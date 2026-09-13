@@ -34,6 +34,11 @@ export default {
   config: (name, entry, language) => {
     const S = text(language);
     const options = llamacppOptions(entry);
+    const body: Record<string, ConfigProperty> = {
+      'options.omitTemplateKwargs': {
+        type: 'boolean', title: S.omitTemplateKwargs, description: S.omitTemplateKwargsDescription, 'x-hot': true,
+      },
+    };
     const managed: Record<string, ConfigProperty> = options.runtime
       ? {
           'options.runtime.release': { type: 'string', title: S.release, description: S.releaseDescription, 'x-hot': true },
@@ -49,12 +54,15 @@ export default {
           'options.autoStart': { type: 'boolean', title: S.autoStart, 'x-hot': true },
         }
       : {};
-    return [connectionGroup(name, entry, managed, language)];
+    return [connectionGroup(name, entry, { ...body, ...managed }, language)];
   },
   validateEntry: (entry, language) => {
     const S = text(language);
     const options = llamacppOptions(entry);
     if (options.autoStart !== undefined && typeof options.autoStart !== 'boolean') throw new Error(S.autoStartBoolean);
+    if (options.omitTemplateKwargs !== undefined && typeof options.omitTemplateKwargs !== 'boolean') throw new Error(S.omitTemplateKwargsBoolean);
+    if (options.extraBody !== undefined && (typeof options.extraBody !== 'object' || options.extraBody === null
+      || Array.isArray(options.extraBody))) throw new Error(S.extraBodyObject);
     if (!options.runtime) return;
     const { runtime, launch } = options;
     if (typeof runtime.release !== 'string' || !runtime.release.trim()) throw new Error(S.releaseRequired);
@@ -94,6 +102,7 @@ export default {
       client: new LlamaCppProvider({
         baseUrl: entry.baseUrl,
         apiKey,
+        options: llamacppOptions(entry),
         log: host.log,
         media: { enabled: () => entry.multimodal === true, read: host.readBlob },
       }),

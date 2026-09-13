@@ -24,6 +24,12 @@ const zh = {
   nonNegativeInteger: (field: string) => `${field} 必须为非负整数`,
   extraArgsString: '附加启动参数必须是字符串',
   autoStartBoolean: '自动启动必须是布尔值',
+  omitTemplateKwargs: '省略 chat_template_kwargs',
+  omitTemplateKwargsDescription:
+    '不向端点发送模板开关字段。给只有 chat/completions、对未知字段整单拒绝的网关用;'
+    + '思考参数在端点条目的 options.extraBody 里按该端点的方言自带。',
+  omitTemplateKwargsBoolean: '省略模板开关必须是布尔值',
+  extraBodyObject: '附加请求体必须是对象',
   notManaged: '这条端点没有开启托管',
   runtimeNotInstalled: '运行时还没装好',
   runtimeUnsupported: '本机平台没有这个后端的官方构建,填自备运行时目录',
@@ -74,6 +80,12 @@ const en: typeof zh = {
   nonNegativeInteger: (field: string) => `${field} must be a non-negative integer`,
   extraArgsString: 'Extra launch arguments must be a string',
   autoStartBoolean: 'Auto start must be a boolean',
+  omitTemplateKwargs: 'Omit chat_template_kwargs',
+  omitTemplateKwargsDescription:
+    'Never send the template switch field. For OpenAI Chat Completions gateways that reject unknown'
+    + ' fields wholesale; carry the endpoint\'s own thinking parameter in options.extraBody of the entry.',
+  omitTemplateKwargsBoolean: 'Omit template kwargs must be a boolean',
+  extraBodyObject: 'Extra request body must be an object',
   notManaged: 'This endpoint is not managed',
   runtimeNotInstalled: 'The runtime is not installed yet',
   runtimeUnsupported: 'No official build for this backend on this platform; set an own runtime directory',

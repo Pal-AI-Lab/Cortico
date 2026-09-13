@@ -28,6 +28,10 @@ export interface LlamaCppOptions {
   runtime?: RuntimeOptions;
   launch?: LaunchOptions;
   autoStart?: boolean;
+  /** Merged into every request body last, so endpoint-specific fields (`thinking`, …) win. */
+  extraBody?: Record<string, unknown>;
+  /** Don't send `chat_template_kwargs` at all: strict chat-completions relays reject unknown fields wholesale. */
+  omitTemplateKwargs?: boolean;
 }
 
 export const LAUNCH_DEFAULTS: LaunchOptions = { contextSize: 16384, nGpuLayers: 99, parallel: 1, extraArgs: '' };
@@ -45,6 +49,7 @@ export function normalizeLlamaCpp(entry: LLMProviderEntry): LLMProviderEntry {
     if (options.runtime.runtimeDir === '') delete options.runtime.runtimeDir;
     options.launch = { ...LAUNCH_DEFAULTS, ...(options.launch ?? {}) };
   }
+  if (options.extraBody && typeof options.extraBody === 'object' && !Array.isArray(options.extraBody) && !Object.keys(options.extraBody).length) delete options.extraBody;
   return { ...entry, options: options as Record<string, unknown> };
 }
 

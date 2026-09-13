@@ -64,6 +64,11 @@ Provider 是模型端点的方言。仓库内建两个:`openai-responses-compat`
 server 下到缓存里,进度与状态从列表回读;本机 GGUF 扔进 `local/` 目录后「重扫」。`spec.model`
 填列表里的 id,首次请求时 router 自动加载。目录约定见 [runtimes.md](runtimes.md)。
 
+llamacpp 讲的是 llama-server 的方言:思考开关走模板的 `chat_template_kwargs`。只有
+chat/completions、且对未知字段整单拒绝的网关(模型中继多属此类)讲不通——`options.omitTemplateKwargs: true`
+省略该字段,思考参数用 `options.extraBody` 按那个端点的方言自带;或者写一个 provider 扩展,
+[templates/extension/provider](../templates/extension/provider/README.md) 就是这个方言的最小实现。
+
 ## 传输
 
 一次生成多次 attempt,退避 1s / 4s / 10s;只对状态 0、429、5xx 重试,401/403 先刷新一次凭证。

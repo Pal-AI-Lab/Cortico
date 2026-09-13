@@ -31,8 +31,20 @@ describe('llamacpp 条目', () => {
     expect(properties['providers.local.options.runtime.runtimeDir']['x-path']).toEqual({ kind: 'directory' });
   });
 
-  it('校验:本机没有的后端只有自备目录才放行;启动参数要正整数', () => {
-    const managed = (runtime: Record<string, unknown>, launch?: Record<string, unknown>) =>
+  it('严格网关选项:外部端点的控制台带省略开关;空 extraBody 归一掉;形状不对要拦', () => {
+    const external = module.normalize(entry());
+    const properties = module.config('local', external, 'zh')[0].schema.properties;
+    expect(properties['providers.local.options.omitTemplateKwargs'].type).toBe('boolean');
+
+    const cleaned = module.normalize(entry({ options: { extraBody: {} } }));
+    expect(cleaned.options).toEqual({});
+
+    expect(() => module.validateEntry(entry({ options: { omitTemplateKwargs: 'yes' } }), 'zh')).toThrow('布尔');
+    expect(() => module.validateEntry(entry({ options: { extraBody: ['thinking'] } }), 'zh')).toThrow('对象');
+    expect(() => module.validateEntry(entry({ options: { extraBody: { thinking: { type: 'enabled' } }, omitTemplateKwargs: true } }), 'zh')).not.toThrow();
+  });
+
+  it('校验:本机没有的后端只有自备目录才放行;启动参数要正整数', () => {    const managed = (runtime: Record<string, unknown>, launch?: Record<string, unknown>) =>
       entry({ options: { runtime, ...(launch ? { launch } : {}) } });
     expect(() => module.validateEntry(managed({ release: PINNED_RELEASE, backend: 'sycl-fp16' }), 'zh')).toThrow('没有后端');
     expect(() => module.validateEntry(managed({ release: PINNED_RELEASE, backend: 'sycl-fp16', runtimeDir: 'D:/own' }), 'zh')).not.toThrow();
@@ -82,6 +94,22 @@ describe('llamacpp Chat 请求', () => {
     expect(off).not.toHaveProperty('tools');
   });
 
+  it('omitTemplateKwargs 掉模板开关;extraBody 最后合并,能按端点方言自带思考参数', () => {
+    const strict = buildLlamaCppRequestBody(
+      { model: 'glm', thinking: true },
+      [{ role: 'user', content: 'hi' }],
+      undefined,
+      undefined,
+      { omitTemplateKwargs: true, extraBody: { thinking: { type: 'enabled' } } },
+    );
+    expect(strict).not.toHaveProperty('chat_template_kwargs');
+    expect(strict.thinking).toEqual({ type: 'enabled' });
+
+    // 默认(两个选项都不给)与旧行为逐字节一致。
+    const plain = buildLlamaCppRequestBody({ model: 'qwen', thinking: true }, [{ role: 'user', content: 'hi' }]);
+    expect(plain.chat_template_kwargs).toEqual({ enable_thinking: true });
+  });
+
   it('打到 <baseUrl>/chat/completions,密钥进 bearer,reasoning_content 归一成推理项', async () => {
     let url = '';
     let headers: Record<string, string> = {};
@@ -99,6 +127,27 @@ describe('llamacpp Chat 请求', () => {
     expect(url).toBe('http://127.0.0.1:8090/v1/chat/completions');
     expect(headers.Authorization).toBe('Bearer k');
     expect(generation.response.output.map((item) => item.type)).toEqual(['reasoning', 'message']);
+  });
+
+  it('端点条目的 options 一路落到线上请求体:省略模板开关,extraBody 并进最外层', async () => {
+    let wire: Record<string, unknown> = {};
+    vi.stubGlobal('fetch', async (_target: unknown, init: RequestInit) => {
+      wire = JSON.parse(String(init.body));
+      return new Response(JSON.stringify({
+        id: 'chat-1', model: 'glm',
+        choices: [{ message: { content: 'pong' }, finish_reason: 'stop' }],
+        usage: { prompt_tokens: 3, completion_tokens: 1 },
+      }));
+    });
+    const client = new LlamaCppProvider({
+      baseUrl: 'http://127.0.0.1:8090/v1',
+      apiKey: 'k',
+      options: { omitTemplateKwargs: true, extraBody: { thinking: { type: 'enabled' } } },
+      log: nullLogger(),
+    });
+    await client.respond({ model: 'glm', input: [{ type: 'message', role: 'user', content: 'hi' }] });
+    expect(wire).not.toHaveProperty('chat_template_kwargs');
+    expect(wire.thinking).toEqual({ type: 'enabled' });
   });
 });
 
