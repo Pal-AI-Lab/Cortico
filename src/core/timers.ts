@@ -123,8 +123,7 @@ export class TimerStore implements TimersApi {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = this.file + '.tmp';
     writeFileSync(tmp, JSON.stringify(this.entries, null, 2), 'utf8');
-    // 直接 rename 覆盖(Windows 走 MoveFileExW 支持覆盖):先删会留出崩溃丢文件窗口,
-    // 与 CoreState.save / config-file.updateJsonObject 的写法对齐。
+    // renameSync 原子替换目标文件,落盘期间不会暴露残缺内容。
     renameSync(tmp, this.file);
   }
 }

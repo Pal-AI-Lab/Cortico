@@ -404,8 +404,7 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
 
   const writes=new Map<string,Promise<void>>();
   function save(groupId:string):Promise<void>{
-    // .catch 吞掉前一次 persist 的 rejection:否则它会随链传播成 unhandledRejection,
-    // 且让下一次 save 拿到一个 rejected promise 而跳过 persist。finally 仍负责清理 map 条目。
+    // 吞掉前一次 persist 的 rejection,避免 unhandledRejection 并防止下一次 save 被跳过。
     const next=(writes.get(groupId) ?? Promise.resolve()).catch(() => {}).then(()=>persist(groupId));
     writes.set(groupId,next);
     void next.finally(()=>{if(writes.get(groupId)===next)writes.delete(groupId);});

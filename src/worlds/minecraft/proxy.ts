@@ -320,7 +320,7 @@ export class MinecraftWorldProxy implements World {
       },
       { trigger: 'flush' },
     ).catch((err) => {
-      // 子进程崩溃告警是 World 层最重要的告警之一:宿主在但投递临时失败时也要可见,不能全吞。
+      // 投递失败时记录日志,便于排查引擎崩溃。
       this.host?.log?.warn('Minecraft 引擎崩溃告警投递失败', { err: String(err) });
     });
     this.scheduleRestart();
@@ -382,7 +382,7 @@ export class MinecraftWorldProxy implements World {
     }
   }
 
-  /** 子进程在 await 期间退出会让 child.send 返回 false 或抛异常(通道刚断/序列化失败)。返回 false 时子进程侧的超时会兜底,这里只记一条日志便于排查。 */
+  /** child.send 可能返回 false(通道断开)或抛异常(序列化失败);失败时记日志,子进程侧超时兜底。 */
   private sendToChild(child: ChildProcess | null, msg: unknown): void {
     if (!child || !child.connected) return;
     try {

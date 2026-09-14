@@ -47,7 +47,7 @@ export function defaultPricing(): PriceDefinition[] {
 /** Probe budget: enough for a reasoning model to answer one word without an `incomplete` stop. */
 const PROBE_MAX_OUTPUT_TOKENS = 256;
 
-/** 密钥名经 validateEntry 校验为 `^[A-Za-z_][A-Za-z0-9_]*$`,但走未校验路径时正则元字符会注入;统一转义。 */
+/** 密钥名拼入正则前统一转义,避免正则元字符被当作模式。 */
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

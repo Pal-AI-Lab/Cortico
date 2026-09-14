@@ -734,7 +734,7 @@ export class BilibiliWorld implements World {
       }
     }
     const file = this.rawSampleFile;
-    // 采样落盘队列深度保护:磁盘 I/O 变慢 + 高频弹幕时链会无限增长,超限丢弃新帧并告警一次。
+    // 采样落盘队列上限:超限丢弃新帧并告警一次,避免无限增长致 OOM。
     if (this.rawSamplePending >= RAW_SAMPLE_QUEUE_MAX) {
       if (!this.rawSampleDropReported) {
         this.rawSampleDropReported = true;
@@ -1024,8 +1024,7 @@ export class BilibiliWorld implements World {
   private pushLiveEvent(sources: readonly PendingLiveEvent[], { item }: PendingLiveEvent): void {
     const host = this.host;
     if (!host) return;
-    // 队列深度保护:宿主变慢(事件库 I/O 瓶颈)+高频弹幕会让 pendingEventWrites 无限增长致 OOM。
-    // 超过上限时丢弃本条并告警一次,保留已排队的投递完成。丢的是最早积压的余量,不是当前这场。
+    // 队列深度上限:pendingEventWrites 超限时丢弃新到的这条并告警一次,避免无限增长致 OOM。
     if (this.pendingEventWrites >= LIVE_WRITE_QUEUE_MAX) {
       if (!this.liveDropReported) {
         this.liveDropReported = true;
