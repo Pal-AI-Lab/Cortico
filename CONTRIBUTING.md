@@ -27,6 +27,15 @@ with a coding agent. Pull requests that fail this requirement are closed.
 - Persona content (constitutions, notes, memories, people files) is not accepted and is not
   covered by the license.
 
+## Limits and guards
+
+A cap, a queue bound, a timeout or a retry is accepted only with evidence that the failure it
+prevents has happened: lines from a run directory, a crash, a profile. The value carries its
+derivation from the path it protects, naming what produces the load and what drains it. A guard
+the path cannot reach is dead code asserting a risk the code does not have; one that discards
+real work when it fires says which work and why that is the better outcome. Looking safer is not
+a reason.
+
 ## Before opening an issue
 
 - One problem per issue: what happened, what you expected, how to reproduce it.
