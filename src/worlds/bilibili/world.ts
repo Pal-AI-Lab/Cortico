@@ -84,6 +84,12 @@ const ANON_WINDOW = 20;
  */
 const COALESCE_LOG_WINDOW_MS = 60_000;
 /**
+ * 直播间事件投递队列深度上限:超过则丢弃新到达,保护进程不被高频弹幕+宿主 I/O 瓶颈拖垮 OOM。
+ * 1000 场覆盖一场大型直播的弹幕洪峰(每场被 coalescing 合并后通常远低于此)。
+ */
+const LIVE_WRITE_QUEUE_MAX = 1000;
+const RAW_SAMPLE_QUEUE_MAX = 5000;
+/**
  * 挂单超过此时限仍未渲染时允许重挂。渲染是正常复位点；陈旧窗口处理挂单被清空或隐藏期丢弃后无法复位的情况。
  */
 const ARM_STALE_MS = 300_000;
@@ -233,10 +239,14 @@ export class BilibiliWorld implements World {
   private readonly admission: AudienceAdmission;
   private eventWrites: Promise<void> = Promise.resolve();
   private pendingEventWrites = 0;
+  /** 投递队列溢出告警只报一次,排空后复位以便下次溢出可见。 */
+  private liveDropReported = false;
+  private rawSampleDropReported = false;
 
   /** 原始 WS 帧采样落盘路径;null = 不采样(见 rawSampleFile 选项注释) */
   private readonly rawSampleFile: string | null;
   private rawSampleWrites: Promise<void> = Promise.resolve();
+  private rawSamplePending = 0;
   private rawSampleDirReady = false;
   /** 落盘失败只报一次,别把一场日志刷满 */
   private rawSampleErrorReported = false;
@@ -431,8 +441,11 @@ export class BilibiliWorld implements World {
     this.coalescing.reset();
     this.eventWrites = Promise.resolve();
     this.pendingEventWrites = 0;
+    this.liveDropReported = false;
     this.rawSampleWrites = Promise.resolve();
+    this.rawSamplePending = 0;
     this.rawSampleErrorReported = false;
+    this.rawSampleDropReported = false;
     this.seenGiftNames.clear();
     this.unnamedGiftSamples = 0;
     this.recentGuard.clear();
@@ -721,7 +734,16 @@ export class BilibiliWorld implements World {
       }
     }
     const file = this.rawSampleFile;
+    // 采样落盘队列深度保护:磁盘 I/O 变慢 + 高频弹幕时链会无限增长,超限丢弃新帧并告警一次。
+    if (this.rawSamplePending >= RAW_SAMPLE_QUEUE_MAX) {
+      if (!this.rawSampleDropReported) {
+        this.rawSampleDropReported = true;
+        this.host?.log.warn(`原始帧采样落盘队列超过 ${RAW_SAMPLE_QUEUE_MAX},丢弃新帧直到排空`, { cmd });
+      }
+      return;
+    }
     const line = `${JSON.stringify({ ts: nowIso(this.timezone), cmd, msg })}\n`;
+    this.rawSamplePending += 1;
     this.rawSampleWrites = this.rawSampleWrites
       .then(async () => {
         if (!this.rawSampleDirReady) {
@@ -737,6 +759,10 @@ export class BilibiliWorld implements World {
           file,
           err: error instanceof Error ? error.message : String(error),
         });
+      })
+      .finally(() => {
+        this.rawSamplePending -= 1;
+        if (this.rawSamplePending === 0) this.rawSampleDropReported = false;
       });
   }
 
@@ -998,6 +1024,15 @@ export class BilibiliWorld implements World {
   private pushLiveEvent(sources: readonly PendingLiveEvent[], { item }: PendingLiveEvent): void {
     const host = this.host;
     if (!host) return;
+    // 队列深度保护:宿主变慢(事件库 I/O 瓶颈)+高频弹幕会让 pendingEventWrites 无限增长致 OOM。
+    // 超过上限时丢弃本条并告警一次,保留已排队的投递完成。丢的是最早积压的余量,不是当前这场。
+    if (this.pendingEventWrites >= LIVE_WRITE_QUEUE_MAX) {
+      if (!this.liveDropReported) {
+        this.liveDropReported = true;
+        host.log.warn(`直播间事件投递队列超过 ${LIVE_WRITE_QUEUE_MAX},丢弃新到达事件直到排空`, { sourceType: item.type });
+      }
+      return;
+    }
     const write = async (): Promise<void> => {
       await host.pushCandidate!(
         {
@@ -1021,6 +1056,7 @@ export class BilibiliWorld implements World {
       .catch((error) => host.log.warn('直播间事件投递失败', { err: String(error) }))
       .finally(() => {
         this.pendingEventWrites -= 1;
+        if (this.pendingEventWrites === 0) this.liveDropReported = false;
       });
   }
 

@@ -46,6 +46,15 @@ const COGNITION_RPC_TIMEOUT_MS = 16 * 60_000;
 let nextHostReqId = 1;
 const pendingHost = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
+/** 关机/断线/崩溃收尾:拒绝所有未回执的宿主调用,清掉它们的超时定时器,避免向已断的 IPC 通道写或漏成未处理拒绝。 */
+function rejectAllPending(reason: Error): void {
+  for (const [id, entry] of pendingHost) {
+    clearTimeout(entry.timer);
+    entry.reject(reason);
+    pendingHost.delete(id);
+  }
+}
+
 function hostRpc(req: HostRequest, timeoutMs = HOST_RPC_TIMEOUT_MS): Promise<unknown> {
   const id = nextHostReqId++;
   return new Promise((resolve, reject) => {
@@ -212,6 +221,7 @@ async function handleRequest(req: EngineRequest): Promise<unknown> {
   if (req.kind === 'shutdown') {
     if (statusTimer) clearInterval(statusTimer);
     statusTimer = null;
+    rejectAllPending(new Error('引擎子进程正在关闭'));
     await mod?.stop();
     mod = null;
     setImmediate(() => process.exit(0));
@@ -276,6 +286,7 @@ process.on('message', (msg: MainToChild) => {
 
 // 父进程没了就跟着退,不留孤儿(mineflayer 连接与托管的 java/llama 进程一并收干净)
 process.on('disconnect', () => {
+  rejectAllPending(new Error('与主进程的 IPC 通道已断开'));
   const m = mod;
   if (!m) {
     process.exit(0);
@@ -300,6 +311,7 @@ process.on('uncaughtException', (err) => {
   dying = true;
   const m = mod;
   mod = null;
+  rejectAllPending(new Error('引擎子进程因未捕获异常退出'));
   if (!m) { process.exit(1); return; }
   log.emit('warn', '引擎子进程收尾中(给服务端存档 8 秒)', { event: 'fatal-drain' });
   const hard = setTimeout(() => process.exit(1), FATAL_DRAIN_MS);

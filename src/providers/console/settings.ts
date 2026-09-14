@@ -47,6 +47,11 @@ export function defaultPricing(): PriceDefinition[] {
 /** Probe budget: enough for a reasoning model to answer one word without an `incomplete` stop. */
 const PROBE_MAX_OUTPUT_TOKENS = 256;
 
+/** 密钥名经 validateEntry 校验为 `^[A-Za-z_][A-Za-z0-9_]*$`,但走未校验路径时正则元字符会注入;统一转义。 */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export class ProviderSettings {
   /** Console language, resolved once from the deployment config and passed down as a value. */
   private readonly language: Language;
@@ -178,7 +183,7 @@ export class ProviderSettings {
     if (process.env[entry.secret]) return 'env';
     const file = join(this.providersDir, name, '.env');
     if (!existsSync(file)) return 'none';
-    return new RegExp(`^\\s*${entry.secret}\\s*=\\s*\\S+`, 'm').test(readFileSync(file, 'utf8')) ? 'file' : 'none';
+    return new RegExp(`^\\s*${escapeRegExp(entry.secret)}\\s*=\\s*\\S+`, 'm').test(readFileSync(file, 'utf8')) ? 'file' : 'none';
   }
 
   /** 把密钥值写进端点目录的 `.env`(同名行覆盖),并让实例重建以读到它。 */
@@ -192,7 +197,7 @@ export class ProviderSettings {
     const file = join(dir, '.env');
     const line = `${entry.secret}=${value.trim()}`;
     const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
-    const pattern = new RegExp(`^\\s*${entry.secret}\\s*=.*$`, 'm');
+    const pattern = new RegExp(`^\\s*${escapeRegExp(entry.secret)}\\s*=.*$`, 'm');
     const next = pattern.test(current)
       ? current.replace(pattern, line)
       : current + (current && !current.endsWith('\n') ? '\n' : '') + line + '\n';

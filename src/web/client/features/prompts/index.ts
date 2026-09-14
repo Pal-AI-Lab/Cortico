@@ -160,11 +160,12 @@ export async function mountPrompts(ctx: FeatureContext, opts: { embedded?: boole
     justClosed = chip?.getAttribute('data-chip') === key ? key : null;
     closePop();
   };
-  document.addEventListener('click', onDocClick, true);
-  ctx.lifecycle.own({ dispose: () => document.removeEventListener('click', onDocClick, true) });
+  const doc = ctx.root.ownerDocument;
+  doc.addEventListener('click', onDocClick, true);
+  ctx.lifecycle.own({ dispose: () => doc.removeEventListener('click', onDocClick, true) });
   const onEsc = (ev: KeyboardEvent): void => { if (ev.key === 'Escape') closePop(); };
-  document.addEventListener('keydown', onEsc);
-  ctx.lifecycle.own({ dispose: () => document.removeEventListener('keydown', onEsc) });
+  doc.addEventListener('keydown', onEsc);
+  ctx.lifecycle.own({ dispose: () => doc.removeEventListener('keydown', onEsc) });
 
   function varPopup(v: PromptVar): HTMLElement {
     const pop = ui.h('div', 'varpop');

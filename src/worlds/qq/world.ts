@@ -457,10 +457,14 @@ export class QQWorld implements World {
   }
 
   /** HTTP 响应冲刷后再写重启标志并退出进程。 */
+  private gateRestartTimer: ReturnType<typeof setTimeout> | null = null;
   private scheduleGateRestart(gate: QQGatePanelDeps): void {
-    setTimeout(() => {
+    if (this.gateRestartTimer) clearTimeout(this.gateRestartTimer);
+    this.gateRestartTimer = setTimeout(() => {
+      this.gateRestartTimer = null;
       try { gate.restart(); } catch (err) { this.log.error('触发重启失败', { error: String(err) }); }
     }, 300);
+    this.gateRestartTimer.unref?.();
   }
 
   private async invokeRoster(method: string, args: unknown[]): Promise<unknown> {
@@ -573,7 +577,22 @@ export class QQWorld implements World {
   }
 
   async stop(): Promise<void> {
+    if (this.gateRestartTimer) { clearTimeout(this.gateRestartTimer); this.gateRestartTimer = null; }
     await this.driver?.stop();
+  }
+
+  /** 已记录消息索引的上限:超过则淘汰最早插入的(Map 保持插入序)。引用回复通常针对近期消息,保留 2 万条覆盖数天高频群。 */
+  private static readonly KNOWN_MESSAGES_MAX = 20_000;
+  private trimKnownMessages(): void {
+    const max = QQWorld.KNOWN_MESSAGES_MAX;
+    let size = this.knownMessages.size;
+    if (size <= max) return;
+    const it = this.knownMessages.keys();
+    while (size-- > max) {
+      const key = it.next().value;
+      if (key === undefined) break;
+      this.knownMessages.delete(key);
+    }
   }
 
   /** 测试/联调辅助:等驱动连接并完成身份初始化 */
@@ -796,6 +815,7 @@ export class QQWorld implements World {
       { trigger },
     );
     this.knownMessages.set(String(msg.message_id), { conv, ts: env.ts });
+    this.trimKnownMessages();
 
     // 图片:回填所属消息号,被动识图(理解闭合后作为qq.vision事件延迟到达)。
     // 已经被上面的去重预判内联进消息本身的图,不用再走这条异步路径。
@@ -1159,6 +1179,7 @@ export class QQWorld implements World {
       messages: this.knownMessages.size,
       names: this.nameByUserId.size,
     });
+    this.trimKnownMessages();
   }
 
 
@@ -1282,6 +1303,7 @@ export class QQWorld implements World {
     // 自己发出去的也进索引:可以引用回复自己刚说过的话
     if (messageId !== undefined) {
       this.knownMessages.set(String(messageId), { conv: target, ts: env.ts });
+      this.trimKnownMessages();
     }
     return `[sent${messageId !== undefined ? ` #${messageId}` : ''} → ${this.targetDesc(target)}]`;
   }

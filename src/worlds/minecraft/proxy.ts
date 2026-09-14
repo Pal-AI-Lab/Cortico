@@ -10,7 +10,7 @@
  * 徽标、存储统计走推送缓存(1s 级新鲜度);世界快照走投递成文事件
  * (arm-deferred 代挂 + 发车刻 render-deferred 现拿)。
  */
-import { fork, type ChildProcess } from 'node:child_process';
+import { fork, type ChildProcess, type Serializable } from 'node:child_process';
 import { nowIso } from '../../core/util.ts';
 import { emitLogNote, logChildStdio } from '../../core/ipc-logger.ts';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -319,7 +319,10 @@ export class MinecraftWorldProxy implements World {
         senderKey: 'minecraft',
       },
       { trigger: 'flush' },
-    ).catch(() => { /* 宿主也在收摊时投不进去,认了 */ });
+    ).catch((err) => {
+      // 子进程崩溃告警是 World 层最重要的告警之一:宿主在但投递临时失败时也要可见,不能全吞。
+      this.host?.log?.warn('Minecraft 引擎崩溃告警投递失败', { err: String(err) });
+    });
     this.scheduleRestart();
   }
 
@@ -373,9 +376,21 @@ export class MinecraftWorldProxy implements World {
           ? await port.request(req.req)
           : { error: `${COGNITION_ABSENT}(问的时候句柄已经不在了)` };
       }
-      child?.send({ t: 'hrep', id, ok: true, value });
+      this.sendToChild(child, { t: 'hrep', id, ok: true, value });
     } catch (err) {
-      child?.send({ t: 'hrep', id, ok: false, error: err instanceof Error ? err.message : String(err) });
+      this.sendToChild(child, { t: 'hrep', id, ok: false, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+
+  /** 子进程在 await 期间退出会让 child.send 返回 false 或抛异常(通道刚断/序列化失败)。返回 false 时子进程侧的超时会兜底,这里只记一条日志便于排查。 */
+  private sendToChild(child: ChildProcess | null, msg: unknown): void {
+    if (!child || !child.connected) return;
+    try {
+      if (!child.send(msg as Serializable)) {
+        this.host?.log?.warn('Minecraft 引擎子进程 IPC send 返回 false(通道已断),子进程侧 RPC 将由其超时兜底', { kind: String((msg as { t?: string }).t) });
+      }
+    } catch (err) {
+      this.host?.log?.warn('Minecraft 引擎子进程 IPC send 抛异常', { err: String(err) });
     }
   }
 
@@ -432,14 +447,13 @@ export class MinecraftWorldProxy implements World {
       }, timeoutMs);
       timer.unref?.();
       this.pending.set(id, { resolve, reject, timer });
-      child.send({ t: 'req', id, req });
+      // send 失败(通道断/序列化抛异常)由超时兜底;sendToChild 内部已 try/catch 不会让 executor 抛出。
+      this.sendToChild(child, { t: 'req', id, req });
     });
   }
 
   private cast(cast: EngineCast): void {
-    const child = this.child;
-    if (!child || !child.connected) return;
-    child.send({ t: 'cast', cast });
+    this.sendToChild(this.child, { t: 'cast', cast });
   }
 
   /** x-hot 配置的采样推送:控制台热改最迟 1s 到达子进程 */

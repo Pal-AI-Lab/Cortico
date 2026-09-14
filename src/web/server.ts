@@ -1654,7 +1654,7 @@ export class WebApp {
     // POST:带参调用。base64 音频/图片会经这里,limit 放宽。
     app.post(
       '/api/console/providers/:provider/panels/:panel/:method',
-      express.json({ limit: '64mb' }),
+      express.json({ limit: '16mb' }),
       wrap((req, res) => {
         const body = (req.body ?? {}) as { args?: unknown };
         if (body.args !== undefined && !Array.isArray(body.args)) {

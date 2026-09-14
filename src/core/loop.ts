@@ -1566,9 +1566,13 @@ export class MainLoop {
   private async flushRequestedPrefixReload(_generation: number): Promise<boolean> {
     const release = this.releasePrefixReload;
     if (!release) return false;
+    // 先捕获引用再 release:release 触发的 chain 可能在 await 前就把
+    // this.prefixReloadPromise 置 null(reloadSystemPrefixReload 的 finally),
+    // 此时 await null 直接 resolve,调用方误以为重载已完成。
+    const pending = this.prefixReloadPromise;
     this.releasePrefixReload = null;
     release();
-    await this.prefixReloadPromise;
+    await pending;
     return true;
   }
 

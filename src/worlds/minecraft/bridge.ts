@@ -834,5 +834,6 @@ export class Bridge {
       this.reconnectTimer = null;
       this.connect();
     }, delay);
+    this.reconnectTimer.unref?.();
   }
 }

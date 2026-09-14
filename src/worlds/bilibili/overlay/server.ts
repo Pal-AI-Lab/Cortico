@@ -119,6 +119,7 @@ export class BilibiliOverlayServer {
           response.write(':hb\n\n');
         } catch {
           this.subscribers.delete(response);
+          response.destroy();
         }
       }
     }, KEEPALIVE_MS);

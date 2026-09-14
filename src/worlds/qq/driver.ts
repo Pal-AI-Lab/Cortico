@@ -277,6 +277,7 @@ export class OneBotDriver {
       this.reconnectTimer = undefined;
       if (!this.stopped) this.connectAttempt();
     }, delay);
+    this.reconnectTimer.unref?.();
   }
 
   /** 连上后查 自身账号→逐个监听群的群名/自己的群昵称,填identity */
