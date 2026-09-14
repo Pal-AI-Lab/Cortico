@@ -131,7 +131,7 @@ export class ProviderSettings {
     this.config.providers = { ...this.config.providers, [name]: next };
     this.config.activeProvider = activeProvider;
     this.config.providerSchemaVersion = 3;
-    // 保存后刷新实例，使外部写入端点 .env 的密钥在下一次调用生效。
+    // 端点 .env 的内容按 provider 实例缓存。
     this.registry.invalidate(name);
   }
 
