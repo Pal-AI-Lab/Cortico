@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="Cortico">
+  <title>Cortico</title>
+  <rect width="1280" height="340" fill="#FFFFFF"/>
+  <g transform="translate(298.88 24.5) scale(1.05)">
+    <g transform="translate(10 14) scale(0.75)" fill="none" stroke-linecap="round">
+      <path d="M182 63.66A84 84 0 1 0 182 192.34" stroke="#1B1626" stroke-width="30"/>
+      <circle cx="113" cy="117" r="16" stroke="#00A870" stroke-width="11"/>
+      <circle cx="163" cy="117" r="16" stroke="#00A870" stroke-width="11"/>
+    </g>
+    <g fill="none" stroke="#1B1626" stroke-width="16" stroke-linecap="round">
+      <path d="M230.97 93.03A24 24 0 1 0 230.97 126.97"/>
+      <circle cx="286" cy="110" r="24" stroke="#00A870"/>
+      <path d="M341 86V134"/>
+      <path d="M341 112A24 24 0 0 1 365 88"/>
+      <path d="M412 70V134"/>
+      <path d="M396 78H428"/>
+      <path d="M459 86V134"/>
+      <path d="M530.97 93.03A24 24 0 1 0 530.97 126.97"/>
+      <circle cx="586" cy="110" r="24" stroke="#00A870"/>
+    </g>
+    <circle cx="459" cy="58" r="9" fill="#1B1626"/>
+  </g>
+  <text x="640" y="272" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="27" letter-spacing="0.6" fill="#6B6577">Event-driven agent harness for persona bots</text>
+</svg>
