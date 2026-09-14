@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 340" width="1280" height="340" role="img" aria-label="Cortico">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 300" width="1280" height="300" role="img" aria-label="Cortico">
   <title>Cortico</title>
-  <rect width="1280" height="340" fill="#FFFFFF"/>
-  <g transform="translate(298.88 24.5) scale(1.05)">
+  <rect width="1280" height="300" fill="#FFFFFF"/>
+  <g transform="translate(250.15 18) scale(1.2)">
     <g transform="translate(10 14) scale(0.75)" fill="none" stroke-linecap="round">
       <path d="M182 63.66A84 84 0 1 0 182 192.34" stroke="#1B1626" stroke-width="30"/>
       <circle cx="113" cy="117" r="16" stroke="#00A870" stroke-width="11"/>
@@ -20,5 +20,4 @@
     </g>
     <circle cx="459" cy="58" r="9" fill="#1B1626"/>
   </g>
-  <text x="640" y="272" text-anchor="middle" font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="27" letter-spacing="0.6" fill="#6B6577">Event-driven agent harness for persona bots</text>
 </svg>
