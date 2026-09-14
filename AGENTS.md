@@ -83,8 +83,9 @@ Conventions that hold across the repository:
 
 ## 4. Writing
 
-These rules apply to comments, documents and commit messages alike. A sentence stays only if it
-carries a fact the reader needs and cannot get from the code.
+These rules apply to comments, documents and commit messages alike, and to what a session
+reports to the operator. A sentence stays only if it carries a fact the reader needs and cannot
+get from the code.
 
 - Conclusion first, mechanism second.
 - State the invariant, not the runtime story and not the negotiation that produced it. History
@@ -101,7 +102,8 @@ carries a fact the reader needs and cannot get from the code.
 
 ### AI slop checklist
 
-Review UI copy, prompts, documentation, code comments and commit messages sentence by sentence.
+Review UI copy, prompts, documentation, code comments, commit messages and reports to the
+operator sentence by sentence.
 Prefer deleting redundant prose. Preserve factual content in documentation; trace vague claims to
 their implementation and state the actual behavior. Keep comments only when they explain facts
 that cannot be inferred from the code.
