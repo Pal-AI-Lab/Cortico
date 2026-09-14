@@ -257,6 +257,55 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     }
     await expect(invoke(settings, 'setSecret', { name: 'local', value: 'x' })).rejects.toThrow('变量名');
   });
+  it.each(['save', 'setConfig'] as const)('%s 保存自定义密钥变量名后，请求使用对应的文件或环境密钥', async (method) => {
+    const { cfg, settings, registry, providersDir, endpoint } = fixture();
+    const secret = 'my_ModelToken_42';
+    vi.stubEnv(secret, '');
+    try {
+      if (method === 'save') {
+        await invoke(settings, 'save', {
+          name: 'local', secret, spec: cfg.providers.local.spec, pricing: [],
+        });
+      } else {
+        settings.setConfig('llm.openai-responses-compat.local', { 'providers.local.secret': secret });
+      }
+      expect(endpoint('local').secret).toBe(secret);
+      expect(settings.secretStatus('local', cfg.providers.local)).toBe('none');
+      registry.resolve('local');
+      await invoke(settings, 'setSecret', { name: 'local', value: 'sk-custom-file' });
+      expect(readFileSync(join(providersDir, 'local', '.env'), 'utf8')).toBe(`${secret}=sk-custom-file\n`);
+      const seen: string[] = [];
+      vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+        seen.push((init.headers as Record<string, string>).Authorization);
+        return new Response(JSON.stringify({ id: 'r', model: 'local', status: 'completed', output: [], usage: { input_tokens: 1, output_tokens: 0 } }));
+      });
+      await registry.bind('local').respond({ model: 'local', input: 'hi' });
+      vi.stubEnv(secret, 'sk-custom-env');
+      settings.setConfig('llm.openai-responses-compat.local', { 'providers.local.secret': secret });
+      expect(settings.secretStatus('local', cfg.providers.local)).toBe('env');
+      await registry.bind('local').respond({ model: 'local', input: 'hi' });
+      expect(seen).toEqual(['Bearer sk-custom-file', 'Bearer sk-custom-env']);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+  it('只保存模型配置后，下一次请求读取外部更新的端点密钥', async () => {
+    const { cfg, settings, registry, providersDir } = fixture();
+    cfg.providers.cloud.secret = 'DS_TEST_KEY';
+    cfg.providers.cloud.spec = { model: 'deepseek-flash', thinking: false };
+    const before = registry.resolve('cloud');
+    mkdirSync(join(providersDir, 'cloud'), { recursive: true });
+    writeFileSync(join(providersDir, 'cloud', '.env'), 'DS_TEST_KEY=sk-from-file\n');
+    await invoke(settings, 'save', { name: 'cloud', spec: { model: 'deepseek-v4-pro', thinking: false }, pricing: [] });
+    expect(registry.resolve('cloud')).not.toBe(before);
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      seen.push((init.headers as Record<string, string>).Authorization);
+      return new Response(JSON.stringify({ id: 'r', model: 'deepseek-v4-pro', status: 'completed', output: [], usage: { input_tokens: 1, output_tokens: 0 } }));
+    });
+    await registry.bind('cloud').respond({ model: 'deepseek-v4-pro', input: 'hi' });
+    expect(seen).toEqual(['Bearer sk-from-file']);
+  });
   it("模型列表来自实例；probe 返回状态、耗时、用量和报价，404 提示检查地址与路径", async () => {
     const { cfg, settings } = fixture();
     cfg.providers.cloud.spec = { model: 'deepseek-flash', thinking: true, reasoningEffort: 'low', maxTokens: 4096 };

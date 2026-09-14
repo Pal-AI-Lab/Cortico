@@ -131,6 +131,8 @@ export class ProviderSettings {
     this.config.providers = { ...this.config.providers, [name]: next };
     this.config.activeProvider = activeProvider;
     this.config.providerSchemaVersion = 3;
+    // 保存后刷新实例，使外部写入端点 .env 的密钥在下一次调用生效。
+    this.registry.invalidate(name);
   }
 
   save(name: string, entry: LLMProviderEntry, language: Language = 'zh'): void {

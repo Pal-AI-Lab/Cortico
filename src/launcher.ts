@@ -122,12 +122,11 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  // 密钥链与 provider 那侧同一条:进程环境 > 这个端点自己的 .env。
   const endpointDir = providerDir(cfg.activeProvider);
-  if (activeProvider.secret && !secretReader(resolve(endpointDir, '.env'))(activeProvider.secret)) {
-    console.error(`缺少 ${activeProvider.secret}(进程环境或 ${resolve(endpointDir, '.env')})`);
-    process.exit(1);
-  }
+  const missingSecret =
+    activeProvider.secret && !secretReader(resolve(endpointDir, '.env'))(activeProvider.secret)
+      ? activeProvider.secret
+      : null;
 
   const bot = createBot(loaded, definition, { extensions });
 
@@ -158,6 +157,9 @@ async function main(): Promise<void> {
         : `  扩展:      ${ext.name} 未加载: ${ext.reason}`);
   }
   console.log(`  主模型:    ${bot.core.mainSessionSpec().model}`);
+  if (missingSecret) {
+    console.log(`  ⚠ 缺少 ${missingSecret}(进程环境或 ${resolve(endpointDir, '.env')})；可在控制台「语言模型」页修改密钥变量名或补填密钥`);
+  }
   if (startPaused) {
     console.log('  ⏸ 已暂停');
   }

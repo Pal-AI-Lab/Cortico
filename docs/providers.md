@@ -14,7 +14,7 @@ Provider 适配模型服务的通信协议。仓库内建 `openai-responses-comp
 |---|---|
 | `kind` | provider 模块的 id，决定通信协议的实现 |
 | `baseUrl` | 模型服务的基础 URL |
-| `secret` | 密钥名;优先读取进程环境,其次读取端点目录的 `.env` |
+| `secret` | 自定义密钥环境变量名；优先读取进程环境，其次读取端点目录的 `.env` |
 | `spec` | 模型与生成参数：`model`、`thinking`、`reasoningEffort`、`temperature`、`maxTokens`、`contextWindow` |
 | `multimodal` | 是否接受图片 |
 | `serviceTier` / `pricing` / `options` | 服务档位、价目、模块自定义项 |
@@ -34,7 +34,12 @@ provider 模块不预设任何模型名;端点
 
 每个 provider 模块一页,页 id `llm:<kind>`。页上能做的事:新建、复制、删除端点(当前端点不能
 删),写模型与采样参数,填密钥(只写不读回),拉模型列表,探活(发一条 ping,回状态码、耗时、
-是否带加密推理、这一次的费用),编辑价目。
+是否带加密推理、这一次的费用),编辑价目。每次保存都重建该端点的客户端并重读它的 `.env`,
+外部填的密钥随下一次请求生效,不必重启进程。
+
+“密钥变量名”可填写任意合法的环境变量名，如 `MY_MODEL_TOKEN`：以字母或下划线开头，
+其余字符为字母、数字或下划线。保存变量名后可“写入密钥”，值保存在端点 `.env` 的同名项中。
+留空表示不使用密钥鉴权。
 
 ## 内建 openai-responses-compat
 

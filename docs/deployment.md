@@ -62,8 +62,9 @@ pnpm start <部署名>
 | `--log-level=<级别>`、`CORTICO_LOG` | 写入日志文件的最低级别，覆盖 `config.json` |
 | `--force-second-instance` | 绕过单实例锁 |
 
-启动前校验:`activeProvider` 必须在端点表里;它声明的 `secret` 必须能从进程环境或
-`providers/<端点名>/.env` 读到。任一不满足直接退出。
+启动前校验 `activeProvider` 必须在端点表里,不在直接退出。它声明的 `secret` 读不到(进程环境
+或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「语言模型」页修改密钥变量名或补填密钥，
+保存后下一次模型调用生效，不必重启。
 
 `start.bat` 与 `start.sh` 调用 `bin/cortico.mjs`。它安装缺失的依赖、构建缺失的控制台产物，
 在有多份部署时提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；

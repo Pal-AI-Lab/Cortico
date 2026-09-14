@@ -37,7 +37,7 @@ mkdir -p deployments/mybot && echo '{ "bot": "cormini" }' > deployments/mybot/de
 mkdir -p deployments/providers/deepseek && echo "DEEPSEEK_API_KEY=你的key" > deployments/providers/deepseek/.env
 ```
 
-其他端点可在控制台「语言模型」页创建。启动部署：
+其他端点可在控制台「语言模型」页创建；密钥也可以启动后填写，保存即生效，不必重启。启动部署：
 
 ```bash
 pnpm start mybot
