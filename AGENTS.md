@@ -136,6 +136,10 @@ that cannot be inferred from the code.
 
 - Assert the contract, not incidental values: compare with the exported default, not a literal.
 - Real components: real git repos, real ports, a real event store. Only the LLM is scripted.
+- Fixtures and documentation examples name no real vendor or model. Which model runs behind an
+  endpoint is a deployment fact, and a fixture that copies one pins that fact into the repository.
+  The shipped default endpoint and the extension package names are the exception: they name
+  something real in order to work at all.
 - No network in tests. Real-service checks live in `scripts/` and run by hand.
 
 ## 6. Commands
@@ -193,7 +197,7 @@ Commits made before this rule do not follow it and are not rewritten.
 | `revert` | subject repeats the reverted subject, body is `This reverts commit <sha>.` |
 
 The scope is the unit the change lives in, written as its path with `src/` dropped: `core`,
-`worlds/pvz`, `providers/grok`, `extensions`, `bots/cortiv`, `console` for `src/web/`. A
+`worlds/pvz`, `providers/llamacpp`, `extensions`, `bots/cortiv`, `console` for `src/web/`. A
 one-file change may use the file's own name (`package.json`, `ci.yml`). Omit the scope only for
 a repository-wide change; a commit that wants two scopes is two commits.
 
