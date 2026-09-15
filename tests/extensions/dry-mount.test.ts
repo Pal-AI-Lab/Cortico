@@ -159,6 +159,7 @@ describe("Bot 构造检查", () => {
     const report = dryMountBot(cormini as unknown as BotDefinition<CoreConfig>, { scratchDir, packageDir });
     expect(report.failures).toEqual([]);
     expect(report.ok.join('\n')).toContain('declares: terminal');
+    expect(report.warnings.join('\n')).not.toContain('memoryName');
   });
 
   it('persona 缺必填项是失败', () => {
@@ -169,6 +170,7 @@ describe("Bot 构造检查", () => {
     };
     const report = dryMountBot(def, { scratchDir, packageDir: scratchDir });
     expect(report.failures.join('\n')).toContain('declareSessions()');
+    expect(report.warnings.join('\n')).toContain('memoryName');
   });
 
   it('declares 不合形状是失败', () => {

@@ -282,7 +282,7 @@ export class Cormini implements Persona {
         ...this.firstTurnDocs(language),
       ],
       // 工作区记忆跨场保留，但属于“清除所有数据”的范围。宪法由人格检查点管理，不随数据清除。
-      storage: [
+      memory: { storage: [
         {
           key: 'workspace',
           label: t.workspaceLabel,
@@ -297,7 +297,7 @@ export class Cormini implements Persona {
             return t.workspaceCleared(files.length);
           },
         },
-      ],
+      ] },
     };
   }
 

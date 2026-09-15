@@ -41,8 +41,6 @@ describe('上下文交接阈值', () => {
     expect(prop.maximum!).toBeGreaterThanOrEqual(96000);
     // 归Persona(容量归它);core 那组只管历史思维链与首轮对话两条策略
     expect(CORTIV_CONTEXT_CONFIG_GROUP.owner).toBe('persona');
-    // settingsPage 将配置放入运行参数页，不改变 owner。
-    expect(CORTIV_CONTEXT_CONFIG_GROUP.settingsPage).toBe(true);
 
     const dir = mkdtempSync(join(tmpdir(), 'cortiv-ctx-'));
     try {

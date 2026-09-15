@@ -66,6 +66,7 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
 const definition: BotDefinition<CorminiConfig> = {
   id: 'cormini',
   description: '最小完整实现:工作区即记忆、宪法即前缀、一个 session、只有终端',
+  memoryName: 'GitMem',
   declares: DECLARES,
   defaults: () => ({
     ...CORE_DEFAULTS,

@@ -350,9 +350,11 @@ export class ConsolePageRegistry {
     | { ok: true; open: (socket: ConsoleStream) => void }
     | { ok: false; failure: InvokeFailure }
   > {
-    const found = await this.resolvePanel(pageId, panelId, language);
-    if (!found.ok) return found;
-    const c = found.contribution;
+    // 通道名与面板 id 同一个命名空间,但不要求声明过同名面板:没有面板的页也能有流。
+    const c = await this.find(pageId, language);
+    if (!c) {
+      return { ok: false, failure: { kind: 'no-provider', message: `没有这个 provider: ${pageId}` } };
+    }
     const stream = c.stream;
     if (!stream) {
       return {

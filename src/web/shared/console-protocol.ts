@@ -16,8 +16,8 @@ export const CONSOLE_PROTOCOL_VERSION = 1;
 export const CONSOLE_LANGUAGE_HEADER = 'x-cortico-language';
 export const CONSOLE_LANGUAGE_QUERY = 'language';
 
-/** world：World 控制面；llm：LLM 供应模块；persona：bot/Persona 控制面。framework 为保留类别，不经贡献协议提供页面。 */
-export type ConsolePageKind = 'framework' | 'world' | 'persona' | 'llm';
+/** world：World 控制面；llm：LLM 供应模块；persona：bot/Persona 控制面；memory：Persona 的 Memory 页。framework 为保留类别，不经贡献协议提供页面。 */
+export type ConsolePageKind = 'framework' | 'world' | 'persona' | 'llm' | 'memory';
 
 /** 能真正贡献一页的类别（框架除外）。 */
 export type ContributingKind = Exclude<ConsolePageKind, 'framework'>;
@@ -26,8 +26,8 @@ export type ContributingKind = Exclude<ConsolePageKind, 'framework'>;
 // 1. 命名空间规则
 // ---------------------------------------------------------------------------
 
-/** Page ID 使用 kind:name 命名空间，如 world:chat、persona:demo、llm:sample；Panel ID 仅在页内唯一。 */
-const PAGE_ID_RE = /^(world|persona|llm):[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
+/** Page ID 使用 kind:name 命名空间，如 world:chat、persona:demo、memory:demo、llm:sample；Panel ID 仅在页内唯一。 */
+const PAGE_ID_RE = /^(world|persona|llm|memory):[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 /** Panel ID 只需在自己这一页内唯一，所以不带任何前缀。 */
 const PANEL_ID_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -65,9 +65,10 @@ export function pageIdFor(kind: ContributingKind, name: string): string {
 // 2. Asset 安全模型
 // ---------------------------------------------------------------------------
 
-/** 资源 key 等于 page id；资源 URL 由构建清单和服务端资源表提供，贡献声明不提供路径。 */
+/** 资源 key:Memory 页与同名 Persona 页共用一份浏览器产物,其余等于 page id。资源 URL 由构建清单和服务端资源表提供，贡献声明不提供路径。 */
 export function assetKeyForPage(pageId: string): string {
-  return pageId;
+  const parsed = parsePageId(pageId);
+  return parsed?.kind === 'memory' ? pageIdFor('persona', parsed.name) : pageId;
 }
 
 /** 构建产物里一页的浏览器资源。值是 URL 路径，不是文件系统路径。 */

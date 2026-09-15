@@ -24,7 +24,7 @@ function assemblyWith(spec: {
   }));
   return new WorldAssembly(loaded, defs, [...defs.map((d) => d.id), ...(spec.missing ?? [])]);
 }
-import type { World, WorldConsoleDecl, ToolDef } from '../../src/core/types.ts';
+import type { Persona, World, WorldConsoleDecl, ToolDef } from '../../src/core/types.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -213,27 +213,54 @@ describe('manifest 组装', () => {
     });
   });
 
-  it('标了 settingsPage 的 bot 级配置组不被人格 provider 认领', async () => {
-    const claimed = {
-      id: 'persona',
-      owner: 'persona' as const,
-      schema: { type: 'object' as const, title: '认知节奏', properties: {} },
-    };
-    const settings = {
-      id: 'persona-ctx',
-      owner: 'persona' as const,
-      settingsPage: true,
-      schema: { type: 'object' as const, title: '上下文与交接', properties: {} },
-    };
+  /** Persona 夹具:Persona 页一块面板,Memory 页一块面板,invoke 共用。 */
+  const personaWithMemory = (memory: object | undefined): Persona => ({
+    memory,
+    console: () => ({
+      panels: [{ id: 'notes', title: '笔记' }],
+      memory: { panels: [{ id: 'workspace', title: '工作区' }] },
+      invoke: async (panel: string, method: string) => ({ panel, method }),
+    }),
+  }) as unknown as Persona;
+
+  it('Persona 的 memory 子声明成为 memory:<bot> 页:标题取 memoryName,面板归它,invoke 走同一个数据面', async () => {
     const sources = deriveConsolePageSources(
       facts(),
-      { assembly: WorldAssembly.ofInstances([]) },
-      { id: 'demo', label: '示例人格', configGroups: [claimed, settings] },
+      { assembly: WorldAssembly.ofInstances([]), persona: personaWithMemory(undefined) },
+      { id: 'demo', label: '示例人格', memoryName: 'GitMem' },
     );
     await withApp({ consolePageSources: sources }, async (base) => {
-      const p = byId(await manifestOf(base), 'persona:demo');
-      expect(p?.configGroups).toEqual(['persona']);
-      expect(JSON.stringify(p)).not.toContain('persona-ctx');
+      const m = await manifestOf(base);
+      expect(byId(m, 'persona:demo')?.panels?.map((x) => x.id)).toEqual(['notes']);
+      const mem = byId(m, 'memory:demo');
+      expect(mem?.kind).toBe('memory');
+      expect(mem?.label).toBe('GitMem');
+      expect(mem?.panels?.map((x) => x.id)).toEqual(['workspace']);
+      const r = await fetch(`${base}${panelRoute('memory:demo', 'workspace', 'tree')}`, { method: 'POST' });
+      expect(await r.json()).toEqual({ panel: 'workspace', method: 'tree' });
+    });
+  });
+
+  it('没给 memoryName 时标题回落到 Memory 实例的类名;没有 memory 子声明就没有这一页', async () => {
+    class GitWorkspaceMemory {}
+    const named = deriveConsolePageSources(
+      facts(),
+      { assembly: WorldAssembly.ofInstances([]), persona: personaWithMemory(new GitWorkspaceMemory()) },
+      { id: 'demo', label: '示例人格' },
+    );
+    await withApp({ consolePageSources: named }, async (base) => {
+      expect(byId(await manifestOf(base), 'memory:demo')?.label).toBe('GitWorkspaceMemory');
+    });
+    const plain = { console: () => ({ panels: [{ id: 'notes', title: '笔记' }] }) } as unknown as Persona;
+    const none = deriveConsolePageSources(
+      facts(),
+      { assembly: WorldAssembly.ofInstances([]), persona: plain },
+      { id: 'demo', label: '示例人格' },
+    );
+    await withApp({ consolePageSources: none }, async (base) => {
+      const m = await manifestOf(base);
+      expect(byId(m, 'persona:demo')).toBeDefined();
+      expect(byId(m, 'memory:demo')).toBeUndefined();
     });
   });
 

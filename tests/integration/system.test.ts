@@ -138,7 +138,7 @@ describe('全系统集成(终端对话链路)', () => {
     };
     expect(events.events.length).toBeGreaterThanOrEqual(2);
 
-    const file = await fetch(`http://127.0.0.1:${port}/api/console/providers/persona%3Acorti-soulmate/panels/workspace/read`, {
+    const file = await fetch(`http://127.0.0.1:${port}/api/console/providers/memory%3Acorti-soulmate/panels/workspace/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ args: ['CONSTITUTION.md'] }),

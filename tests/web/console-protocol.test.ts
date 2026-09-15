@@ -675,3 +675,13 @@ describe('状态灯', () => {
     expect(toPageManifest({ id: 'world:alpha', kind: 'world', label: '阿尔法' }).lamps).toBeUndefined();
   });
 });
+
+describe('Memory 页', () => {
+  it('memory:<name> 是合法 page id,浏览器产物与同名 persona 页共用一份', async () => {
+    const { parsePageId, assetKeyForPage } = await import('../../src/web/shared/console-protocol.ts');
+    expect(parsePageId('memory:demo')).toEqual({ kind: 'memory', name: 'demo' });
+    expect(assetKeyForPage('memory:demo')).toBe('persona:demo');
+    expect(assetKeyForPage('persona:demo')).toBe('persona:demo');
+    expect(assetKeyForPage('world:qq')).toBe('world:qq');
+  });
+});

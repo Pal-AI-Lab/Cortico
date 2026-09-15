@@ -1,4 +1,4 @@
-/** 验证 configGroups 归属合并与 settingsPage 排除规则；未认领组留在框架设置页。 */
+/** 验证只挂框架级 ConsoleSurface、一个贡献页都没有时各端点的行为。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

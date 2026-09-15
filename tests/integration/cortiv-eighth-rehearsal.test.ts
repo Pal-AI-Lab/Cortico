@@ -192,7 +192,7 @@ describe.sequential('CortiV 集成测试', () => {
       message.role === 'tool' && /缩水提示/.test(message.content)));
 
     const history = await fetch(
-      `http://127.0.0.1:${port}/api/console/providers/persona%3Acortiv/panels/workspace/history`,
+      `http://127.0.0.1:${port}/api/console/providers/memory%3Acortiv/panels/workspace/history`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

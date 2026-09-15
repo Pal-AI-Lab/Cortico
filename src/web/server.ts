@@ -19,7 +19,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   EventEnvelope, EventRangeQuery, EventStoreReader, Logger,
   ConfigGroup, ConfigValues, WorldConsoleDecl,
-  LogRecord, StoragePart, ToolSchema,
+  LogRecord, OwnedStoragePart, StoragePart, ToolSchema,
 } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
@@ -107,7 +107,7 @@ export interface WebAppSessionsDeps {
   onChange(cb: () => void): void;
 }
 
-export type { StoragePart };
+export type { OwnedStoragePart, StoragePart };
 
 export interface WorldInfo {
   /** Worldid(装配层给的那个,如 terminal) */
@@ -415,8 +415,8 @@ export interface ConsoleSurface {
   debug?: WebAppDebugDeps;
   /** session观察(可选;不挂载时 /api/sessions 空、/ws/sessions 拒绝) */
   sessions?: WebAppSessionsDeps;
-  /** 可清除的存储部分清单(可选;不挂载时 /api/storage 空)。标签与回执按 `language`;key 不随语言变。 */
-  storage?: (language: Language) => StoragePart[];
+  /** 可清除的存储部分清单(可选;不挂载时 /api/storage 空),每项带装配层盖的归属。标签与回执按 `language`;key 不随语言变。 */
+  storage?: (language: Language) => OwnedStoragePart[];
   /** 用量聚合(可选;不挂载时 /api/usage 空) */
   usage?: WebAppUsageDeps;
   /** 按 schema 声明的可调配置项(可选;不挂载时 /api/config 503) */
@@ -1315,7 +1315,7 @@ export class WebApp {
         let stat = '';
         try { stat = p.stat(); } catch (err) { stat = `统计失败: ${String(err)}`; }
         return {
-          key: p.key, label: p.label, kind: p.kind, group: p.group,
+          key: p.key, label: p.label, kind: p.kind, owner: p.owner,
           location: p.location, danger: !!p.danger, note: p.note, stat,
         };
       });

@@ -35,7 +35,7 @@ import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bi
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
-import { PromptRevisionConflict, WebApp, type ExtensionInfo, type StoragePart, type ToolOwner } from '../src/web/server.ts';
+import { PromptRevisionConflict, WebApp, type ExtensionInfo, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
 import { ioPageContribution } from '../src/bot.ts';
 import { ConsoleFixtureWorld } from '../src/worlds/console-fixture/world.ts';
@@ -235,16 +235,16 @@ const sessionsList: SessionStats[] = [
   { id: 'dream-1', role: 'dream', label: '梦', startedAt: '2026-07-19T04:00:00+08:00', endedAt: '2026-07-19T04:06:00+08:00', calls: 8, promptTokens: 61000, completionTokens: 3400, cacheHitTokens: 40000, cacheMissTokens: 21000, reasoningTokens: 1200, cacheHitRate: 40000 / 61000, messageCount: 18 } as SessionStats,
 ];
 
-const storage: StoragePart[] = [
-  { key: 'events', label: '事件库(本次运行)', kind: 'disk', location: 'data/runs/r-dev/events.jsonl', danger: true, note: '清除本次运行的事件记录,保留此前记录;游标不回退', stat: () => `${store.latestCursor()}条 / 12.4KB`, clear: () => '(dev)不清除' },
-  { key: 'session', label: '主session(当前对话上下文)', kind: 'disk', location: 'data/session-main.jsonl', danger: true, order: 10, note: '清除对话上下文并重新开场,保留 Memory 和事件库', stat: () => `${session.length}条 / ~90k tok`, clear: () => '(dev)不清除' },
-  { key: 'runlog', label: '运行日志', kind: 'disk', location: 'data/runs/r-dev/log.jsonl', note: '运行日志不进入模型上下文', stat: () => '8.1KB', clear: () => '(dev)不清除' },
-  { key: 'state', label: 'Core 状态', kind: 'disk', location: 'data/core-state.json', note: '清除 Persona 状态、交接时间和模型连续失败记录,保留投递游标与 World 可见性', stat: () => 'Persona 状态1项 / 上次交接刚刚', clear: () => '(dev)不清除' },
-  { key: 'wakes', label: '定时唤醒', kind: 'disk', location: 'data/timers.json', note: '取消全部定时器,不产生通知', stat: () => '1个待触发', clear: () => '(dev)不清除' },
-  { key: 'tracker', label: 'session统计(usage/缓存)', kind: 'memory', note: '清零统计,保留正在运行的 session 条目', stat: () => `${sessionsList.length}个session`, clear: () => '(dev)不清除' },
-  { key: 'pending', label: '待投递事件', kind: 'memory', order: 9, note: '丢弃待投递的事件,保留事件库记录。延迟生成正文的队列项保留;已丢弃项不会在重启后补投', stat: () => '7条待投递', clear: () => '(dev)不清除' },
+const storage: OwnedStoragePart[] = [
+  { key: 'events', owner: 'core', label: '事件库(本次运行)', kind: 'disk', location: 'data/runs/r-dev/events.jsonl', danger: true, note: '清除本次运行的事件记录,保留此前记录;游标不回退', stat: () => `${store.latestCursor()}条 / 12.4KB`, clear: () => '(dev)不清除' },
+  { key: 'session', owner: 'core', label: '主session(当前对话上下文)', kind: 'disk', location: 'data/session-main.jsonl', danger: true, order: 10, note: '清除对话上下文并重新开场,保留 Memory 和事件库', stat: () => `${session.length}条 / ~90k tok`, clear: () => '(dev)不清除' },
+  { key: 'runlog', owner: 'core', label: '运行日志', kind: 'disk', location: 'data/runs/r-dev/log.jsonl', note: '运行日志不进入模型上下文', stat: () => '8.1KB', clear: () => '(dev)不清除' },
+  { key: 'state', owner: 'core', label: 'Core 状态', kind: 'disk', location: 'data/core-state.json', note: '清除 Persona 状态、交接时间和模型连续失败记录,保留投递游标与 World 可见性', stat: () => 'Persona 状态1项 / 上次交接刚刚', clear: () => '(dev)不清除' },
+  { key: 'wakes', owner: 'core', label: '定时唤醒', kind: 'disk', location: 'data/timers.json', note: '取消全部定时器,不产生通知', stat: () => '1个待触发', clear: () => '(dev)不清除' },
+  { key: 'tracker', owner: 'core', label: 'session统计(usage/缓存)', kind: 'memory', note: '清零统计,保留正在运行的 session 条目', stat: () => `${sessionsList.length}个session`, clear: () => '(dev)不清除' },
+  { key: 'pending', owner: 'core', label: '待投递事件', kind: 'memory', order: 9, note: '丢弃待投递的事件,保留事件库记录。延迟生成正文的队列项保留;已丢弃项不会在重启后补投', stat: () => '7条待投递', clear: () => '(dev)不清除' },
 
-  { key: 'minecraft-log', label: 'World 日志(本次运行)', kind: 'disk', group: 'Minecraft World', location: 'data/runs/r-dev/log.jsonl', note: '清除本次运行的 World 日志,保留此前运行的日志', stat: () => '1594条 / 612.0KB', clear: () => '(dev)不清除' },
+  { key: 'minecraft-log', label: 'World 日志(本次运行)', kind: 'disk', owner: 'world:minecraft', location: 'data/runs/r-dev/log.jsonl', note: '清除本次运行的 World 日志,保留此前运行的日志', stat: () => '1594条 / 612.0KB', clear: () => '(dev)不清除' },
 ];
 
 let watched = {

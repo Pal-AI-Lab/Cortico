@@ -32,6 +32,7 @@ function build(loaded: LoadedConfig<ExampleConfig>, worlds: World[]): BotParts<E
 const definition: BotDefinition<ExampleConfig> = {
   id: 'example',
   description: '最小完整 bot:一个 session、只有终端、一份 MEMORY.md',
+  memoryName: 'MEMORY.md',
   declares: DECLARES,
   // 层 1+2:框架默认 ← 这个 bot 的建议。World 段不在这里,启动器按本机实现补。
   defaults: () => ({

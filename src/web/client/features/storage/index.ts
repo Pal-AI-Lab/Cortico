@@ -12,8 +12,8 @@ export interface StoragePartView {
   key: string;
   label: string;
   kind: 'disk' | 'memory';
-  /** 分节归属；留空 = 框架自己的存储。 */
-  group?: string | null;
+  /** 归属:core、persona、memory 或 world:<id>,装配层盖章。 */
+  owner: string;
   location?: string;
   danger?: boolean;
   note?: string;
@@ -29,12 +29,12 @@ function isAbort(err: unknown): boolean {
   return (err as { name?: unknown } | null)?.name === 'AbortError';
 }
 
-/** 框架存储在前，World 按清单中首次出现的顺序分组；各组内 disk 在 memory 前。 */
+/** Core 的存储在前，其余归属按清单中首次出现的顺序分组；各组内 disk 在 memory 前。 */
 export function storageSections(
   parts: readonly StoragePartView[],
 ): Array<{ group: string | null; kind: 'disk' | 'memory'; title: string }> {
   const groups: string[] = [];
-  for (const p of parts) if (p.group && !groups.includes(p.group)) groups.push(p.group);
+  for (const p of parts) if (p.owner !== 'core' && !groups.includes(p.owner)) groups.push(p.owner);
   const out: Array<{ group: string | null; kind: 'disk' | 'memory'; title: string }> = [
     { group: null, kind: 'disk', title: S.sectionDisk },
     { group: null, kind: 'memory', title: S.sectionMemory },
@@ -157,7 +157,7 @@ export function mountStorage(ctx: FeatureContext, opts: { embedded?: boolean } =
         return;
       }
       for (const sec of storageSections(parts)) {
-        const items = parts.filter((p) => (p.group || null) === sec.group && p.kind === sec.kind);
+        const items = parts.filter((p) => (p.owner === 'core' ? null : p.owner) === sec.group && p.kind === sec.kind);
         if (!items.length) continue;
         body.appendChild(ui.h('div', 'stacklabel', sec.title));
         for (const p of items) body.appendChild(row(p));

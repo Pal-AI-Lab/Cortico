@@ -39,6 +39,7 @@ import {
   type ConsoleWorldInfo,
   type WorldInfo,
   type PromptDocument,
+  type OwnedStoragePart,
   type StoragePart,
   type ToolOwner,
   type WebAppPromptDeps,
@@ -55,6 +56,8 @@ export interface BotDefinition<C extends CoreConfig = CoreConfig> {
   id: string;
   /** 一句话说明,启动器列表里显示 */
   description?: string;
+  /** Memory 系统的名字,作 Memory 页的标题;缺省回落到 persona.memory 的类名,再缺省是 Memory。 */
+  memoryName?: string;
   /** 框架默认值与 Persona 默认值；World 默认段由 withWorlds() 补充。 */
   defaults(): C;
   /** 由 withWorlds() 注入的内建及扩展 World 定义；按 worlds.<id>.enabled 挂载。 */
@@ -86,8 +89,6 @@ export interface BotParts<C extends CoreConfig = CoreConfig> {
 export interface ConsoleContribution {
   /** false = 完全不起控制台(无头运行) */
   enabled?: boolean;
-  /** 追加的可清除存储项。 */
-  storage?: StoragePart[];
   /** 追加的可调配置组(Persona那组;core 与各 World 的由框架收拢) */
   configGroups?: ConfigGroup[];
   /** 动态下拉选项；固定选项的文案使用请求语言。 */
@@ -672,15 +673,15 @@ async function deriveWorldInfo(
 /**
  * 存储清单在装配期固定；stat/clear 按 key 访问当前实例，以支持定义实例重建。
  */
-function deriveSlotStorage(assembly: WorldAssembly, language: Language): StoragePart[] {
+function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedStoragePart[] {
   return assembly.slots.flatMap((slot) =>
-    (slot.instance.console?.(language)?.storage ?? []).map((part): StoragePart => {
+    (slot.instance.console?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
       const current = (): StoragePart => {
         const found = slot.instance.console?.(language)?.storage?.find((p) => p.key === part.key);
         if (!found) throw new Error(`${slot.id} 的存储项 ${part.key} 在当前实例上不存在`);
         return found;
       };
-      return { ...part, stat: () => current().stat(), clear: () => current().clear() };
+      return { ...part, owner: `world:${slot.id}`, stat: () => current().stat(), clear: () => current().clear() };
     }),
   );
 }
@@ -768,6 +769,39 @@ export function personaPageContribution(
   return out;
 }
 
+/** Persona 的 memory 子声明成为 memory:<bot> 页;面板、模板与存储项三项皆空时没有这一页。invoke 与 Persona 页共用。 */
+export function memoryPageContribution(
+  botId: string,
+  label: string,
+  persona: Persona,
+  language: Language = 'zh',
+): ConsolePageContribution | null {
+  const decl = persona.console?.(language)?.memory;
+  if (!decl) return null;
+  const panels = decl.panels ?? [];
+  const promptDocs = decl.promptDocs ?? [];
+  const storage = decl.storage ?? [];
+  if (!panels.length && !promptDocs.length && !storage.length) return null;
+  const out: ConsolePageContribution = {
+    id: pageIdFor('memory', botId),
+    kind: 'memory',
+    label,
+    availability: 'active',
+  };
+  if (panels.length) out.panels = normalizePanelDecls(panels);
+  if (promptDocs.length) out.promptDocs = promptDocs;
+  if (storage.length) out.storage = storage;
+  const invoke = persona.console?.(language)?.invoke;
+  if (invoke) out.invoke = (panel, method, args) => invoke(panel, method, args);
+  return out;
+}
+
+/** Memory 实例的类名;没有实例或只是个普通对象时为 null。 */
+function memoryClassName(persona: Persona): string | null {
+  const name = persona.memory?.constructor?.name;
+  return name && name !== 'Object' ? name : null;
+}
+
 /** 合并同 id 的 Persona 页面，按面板归属分派 invoke 和 stream；重复面板由 validateContributions 拒绝。 */
 export function mergePersonaContributions(
   id: string,
@@ -826,8 +860,8 @@ export function deriveConsolePageSources(
   core: WorldVisibilityFacts,
 
   parts: { assembly: WorldAssembly; persona?: Persona },
-  /** bot 标识与配置组；未指定 settingsPage 的组归入 Persona 页面。 */
-  bot?: { id: string; label: string; configGroups?: readonly ConfigGroup[] },
+  /** bot 标识、Memory 名与配置组;配置组归入 Persona 页面。 */
+  bot?: { id: string; label: string; memoryName?: string; configGroups?: readonly ConfigGroup[] },
 
   extra?: (language: Language) => ConsolePageContribution[],
 ): () => ConsolePageSource[] {
@@ -868,10 +902,7 @@ export function deriveConsolePageSources(
 
     // 同 id 的贡献共用页面与构建产物。
     if (bot && selfId) {
-
-      // 指定 settingsPage 的配置组保留在设置页。
-
-      const claimedGroups = (bot.configGroups ?? []).filter((g) => g.settingsPage !== true);
+      const claimedGroups = [...(bot.configGroups ?? [])];
       const botConfig: ConsolePageContribution[] = claimedGroups.length
         ? [{ id: selfId, kind: 'persona', label: bot.label, config: claimedGroups }]
         : [];
@@ -884,6 +915,13 @@ export function deriveConsolePageSources(
           [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
         ),
       });
+      if (persona) {
+        const memoryLabel = bot.memoryName ?? memoryClassName(persona) ?? 'Memory';
+        sources.push({
+          id: pageIdFor('memory', bot.id),
+          contribute: (language) => memoryPageContribution(bot.id, memoryLabel, persona, language),
+        });
+      }
     }
     // 页面 id 不随语言变化；各来源异常由 registry 分别处理。
 
@@ -992,15 +1030,18 @@ export function createBot<C extends CoreConfig>(
   if (contribution.enabled !== false) {
     const startedAt = new Date().toISOString();
     /**
-     * 可清除存储清单在装配期生成一次，/api/storage 与 bot 的 consolePages 共用这些对象。
+     * 可清除存储清单在装配期生成一次，/api/storage 与 bot 的 consolePages 共用这些对象;归属按来源盖章。
      * 贡献方须在 console().storage 中声明全部项目；stat 和 clear 可延迟执行，子进程代理也须在装配期提供完整声明。
      */
-    const consoleStorage = (language: Language): StoragePart[] => [
-      ...deriveStorage(core, loaded.dataDir, language),
-      ...(parts.persona.console?.(language)?.storage ?? []),
-      ...deriveSlotStorage(assembly, language),
-      ...(contribution.storage ?? []),
-    ];
+    const consoleStorage = (language: Language): OwnedStoragePart[] => {
+      const decl = parts.persona.console?.(language);
+      return [
+        ...deriveStorage(core, loaded.dataDir, language).map((p): OwnedStoragePart => ({ ...p, owner: 'core' })),
+        ...(decl?.storage ?? []).map((p): OwnedStoragePart => ({ ...p, owner: 'persona' })),
+        ...(decl?.memory?.storage ?? []).map((p): OwnedStoragePart => ({ ...p, owner: 'memory' })),
+        ...deriveSlotStorage(assembly, language),
+      ];
+    };
     webApp = new WebApp({
       store: core.store,
       memoryDir: loaded.memoryDir,
@@ -1039,6 +1080,7 @@ export function createBot<C extends CoreConfig>(
         {
           id: definition.id,
           label: cfg.displayName || definition.id,
+          ...(definition.memoryName ? { memoryName: definition.memoryName } : {}),
 
           ...(contribution.configGroups?.length ? { configGroups: contribution.configGroups } : {}),
         },

@@ -303,15 +303,13 @@ export class CortiV extends Cormini {
     return this.memory.git;
   }
 
-  /** 在 Cormini 的 ORIENTATION/宪法/工作区清除面之上,加上工作区编辑器三块。 */
+  /** Memory 页是工作区编辑器三块;Cormini 的工作区清除项不要:工作区归版本历史管,一键清空只扫 session/事件/用量。 */
   override console(language: Language = 'zh'): PersonaConsoleDecl {
     const base = super.console(language);
     const surface = personaConsoleDecl({ memory: this.memory });
     return {
       ...base,
-      // 工作区归版本历史管,不进「删除全部数据」。一键清空只扫 session/事件/用量。
-      storage: undefined,
-      panels: surface.panels,
+      memory: { panels: surface.panels },
       invoke: surface.invoke,
     };
   }

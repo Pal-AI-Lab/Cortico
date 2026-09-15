@@ -1810,7 +1810,6 @@ describe('World 自报的可清除存储', () => {
     // 暂态本来就不落盘:它是内存的,清了只等于提前进下一场
     expect(parts.find((p) => p.key === 'minecraft-pwsr')?.kind).toBe('memory');
     for (const p of parts) {
-      expect(p.group).toBe('Minecraft World');
       expect(p.stat()).toBeTruthy();
       expect(p.danger).toBeUndefined();
     }

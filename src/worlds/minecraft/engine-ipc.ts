@@ -44,7 +44,6 @@ export interface StorageStat {
   key: string;
   label: string;
   kind: 'disk' | 'memory';
-  group?: string;
   location?: string;
   danger?: boolean;
   note?: string;

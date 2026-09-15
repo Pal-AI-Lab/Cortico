@@ -356,14 +356,15 @@ export class CortiSoulmate extends Cormini {
   // 控制台
   // ---------------------------------------------------------------------------
 
-  /** 声明工作区、Memory 分层、版本历史与模板；部署级控制在 console-page.ts。工作区排除在统一清除清单外。 */
+  /** 工作区、Memory 分层、版本历史三块归 Memory 页,模板归 Persona 页;部署级控制在 console-page.ts。工作区排除在统一清除清单外。 */
   override console(language: Language = 'zh'): PersonaConsoleDecl {
-    return personaConsoleDecl({
+    const { panels, ...decl } = personaConsoleDecl({
       memory: this.memory,
       memo: this.memo,
       emergences: () => this.emergences(),
       firstTurnDocs: this.firstTurnDocs(language),
       texts: { path: (name) => this.textFile(name), writePath: (name) => this.textWritePath(name) },
     });
+    return { ...decl, memory: { panels } };
   }
 }

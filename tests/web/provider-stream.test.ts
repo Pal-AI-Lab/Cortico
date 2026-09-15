@@ -280,7 +280,17 @@ describe('解析失败', () => {
     return text;
   };
 
-  it('没这个 provider / 没声明这个面板 / 没有流式面,三种都先说明再关', async () => {
+  it('流式通道不要求声明过同名面板:通道名只归那一页解释', async () => {
+    const fake = capturing('world:demo', 'live');
+    await withApp(fake.sources, async ({ port }) => {
+      const ws = connect(port, 'world:demo', 'undeclared');
+      await opened(ws);
+      expect((await fake.opened).panel).toBe('undeclared');
+      ws.close();
+    });
+  });
+
+  it('没这个 provider / 没有流式面,两种都先说明再关', async () => {
     const withStream = capturing().contribution;
     const mute: ConsolePageContribution = {
       id: 'world:mute',
@@ -290,7 +300,6 @@ describe('解析失败', () => {
     };
     await withApp(sourcesOf(withStream, mute), async ({ port }) => {
       expect(await expectExplainedClose(port, 'world:nobody', 'live', 1008)).toContain('没有这个 provider');
-      expect(await expectExplainedClose(port, 'world:demo', 'nosuch', 1008)).toContain('没有声明面板');
       expect(await expectExplainedClose(port, 'world:mute', 'live', 1013)).toContain('没有流式面');
     });
   });

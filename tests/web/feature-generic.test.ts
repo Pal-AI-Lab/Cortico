@@ -776,10 +776,10 @@ describe('配置页', () => {
 // ---------------------------------------------------------------------------
 
 const parts = [
-  { key: 'events', label: '事件库', kind: 'disk', location: 'data/events.jsonl', stat: '128 条', danger: true, note: '经历不可恢复' },
-  { key: 'cache', label: '缓存', kind: 'memory', stat: '3 项' },
-  { key: 'mod-disk', label: 'World 落盘', kind: 'disk', group: '样例 World', stat: '1KB' },
-  { key: 'mod-mem', label: 'World 内存', kind: 'memory', group: '样例 World', stat: '0' },
+  { key: 'events', owner: 'core', label: '事件库', kind: 'disk', location: 'data/events.jsonl', stat: '128 条', danger: true, note: '经历不可恢复' },
+  { key: 'cache', owner: 'core', label: '缓存', kind: 'memory', stat: '3 项' },
+  { key: 'mod-disk', owner: 'world:sample', label: 'World 落盘', kind: 'disk', stat: '1KB' },
+  { key: 'mod-mem', owner: 'world:sample', label: 'World 内存', kind: 'memory', stat: '0' },
 ];
 
 describe('存储页', () => {
@@ -788,8 +788,8 @@ describe('存储页', () => {
     expect(storageSections(parts).map((s: Any) => s.title)).toEqual([
       '落盘 data/（重启后仍在）',
       '内存暂存（重启即清零）',
-      '样例 World · 落盘',
-      '样例 World · 内存暂存',
+      'world:sample · 落盘',
+      'world:sample · 内存暂存',
     ]);
     // 没有 World 存储时就只有前两节
     expect(storageSections([parts[1]]).length).toBe(2);

@@ -23,8 +23,9 @@
 
 ## 协议
 
-`ConsolePageKind` 包含 `framework`、`world`、`persona`、`llm`。贡献页 id 使用 `world:<id>`、
-`persona:<id>` 或 `llm:<id>`；构建脚本与服务端共用 `pageIdFor()`。面板 id 在所属页内唯一。
+`ConsolePageKind` 包含 `framework`、`world`、`persona`、`memory`、`llm`。贡献页 id 使用 `world:<id>`、
+`persona:<id>`、`memory:<id>` 或 `llm:<id>`；构建脚本与服务端共用 `pageIdFor()`,`memory:<id>` 的浏览器产物
+取 `persona:<id>` 那份。面板 id 在所属页内唯一。
 manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 
 `toPageManifest()` 将服务端的 `ConsolePageContribution` 转换为 `ConsolePageManifest`。

@@ -141,7 +141,6 @@ function storageStats(parts: StoragePart[]): StorageStat[] {
       key: p.key,
       label: p.label,
       kind: p.kind,
-      group: p.group,
       location: p.location,
       danger: p.danger,
       note: p.note,

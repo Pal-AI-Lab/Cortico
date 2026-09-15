@@ -23,7 +23,8 @@
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
 
 World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `persona:<id>` /
-`llm:<id>`。面板、配置组与提示词文档由贡献方声明;
+`llm:<id>`;Persona 的 `console().memory` 子声明另成一页 `memory:<id>`,与 Persona 页共用一份
+浏览器产物,标题取 bot 的 `memoryName`。面板、配置组与提示词文档由贡献方声明;
 框架按声明渲染，新增 World 或 Persona 无需修改 `src/web/**`。
 `tests/web/acceptance-zero-diff.test.ts` 验证此约束。
 
@@ -34,7 +35,8 @@ World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `per
 `promptDocs`(可编辑的提示词文档,如环境提示词)、`storage`(存储清单)、`invoke`(面板的
 数据接口)、`stream`(面板的推送通道)。World 通过 `World.console()` 声明,Persona 通过
 `Persona.console()` 声明。面板方法只接受 POST;`getMethods` 点名的方法才接受 GET(轮询读、
-`<audio src>` 这类只能带 URL 的场合)。
+`<audio src>` 这类只能带 URL 的场合)。存储项由装配层按来源盖上归属 `owner`(`core` / `persona` /
+`memory` / `world:<id>`),`/api/storage` 原样回它。
 
 自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/console/client.ts`(Persona 是
 `bots/<名>/console/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,

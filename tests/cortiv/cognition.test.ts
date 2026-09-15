@@ -279,7 +279,6 @@ describe('认知外包受理 · 四条路的返回', () => {
     expect(prop.title).toContain('请托');
     expect(prop['x-hot']).toBe(true);
     expect(CORTIV_COGNITION_CONFIG_GROUP.owner).toBe('persona');
-    expect(CORTIV_COGNITION_CONFIG_GROUP.settingsPage).toBeUndefined();
 
     const defaults = definition.defaults();
     expect(defaults.cognition.enabled).toBe(true);

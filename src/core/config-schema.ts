@@ -56,8 +56,6 @@ export interface ConfigGroup {
   id: string;
   /** 所有者角色，不含具体实现名称；不同 Persona 的 owner 均为 persona。 */
   owner: 'core' | 'persona' | `world:${string}` | `provider:${string}`;
-  /** 将配置组放在设置页；不改变 owner 或写入权限。 */
-  settingsPage?: boolean;
   schema: ConfigGroupSchema;
 }
 

@@ -5,7 +5,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WebApp, type StoragePart } from '../../src/web/server.ts';
+import { WebApp, type OwnedStoragePart } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -14,9 +14,10 @@ let port: number;
 let dir: string;
 let cleared: string[] = [];
 
-const parts: StoragePart[] = [
+const parts: OwnedStoragePart[] = [
   {
     key: 'session',
+    owner: 'core',
     label: '主session',
     kind: 'disk',
     danger: true,
@@ -29,6 +30,7 @@ const parts: StoragePart[] = [
   },
   {
     key: 'events',
+    owner: 'core',
     label: '事件库',
     kind: 'disk',
     location: 'data/events.jsonl',
@@ -42,6 +44,7 @@ const parts: StoragePart[] = [
   },
   {
     key: 'tracker',
+    owner: 'core',
     label: 'session统计',
     kind: 'memory',
     stat: () => '3个session',
@@ -52,6 +55,7 @@ const parts: StoragePart[] = [
   },
   {
     key: 'broken',
+    owner: 'world:sample',
     label: '会失败的部分',
     kind: 'memory',
     stat: () => {
@@ -88,7 +92,7 @@ afterAll(async () => {
 });
 
 describe('GET /api/storage', () => {
-  it('列出各部分:key/label/kind/danger/stat;统计异常不炸整个列表', async () => {
+  it('列出各部分:key/label/kind/owner/danger/stat;统计异常不炸整个列表', async () => {
     const { status, body } = await req(`${base()}/api/storage`);
     expect(status).toBe(200);
     expect(body.parts).toHaveLength(4);
@@ -98,6 +102,8 @@ describe('GET /api/storage', () => {
     expect(ev.danger).toBe(true);
     expect(ev.stat).toBe('42条');
     expect(ev.location).toBe('data/events.jsonl');
+    expect(ev.owner).toBe('core');
+    expect(body.parts.find((p: any) => p.key === 'broken').owner).toBe('world:sample');
 
     const tr = body.parts.find((p: any) => p.key === 'tracker');
     expect(tr.kind).toBe('memory');

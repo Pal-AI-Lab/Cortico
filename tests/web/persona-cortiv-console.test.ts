@@ -29,7 +29,7 @@ describe('CortiV 控制面声明', () => {
     expect(validateContributions([c!])).toEqual([]);
   });
 
-  it('CortiV.console() 保留 promptDocs、排除工作区清除项，并提供 invoke', () => {
+  it('CortiV.console() 保留 promptDocs,Memory 页是工作区三块且不带工作区清除项,并提供 invoke', () => {
     const core = new CortiV({ memoryDir: dir });
     const decl = core.console();
     // 没给 firstTurnDir(部署的 prompts/)就没有首轮对话三份;装配层会给
@@ -40,7 +40,9 @@ describe('CortiV 控制面声明', () => {
       'firstTurn.user', 'firstTurn.thinking', 'firstTurn.reply',
     ]);
     expect(decl.storage).toBeUndefined();
-    expect(decl.panels?.map((p) => p.id)).toEqual(['workspace', 'memory', 'history']);
+    expect(decl.panels).toBeUndefined();
+    expect(decl.memory?.storage).toBeUndefined();
+    expect(decl.memory?.panels?.map((p) => p.id)).toEqual(['workspace', 'memory', 'history']);
     expect(typeof decl.invoke).toBe('function');
   });
 

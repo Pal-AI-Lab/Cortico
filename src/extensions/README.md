@@ -35,6 +35,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 
 - `WorldContext.language` 删除。
 - `Persona.firstTurn()` 改为 `sessionHead()`,返回 Open Responses item 列表;`FirstTurnRound` 删除。
+- `ConfigGroup.settingsPage` 删除,Persona 的配置组一律进 Persona 页;`ConsoleContribution.storage` 删除。
 
 ## 装载
 

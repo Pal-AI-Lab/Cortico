@@ -58,7 +58,7 @@ beforeAll(async () => {
     getStatus: () => ({}),
     run: { pause: () => {}, resume: () => {}, isPaused: () => false },
     storage: (language) => [{
-      key: 'demo', kind: 'memory', label: language === 'en' ? 'Demo' : '演示',
+      key: 'demo', owner: 'core', kind: 'memory', label: language === 'en' ? 'Demo' : '演示',
       stat: () => '', clear: () => (language === 'en' ? 'cleared' : '已清'),
     }],
     consolePageSources: () => [{

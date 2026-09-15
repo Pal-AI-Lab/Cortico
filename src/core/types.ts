@@ -681,8 +681,6 @@ export interface StoragePart {
   key: string;
   label: string;
   kind: 'disk' | 'memory';
-  /** 存储页的分组名；缺省为框架存储，World 填写自己的名称。 */
-  group?: string;
   /** 磁盘位置说明；内存存储省略。 */
   location?: string;
   /** 清除不可恢复的记录时设置；控制台要求额外确认。 */
@@ -695,6 +693,13 @@ export interface StoragePart {
   stat(): string;
   /** 返回清除结果；抛错表示失败。 */
   clear(): Promise<string> | string;
+}
+
+/** 存储项的归属。装配层按声明来源盖章,控制台按它把项分到 Core、Persona、Memory 与各 World 的页面。 */
+export type StorageOwner = 'core' | 'persona' | 'memory' | `world:${string}`;
+
+export interface OwnedStoragePart extends StoragePart {
+  owner: StorageOwner;
 }
 
 /**
@@ -790,7 +795,7 @@ export interface WorldConsoleDecl {
   stream?(panel: string, socket: WorldStreamSocket): void;
   /** World 的提示词模板；role=envPrompt 的模板用 envPromptVars() 渲染。 */
   promptDocs?: PromptDocDecl[];
-  /** World 的可清除存储，单独列在存储页。 */
+  /** World 的可清除存储，列在本 World 页的数据页签。 */
   storage?: StoragePart[];
   /**
    * 独立页面链接；inheritTheme 表示打开时附带当前主题快照。
@@ -928,6 +933,8 @@ export interface Persona {
    * 计入 hardTokens。内容只应随 Persona 自己的输入变化;每次不同就每次打穿前缀缓存。
    */
   sessionHead?(): Item[];
+  /** Memory 实例。Core 不读它的内容;bot 没给 memoryName 时控制台以它的类名作 Memory 页标题。 */
+  memory?: object;
   /** Memory 目录的绝对路径。 */
   memoryDir: string;
   /** mem: 句柄的后端，由 Persona 解释和保存二进制内容。 */
@@ -975,6 +982,11 @@ export interface PersonaConsoleDecl {
   promptDocs?: PromptDocDecl[];
   storage?: StoragePart[];
   config?: ConfigGroup[];
+  /**
+   * Memory 页的声明:面板、模板与存储项归 Memory 而不是 Persona。面板 id 不得与本页的重复,
+   * invoke 共用;缺省或三项皆空时没有 Memory 页。
+   */
+  memory?: { panels?: WorldPanelDecl[]; promptDocs?: PromptDocDecl[]; storage?: StoragePart[] };
 }
 
 /**

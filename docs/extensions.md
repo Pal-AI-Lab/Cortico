@@ -80,6 +80,8 @@ export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), cre
 「已装,本部署未用」。bot 的 `id` 不得与仓内 `bots/` 任一目录同名:控制台面板产物按
 `persona:<id>` 找,撞名会拿到仓内那份。
 
+`memoryName` 是 Memory 页的标题;缺省回落到 `persona.memory` 的类名,`check:extension` 对缺名的包给警告。
+
 包目录只读。`promptDocs` 里没给 `deploymentPath` 的模板在控制台里能看不能存;要让部署者改,
 在声明里给出部署侧的覆盖路径(通常在 `loaded.rootDir` 下)。bot 要挂的 World 若也是扩展,
 在 `declares` 里声明 id 即可,没装时是灰卡。

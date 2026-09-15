@@ -371,6 +371,9 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
     failures.push('persona.blobs 不是 BlobStore(put / get / list):mem: 句柄没有后端。');
   }
   if (!failures.length) ok.push('build() 返回 Persona,契约必填项都在。');
+  if (typeof def.memoryName !== 'string' || def.memoryName === '') {
+    warnings.push('BotDefinition 没有 memoryName:Memory 页标题回落到 persona.memory 的类名,再缺省是「Memory」。');
+  }
 
   const prebuilt = parts.worlds ?? [];
   const ids = new Set<string>();
