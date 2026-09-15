@@ -1555,10 +1555,9 @@ function fieldUse(skill: string, f: FieldSpec, merged: Record<string, unknown>):
 
 /**
  * steps.items schema:一份扁平字段池,description 写明每个字段用于哪些技能。
- * 每技能自己的必填与横向规则不进 schema——2026-08-20:grok 的工具参数约束解码
- * 只认顶层 properties,判别式 oneOf 分支里的字段会被整个吃掉(她填了 text 也传不出来),
- * 于是取消判别式。硬约束改由 SKILL_DOC 陈述、parseSteps 裁决,报错回执带整张技能表。
- * 判别式等各 provider 的支持面摸清了再说。
+ * 每技能自己的必填与横向规则不进 schema:判别式 oneOf 不能用,有的 provider 解工具参数
+ * 约束只认顶层 properties,分支里的字段会被整个吃掉,她填了也传不出来。硬约束改由
+ * SKILL_DOC 陈述、parseSteps 裁决,报错回执带整张技能表。
  */
 function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
   const pool = new Map<string, { schema: Record<string, unknown>; uses: Array<[string, FieldSpec]> }>();
