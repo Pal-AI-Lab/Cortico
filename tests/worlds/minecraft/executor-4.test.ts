@@ -4066,9 +4066,13 @@ describe('物品使用效果与行军停滞边界', () => {
       (baseSetGoal as (g: unknown) => void)(g);
     };
     (bot.pathfinder as { isMining?: () => boolean }).isMining = () => true;
-    // 人在原地小幅抖动:净位移凑不满 8 格,距离也从没更近
+    // 人在原地两点间来回蹭:净位移 0.71 格凑不满 8 格,靠近的那 0.71 格也够不到
+    // GOTO_STALL_EPS 的 1 格,两条刷新无进展计时的路都不通。
+    // 两点写死不取随机:随机抖动的改善幅度最大到 1.5×√2 格,约 2% 的场次要到二十几
+    // 秒才抖出「近满 1 格」的一步,计时跟着归零,25 秒的闸推到 waitUntil 的 40 秒之外。
+    bot.entity.position = new V(1, 64, 1);
     const wiggle = setInterval(() => {
-      bot.entity.position = new V(0.5 + Math.random() * 1.5, 64, 0.5 + Math.random() * 1.5);
+      bot.entity.position = bot.entity.position.x === 1 ? new V(1.5, 64, 1.5) : new V(1, 64, 1);
     }, 300);
     try {
       const { exec, reports } = makeExecutorOn(bot);
