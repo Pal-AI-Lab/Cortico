@@ -1,12 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { readTextFile } from './core/util.ts';
 
 export type JsonObject = Record<string, unknown>;
 
 export function readJsonObject(file: string): JsonObject {
   if (!existsSync(file)) return {};
   try {
-    const value = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+    const value = JSON.parse(readTextFile(file)) as unknown;
     if (!value || typeof value !== 'object' || Array.isArray(value)) {
       throw new Error('root must be an object');
     }

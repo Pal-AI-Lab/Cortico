@@ -56,16 +56,21 @@ Node 22+。
 corepack pnpm install
 ```
 
-一份部署是一个目录，指定一个 bot。参考 bot `cormini` 初始只启用终端对话：
-
-```bash
-mkdir -p deployments/mybot && echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
-```
-
+一份部署是一个目录，指定一个 bot。参考 bot `cormini` 初始只启用终端对话，
 它的默认端点经 `openai-responses-compat` 连接 DeepSeek：
 
 ```bash
-mkdir -p deployments/providers/deepseek && echo "DEEPSEEK_API_KEY=你的key" > deployments/providers/deepseek/.env
+mkdir -p deployments/mybot deployments/providers/deepseek
+echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
+echo 'DEEPSEEK_API_KEY=你的key' > deployments/providers/deepseek/.env
+```
+
+Windows PowerShell：
+
+```powershell
+mkdir deployments\mybot, deployments\providers\deepseek -Force
+Set-Content deployments\mybot\deployment.json '{ "bot": "cormini" }' -Encoding utf8
+Set-Content deployments\providers\deepseek\.env 'DEEPSEEK_API_KEY=你的key' -Encoding utf8
 ```
 
 ```bash
@@ -74,8 +79,8 @@ pnpm start mybot
 
 控制台在 `http://127.0.0.1:7788/`。端点、密钥和其余参数都在控制台里改，保存即生效。
 
-`./start.sh`（Windows 上双击 `start.bat`）会安装缺失的依赖、构建缺失的控制台产物，提供部署选择
-菜单，并在控制台请求重启后重新启动进程。
+`pnpm start`、`./start.sh`（Windows 上双击 `start.bat`）都会安装缺失的依赖、构建缺失的控制台产物，
+提供部署选择菜单，并在控制台请求重启后重新启动进程。
 
 ## 四层设计
 

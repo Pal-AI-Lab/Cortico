@@ -40,7 +40,7 @@ async function loadBotDefinition(
   const deployDir = deploymentDir(name);
   const manifest = readDeploymentManifest(name);
   if (!manifest) {
-    throw new Error(`${resolve(deployDir, 'deployment.json')} 缺失或没有 bot 字段`);
+    throw new Error(`${resolve(deployDir, 'deployment.json')} 不存在`);
   }
   const location = locateBotPackage(repoRoot(), manifest.bot, packageDir(manifest.bot));
   const definition = await importBotDefinition(location, {
@@ -164,7 +164,9 @@ async function main(): Promise<void> {
   }
   console.log(`  主模型:    ${bot.core.mainSessionSpec().model}`);
   if (missingSecret) {
-    console.log(`  ⚠ 缺少 ${missingSecret}(进程环境或 ${resolve(endpointDir, '.env')})；可在控制台「语言模型」页修改密钥变量名或补填密钥`);
+    const envFile = resolve(endpointDir, '.env');
+    const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
+    console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「语言模型」页修改密钥变量名或补填密钥`);
   }
   if (startPaused) {
     console.log('  ⏸ 已暂停');

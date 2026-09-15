@@ -38,3 +38,9 @@ Windows 把控制台事件发给前台进程组里的每一个进程。`bin/cort
 - 外部程序可能受到 Smart App Control 限制;诊断与运行时目录设置见 [runtimes.md](runtimes.md)。
 - Minecraft 的 Java 版本约定与客户端兼容限制见 [Minecraft README](../src/worlds/minecraft/README.md)。
 - 在 `extensions/` 下跑 pnpm 必须带 `--ignore-workspace`,否则根 lockfile 会多出一个 importer。
+
+## 文本文件编码
+
+手写的配置与密钥文件(`deployment.json`、`config.json`、`.env`)按 BOM 解码:UTF-8、
+带 BOM 的 UTF-8 与 UTF-16 LE 都读得出来。PowerShell 5.1 的 `>` 与 `Out-File` 默认写 UTF-16 LE,
+`Set-Content` 默认写当前代码页的 ANSI;非 ASCII 内容用 `-Encoding utf8` 指明。

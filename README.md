@@ -58,16 +58,20 @@ corepack pnpm install
 ```
 
 A deployment is a directory naming one bot. The reference bot `cormini` starts with terminal
-conversation alone:
+conversation alone, and its default endpoint reaches DeepSeek through `openai-responses-compat`:
 
 ```bash
-mkdir -p deployments/mybot && echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
+mkdir -p deployments/mybot deployments/providers/deepseek
+echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
+echo 'DEEPSEEK_API_KEY=your-key' > deployments/providers/deepseek/.env
 ```
 
-Its default endpoint reaches DeepSeek through `openai-responses-compat`:
+On Windows PowerShell:
 
-```bash
-mkdir -p deployments/providers/deepseek && echo "DEEPSEEK_API_KEY=your-key" > deployments/providers/deepseek/.env
+```powershell
+mkdir deployments\mybot, deployments\providers\deepseek -Force
+Set-Content deployments\mybot\deployment.json '{ "bot": "cormini" }' -Encoding utf8
+Set-Content deployments\providers\deepseek\.env 'DEEPSEEK_API_KEY=your-key' -Encoding utf8
 ```
 
 ```bash
@@ -77,9 +81,9 @@ pnpm start mybot
 The console is at `http://127.0.0.1:7788/`. Endpoints, keys, and every other knob are edited
 there and take effect on save.
 
-`./start.sh`, or `start.bat` on Windows, installs missing dependencies, builds the console
-bundle when it is absent, offers a deployment menu, and restarts the process when the console
-asks for it.
+`pnpm start`, `./start.sh`, and `start.bat` on Windows all install missing dependencies, build
+the console bundle when it is absent, offer a deployment menu, and restart the process when the
+console asks for it.
 
 ## The Four Layers
 

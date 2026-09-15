@@ -11,7 +11,7 @@ import {
   readGroupValues,
   setByPath,
 } from '../../core/config-schema.ts';
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { updateJsonObject } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
@@ -22,6 +22,7 @@ import type { ProviderAvailability, ProviderModule } from '../base.ts';
 import { endpointAvailability, validateEntry } from '../configuration.ts';
 import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
 import { GenerationError } from '../../core/generation.ts';
+import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
 import { record } from '../../protocol/open-responses/context.ts';
 import { text } from './strings.ts';
@@ -171,7 +172,7 @@ export class ProviderSettings {
     if (process.env[entry.secret]) return 'env';
     const file = join(this.providersDir, name, '.env');
     if (!existsSync(file)) return 'none';
-    return new RegExp(`^\\s*${entry.secret}\\s*=\\s*\\S+`, 'm').test(readFileSync(file, 'utf8')) ? 'file' : 'none';
+    return new RegExp(`^\\s*${entry.secret}\\s*=\\s*\\S+`, 'm').test(readTextFile(file)) ? 'file' : 'none';
   }
 
   /** 把密钥值写进端点目录的 `.env`(同名行覆盖),并让实例重建以读到它。 */
@@ -185,7 +186,7 @@ export class ProviderSettings {
     mkdirSync(dir, { recursive: true });
     const file = join(dir, '.env');
     const line = `${entry.secret}=${value.trim()}`;
-    const current = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const current = existsSync(file) ? readTextFile(file) : '';
     const pattern = new RegExp(`^\\s*${entry.secret}\\s*=.*$`, 'm');
     const next = pattern.test(current)
       ? current.replace(pattern, line)

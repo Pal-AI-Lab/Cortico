@@ -4,8 +4,9 @@
  * 同一代码包可供多个部署使用。
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
+import { readTextFile } from './core/util.ts';
 
 /** 默认部署目录，相对主仓库根；该目录不纳入版本控制。 */
 const DEFAULT_DEPLOYMENT_DIRNAME = 'deployments';
@@ -62,7 +63,7 @@ function readDeploymentRootFromEnvFile(checkoutRoot: string): string {
   const file = resolve(checkoutRoot, '.env');
   if (!existsSync(file)) return '';
   const m = new RegExp(`^[ \\t]*${DEPLOYMENT_ROOT_ENV}[ \\t]*=[ \\t]*(.*)$`, 'm').exec(
-    readFileSync(file, 'utf8'),
+    readTextFile(file),
   );
   const raw = m ? m[1].trim() : '';
   return raw.length >= 2 && (raw.startsWith('"') || raw.startsWith("'")) && raw.endsWith(raw[0])
@@ -134,15 +135,21 @@ export interface DeploymentManifest {
   bot: string;
 }
 
-/** 读一份部署的 `deployment.json`;文件缺失或 `bot` 字段不成形状都回 null。 */
+/**
+ * 读一份部署的 `deployment.json`。文件不在回 null;文件在而读不成一个带 `bot` 的对象就抛,
+ * 消息里带上是哪一步不成。
+ */
 export function readDeploymentManifest(name: string): DeploymentManifest | null {
   const file = resolve(deploymentDir(name), 'deployment.json');
   if (!existsSync(file)) return null;
+  let raw: { bot?: unknown };
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as { bot?: unknown };
-    if (typeof raw.bot !== 'string' || !raw.bot.trim()) return null;
-    return { bot: raw.bot.trim() };
-  } catch {
-    return null;
+    raw = JSON.parse(readTextFile(file)) as { bot?: unknown };
+  } catch (err) {
+    throw new Error(`${file} 不是合法 JSON: ${err instanceof Error ? err.message : String(err)}`);
   }
+  if (typeof raw.bot !== 'string' || !raw.bot.trim()) {
+    throw new Error(`${file} 没有 bot 字段`);
+  }
+  return { bot: raw.bot.trim() };
 }

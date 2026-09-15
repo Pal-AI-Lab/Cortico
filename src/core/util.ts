@@ -3,7 +3,7 @@ import { type ContextRecord } from '../protocol/open-responses/context.ts';
  * 共享小工具:token估算、时间格式化、Logger实现。
  */
 import { createHash } from 'node:crypto';
-import { appendFileSync, mkdirSync, existsSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { LOG_LEVEL_RANK, type EventEnvelope, type LogEmitOptions, type LogError, type LogInput, type Logger, type LogLevel, type LogRecord } from './types.ts';
 import { currentAnchors } from './log-context.ts';
@@ -369,4 +369,19 @@ export function nullLogger(): Logger {
 /** 生成短随机id(tool_call补记、fork id等) */
 export function shortId(prefix = ''): string {
   return prefix + Math.random().toString(36).slice(2, 10);
+}
+
+/**
+ * 读一个手写的文本文件:按 BOM 选编码,UTF-8 与 UTF-16 LE 都读得出来,BOM 不进返回值。
+ * 没有 BOM 就是 UTF-8。Windows 的 shell 重定向写出的是带 BOM 的 UTF-8 或 UTF-16 LE。
+ */
+export function readTextFile(file: string): string {
+  const bytes = readFileSync(file);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return bytes.subarray(2).toString('utf16le');
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
+    return bytes.subarray(3).toString('utf8');
+  }
+  return bytes.toString('utf8');
 }
