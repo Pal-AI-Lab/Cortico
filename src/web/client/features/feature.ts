@@ -40,6 +40,11 @@ export interface FeatureContext {
     root: HTMLElement;
     route(pageId: string, panelId: string): readonly string[];
   }): EmbeddedConsolePageHost;
+  /**
+   * 重取控制台页清单并重排左栏，不动当前页。激活/停用 World 这类会改清单的
+   * 操作成功后调用。缺席时左栏保持旧清单。
+   */
+  refreshNav?(): Promise<void>;
 }
 
 export type FrameworkFeature = {

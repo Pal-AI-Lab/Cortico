@@ -184,6 +184,7 @@ export function boot(doc: Document = document): { dispose(): void } {
         const out = await feature.mount({
           root: slot, lifecycle, signal: lifecycle.signal, ui, router, route,
           capabilities, onError, consolePageHost,
+          refreshNav: () => host.refresh(),
         });
         if (gen !== generation) {
           if (out && typeof out.dispose === 'function') out.dispose();

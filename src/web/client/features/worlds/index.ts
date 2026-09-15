@@ -179,7 +179,7 @@ export function mountWorlds(ctx: FeatureContext): void {
       );
       if (ctx.signal.aborted) return;
       setMsg(out?.result || (wantEnabled ? S.activated : S.deactivated));
-      await load();
+      await Promise.all([load(), ctx.refreshNav?.()]);
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return;
       setMsg(wantEnabled ? S.activateFailed(errText(err)) : S.deactivateFailed(errText(err)), true);

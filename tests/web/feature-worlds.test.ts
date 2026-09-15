@@ -282,6 +282,7 @@ async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
     route: { segments: ['world'], query: {}, raw: '/worlds' },
     capabilities: caps,
     onError: vi.fn(),
+    refreshNav: vi.fn(async (): Promise<void> => {}),
   };
   return { ctx, doc, root, lifecycle, navigated, ui, win: doc.defaultView as FakeWindow };
 }
@@ -584,6 +585,26 @@ describe('激活 / 停用 / 重启（热生效）', () => {
     expect(calls[0].url).toBe('/api/worlds/restart');
     expect(calls[0].body).toEqual({ id: 'alpha' });
     expect(root.find('msgline')!.textContent).toBe('已重启');
+  });
+
+  it('激活/停用成功后各调一次 refreshNav 重排左栏;拒绝时不调', async () => {
+    const bag = await mountWith(routes);
+    bag.ctx.refreshNav.mockClear();
+    cardOf(bag.root, '丙渠道').findButton('激活 World')!.dispatchEvent({ type: 'click' });
+    await flush();
+    expect(bag.ctx.refreshNav).toHaveBeenCalledTimes(1);
+
+    bag.ctx.refreshNav.mockClear();
+    cardOf(bag.root, '甲渠道').findButton('停用 World')!.dispatchEvent({ type: 'click' });
+    answerConfirm(bag.doc, true);
+    await flush();
+    expect(bag.ctx.refreshNav).toHaveBeenCalledTimes(1);
+
+    stubFetch({ ...listRoute }, ['/api/worlds/activation']);
+    bag.ctx.refreshNav.mockClear();
+    cardOf(bag.root, '丙渠道').findButton('激活 World')!.dispatchEvent({ type: 'click' });
+    await flush();
+    expect(bag.ctx.refreshNav).not.toHaveBeenCalled();
   });
 
   it('服务端拒绝(前置检查没过)→ 一行红字,按钮解禁', async () => {
