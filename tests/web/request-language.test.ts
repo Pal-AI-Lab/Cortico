@@ -90,7 +90,7 @@ describe('每个请求自带界面语言', () => {
     expect(zh.providers.map((p) => p.id)).toEqual(en.providers.map((p) => p.id));
     expect(zh.providers[0].label).toBe('终端对话');
     expect(en.providers[0].label).toBe('Terminal chat');
-    expect(en.providers[0].panels?.[0]?.title).toBe('Chat');
+    expect(en.providers[0].prompts?.[0]?.title).toBe('Terminal · Environment prompt');
   });
 
   it('存储清单与清除回执按请求语言', async () => {

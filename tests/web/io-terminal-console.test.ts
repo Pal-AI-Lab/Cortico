@@ -316,18 +316,6 @@ describe('终端消息附图', () => {
     await mod.stop();
   });
 
-  it('面板调用面 blob(handle) 按句柄回二进制;不在库里的句柄抛错', async () => {
-    const host = new FakeHost();
-    const { mod } = await connect(host);
-    const handle = host.putBlob(PNG, 'image/png');
-    const decl = mod.console();
-    const out = await decl.invoke!('chat', 'blob', [handle]) as { $binary: { mime: string; base64: string } };
-    expect(out.$binary.mime).toBe('image/png');
-    expect(Buffer.from(out.$binary.base64, 'base64').equals(PNG)).toBe(true);
-    await expect(async () => decl.invoke!('chat', 'blob', ['log:nope.png'])).rejects.toThrow('附件库里没有');
-    await expect(async () => decl.invoke!('chat', 'other', [])).rejects.toThrow('未知方法');
-    await mod.stop();
-  });
 });
 
 
@@ -467,18 +455,13 @@ describe('控制台通道', () => {
 // ── 3. 控制台贡献 ──────────────────────────────────────────────────────
 
 describe('控制台贡献', () => {
-  it('panel 是新式对象声明,id 是局部 id(不带 World 名前缀)', () => {
+  it('这一页不声明面板:对话只在终端页;流的通道名 chat 是局部 id(不带 World 名前缀)', () => {
     const mod = new TerminalWorld();
     const decl = mod.console();
-    expect(decl.panels).toHaveLength(1);
-    const panel = decl.panels![0];
-    expect(typeof panel).toBe('object');
-    const p = panel as { id: string; title: string; description?: string };
-    expect(p.id).toBe('chat');
-    expect(isPanelId(p.id)).toBe(true);
-    expect(p.id.startsWith('terminal')).toBe(false);
-    expect(p.title).toBeTruthy();
-    expect(p.description).toBeTruthy();
+    expect(decl.panels).toBeUndefined();
+    expect(decl.invoke).toBeUndefined();
+    expect(typeof decl.stream).toBe('function');
+    expect(isPanelId('chat')).toBe(true);
   });
 
   it('在线人数徽标随连接变化', async () => {
@@ -496,7 +479,7 @@ describe('控制台贡献', () => {
 // ── 4. 按局部 id 分派 ──────────────────────────────────────────────────
 
 describe('stream 按局部 panel id 分派', () => {
-  it('未知面板抛错(旧的全局扁平 id 也在其中),已建立的连接不受影响', async () => {
+  it('未知通道抛错(旧的全局扁平 id 也在其中),已建立的连接不受影响', async () => {
     const host = new FakeHost();
     const mod = new TerminalWorld();
     await mod.start(host);
@@ -505,7 +488,7 @@ describe('stream 按局部 panel id 分派', () => {
 
     for (const bad of ['terminal-chat', 'world:terminal', 'nosuch']) {
       const sock = new FakeStream();
-      expect(() => mod.stream(bad, sock)).toThrow(/未知面板/);
+      expect(() => mod.stream(bad, sock)).toThrow(/未知通道/);
       // 抛错的那条一个人都没进名单
       expect(sock.sent).toHaveLength(0);
     }
@@ -521,7 +504,7 @@ describe('界面语言', () => {
     const mod = new TerminalWorld({ timezone: 'Asia/Shanghai' });
     expect(mod.console().label).toBe('终端对话');
     expect(mod.console('en').label).toBe('Terminal chat');
-    expect(mod.console('en').panels?.[0]?.title).toBe('Chat');
+    expect(mod.console('en').promptDocs?.[0]?.title).toBe('Terminal · Environment prompt');
     expect(mod.console('en').config?.[0]?.schema.title).not.toMatch(/[一-鿿]/);
     // 控制台 provider 的显示名跟实例走;定义里的中文名只在实例没报时兜底。
     expect(ioPageContribution('terminal', '终端对话', undefined, mod, 'en').label).toBe('Terminal chat');
@@ -548,7 +531,7 @@ describe('界面语言', () => {
     await settle();
     const msg = host.pushed.find((p) => p.e.type === 'terminal.message')!;
     expect(msg.e.text).toMatch(/^\[console\|PIN:406193\] \[\d{2}:\d{2}\] Bob: hi$/);
-    await expect(async () => mod.console('en').invoke!('chat', 'other', [])).rejects.toThrow('Unknown method');
+    expect(() => mod.console('en').stream!('other', new FakeStream())).toThrow('Unknown channel');
     await mod.stop();
   });
 });
@@ -561,7 +544,8 @@ describe('World 的 stream 经装配层适配后对框架可达', () => {
 
     const contribution = ioPageContribution('terminal', '终端对话', undefined, mod);
     expect(typeof contribution.stream).toBe('function');
-    expect(contribution.panels?.map((p) => p.id)).toEqual(['chat']);
+    // 这一页没有自己的面板:对话只在终端页,流照旧接在 chat 通道上
+    expect(contribution.panels).toBeUndefined();
 
     const sock = new FakeStream();
     contribution.stream!('chat', sock);

@@ -2,7 +2,7 @@ import { pick } from '../core/language.ts';
 
 const zh = {
   tagline: '事件驱动的人格 bot',
-  groupPersonas: 'Persona',
+  groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World 实例',
   navAria: '控制台导航',
@@ -41,7 +41,7 @@ const zh = {
 
 const en: typeof zh = {
   tagline: 'An event-driven persona bot',
-  groupPersonas: 'Persona',
+  groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World instances',
   navAria: 'Console navigation',

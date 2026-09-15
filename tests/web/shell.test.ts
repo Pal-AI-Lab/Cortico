@@ -191,7 +191,7 @@ const feature = (
   label: string,
   needsAny?: string[],
   navGroup?: string,
-  navMode?: 'group' | 'primary' | 'world-root' | 'hidden',
+  navMode?: 'group' | 'primary' | 'world-root' | 'persona' | 'hidden',
 ): Any => ({
   route: r, label, needsAny, navGroup, navMode, mount: (): void => {},
 });
@@ -252,38 +252,35 @@ describe('框架页那一段', () => {
     expect(groups.map((g) => labels(g))).toEqual([['终端', '用量'], ['配置']]);
   });
 
-  it('终端是一级入口， World 总览是实例树入口；系统提示词与设置排在「系统」组最下面', async () => {
+  it('终端是一级入口,World 总览是实例树入口;设置压在 Core 组底,系统提示词归 Persona & Memory 组', async () => {
     stubStatus({});
     const { nav, navigated } = await mkShell({
       features: [
         feature('live', '终端', undefined, undefined, 'primary'),
-        feature('core', '核心状态', undefined, '系统'),
-        feature('usage', '用量', undefined, '系统'),
-        feature('providers', '语言模型', undefined, '系统'),
+        feature('core', '运行诊断', undefined, 'Core'),
+        feature('usage', '用量', undefined, 'Core'),
+        feature('providers', '语言模型', undefined, 'Core'),
         feature('world', 'World 总览', ['worlds'], undefined, 'world-root'),
-        feature('extensions', '扩展', undefined, '系统'),
-        feature('prompts', '系统提示词', undefined, '系统'),
-        feature('pricing', '定价', undefined, undefined, 'hidden'),
-        feature('config', '运行参数', undefined, undefined, 'hidden'),
-        feature('storage', '存储', undefined, undefined, 'hidden'),
+        feature('extensions', '扩展', undefined, 'Core'),
+        feature('prompts', '系统提示词', undefined, undefined, 'persona'),
         feature('appearance', '外观', undefined, undefined, 'hidden'),
-        feature('settings', '设置', undefined, '系统'),
+        feature('settings', '设置', undefined, 'Core'),
       ],
       capabilities: { worlds: true },
     });
 
-    expect(nav.children.length).toBe(3);
+    expect(nav.children.length).toBe(4);
     expect(nav.children[0].classList.contains('navgroup-primary')).toBe(true);
     expect(labels(nav.children[0])).toEqual(['终端']);
-    const system = nav.children[1];
-    expect(system.find('stacklabel')!.textContent).toBe('系统');
-    // 组内按声明顺序;系统提示词与设置声明在最末,所以压组底
-    expect(labels(system)).toEqual(['核心状态', '用量', '语言模型', '扩展', '系统提示词', '设置']);
-    expect(nav.children[2].classList.contains('navgroup-world-tree')).toBe(true);
-    expect(labels(nav)).toEqual([
-      '终端', '核心状态', '用量', '语言模型', '扩展', '系统提示词', '设置', 'World 总览',
-    ]);
-    click(system.findAll('navitem')[5]);
+    const core = nav.children[1];
+    expect(core.find('stacklabel')!.textContent).toBe('Core');
+    // 组内按声明顺序;设置声明在最末,所以压组底
+    expect(labels(core)).toEqual(['运行诊断', '用量', '语言模型', '扩展', '设置']);
+    const persona = nav.children[2];
+    expect(persona.find('stacklabel')!.textContent).toBe('Persona & Memory');
+    expect(labels(persona)).toEqual(['系统提示词']);
+    expect(nav.children[3].classList.contains('navgroup-world-tree')).toBe(true);
+    click(core.findAll('navitem')[4]);
     expect(navigated).toEqual([['settings']]);
   });
 
@@ -352,7 +349,7 @@ describe('provider 那一段', () => {
     stubStatus({});
     const { nav } = await mkShell({ pages: providers });
     expect(labels(nav)).toEqual(['样例人格', '样例 World']);
-    expect(nav.findAll('stacklabel').map((label) => label.textContent)).toEqual(['Persona', 'World']);
+    expect(nav.findAll('stacklabel').map((label) => label.textContent)).toEqual(['Persona & Memory', 'World']);
     expect(nav.find('navmodule-list')!.getAttribute('aria-label')).toBe('World 实例');
   });
 
@@ -365,6 +362,18 @@ describe('provider 那一段', () => {
       ],
     });
     expect(labels(nav.find('navgroup-persona')!)).toEqual(['样例人格', 'GitMem']);
+  });
+
+  it('navMode persona 的框架页排在 Persona 页与 Memory 页之后,同一组', async () => {
+    stubStatus({});
+    const { nav } = await mkShell({
+      features: [feature('prompts', '系统提示词', undefined, undefined, 'persona')],
+      pages: [
+        { id: 'persona:demo', kind: 'persona', label: '样例人格', availability: 'active' },
+        { id: 'memory:demo', kind: 'memory', label: 'GitMem', availability: 'active' },
+      ],
+    });
+    expect(labels(nav.find('navgroup-persona')!)).toEqual(['样例人格', 'GitMem', '系统提示词']);
   });
 
   it('跳 #/provider/<id>，冒号按 URL 编码（协议要求调用方自己编）', async () => {

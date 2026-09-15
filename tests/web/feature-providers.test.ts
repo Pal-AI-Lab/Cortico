@@ -94,7 +94,7 @@ describe('语言模型页', () => {
   it('左栏只占一条:在「系统」组里,带图标,永远可用', () => {
     expect(providersFeature.route).toBe('providers');
     expect(providersFeature.label).toBe('语言模型');
-    expect(providersFeature.navGroup).toBe('系统');
+    expect(providersFeature.navGroup).toBe('Core');
     expect(providersFeature.icon).toBe('cpu');
     expect(providersFeature.needsAny).toBeUndefined();
   });

@@ -2,7 +2,7 @@ import { pick } from '../../core/language.ts';
 
 const zh = {
   navLabel: '扩展',
-  navGroup: '系统',
+  navGroup: 'Core',
   introTitle: '扩展',
   introDesc: '从 npm 安装第三方 World、LLM Provider 和 bot 包。安装、卸载后需重启进程才能生效。',
 
@@ -82,7 +82,7 @@ const zh = {
 
 const en: typeof zh = {
   navLabel: 'Extensions',
-  navGroup: 'System',
+  navGroup: 'Core',
   introTitle: 'Extensions',
   introDesc: 'Install third-party Worlds, LLM providers and bot packages from npm. '
     + 'Installations and removals take effect after restarting the process.',

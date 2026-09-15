@@ -7,7 +7,7 @@ const zh = {
   loading: '读取供应模块…',
   none: '没有已注册的供应模块。',
   navLabel: '语言模型',
-  navGroup: '系统',
+  navGroup: 'Core',
 };
 
 const en: typeof zh = {
@@ -17,7 +17,7 @@ const en: typeof zh = {
   loading: 'Loading provider modules…',
   none: 'No provider modules registered.',
   navLabel: 'LLM',
-  navGroup: 'System',
+  navGroup: 'Core',
 };
 
 export const S = pick({ zh, en });

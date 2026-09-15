@@ -342,6 +342,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
     const pages = features.filter((f) => featureAvailable(f, capabilities));
     const worldRoots = pages.filter((f) => f.navMode === 'world-root');
+    const personaTail = pages.filter((f) => f.navMode === 'persona');
     const groups = new Map<string, HTMLElement>();
     for (const f of pages) {
       if (f.navMode === undefined || f.navMode === 'group') {
@@ -371,12 +372,12 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     // 总览页负责露面(那里才有"为什么没装上"的位置)。供应模块(kind `llm`)不在
     // 这里逐个列出:它们的入口是框架的「语言模型」页,模块清单是那一页里的次级菜单。
     const listed = consolePages.filter((p) => p.availability === 'active');
-    // Persona 页在前,它的 Memory 页跟在后面,同一组。
+    // Persona 页在前,它的 Memory 页跟在后面,再是归这一组的框架页(系统提示词),同一组。
     const personas = [
       ...listed.filter((page) => page.kind === 'persona'),
       ...listed.filter((page) => page.kind === 'memory'),
     ];
-    if (personas.length) {
+    if (personas.length || personaTail.length) {
       const group = addGroup(GROUP_PERSONAS, 'persona');
       for (const p of personas) {
         addItem(group, {
@@ -385,6 +386,9 @@ export function createShell(deps: ShellDeps): ConsoleShell {
           pageId: p.id,
           segments: [PROVIDER_ROUTE, p.id],
         }, itemSignal);
+      }
+      for (const f of personaTail) {
+        addItem(group, { label: f.label, icon: f.icon, segments: [f.route] }, itemSignal);
       }
     }
 

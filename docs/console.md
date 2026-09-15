@@ -21,6 +21,7 @@
 | `prompts` | 系统提示词 | 前缀各段的模板 |
 | `settings` / `appearance` | 设置 | 语言、外观 |
 
+左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
 存储项按归属分页:Core 的在运行诊断的「数据」子页,一键清空也在那里;World、Persona 与 Memory 页
 各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「参数」子页,其余在声明方自己的页。

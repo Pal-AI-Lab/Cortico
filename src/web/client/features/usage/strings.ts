@@ -3,7 +3,7 @@ import { pick } from '../../core/language.ts';
 const zh = {
   // index.ts
   navLabel: '用量 · 成本',
-  navGroup: '系统',
+  navGroup: 'Core',
   pageTitle: '用量与成本',
   bucketAuto: '自动',
   bucketMinute: '分',
@@ -97,7 +97,7 @@ const zh = {
 const en: typeof zh = {
   // index.ts
   navLabel: 'Usage · Cost',
-  navGroup: 'System',
+  navGroup: 'Core',
   pageTitle: 'Usage & cost',
   bucketAuto: 'Auto',
   bucketMinute: 'Minute',

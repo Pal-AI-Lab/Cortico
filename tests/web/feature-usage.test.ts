@@ -751,7 +751,7 @@ describe('feature 声明', () => {
   it('用量页声明路由和对应 capability', async () => {
     const usage = ((await import(USAGE)) as Any).usageFeature;
     expect(usage.route).toBe('usage');
-    expect(usage.navGroup).toBe('系统');
+    expect(usage.navGroup).toBe('Core');
     expect(usage.needsAny).toEqual(['usage']);
   });
 

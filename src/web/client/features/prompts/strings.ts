@@ -4,7 +4,6 @@ import type { EnvPromptOrigin } from '../../../../core/prefix.ts';
 const zh = {
   // index.ts
   title: '系统提示词',
-  navGroup: '系统',
   introDesc: "Ctrl+S 保存模板，重载后更新当前 session 前缀。来自代码的段只读。",
   reloadSession: '重载当前 session',
   reloading: '正在重载…',
@@ -71,7 +70,6 @@ const zh = {
 const en: typeof zh = {
   // index.ts
   title: 'System prompt',
-  navGroup: 'System',
   introDesc: "Ctrl+S saves templates; reload to update the current session prefix. Sections from code are read-only.",
   reloadSession: 'Reload current session',
   reloading: 'Reloading…',

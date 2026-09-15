@@ -3,7 +3,7 @@ import { pick } from '../../core/language.ts';
 const zh = {
   // index.ts
   navLabel: '运行诊断',
-  navGroup: '系统',
+  navGroup: 'Core',
   pageTitle: '运行诊断',
   subRun: '运行',
   subSessions: '会话统计',
@@ -103,7 +103,7 @@ const zh = {
 const en: typeof zh = {
   // index.ts
   navLabel: 'Diagnostics',
-  navGroup: 'System',
+  navGroup: 'Core',
   pageTitle: 'Diagnostics',
   subRun: 'Run',
   subSessions: 'Sessions',

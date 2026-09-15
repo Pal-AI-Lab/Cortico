@@ -378,10 +378,10 @@ describe('parseInstallInput', () => {
 });
 
 describe('feature 契约', () => {
-  it('route 是 extensions,needsAny 是 extensions,进「系统」组', () => {
+  it('route 是 extensions,needsAny 是 extensions,进 Core 组', () => {
     expect(extensionsFeature.route).toBe('extensions');
     expect(extensionsFeature.needsAny).toEqual(['extensions']);
-    expect(extensionsFeature.navGroup).toBe('系统');
+    expect(extensionsFeature.navGroup).toBe('Core');
   });
 
   it('卸载后不再发请求', async () => {

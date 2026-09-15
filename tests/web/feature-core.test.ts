@@ -489,7 +489,7 @@ describe('core feature 声明', () => {
   it('认领 core 路由;不依赖任何可选表面,永远可用', () => {
     expect(core.coreFeature.route).toBe('core');
     expect(core.coreFeature.label).toBe('运行诊断');
-    expect(core.coreFeature.navGroup).toBe('系统');
+    expect(core.coreFeature.navGroup).toBe('Core');
     expect(core.coreFeature.needsAny).toBe(undefined);
     expect(featureAvailable(core.coreFeature, {})).toBe(true);
   });

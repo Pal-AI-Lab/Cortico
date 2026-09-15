@@ -36,8 +36,7 @@
  *          {type:'msg', text, images?}         发消息;images 为 [{mime, base64, name?}],
  *                                              text 与 images 至少一样非空
  *   服务端→ {type:'msg', from, text, ts, images?}  广播(用户消息回显+bot消息);
- *                                              images 为 [{ref, mime, name?}](ref 是附件句柄),字节经
- *                                              面板调用面 `media(ref)` 取回
+ *                                              images 为 [{ref, mime, name?}](ref 是附件句柄)
  *          {type:'sys', text}                  系统提示
  *
  * 图片进媒体库(core data/media/),事件只带引用;正文末尾标注张数,模型不接受
@@ -107,8 +106,6 @@ const zh = {
   pinMalformed: '格式不对',
   pinUnset: '未设置',
   moduleLabel: '终端对话',
-  panelTitle: '对话',
-  panelDescription: '消息即时投递。',
   promptDocTitle: '终端 · 环境提示词',
   promptDocDescription: '终端对话环境的常驻事实。',
   pinVarDescription: '本场的控制台口令(worlds.terminal.pin);没配置或形状不对时展开成模板里的缺省文案。',
@@ -133,10 +130,8 @@ const zh = {
   imageNoBase64: '图片缺少 base64 内容',
   imageEmpty: '图片内容为空',
   imageTooLarge: (mb: number) => `单张图片超过 ${mb}MB`,
-  // ── 面板路由与调用面的错误(措辞会带给对端) ────────────────────────
-  unknownPanel: (panel: string) => `未知面板: ${panel}`,
-  unknownMethod: (method: string) => `未知方法: ${method}`,
-  noSuchBlob: (handle: string) => `附件库里没有这个句柄: ${handle}`,
+  // ── 流式通道名不对时的错误(措辞会带给对端) ────────────────────────
+  unknownPanel: (panel: string) => `未知通道: ${panel}`,
 };
 
 const en: typeof zh = {
@@ -160,8 +155,6 @@ const en: typeof zh = {
   pinMalformed: 'Malformed',
   pinUnset: 'Not set',
   moduleLabel: 'Terminal chat',
-  panelTitle: 'Chat',
-  panelDescription: 'Messages are delivered immediately.',
   promptDocTitle: 'Terminal · Environment prompt',
   promptDocDescription: 'Standing facts about the terminal chat environment.',
   pinVarDescription: 'This session\'s console PIN (worlds.terminal.pin); expands to the template\'s default text when unset or malformed.',
@@ -184,9 +177,7 @@ const en: typeof zh = {
   imageNoBase64: 'Image is missing its base64 content',
   imageEmpty: 'Image content is empty',
   imageTooLarge: (mb) => `A single image exceeds ${mb}MB`,
-  unknownPanel: (panel) => `Unknown panel: ${panel}`,
-  unknownMethod: (method) => `Unknown method: ${method}`,
-  noSuchBlob: (handle) => `No such handle in the attachment store: ${handle}`,
+  unknownPanel: (panel) => `Unknown channel: ${panel}`,
 };
 
 type TerminalText = typeof zh;
@@ -351,18 +342,9 @@ export class TerminalWorld implements World {
         // 口令本身不进徽标:控制台页面会被投屏、被截图。
         { label: t.badgePin, value: pinState, tone: pin ? 'on' : 'off' },
       ],
-      panels: [
-        {
-          id: PANEL_CHAT,
-          title: t.panelTitle,
-          description: t.panelDescription,
-        },
-      ],
-      // 流式面。框架据此把 /ws/providers/worlds%3Aterminal/panels/chat 接到这里——
-      // 对话就此变成"一个带流的普通控制台页",框架不必再为它留具名槽位。
+      // 流式面:终端页经 /ws/providers/world%3Aterminal/panels/chat 接进来。这一页没有自己的面板,
+      // 对话只在终端页;这里只剩配置、模板、徽标与灯。
       stream: (panel, socket) => this.stream(panel, socket, language),
-      // 调用面只有取图这一件事:对话本身走流。
-      invoke: (panel, method, args) => this.invoke(panel, method, args, language),
       promptDocs: [
         {
           key: 'worlds.terminal.envPrompt',
@@ -625,20 +607,6 @@ export class TerminalWorld implements World {
         ...(images.length ? { images } : {}),
       });
     }
-  }
-
-  /**
-   * 面板调用面。`blob(handle)` 按句柄回附件字节,回显与回放里的图都从这里取。
-   * 句柄来自本 World 自己投出去的帧;不合形状或已不在库里的句柄抛错(404 语义归框架)。
-   */
-  private invoke(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {
-    const t = text(language);
-    if (panel !== PANEL_CHAT) throw new Error(t.unknownPanel(panel));
-    if (method !== 'blob') throw new Error(t.unknownMethod(method));
-    const handle = typeof args[0] === 'string' ? args[0] : '';
-    const got = this.host?.blob(handle) ?? null;
-    if (!got) throw new Error(t.noSuchBlob(handle));
-    return Promise.resolve({ $binary: { mime: got.mime, base64: Buffer.from(got.bytes).toString('base64') } });
   }
 
   /** 返回实际送达的客户端数，并移除已关闭的连接。 */
