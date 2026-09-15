@@ -46,3 +46,56 @@ Cortico 的人格 Bot 审美（非工程驱动的偏好）：
 
 1. Memory 即人格：独立存在的人格 Bot 的主体性和连续性由它的 Memory 数据完全定义，决定和保证。模型替换、上下文交接和进程重启不会改变 Bot 的人格个体身份。
 2. 主动性和自由性优先：最大限度保证人格 Bot 的主动性，尽量不强迫 Bot 做出认知/裁决/行为，以不行为为默认行为，允许Bot自行判断是否做出行动。需要约束和规范模型的行为时，除涉及硬安全边界、权限和不可逆副作用外，应尽量使用上下文语义约束代替机械阻拦。
+
+---
+
+# English
+
+What Cortico is
+
+Cortico is an Agent Harness built on an event stream.
+Cortico supports building agents that respond on their own, run continuously, and take mixed and real-time input; it suits persona bots, AI streamers, roleplay, companionship and other downstream tasks.
+
+What Cortico is not
+
+Cortico is not a framework for question-and-answer chat bots.
+Cortico is not a preset character, persona or memory scheme.
+Cortico is not an Agent Harness / Coding Agent aimed at solving a user's problems or finishing coding tasks.
+
+Cortico's four layers
+
+Cortico Core
+
+Core holds the lifecycle of sessions, the event stream and model calls, along with the mechanical management around them: event delivery, scheduling, context handoff, tool dispatch, capacity control, error isolation, LLM providers and other low-level matters. It offers general hooks and runtime primitives. It does not own, interpret or generate any semantic content.
+
+Cortico Persona
+
+Persona defines the basic semantics and the way one class of Cortico Bot runs: context construction, session declaration, cognitive flow, internal prompts, the context handoff strategy, and the interpretation of and operating protocol for Memory. Persona also provides the tools that read and modify Memory.
+A Persona is a reusable bot type, not one concrete bot individual. A Persona class is usually bound to one Memory class, but different instances of that class can hold different Memory instances, giving several bots that share operating logic and Memory management while having different individual histories.
+
+Cortico Memory
+
+Memory is the only authoritative carrier of a Cortico Bot's internal persistent state. Memory itself is passive; it is understood, read and modified through the protocol and tools that Persona defines.
+The concrete form of Memory is not prescribed by Cortico: it can be a file workspace, a structured database, object storage or another medium. Persona holds the semantic authority over that form; Core treats it as opaque content.
+
+Cortico World
+
+World is the only boundary between a Cortico Bot and one external environment. It defines the agent's input to that environment (tool definitions, parsing and execution, receipts) and its output (event definitions). Concretely, World describes environment changes as events the agent can observe and delivers them over the event stream, and declares the external behaviours the agent can perform as tools it may call. A World may host the environment directly (a game process, say), or serve only as an interface for observing and operating one (an IM platform, say).
+World and a concrete Persona implementation do not depend on each other directly and cannot call each other's programmatic interfaces; World and Bot communicate only in semantic forms such as event delivery and tool descriptions. World supplies the environment description (a system prompt section), the event contract and the tool contract; Persona understands them at the semantic level inside a session, learns about the environment from them, and acts on it through tool calls.
+
+Cortico Bot
+
+One Cortico Bot instance corresponds to one assembly definition of a deployable Cortico Bot. It picks a Persona and the matching Memory, declares the set of Worlds it needs, and supplies the deployment configuration and the initial configuration of each module.
+
+Cortico's engineering philosophy (design principles as an AI Harness):
+
+1. Design for the future / let progress arrive on its own: agents and AI are moving fast, and an AI Harness should be designed first for the larger, stronger, faster models to come. The limits of today's available models must not be frozen into the limits of the system. As the models gain capability, the system should benefit from it without its core semantics being rewritten. Mechanisms that compromise for today's models belong in the system as fallbacks.
+
+2. Minimal prior intervention: mechanical and heuristic infrastructure should interfere with the model's behavioural functions as little as possible. Infrastructure should declare every exception (a reaction-speed limit, a safety boundary) explicitly before it happens, and tell the model when it does happen.
+
+3. Honest epistemology: mechanical and heuristic infrastructure should interfere with the model's cognitive functions as little as possible. Infrastructure should state only what the system can confirm. Every piece of event content and every tool receipt should be bound to, and reducible to, a fact the infrastructure can verify; heuristic inference should be avoided.
+
+Cortico's taste in persona bots (preferences, not engineering):
+
+1. Memory is the persona: the subjecthood and continuity of an independently existing persona bot are wholly defined, decided and guaranteed by its Memory data. Replacing the model, handing off the context and restarting the process do not change the bot's individual identity.
+2. Autonomy and freedom come first: keep a persona bot's initiative as intact as possible, do not force it into a cognition, a judgement or an action, take inaction as the default behaviour, and let the bot decide for itself whether to act. Where the model's behaviour has to be constrained, use semantic constraints in the context rather than mechanical blocking, except for hard safety boundaries, permissions and irreversible side effects.

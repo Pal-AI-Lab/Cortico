@@ -29,12 +29,6 @@
   <a href="https://github.com/Pal-AI-Lab/Cortico/issues">Issue Tracker</a>
 </p>
 
-Cortico is an event-driven agent harness for persona bots: autonomous response, continuous
-operation, mixed and real-time input. It ships no persona and no memory scheme of its own, and
-it is not aimed at question-answering chatbots or coding agents. A bot picks one Persona,
-declares a set of Worlds, and runs as a deployment with its own console, config, secrets and
-memory. [PHILOSOPHY.md](PHILOSOPHY.md) states the design stance every change is held to.
-
 | Layer | Owns | Lives in |
 |---|---|---|
 | **Core** | The lifecycle of sessions, the event stream and model calls. No semantics of its own | `src/core/` |
@@ -43,23 +37,30 @@ memory. [PHILOSOPHY.md](PHILOSOPHY.md) states the design stance every change is 
 | **World** | The only boundary to one external environment: events, tools, environment prompt | `src/worlds/<id>/` |
 | **Bot** | The assembly: one Persona, a set of Worlds | `bots/<name>/index.ts` |
 
+Cortico is an agent harness designed around an event stream, for building agents that respond on
+their own, run continuously, and take mixed real-time input — persona bots, AI streamers,
+roleplay, companionship and other downstream tasks. A Cortico bot is far more than a chat bot:
+with an agent system designed around the event stream, Cortico helps you build agents that
+persist over the long term and hold up under complicated input. Extensions are yours to write,
+and one bot can watch and act on several external environments at once — chat platforms, live
+games, even the physical environment. Cortico's goal: bring your AI to the world!
+
 ## Features
 
-- **Events, not request and response.** A World records environment changes as events and
-  delivers them to a session; the bot decides whether to act. Not acting is the default.
-- **Continuous operation.** When the context reaches its capacity, the Persona's handoff
-  strategy carries the bot into a new session. Restarting the process or changing the model does
-  not change the bot's identity.
-- **Persona and Memory are yours.** The Persona supplies prompts, context and the Memory
-  protocol; the form of Memory is unconstrained. Core writes no prose for the model.
-- **One bot in several environments at once.** Terminal, QQ, Bilibili live, Minecraft and web
-  search are separate Worlds; the deployment decides which are mounted.
-- **A console per deployment.** Every knob is a JSON Schema property declared by its owning
-  module and rendered by the console; edits take effect without a restart.
-- **Three extension points.** A World, a provider or a bot, each shipped as an npm package,
-  searchable and installable from the console.
-- **Models belong to the endpoint.** Model name, sampling and prices live in the provider entry.
-  The Persona never names a model.
+1. Free and open source!
+2. A native agent harness: everything is designed around the agent.
+3. Modular LLM provider components. The Responses protocol inside; many upstream LLM APIs
+   outside, locally deployed models included.
+4. Unconstrained internal context management, for different agent behaviour patterns and many
+   designs of Memory system.
+5. An extension system (Cortico World), isolated from the inside, with event delivery and tool
+   calls as its input and output: excellent compatibility and nearly unlimited extensibility.
+6. A WebUI that is straightforward to operate.
+7. An Extension Creator system built for AI development
+   ([Cortina](https://github.com/Pal-AI-Lab/Cortina)): a non-developer can use an AI agent to
+   build the extension they want, or move an existing implementation onto Cortico!
+
+[PHILOSOPHY.md](PHILOSOPHY.md) states the design stance every change is held to.
 
 ## Quick Start
 
@@ -156,3 +157,8 @@ pnpm run typecheck
 
 Browser changes also require `pnpm typecheck:web`, and `pnpm build:web` rebuilds the console
 bundle.
+
+## Built With Cortico
+
+[@可缇Corti](https://space.bilibili.com/3707044056009191), an AI VTuber from the future, is built
+with Cortico!

@@ -29,11 +29,6 @@
   <a href="https://github.com/Pal-AI-Lab/Cortico/issues">Issues</a>
 </p>
 
-Cortico 是基于事件流的 Agent Harness，支持人格 Bot 的自主响应、持续运行、混合输入与实时交互。
-框架不预设人格或记忆方案，也不面向问答式聊天或 coding agent。一个 Bot 选一个 Persona、声明一组
-World，作为一份部署运行，自带控制台、配置、密钥与 Memory。设计说明见
-[PHILOSOPHY.md](PHILOSOPHY.md)。
-
 | 层 | 职责 | 位置 |
 |---|---|---|
 | **Core** | session、事件流与模型调用的生命周期，不拥有任何语义 | `src/core/` |
@@ -42,20 +37,26 @@ World，作为一份部署运行，自带控制台、配置、密钥与 Memory�
 | **World** | 与一个外部环境之间的唯一边界：事件、工具、环境提示词 | `src/worlds/<id>/` |
 | **Bot** | 装配定义：选一个 Persona，声明一组 World | `bots/<名>/index.ts` |
 
+Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、持续运行、混合实时输入场景的智能体
+开发，适用于人格 Bot、AI 主播、角色扮演、聊天陪伴等多种下游任务。Cortico Bot 远不只是聊天 Bot：
+得益于围绕事件流设计的 Agent 系统，Cortico 可以帮助构建长期持续存在、适用于复杂输入的 AI 智能
+体，它支持自由的外部扩展，能够同时观察和操作多个外部环境，包括聊天平台、实时游戏、甚至现实环
+境。Cortico 的目标是：把你的 AI 带到这个世界！（Bring your AI to the world！）
+
 ## 特性
 
-- **事件流而非请求应答**：World 把环境变化写成事件投递给 session，Bot 自行决定是否行动；不行动
-  是默认行为。
-- **持续运行**：上下文达到容量上限时按 Persona 的交接策略续接，进程重启、模型更换都不改变 Bot
-  的身份。
-- **人格与记忆由部署方定义**：Persona 提供提示词、上下文与记忆协议，Memory 的形式不受框架规定；
-  Core 不生成任何语义内容。
-- **一个 Bot 同时在多个环境里**：终端、QQ、哔哩哔哩直播、Minecraft、网页搜索各是一个 World，
-  挂载与否由部署配置决定。
-- **每份部署一个控制台**：每个参数都是所属模块声明的 JSON Schema 属性，由控制台渲染，改完不必
-  重启。
-- **扩展点只有三个**：World、provider、bot，各由一个 npm 包提供，控制台内搜索安装。
-- **模型属于端点**：模型名、采样、价格写在 provider 端点配置里，Persona 不指定模型。
+1. 免费开源！
+2. 源生 Agent Harness，一切围绕 Agent 设计。
+3. 模块化的 LLM Provider 组件，内部使用 Responses 协议，对外支持多种上游 LLM API，并支持使用本
+   地部署模型。
+4. 自由的内部上下文管理，支持不同的 AI 智能体行为模式，兼容多种 Memory 系统设计。
+5. 插件系统（Cortico World）与内部隔离，采用事件投递／工具调用作为输入／输出，提供优秀的兼容性
+   和近乎无限的可扩展能力。
+6. 提供便于操作的 WebUI 支持。
+7. 提供专用于 AI 开发的 Extension Creator 系统（[Cortina](https://github.com/Pal-AI-Lab/Cortina)），
+   非专业开发者也可以使用 AI Agent 快速创建想要的扩展，或迁移现有的实现到 Cortico！
+
+设计说明见 [PHILOSOPHY.md](PHILOSOPHY.md)。
 
 ## 快速开始
 
@@ -145,3 +146,7 @@ pnpm run typecheck
 ```
 
 改动浏览器侧代码还需要 `pnpm typecheck:web`，`pnpm build:web` 重建控制台产物。
+
+## 范例实现
+
+来自未来的 AI Vtuber [@可缇Corti](https://space.bilibili.com/3707044056009191)，使用 Cortico 开发！
