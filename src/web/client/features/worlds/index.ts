@@ -179,7 +179,9 @@ export function mountWorlds(ctx: FeatureContext): void {
       );
       if (ctx.signal.aborted) return;
       setMsg(out?.result || (wantEnabled ? S.activated : S.deactivated));
-      await Promise.all([load(), ctx.refreshNav?.()]);
+      // 左栏重排失败只是导航旧了一拍,激活本身已经成功,不进上面那行的失败文案。
+      void ctx.refreshNav?.().catch(ctx.onError);
+      await load();
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return;
       setMsg(wantEnabled ? S.activateFailed(errText(err)) : S.deactivateFailed(errText(err)), true);
