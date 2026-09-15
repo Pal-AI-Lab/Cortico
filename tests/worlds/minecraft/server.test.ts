@@ -337,6 +337,21 @@ describe('MinecraftServerManager:就绪判据与存档退出', () => {
     });
   });
 
+  it('对端关掉 stdin 后再写指令:EPIPE 只进日志,不成为未处理错误', async () => {
+    const port = await deadPort();
+    const script = [
+      `process.stdin.destroy();`,
+      `console.log('Done (1.001s)! For help, type "help"');`,
+      `setTimeout(()=>process.exit(0),600);`,
+    ].join('');
+    mgr = makeMgr(script, port);
+    await mgr.start();
+    await waitFor(async () => (await mgr!.state()).phase === 'running');
+    // 流还标着可写,指令照发;错误在之后一拍才到
+    expect(mgr.command('save-all')).toBe(true);
+    await new Promise((r) => setTimeout(r, 300));
+  });
+
   it('没有托管进程时不占监听位:停掉之后信号不再有人接', async () => {
     const port = await deadPort();
     const before = process.listenerCount('SIGHUP');

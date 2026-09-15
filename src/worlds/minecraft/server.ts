@@ -331,6 +331,8 @@ export class MinecraftServerManager {
       windowsHide: true,
     });
     this.proc = proc;
+    // 对端退出后再写 stdin,EPIPE 从流上异步冒出来,write 外面的 try/catch 接不住。
+    proc.stdin?.on('error', (err) => this.opts.log.debug('MC 服务器 stdin 写入失败', { err }));
     this.setPhase('starting', portFix ? `世界加载中(${portFix})` : '世界加载中');
     const tail = (chunk: Buffer) => {
       const text = chunk.toString();
