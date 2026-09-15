@@ -12,7 +12,7 @@ export interface StoragePartView {
   key: string;
   label: string;
   kind: 'disk' | 'memory';
-  /** 声明方组名，按契约由 World 填写；留空 = 框架自己的存储。 */
+  /** 分节归属；留空 = 框架自己的存储。 */
   group?: string | null;
   location?: string;
   danger?: boolean;
@@ -29,37 +29,21 @@ function isAbort(err: unknown): boolean {
   return (err as { name?: unknown } | null)?.name === 'AbortError';
 }
 
-/** 组内一个落盘或内存小节，携带本节条目；没有条目的小节不出现。 */
-export interface StorageSubsectionView {
-  kind: 'disk' | 'memory';
-  label: string;
-  items: StoragePartView[];
-}
-
-/** 一节存储：框架的落盘/内存两小节，或一个 World 组（group 为组名，渲染组头与来源标）。 */
-export interface StorageSectionView {
-  group: string | null;
-  subsections: StorageSubsectionView[];
-}
-
-/** 框架存储在前，World 按清单中首次出现的顺序各成一组；组内 disk 在 memory 前。 */
-export function storageSections(parts: readonly StoragePartView[]): StorageSectionView[] {
+/** 框架存储在前，World 按清单中首次出现的顺序分组；各组内 disk 在 memory 前。 */
+export function storageSections(
+  parts: readonly StoragePartView[],
+): Array<{ group: string | null; kind: 'disk' | 'memory'; title: string }> {
   const groups: string[] = [];
   for (const p of parts) if (p.group && !groups.includes(p.group)) groups.push(p.group);
-  const section = (group: string | null, diskLabel: string, memoryLabel: string): StorageSectionView => ({
-    group,
-    subsections: ([
-      { kind: 'disk', label: diskLabel },
-      { kind: 'memory', label: memoryLabel },
-    ] as const).flatMap(({ kind, label }) => {
-      const items = parts.filter((p) => (p.group || null) === group && p.kind === kind);
-      return items.length ? [{ kind, label, items }] : [];
-    }),
-  });
-  return [
-    section(null, S.sectionDisk, S.sectionMemory),
-    ...groups.map((g) => section(g, S.worldDisk, S.worldMemory)),
+  const out: Array<{ group: string | null; kind: 'disk' | 'memory'; title: string }> = [
+    { group: null, kind: 'disk', title: S.sectionDisk },
+    { group: null, kind: 'memory', title: S.sectionMemory },
   ];
+  for (const g of groups) {
+    out.push({ group: g, kind: 'disk', title: S.groupDisk(g) });
+    out.push({ group: g, kind: 'memory', title: S.groupMemory(g) });
+  }
+  return out;
 }
 
 export function mountStorage(ctx: FeatureContext, opts: { embedded?: boolean } = {}): void {
@@ -173,16 +157,10 @@ export function mountStorage(ctx: FeatureContext, opts: { embedded?: boolean } =
         return;
       }
       for (const sec of storageSections(parts)) {
-        if (!sec.subsections.length) continue;
-        if (sec.group !== null) {
-          const head = ui.h('div', 'stgroup');
-          head.append(ui.h('div', 'stacklabel', sec.group), ui.h('span', 'badge', S.worldTag));
-          body.appendChild(head);
-        }
-        for (const sub of sec.subsections) {
-          body.appendChild(ui.h('div', sec.group === null ? 'stacklabel' : 'stsub', sub.label));
-          for (const p of sub.items) body.appendChild(row(p));
-        }
+        const items = parts.filter((p) => (p.group || null) === sec.group && p.kind === sec.kind);
+        if (!items.length) continue;
+        body.appendChild(ui.h('div', 'stacklabel', sec.title));
+        for (const p of items) body.appendChild(row(p));
       }
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return;

@@ -542,9 +542,6 @@
   .strow .stloc { color: var(--ink-soft); font: 12.5px/1.4 var(--mono); margin-left: 8px; }
   .strow .stnote { color: var(--ink-soft); font-size: var(--text-detail); line-height: 1.5; margin-top: 2px; }
   .strow .ststat { font: var(--text-detail)/1.4 var(--mono); color: var(--ink-blue); white-space: nowrap; }
-  .stgroup { display: flex; align-items: baseline; gap: 8px; }
-  .stgroup .badge { color: var(--ink-blue); border-color: color-mix(in srgb, var(--ink-blue) 42%, transparent); }
-  .stsub { font-size: 10.5px; color: var(--ink-dim); margin: 10px 8px 5px; }
 
 
   .modal { position: fixed; inset: 0; background: var(--overlay); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 30; animation: fadein .14s ease-out; }

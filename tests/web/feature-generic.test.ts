@@ -783,19 +783,19 @@ const parts = [
 ];
 
 describe('存储页', () => {
-  it('分节：框架的落盘/内存两小节在前，World 各成一组；空小节不出', async () => {
+  it('分节：框架的落盘/内存在前， World 的各自成节', async () => {
     const { storageSections } = (await import(STORAGE)) as Any;
-    const secs = storageSections(parts);
-    expect(secs.map((s: Any) => s.group)).toEqual([null, '样例 World']);
-    expect(secs[0].subsections.map((s: Any) => s.label)).toEqual(['落盘 data/（重启后仍在）', '内存暂存（重启即清零）']);
-    expect(secs[1].subsections.map((s: Any) => s.label)).toEqual(['落盘', '内存暂存']);
-    // 没有 World 存储时就只有框架一节；框架缺一种就少一小节
-    const only = storageSections([parts[1]]);
-    expect(only.length).toBe(1);
-    expect(only[0].subsections.map((s: Any) => s.label)).toEqual(['内存暂存（重启即清零）']);
+    expect(storageSections(parts).map((s: Any) => s.title)).toEqual([
+      '落盘 data/（重启后仍在）',
+      '内存暂存（重启即清零）',
+      '样例 World · 落盘',
+      '样例 World · 内存暂存',
+    ]);
+    // 没有 World 存储时就只有前两节
+    expect(storageSections([parts[1]]).length).toBe(2);
   });
 
-  it('每项印规模与位置；World 组头带来源标，空节不留标题', async () => {
+  it('每项印规模与位置；空节不留标题', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root } = await mkCtx({ storage: true });
     const { mountStorage } = (await import(STORAGE)) as Any;
@@ -804,11 +804,7 @@ describe('存储页', () => {
 
     expect(root.findTag('h1')!.textContent).toBe('存储');
     expect(root.findAll('strow').length).toBe(4);
-    // 框架两节标题 + World 组头名
-    expect(root.findAll('stacklabel').length).toBe(3);
-    expect(root.find('stgroup')!.find('stacklabel')!.textContent).toBe('样例 World');
-    expect(root.find('stgroup')!.find('badge')!.textContent).toBe('World');
-    expect(root.findAll('stsub').length).toBe(2);
+    expect(root.findAll('stacklabel').length).toBe(4);
     expect(root.find('stloc')!.textContent).toBe('data/events.jsonl');
     expect(root.find('ststat')!.textContent).toBe('128 条');
     // danger 的那颗是危险配色
