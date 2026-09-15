@@ -8,7 +8,7 @@ import type {
   ConsoleStreamHandle,
   Disposable,
 } from '../../../shared/client-panel.ts';
-import { panelStreamRoute } from '../../../shared/console-protocol.ts';
+import { PROVIDERS_LAMP_ID, panelStreamRoute } from '../../../shared/console-protocol.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { get } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
@@ -22,6 +22,7 @@ import {
   type StatusSnapshot,
   type ToolSchemaDoc,
 } from './protocol.ts';
+import { subscribeLamps } from '../../ui/lamp.ts';
 import { createSessionBand } from './sessions.ts';
 import { applyDisplayName, createStatusBand } from './status.ts';
 import { S } from './strings.ts';
@@ -166,6 +167,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   });
   view.append(timeline.el, composer.el);
   timeline.rebuild([], { empty: S.emptyConnecting });
+
+  // 没有可用端点时说清楚要去哪儿,而不是让操作员发出一条得不到回复的消息。
+  ctx.lifecycle.own(subscribeLamps(ctx.root.ownerDocument, (lamps) => {
+    const lamp = lamps[PROVIDERS_LAMP_ID]?.[0];
+    composer.setPlaceholder(lamp && lamp.state !== 'online' ? S.composerNoProvider : null);
+  }));
 
   const hello = JSON.stringify({ type: 'hello', name: '控制台' });
   let chatStream: ConsoleStreamHandle | null = null;

@@ -10,6 +10,7 @@ import { llamacppConsole } from './console/server.ts';
 import { LlamaCppProvider } from './native.ts';
 import { backendChoices, llamacppOptions, normalizeLlamaCpp } from './options.ts';
 import { LlamaRuntime } from './runtime.ts';
+import { nullLogger } from '../../core/util.ts';
 import { text } from './strings.ts';
 
 /** Two tiers: the transport sends the template's thinking switch, effort only when the operator typed one. */
@@ -68,6 +69,18 @@ export default {
     }
   },
   contextOverflow: isContextOverflow,
+  availability: (name, entry, language) => {
+    if (!llamacppOptions(entry).runtime) return { ready: true };
+    const runtime = new LlamaRuntime({
+      name,
+      entry: () => entry,
+      secret: () => '',
+      log: nullLogger(),
+      roots: { runtimes: runtimesRoot(), models: modelsRoot() },
+    });
+    if (runtime.installState(language).phase === 'installed') return { ready: true };
+    return { ready: false, reason: text(language).runtimeNotInstalled };
+  },
   create(name, entry, host) {
     const current = host.currentEntry ?? (() => entry);
     const apiKey = entry.secret ? host.secret(entry.secret) : undefined;

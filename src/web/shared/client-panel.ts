@@ -424,6 +424,8 @@ export interface ConsolePromptInput {
   el: HTMLDivElement;
   focus(): void;
   setDisabled(disabled: boolean): void;
+  /** 盖住输入框里的灰字。`null` 回到构造时给的那一句。 */
+  setPlaceholder(text: string | null): void;
 }
 
 export interface ConsoleTableOptions {

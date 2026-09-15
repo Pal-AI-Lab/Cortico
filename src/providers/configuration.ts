@@ -1,6 +1,6 @@
 import type { LLMProviderEntry, ModelSpec } from '../core/types.ts';
 import type { Language } from '../core/language.ts';
-import type { ProviderModule } from './base.ts';
+import type { ProviderAvailability, ProviderModule } from './base.ts';
 import { validatePrices } from './pricebook.ts';
 import { text } from './strings.ts';
 
@@ -44,6 +44,23 @@ export function validateSpec(
     model: spec.model.trim(),
     ...(spec.reasoningEffort !== undefined ? { reasoningEffort: spec.reasoningEffort.trim() } : {}),
   });
+}
+
+/**
+ * 端点能不能用:选了模型、声明的密钥读得到,模块自己的条件也满足。
+ * 通用条件不满足就不问模块,第一条不满足的就是回给操作员的那句话。
+ */
+export function endpointAvailability(
+  module: ProviderModule,
+  name: string,
+  entry: LLMProviderEntry,
+  secretConfigured: boolean,
+  language: Language = 'zh',
+): ProviderAvailability {
+  const S = text(language);
+  if (!entry.spec?.model) return { ready: false, reason: S.noModel };
+  if (entry.secret && !secretConfigured) return { ready: false, reason: S.noSecret(entry.secret) };
+  return module.availability?.(name, entry, language) ?? { ready: true };
 }
 
 export function validateEntry(

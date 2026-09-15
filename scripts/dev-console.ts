@@ -1046,6 +1046,7 @@ const app = new WebApp({
       return c;
     },
   }))],
+  providersLamp: (language) => devProviders.providersLamp(language),
   worlds: async () => [
     ...(await Promise.all([...worlds, ...devFakeWorlds].map(async (m) => {
       const decl = m.console?.();

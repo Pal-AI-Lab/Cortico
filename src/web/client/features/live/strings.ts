@@ -11,6 +11,7 @@ const zh = {
   composerLabel: '终端消息输入',
   composerPlaceholder: "输入消息…",
   composerHint: 'Terminal · Enter 发送 · 可粘贴或拖入图片',
+  composerNoProvider: '当前无可用 Provider,请前往「语言模型」页设置',
   composerQueued: '终端通道正在重连，消息已排队',
   emptyConnecting: '连接调试通道中…',
   ctxTitle: (total: string, max: string | null) =>
@@ -120,6 +121,7 @@ const en: typeof zh = {
   composerLabel: 'Terminal message input',
   composerPlaceholder: "Enter a message…",
   composerHint: 'Terminal · Enter to send · paste or drop images',
+  composerNoProvider: 'No usable provider. Set one up on the Language models page.',
   composerQueued: 'Terminal channel is reconnecting; message queued',
   emptyConnecting: 'Connecting to the debug channel…',
   ctxTitle: (total: string, max: string | null) =>

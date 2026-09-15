@@ -31,6 +31,8 @@ const zh = {
   tiersObject: '服务档报价必须是对象',
   tierNameRequired: '服务档名不能为空',
   tierRules: '服务档报价需要规则对象',
+  noModel: '未选模型',
+  noSecret: (name: string) => `缺少密钥 ${name}`,
 };
 const en: typeof zh = {
   profileObject: 'Model configuration must be an object',
@@ -63,5 +65,7 @@ const en: typeof zh = {
   tiersObject: 'Service tier pricing must be an object',
   tierNameRequired: 'Service tier name cannot be empty',
   tierRules: 'Service tier pricing needs a rules object',
+  noModel: 'No model selected',
+  noSecret: (name: string) => `Missing secret ${name}`,
 };
 export const text = (language: Language) => pick(language, { zh, en });

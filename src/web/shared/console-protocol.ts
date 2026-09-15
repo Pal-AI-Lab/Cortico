@@ -390,6 +390,12 @@ export interface ConsoleLampsResponse {
 }
 
 /**
+ * 「语言模型」那一行的灯在灯表里的键。贡献方的 page id 是 `<kind>:<id>`,
+ * kind 取 world / llm / persona,因此这个键与谁都不撞。
+ */
+export const PROVIDERS_LAMP_ID = 'framework:providers';
+
+/**
  * Panel RPC 路径。page id 含冒号，调用方**必须** `encodeURIComponent`。
  * GET 用于轮询读与 `<audio src>` 这类只能带 URL 的场合（args 经 query 传 JSON 数组）；
  * POST 用于带参调用。

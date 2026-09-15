@@ -9,6 +9,7 @@
  * 模块及其第一个面板。面板页签由宿主渲染并指向同一前缀,所以切换留在本页内。
  */
 
+import { PROVIDERS_LAMP_ID } from '../../../shared/console-protocol.ts';
 import { lampRow, paintLamps, subscribeLamps } from '../../ui/lamp.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { Route } from '../../core/router.ts';
@@ -93,6 +94,7 @@ export const providersFeature: FrameworkFeature = {
   route: PROVIDERS_ROUTE,
   label: S.navLabel,
   icon: 'cpu',
+  lampId: PROVIDERS_LAMP_ID,
   navGroup: S.navGroup,
   mount: mountProviders,
 };

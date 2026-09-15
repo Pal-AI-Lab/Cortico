@@ -59,8 +59,9 @@ import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './co
 import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
 import {
   CONSOLE_LAMPS_ROUTE, CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY, CONSOLE_PROTOCOL_VERSION,
+  PROVIDERS_LAMP_ID,
   isBinaryResult, isFileResult,
-  type ConsoleFileResult, type ConsoleStream,
+  type ConsoleFileResult, type ConsoleLamp, type ConsoleStream,
 } from './shared/console-protocol.ts';
 import {
   PATH_PICKER_ROUTE,
@@ -459,6 +460,10 @@ export interface ConsoleSurface {
    * 不挂载时 /api/console/manifest 返回一份只有 framework 能力的空 manifest。
    */
   consolePageSources?: () => ConsolePageSource[];
+  /**
+   * 有没有一个可用的端点。缺省不挂:「语言模型」那一行不点灯。
+   */
+  providersLamp?: (language: Language) => ConsoleLamp;
   /**
    * 浏览器端构建产物目录(含 asset-manifest.json)。缺省取仓库的 `dist/web`。
    * 没构建过不是错误——控制台照常起,只是没有任何页扩展。
@@ -1582,8 +1587,12 @@ export class WebApp {
      * 失败给 200 + 空表:一次取灯失败不该让导航变成一排问号,下一拍自然会补上。
      */
     app.get(CONSOLE_LAMPS_ROUTE, (req: Request, res: Response) => {
-      void this.consolePages.lamps(this.languageOf(req)).then(
-        (lamps) => { if (!res.headersSent) res.json({ lamps }); },
+      const language = this.languageOf(req);
+      const framework = this.deps.providersLamp
+        ? { [PROVIDERS_LAMP_ID]: [this.deps.providersLamp(language)] }
+        : {};
+      void this.consolePages.lamps(language).then(
+        (lamps) => { if (!res.headersSent) res.json({ lamps: { ...framework, ...lamps } }); },
         (err) => {
           this.deps.log.error(`API错误 ${CONSOLE_LAMPS_ROUTE}`, { error: String(err) });
           if (!res.headersSent) res.json({ lamps: {} });

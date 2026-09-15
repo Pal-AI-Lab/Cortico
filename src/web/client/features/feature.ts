@@ -52,6 +52,8 @@ export type FrameworkFeature = {
   readonly label: string;
   /** 左栏图标。 World 那一页不走此字段。 */
   readonly icon?: ConsoleIconName;
+  /** 这一行那盏灯在灯表里的键。省略就不点灯。 */
+  readonly lampId?: string;
   /**
    * 任一所需 capability 已挂载时显示导航项；省略或为空时始终显示。
    */

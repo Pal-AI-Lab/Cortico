@@ -60,6 +60,13 @@ export interface ProviderInstance {
   contextWindow?(model: string): number | undefined;
 }
 
+/** 一个端点此刻能不能发起生成。判断只看本地状态,不连上游。 */
+export interface ProviderAvailability {
+  ready: boolean;
+  /** 不可用的原因,控制台语言;可用时不带。 */
+  reason?: string;
+}
+
 export interface ProviderModule {
   id: string;
   title: string;
@@ -80,6 +87,11 @@ export interface ProviderModule {
     serviceTiers?: readonly ServiceTier[];
     temperatureNote?: string;
   };
+  /**
+   * 这个端点还缺什么本地条件。框架先查通用条件——模型、密钥——都齐了才问模块;
+   * 除此之外没有条件的模块不实现它。
+   */
+  availability?(name: string, entry: LLMProviderEntry, language: Language): ProviderAvailability;
   normalize?(entry: LLMProviderEntry): LLMProviderEntry;
   /** `language` is the console language for the thrown message; validation itself is fixed. */
   validateEntry?(entry: LLMProviderEntry, language: Language): void;

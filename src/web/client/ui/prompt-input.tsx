@@ -20,6 +20,7 @@ import { S } from './strings.ts';
 interface ComposerHandle {
   focus(): void;
   setDisabled(disabled: boolean): void;
+  setPlaceholder(text: string | null): void;
 }
 
 /** 托盘里的一张:归一化结果 + 同一份字节的 data URL 缩略图。 */
@@ -119,6 +120,8 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
     /** 最近一次拒收的理由。下一次成功入托盘或用户改动文本时清掉。 */
     const [note, setNote] = React.useState<string | null>(null);
     const [dragging, setDragging] = React.useState(false);
+    /** 盖住 `opts.placeholder` 的那一句;`null` 就是不盖。 */
+    const [placeholder, setPlaceholder] = React.useState<string | null>(null);
     const textarea = React.useRef<HTMLTextAreaElement>(null);
     const tools = React.useRef<HTMLSpanElement>(null);
     const picker = React.useRef<HTMLInputElement>(null);
@@ -137,6 +140,7 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
     React.useImperativeHandle(ref, () => ({
       focus: () => textarea.current?.focus(),
       setDisabled,
+      setPlaceholder,
     }), []);
 
     /** 收一批文件。超出张数的整批拒;单张失败只报那一张,其余照收。 */
@@ -214,7 +218,7 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
             rows={1}
             value={value}
             disabled={disabled}
-            placeholder={opts.placeholder ?? S.typeMessage}
+            placeholder={placeholder ?? opts.placeholder ?? S.typeMessage}
             className={TEXTAREA_CLASS}
             onChange={(event) => { setValue(event.currentTarget.value); setNote(null); }}
             onKeyDown={(event) => {
@@ -302,5 +306,6 @@ export function promptInput(
     el,
     focus: () => handle.current?.focus(),
     setDisabled: (disabled) => handle.current?.setDisabled(disabled),
+    setPlaceholder: (text) => handle.current?.setPlaceholder(text),
   };
 }

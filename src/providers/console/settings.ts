@@ -15,11 +15,11 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync
 import { join } from 'node:path';
 import { updateJsonObject } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
-import type { ConsolePageContribution } from '../../web/shared/console-protocol.ts';
+import type { ConsoleLamp, ConsolePageContribution } from '../../web/shared/console-protocol.ts';
 import type { ConsolePageSource } from '../../web/console-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
-import type { ProviderModule } from '../base.ts';
-import { validateEntry } from '../configuration.ts';
+import type { ProviderAvailability, ProviderModule } from '../base.ts';
+import { endpointAvailability, validateEntry } from '../configuration.ts';
 import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
 import { GenerationError } from '../../core/generation.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
@@ -257,6 +257,47 @@ export class ProviderSettings {
     })) satisfies ConsolePageSource[];
   }
 
+  /** 端点能不能用:通用条件由框架查,模块自己的条件由模块答。 */
+  availability(name: string, language: Language = 'zh'): ProviderAvailability {
+    const entry = this.config.providers[name];
+    if (!entry) return { ready: false, reason: text(language).unknownInstance };
+    return endpointAvailability(
+      this.module(entry.kind),
+      name,
+      entry,
+      this.secretStatus(name, entry) !== 'none',
+      language,
+    );
+  }
+
+  /**
+   * 这批端点里有没有一个能用。灯亮=有;悬停说明给出第一个可用的端点名,
+   * 或者最后一个端点的不可用原因。
+   */
+  private availableLamp(
+    entries: ReadonlyArray<{ name: string }>,
+    language: Language,
+  ): ConsoleLamp {
+    const S = text(language);
+    let reason = S.availableLampNone;
+    for (const { name } of entries) {
+      const state = this.availability(name, language);
+      if (state.ready) {
+        return { label: S.availableLamp, state: 'online', hint: S.availableLampReady(name) };
+      }
+      if (state.reason) reason = `${name}: ${state.reason}`;
+    }
+    return { label: S.availableLamp, state: 'offline', hint: reason };
+  }
+
+  /** 所有模块合起来有没有一个可用端点。控制台左栏「语言模型」那一行点的就是它。 */
+  providersLamp(language: Language = 'zh'): ConsoleLamp {
+    return this.availableLamp(
+      this.modules.flatMap((module) => this.entries(module)),
+      language,
+    );
+  }
+
   private contribute(module: ProviderModule, language: Language): ConsolePageContribution {
     const S = text(language);
     const entries = this.entries(module);
@@ -287,6 +328,7 @@ export class ProviderSettings {
             ? 'online'
             : 'offline',
         },
+        this.availableLamp(this.entries(module), language),
         ...(extra.lamps ?? []),
       ],
       badges: [{ label: S.instancesBadge, value: String(entries.length) }, ...(extra.badges ?? [])],

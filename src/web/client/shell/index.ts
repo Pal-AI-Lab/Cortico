@@ -360,11 +360,17 @@ export function createShell(deps: ShellDeps): ConsoleShell {
           group = addGroup(label, 'framework');
           groups.set(label, group);
         }
-        addItem(group, { label: f.label, icon: f.icon, segments: [f.route] }, itemSignal);
+        addItem(group, {
+          label: f.label,
+          icon: f.icon,
+          ...(f.lampId ? { pageId: f.lampId } : {}),
+          segments: [f.route],
+        }, itemSignal);
       } else if (f.navMode === 'primary') {
         addItem(addPrimary(f.label), {
           label: f.label,
           icon: f.icon,
+          ...(f.lampId ? { pageId: f.lampId } : {}),
           segments: [f.route],
         }, itemSignal);
       }

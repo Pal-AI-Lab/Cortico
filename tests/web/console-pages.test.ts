@@ -290,6 +290,18 @@ describe('manifest 组装', () => {
     });
   });
 
+  it('「语言模型」那一行的灯与页的灯同表不同键,挂了才有', async () => {
+    const lamp = { label: '可用端点', state: 'offline' as const, hint: '没有可用端点' };
+    await withApp({ providersLamp: () => lamp }, async (base) => {
+      const body = await (await fetch(`${base}/api/console/lamps`)).json() as { lamps: Record<string, unknown> };
+      expect(body.lamps['framework:providers']).toEqual([lamp]);
+    });
+    await withApp({}, async (base) => {
+      const body = await (await fetch(`${base}/api/console/lamps`)).json() as { lamps: Record<string, unknown> };
+      expect(body.lamps['framework:providers']).toBeUndefined();
+    });
+  });
+
   it('灯是活数据:同一个 World 两次取,读到的是当下那排', async () => {
     let connected = false;
     const sources = deriveConsolePageSources(facts(), {

@@ -1046,6 +1046,7 @@ export function createBot<C extends CoreConfig>(
           ? (language) => contribution.consolePages!({ storage: consoleStorage(language), language })
           : undefined,
       )(),...providerSettings.sources()],
+      providersLamp: (language) => providerSettings.providersLamp(language),
       worldVisibility: {
         state: () => core.worldVisibility(),
         set: (id, visible, language) => {
