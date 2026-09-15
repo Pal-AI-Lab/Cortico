@@ -692,13 +692,13 @@ describe('详情入口', () => {
 // ---------------------------------------------------------------------------
 
 describe('feature 契约', () => {
-  it('route 沿用 worlds（书签不断）、needs 是 worlds，缺了就整页不渲染', async () => {
+  it('route 沿用 worlds（书签不断）、needsAny 是 worlds，缺了就整页不渲染', async () => {
     const { featureAvailable } = (await import(FEATURE)) as Any;
     const f = ((await import(MODULES)) as Any).worldsFeature;
     expect(f.route).toBe('world');
     expect(f.label).toBe('World 总览');
     expect(f.navMode).toBe('world-root');
-    expect(f.needs).toEqual(['worlds']);
+    expect(f.needsAny).toEqual(['worlds']);
     expect(featureAvailable(f, {})).toBe(false);
     expect(featureAvailable(f, { worlds: false })).toBe(false);
     expect(featureAvailable(f, { worlds: true })).toBe(true);

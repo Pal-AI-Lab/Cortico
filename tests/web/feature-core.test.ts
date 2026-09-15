@@ -488,7 +488,7 @@ describe('core feature 声明', () => {
     expect(core.coreFeature.route).toBe('core');
     expect(core.coreFeature.label).toBe('运行诊断');
     expect(core.coreFeature.navGroup).toBe('系统');
-    expect(core.coreFeature.needs).toBe(undefined);
+    expect(core.coreFeature.needsAny).toBe(undefined);
     expect(featureAvailable(core.coreFeature, {})).toBe(true);
   });
 });

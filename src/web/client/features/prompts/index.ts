@@ -341,6 +341,6 @@ export const promptsFeature: FrameworkFeature = {
   label: S.title,
   icon: 'text',
   navGroup: S.navGroup,
-  needs: ['prompts'],
+  needsAny: ['prompts'],
   mount: mountPrompts,
 };

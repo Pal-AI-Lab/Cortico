@@ -402,6 +402,6 @@ export const usageFeature: FrameworkFeature = {
   label: S.navLabel,
   icon: 'chart',
   navGroup: S.navGroup,
-  needs: ['usage'],
+  needsAny: ['usage'],
   mount: mountUsage,
 };

@@ -750,13 +750,13 @@ describe('配置页', () => {
     expect(root.find('msgline')!.classList.contains('bad')).toBe(true);
   });
 
-  it('route / needs / 卸载后无残留', async () => {
+  it('route / needsAny / 卸载后无残留', async () => {
     const { featureAvailable } = (await import(FEATURE)) as Any;
     const f = ((await import(CONFIG)) as Any).configFeature;
     expect(f.route).toBe('config');
     expect(f.label).toBe('运行参数');
     expect([f.navGroup, f.navMode]).toEqual([undefined, 'hidden']);
-    expect(f.needs).toEqual(['config']);
+    expect(f.needsAny).toEqual(['config']);
     expect(featureAvailable(f, {})).toBe(false);
     expect(featureAvailable(f, { config: true })).toBe(true);
 
@@ -902,12 +902,12 @@ describe('存储页', () => {
     expect(calls.length).toBe(0); // 没答应 → 一个请求都不该发出去
   });
 
-  it('route / needs', async () => {
+  it('route / needsAny', async () => {
     const { featureAvailable } = (await import(FEATURE)) as Any;
     const f = ((await import(STORAGE)) as Any).storageFeature;
     expect(f.route).toBe('storage');
     expect([f.navGroup, f.navMode]).toEqual([undefined, 'hidden']);
-    expect(f.needs).toEqual(['storage']);
+    expect(f.needsAny).toEqual(['storage']);
     expect(featureAvailable(f, { storage: false })).toBe(false);
   });
 });

@@ -96,7 +96,7 @@ describe('语言模型页', () => {
     expect(providersFeature.label).toBe('语言模型');
     expect(providersFeature.navGroup).toBe('系统');
     expect(providersFeature.icon).toBe('cpu');
-    expect(providersFeature.needs).toBeUndefined();
+    expect(providersFeature.needsAny).toBeUndefined();
   });
 
   it('次级菜单只列 llm 类 provider,带灯;缺省选第一个并让宿主画它的首个面板', async () => {

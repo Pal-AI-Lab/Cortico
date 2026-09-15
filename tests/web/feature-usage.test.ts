@@ -752,7 +752,7 @@ describe('feature 声明', () => {
     const usage = ((await import(USAGE)) as Any).usageFeature;
     expect(usage.route).toBe('usage');
     expect(usage.navGroup).toBe('系统');
-    expect(usage.needs).toEqual(['usage']);
+    expect(usage.needsAny).toEqual(['usage']);
   });
 
   it('capabilities 里没挂 → featureAvailable 为假，这一页根本不出现在导航里', async () => {

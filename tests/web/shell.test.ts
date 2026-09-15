@@ -189,11 +189,11 @@ const route = (...segments: string[]): Any => ({ segments, query: {}, raw: `/${s
 const feature = (
   r: string,
   label: string,
-  needs?: string[],
+  needsAny?: string[],
   navGroup?: string,
   navMode?: 'group' | 'primary' | 'world-root' | 'hidden',
 ): Any => ({
-  route: r, label, needs, navGroup, navMode, mount: (): void => {},
+  route: r, label, needsAny, navGroup, navMode, mount: (): void => {},
 });
 
 interface Made {
@@ -287,11 +287,11 @@ describe('框架页那一段', () => {
     expect(navigated).toEqual([['settings']]);
   });
 
-  it('按 needs 过滤：没挂的表面根本不出现在导航里', async () => {
+  it('按 needsAny 过滤：没挂的表面根本不出现在导航里', async () => {
     stubStatus({});
     const { nav } = await mkShell({
       features: [
-        feature('alpha', '甲页', undefined, '系统'), // 无 needs = 永远可用
+        feature('alpha', '甲页', undefined, '系统'), // 无 needsAny = 永远可用
         feature('beta', '乙页', ['beta'], '系统'),
         feature('gamma', '丙页', ['gamma', 'delta'], '系统'), // 任一满足即可
       ],

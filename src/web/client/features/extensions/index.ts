@@ -417,6 +417,6 @@ export const extensionsFeature: FrameworkFeature = {
   label: S.navLabel,
   icon: 'download',
   navGroup: S.navGroup,
-  needs: ['extensions'],
+  needsAny: ['extensions'],
   mount: mountExtensions,
 };

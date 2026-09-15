@@ -420,6 +420,6 @@ export const worldsFeature: FrameworkFeature = {
   label: S.navLabel,
   icon: 'boxes',
   navMode: 'world-root',
-  needs: ['worlds'],
+  needsAny: ['worlds'],
   mount: mountWorlds,
 };

@@ -378,9 +378,9 @@ describe('parseInstallInput', () => {
 });
 
 describe('feature 契约', () => {
-  it('route 是 extensions,needs 是 extensions,进「系统」组', () => {
+  it('route 是 extensions,needsAny 是 extensions,进「系统」组', () => {
     expect(extensionsFeature.route).toBe('extensions');
-    expect(extensionsFeature.needs).toEqual(['extensions']);
+    expect(extensionsFeature.needsAny).toEqual(['extensions']);
     expect(extensionsFeature.navGroup).toBe('系统');
   });
 

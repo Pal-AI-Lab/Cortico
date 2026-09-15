@@ -63,6 +63,6 @@ export const configFeature: FrameworkFeature = {
   route: 'config',
   label: S.navLabel,
   navMode: 'hidden',
-  needs: ['config'],
+  needsAny: ['config'],
   mount: mountConfig,
 };

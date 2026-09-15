@@ -43,7 +43,7 @@ export function createLiveFeature(opts: LiveFeatureOptions = {}): FrameworkFeatu
     icon: 'terminal',
     navMode: 'primary',
     // 两条通道任一挂着这一页就有意义;都没有的话导航里根本不出现它。
-    needs: ['debug', 'sessions'],
+    needsAny: ['debug', 'sessions'],
     mount(ctx) {
       return mountLive(ctx, opts.env ?? browserSocketEnv(window));
     },

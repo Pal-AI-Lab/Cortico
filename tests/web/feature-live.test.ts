@@ -485,7 +485,7 @@ describe('live feature 声明', () => {
   it('认领 live 路由,两条通道任一挂着就有意义', () => {
     expect(live.liveFeature.route).toBe('live');
     expect(live.liveFeature.label).toBe('终端');
-    expect([...live.liveFeature.needs]).toEqual(['debug', 'sessions']);
+    expect([...live.liveFeature.needsAny]).toEqual(['debug', 'sessions']);
     expect(featureAvailable(live.liveFeature, { debug: true, sessions: false })).toBe(true);
     expect(featureAvailable(live.liveFeature, { debug: false, sessions: true })).toBe(true);
     expect(featureAvailable(live.liveFeature, { debug: false, sessions: false })).toBe(false);

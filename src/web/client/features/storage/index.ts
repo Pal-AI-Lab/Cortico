@@ -176,6 +176,6 @@ export const storageFeature: FrameworkFeature = {
   route: 'storage',
   label: S.navLabel,
   navMode: 'hidden',
-  needs: ['storage'],
+  needsAny: ['storage'],
   mount: mountStorage,
 };

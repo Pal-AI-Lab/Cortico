@@ -59,10 +59,8 @@ export type FrameworkFeature = {
   readonly icon?: ConsoleIconName;
   /** 这一行那盏灯在灯表里的键。省略就不点灯。 */
   readonly lampId?: string;
-  /**
-   * 任一所需 capability 已挂载时显示导航项；省略或为空时始终显示。
-   */
-  readonly needs?: readonly string[];
+  /** 列出的 capability 任一已挂载即显示导航项；省略或为空时始终显示。 */
+  readonly needsAny?: readonly string[];
   /**
    * 渲染。返回的 `Disposable` 在离开时被调用；用 `ctx.lifecycle` 登记过的
    * 不必再返回。抛错只让这一页变成错误卡，不波及框架其余部分。
@@ -82,12 +80,11 @@ export type FrameworkFeature = {
     }
 );
 
-/** 某个 feature 的 `needs` 是否被满足。 */
+/** `needsAny` 里任一 capability 已挂载,或根本没有要求。 */
 export function featureAvailable(
   feature: FrameworkFeature,
   capabilities: Record<string, boolean>,
 ): boolean {
-  const needs = feature.needs ?? [];
-  if (needs.length === 0) return true;
-  return needs.some((k) => capabilities[k] === true);
+  const wanted = feature.needsAny ?? [];
+  return wanted.length === 0 || wanted.some((k) => capabilities[k] === true);
 }
