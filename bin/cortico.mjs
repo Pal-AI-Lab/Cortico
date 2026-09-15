@@ -4,10 +4,11 @@
  * 此入口需要在 node_modules 不存在时运行，不得依赖第三方包。
  */
 import { spawnSync, fork } from 'node:child_process';
-import { existsSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, rmSync } from 'node:fs';
 import { emitKeypressEvents } from 'node:readline';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { webAssetsProblem } from './web-assets.mjs';
 
 /** 仓库根:本文件在 `<根>/bin/` 下。 */
 export const REPO_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
@@ -243,9 +244,10 @@ async function main() {
     if (code !== 0) return code;
   }
 
-  // 控制台产物不纳入版本控制。
-  if (!existsSync(join(REPO_ROOT, 'dist', 'web', 'asset-manifest.json'))) {
-    console.log('正在构建控制台: pnpm build:web ...\n');
+  // 控制台产物不纳入版本控制;半份产物按没有算,否则页面会缺样式或缺分包。
+  const assetsProblem = webAssetsProblem(join(REPO_ROOT, 'dist', 'web'));
+  if (assetsProblem) {
+    console.log(`正在构建控制台: pnpm build:web ...(${assetsProblem})\n`);
     const code = runPnpm(pnpm, ['build:web']);
     if (code !== 0) return code;
   }

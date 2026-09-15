@@ -5,6 +5,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { webAssetsProblem } from '../bin/web-assets.mjs';
 import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
 import type { BotDefinition } from './bot.ts';
 import { createBot } from './bot.ts';
@@ -142,6 +144,11 @@ async function main(): Promise<void> {
   console.log(`\n  Bot:       ${botName}${cfg.displayName && cfg.displayName !== botName ? ` (${cfg.displayName})` : ''}`);
   if (port !== null) {
     console.log(`  控制台:    http://127.0.0.1:${port}/`);
+    // 缺产物时页面只会白着,浏览器那边看到的是 404,不是原因。
+    const assetsProblem = webAssetsProblem(fileURLToPath(new URL('../dist/web', import.meta.url)));
+    if (assetsProblem) {
+      console.log(`  ⚠ 控制台产物不完整(${assetsProblem});停止 bot 后运行 pnpm build:web`);
+    }
   }
   for (const slot of bot.assembly.slots) {
     console.log(slot.mounted ? `  World:    ${slot.id}` : `  World:    ${slot.id} · 未激活`);
