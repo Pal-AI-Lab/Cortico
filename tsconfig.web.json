@@ -22,7 +22,7 @@
     "bots/*/console/**/*.ts",
     // jsdom 测试使用 DOM 类型。
     "tests/web/feature-prompts.test.ts",
-    "tests/web/feature-firstturn.test.ts",
+    "tests/web/client-main.test.ts",
     "tests/web/client-language.test.ts",
     "tests/web/settings-general.test.ts",
     "tests/web/feature-providers.test.ts",

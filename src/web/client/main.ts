@@ -46,17 +46,18 @@ const featureLoadFailed = pick({
 });
 
 /** localStorage 后端；无痕模式下静默降级成内存，不抛。 */
-function createMemo(prefix: string): ConsoleMemo {
+export function createMemo(prefix: string): ConsoleMemo {
   const fallback = new Map<string, unknown>();
   return {
     get<T>(key: string, dflt: T): T {
       const k = prefix + key;
+      // 本会话写过的值优先:localStorage 写不进去(无痕、配额满)时只有内存表是新的。
+      if (fallback.has(k)) return fallback.get(k) as T;
       try {
         const raw = localStorage.getItem(k);
-        if (raw === null) return fallback.has(k) ? (fallback.get(k) as T) : dflt;
-        return JSON.parse(raw) as T;
+        return raw === null ? dflt : (JSON.parse(raw) as T);
       } catch {
-        return fallback.has(k) ? (fallback.get(k) as T) : dflt;
+        return dflt;
       }
     },
     set(key: string, value: unknown): void {
@@ -152,6 +153,8 @@ export function boot(doc: Document = document): { dispose(): void } {
   let capabilities: Record<string, boolean> = {};
   /** capabilities 与 manifest 都到齐了吗。到齐之前不渲染任何一页。 */
   let ready = false;
+  /** 到齐之前就 dispose 了:那一拍回来什么都不做。 */
+  let disposed = false;
 
   /** 当前挂着的 framework feature（贡献方那边由 host 自己管）。 */
   let mounted: { route: string; lifecycle: Lifecycle } | null = null;
@@ -245,6 +248,7 @@ export function boot(doc: Document = document): { dispose(): void } {
       .then((r) => { capabilities = r?.capabilities ?? {}; }),
     host.load(),
   ]).then(() => {
+    if (disposed) return;
     ready = true;
     shell.setCapabilities(capabilities);
     shell.setPages(host.pages);
@@ -253,6 +257,7 @@ export function boot(doc: Document = document): { dispose(): void } {
 
   return {
     dispose(): void {
+      disposed = true;
       offNav.dispose();
       shell.dispose();
       shellLife.dispose();
@@ -264,7 +269,7 @@ export function boot(doc: Document = document): { dispose(): void } {
   };
 }
 
-// 作为 bundle 入口被加载时自动启动;被测试 import 时(没有真 DOM)不自动跑。
-if (typeof document !== 'undefined' && document.body) {
+// 作为 bundle 入口被加载时自动启动:真页面带着 boot-note。测试 import 时没有它,不自动跑。
+if (typeof document !== 'undefined' && document.getElementById('boot-note')) {
   boot();
 }

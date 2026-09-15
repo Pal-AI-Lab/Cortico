@@ -31,7 +31,7 @@
     "src/web/shared/**",
     // 以下 jsdom 测试由浏览器配置检查。
     "tests/web/feature-prompts.test.ts",
-    "tests/web/feature-firstturn.test.ts",
+    "tests/web/client-main.test.ts",
     "tests/web/client-language.test.ts",
     "tests/web/settings-general.test.ts",
     "tests/web/feature-providers.test.ts",
