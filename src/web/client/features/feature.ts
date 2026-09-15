@@ -74,8 +74,11 @@ export type FrameworkFeature = {
       readonly navGroup: string;
     }
   | {
-      /** primary 是独立一级入口；world-root 是 World 实例树入口；hidden 只保留路由。 */
-      readonly navMode: 'primary' | 'world-root' | 'hidden';
+      /**
+       * primary 是独立一级入口；world-root 是 World 实例树入口；system 挂在左栏
+       * 最末（World 树之下，无组头）；hidden 只保留路由。
+       */
+      readonly navMode: 'primary' | 'world-root' | 'system' | 'hidden';
       readonly navGroup?: string;
     }
 );

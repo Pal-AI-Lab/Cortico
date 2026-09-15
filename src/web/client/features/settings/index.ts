@@ -2,8 +2,6 @@ import { pageIntro } from '../../ui/page.ts';
 import { mountAppearance } from '../appearance/index.ts';
 import { mountConfig } from '../config/index.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
-import { mountFirstTurn } from '../firstturn/index.ts';
-import { mountPrompts } from '../prompts/index.ts';
 import { mountStorage } from '../storage/index.ts';
 import { mountGeneral } from './general.ts';
 import { S } from './strings.ts';
@@ -35,20 +33,6 @@ const SECTIONS: readonly SettingSection[] = [
     description: S.runtimeDesc,
     need: 'config',
     mount: (ctx) => mountConfig(ctx, { embedded: true }),
-  },
-  {
-    id: 'prompts',
-    label: S.prompts,
-    description: S.promptsDesc,
-    need: 'prompts',
-    mount: (ctx) => mountPrompts(ctx, { embedded: true }),
-  },
-  {
-    id: 'firstturn',
-    label: S.firstturn,
-    description: S.firstturnDesc,
-    need: 'prompts',
-    mount: (ctx) => mountFirstTurn(ctx),
   },
   {
     id: 'storage',
@@ -109,6 +93,6 @@ export const settingsFeature: FrameworkFeature = {
   route: 'settings',
   label: S.navLabel,
   icon: 'settings',
-  navMode: 'hidden',
+  navMode: 'system',
   mount: mountSettings,
 };

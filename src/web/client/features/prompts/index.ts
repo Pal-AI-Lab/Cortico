@@ -339,7 +339,8 @@ export async function mountPrompts(ctx: FeatureContext, opts: { embedded?: boole
 export const promptsFeature: FrameworkFeature = {
   route: PROMPTS_ROUTE,
   label: S.title,
-  navMode: 'hidden',
+  icon: 'text',
+  navMode: 'system',
   needs: ['prompts'],
   mount: mountPrompts,
 };

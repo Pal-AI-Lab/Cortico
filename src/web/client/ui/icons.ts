@@ -14,6 +14,7 @@ export type ConsoleIconName =
   | 'folder-open'
   | 'download'
   | 'cpu'
+  | 'text'
   | 'eye'
   | 'eye-off'
   | 'refresh';
@@ -76,6 +77,11 @@ const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
     ['rect', { x: '5', y: '5', width: '14', height: '14', rx: '2' }],
     ['rect', { x: '9', y: '9', width: '6', height: '6', rx: '1' }],
     ['path', { d: 'M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3' }],
+  ],
+  text: [
+    ['path', { d: 'M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z' }],
+    ['path', { d: 'M14 2v4a2 2 0 0 0 2 2h4' }],
+    ['path', { d: 'M10 9H8M16 13H8M16 17H8' }],
   ],
   eye: [
     ['path', { d: 'M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z' }],

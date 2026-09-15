@@ -139,12 +139,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const restartButton = ui.h('button', 'rail-action rail-restart');
   restartButton.type = 'button';
   restartButton.appendChild(icon(doc, 'refresh'));
-  const settingsButton = ui.h('button', 'rail-action');
-  settingsButton.type = 'button';
-  settingsButton.setAttribute('aria-label', S.settingsAria);
-  settingsButton.title = S.settingsTitle;
-  settingsButton.appendChild(icon(doc, 'settings'));
-  footActions.append(runButton, settingsButton, restartButton, shutdownButton);
+  footActions.append(runButton, restartButton, shutdownButton);
   foot.append(avatar.el, footActions);
 
   let paused = false;
@@ -267,10 +262,6 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       renderRun();
     });
   }, { signal });
-  settingsButton.addEventListener('click', () => {
-    try { router.navigate(['settings']); } catch (err) { onError(err); }
-  }, { signal });
-
   el.append(brand, nav, foot);
 
   // ---- 导航 -------------------------------------------------------------
@@ -416,6 +407,18 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       }
     }
 
+    // 系统项(系统提示词、设置)固定在最末,不带组头:顶部的「系统」组已用过这个名字。
+    const systemPages = pages.filter((f) => f.navMode === 'system');
+    if (systemPages.length) {
+      const group = ui.h('div', 'navgroup navgroup-framework navgroup-system');
+      group.setAttribute('role', 'group');
+      group.setAttribute('aria-label', S.systemAria);
+      nav.appendChild(group);
+      for (const f of systemPages) {
+        addItem(group, { label: f.label, icon: f.icon, segments: [f.route] }, itemSignal);
+      }
+    }
+
     applyRoute();
   };
 
@@ -426,10 +429,6 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       if (on) entry.el.setAttribute('aria-current', 'page');
       else entry.el.removeAttribute('aria-current');
     }
-    const settingsOn = route?.segments[0] === 'settings';
-    settingsButton.classList.toggle('active', settingsOn);
-    if (settingsOn) settingsButton.setAttribute('aria-current', 'page');
-    else settingsButton.removeAttribute('aria-current');
   };
 
   // ---- 品牌名 -----------------------------------------------------------
