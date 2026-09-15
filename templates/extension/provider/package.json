@@ -15,7 +15,7 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "provider",
-    "api": 3
+    "api": 4
   },
   "files": [
     "src",

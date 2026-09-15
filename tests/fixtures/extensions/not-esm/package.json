@@ -4,5 +4,5 @@
   "description": "缺 type: module",
   "main": "./index.js",
   "keywords": ["cortico-world"],
-  "cortico": { "kind": "world", "api": 3 }
+  "cortico": { "kind": "world", "api": 4 }
 }

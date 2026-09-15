@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, loadExtensions, readInstalled, type ExtensionSet } from '../src/extensions.ts';
+import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extensions-')); });
@@ -38,7 +39,7 @@ function installFake(name: string, opts: {
   mkdirSync(pkgDir, { recursive: true });
   writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({
     name, version: '1.2.3', type: 'module', main: './index.js',
-    keywords: ['cortico-world'], cortico: { kind: 'world', api: 3 },
+    keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSION },
     ...(opts.pkg ?? {}),
   }));
   writeFileSync(join(pkgDir, 'index.js'), opts.body ?? definitionSource('x'));
@@ -60,7 +61,7 @@ describe('loadExtensions', () => {
     expect(set.worlds.map((m) => m.id)).toEqual(['alpha']);
     expect(set.records).toEqual([{
       name: '@acme/cortico-world-alpha', spec: '^1.0.0', version: '1.2.3', description: '甲',
-      kind: 'world', api: 3, consoleClient: false, console: 'none',
+      kind: 'world', api: EXTENSION_API_VERSION, consoleClient: false, console: 'none',
       loaded: true, worldId: 'alpha', label: 'alpha 扩展',
     }]);
     // 定义是活的:defaults / create 都能调
@@ -101,7 +102,7 @@ describe('loadExtensions', () => {
       pkg: {
         main: undefined,
         exports: { '.': { import: './esm.js', require: './cjs.js' } },
-        cortico: { kind: 'world', api: 3, consoleClient: 'dist/client.js' },
+        cortico: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/client.js' },
       },
       body: 'nope',
     });

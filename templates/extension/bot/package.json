@@ -15,7 +15,7 @@
   "main": "./index.ts",
   "cortico": {
     "kind": "bot",
-    "api": 3
+    "api": 4
   },
   "files": [
     "index.ts",

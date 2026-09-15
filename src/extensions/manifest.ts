@@ -8,7 +8,7 @@
  */
 
 /** 扩展接口发生不兼容变更时递增。 */
-export const EXTENSION_API_VERSION = 3;
+export const EXTENSION_API_VERSION = 4;
 
 export type ExtensionKind = 'world' | 'provider' | 'bot';
 export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', 'bot'];

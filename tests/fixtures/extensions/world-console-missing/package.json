@@ -5,5 +5,5 @@
   "type": "module",
   "main": "./index.js",
   "keywords": ["cortico-world"],
-  "cortico": { "kind": "world", "api": 3, "consoleClient": "dist/console.js" }
+  "cortico": { "kind": "world", "api": 4, "consoleClient": "dist/console.js" }
 }

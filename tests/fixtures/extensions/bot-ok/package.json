@@ -5,5 +5,5 @@
   "type": "module",
   "main": "./index.js",
   "keywords": ["cortico-bot"],
-  "cortico": { "kind": "bot", "api": 3 }
+  "cortico": { "kind": "bot", "api": 4 }
 }

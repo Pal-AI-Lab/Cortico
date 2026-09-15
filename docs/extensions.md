@@ -41,7 +41,7 @@ checkout,`corepack pnpm install`,`pnpm test`。每个模板的 README 说它验�
   "type": "module",
   "main": "./src/index.ts",
   "keywords": ["cortico-world"],
-  "cortico": { "kind": "world", "api": 3, "consoleClient": "dist/console.js", "consoleStyle": "dist/console.css" }
+  "cortico": { "kind": "world", "api": 4, "consoleClient": "dist/console.js", "consoleStyle": "dist/console.css" }
 }
 ```
 
@@ -100,7 +100,7 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 
 ## 契约版本
 
-`cortico.api` 必须等于框架的 `EXTENSION_API_VERSION`(现在是 3)。`WorldDefinition`、
+`cortico.api` 必须等于框架的 `EXTENSION_API_VERSION`(现在是 4)。`WorldDefinition`、
 `ProviderModule`、`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)或
 `ConsolePanelContext` 任一不兼容变更时框架将版本加一,版本不符的扩展不能加载,页面显示「需要升级」。
 扩展 API 与控制台协议分别版本化。

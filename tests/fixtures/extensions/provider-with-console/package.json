@@ -5,5 +5,5 @@
   "type": "module",
   "main": "./index.js",
   "keywords": ["cortico-provider"],
-  "cortico": { "kind": "provider", "api": 3, "consoleClient": "dist/panel.js" }
+  "cortico": { "kind": "provider", "api": 4, "consoleClient": "dist/panel.js" }
 }

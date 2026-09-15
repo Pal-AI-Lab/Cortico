@@ -34,8 +34,8 @@ describe('按 kind 分派', () => {
     const { set, records } = await byName();
     expect(set.worlds.map((m) => m.id)).toEqual(['fixture-world']);
     expect(set.providers.map((p) => p.id)).toEqual(['fixture-provider']);
-    expect(records['world-ok']).toMatchObject({ kind: 'world', api: 3, loaded: true, worldId: 'fixture-world', label: '夹具 World' });
-    expect(records['provider-ok']).toMatchObject({ kind: 'provider', api: 3, loaded: true, worldId: 'fixture-provider', label: '夹具端点' });
+    expect(records['world-ok']).toMatchObject({ kind: 'world', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-world', label: '夹具 World' });
+    expect(records['provider-ok']).toMatchObject({ kind: 'provider', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-provider', label: '夹具端点' });
   });
 
   it('没有 cortico 块 / 不是 ESM 的包一律不 import,原因说清要改哪里', async () => {
@@ -107,7 +107,7 @@ describe('bot 包', () => {
     const other = installFixture(root, 'bot-ok', { as: 'other-bot' });
     writeFileSync(join(other, 'index.js'), 'throw new Error("must not be imported");');
     const { set, records } = await byName({ activeBot: { name: 'bot-with-console', id: 'fixture-bot-console' } });
-    expect(records['bot-with-console']).toMatchObject({ kind: 'bot', api: 3, loaded: true, worldId: 'fixture-bot-console', console: 'served' });
+    expect(records['bot-with-console']).toMatchObject({ kind: 'bot', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-bot-console', console: 'served' });
     expect(records['other-bot']).toMatchObject({ kind: 'bot', loaded: false, idle: true });
     expect(records['other-bot'].reason).toBeUndefined();
     expect(set.consoleAssets.map((a) => a.pageId)).toEqual(['persona:fixture-bot-console']);
@@ -244,8 +244,8 @@ describe("ExtensionManager 安装与加载状态", () => {
     const mgr = manager(booted);
     expect(mgr.consoleAssets()).toBe(booted.consoleAssets);
     const extensions = Object.fromEntries(mgr.list().extensions.map((p) => [p.name, p]));
-    expect(extensions['world-with-console']).toMatchObject({ state: 'loaded', kind: 'world', api: 3, console: 'served' });
-    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: 3, console: 'none' });
+    expect(extensions['world-with-console']).toMatchObject({ state: 'loaded', kind: 'world', api: EXTENSION_API_VERSION, console: 'served' });
+    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: EXTENSION_API_VERSION, console: 'none' });
   });
 });
 

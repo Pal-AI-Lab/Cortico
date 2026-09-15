@@ -19,7 +19,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
   "keywords": ["cortico-world"],          // npm 搜索按类关键字:cortico-world / cortico-provider / cortico-bot
   "cortico": {
     "kind": "world",                      // world | provider | bot
-    "api": 3,                             // 扩展契约版本,与 EXTENSION_API_VERSION 相等才加载
+    "api": 4,                             // 扩展契约版本,与 EXTENSION_API_VERSION 相等才加载
     "consoleClient": "dist/console.js",   // 可选:预构建的面板 bundle,包内相对路径
     "consoleStyle": "dist/console.css"    // 可选:随 bundle 注入的样式
   }
@@ -29,13 +29,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 `parseExtensionManifest(pkg)` 只做解析与校验,不碰文件系统;装载器与
 `pnpm check:extension <dir>` 共用它。`api` 与框架不等时不加载,扩展页说明哪一边旧。
 `WorldDefinition`、`ProviderModule`、`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)
-或 `ConsolePanelContext` 任一不兼容变更就把 `EXTENSION_API_VERSION` 加一。
-
-已发生、尚未计入版本号的不兼容变更(下次升版一并计入):
-
-- `WorldContext.language` 删除。
-- `Persona.firstTurn()` 改为 `sessionHead()`,返回 Open Responses item 列表;`FirstTurnRound` 删除。
-- `ConfigGroup.settingsPage` 删除,Persona 的配置组一律进 Persona 页;`ConsoleContribution.storage` 删除。
+或 `ConsolePanelContext` 任一不兼容变更就把 `EXTENSION_API_VERSION` 加一。同一次发布里的多处变更合计加一。
 
 ## 装载
 
