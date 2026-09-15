@@ -4,15 +4,25 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PassThrough } from 'node:stream';
+
 import {
   RESTART_FLAG_FILE,
   chooseBot,
   parseArgs,
+  parseRequest,
   pnpmMissingMessage,
+  promptChoice,
   resolvePnpm,
   shouldRelaunch,
   supervise,
 } from '../bin/cortico.mjs';
+
+/** 假终端要在 Readable 上补 isTTY / setRawMode,类型上没有这两项。 */
+type Any = any;
+
+/** 回车键送进输入流的字节。 */
+const ENTER = String.fromCharCode(13);
 
 describe('shouldRelaunch', () => {
   const never = () => false;
@@ -50,6 +60,29 @@ describe('parseArgs', () => {
   });
 });
 
+describe('parseRequest', () => {
+  it('--list 就是列清单,不启动任何部署', () => {
+    expect(parseRequest(['--list'], {})).toEqual({ kind: 'list' });
+    expect(parseRequest(['cortiv', '--list'], {})).toEqual({ kind: 'list' });
+  });
+
+  it('不给名字时取 CORTICO_BOT', () => {
+    expect(parseRequest([], { CORTICO_BOT: 'cortiv' })).toEqual({
+      kind: 'run', bot: 'cortiv', passthrough: [],
+    });
+  });
+
+  it('命令行上的名字压过 CORTICO_BOT,其余参数原样透传', () => {
+    expect(parseRequest(['cormini', '--paused'], { CORTICO_BOT: 'cortiv' })).toEqual({
+      kind: 'run', bot: 'cormini', passthrough: ['--paused'],
+    });
+  });
+
+  it('两处都没有名字:留给部署菜单', () => {
+    expect(parseRequest([], {})).toEqual({ kind: 'run', bot: null, passthrough: [] });
+  });
+});
+
 describe('chooseBot', () => {
   it('给了名字就用它', () => {
     expect(chooseBot({ bot: 'b', available: ['a', 'b'], interactive: true })).toEqual({ kind: 'run', bot: 'b' });
@@ -79,6 +112,37 @@ describe('chooseBot', () => {
     const out = chooseBot({ bot: null, available: [], interactive: true });
     expect(out.kind).toBe('error');
     expect(out.kind === 'error' && out.message).toContain('deployment.json');
+  });
+});
+
+describe('promptChoice', () => {
+  /** 一个可写可读的假终端:记下每次 raw 模式切换。 */
+  function fakeTty(): { stream: Any; modes: boolean[] } {
+    const stream = new PassThrough() as Any;
+    const modes: boolean[] = [];
+    stream.isTTY = true;
+    stream.setRawMode = (on: boolean) => { modes.push(on); };
+    return { stream, modes };
+  }
+
+  it('选完就退出 raw 模式,并摘掉自己挂的 exit 监听', async () => {
+    const { stream: input, modes } = fakeTty();
+    const exitListeners = process.listenerCount('exit');
+    const picked = promptChoice(['alpha', 'beta'], new PassThrough() as Any, input);
+    input.write(ENTER);
+    expect(await picked).toBe('alpha');
+    expect(modes).toEqual([true, false]);
+    expect(process.listenerCount('exit')).toBe(exitListeners);
+  });
+
+  it('菜单开着时进程退出:exit 监听把终端从 raw 模式带回来', async () => {
+    const { stream: input, modes } = fakeTty();
+    const picked = promptChoice(['alpha', 'beta'], new PassThrough() as Any, input);
+    const restore = process.listeners('exit').at(-1) as () => void;
+    restore();
+    expect(modes).toEqual([true, false]);
+    input.write(ENTER);
+    await picked;
   });
 });
 
