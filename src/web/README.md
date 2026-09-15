@@ -54,9 +54,11 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 ## 浏览器
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、
-`config`、`storage`、`appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。
+`appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。
+`features/config/view.ts` 与 `features/storage/view.ts` 是配置组与存储清单的通用视图,运行诊断页与
+`ConsolePageHost` 共用。
 
-`ConsolePageHost` 渲染页面声明中的徽标、状态灯、配置组、提示词文档与面板。
+`ConsolePageHost` 渲染页面声明中的徽标、状态灯、配置组、提示词文档、存储项与面板。
 `ConsolePageLoader` 按页 id 查找 bundle，缓存成功的导入，校验默认导出的 `{ panels }`；缺少 `mount` 的面板显示错误。
 卸载依次执行 abort、dispose、清空 root，并释放上下文登记的轮询、RAF、observer、监听器、请求和音频资源。
 

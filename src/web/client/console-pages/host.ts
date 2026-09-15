@@ -16,6 +16,7 @@ import { createConsoleUi } from '../ui/index.ts';
 import { lampRow } from '../ui/lamp.ts';
 import { createConfigView } from '../features/config/view.ts';
 import { createPromptsView } from '../features/prompts/view.ts';
+import { createStorageView } from '../features/storage/view.ts';
 import { resolveConsoleLinkHref } from '../theme/handoff.ts';
 import type { BuiltinPanels } from './builtins.ts';
 import { createPanelContext, namespacedMemo } from './context.ts';
@@ -24,9 +25,10 @@ import { S } from './strings.ts';
 
 /** 控制台页路由的首段，与框架页路由分开。 */
 export const PROVIDER_ROUTE = 'provider';
-/** 框架页签由 promptDocs 与 config 声明生成；~ 前缀不在合法 panel id 字符集中。 */
+/** 框架页签由 promptDocs、config 与 storage 声明生成；~ 前缀不在合法 panel id 字符集中。 */
 const PROVIDER_PROMPTS_ROUTE = '~prompts';
 const PROVIDER_CONFIG_ROUTE = '~config';
+const PROVIDER_STORAGE_ROUTE = '~storage';
 
 function asArray<T>(v: readonly T[] | undefined): readonly T[] {
   return Array.isArray(v) ? v : [];
@@ -188,9 +190,11 @@ export class ConsolePageHost {
     const panels = asArray(page.panels);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
+    const storageKeys = this.storageKeysOf(page);
     const wanted = panelId ?? panels[0]?.id
       ?? (configGroups.length ? PROVIDER_CONFIG_ROUTE : undefined)
-      ?? (prompts.length ? PROVIDER_PROMPTS_ROUTE : undefined);
+      ?? (prompts.length ? PROVIDER_PROMPTS_ROUTE : undefined)
+      ?? (storageKeys.length ? PROVIDER_STORAGE_ROUTE : undefined);
     if (wanted === PROVIDER_CONFIG_ROUTE && configGroups.length) {
       this.renderChrome(pageId, PROVIDER_CONFIG_ROUTE);
       await this.showConfig(pageId, configGroups, gen);
@@ -201,10 +205,15 @@ export class ConsolePageHost {
       await this.showPrompts(pageId, prompts.map((doc) => doc.key), gen);
       return;
     }
+    if (wanted === PROVIDER_STORAGE_ROUTE && storageKeys.length) {
+      this.renderChrome(pageId, PROVIDER_STORAGE_ROUTE);
+      await this.showStorage(pageId, storageKeys, gen);
+      return;
+    }
     const panel = wanted ? panels.find((p) => p.id === wanted) : undefined;
     if (!panel) {
       this.renderChrome(pageId, wanted);
-      if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0) {
+      if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0 && storageKeys.length === 0) {
         this.appendNote(S.noPanels(page.label));
       } else {
         this.renderError(
@@ -213,6 +222,7 @@ export class ConsolePageHost {
             ...panels.map((p) => p.id),
             ...(configGroups.length ? [PROVIDER_CONFIG_ROUTE] : []),
             ...(prompts.length ? [PROVIDER_PROMPTS_ROUTE] : []),
+            ...(storageKeys.length ? [PROVIDER_STORAGE_ROUTE] : []),
           ].join(' / ')),
         );
       }
@@ -283,6 +293,32 @@ export class ConsolePageHost {
   private configGroupsOf(page: ConsolePageManifest): readonly string[] {
     if (this.snapshot?.framework?.capabilities?.config === false) return [];
     return asArray(page.configGroups);
+  }
+
+  /** 仅返回当前页声明且部署支持 storage 能力的存储项 key。 */
+  private storageKeysOf(page: ConsolePageManifest): readonly string[] {
+    if (this.snapshot?.framework?.capabilities?.storage === false) return [];
+    return asArray(page.storageKeys);
+  }
+
+  /** 这一页声明的存储项走同一张 /api/storage 清单;这里只按 key 挑出自己的。 */
+  private async showStorage(pageId: string, keys: readonly string[], gen: number): Promise<void> {
+    const { slot } = this.ensurePanes();
+    const lifecycle = new Lifecycle(this.deps.onError);
+    this.mounted = { pageId, panelId: PROVIDER_STORAGE_ROUTE, lifecycle };
+    const ui = createConsoleUi({
+      memo: namespacedMemo(this.deps.memo, pageId, PROVIDER_STORAGE_ROUTE),
+      overlayHost: this.deps.overlayHost,
+      signal: lifecycle.signal,
+      doc: this.deps.doc,
+    });
+    const wanted = new Set(keys);
+    const view = createStorageView({ ui, signal: lifecycle.signal, filter: (part) => wanted.has(part.key) });
+    const sheet = ui.sheet({ title: S.storageTitle, en: 'storage', desc: S.storageDesc });
+    sheet.body.appendChild(view.el);
+    slot.appendChild(sheet.el);
+    await view.load();
+    if (gen !== this.generation) lifecycle.dispose();
   }
 
   /** manifest 提供组 id，schema 与当前值取自 /api/config；页内省略重复 owner 标签。 */
@@ -409,7 +445,8 @@ export class ConsolePageHost {
     const panels = asArray(page.panels);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
-    if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0) > 1) {
+    const storageKeys = this.storageKeysOf(page);
+    if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0) + (storageKeys.length ? 1 : 0) > 1) {
       const tabs = ui.rowbar();
       const go = (panelId: string): void => this.deps.router.navigate(this.routeOf(page.id, panelId));
       for (const p of panels) {
@@ -432,6 +469,13 @@ export class ConsolePageHost {
           size: 'sm',
           variant: activePanel === PROVIDER_PROMPTS_ROUTE ? 'primary' : 'plain',
           onClick: () => go(PROVIDER_PROMPTS_ROUTE),
+        }));
+      }
+      if (storageKeys.length) {
+        tabs.appendChild(ui.button(S.storageTab, {
+          size: 'sm',
+          variant: activePanel === PROVIDER_STORAGE_ROUTE ? 'primary' : 'plain',
+          onClick: () => go(PROVIDER_STORAGE_ROUTE),
         }));
       }
       chrome.appendChild(tabs);

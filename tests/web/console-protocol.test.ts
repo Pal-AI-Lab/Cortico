@@ -467,8 +467,11 @@ describe('toPageManifest 序列化公开字段', () => {
     expect('configGroups' in toPageManifest(provider())).toBe(false);
   });
 
-  it('storage 整块不上线', () => {
-    expect(JSON.stringify(toPageManifest(full()))).not.toContain('storage');
+  it('storage 只上 key:stat 与 clear 是函数,连键名都不该出现', () => {
+    const text = JSON.stringify(toPageManifest(full()));
+    expect(text).toContain('"storageKeys":["alpha.cache"]');
+    expect(text).not.toContain('stat');
+    expect(text).not.toContain('clear');
   });
 
   it('invoke 是可执行的,连键名都不该出现', () => {
@@ -484,6 +487,7 @@ describe('toPageManifest 序列化公开字段', () => {
       badges: [{ label: '连接', value: 3, tone: 'on' }],
       panels: [{ id: 'log', title: '日志', description: '一句话' }],
       configGroups: ['alpha'],
+      storageKeys: ['alpha.cache'],
       prompts: [{ key: 'worlds.alpha.main', title: '主提示词', description: '说明' }],
       links: [{ label: '打开', href: '/alpha/page' }],
       declared: true,

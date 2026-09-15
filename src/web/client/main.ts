@@ -18,8 +18,6 @@ import { liveFeature } from './features/live/index.ts';
 import { coreFeature } from './features/core/index.ts';
 import { usageFeature } from './features/usage/index.ts';
 import { providersFeature } from './features/providers/index.ts';
-import { configFeature } from './features/config/index.ts';
-import { storageFeature } from './features/storage/index.ts';
 import { worldsFeature } from './features/worlds/index.ts';
 import { extensionsFeature } from './features/extensions/index.ts';
 import { appearanceFeature } from './features/appearance/index.ts';
@@ -30,12 +28,12 @@ import type { ConsoleMemo } from '../shared/client-panel.ts';
 /**
  * 控制台自己的页面。与贡献方的页无关——那一路完全由 manifest 驱动。
  *
- * 顺序即左栏顺序。`hidden` 的页面(运行参数、存储、外观)不进左栏,
- * 但仍要在这张表里:路由分派只认这张表,设置页里嵌着它们的同时,直达链接也要能开。
+ * 顺序即左栏顺序。`hidden` 的页面(外观)不进左栏,
+ * 但仍要在这张表里:路由分派只认这张表,设置页里嵌着它的同时,直达链接也要能开。
  */
 export const FEATURES: readonly FrameworkFeature[] = [
   liveFeature, coreFeature, usageFeature, providersFeature,
-  worldsFeature, extensionsFeature, promptsFeature, configFeature, storageFeature, appearanceFeature,
+  worldsFeature, extensionsFeature, promptsFeature, appearanceFeature,
   settingsFeature,
 ];
 

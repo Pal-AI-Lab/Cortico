@@ -354,6 +354,8 @@ export interface ConsolePageManifest {
    * 归属不从 owner 推断；未认领的组显示在框架设置页。
    */
   configGroups?: string[];
+  /** 这一页声明的存储项 key;清单与清除仍走 /api/storage。 */
+  storageKeys?: string[];
   links?: ConsoleLink[];
 
   declared?: boolean;
@@ -519,6 +521,7 @@ export function toPageManifest(
   }
   // 只上 id:归属够用了,schema 与当前值仍只走 /api/config。
   if (c.config?.length) out.configGroups = c.config.map((g) => g.id);
+  if (c.storage?.length) out.storageKeys = c.storage.map((p) => p.key);
   if (c.promptDocs?.length) {
     out.prompts = c.promptDocs.map((doc) => ({
       key: doc.key,

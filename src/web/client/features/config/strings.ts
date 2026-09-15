@@ -1,12 +1,7 @@
 import { pick } from '../../core/language.ts';
 
 const zh = {
-  pageTitle: '运行参数',
-  sheetTitle: '机械参数',
-  sheetDesc: "修改自动保存到 config.json。标有重启要求的参数在重启后生效，其余立即生效。",
   loading: '加载中…',
-  allClaimed: "参数均位于各自的设置页。",
-  navLabel: '运行参数',
   optionCurrent: '(当前)',
   ownerPersona: 'Persona',
   chooseFile: '选择文件',
@@ -25,12 +20,7 @@ const zh = {
 };
 
 const en: typeof zh = {
-  pageTitle: 'Runtime parameters',
-  sheetTitle: 'Mechanical parameters',
-  sheetDesc: "Changes save automatically to config.json. Parameters marked for restart apply after restarting; others apply immediately.",
   loading: 'Loading…',
-  allClaimed: "All parameters are on their own settings pages.",
-  navLabel: 'Runtime parameters',
   optionCurrent: '(current)',
   ownerPersona: 'Persona',
   chooseFile: 'Choose file',

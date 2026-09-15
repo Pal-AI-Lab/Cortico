@@ -370,6 +370,8 @@ const ALL_CAPS = {
   run: true,
   toolSchemas: true,
   prompts: true,
+  storage: true,
+  config: true,
 };
 
 /** 一份够用的假回应表。 */
@@ -507,7 +509,7 @@ describe('core 子页签', () => {
     expect(segs(root).map((s) => s.textContent)).toEqual(['运行', '事件流', '运行日志']);
   });
 
-  it('全挂时五个都在,默认落在第一个(ORIENTATION 不在这——core 不持环境提示词)', () => {
+  it('全挂时七个都在,默认落在第一个(ORIENTATION 不在这——core 不持环境提示词)', () => {
     stubFetch(defaultReply);
     const { env } = fakeEnv();
     const { ctx, root } = mkCtx(ALL_CAPS);
@@ -519,10 +521,37 @@ describe('core 子页签', () => {
       '事件流',
       '运行日志',
       '工具表',
+      '数据',
+      '参数',
     ]);
     expect(root.find('subtabs')).not.toBe(null);
     expect(segs(root)[0].className).toContain('active');
     expect(root.find('statgrid')).not.toBe(null);
+  });
+
+  it('数据子页只列 owner 是 core 的项,带一键清空;参数子页只画 owner 是 core 的组', async () => {
+    stubFetch((u) => u.startsWith('/api/storage')
+      ? { parts: [
+        { key: 'events', owner: 'core', label: '事件库', kind: 'disk', stat: '1' },
+        { key: 'ws', owner: 'memory', label: '工作区', kind: 'disk', stat: '2' },
+      ] }
+      : u.startsWith('/api/config')
+        ? { groups: [
+          { group: { id: 'core', owner: 'core', schema: { title: '主循环', properties: { 'a.b': { type: 'integer', title: '甲' } } } }, values: { 'a.b': 1 } },
+          { group: { id: 'world:x', owner: 'world:x', schema: { title: 'X 的旋钮', properties: { 'x.n': { type: 'integer', title: '乙' } } } }, values: { 'x.n': 2 } },
+        ] }
+        : defaultReply(u));
+    const { env } = fakeEnv();
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/data');
+    core.createCoreFeature({ env }).mount(ctx);
+    await flush();
+    expect(root.findAll('strow').map((r) => r.find('stlabel')!.textContent)).toEqual(['事件库']);
+    expect(root.textContent).toContain('⚠ 一键清空全部');
+
+    const params = mkCtx(ALL_CAPS, '#/core/params');
+    core.createCoreFeature({ env }).mount(params.ctx);
+    await flush();
+    expect(params.root.findAll('tsection').map((s) => s.textContent)).toEqual(['主循环']);
   });
 
   it('进来时按路由第二段落在对应子页', async () => {

@@ -2,8 +2,8 @@
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
-const CONFIG = '../../src/web/client/features/config/index.ts';
-const STORAGE = '../../src/web/client/features/storage/index.ts';
+const CONFIG = '../../src/web/client/features/config/view.ts';
+const STORAGE = '../../src/web/client/features/storage/view.ts';
 const FEATURE = '../../src/web/client/features/feature.ts';
 const UI = '../../src/web/client/ui/index.ts';
 const LIFECYCLE = '../../src/web/client/core/lifecycle.ts';
@@ -288,6 +288,24 @@ async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
   return { ctx, doc, root, lifecycle, guards, ui };
 }
 
+/** 视图模块先于任何用例载入,挂载才是同步的:用例只 flush 微任务,不等模块加载。 */
+const { createConfigView } = (await import(CONFIG)) as Any;
+const { createStorageView } = (await import(STORAGE)) as Any;
+
+/** 把参数视图挂进 ctx.root;filter 缺省画全部。 */
+function mountConfig(ctx: Any, filter?: (group: Any) => boolean): void {
+  const view = createConfigView({ ui: ctx.ui, lifecycle: ctx.lifecycle, signal: ctx.signal, ...(filter ? { filter } : {}) });
+  ctx.root.appendChild(view.el);
+  void view.load();
+}
+
+/** 把存储视图挂进 ctx.root;缺省带一键清空。 */
+function mountStorage(ctx: Any, opts: { filter?: (part: Any) => boolean; clearAll?: boolean } = { clearAll: true }): void {
+  const view = createStorageView({ ui: ctx.ui, signal: ctx.signal, ...opts });
+  ctx.root.appendChild(view.el);
+  void view.load();
+}
+
 /** 答一次模态确认。`yes` 决定点哪一颗。 */
 function answerConfirm(doc: FakeDoc, yes: boolean): void {
   const modal = doc.body.find('modal');
@@ -536,11 +554,9 @@ describe('配置页', () => {
   it('按组分节；owner 认识的翻中文，不认识的原样显示', async () => {
     stubFetch({ '/api/config': configPayload });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(ctx);
     await flush();
 
-    expect(root.findTag('h1')!.textContent).toBe('运行参数');
     const sections = root.findAll('tsection');
     expect(sections.length).toBe(2);
     expect(sections[0].textContent).toContain('主循环');
@@ -550,53 +566,26 @@ describe('配置页', () => {
     expect(root.textContent).toContain('循环的机械参数');
   });
 
-  /** provider 认领的那组旋钮画在 provider 自己那一页，这一页只留没人认领的。 */
-  const claimingManifest = {
-    protocolVersion: 1,
-    providers: [{
-      id: 'world:sample', kind: 'world', label: '样例 World', availability: 'active',
-      configGroups: ['world:sample'],
-    }],
-    framework: { capabilities: {} },
-  };
-
-  it('被 provider 认领的组不在这一页——它画在声明方自己那一页', async () => {
-    stubFetch({ '/api/config': configPayload, '/api/console/manifest': claimingManifest });
+  it('filter 只画归属匹配的组;一组不剩时是"此页没有配置项",不是"未提供配置项"', async () => {
+    stubFetch({ '/api/config': configPayload });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
-    await mountConfig(ctx);
+    mountConfig(ctx, (group) => group.owner === 'core');
     await flush();
-
     const sections = root.findAll('tsection');
     expect(sections.length).toBe(1);
     expect(sections[0].textContent).toContain('主循环');
     expect(root.textContent).not.toContain('样例 World');
-  });
 
-  it('认领方把组认光了 → 一句"都归到各自页面"的空态,不是"未挂载声明"', async () => {
-    stubFetch({
-      '/api/config': { groups: [configPayload.groups[1]] },
-      '/api/console/manifest': claimingManifest,
-    });
-    const { ctx, root } = await mkCtx({ config: true });
-    await ((await import(CONFIG)) as Any).mountConfig(ctx);
+    const none = await mkCtx({ config: true });
+    mountConfig(none.ctx, () => false);
     await flush();
-    expect(root.textContent).toContain('参数均位于各自的设置页');
-    expect(root.textContent).not.toContain('未挂载配置项声明');
-  });
-
-  it('manifest 取不到 → 退回"全都画在这一页",绝不把旋钮藏起来', async () => {
-    stubFetch({ '/api/config': configPayload }, ['/api/console/manifest']);
-    const { ctx, root } = await mkCtx({ config: true });
-    await ((await import(CONFIG)) as Any).mountConfig(ctx);
-    await flush();
-    expect(root.findAll('tsection').length).toBe(2);
+    expect(none.root.textContent).toContain('此页没有配置项');
+    expect(none.root.textContent).not.toContain('未提供配置项');
   });
 
   it('x-suffix 印成单位、x-hot:false 标"重启生效"、description 落在说明列', async () => {
     stubFetch({ '/api/config': configPayload });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(ctx);
     await flush();
 
@@ -613,7 +602,6 @@ describe('配置页', () => {
     vi.useFakeTimers();
     stubFetch({ '/api/config': configPayload, POST: { ok: true, result: '已应用' } });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(ctx);
     await flush();
     calls.length = 0;
@@ -660,7 +648,7 @@ describe('配置页', () => {
       '/api/path-picker': { path: 'C:\\models\\vision.gguf' },
     });
     const { ctx, root } = await mkCtx({ config: true });
-    ((await import(CONFIG)) as Any).mountConfig(ctx);
+    mountConfig(ctx);
     await flush();
     calls.length = 0;
 
@@ -680,7 +668,7 @@ describe('配置页', () => {
     vi.useFakeTimers();
     stubFetch({ '/api/config': configPayload, POST: { ok: true, result: '已应用' } });
     const { ctx, root } = await mkCtx({ config: true });
-    ((await import(CONFIG)) as Any).mountConfig(ctx);
+    mountConfig(ctx);
     await flush();
     calls.length = 0;
 
@@ -708,7 +696,6 @@ describe('配置页', () => {
       },
     });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(ctx);
     await flush();
     calls.length = 0;
@@ -722,7 +709,6 @@ describe('配置页', () => {
   it('没有任何声明 / 取数失败 → 各自一句空态，不是一片白', async () => {
     stubFetch({ '/api/config': { groups: [] } });
     const a = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(a.ctx);
     await flush();
     expect(a.root.textContent).toContain('未提供配置项。');
@@ -739,7 +725,6 @@ describe('配置页', () => {
     vi.useFakeTimers();
     stubFetch({ '/api/config': configPayload });
     const { ctx, root } = await mkCtx({ config: true });
-    const { mountConfig } = (await import(CONFIG)) as Any;
     mountConfig(ctx);
     await flush();
     stubFailing(400, '这一组不认识那个键');
@@ -750,21 +735,12 @@ describe('配置页', () => {
     expect(root.find('msgline')!.classList.contains('bad')).toBe(true);
   });
 
-  it('route / needsAny / 卸载后无残留', async () => {
-    const { featureAvailable } = (await import(FEATURE)) as Any;
-    const f = ((await import(CONFIG)) as Any).configFeature;
-    expect(f.route).toBe('config');
-    expect(f.label).toBe('运行参数');
-    expect([f.navGroup, f.navMode]).toEqual([undefined, 'hidden']);
-    expect(f.needsAny).toEqual(['config']);
-    expect(featureAvailable(f, {})).toBe(false);
-    expect(featureAvailable(f, { config: true })).toBe(true);
-
+  it('卸载后无残留', async () => {
     vi.useFakeTimers();
     stubFetch({ '/api/config': configPayload });
     const { ctx, lifecycle } = await mkCtx({ config: true });
     const before = vi.getTimerCount();
-    ((await import(CONFIG)) as Any).mountConfig(ctx);
+    mountConfig(ctx);
     await flush();
     lifecycle.dispose();
     expect(vi.getTimerCount()).toBe(before);
@@ -783,28 +759,34 @@ const parts = [
 ];
 
 describe('存储页', () => {
-  it('分节：框架的落盘/内存在前， World 的各自成节', async () => {
-    const { storageSections } = (await import(STORAGE)) as Any;
-    expect(storageSections(parts).map((s: Any) => s.title)).toEqual([
-      '落盘 data/（重启后仍在）',
-      '内存暂存（重启即清零）',
-      'world:sample · 落盘',
-      'world:sample · 内存暂存',
-    ]);
-    // 没有 World 存储时就只有前两节
-    expect(storageSections([parts[1]]).length).toBe(2);
-  });
-
-  it('每项印规模与位置；空节不留标题', async () => {
+  it('filter 只画归属匹配的项;落盘在内存前,空小节不留标题,一项不剩时说这一页没有', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root } = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
+    mountStorage(ctx, { filter: (p) => p.owner === 'world:sample' });
+    await flush();
+    expect(root.findAll('strow').map((r: Any) => r.find('stlabel')!.textContent)).toEqual(['World 落盘', 'World 内存']);
+    expect(root.findAll('stacklabel').map((l: Any) => l.textContent)).toEqual(['落盘 data/（重启后仍在）', '内存暂存（重启即清零）']);
+    expect(root.findButton('⚠ 一键清空全部')).toBeNull();
+
+    const disk = await mkCtx({ storage: true });
+    mountStorage(disk.ctx, { filter: (p) => p.key === 'events' });
+    await flush();
+    expect(disk.root.findAll('stacklabel').map((l: Any) => l.textContent)).toEqual(['落盘 data/（重启后仍在）']);
+
+    const none = await mkCtx({ storage: true });
+    mountStorage(none.ctx, { filter: () => false });
+    await flush();
+    expect(none.root.textContent).toContain('这一页没有存储项');
+  });
+
+  it('每项印规模与位置', async () => {
+    stubFetch({ '/api/storage': { parts } });
+    const { ctx, root } = await mkCtx({ storage: true });
     mountStorage(ctx);
     await flush();
 
-    expect(root.findTag('h1')!.textContent).toBe('存储');
     expect(root.findAll('strow').length).toBe(4);
-    expect(root.findAll('stacklabel').length).toBe(4);
+    expect(root.findAll('stacklabel').length).toBe(2);
     expect(root.find('stloc')!.textContent).toBe('data/events.jsonl');
     expect(root.find('ststat')!.textContent).toBe('128 条');
     // danger 的那颗是危险配色
@@ -814,7 +796,6 @@ describe('存储页', () => {
   it('清除：危险项的确认框写的是后果，答"否"就什么都不发', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root, doc } = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
     mountStorage(ctx);
     await flush();
     calls.length = 0;
@@ -832,7 +813,6 @@ describe('存储页', () => {
   it('清除：答"是"→ key 走 URL 编码，回执落在消息行，并重取清单', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root, doc } = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
     mountStorage(ctx);
     await flush();
     calls.length = 0;
@@ -850,7 +830,6 @@ describe('存储页', () => {
   it('一键清空：逐项结果里有失败就报出是哪几项', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root, doc } = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
     mountStorage(ctx);
     await flush();
     stubFetch({
@@ -874,7 +853,6 @@ describe('存储页', () => {
   it('空清单 / 取数失败 → 各自一句空态', async () => {
     stubFetch({ '/api/storage': { parts: [] } });
     const a = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
     mountStorage(a.ctx);
     await flush();
     expect(a.root.textContent).toContain('(服务端未挂载存储清单)');
@@ -889,7 +867,6 @@ describe('存储页', () => {
   it('卸载时挂起的确认框按"没答应"收场，不会留一层遮罩', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root, doc, lifecycle } = await mkCtx({ storage: true });
-    const { mountStorage } = (await import(STORAGE)) as Any;
     mountStorage(ctx);
     await flush();
     calls.length = 0;
@@ -902,14 +879,6 @@ describe('存储页', () => {
     expect(calls.length).toBe(0); // 没答应 → 一个请求都不该发出去
   });
 
-  it('route / needsAny', async () => {
-    const { featureAvailable } = (await import(FEATURE)) as Any;
-    const f = ((await import(STORAGE)) as Any).storageFeature;
-    expect(f.route).toBe('storage');
-    expect([f.navGroup, f.navMode]).toEqual([undefined, 'hidden']);
-    expect(f.needsAny).toEqual(['storage']);
-    expect(featureAvailable(f, { storage: false })).toBe(false);
-  });
 });
 
 // ---------------------------------------------------------------------------

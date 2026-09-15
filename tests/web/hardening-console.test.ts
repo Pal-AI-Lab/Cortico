@@ -307,6 +307,8 @@ interface ProviderDecl {
   links?: Array<{ label: string; href: string; inheritTheme?: boolean }>;
   /** 这个 provider 认领的配置组 id(归属),参数页据此只画自己那几组。 */
   configGroups?: string[];
+  /** 这个 provider 声明的存储项 key,数据页签据此只画自己那几项。 */
+  storageKeys?: string[];
 }
 
 interface Stage {
@@ -1590,5 +1592,41 @@ describe('参数页与 capabilities', () => {
     await flush();
     expect(root.textContent).toContain('没有面板「~config」');
     expect(root.textContent).not.toContain('~config / ');
+  });
+});
+
+describe('数据页签', () => {
+  const STORAGE_PARTS = {
+    parts: [
+      { key: 'a-log', owner: 'world:a', label: 'A 日志', kind: 'disk', stat: '3 条' },
+      { key: 'events', owner: 'core', label: '事件库', kind: 'disk', stat: '9 条' },
+    ],
+  };
+  beforeEach(() => {
+    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify(String(url).startsWith('/api/storage') ? STORAGE_PARTS : {})),
+    }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('只画 manifest 里点名的那几项;页签上多一颗「数据」', async () => {
+    const stage = makeStage([{ id: 'world:a', label: 'A World', storageKeys: ['a-log'], panels: [{ id: 'one', title: '面板一' }] }], {});
+    await stage.host.load();
+    await stage.host.show('world:a', '~storage');
+    await flush();
+    expect(stage.chrome()!.textContent).toContain('数据');
+    expect(stage.slotText()).toContain('A 日志');
+    expect(stage.slotText()).not.toContain('事件库');
+  });
+
+  it('没声明存储项的页没有这颗页签,直接进 ~storage 是一张"没有这个面板"的卡', async () => {
+    const stage = makeStage([{ id: 'world:b', label: 'B World', panels: [{ id: 'one', title: '面板一' }, { id: 'two', title: '面板二' }] }], {});
+    await stage.host.load();
+    await stage.host.show('world:b', '~storage');
+    await flush();
+    expect(stage.chrome()!.textContent).not.toContain('数据');
+    expect(stage.slotText()).toContain('没有面板「~storage」');
   });
 });

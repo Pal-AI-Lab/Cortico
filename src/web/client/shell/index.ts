@@ -371,13 +371,17 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     // 总览页负责露面(那里才有"为什么没装上"的位置)。供应模块(kind `llm`)不在
     // 这里逐个列出:它们的入口是框架的「语言模型」页,模块清单是那一页里的次级菜单。
     const listed = consolePages.filter((p) => p.availability === 'active');
-    const personas = listed.filter((page) => page.kind === 'persona');
+    // Persona 页在前,它的 Memory 页跟在后面,同一组。
+    const personas = [
+      ...listed.filter((page) => page.kind === 'persona'),
+      ...listed.filter((page) => page.kind === 'memory'),
+    ];
     if (personas.length) {
       const group = addGroup(GROUP_PERSONAS, 'persona');
       for (const p of personas) {
         addItem(group, {
           label: p.label || p.id,
-          icon: 'bot',
+          icon: p.kind === 'memory' ? 'folder-open' : 'bot',
           pageId: p.id,
           segments: [PROVIDER_ROUTE, p.id],
         }, itemSignal);

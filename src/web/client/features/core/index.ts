@@ -1,5 +1,5 @@
 /**
- * core 的运行态、会话统计、事件流、日志与工具表观察页，不持有或显示人格前缀。
+ * core 的运行态、会话统计、事件流、日志、工具表、数据与参数页，不持有或显示人格前缀。
  * 子页状态由路由表达；sessions、toolSchemas 等未挂载能力不显示页签。仅当前子页运行轮询，状态保存在挂载闭包，由调试帧或一次性 GET 填充。
  */
 
@@ -21,6 +21,8 @@ import { createRunView } from './run.ts';
 import { createSessionTable } from './sessions.ts';
 import { S } from './strings.ts';
 import { createToolsView } from './tools.ts';
+import { createConfigView } from '../config/view.ts';
+import { createStorageView } from '../storage/view.ts';
 
 const CORE_ROUTE = 'core';
 const DEBUG_WS_PATH = '/ws/debug';
@@ -38,6 +40,8 @@ const CORE_SUBS: readonly SubDef[] = [
   { id: 'events', label: S.subEvents, need: null },
   { id: 'runlog', label: S.subRunlog, need: null },
   { id: 'tools', label: S.subTools, need: 'toolSchemas' },
+  { id: 'data', label: S.subData, need: 'storage' },
+  { id: 'params', label: S.subParams, need: 'config' },
 ];
 
 export interface CoreFeatureOptions {
@@ -112,6 +116,20 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onError: (err) => ctx.onError(err),
   });
   const tools = createToolsView(ui);
+  // Core 自己的存储项与配置组:按 owner 取,World / Persona / Memory 的各在自己页上。
+  const data = createStorageView({ ui, signal: ctx.signal, filter: (p) => p.owner === 'core', clearAll: true });
+  const dataSheet = ui.sheet({ title: S.dataTitle, en: 'core storage', desc: S.dataDesc });
+  dataSheet.body.appendChild(data.el);
+  const params = createConfigView({
+    ui,
+    lifecycle: ctx.lifecycle,
+    signal: ctx.signal,
+    filter: (group) => group.owner === 'core',
+    showOwner: false,
+    emptyText: S.paramsEmpty,
+  });
+  const paramsSheet = ui.sheet({ title: S.paramsTitle, en: 'core config', desc: S.paramsDesc });
+  paramsSheet.body.appendChild(params.el);
 
   const panes: Record<string, HTMLElement> = {
     run: run.el,
@@ -119,6 +137,8 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     events: events.el,
     runlog: runlog.el,
     tools: tools.el,
+    data: dataSheet.el,
+    params: paramsSheet.el,
   };
 
   /** 每次进入某个子页要做的事。进来才拉数据——没打开的页不该占网络。 */
@@ -141,6 +161,12 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     tools: () => {
       tools.render(state.toolSchemas);
       void refreshTools();
+    },
+    data: () => {
+      void data.load();
+    },
+    params: () => {
+      void params.load();
     },
   };
 

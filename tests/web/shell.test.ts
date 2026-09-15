@@ -356,6 +356,17 @@ describe('provider 那一段', () => {
     expect(nav.find('navmodule-list')!.getAttribute('aria-label')).toBe('World 实例');
   });
 
+  it('memory 页跟在 persona 页后面,同一组;manifest 里的先后不算数', async () => {
+    stubStatus({});
+    const { nav } = await mkShell({
+      pages: [
+        { id: 'memory:demo', kind: 'memory', label: 'GitMem', availability: 'active' },
+        { id: 'persona:demo', kind: 'persona', label: '样例人格', availability: 'active' },
+      ],
+    });
+    expect(labels(nav.find('navgroup-persona')!)).toEqual(['样例人格', 'GitMem']);
+  });
+
   it('跳 #/provider/<id>，冒号按 URL 编码（协议要求调用方自己编）', async () => {
     stubStatus({});
     const { nav, navigated } = await mkShell({ pages: providers });

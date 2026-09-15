@@ -195,6 +195,19 @@ describe('manifest 组装', () => {
     });
   });
 
+  it('World 声明的存储项:manifest 只带 key,stat 与 clear 不上线', async () => {
+    const sources = deriveConsolePageSources(facts(), {
+      assembly: WorldAssembly.ofInstances([new FakeWorld('demo', () => ({
+        storage: [{ key: 'demo-log', label: '日志', kind: 'disk' as const, stat: () => '1', clear: () => '清了' }],
+      }))]),
+    });
+    await withApp({ consolePageSources: sources }, async (base) => {
+      const p = byId(await manifestOf(base), 'world:demo');
+      expect(p?.storageKeys).toEqual(['demo-log']);
+      expect(JSON.stringify(p)).not.toContain('清了');
+    });
+  });
+
   it('bot 级声明的配置组跟着人格 provider 走(Persona自己没实现 console() 也算)', async () => {
     const group = {
       id: 'persona',

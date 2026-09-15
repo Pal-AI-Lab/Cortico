@@ -13,14 +13,17 @@
 | 路由 | 页 | 内容 |
 |---|---|---|
 | `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork |
-| `core` | 运行诊断 | run、session、事件、运行日志、工具 |
+| `core` | 运行诊断 | run、session、事件、运行日志、工具,以及 Core 自己的数据与参数 |
 | `usage` | 用量·成本 | 按 session、按天的 token 与费用 |
 | `provider` | 语言模型 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
 | `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
-| `config` / `prompts` / `storage` / `appearance` / `settings` | 设置里的次级页 | 运行参数、提示词文档、存储清单、外观、语言 |
+| `prompts` | 系统提示词 | 前缀各段的模板 |
+| `settings` / `appearance` | 设置 | 语言、外观 |
 
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
+存储项按归属分页:Core 的在运行诊断的「数据」子页,一键清空也在那里;World、Persona 与 Memory 页
+各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「参数」子页,其余在声明方自己的页。
 
 World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `persona:<id>` /
 `llm:<id>`;Persona 的 `console().memory` 子声明另成一页 `memory:<id>`,与 Persona 页共用一份

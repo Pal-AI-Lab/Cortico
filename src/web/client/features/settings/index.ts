@@ -1,8 +1,6 @@
 import { pageIntro } from '../../ui/page.ts';
 import { mountAppearance } from '../appearance/index.ts';
-import { mountConfig } from '../config/index.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
-import { mountStorage } from '../storage/index.ts';
 import { mountGeneral } from './general.ts';
 import { S } from './strings.ts';
 
@@ -26,20 +24,6 @@ const SECTIONS: readonly SettingSection[] = [
     label: S.appearance,
     description: S.appearanceDesc,
     mount: (ctx) => mountAppearance(ctx, { embedded: true }),
-  },
-  {
-    id: 'runtime',
-    label: S.runtime,
-    description: S.runtimeDesc,
-    need: 'config',
-    mount: (ctx) => mountConfig(ctx, { embedded: true }),
-  },
-  {
-    id: 'storage',
-    label: S.storage,
-    description: S.storageDesc,
-    need: 'storage',
-    mount: (ctx) => mountStorage(ctx, { embedded: true }),
   },
 ];
 
