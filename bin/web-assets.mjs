@@ -1,9 +1,7 @@
 // @ts-check
 /**
- * 控制台产物的完整性判断。`bin/cortico.mjs` 在依赖装好之前就要用它，因此不得依赖第三方包。
- *
- * `pnpm build:web` 由 esbuild 与 Tailwind 两步组成，两步各写各的文件：清单在第一步末尾写出，
- * 样式表在第二步写出。只看清单在不在，会把中断在两步之间的产物当成完整的。
+ * 控制台产物的完整性判断:清单、样式表,以及清单引用到的每个文件都在才算完整。
+ * `bin/cortico.mjs` 在依赖装好之前就要用它，因此不得依赖第三方包。
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';

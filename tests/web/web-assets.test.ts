@@ -1,7 +1,4 @@
-/**
- * `pnpm build:web` 的两步会写出各自的文件,中断在两步之间的产物目录里清单是齐的,
- * 页面却缺样式。检查器按清单引用到的文件逐个核对,半份产物不算数。
- */
+/** 完整 = 清单、样式表,以及清单引用到的每个文件都在;缺哪个就报哪个。 */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

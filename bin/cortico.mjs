@@ -244,7 +244,7 @@ async function main() {
     if (code !== 0) return code;
   }
 
-  // 控制台产物不纳入版本控制;半份产物按没有算,否则页面会缺样式或缺分包。
+  // 控制台产物不纳入版本控制;不完整的产物按没有算。
   const assetsProblem = webAssetsProblem(join(REPO_ROOT, 'dist', 'web'));
   if (assetsProblem) {
     console.log(`正在构建控制台: pnpm build:web ...(${assetsProblem})\n`);

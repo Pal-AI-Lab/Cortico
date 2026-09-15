@@ -144,7 +144,6 @@ async function main(): Promise<void> {
   console.log(`\n  Bot:       ${botName}${cfg.displayName && cfg.displayName !== botName ? ` (${cfg.displayName})` : ''}`);
   if (port !== null) {
     console.log(`  控制台:    http://127.0.0.1:${port}/`);
-    // 缺产物时页面只会白着,浏览器那边看到的是 404,不是原因。
     const assetsProblem = webAssetsProblem(fileURLToPath(new URL('../dist/web', import.meta.url)));
     if (assetsProblem) {
       console.log(`  ⚠ 控制台产物不完整(${assetsProblem});停止 bot 后运行 pnpm build:web`);
