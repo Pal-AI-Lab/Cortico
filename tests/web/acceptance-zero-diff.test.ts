@@ -319,7 +319,7 @@ describe('新增一个 Persona,src/web/** 零 diff', () => {
     id: PERSONA_PROVIDER,
     kind: 'persona',
     label: 'ZZZ 验收人格',
-    panels: [{ id: 'models', title: '模型档位' }],
+    panels: [{ id: 'models', title: '模型档位', getMethods: ['state'] }],
     invoke: async (panel, method) => ({ half: 'deploy', panel, method }),
   });
 
@@ -426,7 +426,7 @@ describe('活体验收件 · src/worlds/console-fixture 的贯通', () => {
       expect(p?.panels?.map((x) => x.id)).toEqual(['hello', 'echo']);
       expect(p?.client?.js).toBe(built.providers[FIXTURE_PROVIDER]!.js);
 
-      const r = await fetch(`${base}${panelRoute(FIXTURE_PROVIDER, 'hello', 'ping')}`);
+      const r = await fetch(`${base}${panelRoute(FIXTURE_PROVIDER, 'hello', 'ping')}`, { method: 'POST' });
       expect(r.status).toBe(200);
       expect((await r.json() as { pings: number }).pings).toBe(1);
     });

@@ -407,7 +407,7 @@ describe('panel 调用', () => {
   const spy = () => {
     const calls: Array<{ panel: string; method: string; args: unknown[] }> = [];
     const mod = new FakeWorld('demo', () => ({
-      panels: [ { id: 'gate', title: '接入门' }, { id: 'loose', title: 'loose' }],
+      panels: [ { id: 'gate', title: '接入门', getMethods: ['read'] }, { id: 'loose', title: 'loose' }],
       invoke: async (panel, method, args) => {
         calls.push({ panel, method, args });
         return { ok: true, panel };
@@ -435,6 +435,15 @@ describe('panel 调用', () => {
     await withApp({ consolePageSources: sources }, async (base) => {
       await fetch(`${base}${panelRoute('world:demo', 'loose', 'ping')}`, { method: 'POST' });
       expect(calls).toEqual([{ panel: 'loose', method: 'ping', args: [] }]);
+    });
+  });
+
+  it('GET 只对 getMethods 点名的方法开放:没点名的方法与没声明的面板都是 405,面板没被调到', async () => {
+    const { calls, sources } = spy();
+    await withApp({ consolePageSources: sources }, async (base) => {
+      expect((await fetch(`${base}${panelRoute('world:demo', 'gate', 'status')}`)).status).toBe(405);
+      expect((await fetch(`${base}${panelRoute('world:demo', 'loose', 'ping')}`)).status).toBe(405);
+      expect(calls).toEqual([]);
     });
   });
 
@@ -469,7 +478,7 @@ describe('panel 调用', () => {
   it('返回 { $binary } 时按二进制送回,Content-Type 与字节都对', async () => {
     const bytes = Buffer.from([0xff, 0x00, 0x41, 0x42]);
     const mod = new FakeWorld('demo', () => ({
-      panels: [ { id: 'tts', title: '声线' }],
+      panels: [ { id: 'tts', title: '声线', getMethods: ['preview'] }],
       invoke: async () => ({ $binary: { mime: 'audio/wav', base64: bytes.toString('base64') } }),
     }));
     const sources = deriveConsolePageSources(facts(), { assembly: WorldAssembly.ofInstances([mod]) });
@@ -485,11 +494,11 @@ describe('panel 调用', () => {
     const sources = deriveConsolePageSources(facts(), {
       assembly: WorldAssembly.ofInstances([
         new FakeWorld('demo', () => ({
-          panels: [ { id: 'gate', title: '接入门' }],
+          panels: [ { id: 'gate', title: '接入门', getMethods: ['status'] }],
           invoke: async () => ({ ok: true }),
         })),
         // 声明了面板但没有 invoke:面板存在、数据面缺席
-        new FakeWorld('mute', () => ({ panels: [{ id: 'gate', title: '接入门' }] })),
+        new FakeWorld('mute', () => ({ panels: [{ id: 'gate', title: '接入门', getMethods: ['status'] }] })),
       ]),
     });
     await withApp({ consolePageSources: sources }, async (base) => {
@@ -508,7 +517,7 @@ describe('panel 调用', () => {
 
   it('World 自己抛错是 500,错误信息原样透传给操作者', async () => {
     const mod = new FakeWorld('demo', () => ({
-      panels: [ { id: 'gate', title: '接入门' }],
+      panels: [ { id: 'gate', title: '接入门', getMethods: ['status'] }],
       invoke: async () => {
         throw new Error('后端没连上');
       },

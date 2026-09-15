@@ -3,7 +3,8 @@
 # 控制台
 
 每份部署运行一个本机 Web 控制台:`http://127.0.0.1:<web.port>/`,端口被占时顺延,含配置端口最多尝试五个端口。
-服务仅绑定 `127.0.0.1`,拒绝跨站 Origin 的 WebSocket 升级请求。
+服务仅绑定 `127.0.0.1`;Host 头不是回环名或绑定地址的请求回 421,带跨站 Origin 的写请求与 WebSocket
+升级被拒。显式绑到 `0.0.0.0` 时不校验 Host。
 
 ## 页
 
@@ -32,7 +33,8 @@ World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `per
 `badges`、`panels`、`links`、`config`(按 schema 渲染的配置组)、
 `promptDocs`(可编辑的提示词文档,如环境提示词)、`storage`(存储清单)、`invoke`(面板的
 数据接口)、`stream`(面板的推送通道)。World 通过 `World.console()` 声明,Persona 通过
-`Persona.console()` 声明。
+`Persona.console()` 声明。面板方法只接受 POST;`getMethods` 点名的方法才接受 GET(轮询读、
+`<audio src>` 这类只能带 URL 的场合)。
 
 自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/console/client.ts`(Persona 是
 `bots/<名>/console/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,

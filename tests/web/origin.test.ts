@@ -1,12 +1,14 @@
 /**
- * 控制台的两道本机防线:
+ * 控制台的三道本机防线:
  *  - 只绑回环:局域网地址上根本没有这个端口
+ *  - Host 白名单:Host 头不是回环名或绑定地址的请求一律 421,DNS rebinding 的页面同源也拿不到
  *  - 同源闸门:带外站 Origin 的写请求/WS 握手一律拒;没有 Origin 的程序化客户端放行
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { request } from 'node:http';
 import { connect } from 'node:net';
 import WebSocket from 'ws';
 import { WebApp } from '../../src/web/server.ts';
@@ -158,5 +160,65 @@ describe('WebSocket 握手的同源闸门', () => {
   it('外站 Origin 被拒', async () => {
     expect(await handshake('/ws/sessions', { origin: 'http://evil.example' })).toBe('rejected');
     expect(await handshake('/ws/debug', { origin: 'http://evil.example' })).toBe('rejected');
+  });
+});
+
+/** Host 头只有 node:http 让改写;fetch 把它当禁改头丢掉。 */
+const rawStatus = (
+  at: number,
+  opts: { path: string; method?: string; headers: Record<string, string> },
+): Promise<number> =>
+  new Promise((resolve, reject) => {
+    const req = request(
+      { host: '127.0.0.1', port: at, path: opts.path, method: opts.method ?? 'GET', headers: opts.headers },
+      (res) => {
+        res.resume();
+        res.on('end', () => resolve(res.statusCode ?? 0));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+
+describe('Host 头白名单', () => {
+  it('回环名放行:127.0.0.1 与 localhost 都行', async () => {
+    expect(await rawStatus(port, { path: '/api/status', headers: { Host: `127.0.0.1:${port}` } })).toBe(200);
+    expect(await rawStatus(port, { path: '/api/status', headers: { Host: `localhost:${port}` } })).toBe(200);
+  });
+
+  it('Host 是别的名字一律 421,读接口也拦', async () => {
+    expect(await rawStatus(port, { path: '/api/status', headers: { Host: `evil.example:${port}` } })).toBe(421);
+  });
+
+  it('Origin 与 Host 同为外站名(DNS rebinding 的形状)的写请求 421,副作用没发生', async () => {
+    paused = false;
+    const status = await rawStatus(port, {
+      path: '/api/run/pause',
+      method: 'POST',
+      headers: { Host: 'evil.example', Origin: 'http://evil.example' },
+    });
+    expect(status).toBe(421);
+    expect(paused).toBe(false);
+  });
+
+  it('WebSocket 握手同样看 Host', async () => {
+    expect(await handshake('/ws/sessions', { Host: 'evil.example' })).toBe('rejected');
+  });
+
+  it('显式绑到 0.0.0.0 就不校验 Host:那是操作员选择对外露面', async () => {
+    const other = new WebApp({
+      store: new FakeStore(),
+      memoryDir: dir,
+      dataDir: dir,
+      host: '0.0.0.0',
+      getStatus: () => ({}),
+      log: nullLogger(),
+    });
+    const at = await other.start(0);
+    try {
+      expect(await rawStatus(at, { path: '/api/status', headers: { Host: 'evil.example' } })).toBe(200);
+    } finally {
+      await other.stop();
+    }
   });
 });

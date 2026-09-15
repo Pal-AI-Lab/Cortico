@@ -318,7 +318,8 @@ export class ConsolePageRegistry {
   ): Promise<{ ok: true; value: unknown } | { ok: false; failure: InvokeFailure }> {
     const found = await this.resolvePanel(pageId, panelId, language);
     if (!found.ok) return found;
-    if (transport === 'get' && found.panel.getMethods && !found.panel.getMethods.includes(method)) {
+    // GET 不过写请求的同源闸门,任何站点凭 <img src> 就能发出;只放行面板点名的方法。
+    if (transport === 'get' && !(found.panel.getMethods ?? []).includes(method)) {
       return {
         ok: false,
         failure: { kind: 'method-not-allowed', message: `面板 ${panelId} 的方法 ${method} 只允许 POST` },

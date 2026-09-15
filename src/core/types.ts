@@ -706,7 +706,7 @@ export interface WorldPanelDecl {
   id: string;
   title: string;
   description?: string;
-  /** 允许经 HTTP GET 调用的方法；省略时沿用兼容行为，允许本面板全部方法。 */
+  /** 允许经 HTTP GET 调用的方法；省略时本面板只接受 POST。 */
   getMethods?: readonly string[];
 }
 

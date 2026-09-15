@@ -35,14 +35,15 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 |---|---|
 | `/api/console/manifest` | 页面声明。 |
 | `/api/console/lamps` | 状态灯。 |
-| `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 参数使用 query 中的 JSON 数组，POST JSON 上限为 64 MiB。 |
+| `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
 | `/ws/providers/<page>/panels/<panel>` | 面板流。 |
 
 ## 服务端
 
 `WebApp` 默认监听 `127.0.0.1`，支持由依赖配置指定监听地址。从首选端口起最多尝试五个端口；
 端口为 0 时仅申请一次系统分配。WebSocket 使用 `noServer` 分派 `/ws/debug`、`/ws/sessions` 和面板流。
-upgrade 按请求 Host 校验 Origin，拒绝不匹配或无效的 Origin；缺少 Origin 时放行。
+所有请求与 upgrade 先校验 Host 头：只接受回环名或显式绑定的地址，绑到通配地址时不校验。
+写请求与 upgrade 再按 Host 校验 Origin，拒绝不匹配或无效的 Origin；缺少 Origin 时放行。
 
 `/assets` 提供 `dist/web` 资源。首页在最后一个 `</body>` 前注入带 hash 的入口。
 扩展面板通过 `/assets/extensions/<包>/<版本>/<文件>` 提供，仅允许 manifest 声明的脚本与样式文件。

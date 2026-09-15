@@ -184,7 +184,7 @@ export interface ConsolePanelDecl {
   title: string;
   /** 一句话说明，控制台可显示在标题旁 */
   description?: string;
-  /** 允许经 HTTP GET 调用的方法；该声明只留在服务端，不进入 manifest。 */
+  /** 允许经 HTTP GET 调用的方法，省略时只接受 POST；该声明只留在服务端，不进入 manifest。 */
   getMethods?: readonly string[];
   /**
    * 这块面板的实现由控制台核心提供，值是它在内核那张内置表里的名字。

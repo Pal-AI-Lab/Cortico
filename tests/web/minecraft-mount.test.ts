@@ -79,7 +79,7 @@ beforeAll(async () => {
         kind: 'world' as const,
         label: 'Minecraft',
         availability: 'active' as const,
-        panels: Object.keys(mcPanels).map((id) => ({ id, title: id })),
+        panels: Object.keys(mcPanels).map((id) => ({ id, title: id, getMethods: ['state'] })),
         invoke: mcInvoke,
       }),
     }],

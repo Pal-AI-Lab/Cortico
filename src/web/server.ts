@@ -545,6 +545,21 @@ function isForeignOrigin(origin: unknown, hostHeader: unknown): boolean {
   return true;
 }
 
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
+
+/**
+ * Host 头必须是回环名或显式绑定的地址。DNS rebinding 让外站页面的 Origin 与 Host 同名,
+ * 同源闸门因此失效;这一关把请求钉在浏览器真正访问的名字上。绑到通配地址即操作员
+ * 已选择对外露面,不校验。
+ */
+function isAllowedHost(hostHeader: unknown, listenHost: string): boolean {
+  if (WILDCARD_HOSTS.has(listenHost)) return true;
+  if (typeof hostHeader !== 'string' || hostHeader === '') return false;
+  const name = barePort(hostHeader).toLowerCase();
+  return LOOPBACK_HOSTS.has(name) || name === listenHost.toLowerCase() || name === `[${listenHost.toLowerCase()}]`;
+}
+
 /**
  * 控制台页流式通道的 WS 路径:`/ws/providers/<page>/panels/<panel>`
  * (与 `panelStreamRoute` 同一形状;路径里的 `providers` 段是线协议形状,未随类型改名)。
@@ -1056,6 +1071,13 @@ export class WebApp {
           socket.destroy();
           return;
         }
+        if (!isAllowedHost(req.headers.host, this.listenHost)) {
+          this.deps.log.warn('拒绝 Host 不在白名单的 WebSocket 连接', {
+            path: pathname, host: String(req.headers.host),
+          });
+          socket.destroy();
+          return;
+        }
         // 跨站页面开的 WS 不受同源策略限制,只能在 upgrade 这一关自己拦(见 isForeignOrigin)
         if (isForeignOrigin(req.headers.origin, req.headers.host)) {
           this.deps.log.warn('拒绝跨站WebSocket连接', {
@@ -1163,6 +1185,15 @@ export class WebApp {
   private buildApp(): express.Express {
     const app = express();
     app.disable('x-powered-by');
+
+    app.use((req, res, next) => {
+      if (isAllowedHost(req.headers.host, this.listenHost)) {
+        next();
+        return;
+      }
+      this.deps.log.warn('拒绝 Host 不在白名单的请求', { path: req.path, host: String(req.headers.host) });
+      res.status(421).json({ error: 'Host 不被接受' });
+    });
 
     // 写操作的同源闸门:控制台的每个 POST 都是真副作用(改配置、删存储、回滚人格),
     // 别的站点的页面能凭浏览器自动发这些请求,拦这一下就断了。读接口不设闸——
