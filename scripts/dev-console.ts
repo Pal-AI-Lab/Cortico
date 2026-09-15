@@ -245,6 +245,7 @@ const storage: StoragePart[] = [
   { key: 'pending', label: '待投递事件', kind: 'memory', order: 9, note: '丢弃待投递的事件,保留事件库记录。延迟生成正文的队列项保留;已丢弃项不会在重启后补投', stat: () => '7条待投递', clear: () => '(dev)不清除' },
 
   { key: 'minecraft-log', label: 'World 日志(本次运行)', kind: 'disk', group: 'Minecraft World', location: 'data/runs/r-dev/log.jsonl', note: '清除本次运行的 World 日志,保留此前运行的日志', stat: () => '1594条 / 612.0KB', clear: () => '(dev)不清除' },
+  { key: 'minecraft-pwsr', label: '暂态表(目标/路标等)', kind: 'memory', group: 'Minecraft World', note: 'PWSR 暂态:她从笔记投影进来的目标与路标,本来就不跨重启', stat: () => '3项', clear: () => '(dev)不清除' },
 ];
 
 let watched = {
