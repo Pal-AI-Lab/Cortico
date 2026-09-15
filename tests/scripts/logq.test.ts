@@ -40,7 +40,7 @@ function buildFixture(): void {
 
   writeFileSync(join(botDir, 'config.json'), JSON.stringify({
     displayName: 'tb',
-    providers: { grok: { apiKey: 'sk-live-123', options: { token: 'tok-1' }, model: 'grok-4.5' } },
+    providers: { cloud: { apiKey: 'sk-live-123', options: { token: 'tok-1' }, model: 'cloud-1' } },
     web: { password: 'pw' },
   }));
 
@@ -108,10 +108,10 @@ function buildFixture(): void {
   writeFileSync(join(runsDir, R2, 'incidents', '2026-09-09T10-00-20-000-llm-failed.json'), '{}');
 
   writeFileSync(join(dataDir, 'usage.jsonl'), jsonl([
-    { run: R1, round: 1, ts: `2026-09-08T10:05:00.000${OFFSET}`, sessionId: 'main', role: 'main', label: 'main', model: 'grok-4.5', promptTokens: 10, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 10, reasoningTokens: 0, attempt: { elapsedMs: 900, responseId: 'old' } },
-    { run: R2, round: 3, ts: at(5000), sessionId: 'main', role: 'main', label: 'main', model: 'grok-4.5', promptTokens: 1000, completionTokens: 50, cacheHitTokens: 900, cacheMissTokens: 100, reasoningTokens: 5, attempt: { elapsedMs: 1000, responseId: 'resp_a' } },
-    { run: R2, round: 3, ts: at(10_000), sessionId: 'main', role: 'main', label: 'main', model: 'grok-4.5', promptTokens: 1000, completionTokens: 0, cacheHitTokens: 900, cacheMissTokens: 100, reasoningTokens: 0, outcome: 'failed', attempt: { elapsedMs: 3000, responseId: null } },
-    { run: R2, round: 4, ts: at(70_000), sessionId: 'main', role: 'main', label: 'main', model: 'grok-4.6', promptTokens: 1200, completionTokens: 40, cacheHitTokens: 1100, cacheMissTokens: 100, reasoningTokens: 8, attempt: { elapsedMs: 2000, responseId: 'resp_c' } },
+    { run: R1, round: 1, ts: `2026-09-08T10:05:00.000${OFFSET}`, sessionId: 'main', role: 'main', label: 'main', model: 'cloud-1', promptTokens: 10, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 10, reasoningTokens: 0, attempt: { elapsedMs: 900, responseId: 'old' } },
+    { run: R2, round: 3, ts: at(5000), sessionId: 'main', role: 'main', label: 'main', model: 'cloud-1', promptTokens: 1000, completionTokens: 50, cacheHitTokens: 900, cacheMissTokens: 100, reasoningTokens: 5, attempt: { elapsedMs: 1000, responseId: 'resp_a' } },
+    { run: R2, round: 3, ts: at(10_000), sessionId: 'main', role: 'main', label: 'main', model: 'cloud-1', promptTokens: 1000, completionTokens: 0, cacheHitTokens: 900, cacheMissTokens: 100, reasoningTokens: 0, outcome: 'failed', attempt: { elapsedMs: 3000, responseId: null } },
+    { run: R2, round: 4, ts: at(70_000), sessionId: 'main', role: 'main', label: 'main', model: 'cloud-2', promptTokens: 1200, completionTokens: 40, cacheHitTokens: 1100, cacheMissTokens: 100, reasoningTokens: 8, attempt: { elapsedMs: 2000, responseId: 'resp_c' } },
   ]));
 }
 
@@ -228,7 +228,7 @@ describe('timeline', () => {
 describe('turn', () => {
   it('投递事件、推理、工具调用及同 call 的 World 记录、用量按序出现', async () => {
     const text = (await turn(locateRun(dataDir, R2), 3)).join('\n');
-    const order = ['## 投递', '#10 10:00:24.000 bilibili/danmaku  张三: 你好呀', '#11', '## 推理', '有人打招呼', '## 工具 vtuber_act (vtuber)', 'c=c1', 'args: {"script":"你好"}', 'receipt(3ch): 已受理', 'worlds.vtuber.perf/act-accepted', 'worlds.vtuber.tts/stream-received', '## 工具 end_turn', '## 用量 2 次', 'grok-4.5 prompt=1000'];
+    const order = ['## 投递', '#10 10:00:24.000 bilibili/danmaku  张三: 你好呀', '#11', '## 推理', '有人打招呼', '## 工具 vtuber_act (vtuber)', 'c=c1', 'args: {"script":"你好"}', 'receipt(3ch): 已受理', 'worlds.vtuber.perf/act-accepted', 'worlds.vtuber.tts/stream-received', '## 工具 end_turn', '## 用量 2 次', 'cloud-1 prompt=1000'];
     let pos = -1;
     for (const needle of order) {
       const next = text.indexOf(needle, pos + 1);
@@ -299,9 +299,9 @@ describe('bundle', () => {
     expect(readFileSync(join(dest, 'index.jsonl'), 'utf8').trim().split('\n').length).toBe(2);
     const cfg = JSON.parse(readFileSync(join(dest, 'config.json'), 'utf8'));
     expect(cfg.displayName).toBe('tb');
-    expect(cfg.providers.grok.apiKey).toBe('***');
-    expect(cfg.providers.grok.options.token).toBe('***');
-    expect(cfg.providers.grok.model).toBe('grok-4.5');
+    expect(cfg.providers.cloud.apiKey).toBe('***');
+    expect(cfg.providers.cloud.options.token).toBe('***');
+    expect(cfg.providers.cloud.model).toBe('cloud-1');
     expect(cfg.web.password).toBe('***');
     expect(readFileSync(join(dest, 'doctor.md'), 'utf8')).toContain(`# doctor · ${R2}`);
   });

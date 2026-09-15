@@ -5,7 +5,7 @@ import { priceUsage, unknownMeters } from '../../src/core/generation.ts';
 import { snapshotPrice } from '../../src/providers/pricebook.ts';
 
 function charged(row: UsageRecord): UsageRecord {
-  const rates = row.model.startsWith('grok-') ? [0, 0, 0] : row.model === 'pro' ? [0.025, 3, 6] : [0.02, 1, 2];
+  const rates = row.model.startsWith('free-') ? [0, 0, 0] : row.model === 'pro' ? [0.025, 3, 6] : [0.02, 1, 2];
   const quote = snapshotPrice({ models: [row.model], currency: 'USD', basis: 'marginal', source: 'test contract', rules: (['cachedInput', 'uncachedInput', 'output'] as const).map((meter, index) => ({ meter, perMillion: rates[index] })) }, { startedAt: row.ts, requestedServiceTier: null });
   return { ...row, version: 2, charges: priceUsage({ ...unknownMeters(), input: row.promptTokens, output: row.completionTokens, cachedInput: row.cacheHitTokens, uncachedInput: row.cacheMissTokens }, [quote]) };
 }
@@ -166,10 +166,10 @@ describe('aggregateUsage:失败流单列', () => {
   });
 
   it("零价目下失败调用的成本为 0，token 用量仍保留", () => {
-    const grokRecs: UsageRecord[] = recs
+    const freeRecs: UsageRecord[] = recs
       .filter((r) => r.outcome === 'failed')
-      .map((r) => charged({ ...r, model: 'grok-4.5' }));
-    const a = aggregateUsage(grokRecs, { bucket: 'day' });
+      .map((r) => charged({ ...r, model: 'free-1' }));
+    const a = aggregateUsage(freeRecs, { bucket: 'day' });
     expect(a.failed.cost).toBe(0);
     expect(a.failed.promptTokens).toBe(2_000_000);
   });
