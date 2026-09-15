@@ -92,6 +92,23 @@ describe('公开发布审计', () => {
     ]));
   });
 
+  it('OAuth token 文件按文件名认出来,与是哪家的端点无关', () => {
+    const root = repository({
+      'src/index.ts': 'export const x = 1;\n',
+      'runtime/alpha-oauth-7f3.json': '{"access_token":"redacted"}\n',
+      'runtime/oauth.json': '{"access_token":"redacted"}\n',
+      'docs/oauth.md': '# 设备码流\n',
+    });
+
+    const result = auditRepository(root);
+
+    expect(result.findings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'credential', path: 'runtime/alpha-oauth-7f3.json' }),
+      expect.objectContaining({ kind: 'credential', path: 'runtime/oauth.json' }),
+    ]));
+    expect(result.findings.map((f) => f.path)).not.toContain('docs/oauth.md');
+  });
+
   it('从索引内容识别凭证且不在报告中回显正文', () => {
     const token = `hf_${'a'.repeat(24)}`;
     const root = repository({

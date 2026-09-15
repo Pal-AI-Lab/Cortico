@@ -239,7 +239,7 @@ function isSensitivePath(path: string): string | null {
     return '凭证文件名';
   }
   if (/\.(jks|key|keystore|p12|pfx)$/.test(base)) return '私钥或证书容器';
-  if (/^grok-oauth-.*\.json$/.test(base)) return 'OAuth token 文件';
+  if (/oauth.*\.json$/.test(base)) return 'OAuth token 文件';
   // 部署目录包含私有数据,即使文件名或内容未命中其他规则也要排除。
   if (lower === 'deployments' || lower.startsWith('deployments/')) return '部署根不得进入版本控制';
   if (/^bots\/[^/]+\/config\.json$/.test(lower)) return 'bot 部署配置';
