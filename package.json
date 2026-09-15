@@ -14,7 +14,7 @@
   },
   "packageManager": "pnpm@11.5.0",
   "scripts": {
-    "start": "tsx src/launcher.ts",
+    "start": "node bin/cortico.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",

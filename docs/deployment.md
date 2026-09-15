@@ -66,11 +66,12 @@ pnpm start <部署名>
 或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「语言模型」页修改密钥变量名或补填密钥，
 保存后下一次模型调用生效，不必重启。
 
-`start.bat` 与 `start.sh` 调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
+`pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
 在有多份部署时提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
 `CORTICO_START_PAUSED` 未设置时默认为 `1`。首次启动默认打开控制台，
-`CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。
-控制台的「重启进程」由此启动器执行；直接使用 `pnpm start` 时，进程退出后需要手动启动。
+`CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。控制台的「重启进程」由此启动器执行。
+
+`tsx src/launcher.ts <部署名>` 直接运行 bot 进程本身：不装依赖、不建产物、不重启。
 
 子进程通过 IPC 消息或 `data/.restart-request` 文件请求重启，启动器接受任一方式。
 没有重启请求时，崩溃、非零退出和信号退出均不触发自动重启。

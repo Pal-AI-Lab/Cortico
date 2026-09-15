@@ -147,8 +147,12 @@ export function promptChoice(items, out = process.stdout, input = process.stdin)
         out.write(`  ${mark} ${name}\u001b[0m\u001b[K\n`);
       }
     };
+    // 每条退出路径都要退出 raw 模式,包括不经 finish 的那些。
+    const restore = () => { if (input.isTTY) input.setRawMode(false); };
+    process.once('exit', restore);
     const finish = (/** @type {string | null} */ value) => {
-      if (input.isTTY) input.setRawMode(false);
+      restore();
+      process.off('exit', restore);
       input.removeListener('keypress', onKey);
       input.pause();
       done(value);
@@ -230,7 +234,8 @@ export async function supervise(bot, passthrough, firstRunOpensBrowser, opts = {
 }
 
 async function main() {
-  const { bot: requested, passthrough } = parseArgs(process.argv.slice(2));
+  const { bot: parsed, passthrough } = parseArgs(process.argv.slice(2));
+  const requested = parsed ?? process.env.CORTICO_BOT ?? null;
 
   const pnpm = resolvePnpm(onPath);
   if (!pnpm) {
@@ -253,6 +258,11 @@ async function main() {
   }
 
   const available = readPnpm(pnpm, ['--silent', 'bots']).split('\n').map((s) => s.trim()).filter(Boolean);
+  if (passthrough.includes('--list')) {
+    console.log(available.join('\n'));
+    return 0;
+  }
+
   let choice = chooseBot({ bot: requested, available, interactive: process.stdin.isTTY === true });
   if (choice.kind === 'ask') {
     const picked = await promptChoice(available);

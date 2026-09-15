@@ -11,6 +11,19 @@
 关闭终端窗口的处理时限通常为 5 秒,可能不足以完成关机;正常退出使用控制台的「关机」。
 时限由系统参数决定,见 [Windows 控制台文档](https://learn.microsoft.com/en-us/windows/console/handlerroutine)。
 
+## Ctrl+C
+
+Windows 把控制台事件发给前台进程组里的每一个进程。`bin/cortico.mjs` 收到后不做处理,
+等子进程走完关机再退出,所以走 `start.bat` 或 `node bin/cortico.mjs <部署名>` 时提示符在关机
+打完之后才回来。
+
+经 `pnpm start` 启动时,链路上多一层 `pnpm.cmd`。cmd.exe 自己也响应同一个控制台事件,
+弹出 `Terminate batch job (Y/N)?` 并可能在 bot 关机完成前把提示符交还给 shell;
+此后 PSReadLine 的退格与方向键会打出控制字符,开新窗口即恢复。这一层不在 Cortico 的进程链内。
+
+改动关机或启动器后按以下步骤手工验证:PowerShell 里启动 → Ctrl+C → 等关机输出打完 →
+输入一行字并用退格和方向键编辑,行为应与启动前一致。
+
 ## 平台分支
 
 | 位置 | 行为 |
