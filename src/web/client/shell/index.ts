@@ -407,18 +407,6 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       }
     }
 
-    // 系统项(系统提示词、设置)固定在最末,不带组头:顶部的「系统」组已用过这个名字。
-    const systemPages = pages.filter((f) => f.navMode === 'system');
-    if (systemPages.length) {
-      const group = ui.h('div', 'navgroup navgroup-framework navgroup-system');
-      group.setAttribute('role', 'group');
-      group.setAttribute('aria-label', S.systemAria);
-      nav.appendChild(group);
-      for (const f of systemPages) {
-        addItem(group, { label: f.label, icon: f.icon, segments: [f.route] }, itemSignal);
-      }
-    }
-
     applyRoute();
   };
 

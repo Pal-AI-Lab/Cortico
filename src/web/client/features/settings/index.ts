@@ -93,6 +93,6 @@ export const settingsFeature: FrameworkFeature = {
   route: 'settings',
   label: S.navLabel,
   icon: 'settings',
-  navMode: 'system',
+  navGroup: S.navGroup,
   mount: mountSettings,
 };

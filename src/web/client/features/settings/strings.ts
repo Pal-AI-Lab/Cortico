@@ -1,6 +1,7 @@
 import { pick } from '../../core/language.ts';
 
 const zh = {
+  navGroup: '系统',
   general: '通用',
   generalDesc: '控制台语言偏好。',
   language: '界面语言 / Language',
@@ -19,6 +20,7 @@ const zh = {
 };
 
 const en: typeof zh = {
+  navGroup: 'System',
   general: 'General',
   generalDesc: 'Console language preferences.',
   language: '界面语言 / Language',

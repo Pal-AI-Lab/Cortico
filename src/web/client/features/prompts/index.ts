@@ -340,7 +340,7 @@ export const promptsFeature: FrameworkFeature = {
   route: PROMPTS_ROUTE,
   label: S.title,
   icon: 'text',
-  navMode: 'system',
+  navGroup: S.navGroup,
   needs: ['prompts'],
   mount: mountPrompts,
 };
