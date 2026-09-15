@@ -12,7 +12,7 @@ export interface FixtureMessage {
   tool_call_id?: string;
   blobs?: BlobRef[];
   ephemeral?: true;
-  firstTurn?: true;
+  head?: true;
   ts?: string;
   frame?: { events: FrameEventRef[] };
 }
@@ -25,7 +25,7 @@ export function fixtureRecords(messages: readonly FixtureMessage[], namespace: s
       ...(message.reasoningRef ? { origin: { instance: 'fixture', module: 'fixture', model: message.reasoningRef.model, compatibilityDomain: 'fixture' } } : {}),
       ...(message.ts ? { ts: message.ts } : {}),
       ...(message.ephemeral ? { ephemeral: true } : {}),
-      ...(message.firstTurn ? { firstTurn: true } : {}),
+      ...(message.head ? { head: true } : {}),
       ...(message.blobs ? { blobs: message.blobs } : {}),
       ...(message.frame ? { frame: message.frame } : {}),
     };

@@ -29,8 +29,8 @@ export interface ForkDeps {
   timeline: TimelineView;
   /** 主 session 的消息(切回主视图时重画用) */
   mainMessages(): readonly ContextRecord[];
-  /** 主 session 的合成首轮对话(切回主视图时把标注块画回来) */
-  mainFirstTurn?(): readonly ContextRecord[];
+  /** 主 session 的合成开头(切回主视图时把标注块画回来) */
+  mainHead?(): readonly ContextRecord[];
   /** 当前 session 列表(判断 fork 是否已结束) */
   sessions(): readonly SessionStat[];
   /** 当前观察目标变了(卡条要重画选中态) */
@@ -139,7 +139,7 @@ export function createForkView(deps: ForkDeps): ForkView {
       lastRevision = '';
       deps.onChange();
       if (next === MAIN_ID) {
-        timeline.rebuild(deps.mainMessages(), { firstTurn: deps.mainFirstTurn?.() ?? null });
+        timeline.rebuild(deps.mainMessages(), { head: deps.mainHead?.() ?? null });
         return;
       }
       void refresh(true);

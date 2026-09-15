@@ -75,8 +75,8 @@ handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执�
 超过上限时，主循环在轮次边界结束本批，并在批末强制交接；上游报告输入超限时也请求交接。
 
 `Persona.onHandoff(snapshot, { hardTokens })` 返回 `{ tail, trim? }`。Core 重建 system 前缀，
-按 `hardTokens − estimate(prefix)` 限制保留上下文，其中 prefix 包括 system 前缀和启用的合成
-首轮对话。Core 校验工具调用配对，并重置 session。
+按 `hardTokens − estimate(prefix)` 限制保留上下文，其中 prefix 包括 system 前缀和 Persona 的合成
+开头(`sessionHead()`)。Core 校验工具调用配对，并重置 session。
 阶段预算与保留比例由 Persona 决定，模型配置来自当前 provider。
 
 ## 错误隔离

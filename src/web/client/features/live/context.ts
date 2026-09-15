@@ -50,7 +50,7 @@ const CTX_CATS: readonly ContextCategoryDef[] = [
   { key: 'memory', group: S.groupPrefix, label: S.catMemory, color: 'var(--chart-6)' },
   { key: 'prefixMisc', group: S.groupPrefix, label: S.catPrefixMisc, color: 'var(--chart-7)' },
   { key: 'toolsSchema', group: S.groupTools, label: S.catToolsSchema, color: 'var(--chart-hit)' },
-  { key: 'firstTurn', group: S.groupDialogue, label: S.catFirstTurn, color: 'var(--chart-8)' },
+  { key: 'head', group: S.groupDialogue, label: S.catHead, color: 'var(--chart-8)' },
   { key: 'reasoning', group: S.groupDialogue, label: S.catReasoning, color: 'var(--chart-3)' },
   { key: 'dialogue', group: S.groupDialogue, label: S.catDialogue, color: 'var(--chart-2)' },
   { key: 'toolIO', group: S.groupDialogue, label: S.catToolIO, color: 'var(--chart-4)' },
@@ -100,8 +100,8 @@ export interface ContextBreakdown {
 
 export interface ContextInput {
   messages: readonly ContextRecord[];
-  /** messages 之外的合成首轮；估算包含其 reasoning，不应用历史思维链摘除规则。 */
-  firstTurn?: readonly ContextRecord[];
+  /** messages 之外的合成开头；估算包含其 reasoning，不应用历史思维链摘除规则。 */
+  head?: readonly ContextRecord[];
   toolSchemas: readonly ToolSchemaDoc[];
   status: StatusSnapshot | null;
 }
@@ -136,9 +136,9 @@ export function computeCtx(input: ContextInput): ContextBreakdown | null {
     );
   }
 
-  // 合成首轮单独计入估算，包含其中的 reasoning。
-  for (const m of input.firstTurn ?? []) {
-    tok.firstTurn += estimateMessagesTokens([m]);
+  // 合成开头单独计入估算，包含其中的 reasoning。
+  for (const m of input.head ?? []) {
+    tok.head += estimateMessagesTokens([m]);
   }
 
   // 2) 工具表 schema:作为 tools 参数随每次调用发送,与消息分开计。
@@ -152,7 +152,7 @@ export function computeCtx(input: ContextInput): ContextBreakdown | null {
   let strippedThinking = 0;
   for (const entry of rest) {
     const tokens = estimateMessagesTokens([entry]);
-    if (entry.context.firstTurn) tok.firstTurn += tokens;
+    if (entry.context.head) tok.head += tokens;
     else if (entry.item.type === 'reasoning') {
       if (keepOn) tok.reasoning += tokens;
       else strippedThinking += tokens;

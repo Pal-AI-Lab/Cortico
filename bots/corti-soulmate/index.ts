@@ -29,7 +29,7 @@ export type { QQConfigSection, WebSearchConfigSection };
  * CoreConfig 保持框架边界,额外配置由各挂载方拥有。
  */
 export interface BotConfig extends CoreConfig {
-  /** 阶段长度三项归Persona,摘思维链与首轮对话两项归 core;同住 context 段。 */
+  /** 阶段长度三项与首轮对话开关归 Persona,摘思维链归 core;同住 context 段。 */
   context: CoreConfig['context'] & PersonaConfig['context'];
   loop: PersonaConfig['loop'];
   memo: PersonaConfig['memo'];

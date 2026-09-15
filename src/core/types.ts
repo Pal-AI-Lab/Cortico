@@ -1,5 +1,5 @@
 import type { PriceDefinition } from '../providers/pricebook.ts';
-import type { ContextRecord } from '../protocol/open-responses/context.ts';
+import type { ContextRecord, Item } from '../protocol/open-responses/context.ts';
 import type { StreamEvent } from '../protocol/open-responses/index.ts';
 import type { ResponseClient, ProviderAttempt } from './generation.ts';
 import type { ConfigGroup } from './config-schema.ts';
@@ -465,7 +465,7 @@ export interface ContextHandoffResult {
   /** 不含 system 前缀的保留上下文；null 表示由 Core 从当前上下文选择。 */
   tail: ContextRecord[] | null;
   /**
-   * 声明返回内容可由 Core 按剩余 token 预算裁剪，预算扣除 system 前缀与合成首轮对话。
+   * 声明返回内容可由 Core 按剩余 token 预算裁剪，预算扣除 system 前缀与合成开头。
    * 未设置此项时，超限内容仍会被裁剪，但同时记录告警。
    */
   trim?: boolean;
@@ -876,14 +876,6 @@ export interface SystemPrefixContext {
 
 export type SessionOpeningReason = 'new' | 'restarted' | 'cleared';
 
-/** Persona 提供的合成对话，在模型请求中置于 system 前缀之后、真实历史之前。 */
-export interface FirstTurnRound {
-  user: string;
-  /** 合成推理文本；空值或缺省时不添加推理项。 */
-  thinking?: string;
-  reply: string;
-}
-
 export interface MemoryAssemblyContext {
   now: Date;
   timezone: string;
@@ -931,10 +923,11 @@ export interface Persona {
    */
   ownToolNames?(): string[];
   /**
-   * 合成对话仅用于模型请求，不持久化；由 context.firstTurn 控制，默认关闭。
-   * 前缀重建时重新读取，user 或 reply 为空白的轮次跳过；未实现时不注入。
+   * session 的合成开头:每次请求置于 system 前缀之后、持久历史之前,不写入 session,交接时
+   * 不进保留内容。Core 每次出请求前调用一次,丢弃 system 与 developer 项,补齐工具配对,
+   * 计入 hardTokens。内容只应随 Persona 自己的输入变化;每次不同就每次打穿前缀缓存。
    */
-  firstTurn?(): FirstTurnRound[];
+  sessionHead?(): Item[];
   /** Memory 目录的绝对路径。 */
   memoryDir: string;
   /** mem: 句柄的后端，由 Persona 解释和保存二进制内容。 */
@@ -1102,8 +1095,6 @@ export interface CoreConfig {
   context: {
     /** 是否在请求中保留 provider 支持回传的历史推理内容；不改变已保存的 session。 */
     keepPastThinking: boolean;
-    /** 是否在请求中注入 Persona.firstTurn()；空内容不注入，关闭后从下一次请求生效。 */
-    firstTurn: boolean;
   };
   batching: {
     /** debounce 批距末次事件到达的等待时间。 */

@@ -86,8 +86,8 @@ import {
 export interface WebAppDebugDeps {
   /** WebApp 不修改返回的 session 消息数组。 */
   sessionMessages(): readonly ContextRecord[];
-  /** 当前合成首轮请求内容；关闭或内容为空时返回空数组，不写入 session 记录。省略时不标注合成首轮。 */
-  firstTurnMessages?(): ContextRecord[];
+  /** 当前的合成开头；为空时返回空数组，不写入 session 记录。省略时时间线不标注开头。 */
+  sessionHead?(): ContextRecord[];
   onSessionAppend(cb: (msg: ContextRecord, index: number) => void): void;
   onSessionReset(cb: (messages: ContextRecord[]) => void): void;
   onEvent(cb: (e: EventEnvelope) => void): void;
@@ -737,11 +737,11 @@ export class WebApp {
         // status顺带推一份(不定时轮询,append即代表状态变化)
         this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       });
-      // reset 顺带带上首轮对话现值:前缀重载/交接都走 reset,合成块标注跟着刷新
+      // reset 顺带带上合成开头现值:前缀重载/交接都走 reset,标注块跟着刷新
       dbg.onSessionReset((messages) => this.debugBroadcast({
         t: 'session.reset',
         messages,
-        firstTurn: dbg.firstTurnMessages?.() ?? [],
+        head: dbg.sessionHead?.() ?? [],
       }));
       dbg.onEvent((envelope) => this.debugBroadcast({ t: 'event', envelope }));
       dbg.onRunlog((entry) => this.debugBroadcast({ t: 'runlog', entry }));
@@ -1038,7 +1038,7 @@ export class WebApp {
       ws.send(JSON.stringify({
         t: 'hello',
         session: dbg.sessionMessages(),
-        firstTurn: dbg.firstTurnMessages?.() ?? [],
+        head: dbg.sessionHead?.() ?? [],
         toolSchemas: dbg.toolSchemas(),
         events: dropArchiveOnly(this.deps.store.range({ limit: 400 })).slice(-200),
         runlog: dbg.recentLog?.(200) ?? [],

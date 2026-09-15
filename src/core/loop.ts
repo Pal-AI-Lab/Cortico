@@ -1,4 +1,4 @@
-import { message, record, functionCall, functionResult, responseRecords, itemText, withText, type ContextRecord } from '../protocol/open-responses/context.ts';
+import { message, record, functionCall, functionResult, responseRecords, itemText, withText, type ContextRecord, type Item } from '../protocol/open-responses/context.ts';
 import { hasRole, textOf, withoutPastReasoning, responseRequest, usageCounters } from '../protocol/open-responses/context-helpers.ts';
 import type { Response, StreamEvent } from '../protocol/open-responses/index.ts';
 import { GenerationError, type ResponseClient, type TokenMeters } from './generation.ts';
@@ -291,8 +291,6 @@ export class MainLoop {
   private appliedVisibleWorlds: Set<string> | null = null;
   /** 当前前缀中各可见 World 的工具签名，用于检测工具表漂移。 */
   private appliedWorldTools = new Map<string, string>();
-  /** 首轮对话随 system 前缀一起重新读取，重载前保持相同请求内容。 */
-  private firstTurnMsgs: ContextRecord[] = [];
   /** 当前模型轮；非 reasoning 增量一旦外流，本轮不再接受自动抢占。 */
   private currentRound: {
     controller: AbortController;
@@ -400,47 +398,39 @@ export class MainLoop {
       timezone: cfg.timezone,
       dirs,
     });
-    this.refreshFirstTurn();
     return message('system', content);
   }
 
-  /** 重读合成首轮对话内容。user 或 reply 为空白的轮次机械跳过。 */
-  private refreshFirstTurn(): void {
-    const { persona, log } = this.d;
-    const out: ContextRecord[] = [];
-    try {
-      for (const round of persona.firstTurn?.() ?? []) {
-        const user = round.user.trim();
-        const reply = round.reply.trim();
-        const thinking = round.thinking?.trim();
-        if (!user || !reply) continue;
-        out.push(message('user', user, { firstTurn: true }));
-        if (thinking) out.push(record({ type: 'reasoning', id: `rs_first_${out.length}`, summary: [], content: [{ type: 'reasoning_text', text: thinking }] }, { firstTurn: true }));
-        out.push(message('assistant', reply, { firstTurn: true }));
-      }
-    } catch (e) {
-      log.warn('firstTurn内容读取失败,本次不注入', { err: e });
-    }
-    this.firstTurnMsgs = out;
-  }
-
   /**
-   * 在持久上下文的 system 消息后插入合成首轮对话，生成请求与快照使用的副本。
-   * 继承快照的 fork 保留相同的请求前缀；禁用或内容为空时仅复制原上下文。
+   * 在持久上下文的 system 消息后插入合成开头，生成请求与快照使用的副本。
+   * 继承快照的 fork 保留相同的请求前缀；开头为空时仅复制原上下文。
    */
   outboundMessages(): ContextRecord[] {
     const msgs = this.d.session.records;
-    const first = this.activeFirstTurn();
-    if (first.length === 0) return [...msgs];
-    let head = 0;
-    while (head < msgs.length && hasRole(msgs[head], 'system')) head++;
-    return [...msgs.slice(0, head), ...first, ...msgs.slice(head)];
+    const head = this.sessionHead();
+    if (head.length === 0) return [...msgs];
+    let at = 0;
+    while (at < msgs.length && hasRole(msgs[at], 'system')) at++;
+    return [...msgs.slice(0, at), ...head, ...msgs.slice(at)];
   }
 
-  /** 当前生效的合成首轮对话，供请求及控制台查看；禁用或为空时返回空数组。 */
-  activeFirstTurn(): ContextRecord[] {
-    if (!this.d.cfg.context.firstTurn) return [];
-    return [...this.firstTurnMsgs];
+  /**
+   * Persona 的合成开头,每次现取:system 与 developer 项丢弃,工具配对补齐,全部带不落盘标记。
+   * Persona 没提供或抛错时为空。
+   */
+  sessionHead(): ContextRecord[] {
+    const { persona, log } = this.d;
+    let items: Item[];
+    try {
+      items = persona.sessionHead?.() ?? [];
+    } catch (e) {
+      log.warn('sessionHead 读取失败,本次不注入', { err: e });
+      return [];
+    }
+    const kept = items.filter((item) => !(item.type === 'message' && (item.role === 'system' || item.role === 'developer')));
+    if (kept.length !== items.length) log.warn('sessionHead 里的 system/developer 项已丢弃', { dropped: items.length - kept.length });
+    return fixPairing(kept.map((item) => record(item, { head: true })))
+      .map((entry) => (entry.context.head ? entry : { ...entry, context: { ...entry.context, head: true as const } }));
   }
 
   /**
@@ -830,8 +820,6 @@ export class MainLoop {
       this.stallAlarmActive = carried >= STALL_ALERT_THRESHOLD;
     }
     this.requeueUndelivered();
-    // 重启恢复不重建前缀,首轮对话缓存单独补上(全新session由buildSystem刷新)。
-    this.refreshFirstTurn();
     if (session.records.length === 0) {
       const system = await this.buildSystem();
       if (!this.active(generation)) return;
@@ -1383,8 +1371,7 @@ export class MainLoop {
   private async performHandoff(generation: number): Promise<void> {
     if (!this.active(generation)) return;
     const { cfg, session, state, log, persona } = this.d;
-    // 快照包含合成首轮对话，继承它的 fork 保留相同请求前缀。
-    // clampTail 排除 firstTurn 项，避免写入持久上下文。
+    // 快照包含合成开头，继承它的 fork 保留相同请求前缀；clampTail 把它排除在持久上下文外。
     const snapshot = this.outboundMessages();
     const before = this.estTokens();
     let result: ContextHandoffResult = { tail: null };
@@ -1398,7 +1385,7 @@ export class MainLoop {
     // 策略执行后重建前缀，读取其可能更新的内容。
     const sysMsg = await this.buildSystem();
     if (!this.active(generation)) return;
-    const newTail = this.clampTail(result, snapshot, [sysMsg, ...this.activeFirstTurn()]);
+    const newTail = this.clampTail(result, snapshot, [sysMsg, ...this.sessionHead()]);
     session.reset([sysMsg, ...newTail]);
     for (const m of this.d.worlds.visible()) {
       try {
@@ -1427,11 +1414,11 @@ export class MainLoop {
     if (tail === null) {
       let start = 0;
       while (start < snapshot.length && hasRole(snapshot[start], 'system')) start++;
-      const candidate = snapshot.slice(start).filter((m) => !m.context.firstTurn);
+      const candidate = snapshot.slice(start).filter((m) => !m.context.head);
       return budget === null ? fixPairing(candidate) : rebuildTail(candidate, budget, estimate);
     }
-    // system 和合成首轮对话不属于持久化的保留内容。
-    const paired = fixPairing(tail.filter((m) => !hasRole(m, 'system') && !m.context.firstTurn));
+    // system 和合成开头不属于持久化的保留内容。
+    const paired = fixPairing(tail.filter((m) => !hasRole(m, 'system') && !m.context.head));
     if (budget === null || estimate(paired) <= budget) return paired;
     // trim 表示允许 Core 从候选内容裁剪，无需报告策略越界。
     if (!result.trim) log.warn('交接策略返回的动态尾越过模型上下文上限,按机械默认裁剪', { budget });

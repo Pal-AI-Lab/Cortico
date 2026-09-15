@@ -50,7 +50,7 @@ export function nativeChatInput(request: Request, options: GenerateOptions): Nat
   let assistant: NativeChatMessage | null = null;
   const ensureAssistant = (entry: ContextRecord): NativeChatMessage => {
     if (!assistant) {
-      assistant = { role: 'assistant', content: '', ...(entry.context.firstTurn ? { firstTurn: true } : {}) };
+      assistant = { role: 'assistant', content: '', ...(entry.context.head ? { head: true } : {}) };
       messages.push(assistant);
     }
     return assistant;

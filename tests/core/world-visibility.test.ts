@@ -81,7 +81,7 @@ beforeEach(async () => {
     ...CORE_DEFAULTS,
     web: { port: 0 },
     paths: { memory: 'workspace', data: 'data' },
-    context: { maxTokens: 64000, keepRatio: 1 / 3, softRatio: 0.85, ...CORE_DEFAULTS.context },
+    context: { maxTokens: 64000, keepRatio: 1 / 3, softRatio: 0.85, firstTurn: false, ...CORE_DEFAULTS.context },
     loop: { softCap: 8, hardCap: 16 },
   };
   const loaded: LoadedConfig<CoreConfig> = {

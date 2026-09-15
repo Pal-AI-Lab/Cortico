@@ -14,6 +14,8 @@ export interface PersonaConfig {
     keepRatio: number;
     /** 超过阶段预算的此比例时先提示；下一批结束时仍超出则交接。 */
     softRatio: number;
+    /** 是否把部署 prompts/ 里的首轮对话作为合成开头送进请求。 */
+    firstTurn: boolean;
   };
   loop: { softCap: number; hardCap: number };
   memo: { residentCap: number; activeCap: number };
@@ -74,6 +76,12 @@ export const PERSONA_CONFIG_GROUP: ConfigGroup = {
         'x-suffix': '×',
         'x-hot': true,
         description: '上下文预警阈值 = 阶段预算 × 此比例。',
+      },
+      'context.firstTurn': {
+        type: 'boolean',
+        title: '合成首轮对话',
+        'x-hot': true,
+        description: '把部署 prompts/ 里的首轮对话(FIRST_TURN_USER / THINKING / REPLY)作为合成开头送进每次请求,不写入 session;内容为空时不送。',
       },
       'loop.softCap': {
         type: 'integer',
@@ -171,7 +179,7 @@ export const PERSONA_CONFIG_GROUP: ConfigGroup = {
 };
 
 export const PERSONA_DEFAULTS: PersonaConfig = {
-  context: { maxTokens: 128000, keepRatio: 0.3333, softRatio: 0.85 },
+  context: { maxTokens: 128000, keepRatio: 0.3333, softRatio: 0.85, firstTurn: false },
   loop: { softCap: 8, hardCap: 16 },
   // MEMORY 2 的三层容量(7±2 的 7)
   memo: { residentCap: 7, activeCap: 21 },

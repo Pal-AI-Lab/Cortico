@@ -3,7 +3,7 @@
  * 连续的同 responseId assistant 侧 Item 合为一组；无 responseId 的连续 Item 也合组，
  * 回执或输入结束当前组。function_call_output 按 call_id 回填，未匹配时单独显示。
  * 原始 Item 包含 phase、status 与加密载荷；明文计字数，加密载荷计字符数。
- * #n 对应 session 记录 index；合成首轮不落盘且无序号。
+ * #n 对应 session 记录 index；合成开头不落盘且无序号。
  * 打字机由 lifecycle.frame 管理，监听使用 signal，滚动保持由 shouldStick 判断。
  */
 
@@ -92,8 +92,8 @@ export interface TimelineView {
       banner?: HTMLElement | null;
       empty?: string;
       keepScroll?: boolean;
-      /** 合成首轮显示在开头 system 之后；空数组或未提供时不显示。 */
-      firstTurn?: readonly ContextRecord[] | null;
+      /** 合成开头显示在开头 system 之后；空数组或未提供时不显示。 */
+      head?: readonly ContextRecord[] | null;
     },
   ): void;
   /** 追加一条(实时帧)。`live` 决定要不要动画与打字机。 */
@@ -514,12 +514,12 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     stick();
   };
 
-  const renderFirstTurn = (entries: readonly ContextRecord[]): void => {
+  const renderHead = (entries: readonly ContextRecord[]): void => {
     turn = null;
-    inner.appendChild(ui.h('div', 'divider firstturn', S.firstTurnStart));
+    inner.appendChild(ui.h('div', 'divider sessionhead', S.headStart));
     for (const entry of entries) renderOne(entry, null, false);
     turn = null;
-    inner.appendChild(ui.h('div', 'divider firstturn', S.firstTurnEnd));
+    inner.appendChild(ui.h('div', 'divider sessionhead', S.headEnd));
   };
 
   function showThinking(): void {
@@ -546,17 +546,17 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
         inner.appendChild(ui.placeholder(opts?.empty ?? S.sessionEmpty));
         return;
       }
-      // 合成首轮插在开头的 system 卡之后(与请求体里的位置一致)。
-      const firstTurn = opts?.firstTurn?.length ? opts.firstTurn : null;
-      let firstTurnDone = !firstTurn;
+      // 合成开头插在开头的 system 卡之后(与请求体里的位置一致)。
+      const head = opts?.head?.length ? opts.head : null;
+      let headDone = !head;
       messages.forEach((entry, i) => {
-        if (!firstTurnDone && !isPrefix(entry.item)) {
-          renderFirstTurn(firstTurn!);
-          firstTurnDone = true;
+        if (!headDone && !isPrefix(entry.item)) {
+          renderHead(head!);
+          headDone = true;
         }
         renderOne(entry, i, false);
       });
-      if (!firstTurnDone) renderFirstTurn(firstTurn!);
+      if (!headDone) renderHead(head!);
       if (opts?.keepScroll && !wasStuck) {
         scroll.scrollTop = keepTop;
         return;

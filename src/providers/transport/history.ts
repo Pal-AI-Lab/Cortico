@@ -2,7 +2,7 @@ import type { NativeChatMessage } from './native-types.ts';
 import type { ToolSchema } from '../../core/types.ts';
 export function dropPastThinking(messages: NativeChatMessage[]): NativeChatMessage[] {
   return messages.map((m) =>
-    m.role === 'assistant' && m.reasoning_content && !m.firstTurn
+    m.role === 'assistant' && m.reasoning_content && !m.head
       ? { ...m, reasoning_content: '' }
       : m,
   );
@@ -15,7 +15,7 @@ export function dropBlobsField(m: NativeChatMessage): NativeChatMessage {
   return rest as NativeChatMessage;
 }
 
-export function dropFirstTurnMark(m: NativeChatMessage): NativeChatMessage {
+export function dropHeadMark(m: NativeChatMessage): NativeChatMessage {
   return { role: m.role, content: m.content,
     ...(m.reasoning_content !== undefined ? { reasoning_content: m.reasoning_content } : {}),
     ...(m.tool_calls ? { tool_calls: m.tool_calls } : {}),
@@ -48,7 +48,7 @@ export function renderMessagesWithMedia(
   const renderMedia = media?.enabled() === true ? media : undefined;
   return messages.map((m) => {
     const refs = m.blobs;
-    const { reasoning_content: _r, parts: _parts, ...rest } = dropFirstTurnMark(m);
+    const { reasoning_content: _r, parts: _parts, ...rest } = dropHeadMark(m);
     const base = { ...rest, content: m.parts ?? m.content } as Record<string, unknown>;
     if (opts?.keepReasoning && m.reasoning_content) base.reasoning_content = m.reasoning_content;
     if (!renderMedia || !refs?.length) return base;

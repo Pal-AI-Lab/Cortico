@@ -73,8 +73,8 @@ const zh = {
   synthetic: '合成',
   encryptedPayload: (n: number) => `加密载荷 ${n} 字符`,
   rawItems: '原始 Item',
-  firstTurnStart: '合成首轮 · 不落盘',
-  firstTurnEnd: '合成首轮 · 结束',
+  headStart: '合成开头 · 不落盘',
+  headEnd: '合成开头 · 结束',
   sessionEmpty: 'session 为空',
 
   // context.ts
@@ -88,7 +88,7 @@ const zh = {
   catMemory: '记忆 MEMORY',
   catPrefixMisc: '前言 / 分隔 / 结构',
   catToolsSchema: '工具表 schema',
-  catFirstTurn: '首轮对话（合成）',
+  catHead: '合成开头',
   catReasoning: '思维链',
   catDialogue: '对话往来 · 事件',
   catToolIO: '工具调用与结果',
@@ -183,8 +183,8 @@ const en: typeof zh = {
   synthetic: 'synthetic',
   encryptedPayload: (n: number) => `Encrypted payload ${n} chars`,
   rawItems: 'Raw Items',
-  firstTurnStart: 'Synthetic first turn · not persisted',
-  firstTurnEnd: 'Synthetic first turn · end',
+  headStart: 'Session head · not persisted',
+  headEnd: 'Session head · end',
   sessionEmpty: 'session is empty',
 
   // context.ts
@@ -198,7 +198,7 @@ const en: typeof zh = {
   catMemory: 'MEMORY',
   catPrefixMisc: 'Preamble / separators / structure',
   catToolsSchema: 'Tool schemas',
-  catFirstTurn: 'First turn (synthetic)',
+  catHead: 'Session head (synthetic)',
   catReasoning: 'Reasoning',
   catDialogue: 'Dialogue · events',
   catToolIO: 'Tool calls and results',

@@ -29,10 +29,6 @@ const CORE_GROUP_TEXT = {
       title: '保留历史思维链',
       description: "启用后，provider 可回传兼容的历史推理；关闭后请求不含历史推理。已保存的 session 不变。",
     },
-    firstTurn: {
-      title: "合成首轮对话",
-      description: "在模型请求的系统前缀后加入 Persona 提供的首轮对话，不写入 session。默认关闭；内容为空时不添加。",
-    },
     logFile: {
       title: '日志落盘门槛',
       description: "低于此级别的记录不写入 data/runs/<run>/log.jsonl。",
@@ -69,10 +65,6 @@ const CORE_GROUP_TEXT = {
     keepPastThinking: {
       title: 'Keep past reasoning',
       description: "Allow the provider to replay compatible past reasoning. When disabled, requests omit past reasoning. Saved sessions are unchanged.",
-    },
-    firstTurn: {
-      title: "Synthetic first turn",
-      description: "Add the first-turn exchange supplied by the Persona after the system prefix in model requests, without saving it to the session. Disabled by default; empty content is omitted.",
     },
     logFile: {
       title: 'Log file threshold',
@@ -148,12 +140,6 @@ export function coreConfigGroup(language: Language): ConfigGroup {
           'x-hot': true,
           description: t.keepPastThinking.description,
         },
-        'context.firstTurn': {
-          type: 'boolean',
-          title: t.firstTurn.title,
-          'x-hot': true,
-          description: t.firstTurn.description,
-        },
         'logging.file': {
           type: 'string',
           title: t.logFile.title,
@@ -204,7 +190,7 @@ export const CORE_DEFAULTS = {
   web: { port: 7777 },
   paths: { memory: 'memory', data: 'data' },
   batching: { quietGapMs: 2500, minBatchAgeMs: 0, maxBatchAgeMs: 15000, maxBatchSize: 100 },
-  context: { keepPastThinking: true, firstTurn: false },
+  context: { keepPastThinking: true },
   logging: { file: 'debug' as const, console: 'info' as const, areas: '' },
 } as const;
 

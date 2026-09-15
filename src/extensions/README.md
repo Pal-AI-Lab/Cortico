@@ -31,6 +31,11 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 `WorldDefinition`、`ProviderModule`、`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)
 或 `ConsolePanelContext` 任一不兼容变更就把 `EXTENSION_API_VERSION` 加一。
 
+已发生、尚未计入版本号的不兼容变更(下次升版一并计入):
+
+- `WorldContext.language` 删除。
+- `Persona.firstTurn()` 改为 `sessionHead()`,返回 Open Responses item 列表;`FirstTurnRound` 删除。
+
 ## 装载
 
 `loadExtensions(repoRoot)` 读 `extensions/package.json` 的 dependencies,逐个从

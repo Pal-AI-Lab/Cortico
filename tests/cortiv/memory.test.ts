@@ -21,9 +21,9 @@ import { makeFakeHarnessApi, sleep } from '../core/helpers.ts';
 /** core 交给交接策略的物理上限;这些用例不靠它 */
 const HANDOFF_CTX = { hardTokens: null };
 /** 阶段预算 1000 tok，软阈值比例 0.85。 */
-const CONTEXT = () => ({ maxTokens: 1000, softRatio: 0.85, keepRatio: 0.25 });
+const CONTEXT = () => ({ maxTokens: 1000, softRatio: 0.85, keepRatio: 0.25, firstTurn: false });
 /** 交接笔记用例的阶段裁量:900 tok 就越过软阈值(笔记分早/近两段),笔记预算 4096 */
-const NOTE_CONTEXT = () => ({ maxTokens: 16384, softRatio: 0.05, keepRatio: 0.25 });
+const NOTE_CONTEXT = () => ({ maxTokens: 16384, softRatio: 0.05, keepRatio: 0.25, firstTurn: false });
 
 let seq = 0;
 function ev(patch: Partial<EventEnvelope>): EventEnvelope {

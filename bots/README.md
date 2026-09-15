@@ -33,7 +33,7 @@ Windows 也可通过 `start.bat` 选择部署。
 | `.env` | World 密钥。Provider 密钥由端点管理，保存在部署根共享的 `providers/<端点名>/` 中。 |
 | `memory/` 或 `workspace/` | Memory 内容；路径由 Persona 的 `paths.memory` 决定，Git 历史由 Persona 实现提供。 |
 | `worlds/<id>/ENV_PROMPT.md` | 部署对 World 模板的覆盖。控制台保存写此文件；恢复默认会删除此覆盖，重新使用 bot 或 World 模板。 |
-| `prompts/` | Persona 模板覆盖，例如 `ORIENTATION.md`。合成首轮从部署的 `FIRST_TURN_{USER,THINKING,REPLY}.md` 读取，开关 `context.firstTurn` 默认关闭。 |
+| `prompts/` | Persona 模板覆盖，例如 `ORIENTATION.md`。合成首轮从部署的 `FIRST_TURN_{USER,THINKING,REPLY}.md` 读取，作为 session 的合成开头送进请求；开关 `context.firstTurn` 在 Persona 配置组，默认关闭。 |
 | `vtuber-pack/` | 可选的部署演出包。 |
 | `avatar.png`、`voices/` | 头像与参考声线素材。 |
 | `data/` | 事件库、session、用量记录和 Core 状态。 |

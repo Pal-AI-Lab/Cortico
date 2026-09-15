@@ -36,7 +36,7 @@ export function messages(records: readonly ContextRecord[] | readonly ChatMessag
     const { item, context } = entry;
     const key = context.responseId;
     const meta = { ...(context.ts ? { ts: context.ts } : {}), ...(context.blobs ? { blobs: context.blobs } : {}),
-      ...(context.frame ? { frame: context.frame } : {}), ...(context.firstTurn ? { firstTurn: true as const } : {}), ...(context.ephemeral ? { ephemeral: true as const } : {}) };
+      ...(context.frame ? { frame: context.frame } : {}), ...(context.head ? { head: true as const } : {}), ...(context.ephemeral ? { ephemeral: true as const } : {}) };
     if (item.type === 'message' && item.role !== 'assistant') {
       assistant = null;
       result.push({ role: item.role === 'developer' ? 'system' : item.role, content: itemText(item), ...meta });
@@ -44,7 +44,7 @@ export function messages(records: readonly ContextRecord[] | readonly ChatMessag
       assistant = null;
       result.push({ role: 'tool', content: itemText(item), tool_call_id: item.call_id, ...meta });
     } else if (item.type === 'reasoning' || item.type === 'function_call' || item.type === 'message') {
-      if (!assistant || (!(context.firstTurn && assistant.firstTurn) && (key === undefined || key !== group))) {
+      if (!assistant || (!(context.head && assistant.head) && (key === undefined || key !== group))) {
         assistant = { role: 'assistant', content: '', ...meta };
         if (context.origin?.module === 'fixture') assistant.reasoning_content = '';
         result.push(assistant);

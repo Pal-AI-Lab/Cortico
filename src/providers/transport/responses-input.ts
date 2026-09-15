@@ -29,7 +29,7 @@ export function responsesInput(
     const item = entry.item;
     if (item.type === 'reasoning') {
       if (!item.encrypted_content) continue;
-      if (!entry.context.firstTurn && opts.keepThinking?.() === false) continue;
+      if (!entry.context.head && opts.keepThinking?.() === false) continue;
       const owner = entry.context.origin;
       const current = options.origin;
       if (!owner || !current || owner.instance !== current.instance || owner.module !== current.module

@@ -13,11 +13,10 @@ import { saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
 import { workspaceTools } from './workspaceTools.ts';
 import { Heartbeat, quietLine } from './heartbeat.ts';
-import type { ContextRecord } from 'cortico/protocol/open-responses/context.ts';
+import type { ContextRecord, Item } from 'cortico/protocol/open-responses/context.ts';
 import type {
   ContextHandoffResult,
   EventEnvelope,
-  FirstTurnRound,
   CoreApi,
   World,
   WorldLifecycleEvent,
@@ -91,9 +90,11 @@ export interface ContextStagePolicy {
   maxTokens: number;
   softRatio: number;
   keepRatio: number;
+  /** 是否把部署 prompts/ 里的首轮对话作为合成开头送进请求;内容为空时不送。 */
+  firstTurn: boolean;
 }
 
-export const CORMINI_CONTEXT_DEFAULTS: ContextStagePolicy = { maxTokens: 64000, softRatio: 0.85, keepRatio: 1 / 3 };
+export const CORMINI_CONTEXT_DEFAULTS: ContextStagePolicy = { maxTokens: 64000, softRatio: 0.85, keepRatio: 1 / 3, firstTurn: false };
 
 export interface CorminiOptions {
   /** 工作区目录 = 记忆。不存在则创建。 */
@@ -423,12 +424,12 @@ export class Cormini implements Persona {
   }
 
   /**
-   * 合成首轮对话(风格锚):三份源文件各一段。user 或 reply 为空白时框架整轮
-   * 跳过,文件缺失当空。内容随前缀重建刷新(编辑→重载生效)。
+   * 合成开头 = 首轮对话(风格锚):三份源文件各一段,开关 context.firstTurn。user 或 reply
+   * 为空白时整轮不送,文件缺失当空。item id 固定:内容不变时每次请求的前缀逐字相同。
    */
-  firstTurn(): FirstTurnRound[] {
+  sessionHead(): Item[] {
     const dir = this.firstTurnDir;
-    if (!dir) return [];
+    if (!dir || !this.context().firstTurn) return [];
     const read = (name: string): string => {
       try {
         return readFileSync(join(dir, name), 'utf8').trim();
@@ -436,15 +437,19 @@ export class Cormini implements Persona {
         return '';
       }
     };
+    const user = read(FIRST_TURN_FILES.user);
+    const reply = read(FIRST_TURN_FILES.reply);
+    if (!user || !reply) return [];
     const thinking = read(FIRST_TURN_FILES.thinking);
-    return [{
-      user: read(FIRST_TURN_FILES.user),
-      ...(thinking ? { thinking } : {}),
-      reply: read(FIRST_TURN_FILES.reply),
-    }];
+    const items: Item[] = [
+      { type: 'message', id: 'msg_first_turn_user', status: 'completed', role: 'user', content: [{ type: 'input_text', text: user }] },
+    ];
+    if (thinking) items.push({ type: 'reasoning', id: 'rs_first_turn', summary: [], content: [{ type: 'reasoning_text', text: thinking }] });
+    items.push({ type: 'message', id: 'msg_first_turn_reply', status: 'completed', role: 'assistant', content: [{ type: 'output_text', text: reply, annotations: [] }] });
+    return items;
   }
 
-  /** 首轮对话三份源文件的控制台声明(设置页「首轮对话」经 /api/prompts 读写)。 */
+  /** 首轮对话三份源文件的控制台声明(Persona 页提示词页签经 /api/prompts 读写)。 */
   protected firstTurnDocs(language: Language = 'zh'): PromptDocDecl[] {
     const dir = this.firstTurnDir;
     if (!dir) return [];

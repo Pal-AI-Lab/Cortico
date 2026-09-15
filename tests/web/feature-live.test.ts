@@ -240,10 +240,10 @@ class FakeSocket {
   emit(frame: unknown): void {
     const input = frame as Any;
     const encoded = { ...input };
-    for (const field of ['session', 'messages', 'firstTurn']) {
+    for (const field of ['session', 'messages', 'head']) {
       if (!Array.isArray(input[field])) continue;
       encoded[field] = records(input[field]);
-      if (field !== 'firstTurn') {
+      if (field !== 'head') {
         this.messageOffsets = []; this.itemCount = 0;
         for (const entry of input[field]) { this.messageOffsets.push(this.itemCount); this.itemCount += records([entry]).length; }
       }
@@ -466,14 +466,14 @@ describe('上下文占用 · 纯计算', () => {
     expect(kept.strippedThinking).toBe(0);
   });
 
-  it('fork 继承的合成首轮保留推理，空系统 Item 的结构开销仍计入上下文', () => {
+  it('fork 继承的合成开头保留推理，空系统 Item 的结构开销仍计入上下文', () => {
     const reasoning = responseTimelineFixture().entries[4];
-    const synthetic = { ...reasoning, context: { ...reasoning.context, firstTurn: true as const } };
+    const synthetic = { ...reasoning, context: { ...reasoning.context, head: true as const } };
     const session = [message('system', ''), synthetic, reasoning];
     const result = cx.computeCtx({ messages: session, toolSchemas: [], status: { context: { keepPastThinking: false } } });
     expect(result.total).toBe(estimateMessagesTokens(session.slice(0, 2)));
     expect(result.strippedThinking).toBe(estimateMessagesTokens([reasoning]));
-    expect(result.cats.find((cat: Any) => cat.key === 'firstTurn').tok).toBe(estimateMessagesTokens([synthetic]));
+    expect(result.cats.find((cat: Any) => cat.key === 'head').tok).toBe(estimateMessagesTokens([synthetic]));
   });
 });
 
@@ -699,15 +699,15 @@ describe('live feature 挂载', () => {
     sockets[0].emit({
       t: 'hello',
       session: [message('system', '前缀'), message('user', '[system] 2 条新事件。'), message('assistant', '好。')],
-      firstTurn: [message('user', '首轮输入'), message('assistant', '首轮回复')],
+      head: [message('user', '首轮输入'), message('assistant', '首轮回复')],
     });
     const inner = root.find('tlinner') as FakeEl;
     // 系统条 / 分隔线 / 首轮 USER / 首轮 ASSISTANT / 分隔线 / USER №1 / ASSISTANT №2
     expect(inner.children.map((c) => c.className.split(' ')[0])).toEqual([
       'tcard', 'divider', 'usergrp', 'tcard', 'divider', 'usergrp', 'tcard',
     ]);
-    expect(inner.children[1].textContent).toContain('合成首轮');
-    expect(inner.children[1].className).toContain('firstturn');
+    expect(inner.children[1].textContent).toContain('合成开头');
+    expect(inner.children[1].className).toContain('sessionhead');
     const [ftUser, ftTurn, , user, turn] = inner.children.slice(2) as FakeEl[];
     // 首轮没有 session 序号;正式的带 №
     expect(ftUser.find('ordinal')).toBeNull();

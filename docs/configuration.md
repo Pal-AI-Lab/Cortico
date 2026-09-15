@@ -26,12 +26,12 @@
 | `web.port` | `7777` | 控制台端口;三个参考 bot 各自改成 7777 / 7788 / 7789 |
 | `paths.memory`、`paths.data` | `memory`、`data` | Memory 与运行数据目录,相对部署目录 |
 | `batching` | `quietGapMs 2500`、`minBatchAgeMs 0`、`maxBatchAgeMs 15000`、`maxBatchSize 100` | 事件合批投递 |
-| `context` | `keepPastThinking true`、`firstTurn false` | 发给模型前的处理;阶段预算归 Persona 的段 |
+| `context` | `keepPastThinking true` | 发给模型前的处理;阶段预算与首轮对话开关归 Persona 的段 |
 | `logging` | `file debug`、`console info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
 | `language` | 系统区域 | 控制台默认语言 `zh` / `en`,浏览器可改(见 [console.md](console.md)) |
 
-Persona 自己的段(如 CortiV 的 `context.maxTokens`、`rounds`、`cognition`、`tick`)由各 bot 的
+Persona 自己的段(如 CortiV 的 `context.maxTokens`、`context.firstTurn`、`rounds`、`cognition`、`tick`)由各 bot 的
 `index.ts` 定义。
 
 ## 声明配置项

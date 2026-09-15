@@ -24,7 +24,7 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 可选时机钩子:`onOpening({ reason })`(session 开场)、`onDelivery({ events })`(一批唤醒项投递刻,
 钩子内同步调用 `injectInternal` 的项加入本批)、`onBatchEnd()`(一批处理结束,可执行上下文容量策略)、
 `onTurnEnded()`、`onIdle()`、`onStallsRecovered()`(回一句措辞或 null)、
-`onWorldLifecycle(event)`、`firstTurn()`(合成首轮对话,不落盘,开关 `context.firstTurn`)、
+`onWorldLifecycle(event)`、`sessionHead()`(合成开头:置于 system 之后、持久历史之前的 item 列表,每次请求现取,不落盘)、
 `onHandoff(snapshot, { hardTokens })`(回 `{ tail, trim? }`)、`promptVarValues(ctx)`、
 `ownToolNames()`(自有工具名,装配层据此拒绝工具名冲突的 World;未提供时仅告警并保留先注册的工具)、
 `cognition`(处理 World 的后台认知请求)、`console()`。

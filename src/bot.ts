@@ -1078,7 +1078,7 @@ export function createBot<C extends CoreConfig>(
       ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
-        firstTurnMessages: () => core.loop.activeFirstTurn(),
+        sessionHead: () => core.loop.sessionHead(),
         onSessionAppend: (cb) => core.session.onAppend(cb),
         onSessionReset: (cb) => core.session.onReset(cb),
         onEvent: (cb) => core.store.onAppend(cb),

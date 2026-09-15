@@ -16,7 +16,7 @@ const HERE = resolve(import.meta.dirname);
 const DEEPSEEK_SPEC: ModelSpec = { model: 'deepseek-flash', thinking: false, contextWindow: 1_000_000 };
 
 export interface CorminiConfig extends CoreConfig {
-  /** 阶段长度三项归Persona,摘思维链与首轮对话两项归 core;同住 context 段。 */
+  /** 阶段长度三项与首轮对话开关归 Persona,摘思维链归 core;同住 context 段。 */
   context: CoreConfig['context'] & ContextStagePolicy;
   rounds: { soft: number; hard: number };
   /** null disables baseline wakeups. */

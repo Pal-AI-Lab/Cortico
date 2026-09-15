@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { CortiV } from '../../bots/cortiv/persona/persona.ts';
-import { FIRST_TURN_FILES } from '../../bots/cormini/persona/persona.ts';
+import { CORMINI_CONTEXT_DEFAULTS, FIRST_TURN_FILES } from '../../bots/cormini/persona/persona.ts';
 
 let dir: string;
 
@@ -20,13 +20,18 @@ afterAll(() => {
 });
 
 describe('CortiV 首轮对话', () => {
-  it('firstTurnDir 覆写生效:promptDocs 与 firstTurn() 都指向传入目录', () => {
+  it('firstTurnDir 覆写生效:promptDocs 与 sessionHead() 都指向传入目录', () => {
     const ftDir = join(dir, 'ft');
     mkdirSync(ftDir, { recursive: true });
     writeFileSync(join(ftDir, FIRST_TURN_FILES.user), '晚上好', 'utf8');
     writeFileSync(join(ftDir, FIRST_TURN_FILES.reply), '晚上好呀', 'utf8');
-    const p = new CortiV({ memoryDir: join(dir, 'ws'), firstTurnDir: ftDir });
-    expect(p.firstTurn()).toEqual([{ user: '晚上好', reply: '晚上好呀' }]);
+    const p = new CortiV({
+      memoryDir: join(dir, 'ws'),
+      firstTurnDir: ftDir,
+      context: () => ({ ...CORMINI_CONTEXT_DEFAULTS, firstTurn: true }),
+    });
+    expect(p.sessionHead().map((item) => item.type)).toEqual(['message', 'message']);
+    expect(p.sessionHead()[0]).toMatchObject({ role: 'user', content: [{ type: 'input_text', text: '晚上好' }] });
     const doc = (p.console().promptDocs ?? []).find((d) => d.key === 'firstTurn.reply');
     expect(doc?.path).toBe(join(ftDir, FIRST_TURN_FILES.reply));
   });

@@ -8,7 +8,7 @@ export function hasRole(entry: ContextRecord, role: string): boolean {
 }
 export function textOf(entry: ContextRecord): string { return itemText(entry.item); }
 export function withoutPastReasoning(entries: readonly ContextRecord[]): ContextRecord[] {
-  return entries.filter(entry => entry.item.type !== 'reasoning' || entry.context.firstTurn);
+  return entries.filter(entry => entry.item.type !== 'reasoning' || entry.context.head);
 }
 export function responseRequest(spec: ModelSpec, context: readonly ContextRecord[], tools: readonly ToolSchema[] = []): Request {
   return {

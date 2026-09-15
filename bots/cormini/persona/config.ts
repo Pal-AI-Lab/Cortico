@@ -1,8 +1,8 @@
 import type { ConfigGroup } from 'cortico/core/types.ts';
 
 /**
- * 上下文阶段三个裁量(`ContextStagePolicy`)的控制台配置组。归属 `persona`:容量是
- * Persona的参数,core 只持 `hardTokens` 物理钳制与两个策略开关。渲染位置在
+ * 上下文阶段三个裁量与首轮对话开关(`ContextStagePolicy`)的控制台配置组。归属 `persona`:
+ * 容量与首轮对话都是 Persona 的参数,core 只持 `hardTokens` 物理钳制与 keepPastThinking。渲染位置在
  * 「设置 → 运行参数」(`settingsPage: true`),操作员的心智模型里这是系统设置。
  *
  * 每个以 Cormini 为骨架的 bot 各声明一次,`id` 按 bot 取;没有这一组的 bot,这三个数在
@@ -49,6 +49,12 @@ export function contextStageConfigGroup(id: string): ConfigGroup {
           'x-suffix': '×',
           'x-hot': true,
           description: '上下文预警阈值 = 阶段预算 × 此比例。',
+        },
+        'context.firstTurn': {
+          type: 'boolean',
+          title: '合成首轮对话',
+          'x-hot': true,
+          description: '把部署 prompts/ 里的首轮对话(FIRST_TURN_USER / THINKING / REPLY)作为合成开头送进每次请求,不写入 session;内容为空时不送。',
         },
       },
     },

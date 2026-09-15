@@ -74,8 +74,8 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   // ── 这一页的全部活数据 ────────────────────────────────────────────
   const state = {
     messages: [] as ContextRecord[],
-    /** 合成请求内容，不写入 session 记录。 */
-    firstTurn: [] as ContextRecord[],
+    /** 合成开头，不写入 session 记录。 */
+    head: [] as ContextRecord[],
     toolSchemas: [] as ToolSchemaDoc[],
     status: null as StatusSnapshot | null,
     sessions: [] as SessionStat[],
@@ -124,7 +124,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       ui,
       computeCtx({
         messages: state.messages,
-        firstTurn: state.firstTurn,
+        head: state.head,
         toolSchemas: state.toolSchemas,
         status: state.status,
       }),
@@ -184,7 +184,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     signal: ctx.signal,
     timeline,
     mainMessages: () => state.messages,
-    mainFirstTurn: () => state.firstTurn,
+    mainHead: () => state.head,
     sessions: () => state.sessions,
     onChange: () => sessionBand.render(state.sessions, fork.id),
     onError: (err) => ctx.onError(err),
@@ -193,7 +193,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const updateCtx = (): void => {
     const d = computeCtx({
       messages: state.messages,
-      firstTurn: state.firstTurn,
+      head: state.head,
       toolSchemas: state.toolSchemas,
       status: state.status,
     });
@@ -230,12 +230,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       case 'hello': {
         state.toolSchemas = arr<ToolSchemaDoc>(f.toolSchemas);
         state.messages = arr<ContextRecord>(f.session);
-        state.firstTurn = arr<ContextRecord>(f.firstTurn);
+        state.head = arr<ContextRecord>(f.head);
         // 重连即回到主视图:那个 fork 的轮询若还开着,这里连它一起收。
         fork.switchTo(MAIN_ID, MAIN_LABEL);
         // 先记说话人再铺时间线:头像占位圆的首字在画气泡时就定了。
         setStatus((f.status as StatusSnapshot | null) ?? null);
-        timeline.rebuild(state.messages, { firstTurn: state.firstTurn });
+        timeline.rebuild(state.messages, { head: state.head });
         setSessions(arr<SessionStat>(f.sessions));
         break;
       }
@@ -257,9 +257,9 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       }
       case 'session.reset':
         state.messages = arr<ContextRecord>(f.messages);
-        if (f.firstTurn !== undefined) state.firstTurn = arr<ContextRecord>(f.firstTurn);
+        if (f.head !== undefined) state.head = arr<ContextRecord>(f.head);
         if (fork.isMain()) {
-          timeline.rebuild(state.messages, { note: S.sessionResetNote, firstTurn: state.firstTurn });
+          timeline.rebuild(state.messages, { note: S.sessionResetNote, head: state.head });
         }
         break;
       case 'status':

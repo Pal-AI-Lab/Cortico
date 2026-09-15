@@ -6,7 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect } from 'vitest';
 import type { ChatMessage, LLMChatOptions, LLMDelta, LLMResult } from './fixture-types.ts';
-import type { EventEnvelope, FirstTurnRound, CoreApi, CoreConfig, World, LLMUsage, ModelSpec, Persona, SessionDecl, ToolDef, ToolTag, ToolSchema, BlobInput, BlobRef } from '../../src/core/types.ts';
+import type { EventEnvelope, CoreApi, CoreConfig, World, LLMUsage, ModelSpec, Persona, SessionDecl, ToolDef, ToolTag, ToolSchema, BlobInput, BlobRef } from '../../src/core/types.ts';
+import type { Item } from '../../src/protocol/open-responses/context.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import { composeDefaults, type LoadedConfig } from '../../bots/corti-soulmate/assemble.ts';
 import { validatePairing } from "./fixture-truncate.ts";
@@ -282,7 +283,7 @@ export function makeFakePersona(extraTools: ToolDef[] = [], opts?: FakePersonaOp
       }
       return { tail: null };
     },
-    ...(opts?.firstTurn ? { firstTurn: opts.firstTurn } : {}),
+    ...(opts?.sessionHead ? { sessionHead: opts.sessionHead } : {}),
     // 使用不存在的隔离路径，避免读取实际 Memory 内容。
     memoryDir: '__fake_persona_dir_does_not_exist__',
     blobs: { put: (name: string) => `mem:${name}`, get: () => null, list: () => [] },
@@ -348,8 +349,8 @@ export interface FakePersonaOptions {
   pressureNotice?: string | null;
   /** 软轮数提醒文本；null 表示不添加，缺省使用英文提醒。 */
   softHint?: string | null;
-  /** 合成首轮对话内容；未提供时禁用该机制。 */
-  firstTurn?: () => FirstTurnRound[];
+  /** 合成开头；未提供时不注入。 */
+  sessionHead?: () => Item[];
   /** 时机钩子不注入文本；超出软预算时直接请求交接。 */
   silent?: boolean;
 }

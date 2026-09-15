@@ -167,7 +167,7 @@ export function renderHandoffNote(snapshot: readonly ContextRecord[], opts: Hand
 
   const collected: Entry[] = [];
   for (const m of snapshot) {
-    if (hasRole(m, 'system') || m.context.firstTurn || m.context.ephemeral) continue;
+    if (hasRole(m, 'system') || m.context.head || m.context.ephemeral) continue;
     if (hasRole(m, 'user')) {
       collected.push(...deliveryEntries(m, false));
       continue;

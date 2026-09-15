@@ -9,5 +9,5 @@ export interface NativeChatMessage {
   tool_calls?: { id: string; type: 'function'; function: { name: string; arguments: string } }[];
   tool_call_id?: string;
   blobs?: BlobRef[];
-  firstTurn?: true;
+  head?: true;
 }

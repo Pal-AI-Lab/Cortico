@@ -109,9 +109,9 @@ describe('renderHandoffNote', () => {
     expect(note.text).toContain('[调用] mc_bag\n[回执] [背包] 空');
   });
 
-  it('还没回来的回执写明;firstTurn 与自消解项跳过', () => {
+  it('还没回来的回执写明;合成开头与自消解项跳过', () => {
     const snapshot: ChatMessage[] = [
-      { role: 'user', content: '合成首轮', firstTurn: true } as ChatMessage,
+      { role: 'user', content: '合成首轮', head: true } as ChatMessage,
       { role: 'user', content: '自消解', ephemeral: true },
       call('m1', 'mc_queue', '{}'),
     ];

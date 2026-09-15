@@ -408,8 +408,8 @@
   .divider { text-align: center; color: var(--ink-dim); font-size: 11px; letter-spacing: .2em; display: flex; align-items: center; gap: 12px; }
   .divider::before, .divider::after { content: ''; flex: 1; border-top: 1px dashed var(--line-2); }
 
-  .divider.firstturn { color: color-mix(in srgb, var(--ink-dim) 70%, transparent); letter-spacing: .12em; font-size: 10.5px; }
-  .divider.firstturn::before, .divider.firstturn::after { border-top-color: var(--line); }
+  .divider.sessionhead { color: color-mix(in srgb, var(--ink-dim) 70%, transparent); letter-spacing: .12em; font-size: 10.5px; }
+  .divider.sessionhead::before, .divider.sessionhead::after { border-top-color: var(--line); }
 
   .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--violet); animation: pulse 1.15s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: .3; transform: scale(.75); } 50% { opacity: 1; transform: scale(1.15); } }
