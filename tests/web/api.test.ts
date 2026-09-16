@@ -12,6 +12,7 @@ import type { ToolSchema } from '../../src/core/types.ts';
 import type { PathPickerOptions } from '../../src/web/shared/path-picker.ts';
 
 let app: WebApp;
+let onboardingFlag = true;
 let port: number;
 let memoryDir: string;
 let dataDir: string;
@@ -86,7 +87,8 @@ beforeAll(async () => {
     memoryDir,
     dataDir,
     botDir: memoryDir,
-    getStatus: () => ({ session: { tokens: 1234, messages: 56 }, dream: 'idle' }),
+    getStatus: () => ({ session: { tokens: 1234, messages: 56 }, dream: 'idle', onboardingPending: onboardingFlag }),
+    onboarding: { dismiss: () => { onboardingFlag = false; } },
     // World 自己声明控制台露出:badges,控制台不按 id 分支
     worlds: () => [
       {
@@ -241,6 +243,16 @@ describe('bot 头像', () => {
       body: Buffer.from('not an image'),
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe('/api/onboarding/dismiss', () => {
+  it('销掉标记后状态里不再报 pending', async () => {
+    expect((await getJson(base() + '/api/status')).onboardingPending).toBe(true);
+
+    const r = await fetch(base() + '/api/onboarding/dismiss', { method: 'POST' });
+    expect(r.status).toBe(200);
+    expect((await getJson(base() + '/api/status')).onboardingPending).toBe(false);
   });
 });
 

@@ -444,6 +444,12 @@ export interface ConsoleSurface {
    * 可选的运行控制，未挂载时 /api/run/* 返回 503；暂停期间事件仍落库排队。
    * shutdown 按装配层顺序停止投递、IO、托管 LLM server 并落盘，各步有时间预算并返回结果；未提供时不显示关机键，进程退出由装配层决定。
    */
+  /** 开场引导的一次性标记；缺席时控制台不给引导。 */
+  onboarding?: {
+    /** 删除标记；已经删过时不报错。 */
+    dismiss(): void;
+  };
+
   run?: {
     pause(): void;
     resume(): void;
@@ -1362,6 +1368,14 @@ export class WebApp {
         res.json({ ok: results.every((r) => r.ok), results });
       })();
     });
+
+    // 开场引导只出现一次:控制台在操作员开口或按下那颗按钮时销掉标记。
+    app.post('/api/onboarding/dismiss', wrap((_req, res) => {
+      const src = this.deps.onboarding;
+      if (!src) { res.status(503).json({ error: '开场引导标记不可用' }); return; }
+      src.dismiss();
+      res.json({ ok: true });
+    }));
 
     // 暂停/继续:暂停=事件照常落库排队但不投递唤醒;继续=积压一次性投递
     app.post('/api/run/pause', wrap((req, res) => {

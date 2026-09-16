@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { DEFAULT_DEPLOYMENT, ensureDeployment, listBots, loadDeployment } from '../src/deploy.ts';
+import { DEFAULT_DEPLOYMENT, ONBOARDING_FLAG_FILE, ensureDeployment, listBots, loadDeployment } from '../src/deploy.ts';
 import type { CoreConfig } from '../src/core/types.ts';
 
 interface TestConfig extends CoreConfig {
@@ -134,11 +134,11 @@ describe('第一次上手:部署根空着时自建一份', () => {
     for (const dir of homes.splice(0)) rmSync(dir, { recursive: true, force: true });
   });
 
-  it('按 DEFAULT_DEPLOYMENT 建,只写 deployment.json', () => {
+  it('按 DEFAULT_DEPLOYMENT 建,只写 deployment.json 与开场引导的标记', () => {
     const root = home();
     expect(ensureDeployment(root)).toBe(DEFAULT_DEPLOYMENT.name);
     const dir = join(root, DEFAULT_DEPLOYMENT.name);
-    expect(readdirSync(dir)).toEqual(['deployment.json']);
+    expect(readdirSync(dir).sort()).toEqual([ONBOARDING_FLAG_FILE, 'deployment.json'].sort());
     expect(JSON.parse(readFileSync(join(dir, 'deployment.json'), 'utf8'))).toEqual({
       bot: DEFAULT_DEPLOYMENT.bot,
     });

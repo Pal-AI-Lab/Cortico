@@ -254,6 +254,8 @@ let watched = {
 };
 let paused = false;
 let devDreaming = false;
+/** CORTICO_DEV_ONBOARDING=1 起一个带开场引导的控制台(真机上这个标记由自建部署写下)。 */
+let onboardingPending = process.env.CORTICO_DEV_ONBOARDING === '1';
 
 const devLogT0 = Date.now() - 10_000;
 
@@ -1023,6 +1025,7 @@ const app = new WebApp({
     chips: devDreaming ? [{ label: '梦中', tone: 'accent' }] : [],
     terminalOnline: terminal.onlineCount(),
     eventCount: store.latestCursor(),
+    onboardingPending,
     memo: { residentCap: cfg.memo.residentCap, activeCap: cfg.memo.activeCap },
     context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio, keepPastThinking: cfg.context.keepPastThinking },
     displayName: devCfg.displayName,
@@ -1159,6 +1162,8 @@ const app = new WebApp({
       return `已卸载 ${name}。重启进程后生效。(dev)`;
     },
   },
+  onboarding: { dismiss: () => { onboardingPending = false; } },
+
   run: {
     pause: () => { paused = true; },
     resume: () => { paused = false; },

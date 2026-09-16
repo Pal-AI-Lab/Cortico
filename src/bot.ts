@@ -18,6 +18,7 @@ import type { LoadedConfig } from './core/config.ts';
 import { coreConfigGroup } from './core/config.ts';
 import { pick, resolveLanguage, type Language } from './core/language.ts';
 import { updateJsonObject } from './config-file.ts';
+import { ONBOARDING_FLAG_FILE } from './deploy.ts';
 import { isSupervised, requestRestart } from './boot.ts';
 import { ExtensionManager, type ExtensionSet } from './extensions.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
@@ -1127,6 +1128,9 @@ export function createBot<C extends CoreConfig>(
         },
         supervised: isSupervised(),
       },
+      onboarding: {
+        dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
+      },
       ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
@@ -1165,6 +1169,7 @@ export function createBot<C extends CoreConfig>(
         startedAt,
         loop: core.loop.getStatus(),
         eventCount: core.store.latestCursor(),
+        onboardingPending: existsSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)),
         ...(contribution.status?.() ?? {}),
       }),
       log: core.runlog.logger('console'),

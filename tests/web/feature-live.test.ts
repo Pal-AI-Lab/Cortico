@@ -1058,22 +1058,28 @@ describe('live feature 卸载', () => {
 });
 
 describe('开场引导', () => {
-  // 全新部署的 session 不是空的:Core 一起来就有一条系统前缀,所以判据只看事件库游标。
+  // 判据是部署目录里那个一次性标记,不是 session 或事件游标:全新部署起来就有一条系统前缀和
+  // 一条 session 开场事件。
   const fresh = {
     t: 'hello',
     session: [{ role: 'system', content: '前缀' }],
     head: [],
     toolSchemas: [],
-    status: { displayName: 'Cortico Bot', eventCount: 0 },
+    status: { displayName: 'Cortico Bot', eventCount: 1, onboardingPending: true },
     sessions: [],
   };
 
-  it('这份部署什么都还没发生时,时间线上方出现三条引导;没有端点就按不动那颗按钮', () => {
+  const mountWith = (frame: unknown): { root: FakeEl; sockets: Any[] } => {
     const { env, sockets } = fakeEnv();
     const { ctx, root } = mkCtx({ debug: true, sessions: true });
     live.createLiveFeature({ env }).mount(ctx);
     sockets[0].up();
-    sockets[0].emit(fresh);
+    sockets[0].emit(frame);
+    return { root, sockets };
+  };
+
+  it('标记还在时,时间线上方出现三条引导;没有端点就按不动那颗按钮', () => {
+    const { root } = mountWith(fresh);
 
     const ob = root.find('onboarding')!;
     expect(ob).not.toBe(null);
@@ -1081,48 +1087,27 @@ describe('开场引导', () => {
     expect(ob.find('ob-start')!.children[0].disabled).toBe(true);
   });
 
-  it('事件库分配过游标就不出现:交接后 session 同样是空的', () => {
-    const { env, sockets } = fakeEnv();
-    const { ctx, root } = mkCtx({ debug: true, sessions: true });
-    live.createLiveFeature({ env }).mount(ctx);
-    sockets[0].up();
-    sockets[0].emit({ ...fresh, status: { displayName: 'Cortico Bot', eventCount: 12 } });
+  it('没有标记就不出现:session 空不空、事件多少都不管', () => {
+    const { root } = mountWith({ ...fresh, session: [], status: { displayName: 'Cortico Bot', eventCount: 0 } });
 
     expect(root.find('onboarding')).toBe(null);
   });
 
-  it('第一条事件落库后收起', () => {
-    const { env, sockets } = fakeEnv();
-    const { ctx, root } = mkCtx({ debug: true, sessions: true });
-    live.createLiveFeature({ env }).mount(ctx);
-    sockets[0].up();
-    sockets[0].emit(fresh);
-    expect(root.find('onboarding')).not.toBe(null);
-
-    sockets[0].emit({ t: 'status', status: { displayName: 'Cortico Bot', eventCount: 1 } });
-    expect(root.find('onboarding')).toBe(null);
-  });
-
-  it('操作员自己发话也收起:事件计数要等下一帧状态才更新', () => {
+  it('操作员自己发话就收起,并销掉标记', async () => {
     stubFetch(() => ({}));
-    const { env, sockets } = fakeEnv();
-    const { ctx, root } = mkCtx({ debug: true, sessions: true });
-    live.createLiveFeature({ env }).mount(ctx);
-    sockets[0].up();
-    sockets[0].emit(fresh);
+    const { root } = mountWith(fresh);
     expect(root.find('onboarding')).not.toBe(null);
 
     submitted[0]?.('在吗', []);
+    await flush();
+
     expect(root.find('onboarding')).toBe(null);
+    expect(fetched).toContain('/api/onboarding/dismiss');
   });
 
-  it('按下按钮:先让运行继续,再把按钮上的字送上终端通道', async () => {
+  it('按下按钮:先让运行继续,再把按钮上的字送上终端通道,然后收起', async () => {
     stubFetch(() => ({}));
-    const { env, sockets } = fakeEnv();
-    const { ctx, root } = mkCtx({ debug: true, sessions: true });
-    live.createLiveFeature({ env }).mount(ctx);
-    sockets[0].up();
-    sockets[0].emit(fresh);
+    const { root, sockets } = mountWith(fresh);
     const sent: string[] = [];
     sockets[1].send = (raw: string): void => { sent.push(raw); };
     sockets[1].up();
@@ -1134,5 +1119,17 @@ describe('开场引导', () => {
     const greet = JSON.parse(sent.at(-1)!) as { type: string; label: string };
     expect(greet.type).toBe('greet');
     expect(greet.label.length).toBeGreaterThan(0);
+    expect(root.find('onboarding')).toBe(null);
+    expect(fetched).toContain('/api/onboarding/dismiss');
+  });
+
+  it('状态帧还报着 pending 也不会再冒出来', () => {
+    stubFetch(() => ({}));
+    const { root, sockets } = mountWith(fresh);
+    submitted[0]?.('在吗', []);
+    expect(root.find('onboarding')).toBe(null);
+
+    sockets[0].emit({ t: 'status', status: { displayName: 'Cortico Bot', onboardingPending: true } });
+    expect(root.find('onboarding')).toBe(null);
   });
 });

@@ -164,8 +164,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       // 首启时运行是停着的（见 launcher）；发话与按下那颗按钮同样是让它开始跑。
       if (onboarding) {
         void resumeRun();
-        spoke = true;
-        syncOnboarding();
+        dismissOnboarding();
       }
       const attached = images.map((i) => ({ mime: i.mime, base64: i.base64, name: i.name }));
       chatStream?.send(JSON.stringify({ type: 'msg', text, ...(attached.length ? { images: attached } : {}) }));
@@ -189,19 +188,20 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
 
   /**
-   * 开场引导只在这份部署什么都还没发生时出现：事件库没有分配过游标。session 不能当判据——
-   * 全新部署起来就有一条系统前缀，而上下文交接后它反倒是空的。第一条终端消息、第一次
-   * terminal_send 与那颗按钮投的事件都会让游标动，这一块随之收起。
-   * 调试通道没挂载时这一页只剩状态读数，引导也不出现。
+   * 开场引导认部署目录里那个一次性标记（`.onboarding`，自建部署时写入）。session 与事件游标
+   * 都当不了判据：全新部署起来就有一条系统前缀和一条 session 开场事件，而上下文交接后 session
+   * 反倒是空的。
    */
   let onboarding: OnboardingView | null = null;
-  /** 操作员在这一页发过话就不再引导；事件计数要等下一帧状态才更新，那之前不该还挂着。 */
-  let spoke = false;
+  /** 本次挂载里已经收过一次；销标记的请求在路上时状态帧还会报 pending。 */
+  let dismissed = false;
+  const dismissOnboarding = (): void => {
+    dismissed = true;
+    void post('/api/onboarding/dismiss', {}, { signal: ctx.signal }).catch(() => { /* 下次打开再收 */ });
+    syncOnboarding();
+  };
   const syncOnboarding = (): void => {
-    const fresh = ctx.capabilities.debug === true
-      && !spoke
-      && state.status !== null
-      && (state.status.eventCount ?? 0) === 0;
+    const fresh = !dismissed && state.status?.onboardingPending === true;
     if (fresh && !onboarding) {
       onboarding = createOnboarding({
         ui,
@@ -210,7 +210,10 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         go: (segments) => ctx.router.navigate(segments),
         start: (label) => {
           void resumeRun().then(
-            () => chatStream?.send(JSON.stringify({ type: 'greet', label })),
+            () => {
+              chatStream?.send(JSON.stringify({ type: 'greet', label }));
+              dismissOnboarding();
+            },
             (err) => ctx.onError(err),
           );
         },

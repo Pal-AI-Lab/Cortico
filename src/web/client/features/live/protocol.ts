@@ -79,6 +79,8 @@ export interface StatusSnapshot {
    */
   chips?: StatusChip[] | null;
   eventCount?: number | null;
+  /** 部署目录里还挂着开场引导的标记。 */
+  onboardingPending?: boolean;
   terminalOnline?: number | null;
   context?: ContextBudget | null;
   [key: string]: unknown;

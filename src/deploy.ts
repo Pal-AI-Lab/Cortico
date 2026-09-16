@@ -27,8 +27,14 @@ export function listBots(root = deploymentRoot()): string[] {
 export const DEFAULT_DEPLOYMENT = { name: 'mybot', bot: 'cormini' } as const;
 
 /**
- * 返回一个可启动的部署名；部署根下一份都没有时先建 DEFAULT_DEPLOYMENT。
- * 新建的部署只有 deployment.json，端点与其余设置在控制台里配。
+ * 开场引导的一次性标记，放在部署目录下。自建部署时写入，控制台见到它才给引导，操作员
+ * 开口或按下那颗按钮后删除。手动建的部署没有这个文件，也就不会看到引导。
+ */
+export const ONBOARDING_FLAG_FILE = '.onboarding';
+
+/**
+ * 返回一个可启动的部署名；部署根下一份都没有时先建 DEFAULT_DEPLOYMENT，连同开场引导的标记。
+ * 新建的部署没有别的文件，端点与其余设置在控制台里配。
  */
 export function ensureDeployment(root = deploymentRoot()): string {
   const existing = listBots(root);
@@ -40,6 +46,7 @@ export function ensureDeployment(root = deploymentRoot()): string {
     JSON.stringify({ bot: DEFAULT_DEPLOYMENT.bot }, null, 2) + '\n',
     'utf8',
   );
+  writeFileSync(resolve(dir, ONBOARDING_FLAG_FILE), '', 'utf8');
   return DEFAULT_DEPLOYMENT.name;
 }
 
