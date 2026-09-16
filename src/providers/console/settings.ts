@@ -48,6 +48,11 @@ export function defaultPricing(): PriceDefinition[] {
 /** Output token limit used by the connectivity probe. */
 const PROBE_MAX_OUTPUT_TOKENS = 256;
 
+/** 密钥变量名由操作员自由填写,拼进正则前按字面转义。 */
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /** Console entry points receive the request language; callers that omit it use Chinese. */
 export class ProviderSettings {
   constructor(
@@ -172,7 +177,7 @@ export class ProviderSettings {
     if (process.env[entry.secret]) return 'env';
     const file = join(this.providersDir, name, '.env');
     if (!existsSync(file)) return 'none';
-    return new RegExp(`^\\s*${entry.secret}\\s*=\\s*\\S+`, 'm').test(readTextFile(file)) ? 'file' : 'none';
+    return new RegExp(`^\\s*${escapeRegExp(entry.secret)}\\s*=\\s*\\S+`, 'm').test(readTextFile(file)) ? 'file' : 'none';
   }
 
   /** 把密钥值写进端点目录的 `.env`(同名行覆盖),并让实例重建以读到它。 */
@@ -187,7 +192,7 @@ export class ProviderSettings {
     const file = join(dir, '.env');
     const line = `${entry.secret}=${value.trim()}`;
     const current = existsSync(file) ? readTextFile(file) : '';
-    const pattern = new RegExp(`^\\s*${entry.secret}\\s*=.*$`, 'm');
+    const pattern = new RegExp(`^\\s*${escapeRegExp(entry.secret)}\\s*=.*$`, 'm');
     const next = pattern.test(current)
       ? current.replace(pattern, line)
       : current + (current && !current.endsWith('\n') ? '\n' : '') + line + '\n';
