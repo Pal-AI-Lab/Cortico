@@ -19,7 +19,7 @@
 
 | 键 | 默认 | 含义 |
 |---|---|---|
-| `displayName` | `bot` | 控制台标题与终端消息的 bot 名称 |
+| `displayName` | `Cortico Bot` | 控制台标题与终端消息的 bot 名称 |
 | `timezone` | `Asia/Shanghai` | 时间戳与时刻表用的时区 |
 | `providers` | `deepseek` 端点 | 共享端点配置,从部署根 `providers/` 读取(见 [providers.md](providers.md)) |
 | `activeProvider` | `deepseek` | 当前端点 |

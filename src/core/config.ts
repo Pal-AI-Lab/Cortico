@@ -170,7 +170,7 @@ export const CORE_CONFIG_GROUP: ConfigGroup = coreConfigGroup('zh');
 
 export const CORE_DEFAULTS = {
   /** 用于控制台标题和终端消息的发送方名称。 */
-  displayName: 'bot',
+  displayName: 'Cortico Bot',
   timezone: 'Asia/Shanghai',
   /** 默认端点；部署根 providers/ 中的同名端点配置覆盖此项。 */
   providers: {
