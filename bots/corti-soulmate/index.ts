@@ -62,7 +62,7 @@ export function composeDefaults(): BotConfig {
       // 模型归 provider:云端那条端点默认跑哪个模型是部署事实,不是Persona的选择。
       deepseek: { ...structuredClone(CORE_DEFAULTS.providers.deepseek), spec: { ...DEEPSEEK_SPEC } },
     },
-    displayName: 'Yukima',
+    displayName: '雪午Yukima',
     web: { ...CORE_DEFAULTS.web },
     paths: { ...CORE_DEFAULTS.paths },
     batching: { ...CORE_DEFAULTS.batching },
@@ -209,7 +209,7 @@ function consoleContribution(loaded: LoadedConfig<BotConfig>, p: ConsoleParts): 
 
 const definition: BotDefinition<BotConfig> = {
   id: 'corti-soulmate',
-  description: 'Yukima:分层记忆、交接后并行梦、QQ 起草-确认门、宪法归梦修订',
+  description: '雪午Yukima:分层记忆、交接后并行梦、QQ 起草-确认门、宪法归梦修订',
   // 记忆系统与 Cormini 同一套(工作区即记忆,Git 记账),分层记忆建在它上面。
   memoryName: 'GitMem',
   declares: DECLARES,
