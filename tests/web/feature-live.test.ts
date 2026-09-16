@@ -296,6 +296,8 @@ function fakeEnv() {
 // ---------------------------------------------------------------------------
 
 const fetched: string[] = [];
+/** 每次挂载把输入器的提交回调记在这里,用例直接按它模拟操作员发话。 */
+const submitted: Array<(text: string, images: unknown[]) => boolean> = [];
 
 function stubFetch(reply: (url: string) => unknown): void {
   vi.stubGlobal('fetch', (url: unknown) => {
@@ -346,7 +348,13 @@ function mkCtx(capabilities: Record<string, boolean>, hash = '#/live'): Ctx {
     const el = ui.h('div', 'prompt-input-host');
     el.appendChild(ui.h('textarea', 'prompt-textarea'));
     if (opts.tools) el.appendChild(opts.tools);
-    return { el, focus: (): void => {}, setDisabled: (): void => {} };
+    submitted.push(opts.onSubmit);
+    return {
+      el,
+      focus: (): void => {},
+      setDisabled: (): void => {},
+      setPlaceholder: (): void => {},
+    };
   };
   const router = new Router({ win: fakeWin(hash), confirmLeave: async () => true });
   const ctx = {
@@ -375,6 +383,7 @@ const flush = async (): Promise<void> => {
 
 beforeEach(() => {
   fetched.length = 0;
+  submitted.length = 0;
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
   vi.stubGlobal('requestAnimationFrame', () => 1);
   vi.stubGlobal('cancelAnimationFrame', () => {});
@@ -1049,9 +1058,10 @@ describe('live feature 卸载', () => {
 });
 
 describe('开场引导', () => {
+  // 全新部署的 session 不是空的:Core 一起来就有一条系统前缀,所以判据只看事件库游标。
   const fresh = {
     t: 'hello',
-    session: [],
+    session: [{ role: 'system', content: '前缀' }],
     head: [],
     toolSchemas: [],
     status: { displayName: 'Cortico Bot', eventCount: 0 },
@@ -1081,7 +1091,7 @@ describe('开场引导', () => {
     expect(root.find('onboarding')).toBe(null);
   });
 
-  it('第一条记录落进 session 后收起', () => {
+  it('第一条事件落库后收起', () => {
     const { env, sockets } = fakeEnv();
     const { ctx, root } = mkCtx({ debug: true, sessions: true });
     live.createLiveFeature({ env }).mount(ctx);
@@ -1089,7 +1099,20 @@ describe('开场引导', () => {
     sockets[0].emit(fresh);
     expect(root.find('onboarding')).not.toBe(null);
 
-    sockets[0].emit({ t: 'session.append', index: 0, message: { role: 'user', content: '在吗' } });
+    sockets[0].emit({ t: 'status', status: { displayName: 'Cortico Bot', eventCount: 1 } });
+    expect(root.find('onboarding')).toBe(null);
+  });
+
+  it('操作员自己发话也收起:事件计数要等下一帧状态才更新', () => {
+    stubFetch(() => ({}));
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    sockets[0].emit(fresh);
+    expect(root.find('onboarding')).not.toBe(null);
+
+    submitted[0]?.('在吗', []);
     expect(root.find('onboarding')).toBe(null);
   });
 

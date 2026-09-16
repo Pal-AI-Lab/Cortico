@@ -162,7 +162,11 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onSubmit: (text, images) => {
       if (!chatStream?.open) ui.toast(S.composerQueued);
       // 首启时运行是停着的（见 launcher）；发话与按下那颗按钮同样是让它开始跑。
-      if (onboarding) void resumeRun();
+      if (onboarding) {
+        void resumeRun();
+        spoke = true;
+        syncOnboarding();
+      }
       const attached = images.map((i) => ({ mime: i.mime, base64: i.base64, name: i.name }));
       chatStream?.send(JSON.stringify({ type: 'msg', text, ...(attached.length ? { images: attached } : {}) }));
       return true;
@@ -185,14 +189,17 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
 
   /**
-   * 开场引导只在这份部署什么都还没发生时出现：session 没有记录，事件库也没有分配过游标。
-   * 单看 session 为空不够——上下文交接后它同样是空的。调试通道没挂载时读不到 session，
-   * 判不出是不是全新，这一块就不出现。
+   * 开场引导只在这份部署什么都还没发生时出现：事件库没有分配过游标。session 不能当判据——
+   * 全新部署起来就有一条系统前缀，而上下文交接后它反倒是空的。第一条终端消息、第一次
+   * terminal_send 与那颗按钮投的事件都会让游标动，这一块随之收起。
+   * 调试通道没挂载时这一页只剩状态读数，引导也不出现。
    */
   let onboarding: OnboardingView | null = null;
+  /** 操作员在这一页发过话就不再引导；事件计数要等下一帧状态才更新，那之前不该还挂着。 */
+  let spoke = false;
   const syncOnboarding = (): void => {
     const fresh = ctx.capabilities.debug === true
-      && state.messages.length === 0
+      && !spoke
       && state.status !== null
       && (state.status.eventCount ?? 0) === 0;
     if (fresh && !onboarding) {
