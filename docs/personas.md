@@ -48,7 +48,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 
 | 字段 | 含义 |
 |---|---|
-| `id`、`description` | 包 id 与一句话 |
+| `id` | 包 id;仓内包与目录同名 |
 | `defaults()` | bot 默认配置,可包含 World 段。启动器用 `withWorlds()` 补充内建与扩展 World 中缺失的默认段,保留此处已有的段 |
 | `declares` | 默认启用的 World id;未安装时显示为不可用。已安装但未声明的 World 默认关闭,部署可自行启用 |
 | `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, console? }` |

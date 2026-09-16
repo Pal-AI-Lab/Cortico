@@ -52,10 +52,8 @@ import {
 
 /** 启动器使用的 bot 包装配契约。 */
 export interface BotDefinition<C extends CoreConfig = CoreConfig> {
-  /** 目录名以外的稳定标识,用于日志与控制台标题 */
+  /** 控制台页 id `persona:<id>` 与产物键取它;仓内包的 id 与目录同名。 */
   id: string;
-  /** 一句话说明,启动器列表里显示 */
-  description?: string;
   /** Memory 系统的名字,作 Memory 页的标题;缺省回落到 persona.memory 的类名,再缺省是 Memory。 */
   memoryName?: string;
   /** 框架默认值与 Persona 默认值；World 默认段由 withWorlds() 补充。 */
