@@ -257,6 +257,18 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     }
     await expect(invoke(settings, 'setSecret', { name: 'local', value: 'x' })).rejects.toThrow('变量名');
   });
+  it('密钥变量名里的正则元字符按字面处理:既不认成别的变量,也不覆盖它', async () => {
+    const { cfg, settings, providersDir } = fixture();
+    cfg.providers.cloud.secret = 'A.KEY';
+    mkdirSync(join(providersDir, 'cloud'), { recursive: true });
+    const env = join(providersDir, 'cloud', '.env');
+    writeFileSync(env, 'AXKEY=another-secret\n', 'utf8');
+    // 文件里没有 A.KEY,只有一个名字长得像的 AXKEY
+    expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('none');
+    await invoke(settings, 'setSecret', { name: 'cloud', value: 'sk-mine' });
+    expect(readFileSync(env, 'utf8')).toBe('AXKEY=another-secret\nA.KEY=sk-mine\n');
+    expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('file');
+  });
   it.each(['save', 'setConfig'] as const)('%s 保存自定义密钥变量名后，请求使用对应的文件或环境密钥', async (method) => {
     const { cfg, settings, registry, providersDir, endpoint } = fixture();
     const secret = 'my_ModelToken_42';
