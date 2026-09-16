@@ -1,9 +1,10 @@
 /**
- * 只读工具表与完整 JSON Schema。按后端 owner 分组并保留装配顺序，前端不维护具体 World 名单；复制由 ui.copyButton 处理。
+ * 只读工具表与完整 JSON Schema，由 Persona 页的框架页签承载。
+ * 按后端 owner 分组并保留装配顺序，前端不维护具体 World 名单；复制由 ui.copyButton 处理。
  */
 
 import type { ConsoleUi } from '../../../shared/client-panel.ts';
-import type { ToolSchemaDoc } from '../live/protocol.ts';
+import type { ToolSchemaDoc } from '../../features/live/protocol.ts';
 import { S } from './strings.ts';
 
 /** schema 节点的类型名。联合/枚举/组合都给一个能读的词,不返回空。 */

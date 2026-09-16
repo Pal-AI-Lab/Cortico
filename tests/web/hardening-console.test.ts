@@ -12,12 +12,14 @@ const LOADER_SPEC = '../../src/web/client/console-pages/loader.ts';
 const CONTEXT_SPEC = '../../src/web/client/console-pages/context.ts';
 const BUNDLE_SPEC = '../../src/web/shared/client-panel.ts';
 const HANDOFF_SPEC = '../../src/web/client/theme/handoff.ts';
+const TOOLS_SPEC = '../../src/web/client/console-pages/tools/view.ts';
 
 type Any = any;
 
 const { ConsolePageHost } = (await import(HOST_SPEC)) as Any;
 const { ConsolePageLoader } = (await import(LOADER_SPEC)) as Any;
 const { namespacedMemo } = (await import(CONTEXT_SPEC)) as Any;
+const toolsMod = (await import(TOOLS_SPEC)) as Any;
 const { toDisposable, ConsoleInvokeError } = (await import(BUNDLE_SPEC)) as Any;
 const { THEME_HANDOFF_FRAGMENT_KEY } = (await import(HANDOFF_SPEC)) as Any;
 
@@ -305,7 +307,7 @@ interface ProviderDecl {
   client?: { js: string; css?: string };
   badges?: { label: string; value: string | number; tone?: string }[];
   links?: Array<{ label: string; href: string; inheritTheme?: boolean }>;
-  /** 这个 provider 认领的配置组 id(归属),参数页据此只画自己那几组。 */
+  /** 这个 provider 认领的配置组 id(归属),配置页据此只画自己那几组。 */
   configGroups?: string[];
   /** 这个 provider 声明的存储项 key,数据页签据此只画自己那几项。 */
   storageKeys?: string[];
@@ -1459,10 +1461,10 @@ describe('懒加载', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 归属页：provider 自己声明的参数，画在它自己那一页上
+// 归属页：provider 自己声明的配置，画在它自己那一页上
 // ---------------------------------------------------------------------------
 
-describe('provider 归属页的参数', () => {
+describe('provider 归属页的配置', () => {
   /** 全量清单：一组属于 world:a，一组是框架的。 */
   const CONFIG_PAYLOAD = {
     groups: [
@@ -1510,21 +1512,21 @@ describe('provider 归属页的参数', () => {
     expect(stage.slotText()).not.toContain('别人的');
   });
 
-  it('页签上多一颗「参数」；没声明的 provider 上没有这颗', async () => {
+  it('页签上多一颗「配置」；没声明的 provider 上没有这颗', async () => {
     const withPanel = makeStage([withConfig({ panels: [{ id: 'one', title: '面板一' }] })], {});
     await withPanel.host.load();
     await withPanel.host.show('world:a', 'one');
     await flush();
-    expect(withPanel.chrome()!.textContent).toContain('参数');
+    expect(withPanel.chrome()!.textContent).toContain('配置');
 
     const plain = makeStage([{ id: 'world:b', label: 'B World', panels: [{ id: 'one', title: '面板一' }, { id: 'two', title: '面板二' }] }], {});
     await plain.host.load();
     await plain.host.show('world:b', 'one');
     await flush();
-    expect(plain.chrome()!.textContent).not.toContain('参数');
+    expect(plain.chrome()!.textContent).not.toContain('配置');
   });
 
-  it('只有参数、没有面板的 provider：不带页签进来就落在参数页（不是一张"没有面板"的空卡）', async () => {
+  it('只有配置、没有面板的 provider：不带页签进来就落在配置页（不是一张"没有面板"的空卡）', async () => {
     const stage = makeStage([withConfig()], {});
     await stage.host.load();
     await stage.host.show('world:a');
@@ -1544,7 +1546,7 @@ describe('provider 归属页的参数', () => {
     expect(stage.slotText()).toContain('~config');
   });
 
-  it('参数页也归生命周期管：离开之后节点与监听不留', async () => {
+  it('配置页也归生命周期管：离开之后节点与监听不留', async () => {
     const stage = makeStage([withConfig()], {});
     await stage.host.load();
     await stage.host.show('world:a', '~config');
@@ -1556,7 +1558,7 @@ describe('provider 归属页的参数', () => {
   });
 });
 
-describe('参数页与 capabilities', () => {
+describe('配置页与 capabilities', () => {
   it('部署没挂 /api/config：页签不出现，直接进 ~config 也只是一张"没有这个面板"的卡', async () => {
     const doc = new FakeDoc();
     const root = doc.createElement('div');
@@ -1628,5 +1630,170 @@ describe('数据页签', () => {
     await flush();
     expect(stage.chrome()!.textContent).not.toContain('数据');
     expect(stage.slotText()).toContain('没有面板「~storage」');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 工具表页签：只挂在 Persona 页上，画的是整份装配结果
+// ---------------------------------------------------------------------------
+
+describe('工具表页签', () => {
+  const TOOL_SCHEMAS = {
+    tools: [
+      {
+        name: 'schedule_wake',
+        description: '定时唤醒',
+        owner: { kind: 'core' },
+        parameters: { type: 'object', properties: { at: { type: 'string' } } },
+      },
+      { name: 'read_file', description: '读文件', owner: { kind: 'persona' } },
+    ],
+  };
+  beforeEach(() => {
+    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify(
+        String(url).startsWith('/api/tool-schemas') ? TOOL_SCHEMAS : {},
+      )),
+    }));
+  });
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  const personaPage: ProviderDecl = {
+    id: 'persona:a', kind: 'persona', label: 'A Persona', panels: [{ id: 'one', title: '面板一' }],
+  };
+
+  /** 这个文件的迷你 DOM 没有查询方法,自己走一遍。 */
+  const walk = (root: FakeEl, hit: (n: FakeEl) => boolean): FakeEl[] => {
+    const out: FakeEl[] = [];
+    const visit = (n: FakeEl): void => {
+      if (hit(n)) out.push(n);
+      for (const c of n.children) visit(c);
+    };
+    visit(root);
+    return out;
+  };
+  const byClass = (root: FakeEl, cls: string): FakeEl[] =>
+    walk(root, (n) => n.className.split(' ').includes(cls));
+
+  it('Persona 页上多一颗「工具表」;World 页上没有', async () => {
+    const persona = makeStage([personaPage], {});
+    await persona.host.load();
+    await persona.host.show('persona:a', 'one');
+    await flush();
+    expect(persona.chrome()!.textContent).toContain('工具表');
+
+    const world = makeStage([{
+      id: 'world:a', label: 'A World', panels: [{ id: 'one', title: '面板一' }, { id: 'two', title: '面板二' }],
+    }], {});
+    await world.host.load();
+    await world.host.show('world:a', 'one');
+    await flush();
+    expect(world.chrome()!.textContent).not.toContain('工具表');
+    expect(world.slotText()).not.toContain('工具库');
+  });
+
+  it('分栏渲染,筛选把不命中的卡与空栏都收起来', async () => {
+    const stage = makeStage([personaPage], {});
+    await stage.host.load();
+    await stage.host.show('persona:a', '~tools');
+    await flush();
+
+    const slot = stage.slot() as FakeEl;
+    const cards = byClass(slot, 'tool-schema-card');
+    expect(cards.length).toBe(2);
+    expect(byClass(slot, 'schema-group').length).toBe(2);
+    expect(cards[0].textContent).toContain('1 个参数');
+
+    const search = walk(slot, (n) => n.tagName === 'input' && n.type === 'search')[0];
+    search.value = 'read';
+    search.dispatchEvent({ type: 'input' });
+    expect(cards[0].className).toContain('hidden');
+    expect(cards[1].className).not.toContain('hidden');
+    expect(byClass(slot, 'schema-group')[0].className).toContain('hidden');
+  });
+
+  it('部署没挂 /api/tool-schemas:页签不出现,直接进 ~tools 是一张"没有这个面板"的卡', async () => {
+    const doc = new FakeDoc();
+    const root = doc.createElement('div');
+    const overlayHost = doc.createElement('div');
+    doc.body.append(root, overlayHost);
+    const host = new ConsolePageHost({
+      doc,
+      root,
+      overlayHost,
+      loader: new ConsolePageLoader({
+        importModule: async () => ({}),
+        styleHost: { appendChild: () => {} },
+        createLink: () => ({ rel: '', href: '', dataset: {} as Record<string, string> }),
+      }),
+      router: { addLeaveGuard: () => ({ dispose: () => {} }), navigate: () => {} },
+      fetchManifest: async () => ({
+        protocolVersion: 1,
+        providers: [{ ...personaPage, availability: 'active' }],
+        framework: { capabilities: { toolSchemas: false } },
+      }),
+      memo: fakeMemo(),
+      createSocket: () => new FakeSocket('ws://test'),
+      wsUrl: (p: string) => `ws://test${p}`,
+      onError: () => {},
+    });
+
+    await host.load();
+    await host.show('persona:a', '~tools');
+    await flush();
+    expect(root.textContent).toContain('没有面板「~tools」');
+    expect(root.textContent).not.toContain('~tools / ');
+  });
+});
+
+// ===========================================================================
+// 工具 schema · 纯函数
+// ===========================================================================
+
+describe('工具 schema · 纯函数', () => {
+  it('schemaTypeLabel:联合/枚举/组合都给一个能读的词', () => {
+    expect(toolsMod.schemaTypeLabel(null)).toBe('—');
+    expect(toolsMod.schemaTypeLabel({ type: 'string' })).toBe('string');
+    expect(toolsMod.schemaTypeLabel({ type: ['string', 'null'] })).toBe('string | null');
+    expect(toolsMod.schemaTypeLabel({ enum: ['a'] })).toBe('enum');
+    expect(toolsMod.schemaTypeLabel({ oneOf: [] })).toBe('oneOf');
+    expect(toolsMod.schemaTypeLabel({})).toBe('schema');
+  });
+
+  it('schemaParameterRows:递归展开嵌套与数组元素,必填从 required 来', () => {
+    const rows = toolsMod.schemaParameterRows({
+      type: 'object',
+      required: ['text'],
+      properties: {
+        text: { type: 'string', description: '要说的话' },
+        opts: { type: 'object', properties: { loud: { type: 'boolean' } } },
+        list: { type: 'array', items: { type: 'object', properties: { id: { type: 'number' } } } },
+      },
+    });
+    expect(rows.map((r: Any) => r.path)).toEqual(['text', 'opts', 'opts.loud', 'list', 'list[].id']);
+    expect(rows[0]).toMatchObject({ type: 'string', required: true, description: '要说的话' });
+    expect(rows[1].required).toBe(false);
+    expect(toolsMod.schemaParameterRows(undefined)).toEqual([]);
+  });
+
+  it('groupTools:按后端给的 owner 分栏,前端不维护工具名单', () => {
+    const groups = toolsMod.groupTools([
+      { name: 'schedule_wake', owner: { kind: 'core' } },
+      { name: 'read_file', owner: { kind: 'persona' } },
+      { name: 'send', owner: { kind: 'world', id: 'x', label: '某 World' } },
+      { name: 'look', owner: { kind: 'world', id: 'x', label: '某 World' } },
+      { name: 'fork', tags: ['flow'] }, // 没有 owner 时按 tags 兜底
+      { name: 'noop' },
+    ]);
+    expect(groups.map(([k]: Any) => k)).toEqual([
+      '原生动作 · core',
+      '记忆 / 文件工具 · Persona',
+      'IO 工具 · 某 World',
+    ]);
+    expect(groups[0][1].map((t: Any) => t.name)).toEqual(['schedule_wake', 'fork']);
+    expect(groups[1][1].map((t: Any) => t.name)).toEqual(['read_file', 'noop']);
+    expect(groups[2][1].map((t: Any) => t.name)).toEqual(['send', 'look']);
   });
 });

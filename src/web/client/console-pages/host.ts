@@ -8,15 +8,18 @@ import {
   type ConsolePageManifest,
 } from '../../shared/console-protocol.ts';
 import type { ConsoleMemo, ConsolePanel, Disposable } from '../../shared/client-panel.ts';
-import { post } from '../core/api.ts';
+import { get, post } from '../core/api.ts';
 import { Lifecycle } from '../core/lifecycle.ts';
 import type { Router } from '../core/router.ts';
 import type { SocketLike } from '../core/stream.ts';
 import { createConsoleUi } from '../ui/index.ts';
 import { lampRow } from '../ui/lamp.ts';
 import { createConfigView } from '../features/config/view.ts';
+import type { ToolSchemaDoc } from '../features/live/protocol.ts';
 import { createPromptsView } from '../features/prompts/view.ts';
 import { createStorageView } from '../features/storage/view.ts';
+import { S as TOOLS } from './tools/strings.ts';
+import { createToolsView } from './tools/view.ts';
 import { resolveConsoleLinkHref } from '../theme/handoff.ts';
 import type { BuiltinPanels } from './builtins.ts';
 import { createPanelContext, namespacedMemo } from './context.ts';
@@ -29,6 +32,8 @@ export const PROVIDER_ROUTE = 'provider';
 const PROVIDER_PROMPTS_ROUTE = '~prompts';
 const PROVIDER_CONFIG_ROUTE = '~config';
 const PROVIDER_STORAGE_ROUTE = '~storage';
+/** 工具表不来自页面声明:装配好的那一份整个属于 Persona,所以只挂在 Persona 页上。 */
+const PROVIDER_TOOLS_ROUTE = '~tools';
 
 function asArray<T>(v: readonly T[] | undefined): readonly T[] {
   return Array.isArray(v) ? v : [];
@@ -191,10 +196,12 @@ export class ConsolePageHost {
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
     const storageKeys = this.storageKeysOf(page);
+    const tools = this.toolsTabOf(page);
     const wanted = panelId ?? panels[0]?.id
       ?? (configGroups.length ? PROVIDER_CONFIG_ROUTE : undefined)
       ?? (prompts.length ? PROVIDER_PROMPTS_ROUTE : undefined)
-      ?? (storageKeys.length ? PROVIDER_STORAGE_ROUTE : undefined);
+      ?? (storageKeys.length ? PROVIDER_STORAGE_ROUTE : undefined)
+      ?? (tools ? PROVIDER_TOOLS_ROUTE : undefined);
     if (wanted === PROVIDER_CONFIG_ROUTE && configGroups.length) {
       this.renderChrome(pageId, PROVIDER_CONFIG_ROUTE);
       await this.showConfig(pageId, configGroups, gen);
@@ -210,10 +217,16 @@ export class ConsolePageHost {
       await this.showStorage(pageId, storageKeys, gen);
       return;
     }
+    if (wanted === PROVIDER_TOOLS_ROUTE && tools) {
+      this.renderChrome(pageId, PROVIDER_TOOLS_ROUTE);
+      await this.showTools(pageId, gen);
+      return;
+    }
     const panel = wanted ? panels.find((p) => p.id === wanted) : undefined;
     if (!panel) {
       this.renderChrome(pageId, wanted);
-      if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0 && storageKeys.length === 0) {
+      if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0
+        && storageKeys.length === 0 && !tools) {
         this.appendNote(S.noPanels(page.label));
       } else {
         this.renderError(
@@ -223,6 +236,7 @@ export class ConsolePageHost {
             ...(configGroups.length ? [PROVIDER_CONFIG_ROUTE] : []),
             ...(prompts.length ? [PROVIDER_PROMPTS_ROUTE] : []),
             ...(storageKeys.length ? [PROVIDER_STORAGE_ROUTE] : []),
+            ...(tools ? [PROVIDER_TOOLS_ROUTE] : []),
           ].join(' / ')),
         );
       }
@@ -299,6 +313,38 @@ export class ConsolePageHost {
   private storageKeysOf(page: ConsolePageManifest): readonly string[] {
     if (this.snapshot?.framework?.capabilities?.storage === false) return [];
     return asArray(page.storageKeys);
+  }
+
+  /** Persona 页才有工具表页签,且要部署挂着 /api/tool-schemas。 */
+  private toolsTabOf(page: ConsolePageManifest): boolean {
+    if (page.kind !== 'persona' || page.availability !== 'active') return false;
+    return this.snapshot?.framework?.capabilities?.toolSchemas !== false;
+  }
+
+  /** 工具表是整份装配结果,不按页筛:模型看见的那一张表就是这一张。 */
+  private async showTools(pageId: string, gen: number): Promise<void> {
+    const { slot } = this.ensurePanes();
+    const lifecycle = new Lifecycle(this.deps.onError);
+    this.mounted = { pageId, panelId: PROVIDER_TOOLS_ROUTE, lifecycle };
+    const ui = createConsoleUi({
+      memo: namespacedMemo(this.deps.memo, pageId, PROVIDER_TOOLS_ROUTE),
+      overlayHost: this.deps.overlayHost,
+      signal: lifecycle.signal,
+      doc: this.deps.doc,
+    });
+    const view = createToolsView(ui);
+    slot.appendChild(view.el);
+    try {
+      const out = await get<{ tools?: ToolSchemaDoc[] }>('/api/tool-schemas', { signal: lifecycle.signal });
+      view.render(out?.tools ?? []);
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name !== 'AbortError') {
+        this.deps.onError(err);
+        view.render([]);
+        view.note(TOOLS.loadFailed(err instanceof Error ? err.message : String(err)));
+      }
+    }
+    if (gen !== this.generation) lifecycle.dispose();
   }
 
   /** 这一页声明的存储项走同一张 /api/storage 清单;这里只按 key 挑出自己的。 */
@@ -446,7 +492,9 @@ export class ConsolePageHost {
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
     const storageKeys = this.storageKeysOf(page);
-    if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0) + (storageKeys.length ? 1 : 0) > 1) {
+    const tools = this.toolsTabOf(page);
+    if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0)
+      + (storageKeys.length ? 1 : 0) + (tools ? 1 : 0) > 1) {
       const tabs = ui.rowbar();
       const go = (panelId: string): void => this.deps.router.navigate(this.routeOf(page.id, panelId));
       for (const p of panels) {
@@ -476,6 +524,13 @@ export class ConsolePageHost {
           size: 'sm',
           variant: activePanel === PROVIDER_STORAGE_ROUTE ? 'primary' : 'plain',
           onClick: () => go(PROVIDER_STORAGE_ROUTE),
+        }));
+      }
+      if (tools) {
+        tabs.appendChild(ui.button(S.toolsTab, {
+          size: 'sm',
+          variant: activePanel === PROVIDER_TOOLS_ROUTE ? 'primary' : 'plain',
+          onClick: () => go(PROVIDER_TOOLS_ROUTE),
         }));
       }
       chrome.appendChild(tabs);

@@ -1,6 +1,7 @@
 /**
- * core 的运行态、会话统计、事件流、日志、工具表、数据与参数页，不持有或显示人格前缀。
- * 子页状态由路由表达；sessions、toolSchemas 等未挂载能力不显示页签。仅当前子页运行轮询，状态保存在挂载闭包，由调试帧或一次性 GET 填充。
+ * core 的运行态、会话统计、事件流、日志、数据与配置页，不持有或显示人格前缀。
+ * 工具表不在这里:那是 Persona 页的框架页签。
+ * 子页状态由路由表达；未挂载的能力不显示页签。仅当前子页运行轮询，状态保存在挂载闭包，由调试帧或一次性 GET 填充。
  */
 
 import type { Disposable } from '../../../shared/client-panel.ts';
@@ -13,14 +14,12 @@ import {
   str,
   type SessionStat,
   type StatusSnapshot,
-  type ToolSchemaDoc,
 } from '../live/protocol.ts';
 import { createEventsView } from './events.ts';
 import { createRunlogView } from './runlog.ts';
 import { createRunView } from './run.ts';
 import { createSessionTable } from './sessions.ts';
 import { S } from './strings.ts';
-import { createToolsView } from './tools.ts';
 import { createConfigView } from '../config/view.ts';
 import { createStorageView } from '../storage/view.ts';
 
@@ -39,9 +38,8 @@ const CORE_SUBS: readonly SubDef[] = [
   { id: 'sessions', label: S.subSessions, need: 'sessions' },
   { id: 'events', label: S.subEvents, need: null },
   { id: 'runlog', label: S.subRunlog, need: null },
-  { id: 'tools', label: S.subTools, need: 'toolSchemas' },
   { id: 'data', label: S.subData, need: 'storage' },
-  { id: 'params', label: S.subParams, need: 'config' },
+  { id: 'config', label: S.subConfig, need: 'config' },
 ];
 
 export interface CoreFeatureOptions {
@@ -68,7 +66,6 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
 
   const state = {
     status: null as StatusSnapshot | null,
-    toolSchemas: [] as ToolSchemaDoc[],
     sessions: [] as SessionStat[],
   };
 
@@ -99,7 +96,7 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     net.textContent = online ? '' : S.netOffline;
   };
 
-  // ── 五个子页 ─────────────────────────────────────────────────────
+  // ── 六个子页 ─────────────────────────────────────────────────────
   const run = createRunView({ ui });
   const sessions = createSessionTable(ui);
   const events = createEventsView({
@@ -115,30 +112,28 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onNet: setNet,
     onError: (err) => ctx.onError(err),
   });
-  const tools = createToolsView(ui);
   // Core 自己的存储项与配置组:按 owner 取,World / Persona / Memory 的各在自己页上。
   const data = createStorageView({ ui, signal: ctx.signal, filter: (p) => p.owner === 'core', clearAll: true });
   const dataSheet = ui.sheet({ title: S.dataTitle, en: 'core storage', desc: S.dataDesc });
   dataSheet.body.appendChild(data.el);
-  const params = createConfigView({
+  const config = createConfigView({
     ui,
     lifecycle: ctx.lifecycle,
     signal: ctx.signal,
     filter: (group) => group.owner === 'core',
     showOwner: false,
-    emptyText: S.paramsEmpty,
+    emptyText: S.configEmpty,
   });
-  const paramsSheet = ui.sheet({ title: S.paramsTitle, en: 'core config', desc: S.paramsDesc });
-  paramsSheet.body.appendChild(params.el);
+  const configSheet = ui.sheet({ title: S.configTitle, en: 'core config', desc: S.configDesc });
+  configSheet.body.appendChild(config.el);
 
   const panes: Record<string, HTMLElement> = {
     run: run.el,
     sessions: sessions.el,
     events: events.el,
     runlog: runlog.el,
-    tools: tools.el,
     data: dataSheet.el,
-    params: paramsSheet.el,
+    config: configSheet.el,
   };
 
   /** 每次进入某个子页要做的事。进来才拉数据——没打开的页不该占网络。 */
@@ -158,15 +153,11 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     runlog: () => {
       void runlog.refresh();
     },
-    tools: () => {
-      tools.render(state.toolSchemas);
-      void refreshTools();
-    },
     data: () => {
       void data.load();
     },
-    params: () => {
-      void params.load();
+    config: () => {
+      void config.load();
     },
   };
 
@@ -219,20 +210,6 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     }
   }
 
-  /** 完整工具表来自 `/api/tool-schemas`;拿不到就退回调试通道给的那份。 */
-  async function refreshTools(): Promise<void> {
-    try {
-      const d = await get<{ tools?: ToolSchemaDoc[] }>('/api/tool-schemas', { signal: ctx.signal });
-      state.toolSchemas = d?.tools ?? state.toolSchemas;
-      tools.note('');
-      tools.render(state.toolSchemas);
-    } catch (err) {
-      if ((err as { name?: string } | null)?.name === 'AbortError') return;
-      ctx.onError(err);
-      tools.note(S.toolsNote(String((err as Error)?.message ?? err)));
-    }
-  }
-
   const hasDebug = ctx.capabilities.debug === true;
   if (hasDebug) {
     openFrameworkSocket({
@@ -244,12 +221,10 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       onFrame: (f) => {
         switch (f.t) {
           case 'hello':
-            state.toolSchemas = arr<ToolSchemaDoc>(f.toolSchemas);
             state.sessions = arr<SessionStat>(f.sessions);
             state.status = (f.status as StatusSnapshot | null) ?? null;
             if (current === 'run') run.render(state.status);
             if (current === 'sessions') sessions.render(state.sessions);
-            if (current === 'tools') tools.render(state.toolSchemas);
             break;
           case 'status':
             state.status = (f.status as StatusSnapshot | null) ?? null;

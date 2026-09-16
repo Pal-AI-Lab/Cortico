@@ -9,7 +9,7 @@ const UI_ENTRY = '../../src/web/client/ui/index.ts';
 const LIFECYCLE_ENTRY = '../../src/web/client/core/lifecycle.ts';
 const ROUTER_ENTRY = '../../src/web/client/core/router.ts';
 const CORE_ENTRY = '../../src/web/client/features/core/index.ts';
-const TOOLS_ENTRY = '../../src/web/client/features/core/tools.ts';
+
 const PROMPTS_ENTRY = '../../src/web/client/features/prompts/view.ts';
 const FEATURE_ENTRY = '../../src/web/client/features/feature.ts';
 
@@ -19,7 +19,7 @@ const { createConsoleUi } = (await import(UI_ENTRY)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE_ENTRY)) as Any;
 const { Router, parseHash } = (await import(ROUTER_ENTRY)) as Any;
 const core = (await import(CORE_ENTRY)) as Any;
-const toolsMod = (await import(TOOLS_ENTRY)) as Any;
+
 const promptsMod = (await import(PROMPTS_ENTRY)) as Any;
 const { featureAvailable } = (await import(FEATURE_ENTRY)) as Any;
 
@@ -381,7 +381,6 @@ function defaultReply(url: string): unknown {
   if (url.startsWith('/api/events')) return { latest: 2, events: [] };
   if (url.startsWith('/api/log?')) return [];
   if (url.startsWith('/api/runs')) return { current: null, runs: [] };
-  if (url.startsWith('/api/tool-schemas')) return { tools: [] };
   if (url.startsWith('/api/prompts')) return { prompts: [] };
   if (url.startsWith('/api/run/')) return { ok: true, paused: true };
   return {};
@@ -417,52 +416,6 @@ afterEach(() => {
 // ===========================================================================
 // 纯函数
 // ===========================================================================
-
-describe('工具 schema · 纯函数', () => {
-  it('schemaTypeLabel:联合/枚举/组合都给一个能读的词', () => {
-    expect(toolsMod.schemaTypeLabel(null)).toBe('—');
-    expect(toolsMod.schemaTypeLabel({ type: 'string' })).toBe('string');
-    expect(toolsMod.schemaTypeLabel({ type: ['string', 'null'] })).toBe('string | null');
-    expect(toolsMod.schemaTypeLabel({ enum: ['a'] })).toBe('enum');
-    expect(toolsMod.schemaTypeLabel({ oneOf: [] })).toBe('oneOf');
-    expect(toolsMod.schemaTypeLabel({})).toBe('schema');
-  });
-
-  it('schemaParameterRows:递归展开嵌套与数组元素,必填从 required 来', () => {
-    const rows = toolsMod.schemaParameterRows({
-      type: 'object',
-      required: ['text'],
-      properties: {
-        text: { type: 'string', description: '要说的话' },
-        opts: { type: 'object', properties: { loud: { type: 'boolean' } } },
-        list: { type: 'array', items: { type: 'object', properties: { id: { type: 'number' } } } },
-      },
-    });
-    expect(rows.map((r: Any) => r.path)).toEqual(['text', 'opts', 'opts.loud', 'list', 'list[].id']);
-    expect(rows[0]).toMatchObject({ type: 'string', required: true, description: '要说的话' });
-    expect(rows[1].required).toBe(false);
-    expect(toolsMod.schemaParameterRows(undefined)).toEqual([]);
-  });
-
-  it('groupTools:按后端给的 owner 分栏,前端不维护工具名单', () => {
-    const groups = toolsMod.groupTools([
-      { name: 'schedule_wake', owner: { kind: 'core' } },
-      { name: 'read_file', owner: { kind: 'persona' } },
-      { name: 'send', owner: { kind: 'world', id: 'x', label: '某 World' } },
-      { name: 'look', owner: { kind: 'world', id: 'x', label: '某 World' } },
-      { name: 'fork', tags: ['flow'] }, // 没有 owner 时按 tags 兜底
-      { name: 'noop' },
-    ]);
-    expect(groups.map(([k]: Any) => k)).toEqual([
-      '原生动作 · core',
-      '记忆 / 文件工具 · Persona',
-      'IO 工具 · 某 World',
-    ]);
-    expect(groups[0][1].map((t: Any) => t.name)).toEqual(['schedule_wake', 'fork']);
-    expect(groups[1][1].map((t: Any) => t.name)).toEqual(['read_file', 'noop']);
-    expect(groups[2][1].map((t: Any) => t.name)).toEqual(['send', 'look']);
-  });
-});
 
 describe('模板占位符 · 提示与警告', () => {
   it('列出模板里用到的占位符,按出现序去重', () => {
@@ -509,7 +462,7 @@ describe('core 子页签', () => {
     expect(segs(root).map((s) => s.textContent)).toEqual(['运行', '事件流', '运行日志']);
   });
 
-  it('全挂时七个都在,默认落在第一个(ORIENTATION 不在这——core 不持环境提示词)', () => {
+  it('全挂时六个都在,默认落在第一个(ORIENTATION 与工具表都不在这——前者 core 不持,后者归 Persona 页)', () => {
     stubFetch(defaultReply);
     const { env } = fakeEnv();
     const { ctx, root } = mkCtx(ALL_CAPS);
@@ -520,16 +473,15 @@ describe('core 子页签', () => {
       '会话统计',
       '事件流',
       '运行日志',
-      '工具表',
       '数据',
-      '参数',
+      '配置',
     ]);
     expect(root.find('subtabs')).not.toBe(null);
     expect(segs(root)[0].className).toContain('active');
     expect(root.find('statgrid')).not.toBe(null);
   });
 
-  it('数据子页只列 owner 是 core 的项,带一键清空;参数子页只画 owner 是 core 的组', async () => {
+  it('数据子页只列 owner 是 core 的项,带一键清空;配置子页只画 owner 是 core 的组', async () => {
     stubFetch((u) => u.startsWith('/api/storage')
       ? { parts: [
         { key: 'events', owner: 'core', label: '事件库', kind: 'disk', stat: '1' },
@@ -548,10 +500,10 @@ describe('core 子页签', () => {
     expect(root.findAll('strow').map((r) => r.find('stlabel')!.textContent)).toEqual(['事件库']);
     expect(root.textContent).toContain('⚠ 一键清空全部');
 
-    const params = mkCtx(ALL_CAPS, '#/core/params');
-    core.createCoreFeature({ env }).mount(params.ctx);
+    const config = mkCtx(ALL_CAPS, '#/core/config');
+    core.createCoreFeature({ env }).mount(config.ctx);
     await flush();
-    expect(params.root.findAll('tsection').map((s) => s.textContent)).toEqual(['主循环']);
+    expect(config.root.findAll('tsection').map((s) => s.textContent)).toEqual(['主循环']);
   });
 
   it('进来时按路由第二段落在对应子页', async () => {
@@ -759,66 +711,5 @@ describe('运行日志', () => {
     expect(fetched.filter((u) => u.startsWith('/api/log?')).length).toBe(before + 2);
     expect(lastLogUrl()).toContain('area=worlds.vtuber');
     expect(vi.getTimerCount()).toBe(0);
-  });
-});
-
-describe('工具表', () => {
-  it('分栏渲染,筛选把不命中的卡与空栏都收起来', async () => {
-    stubFetch((url) =>
-      url.startsWith('/api/tool-schemas')
-        ? {
-            tools: [
-              {
-                name: 'schedule_wake',
-                description: '定时唤醒',
-                owner: { kind: 'core' },
-                parameters: { type: 'object', properties: { at: { type: 'string' } } },
-              },
-              { name: 'read_file', description: '读文件', owner: { kind: 'persona' } },
-            ],
-          }
-        : defaultReply(url),
-    );
-    const { env } = fakeEnv();
-    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/tools');
-    core.createCoreFeature({ env }).mount(ctx);
-    await flush();
-    const cards = root.findAll('tool-schema-card');
-    expect(cards.length).toBe(2);
-    expect(root.findAll('schema-group').length).toBe(2);
-    expect(cards[0].textContent).toContain('1 个参数');
-
-    const search = root.findAllTag('input').find((i) => i.type === 'search') as FakeEl;
-    search.value = 'read';
-    search.dispatchEvent({ type: 'input' });
-    expect(cards[0].className).toContain('hidden');
-    expect(cards[1].className).not.toContain('hidden');
-    expect(root.findAll('schema-group')[0].className).toContain('hidden');
-  });
-});
-
-
-// ===========================================================================
-// 卸载
-// ===========================================================================
-
-describe('core feature 卸载', () => {
-  it('unmount:连接关掉、退避定时器清掉、轮询与监听归零', async () => {
-    stubFetch(defaultReply);
-    const { env, sockets, timers } = fakeEnv();
-    const { ctx, root, lifecycle } = mkCtx(ALL_CAPS, '#/core/events');
-    core.createCoreFeature({ env }).mount(ctx);
-    await flush();
-    const view = root.children[0];
-    expect(view.totalListeners()).toBeGreaterThan(0);
-
-    sockets[0].readyState = 3;
-    sockets[0].onclose?.({});
-    expect(timers.size).toBe(1);
-
-    lifecycle.dispose();
-    expect(timers.size).toBe(0);
-    expect(vi.getTimerCount()).toBe(0);
-    expect(view.totalListeners()).toBe(0);
   });
 });

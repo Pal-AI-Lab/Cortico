@@ -1,8 +1,8 @@
 /**
- * 按 ConfigGroup JSON Schema 渲染参数，供框架设置与贡献页使用。
+ * 按 ConfigGroup JSON Schema 渲染配置，供框架设置与贡献页使用。
  * 可编辑 integer、number、boolean、string（enum / x-options）和双数值数组；其余只读且不提交。
  * x-scale：显示值 = 存储值 / scale，提交时乘回；取整与范围校验由后端完成。
- * x-suffix 提供单位；x-hot=false 的 World 参数需重启 World，其余需重启进程。
+ * x-suffix 提供单位；x-hot=false 的 World 配置需重启 World，其余需重启进程。
  * x-options 动态获取候选；x-path 选择服务器本机路径；x-download 提供浏览器下载链接。
  */
 
@@ -401,7 +401,7 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
           const row = ui.h('div', 'trow');
           const label = ui.h('span', 'tlabel', prop.title || path);
           if (prop['x-hot'] === false) {
-            // World 的参数在构造时读走:重启那个 World 即生效,不必重启进程。
+            // World 的配置在构造时读走:重启那个 World 即生效,不必重启进程。
             label.appendChild(ui.h('span', 'ttag', group.owner.startsWith('world:') ? S.restartWorld : S.restartProcess));
           }
           row.appendChild(label);
