@@ -1,8 +1,23 @@
 diff --git a/index.js b/index.js
-index b38bd30c0c1babb4d7d3d396067ed828d9dc9f6a..0aab92b17f1f75b01006dc4b9af49ee64a9d5a0b 100644
+index b38bd30c0c1babb4d7d3d396067ed828d9dc9f6a..c5f8fc626cab942b7cc3ba2c2853f1b96b9cda97 100644
 --- a/index.js
 +++ b/index.js
-@@ -567,6 +567,12 @@ function inject (bot) {
+@@ -518,6 +518,14 @@ function inject (bot) {
+         fullStop()
+       }
+ 
++      // The gate branch below reassigns placingBlock from toPlace.shift(),
++      // which is undefined when the gate was the last entry. Nothing is left
++      // to place for this node.
++      if (!placingBlock) {
++        placing = false
++        return
++      }
++
+       // Open gates or doors
+       if (placingBlock?.useOne) {
+         if (!lockUseBlock.tryAcquire()) return
+@@ -567,6 +575,12 @@ function inject (bot) {
                  placing = false
                  lastNodeTime = performance.now()
                })

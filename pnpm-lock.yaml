@@ -8,7 +8,7 @@ overrides:
   vec3: ^0.2.0
 
 patchedDependencies:
-  mineflayer-pathfinder@2.4.5: 81f8ef5678d330b0eeefa7556223c8d82022045ed07060e667c0389d58d6aa79
+  mineflayer-pathfinder@2.4.5: 3198fda389c4ab34d66cdbcb880c90b816b1bec263366c9d99b5cc6a42964c73
 
 importers:
 
@@ -31,7 +31,7 @@ importers:
         version: 4.37.1
       mineflayer-pathfinder:
         specifier: ^2.4.5
-        version: 2.4.5(patch_hash=81f8ef5678d330b0eeefa7556223c8d82022045ed07060e667c0389d58d6aa79)
+        version: 2.4.5(patch_hash=3198fda389c4ab34d66cdbcb880c90b816b1bec263366c9d99b5cc6a42964c73)
       prismarine-viewer:
         specifier: ^1.33.0
         version: 1.33.0
@@ -3559,7 +3559,7 @@ snapshots:
       - encoding
       - supports-color
 
-  mineflayer-pathfinder@2.4.5(patch_hash=81f8ef5678d330b0eeefa7556223c8d82022045ed07060e667c0389d58d6aa79):
+  mineflayer-pathfinder@2.4.5(patch_hash=3198fda389c4ab34d66cdbcb880c90b816b1bec263366c9d99b5cc6a42964c73):
     dependencies:
       minecraft-data: 3.112.0
       prismarine-block: 1.23.0
