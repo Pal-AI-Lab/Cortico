@@ -55,20 +55,23 @@ export function createOnboarding(deps: OnboardingDeps): OnboardingView {
 
   const bubble = (
     line: string,
-    action: { label: string; icon?: ConsoleIconName; accent?: boolean; onClick(): void },
+    action?: { label: string; icon?: ConsoleIconName; accent?: boolean; onClick(): void },
   ): Bubble => {
     const box = ui.h('div', 'monolog');
     box.appendChild(ui.h('div', 'monolog-body', line));
     const state = ui.h('div', 'ob-state hidden');
     // 外观取子页签那颗按钮（`.seg`），`ob-btn` 只挂本页的微调。
-    const button = ui.h('button', action.accent ? 'seg active ob-btn ob-go' : 'seg active ob-btn');
+    const button = ui.h('button', action?.accent ? 'seg active ob-btn ob-go' : 'seg active ob-btn');
     button.type = 'button';
-    if (action.icon) button.appendChild(icon(doc, action.icon));
-    button.appendChild(ui.h('span', null, action.label));
-    button.addEventListener('click', () => action.onClick(), { signal });
-    const acts = ui.h('div', 'ob-acts');
-    acts.appendChild(button);
-    box.append(state, acts);
+    if (action?.icon) button.appendChild(icon(doc, action.icon));
+    button.appendChild(ui.h('span', null, action?.label ?? ''));
+    if (action) button.addEventListener('click', () => action.onClick(), { signal });
+    box.appendChild(state);
+    if (action) {
+      const acts = ui.h('div', 'ob-acts');
+      acts.appendChild(button);
+      box.appendChild(acts);
+    }
     body.appendChild(box);
     return {
       button,
@@ -79,7 +82,8 @@ export function createOnboarding(deps: OnboardingDeps): OnboardingView {
     };
   };
 
-  const provider = bubble(S.obWelcome, { label: S.obGoConfigure, onClick: () => deps.go(['providers']) });
+  bubble(S.obWelcome);
+  const provider = bubble(S.obProvider, { label: S.obGoConfigure, onClick: () => deps.go(['providers']) });
   const worlds = bubble(S.obWorlds, { label: S.obGoConfigure, onClick: () => deps.go(['world']) });
   bubble(S.obPrompts, { label: S.obGoEdit, onClick: () => deps.go(['prompts']) });
 

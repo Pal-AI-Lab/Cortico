@@ -1083,7 +1083,9 @@ describe('开场引导', () => {
 
     const ob = root.find('onboarding')!;
     expect(ob).not.toBe(null);
-    expect(ob.findAll('monolog').length).toBe(4);
+    // 开场白单独一条,没有按钮;其余四条各带一颗。
+    expect(ob.findAll('monolog').length).toBe(5);
+    expect(ob.findAll('ob-acts').length).toBe(4);
     // 最后一条的按钮:没有端点按不动
     expect(ob.findAll('ob-acts').at(-1)!.children[0].disabled).toBe(true);
   });

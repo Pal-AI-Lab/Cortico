@@ -217,14 +217,14 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         },
       });
       onboarding.setProvider(providerReady);
-      view.insertBefore(onboarding.el, timeline.el);
+      timeline.setHeader(onboarding.el);
       // 引导期间系统前缀那张卡先收起来:这一页此刻要说的是怎么把 bot 配起来。
       timeline.setHideSystem(true);
       timeline.rebuild(state.messages, { head: state.head });
       return;
     }
     if (!fresh && onboarding) {
-      onboarding.el.remove();
+      timeline.setHeader(null);
       onboarding = null;
       timeline.setHideSystem(false);
       timeline.rebuild(state.messages, { head: state.head });

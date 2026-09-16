@@ -102,6 +102,8 @@ export interface TimelineView {
   setSpeaker(name: string): void;
   /** 开场引导期间把系统前缀那张卡收起来，下一次重画生效。 */
   setHideSystem(hide: boolean): void;
+  /** 在滚动区顶部挂一块外部内容，随时间线一起滚；传 null 取下。重画不动它。 */
+  setHeader(node: HTMLElement | null): void;
 }
 
 export function createTimeline(deps: TimelineDeps): TimelineView {
@@ -131,6 +133,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   let speakerInitial = 'B';
   /** 收起系统前缀卡。 */
   let hideSystem = false;
+  /** 挂在滚动区顶部的外部内容（开场引导）。 */
+  let header: HTMLElement | null = null;
   let autoScroll = true;
   /** 正在跑的打字机。重画时全部收掉——否则它们会往脱离文档的节点里继续写。 */
   const typing = new Set<Disposable>();
@@ -574,6 +578,11 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     },
     setHideSystem(hide) {
       hideSystem = hide;
+    },
+    setHeader(node) {
+      header?.remove();
+      header = node;
+      if (node) scroll.insertBefore(node, inner);
     },
     setSpeaker(name) {
       speakerInitial = name.trim().slice(0, 1).toUpperCase() || 'B';
