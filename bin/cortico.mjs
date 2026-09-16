@@ -269,10 +269,19 @@ async function main() {
     if (code !== 0) return code;
   }
 
-  const available = readPnpm(pnpm, ['--silent', 'bots']).split('\n').map((s) => s.trim()).filter(Boolean);
+  let available = readPnpm(pnpm, ['--silent', 'bots']).split('\n').map((s) => s.trim()).filter(Boolean);
   if (request.kind === 'list') {
     console.log(available.join('\n'));
     return 0;
+  }
+
+  // 一份部署都没有 = 第一次上手。建一份再启动,端点与其余设置在控制台里配。
+  if (available.length === 0) {
+    const created = readPnpm(pnpm, ['--silent', 'bots', '--create-default']).trim();
+    if (created) {
+      console.log(`\n  已创建部署: ${created}`);
+      available = [created];
+    }
   }
 
   let choice = chooseBot({ bot: request.bot, available, interactive: process.stdin.isTTY === true });

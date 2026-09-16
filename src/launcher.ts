@@ -3,14 +3,14 @@
  * 部署根由 src/paths.ts 解析，代码包来自 bots/ 或已安装的 bot 扩展。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
 import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
 import type { BotDefinition } from './bot.ts';
 import { createBot } from './bot.ts';
-import { loadDeployment } from './deploy.ts';
+import { ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { secretReader } from './core/secrets.ts';
 import { announceDataDir, consumeBootFlags } from './boot.ts';
 import { importBotDefinition, loadExtensions, locateBotPackage, type ActiveBotPackage } from './extensions.ts';
@@ -18,18 +18,6 @@ import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
 import { deploymentDir, deploymentRoot, packageDir, providerDir, providersRoot, readDeploymentManifest, repoRoot } from './paths.ts';
-
-/** 部署根下每个含 deployment.json 的目录就是一份可启动的部署 */
-export function listBots(): string[] {
-  const root = deploymentRoot();
-  if (!existsSync(root)) return [];
-  return readdirSync(root)
-    .filter((name) => {
-      const dir = resolve(root, name);
-      return statSync(dir).isDirectory() && existsSync(resolve(dir, 'deployment.json'));
-    })
-    .sort();
-}
 
 /**
  * botPackage 仅在部署引用扩展 bot 包时返回。
@@ -82,6 +70,11 @@ function pickBotName(): string {
 }
 
 async function main(): Promise<void> {
+  if (process.argv.includes('--create-default')) {
+    process.stdout.write(ensureDeployment() + '\n');
+    return;
+  }
+
   if (process.argv.includes('--list')) {
     process.stdout.write(listBots().join('\n') + '\n');
     return;

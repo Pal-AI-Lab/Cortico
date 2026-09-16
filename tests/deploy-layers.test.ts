@@ -1,11 +1,11 @@
 /** 配置逐层深合并:代码默认、bot 包的 World 配置、共享端点表、部署配置。
  * 端点表不接受部署 config.json 的 providers 覆盖;提示词另按整份文件覆盖。
  */
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
-import { loadDeployment } from '../src/deploy.ts';
+import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_DEPLOYMENT, ensureDeployment, listBots, loadDeployment } from '../src/deploy.ts';
 import type { CoreConfig } from '../src/core/types.ts';
 
 interface TestConfig extends CoreConfig {
@@ -119,5 +119,38 @@ describe('共享端点表', () => {
     expect(cfg.providers.cloud.serviceTier).toBeUndefined();
     expect(cfg.providers.ghost).toBeUndefined();
     expect(cfg.providers.local.kind).toBe('openai-responses-compat');
+  });
+});
+
+describe('第一次上手:部署根空着时自建一份', () => {
+  const homes: string[] = [];
+  const home = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), 'deploy-home-'));
+    homes.push(dir);
+    return dir;
+  };
+
+  afterEach(() => {
+    for (const dir of homes.splice(0)) rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('按 DEFAULT_DEPLOYMENT 建,只写 deployment.json', () => {
+    const root = home();
+    expect(ensureDeployment(root)).toBe(DEFAULT_DEPLOYMENT.name);
+    const dir = join(root, DEFAULT_DEPLOYMENT.name);
+    expect(readdirSync(dir)).toEqual(['deployment.json']);
+    expect(JSON.parse(readFileSync(join(dir, 'deployment.json'), 'utf8'))).toEqual({
+      bot: DEFAULT_DEPLOYMENT.bot,
+    });
+    expect(listBots(root)).toEqual([DEFAULT_DEPLOYMENT.name]);
+  });
+
+  it('已经有部署就返回现有那份,不再建', () => {
+    const root = home();
+    mkdirSync(join(root, 'aaa'), { recursive: true });
+    writeFileSync(join(root, 'aaa', 'deployment.json'), '{"bot":"cormini"}', 'utf8');
+
+    expect(ensureDeployment(root)).toBe('aaa');
+    expect(readdirSync(root)).toEqual(['aaa']);
   });
 });
