@@ -27,6 +27,9 @@ echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
 pnpm start mybot
 ```
 
+部署根下一份部署都没有时，`pnpm start` 自己建一份 `mybot`(引用 `cormini`)再启动它，只写
+`deployment.json`；端点与其余设置在控制台里配。已有任何一份部署时不会发生这件事。
+
 `deployment.json` 只有一个字段 `bot`:引用哪个代码包。仓内 `bots/<名>/` 有它就是那个,否则是
 `extensions/` 下装的同名 bot 包(见 [extensions.md](extensions.md))。其余文件按需出现:
 
@@ -67,7 +70,7 @@ pnpm start <部署名>
 保存后下一次模型调用生效，不必重启。
 
 `pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
-在有多份部署时提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
+在一份部署都没有时建一份、有多份时提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
 `CORTICO_START_PAUSED` 未设置时默认为 `1`。首次启动默认打开控制台，
 `CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。控制台的「重启进程」由此启动器执行。
 

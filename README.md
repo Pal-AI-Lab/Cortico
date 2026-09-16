@@ -55,35 +55,27 @@ Requires Node 22+.
 
 ```bash
 corepack pnpm install
+pnpm start
 ```
 
-A deployment is a directory naming one bot. The reference bot `cormini` starts with terminal
-conversation alone, and its default endpoint reaches DeepSeek through `openai-responses-compat`:
+With no deployment around, the launcher creates one named `mybot` and starts it: it uses the
+reference bot `cormini`, which enables terminal conversation alone. The console is at
+`http://127.0.0.1:7788/`, and the terminal page opens with three steps: configure a model
+endpoint, look at the Worlds, edit the system prompt. Once an endpoint is usable, press
+**Say hello** and the bot speaks first. Endpoints, keys and every other knob are edited in the
+console and take effect on save.
+
+A second deployment is a second directory (see [deployment.md](docs/deployment.md)):
 
 ```bash
-mkdir -p deployments/mybot deployments/providers/deepseek
-echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
-echo 'DEEPSEEK_API_KEY=your-key' > deployments/providers/deepseek/.env
+mkdir deployments/second
+echo '{ "bot": "cormini" }' > deployments/second/deployment.json
+pnpm start second
 ```
-
-On Windows PowerShell:
-
-```powershell
-mkdir deployments\mybot, deployments\providers\deepseek -Force
-Set-Content deployments\mybot\deployment.json '{ "bot": "cormini" }' -Encoding utf8
-Set-Content deployments\providers\deepseek\.env 'DEEPSEEK_API_KEY=your-key' -Encoding utf8
-```
-
-```bash
-pnpm start mybot
-```
-
-The console is at `http://127.0.0.1:7788/`. Endpoints, keys, and every other knob are edited
-there and take effect on save.
 
 `pnpm start`, `./start.sh`, and `start.bat` on Windows all install missing dependencies, build
-the console bundle when it is absent, offer a deployment menu, and restart the process when the
-console asks for it.
+the console bundle when it is absent, create the first deployment when there is none, offer a
+deployment menu when there are several, and restart the process when the console asks for it.
 
 ## The Four Layers
 

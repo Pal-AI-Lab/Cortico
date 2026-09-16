@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/web/server.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # 控制台
 
@@ -12,7 +12,7 @@
 
 | 路由 | 页 | 内容 |
 |---|---|---|
-| `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork |
+| `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork;全新部署上多一组开场引导 |
 | `core` | 运行诊断 | run、session、事件、运行日志,以及 Core 自己的数据与配置 |
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `provider` | 语言模型 | 端点表(见 [providers.md](providers.md)) |
@@ -20,6 +20,11 @@
 | `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
+
+终端页在这份部署什么都还没发生时(session 没有记录、事件库没有分配过游标)多出一组开场引导:
+模型端点、World、系统提示词各一条,报当前状态并给出各自的入口。末尾那颗按钮先让运行继续,再经终端
+通道投一条 `terminal.invite` 事件,正文只陈述谁按了按钮、按钮上写着什么、这个终端此前有没有人说过话。
+第一条记录落进 session 后这一组不再出现。没有可用端点时按钮按不动。
 
 左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
 左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`)。
