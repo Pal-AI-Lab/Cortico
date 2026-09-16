@@ -567,3 +567,54 @@ describe('World 的 stream 经装配层适配后对框架可达', () => {
     expect(contribution.stream).toBeUndefined();
   });
 });
+
+describe('开场那颗按钮', () => {
+  /** 连上、报名字，然后按下按钮。 */
+  const press = async (host: FakeHost, label?: string): Promise<FakeStream> => {
+    const mod = new TerminalWorld({ timezone: 'Asia/Shanghai' });
+    await mod.start(host);
+    const sock = new FakeStream();
+    mod.stream('chat', sock);
+    sock.feed(JSON.stringify({ type: 'hello', name: '控制台' }));
+    sock.feed(JSON.stringify(label === undefined ? { type: 'greet' } : { type: 'greet', label }));
+    await settle();
+    await mod.stop();
+    return sock;
+  };
+
+  it('投一条内部事件:引号里是按钮上当时的字,并报这个终端此前没人说过话', async () => {
+    const host = new FakeHost();
+    await press(host, '打个招呼');
+
+    const invite = host.pushed.find((p) => p.e.type === 'terminal.invite')!;
+    expect(invite.e.origin).toBe('internal');
+    expect(invite.opts?.trigger).toBe('flush');
+    expect(invite.e.senderKey).toBe('控制台');
+    expect(invite.e.text).toContain('"打个招呼"');
+    expect(invite.e.text).toContain('Nothing has been said here before');
+  });
+
+  it('这个终端上说过话以后,不再报那一句', async () => {
+    const host = new FakeHost();
+    const mod = new TerminalWorld({ timezone: 'Asia/Shanghai' });
+    await mod.start(host);
+    const sock = new FakeStream();
+    mod.stream('chat', sock);
+    sock.feed(JSON.stringify({ type: 'hello', name: '控制台' }));
+    sock.feed(JSON.stringify({ type: 'msg', text: '在吗' }));
+    await settle();
+    sock.feed(JSON.stringify({ type: 'greet', label: 'Say hello' }));
+    await settle();
+
+    const invite = host.pushed.find((p) => p.e.type === 'terminal.invite')!;
+    expect(invite.e.text).toContain('"Say hello"');
+    expect(invite.e.text).not.toContain('Nothing has been said');
+    await mod.stop();
+  });
+
+  it('没带标签的帧不投:正文里没有可引用的事实', async () => {
+    const host = new FakeHost();
+    await press(host);
+    expect(host.pushed.some((p) => p.e.type === 'terminal.invite')).toBe(false);
+  });
+});

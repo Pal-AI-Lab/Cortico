@@ -17,6 +17,7 @@
  *   terminal.message  操作员消息, origin:'internal' + trigger:'flush'(跳过合批安静窗口)
  *   (进出终端不投递事件:presence 噪音多次被判定不值得打扰bot)
  *   terminal.self     自己发出的消息回录, deliver:false
+ *   terminal.invite   操作员按下终端页那颗按钮, origin:'internal' + trigger:'flush'
  *
  * 控制台通道的两条纪律:
  *   - 投递按 `internal`:这条通道装的不是"外面发生了什么",是操作员直接对她说话。
@@ -35,6 +36,7 @@
  *   客户端→ {type:'hello', name}                报名字(必须先于msg)
  *          {type:'msg', text, images?}         发消息;images 为 [{mime, base64, name?}],
  *                                              text 与 images 至少一样非空
+ *          {type:'greet', label}               按下终端页那颗按钮;label 是按钮上当时显示的字
  *   服务端→ {type:'msg', from, text, ts, images?}  广播(用户消息回显+bot消息);
  *                                              images 为 [{ref, mime, name?}](ref 是附件句柄)
  *          {type:'sys', text}                  系统提示
@@ -63,10 +65,17 @@ const PIN_SHAPE = /^\d{6}$/;
 /**
  * 模型可见的文本,固定英文:口令标记、回录正文、附件的文本形态、`terminal_send` 的回执。
  * 口令标记写在正文最前面,与普通行(`[HH:MM] 名字: …`)不同形,不易混淆。
+ *
+ * `invite` 引号里的按钮标签是例外:它逐字取自按下时界面上显示的字,随对方的界面语言走。
+ * 被引用的标签是这件事的事实内容,和口令标记里的数字同类。
  */
 const MODEL_TEXT = {
   pinMark: (pin: string) => `[console|PIN:${pin}]`,
   selfLine: (time: string, text: string) => `[${time}] you: ${text}`,
+  inviteLine: (time: string, name: string, label: string, spokenBefore: boolean) =>
+    `[${time}] ${name} pressed the "${label}" button on the terminal.`
+    + (spokenBefore ? '' : ' Nothing has been said here before.')
+    + ' You may say hello and introduce yourself.',
   imageFallback: (from: string, i: number, total: number) => `image ${i}/${total} from ${from}`,
   deliveredTo: (delivered: number, names: string[]) =>
     `Sent to the chat channel on the console's "Terminal" page; ${delivered} connection${delivered === 1 ? '' : 's'} online right now`
@@ -243,6 +252,8 @@ interface TerminalWorldOptions {
 
 const NAME_MAX = 32;
 const TEXT_MAX = 4000;
+/** 按钮标签进事件正文前的长度上限。 */
+const LABEL_MAX = 40;
 
 /** 一条消息最多带几张图,单张解码后的字节上限。与面板侧的上限一致。 */
 const IMAGES_MAX = 8;
@@ -589,7 +600,43 @@ export class TerminalWorld implements World {
       return;
     }
 
+    if (msg.type === 'greet') {
+      if (client.name === null) {
+        this.sendJson(client.peer, { type: 'sys', text: t.helloFirst });
+        return;
+      }
+      if (!this.host) {
+        this.sendJson(client.peer, { type: 'sys', text: t.botNotConnected });
+        return;
+      }
+      // 标签逐字进事件正文,所以压成一行并截断;没有标签就没有可引用的事实,这一帧作废。
+      const label = typeof msg.label === 'string' ? msg.label.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX) : '';
+      if (!label) return;
+      const host = this.host;
+      host.pushEvent(
+        {
+          type: 'terminal.invite',
+          ts: nowIso(this.timezone),
+          source: this.id,
+          origin: 'internal',
+          text: MODEL_TEXT.inviteLine(shortTime(this.timezone), client.name, label, this.spokenBefore()),
+          senderKey: client.name,
+          meta: { from: client.name, label },
+        },
+        { trigger: 'flush' },
+      ).catch((e) => host.log.warn('按钮事件投递失败', { err: String(e) }));
+      return;
+    }
+
     this.sendJson(client.peer, { type: 'sys', text: t.unknownType(String(msg.type)) });
+  }
+
+  /** 这个终端上有没有人说过话。末尾几十条够判断:这颗按钮只在事件库还空着时露面。 */
+  private spokenBefore(): boolean {
+    if (!this.host) return false;
+    return this.host.store
+      .range({ source: this.id, limit: 50 })
+      .some((e) => e.type === 'terminal.message' || e.type === 'terminal.self');
   }
 
   /** hello 后回放最近的对话历史;发言人与正文读本 World 落库时写下的 meta.from/body。 */
