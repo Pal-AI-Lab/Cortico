@@ -108,6 +108,20 @@ const zh = {
   footHardPost: '（模型物理上限）由 core 强制交接。',
   footSoftPre: 'Persona 软阈值：',
   footSoftPost: (max: string) => `；阶段预算 ${max}。`,
+
+  // onboarding.ts
+  obWho: 'Cortico',
+  obProvider: '模型端点决定谁来回话。',
+  obProviderAction: '去配置',
+  obProviderNone: '没有可用端点',
+  obWorlds: 'World 是通向一个外部环境的边界：事件从那里进来，工具往那里出去。',
+  obWorldsAction: '查看 World',
+  obWorldsState: (labels: readonly string[]) => `已启用：${labels.join('、')}`,
+  obPrompts: '系统提示词写它是谁、怎么做事。',
+  obPromptsAction: '去编辑',
+  obPromptsDefault: '用的是包内默认',
+  obPromptsOwn: '本部署已覆盖',
+  obStart: '打个招呼',
 };
 
 const en: typeof zh = {
@@ -218,6 +232,20 @@ const en: typeof zh = {
   footHardPost: ' (the model\'s hard limit) the core forces a handoff.',
   footSoftPre: 'Persona soft threshold: ',
   footSoftPost: (max: string) => `; stage budget ${max}.`,
+
+  // onboarding.ts
+  obWho: 'Cortico',
+  obProvider: 'A model endpoint decides who answers.',
+  obProviderAction: 'Configure',
+  obProviderNone: 'No usable endpoint',
+  obWorlds: 'A World is the boundary to one external environment: events come in, tools go out.',
+  obWorldsAction: 'Open Worlds',
+  obWorldsState: (labels: readonly string[]) => `Enabled: ${labels.join(', ')}`,
+  obPrompts: 'The system prompt says who it is and how it works.',
+  obPromptsAction: 'Edit',
+  obPromptsDefault: 'Package default',
+  obPromptsOwn: 'Overridden by this deployment',
+  obStart: 'Say hello',
 };
 
 export const S = pick({ zh, en });

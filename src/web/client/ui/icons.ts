@@ -155,6 +155,19 @@ export function wordmark(doc: Document, cls = 'wordmark'): SVGSVGElement {
   return svg;
 }
 
+/** 字标前那个符号单独用。视框按它自己的坐标取，描边算在内。 */
+export function brandMark(doc: Document, cls = 'brandmark'): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '29 29 198 198');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', cls);
+  shapesInto(doc, svg, WORDMARK_MARK);
+  return svg;
+}
+
 export function icon(doc: Document, name: ConsoleIconName, cls = 'icon'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');

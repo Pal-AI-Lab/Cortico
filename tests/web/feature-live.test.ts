@@ -200,6 +200,10 @@ class FakeDoc {
   createElement(tag: string): FakeEl {
     return new FakeEl(tag, this);
   }
+  /** 标识用的内联 SVG 走这条；命名空间在这套桩里不影响任何断言。 */
+  createElementNS(_ns: string, tag: string): FakeEl {
+    return new FakeEl(tag, this);
+  }
   addEventListener(type: string, fn: Listener, opts?: ListenOptions): void {
     this.listeners.add(type, fn, opts);
   }
@@ -225,7 +229,7 @@ class FakeSocket {
   onerror: Any = null;
   onmessage: Any = null;
   constructor(readonly url: string) {}
-  send(): void {}
+  send(_raw?: string): void {}
   close(): void {
     this.closed = true;
     this.readyState = 3;
@@ -1041,5 +1045,71 @@ describe('live feature 卸载', () => {
     const before = (root.find('tlinner') as FakeEl).textContent;
     sockets[0].emit({ t: 'hello', session: [{ role: 'system', content: '前缀' }] });
     expect((root.find('tlinner') as FakeEl).textContent).toBe(before);
+  });
+});
+
+describe('开场引导', () => {
+  const fresh = {
+    t: 'hello',
+    session: [],
+    head: [],
+    toolSchemas: [],
+    status: { displayName: 'Cortico Bot', eventCount: 0 },
+    sessions: [],
+  };
+
+  it('这份部署什么都还没发生时,时间线上方出现三条引导;没有端点就按不动那颗按钮', () => {
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    sockets[0].emit(fresh);
+
+    const ob = root.find('onboarding')!;
+    expect(ob).not.toBe(null);
+    expect(ob.findAll('ob-bubble').length).toBe(3);
+    expect(ob.find('ob-start')!.children[0].disabled).toBe(true);
+  });
+
+  it('事件库分配过游标就不出现:交接后 session 同样是空的', () => {
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    sockets[0].emit({ ...fresh, status: { displayName: 'Cortico Bot', eventCount: 12 } });
+
+    expect(root.find('onboarding')).toBe(null);
+  });
+
+  it('第一条记录落进 session 后收起', () => {
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    sockets[0].emit(fresh);
+    expect(root.find('onboarding')).not.toBe(null);
+
+    sockets[0].emit({ t: 'session.append', index: 0, message: { role: 'user', content: '在吗' } });
+    expect(root.find('onboarding')).toBe(null);
+  });
+
+  it('按下按钮:先让运行继续,再把按钮上的字送上终端通道', async () => {
+    stubFetch(() => ({}));
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    sockets[0].emit(fresh);
+    const sent: string[] = [];
+    sockets[1].send = (raw: string): void => { sent.push(raw); };
+    sockets[1].up();
+
+    root.find('ob-start')!.children[0].dispatchEvent({ type: 'click' });
+    await flush();
+
+    expect(fetched).toContain('/api/run/resume');
+    const greet = JSON.parse(sent.at(-1)!) as { type: string; label: string };
+    expect(greet.type).toBe('greet');
+    expect(greet.label.length).toBeGreaterThan(0);
   });
 });

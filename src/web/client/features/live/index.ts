@@ -10,7 +10,7 @@ import type {
 } from '../../../shared/client-panel.ts';
 import { PROVIDERS_LAMP_ID, panelStreamRoute } from '../../../shared/console-protocol.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
-import { get } from '../../core/api.ts';
+import { get, post } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
 import { browserSocketEnv, openFrameworkSocket, type SocketEnv } from '../../core/websocket.ts';
 import { buildCtxPanel, computeCtx, type ContextBreakdown } from './context.ts';
@@ -23,6 +23,7 @@ import {
   type ToolSchemaDoc,
 } from './protocol.ts';
 import { subscribeLamps } from '../../ui/lamp.ts';
+import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
 import { applyDisplayName, createStatusBand } from './status.ts';
 import { S } from './strings.ts';
@@ -160,6 +161,8 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     images: { max: 8 },
     onSubmit: (text, images) => {
       if (!chatStream?.open) ui.toast(S.composerQueued);
+      // 首启时运行是停着的（见 launcher）；发话与按下那颗按钮同样是让它开始跑。
+      if (onboarding) void resumeRun();
       const attached = images.map((i) => ({ mime: i.mime, base64: i.base64, name: i.name }));
       chatStream?.send(JSON.stringify({ type: 'msg', text, ...(attached.length ? { images: attached } : {}) }));
       return true;
@@ -169,10 +172,51 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   timeline.rebuild([], { empty: S.emptyConnecting });
 
   // 没有可用端点时说清楚要去哪儿,而不是让操作员发出一条得不到回复的消息。
+  let providerReady = false;
+  let providerHint = '';
   ctx.lifecycle.own(subscribeLamps(ctx.root.ownerDocument, (lamps) => {
     const lamp = lamps[PROVIDERS_LAMP_ID]?.[0];
     composer.setPlaceholder(lamp && lamp.state !== 'online' ? S.composerNoProvider : null);
+    providerReady = lamp?.state === 'online';
+    providerHint = lamp?.hint ?? '';
+    onboarding?.setProvider(providerReady, providerHint);
   }));
+
+  const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
+
+  /**
+   * 开场引导只在这份部署什么都还没发生时出现：session 没有记录，事件库也没有分配过游标。
+   * 单看 session 为空不够——上下文交接后它同样是空的。调试通道没挂载时读不到 session，
+   * 判不出是不是全新，这一块就不出现。
+   */
+  let onboarding: OnboardingView | null = null;
+  const syncOnboarding = (): void => {
+    const fresh = ctx.capabilities.debug === true
+      && state.messages.length === 0
+      && state.status !== null
+      && (state.status.eventCount ?? 0) === 0;
+    if (fresh && !onboarding) {
+      onboarding = createOnboarding({
+        ui,
+        doc,
+        signal: ctx.signal,
+        go: (segments) => ctx.router.navigate(segments),
+        start: (label) => {
+          void resumeRun().then(
+            () => chatStream?.send(JSON.stringify({ type: 'greet', label })),
+            (err) => ctx.onError(err),
+          );
+        },
+      });
+      onboarding.setProvider(providerReady, providerHint);
+      view.insertBefore(onboarding.el, timeline.el);
+      return;
+    }
+    if (!fresh && onboarding) {
+      onboarding.el.remove();
+      onboarding = null;
+    }
+  };
 
   const hello = JSON.stringify({ type: 'hello', name: '控制台' });
   let chatStream: ConsoleStreamHandle | null = null;
@@ -278,6 +322,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         break; // 认不出的帧忽略:服务端以后加帧型不该让这一页炸
     }
     updateCtx();
+    syncOnboarding();
   };
 
   let socket: Disposable | null = null;
@@ -301,6 +346,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       (st) => {
         setStatus(st);
         setNet(true);
+        syncOnboarding();
       },
       (err) => {
         if ((err as { name?: string } | null)?.name === 'AbortError') return;
