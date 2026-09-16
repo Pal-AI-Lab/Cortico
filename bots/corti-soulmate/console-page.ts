@@ -15,18 +15,6 @@ import {
 // ---------------------------------------------------------------------------
 
 /**
- * 部署面这一页的名字(冒号后那截),与 bot id 相同——于是它和Persona自报的
- * 那半**共用** `persona:corti-soulmate` 这一个 id。
- *
- * 这不是冲突,是有意的:`src/bot.ts` 的 `mergePersonaContributions` 会把同 id 的
- * 两半合成一页(面板拼接,`invoke` 按 panel 归属分派)。合并之后,
- * "认知绑定 vs 部署绑定"那条线**只决定代码写在哪个文件**,不再是用户看得见的
- * 边界——同一页、同一个 bundle。asset key 也因此只有一个,
- * 与构建脚本按目录出的那份产物对得上。
- */
-export const CORTI_OPS_PAGE_NAME = 'corti';
-
-/**
  * 统一重置与强制入梦的 bot 侧接口；人格领域类型由提供方持有。
  */
 export interface CortiResetDeps {
@@ -128,7 +116,7 @@ function readiness(parts: StoragePart[]): { ready: boolean; reason: string | nul
 // ---------------------------------------------------------------------------
 
 export interface CortiOpsDeps {
-  /** 这一页的名字(冒号后那截)。asset key 与它同源,所以由装配层一处说了算。 */
+  /** 这一页的名字(冒号后那截),必须等于 bot id:装配层才会把它与 Persona 自报的那半合成一页,asset key 才对得上按目录出的产物。 */
   name: string;
   label: string;
   checkpoints: WebAppCheckpointDeps;

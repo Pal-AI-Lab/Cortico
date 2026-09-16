@@ -92,9 +92,9 @@ describe('/api/config', () => {
   it('GET 按组返回 JSON Schema 声明 + 当前值,标出各组所有者', async () => {
     const g = await getJ('/api/config');
     // id 标识具体实例；owner 标识与实例无关的架构角色。
-    expect(g.groups.map((x: any) => x.group.id)).toEqual(['core', 'corti', 'world:websearch']);
+    expect(g.groups.map((x: any) => x.group.id)).toEqual(['core', PERSONA_CONFIG_GROUP.id, 'world:websearch']);
     expect(g.groups.map((x: any) => x.group.owner)).toEqual(['core', 'persona', 'world:websearch']);
-    const pc = groupOf(g, 'corti');
+    const pc = groupOf(g, PERSONA_CONFIG_GROUP.id);
     expect(pc.values['dream.maxRounds']).toBe(6);
     expect(pc.group.schema.properties['dream.maxRounds'].type).toBe('integer');
     expect(pc.values['context.maxTokens']).toBeGreaterThan(0);
@@ -109,13 +109,13 @@ describe('/api/config', () => {
 
   it('POST 按组校验并热改(部分更新);越界值 400', async () => {
     const ok = await postJ('/api/config', {
-      group: 'corti',
+      group: PERSONA_CONFIG_GROUP.id,
       values: { 'dream.maxRounds': 3, 'context.keepPastThinking': false },
       persist: false,
     });
     expect(ok.status).toBe(200);
     expect(cfg.dream.maxRounds).toBe(3);
-    const after = groupOf(await getJ('/api/config'), 'corti');
+    const after = groupOf(await getJ('/api/config'), PERSONA_CONFIG_GROUP.id);
     expect(after.values['dream.maxRounds']).toBe(3);
 
     const hot = await postJ('/api/config', {
@@ -126,9 +126,9 @@ describe('/api/config', () => {
     expect(cfg.batching.quietGapMs).toBe(5000);
     expect(cfg.context.keepPastThinking).toBe(false);
 
-    expect((await postJ('/api/config', { group: 'corti', values: { 'dream.maxRounds': 4 } })).status).toBe(200);
-    expect((await postJ('/api/config', { group: 'corti', values: { 'dream.maxRounds': 0 } })).status).toBe(400);
-    expect((await postJ('/api/config', { group: 'corti', values: { 'tick.dayIntervalMinutes': [90, 30] } })).status).toBe(400);
+    expect((await postJ('/api/config', { group: PERSONA_CONFIG_GROUP.id, values: { 'dream.maxRounds': 4 } })).status).toBe(200);
+    expect((await postJ('/api/config', { group: PERSONA_CONFIG_GROUP.id, values: { 'dream.maxRounds': 0 } })).status).toBe(400);
+    expect((await postJ('/api/config', { group: PERSONA_CONFIG_GROUP.id, values: { 'tick.dayIntervalMinutes': [90, 30] } })).status).toBe(400);
     expect((await postJ('/api/config', { group: 'world:websearch', values: { 'worlds.websearch.safesearch': 'nope' } })).status).toBe(400);
     expect((await postJ('/api/config', { group: 'world:nonexistent', values: {} })).status).toBe(400);
     // 配置组只能更新其 schema 声明的键:provider 表与活跃指针都不在 core 组里。

@@ -1,16 +1,17 @@
 /**
- * Persona和部署贡献共用 persona:corti，须在 provider 校验前合并，避免重复 id 导致两份都被丢弃。
+ * Persona和部署贡献共用 同一个 persona:<bot id>，须在 provider 校验前合并，避免重复 id 导致两份都被丢弃。
  * 浏览器扩展键与合并后的面板声明一致；checkpoints、reset、dream 按各自面板分派。
  * 重置必须取得完整存储清单，避免人格状态与 session 只重置一部分。
  */
 import { describe, it, expect } from 'vitest';
 
 import { mergePersonaContributions, personaPageContribution } from '../../src/bot.ts';
-import { validateContributions } from '../../src/web/shared/console-protocol.ts';
+import { pageIdFor, validateContributions } from '../../src/web/shared/console-protocol.ts';
 import type { StoragePart } from '../../src/core/types.ts';
 import {
-  CORTI_OPS_PANELS, CORTI_OPS_PAGE_NAME, cortiConsolePages,
+  CORTI_OPS_PANELS, cortiConsolePages,
 } from '../../bots/corti-soulmate/console-page.ts';
+import definition from '../../bots/corti-soulmate/index.ts';
 import { PERSONA_PANELS, personaConsoleDecl } from '../../bots/corti-soulmate/persona/consoleSurface.ts';
 import type {
   OpsCheckpointsState, OpsDreamState, OpsResetState,
@@ -54,7 +55,7 @@ function ops(storage: StoragePart[] = [part('session'), part('events')]): OpsFix
   const fixture: OpsFixture = { cleared, triggered: 0, contribution: null as never };
   let tags = ['checkpoint0'];
   fixture.contribution = cortiConsolePages({
-    name: CORTI_OPS_PAGE_NAME,
+    name: definition.id,
     label: 'Yukima · 部署',
     checkpoints: {
       list: () => tags.map((t) => ({ name: t, message: '', hash: 'abc1234', date: '' })),
@@ -115,8 +116,8 @@ describe('两条接缝各出一个 provider', () => {
   });
 
   it('Persona那条按 bot id 铸名,面板是认知绑定的三块', () => {
-    const c = personaPageContribution('corti', 'Yukima', fakeCore({ panels: PERSONA_PANELS }));
-    expect(c?.id).toBe('persona:corti');
+    const c = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }));
+    expect(c?.id).toBe(pageIdFor('persona', definition.id));
     expect(c?.kind).toBe('persona');
     expect(c?.availability).toBe('active');
     expect(c?.panels?.map((p) => p.id)).toEqual(['workspace', 'memory', 'history']);
@@ -134,16 +135,16 @@ describe('两条接缝各出一个 provider', () => {
   it('两条接缝共用同一个 id,由装配层合成一份', () => {
     // 合并前它们是同 id 的两份,直接一起上线会被判重复——两个都丢掉。
     // 所以 src/bot.ts 的 mergePersonaContributions 必须在校验之前把它们并了。
-    const core = personaPageContribution('corti', 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
+    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
     const deploy = ops().contribution;
     expect(deploy.id).toBe(core.id);
     expect(validateContributions([core, deploy]).map((p) => p.message).join()).toContain('重复');
   });
 
   it('合成之后:七个面板同在一个 provider 里,校验干净', () => {
-    const core = personaPageContribution('corti', 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
-    const merged = mergePersonaContributions('persona:corti', 'Yukima', core, [ops().contribution]);
-    expect(merged?.id).toBe('persona:corti');
+    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
+    const merged = mergePersonaContributions(pageIdFor('persona', definition.id), 'Yukima', core, [ops().contribution]);
+    expect(merged?.id).toBe(pageIdFor('persona', definition.id));
     expect(merged?.panels?.map((p) => p.id)).toEqual(
       ['workspace', 'memory', 'history', 'checkpoints', 'reset', 'dream'],
     );
@@ -151,7 +152,7 @@ describe('两条接缝各出一个 provider', () => {
   });
 
   it('Persona没实现 console() 就没有那个 provider(不是错误)', () => {
-    expect(personaPageContribution('corti', 'Yukima', {} as Persona)).toBeNull();
+    expect(personaPageContribution(definition.id, 'Yukima', {} as Persona)).toBeNull();
   });
 });
 

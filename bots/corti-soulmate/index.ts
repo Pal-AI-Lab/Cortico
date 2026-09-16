@@ -9,7 +9,7 @@ import type { WebAppCheckpointDeps } from 'cortico/web/server.ts';
 
 import { CortiSoulmate } from './persona/index.ts';
 import {
-  CORTI_OPS_PAGE_NAME, cortiConsolePages,
+  cortiConsolePages,
   type CortiResetDeps,
 } from './console-page.ts';
 import { AUTHOR_OPERATOR } from '../cormini/persona/workspaceGit.ts';
@@ -192,8 +192,8 @@ function consoleContribution(loaded: LoadedConfig<BotConfig>, p: ConsoleParts): 
      * (`CortiSoulmate.console()`)。
      */
     consolePages: (ctx) => cortiConsolePages({
-      name: CORTI_OPS_PAGE_NAME,
-      label: `${cfg.displayName || 'corti-soulmate'} · 部署`,
+      name: definition.id,
+      label: `${cfg.displayName || definition.id} · 部署`,
       checkpoints: checkpointDeps,
       status: () => persona.git.status(),
       reset: resetDeps,

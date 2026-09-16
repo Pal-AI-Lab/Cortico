@@ -5,6 +5,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { assembleBot, type AssembledBot } from '../../bots/corti-soulmate/assemble.ts';
+import { PERSONA_CONFIG_GROUP } from '../../bots/corti-soulmate/persona/config.ts';
 import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, toolReply, sleep } from '../core/helpers.ts';
 import { validatePairing } from "../core/fixture-truncate.ts";
 import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
@@ -191,13 +192,13 @@ describe('全系统集成(终端对话链路)', () => {
     const cpost = (body: Record<string, unknown>) => fetch(`http://127.0.0.1:${port}/api/config`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
     });
-    const pcOf = async () => (await cget()).groups.find((x) => x.group.id === 'corti')!;
+    const pcOf = async () => (await cget()).groups.find((x) => x.group.id === PERSONA_CONFIG_GROUP.id)!;
 
     const g = await cget();
     // 未激活 World 的配置仍可编辑。
 
     expect(g.groups.map((x) => x.group.id)).toEqual([
-      'core', 'corti',
+      'core', PERSONA_CONFIG_GROUP.id,
       'world:terminal', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft:rhythm', 'world:minecraft:client', 'world:minecraft:player',
       'world:websearch',
@@ -211,12 +212,12 @@ describe('全系统集成(终端对话链路)', () => {
       'world:websearch',
       'provider:openai-responses-compat', 'provider:openai-responses-compat',
     ]);
-    const pc0 = g.groups.find((x) => x.group.id === 'corti')!;
+    const pc0 = g.groups.find((x) => x.group.id === PERSONA_CONFIG_GROUP.id)!;
     expect(pc0.group.schema.properties['context.maxTokens']).toBeTruthy();
     expect(pc0.values['context.maxTokens']).toBe(bot.core.config.context.maxTokens);
 
     let r = await cpost({
-      group: 'corti',
+      group: PERSONA_CONFIG_GROUP.id,
       values: {
         'context.maxTokens': 100000,
         'tick.dayIntervalMinutes': [45, 90],
@@ -235,13 +236,13 @@ describe('全系统集成(终端对话链路)', () => {
     expect(onDisk.context.maxTokens).toBe(100000);
     expect(entryOnDisk('deepseek').spec).toBeTruthy();
 
-    r = await cpost({ group: 'corti', values: { 'context.maxTokens': 111000 } });
+    r = await cpost({ group: PERSONA_CONFIG_GROUP.id, values: { 'context.maxTokens': 111000 } });
     expect(r.status).toBe(200);
     onDisk = JSON.parse(readFileSync(join(tmp.dir, 'config.json'), 'utf8'));
     expect(onDisk.context.maxTokens).toBe(111000);
     expect(entryOnDisk('deepseek').spec.model).toBe('deepseek-v4-pro');
 
-    r = await cpost({ group: 'corti', values: { 'context.maxTokens': 100 /* < min 8000 */ } });
+    r = await cpost({ group: PERSONA_CONFIG_GROUP.id, values: { 'context.maxTokens': 100 /* < min 8000 */ } });
     expect(r.status).toBe(400);
     expect(bot.core.config.context.maxTokens).toBe(111000);
 

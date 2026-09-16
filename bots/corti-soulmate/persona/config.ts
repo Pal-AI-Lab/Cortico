@@ -36,7 +36,7 @@ export interface PersonaConfig {
  */
 export const PERSONA_CONFIG_GROUP: ConfigGroup = {
   // id 是配置组的实例身份;同一进程中的多个 bot 必须可区分。
-  id: 'corti',
+  id: 'corti-soulmate',
   // owner 是**角色**,词表由框架定(core / persona / module:*)。它回答的是
   // "这组参数归四分法里的哪一块",不包含具体实现名称。
   owner: 'persona',
