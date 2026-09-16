@@ -194,6 +194,12 @@ export interface ConsolePanelDecl {
    * npm 包）拿不到框架的浏览器代码，通用面板只能走这条路。
    */
   builtin?: string;
+  /**
+   * 挂进同页某块面板开出的插槽，值是那块面板的插槽名。带 slot 的面板没有自己的页签，
+   * 由宿主面板调 `ctx.mountSlot` 挂进去，同一插槽的多块按声明顺序排列。
+   * 数据面照旧按自己的 panel id 分派。
+   */
+  slot?: string;
 }
 
 /**
@@ -330,6 +336,8 @@ export interface ConsolePanelManifest {
   description?: string;
   /** 由内核那张内置表提供实现；缺省则去取这一页自己的扩展。 */
   builtin?: string;
+  /** 挂进同页某块面板的插槽，没有自己的页签。 */
+  slot?: string;
 }
 
 /** 可安全上线的前缀源索引；本地路径与正文仍只走 `/api/prompts`。 */
@@ -489,6 +497,12 @@ export function validateContributions(
       if (!p.title) {
         problems.push({ pageId: c.id, message: `panel「${p.id}」缺 title` });
       }
+      if (p.slot !== undefined && !isPanelId(p.slot)) {
+        problems.push({
+          pageId: c.id,
+          message: `panel「${p.id}」的 slot 不合法「${String(p.slot)}」：只允许小写字母数字与连字符`,
+        });
+      }
     }
   }
   return problems;
@@ -515,6 +529,7 @@ export function toPageManifest(
         const panel: ConsolePanelManifest = { id: p.id, title: p.title };
         if (p.description) panel.description = p.description;
         if (p.builtin !== undefined) panel.builtin = p.builtin;
+        if (p.slot !== undefined && isPanelId(p.slot)) panel.slot = p.slot;
         return panel;
       });
     if (panels.length) out.panels = panels;

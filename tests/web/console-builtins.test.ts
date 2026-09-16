@@ -16,9 +16,20 @@ const { JSDOM } = (await import(JSDOM_MODULE)) as Any;
 const dom = new JSDOM('<!doctype html><body></body>');
 vi.stubGlobal('AbortController', dom.window.AbortController);
 
+/** 插槽里的面板被结束时记一笔,供断言宿主确实收了场。 */
+const slotDisposals: string[] = [];
+
 const FAKE_BUILTINS = {
   'demo-settings': {
     mount: (ctx: Any) => { ctx.root.appendChild(ctx.ui.msgline('内置面板挂上了')); },
+  },
+  'slot-host': {
+    mount: async (ctx: Any) => {
+      const box = ctx.ui.h('div');
+      ctx.root.append(ctx.ui.msgline('宿主面板挂上了'), box);
+      const handle = await ctx.mountSlot('instance', box, { instance: 'primary' });
+      ctx.root.appendChild(ctx.ui.button('收起段落', { onClick: () => handle.dispose() }));
+    },
   },
 };
 
@@ -35,6 +46,15 @@ const MIXED = {
   panels: [
     { id: 'settings', title: '实例与模型', builtin: 'demo-settings' },
     { id: 'own', title: '自有面板' },
+  ],
+  client: { js: BUNDLE_JS },
+};
+/** 宿主面板开一个插槽,页面自己的面板挂进去,不占页签。 */
+const SLOTTED = {
+  id: 'llm:delta', kind: 'llm', label: '丁端点', availability: 'active',
+  panels: [
+    { id: 'settings', title: '实例与模型', builtin: 'slot-host' },
+    { id: 'runtime', title: '运行时', slot: 'instance' },
   ],
   client: { js: BUNDLE_JS },
 };
@@ -59,6 +79,12 @@ function stage(pages: unknown[]) {
         default: {
           panels: {
             own: { mount: (ctx: Any) => { ctx.root.appendChild(ctx.ui.msgline('自有面板挂上了')); } },
+            runtime: {
+              mount: (ctx: Any) => {
+                ctx.root.appendChild(ctx.ui.msgline(`段落挂上了:${ctx.scope.instance}`));
+                return { dispose: () => slotDisposals.push(ctx.panelId) };
+              },
+            },
           },
         },
       };
@@ -81,7 +107,7 @@ function stage(pages: unknown[]) {
     wsUrl: (p: string) => `ws://test${p}`,
     onError: (err: unknown) => { errors.push(err); },
   });
-  return { host, imported, errors, text: (): string => root.textContent };
+  return { host, imported, errors, root, text: (): string => root.textContent };
 }
 
 describe('内置面板的挂载', () => {
@@ -118,6 +144,34 @@ describe('内置面板的挂载', () => {
     await s.host.show('llm:beta', 'settings');
     expect(s.text()).toContain('内置面板挂上了');
     expect(s.text()).not.toContain('nope');
+  });
+});
+
+describe('面板插槽', () => {
+  it('带 slot 的面板挂进宿主给的容器,拿到宿主给的作用域,且不出现在页签上', async () => {
+    slotDisposals.length = 0;
+    const s = stage([SLOTTED]);
+    await s.host.load();
+    await s.host.show('llm:delta');
+    expect(s.text()).toContain('宿主面板挂上了');
+    expect(s.text()).toContain('段落挂上了:primary');
+    expect(s.imported).toEqual([BUNDLE_JS]);
+    // 只剩一块独立面板,页签整条不画
+    expect(s.root.querySelector('.providerchrome button')).toBeNull();
+  });
+
+  it('宿主结束插槽时段落跟着结束;离开这一页也一样', async () => {
+    slotDisposals.length = 0;
+    const s = stage([SLOTTED, MIXED]);
+    await s.host.load();
+    await s.host.show('llm:delta');
+    (s.root.querySelector('button') as Any).click();
+    expect(slotDisposals).toEqual(['runtime']);
+
+    await s.host.show('llm:delta');
+    expect(s.text()).toContain('段落挂上了:primary');
+    await s.host.show('llm:beta', 'settings');
+    expect(slotDisposals).toEqual(['runtime', 'runtime']);
   });
 });
 

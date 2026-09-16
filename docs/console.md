@@ -52,6 +52,11 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `<audio src>` 这类只能带 URL 的场合)。存储项由装配层按来源盖上归属 `owner`(`core` / `persona` /
 `memory` / `world:<id>`),`/api/storage` 原样回它。
 
+面板带 `slot` 就没有自己的页签,由同页某块面板调 `ctx.mountSlot(slot, 容器, 作用域)` 挂进去,
+同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。内建的
+`llm-settings` 开的插槽叫 `instance`,排在连接与模型档之间,作用域是当前端点名——llamacpp 的
+运行时与模型两段就是这么挂在端点页上的。
+
 自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/console/client.ts`(Persona 是
 `bots/<名>/console/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
 `pnpm build:web` 自动发现并打包;扩展包自己 build,manifest 里声明产物路径。
@@ -59,7 +64,8 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 面板通过 `ctx`(`src/web/shared/client-panel.ts`)访问宿主:`invoke` /
 `invokeBinary` 调用本面板的数据接口,`stream` 订阅推送。通过 `interval` / `timeout` / `frame` / `own`
 登记的资源在卸载时释放;`memo` 按页面和面板隔离本地状态,`guardLeave` 检查是否允许离开,
-`pickPath` 打开本机路径选择器,`setConfig` 写配置组,`ui` 提供界面组件(`sheet`、`table`、
+`pickPath` 打开本机路径选择器,`setConfig` 写配置组,`mountSlot` 挂本页声明到某插槽的面板,
+`ui` 提供界面组件(`sheet`、`table`、
 `log`、`toast`、`confirm`、`drawer`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
 

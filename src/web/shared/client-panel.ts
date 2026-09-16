@@ -106,6 +106,22 @@ export interface ConsolePanelContext {
    */
   guardLeave(fn: () => string | null): Disposable;
 
+  /**
+   * 宿主面板挂载本面板时给的作用域（如选中的端点名）。自己占一个页签时为空对象。
+   */
+  readonly scope: Readonly<Record<string, string>>;
+
+  /**
+   * 把本页声明到该插槽的面板按声明顺序挂进 `host`，`scope` 传给它们的 `ctx.scope`。
+   * 返回句柄的 `dispose()` 结束这些面板；`host` 的内容由调用方清理。
+   * 插槽里没有面板时挂载为空。
+   */
+  mountSlot(
+    slot: string,
+    host: HTMLElement,
+    scope?: Readonly<Record<string, string>>,
+  ): Promise<Disposable>;
+
   /** UI 原语。 */
   readonly ui: ConsoleUi;
 

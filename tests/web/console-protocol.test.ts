@@ -388,6 +388,14 @@ describe('validateContributions', () => {
     expect(problems[0]?.message).toContain('panel id 不合法');
   });
 
+  it('slot 名与 panel id 同一套字符集,不合法报一条', () => {
+    const problems = validateContributions([
+      provider({ panels: [{ id: 'runtime', title: '运行时', slot: 'Instance' }] }),
+    ]);
+    expect(problems).toHaveLength(1);
+    expect(problems[0]?.message).toContain('slot 不合法');
+  });
+
   it('非法 provider id 不中断后续 provider 的校验——注册表要一次报全', () => {
     const problems = validateContributions([
       provider({ id: 'nope', kind: 'world' }),
@@ -409,7 +417,10 @@ describe('toPageManifest 序列化公开字段', () => {
     kind: 'world',
     label: '阿尔法',
     badges: [{ label: '连接', value: 3, tone: 'on' }],
-    panels: [{ id: 'log', title: '日志', description: '一句话' }],
+    panels: [
+      { id: 'log', title: '日志', description: '一句话' },
+      { id: 'runtime', title: '运行时', slot: 'instance' },
+    ],
     links: [{ label: '打开', href: '/alpha/page' }],
     config: [{
       id: 'alpha',
@@ -485,7 +496,10 @@ describe('toPageManifest 序列化公开字段', () => {
       label: '阿尔法',
       availability: 'inactive',
       badges: [{ label: '连接', value: 3, tone: 'on' }],
-      panels: [{ id: 'log', title: '日志', description: '一句话' }],
+      panels: [
+      { id: 'log', title: '日志', description: '一句话' },
+      { id: 'runtime', title: '运行时', slot: 'instance' },
+    ],
       configGroups: ['alpha'],
       storageKeys: ['alpha.cache'],
       prompts: [{ key: 'worlds.alpha.main', title: '主提示词', description: '说明' }],
@@ -542,6 +556,15 @@ describe('内置面板声明', () => {
     expect(withBuiltin('llm-settings').panels).toEqual([
       { id: 'settings', title: '设置', builtin: 'llm-settings' },
     ]);
+  });
+
+  it('slot 原样投影;不合法的 slot 名不上线,面板照常在', () => {
+    const slotted = (slot: unknown) =>
+      toPageManifest(provider({
+        panels: [{ id: 'runtime', title: '运行时', slot: slot as string }],
+      })).panels?.[0];
+    expect(slotted('instance')).toEqual({ id: 'runtime', title: '运行时', slot: 'instance' });
+    expect(slotted('Instance')).toEqual({ id: 'runtime', title: '运行时' });
   });
 
   it('不声明 builtin 的面板不带这个键(前端据此去取这一页自己的扩展)', () => {

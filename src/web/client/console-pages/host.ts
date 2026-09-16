@@ -6,6 +6,7 @@ import {
   CONSOLE_PROTOCOL_VERSION,
   type ConsoleManifest,
   type ConsolePageManifest,
+  type ConsolePanelManifest,
 } from '../../shared/console-protocol.ts';
 import type { ConsoleMemo, ConsolePanel, Disposable } from '../../shared/client-panel.ts';
 import { get, post } from '../core/api.ts';
@@ -37,6 +38,11 @@ const PROVIDER_TOOLS_ROUTE = '~tools';
 
 function asArray<T>(v: readonly T[] | undefined): readonly T[] {
   return Array.isArray(v) ? v : [];
+}
+
+/** 页签只给独立面板；带 slot 的由宿主面板挂。 */
+function tabbed(page: ConsolePageManifest): readonly ConsolePanelManifest[] {
+  return asArray(page.panels).filter((p) => p.slot === undefined);
 }
 
 export interface ConsolePageHostDeps {
@@ -192,7 +198,7 @@ export class ConsolePageHost {
       this.renderError(S.noPage(pageId), S.noPageHint);
       return;
     }
-    const panels = asArray(page.panels);
+    const panels = tabbed(page);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
     const storageKeys = this.storageKeysOf(page);
@@ -255,22 +261,9 @@ export class ConsolePageHost {
         : await this.deps.loader.resolvePanel(pageId, panel.id, page.client);
       if (gen !== this.generation) return; // 等 import 的工夫用户已经走了
 
-      const ctx = createPanelContext({
-        pageId,
-        panelId: panel.id,
-        root: slot,
-        lifecycle,
-        overlayHost: this.deps.overlayHost,
-        refresh: () => this.refresh(),
-        addLeaveGuard: (fn) => this.deps.router.addLeaveGuard(fn),
-        memo: namespacedMemo(this.deps.memo, pageId, panel.id),
-        createSocket: this.deps.createSocket,
-        wsUrl: this.deps.wsUrl,
-        onError: this.deps.onError,
-        doc: this.deps.doc,
-      });
-
-      const out = await impl.mount(ctx);
+      const out = await impl.mount(
+        this.panelContext(pageId, panel.id, slot, lifecycle, gen, {}),
+      );
       if (gen !== this.generation) {
         // mount 返回时已卸载，立即释放其 Disposable。
         if (out && typeof out.dispose === 'function') out.dispose();
@@ -288,6 +281,76 @@ export class ConsolePageHost {
         err instanceof Error ? err.message : String(err),
       );
     }
+  }
+
+  /** 面板上下文。插槽里的面板与页签面板走同一条路，区别只在 root、生命周期与 scope。 */
+  private panelContext(
+    pageId: string,
+    panelId: string,
+    root: HTMLElement,
+    lifecycle: Lifecycle,
+    gen: number,
+    scope: Readonly<Record<string, string>>,
+  ) {
+    return createPanelContext({
+      pageId,
+      panelId,
+      root,
+      lifecycle,
+      scope,
+      mountSlot: (name, host, childScope) =>
+        this.mountSlot(pageId, gen, lifecycle, name, host, childScope),
+      overlayHost: this.deps.overlayHost,
+      refresh: () => this.refresh(),
+      addLeaveGuard: (fn) => this.deps.router.addLeaveGuard(fn),
+      memo: namespacedMemo(this.deps.memo, pageId, panelId),
+      createSocket: this.deps.createSocket,
+      wsUrl: this.deps.wsUrl,
+      onError: this.deps.onError,
+      doc: this.deps.doc,
+    });
+  }
+
+  /**
+   * 把声明到该插槽的面板按声明顺序挂进 host。整组共用一个生命周期，返回的句柄结束它们；
+   * 单块面板挂不上只把该块换成错误卡。
+   */
+  private async mountSlot(
+    pageId: string,
+    gen: number,
+    parent: Lifecycle,
+    slot: string,
+    host: HTMLElement,
+    scope: Readonly<Record<string, string>>,
+  ): Promise<Disposable> {
+    const lifecycle = parent.own(new Lifecycle(this.deps.onError));
+    const page = this.find(pageId);
+    for (const decl of asArray(page?.panels).filter((p) => p.slot === slot)) {
+      const box = this.deps.doc.createElement('div');
+      host.appendChild(box);
+      try {
+        const impl = decl.builtin !== undefined
+          ? this.builtinPanel(decl.builtin)
+          : await this.deps.loader.resolvePanel(pageId, decl.id, page?.client);
+        if (gen !== this.generation || lifecycle.disposed) break;
+        const out = await impl.mount(
+          this.panelContext(pageId, decl.id, box, lifecycle, gen, scope),
+        );
+        if (out && typeof out.dispose === 'function') {
+          if (gen !== this.generation || lifecycle.disposed) out.dispose();
+          else lifecycle.own(out);
+        }
+      } catch (err) {
+        this.deps.onError(err);
+        box.replaceChildren();
+        this.renderErrorInto(
+          box,
+          S.panelFailed(decl.title),
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+    return lifecycle;
   }
 
   /**
@@ -488,7 +551,7 @@ export class ConsolePageHost {
     if (page.reason) head.appendChild(ui.msgline(page.reason, true));
     chrome.appendChild(head);
 
-    const panels = asArray(page.panels);
+    const panels = tabbed(page);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
     const storageKeys = this.storageKeysOf(page);

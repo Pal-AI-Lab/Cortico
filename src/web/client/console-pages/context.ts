@@ -41,6 +41,14 @@ export interface PanelContextDeps {
   wsUrl(path: string): string;
   onError(err: unknown): void;
   doc?: Document;
+  /** 宿主面板挂载本面板时给的作用域；自己占一个页签时为空对象。 */
+  scope?: Readonly<Record<string, string>>;
+  /** 把本页声明到某插槽的面板挂进容器。host 提供实现。 */
+  mountSlot(
+    slot: string,
+    host: HTMLElement,
+    scope: Readonly<Record<string, string>>,
+  ): Promise<Disposable>;
 }
 
 /**
@@ -87,6 +95,10 @@ export function createPanelContext(deps: PanelContextDeps): ConsolePanelContext 
         void invokePanel(pageId, panelId, method, args, { keepalive: true }).catch(deps.onError);
       }, { once: true });
     },
+
+    scope: deps.scope ?? {},
+
+    mountSlot: (slot, host, scope) => deps.mountSlot(slot, host, scope ?? {}),
 
     pickPath: (options) => pickHostPath(options, { signal }),
 
