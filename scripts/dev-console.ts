@@ -37,7 +37,8 @@ import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
 import { PromptRevisionConflict, WebApp, type ExtensionInfo, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
-import { ioPageContribution } from '../src/bot.ts';
+import { deriveConsolePageSources, ioPageContribution } from '../src/bot.ts';
+import { WorldAssembly } from '../src/world.ts';
 import { ConsoleFixtureWorld } from '../src/worlds/console-fixture/world.ts';
 import { CORE_CONFIG_GROUP } from '../src/core/config.ts';
 import { PERSONA_CONFIG_GROUP } from '../bots/corti-soulmate/persona/config.ts';
@@ -993,6 +994,17 @@ const devProvidersDir=join(tmpData,'providers');
 const devProviders=new ProviderSettings(devCfg,new ProviderRegistry(()=>devCfg.providers,{stateRoot:devProvidersDir,readBlob:()=>null,keepThinking:()=>true,log:nullLogger()}),join(tmpData,'config.json'),devProvidersDir);
 function devConsolePageSources(){return devProviders.sources();}
 
+/**
+ * Persona 页与 Memory 页。World 那几页在下面按夹具单独造,所以这里给一张空槽位表:
+ * 走的是产线那条装配,页标题、Memory 名与工具表页签才与真跑起来的一样。
+ */
+const devPersonaPageSources = deriveConsolePageSources(
+  { worldVisibility: () => ({ visibility: {}, driftedWorlds: [] }) },
+  { assembly: WorldAssembly.ofInstances([]), persona },
+  // bot id 就是这个人格的目录名:面板产物按它查(`assetKeyForPage`),换个名字就找不到产物。
+  { id: 'corti-soulmate', label: devCfg.displayName, memoryName: 'GitMem' },
+);
+
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
   { name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded' },
@@ -1029,7 +1041,7 @@ const app = new WebApp({
     },
   },
   // 通过 World 声明适配页面,invoke 使用假数据。
-  consolePageSources: () => [...devConsolePageSources(), ...[...worlds, ...devFakeWorlds].map((m) => ({
+  consolePageSources: () => [...devConsolePageSources(), ...devPersonaPageSources(), ...[...worlds, ...devFakeWorlds].map((m) => ({
     id: pageIdFor('world', m.id),
     contribute: (language: Language) => {
       const c = ioPageContribution(m.id, worldLabels[m.id] ?? m.id, {
