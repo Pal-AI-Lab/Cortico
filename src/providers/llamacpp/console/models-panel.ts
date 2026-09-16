@@ -19,6 +19,7 @@ export const modelsPanel: ConsolePanel = {
     root.append(list, message);
     /** Pull inputs survive a re-render: the operator types while the poll redraws the cards. */
     const drafts = new Map<string, string>();
+    let lastSnapshot = '';
 
     async function act(method: string, body: Record<string, unknown>): Promise<void> {
       message.textContent = '';
@@ -27,7 +28,7 @@ export const modelsPanel: ConsolePanel = {
       } catch (error) {
         message.textContent = String(error);
       }
-      await load();
+      await load(true);
     }
 
     function render(state: ModelsState, body: HTMLElement): void {
@@ -53,9 +54,12 @@ export const modelsPanel: ConsolePanel = {
         drafts.set(state.name, '');
         await act('pull', { name: state.name, model });
       };
-      bar.append(pull, ui.button(S.pull, { variant: 'primary', onClick: () => void submit(pull.value) }),
-        ui.button(S.reload, { onClick: () => void act('reload', { name: state.name }) }));
-      body.append(bar);
+      bar.append(
+        pull,
+        ui.button(S.pull, { variant: 'primary', onClick: () => void submit(pull.value) }),
+        ui.button(S.reload, { onClick: () => void act('reload', { name: state.name }) }),
+      );
+      body.append(ui.field(S.pull, bar));
       const table = ui.table({ head: [S.modelId, S.modelStatus, S.modality, S.path, S.actions] });
       if (state.models.length === 0) table.clear(S.noModels);
       for (const model of state.models) {
@@ -88,7 +92,7 @@ export const modelsPanel: ConsolePanel = {
       body.append(table.el);
     }
 
-    async function load(): Promise<void> {
+    async function load(force = false): Promise<void> {
       let states: ModelsState[];
       try {
         states = await ctx.invoke<ModelsState[]>('state');
@@ -97,8 +101,11 @@ export const modelsPanel: ConsolePanel = {
         return;
       }
       if (ctx.signal.aborted) return;
+      const snapshot = JSON.stringify(states);
+      if (!force && snapshot === lastSnapshot) return;
       const focused = document.activeElement;
       if (focused instanceof HTMLInputElement && list.contains(focused)) return;
+      lastSnapshot = snapshot;
       list.replaceChildren();
       for (const state of states) {
         const card = ui.sheet({ title: state.name });
@@ -107,7 +114,7 @@ export const modelsPanel: ConsolePanel = {
       }
     }
 
-    await load();
+    await load(true);
     ctx.interval(() => void load(), POLL_MS);
   },
 };
