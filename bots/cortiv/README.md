@@ -1,8 +1,8 @@
 <!-- Owner: bots/cortiv/index.ts, bots/cortiv/persona/persona.ts -->
 
-# CortiV
+# bots/cortiv
 
-直播 bot。Persona `CortiV` 继承 `Cormini`，增加观众档案和交接后的后台整理。
+直播 bot,默认展示名可缇Corti。Persona `CortiV` 继承 `Cormini`，增加观众档案和交接后的后台整理。
 
 ## 启动
 

@@ -1,10 +1,10 @@
-# 可缇mini (Cormini)
+<!-- Owner: bots/cormini/index.ts -->
 
-Owner: `bots/cormini/index.ts`
+# bots/cormini
 
-The smallest complete Cortico bot. The `Cormini` persona class is also the base
-class of `CortiV`(可缇Corti, `bots/cortiv/`) — variants are **independent classes**,
-not constructor flags.
+The smallest complete Cortico bot; its default display name is 可缇mini. The `Cormini`
+persona class is also the base class of `CortiSoulmate` (`bots/corti-soulmate/`) and
+`CortiV` (`bots/cortiv/`); variants are independent classes, never constructor flags.
 
 ## Run it
 
