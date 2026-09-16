@@ -27,8 +27,9 @@ echo '{ "bot": "cormini" }' > deployments/mybot/deployment.json
 pnpm start mybot
 ```
 
-部署根下一份部署都没有时，`pnpm start` 自己建一份 `mybot`(引用 `cormini`)再启动它，只写
-`deployment.json`；端点与其余设置在控制台里配。已有任何一份部署时不会发生这件事。
+部署根下一份部署都没有时，`pnpm start` 自己建一份 `mybot`(引用 `cormini`)再启动它，写下
+`deployment.json` 与开场引导的标记 `.onboarding`；端点与其余设置在控制台里配。已有任何一份部署时
+不会发生这件事，手动建的部署也不带那个标记。
 
 `deployment.json` 只有一个字段 `bot`:引用哪个代码包。仓内 `bots/<名>/` 有它就是那个,否则是
 `extensions/` 下装的同名 bot 包(见 [extensions.md](extensions.md))。其余文件按需出现:
@@ -42,6 +43,7 @@ pnpm start mybot
 | `prompts/` | Persona 文本的部署侧覆盖:`ORIENTATION.md`;`FIRST_TURN_{USER,THINKING,REPLY}.md` 只有这一层 |
 | `worlds/<id>/ENV_PROMPT.md` | 某个 World 环境提示词的部署侧覆盖,整份替换。控制台编辑写入此文件,「移除部署覆盖」删除此文件 |
 | `avatar.png`、`voices/` | 头像与参考声线 |
+| `.onboarding` | 开场引导的一次性标记,自建部署时写下;控制台见到它才给引导,操作员开口或按下那颗按钮后删除 |
 
 `data/` 里:`runs/index.jsonl` 与 `runs/<run>/`(见 [runs.md](runs.md))、`session-main.jsonl`
 等 session 文件(见 [sessions.md](sessions.md))、`usage.jsonl`、`core-state.json`、
