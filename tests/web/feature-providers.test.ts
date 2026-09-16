@@ -90,10 +90,10 @@ afterEach(() => {
   window.location.hash = '';
 });
 
-describe('语言模型页', () => {
+describe('模型提供商页', () => {
   it('左栏只占一条:在「系统」组里,带图标,永远可用', () => {
     expect(providersFeature.route).toBe('providers');
-    expect(providersFeature.label).toBe('语言模型');
+    expect(providersFeature.label).toBe('模型提供商');
     expect(providersFeature.navGroup).toBe('Core');
     expect(providersFeature.icon).toBe('cpu');
     expect(providersFeature.needsAny).toBeUndefined();
@@ -153,7 +153,7 @@ describe('语言模型页', () => {
     const { ctx, root } = await mk();
     delete ctx.consolePageHost;
     await mountProviders(ctx);
-    expect(root.textContent).toContain('语言模型设置不可用');
+    expect(root.textContent).toContain('模型提供商设置不可用');
   });
 
   it('离开页面:宿主卸载,路由监听不再触发', async () => {

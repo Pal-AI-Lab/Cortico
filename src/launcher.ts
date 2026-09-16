@@ -159,7 +159,7 @@ async function main(): Promise<void> {
   if (missingSecret) {
     const envFile = resolve(endpointDir, '.env');
     const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
-    console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「语言模型」页修改密钥变量名或补填密钥`);
+    console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「模型提供商」页修改密钥变量名或补填密钥`);
   }
   if (startPaused) {
     console.log('  ⏸ 已暂停');

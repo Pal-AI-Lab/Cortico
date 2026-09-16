@@ -11,7 +11,7 @@ const zh = {
   composerLabel: '终端消息输入',
   composerPlaceholder: "输入消息…",
   composerHint: 'Terminal · Enter 发送 · 可粘贴或拖入图片',
-  composerNoProvider: '当前无可用 Provider,请前往「语言模型」页设置',
+  composerNoProvider: '当前无可用 Provider,请前往「模型提供商」页设置',
   composerQueued: '终端通道正在重连，消息已排队',
   emptyConnecting: '连接调试通道中…',
   ctxTitle: (total: string, max: string | null) =>
@@ -111,7 +111,8 @@ const zh = {
 
   // onboarding.ts
   obWho: 'Cortico',
-  obWelcome: '欢迎使用 Cortico！现在，让我们开始部署你的第一个 Cortico Bot。首先，请配置模型提供商：',
+  obWelcome: '欢迎使用 Cortico！现在，让我们开始部署你的第一个 Cortico Bot。',
+  obProvider: '首先，请配置模型提供商：',
   obProviderNone: '尚未配置可用的模型提供商',
   obProviderReady: '模型提供商已配置',
   obWorlds: '接下来，请启用并配置你的 Bot 接入的外部环境模组（Cortico World）。也可以先仅启用终端对话。',
@@ -134,7 +135,7 @@ const en: typeof zh = {
   composerLabel: 'Terminal message input',
   composerPlaceholder: "Enter a message…",
   composerHint: 'Terminal · Enter to send · paste or drop images',
-  composerNoProvider: 'No usable provider. Set one up on the Language models page.',
+  composerNoProvider: 'No usable provider. Set one up on the LLM Provider page.',
   composerQueued: 'Terminal channel is reconnecting; message queued',
   emptyConnecting: 'Connecting to the debug channel…',
   ctxTitle: (total: string, max: string | null) =>
@@ -234,7 +235,8 @@ const en: typeof zh = {
 
   // onboarding.ts
   obWho: 'Cortico',
-  obWelcome: "Welcome to Cortico! Let's set up your first Cortico Bot. Start with a model provider:",
+  obWelcome: "Welcome to Cortico! Let's set up your first Cortico Bot.",
+  obProvider: 'First, configure a model provider:',
   obProviderNone: 'No usable model provider yet',
   obProviderReady: 'Model provider configured',
   obWorlds: 'Next, enable and configure the external environments your bot reaches (Cortico Worlds). Terminal chat alone is a fine start.',
