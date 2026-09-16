@@ -327,6 +327,7 @@ export const llmSettingsPanel: ConsolePanel = {
         });
         extraBody.setAttribute('aria-label', S.extraBody);
         connection.body.append(
+          ui.section(S.advancedProtocolTitle, S.advancedProtocolDescription),
           ui.field(S.endpointPath, path),
           ui.field(S.extraHeaders, extraHeaders),
           ui.field(S.extraBody, extraBody),
@@ -359,7 +360,6 @@ export const llmSettingsPanel: ConsolePanel = {
       // ---- 模型档 ----
       const card = ui.sheet({ title: S.specTitle, desc: S.specDescription });
       {
-        const row = ui.rowbar();
         let catalog: ModelEntry[] = [];
         const numbers: Partial<Record<'maxTokens' | 'contextWindow', HTMLInputElement>> = {};
         const fillHolder = ui.h('span');
@@ -421,6 +421,13 @@ export const llmSettingsPanel: ConsolePanel = {
             syncFill();
           },
         });
+
+        // 1. 模型识别行
+        const modelRow = ui.rowbar();
+        modelRow.append(name, models, fetchModels, fillHolder);
+        card.body.append(ui.field(S.modelFieldLabel, modelRow));
+
+        // 2. 推理强度与温度控制行
         const effortSuggestions = datalist(ui, `${uid}-effort`, state.effortSuggestions ?? []);
         let effortControl: HTMLInputElement | HTMLSelectElement;
         if (open) {
@@ -476,7 +483,17 @@ export const llmSettingsPanel: ConsolePanel = {
         temperature.max = '2';
         temperature.step = '0.1';
         temperature.setAttribute('aria-label', S.temperatureAria);
-        row.append(name, models, fetchModels, fillHolder, effortControl, effortSuggestions, temperature);
+
+        const controlRow = ui.rowbar();
+        controlRow.append(
+          ui.field(open ? S.effortFieldLabel : S.tierAria, effortControl),
+          effortSuggestions,
+          ui.field(S.temperatureFieldLabel, temperature),
+        );
+        card.body.append(controlRow);
+
+        // 3. Token 与上下文限制行
+        const tokenRow = ui.rowbar();
         for (const [key, label] of [
           ['maxTokens', S.maxTokens],
           ['contextWindow', S.contextWindow],
@@ -496,9 +513,9 @@ export const llmSettingsPanel: ConsolePanel = {
           input.step = '1';
           input.setAttribute('aria-label', label);
           numbers[key] = input;
-          row.append(input);
+          tokenRow.append(ui.field(label, input));
         }
-        card.body.append(ui.field(S.specTitle, row));
+        card.body.append(tokenRow);
       }
       for (const note of new Set(state.reasoningTiers.map((tier) => tier.note).filter(Boolean)))
         card.body.append(ui.msgline(note!));

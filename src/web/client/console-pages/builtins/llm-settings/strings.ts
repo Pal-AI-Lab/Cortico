@@ -28,8 +28,13 @@ const zh = {
   extraHeaders: '附加请求头（JSON 对象）',
   extraBody: '附加请求体（JSON 对象）',
   jsonObjectRequired: (label: string) => `${label} 必须是 JSON 对象`,
+  advancedProtocolTitle: '协议与请求扩展',
+  advancedProtocolDescription: '针对 OpenAI Responses 兼容端点的高级配置（端点路径与附加 JSON 字段）。',
+  modelFieldLabel: '模型标识',
+  effortFieldLabel: '推理强度',
+  temperatureFieldLabel: '采样温度',
   specTitle: '模型档',
-  specDescription: '一个端点一份:这个实例的每一次调用都用它,不按 session 角色分。',
+  specDescription: '配置此实例调用的模型及推理、温度和 Token 限制等生成参数。',
   modelName: '明确模型名',
   fetchModels: '取模型列表',
   modelsFetched: (count: number) => `取到 ${count} 个模型。`,
@@ -92,12 +97,12 @@ const zh = {
   rateUncached: '未缓存输入 / 百万 token',
   rateOutput: '输出 / 百万 token',
   currencyField: '币种',
-  costFormNote: '三格表落成一条对全部模型生效的边际费用规则；阶梯与服务档写在下方完整规则里。',
+  costFormNote: '基础费率统一适用于全部模型；阶梯或多模型规则请在下方完整规则中配置。',
   costFormOverridden: '当前报价不是三格表能表达的形状，以下方完整规则为准；改动三格表会覆盖它。',
-  editFull: '编辑完整规则与阶梯',
+  editFull: '高级定价规则 (JSON)',
   fullNote:
     '空数组恢复模块默认报价；rules 为空数组表示明确免费。完整规则支持输入阶梯、服务档及额外计量单位。',
-  viewSnapshot: '查看生效报价的完整快照',
+  viewSnapshot: '查看当前生效报价快照',
 };
 const en: typeof zh = {
   unsavedGuard: 'Connection, models or pricing are not saved yet.',
@@ -129,8 +134,13 @@ const en: typeof zh = {
   extraHeaders: 'Extra headers (JSON object)',
   extraBody: 'Extra body (JSON object)',
   jsonObjectRequired: (label: string) => `${label} must be a JSON object`,
+  advancedProtocolTitle: 'Protocol & Request Overrides',
+  advancedProtocolDescription: 'Advanced options for OpenAI Responses compatible endpoints (custom path and extra JSON fields).',
+  modelFieldLabel: 'Model identifier',
+  effortFieldLabel: 'Reasoning effort',
+  temperatureFieldLabel: 'Sampling temperature',
   specTitle: 'Model',
-  specDescription: 'One per endpoint: every call on this instance uses it, with no per-session split.',
+  specDescription: 'Configure model identifier, reasoning effort, temperature and token limits for this instance.',
   modelName: 'Exact model name',
   fetchModels: 'Fetch models',
   modelsFetched: (count: number) => `Fetched ${count} models.`,
@@ -196,12 +206,12 @@ const en: typeof zh = {
   rateOutput: 'Output / M tokens',
   currencyField: 'Currency',
   costFormNote:
-    'The three rates become one marginal-cost rule for all models; bands and service tiers go in the full rules below.',
+    'Base rates apply to all models; input bands and service tiers go in the full rules below.',
   costFormOverridden:
     'The saved pricing is not a shape the three-rate form can express; the full rules below apply. Editing the form replaces them.',
-  editFull: 'Edit full rules and bands',
+  editFull: 'Advanced Pricing Rules (JSON)',
   fullNote:
     'An empty array restores the module default quote; an empty rules array means explicitly free. Full rules support input bands, service tiers and extra meters.',
-  viewSnapshot: 'View the full snapshot of effective quotes',
+  viewSnapshot: 'View active pricing snapshot',
 };
 export const panel = { zh, en };
