@@ -277,6 +277,32 @@ describe('manifest 组装', () => {
     });
   });
 
+  it('Persona 页的标题是 Persona 的类名;类名取不到才回落到 bot 的展示名', async () => {
+    class DemoPersona {
+      console(): { panels: Array<{ id: string; title: string }> } {
+        return { panels: [{ id: 'notes', title: '笔记' }] };
+      }
+    }
+    const byClass = deriveConsolePageSources(
+      facts(),
+      { assembly: WorldAssembly.ofInstances([]), persona: new DemoPersona() as unknown as Persona },
+      { id: 'demo', label: '示例展示名' },
+    );
+    await withApp({ consolePageSources: byClass }, async (base) => {
+      expect(byId(await manifestOf(base), 'persona:demo')?.label).toBe('DemoPersona');
+    });
+
+    // 字面量对象的类名是 Object,当没有:这时展示名是唯一还能用的名字。
+    const byDisplayName = deriveConsolePageSources(
+      facts(),
+      { assembly: WorldAssembly.ofInstances([]), persona: personaWithMemory(undefined) },
+      { id: 'demo', label: '示例展示名' },
+    );
+    await withApp({ consolePageSources: byDisplayName }, async (base) => {
+      expect(byId(await manifestOf(base), 'persona:demo')?.label).toBe('示例展示名');
+    });
+  });
+
   it('badges 与 links 原样透传,框架不解释语义', async () => {
     const badges = [
       { label: '连接', value: '已连上', tone: 'on' as const },

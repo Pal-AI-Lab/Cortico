@@ -802,6 +802,12 @@ function memoryClassName(persona: Persona): string | null {
   return name && name !== 'Object' ? name : null;
 }
 
+/** Persona 实例的类名;只是个普通对象时为 null。 */
+function personaClassName(persona: Persona): string | null {
+  const name = persona.constructor?.name;
+  return name && name !== 'Object' ? name : null;
+}
+
 /** 合并同 id 的 Persona 页面，按面板归属分派 invoke 和 stream；重复面板由 validateContributions 拒绝。 */
 export function mergePersonaContributions(
   id: string,
@@ -860,7 +866,10 @@ export function deriveConsolePageSources(
   core: WorldVisibilityFacts,
 
   parts: { assembly: WorldAssembly; persona?: Persona },
-  /** bot 标识、Memory 名与配置组;配置组归入 Persona 页面。 */
+  /**
+   * bot 标识、展示名、Memory 名与配置组;配置组归入 Persona 页面。
+   * 展示名是这一台 bot 的名字(底栏头像旁边那个),Persona 页的标题另取 Persona 的类名。
+   */
   bot?: { id: string; label: string; memoryName?: string; configGroups?: readonly ConfigGroup[] },
 
   extra?: (language: Language) => ConsolePageContribution[],
@@ -902,16 +911,18 @@ export function deriveConsolePageSources(
 
     // 同 id 的贡献共用页面与构建产物。
     if (bot && selfId) {
+      // Persona 页写 Persona 的名字:一台 bot 的展示名是部署给的,类名才是这一层的身份。
+      const personaLabel = (persona && personaClassName(persona)) || bot.label;
       const claimedGroups = [...(bot.configGroups ?? [])];
       const botConfig: ConsolePageContribution[] = claimedGroups.length
-        ? [{ id: selfId, kind: 'persona', label: bot.label, config: claimedGroups }]
+        ? [{ id: selfId, kind: 'persona', label: personaLabel, config: claimedGroups }]
         : [];
       sources.push({
         id: selfId,
         contribute: (language) => mergePersonaContributions(
           selfId,
-          bot.label,
-          persona ? personaPageContribution(bot.id, bot.label, persona, language) : null,
+          personaLabel,
+          persona ? personaPageContribution(bot.id, personaLabel, persona, language) : null,
           [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
         ),
       });
