@@ -5,10 +5,13 @@ import { S } from './strings.ts';
 export function mountGeneral(ctx: FeatureContext): void {
   const { ui, root, signal } = ctx;
   const win = root.ownerDocument.defaultView!;
-  const group = ui.h('div');
+  // 同页别处都是档案卡:标题与说明的字体从卡片来,这里自己写 h3/p 会与它们对不齐。
+  const sheet = ui.sheet({ title: S.language, en: 'language', desc: S.languageDesc });
+  const group = ui.h('div', 'rowbar');
   group.setAttribute('role', 'group');
   group.setAttribute('aria-label', S.language);
-  root.append(ui.h('h3', null, S.language), ui.h('p', null, S.languageDesc), group);
+  sheet.body.appendChild(group);
+  root.append(sheet.el);
   for (const [language, label] of [['zh', '简体中文'], ['en', 'English']] as const) {
     const button = ui.h('button', 'btn', label);
     button.type = 'button';
