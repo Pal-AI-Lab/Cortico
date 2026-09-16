@@ -30,21 +30,6 @@ import type { ProviderConsoleHost } from './types.ts';
 
 export type SecretStatus = 'env' | 'file' | 'none';
 
-/** A console-created instance starts explicitly free in USD; the operator fills the real rates. */
-export function defaultPricing(): PriceDefinition[] {
-  return [{
-    models: ['*'],
-    currency: 'USD',
-    basis: 'marginal',
-    source: 'console',
-    rules: [
-      { meter: 'cachedInput', perMillion: 0 },
-      { meter: 'uncachedInput', perMillion: 0 },
-      { meter: 'output', perMillion: 0 },
-    ],
-  }];
-}
-
 /** Output token limit used by the connectivity probe. */
 const PROBE_MAX_OUTPUT_TOKENS = 256;
 
@@ -398,10 +383,11 @@ export class ProviderSettings {
         const name = body.name;
         if (method === 'create') {
           this.assertNewName(name, language);
+          // 报价留空:用量页把这条端点的调用记成未计价,而不是零元。
           this.save(name, {
             kind: module.id,
             baseUrl: String(body.baseUrl || module.defaultBaseUrl || ''),
-            pricing: defaultPricing(),
+            pricing: [],
           }, language);
           return { ok: true };
         }
@@ -409,14 +395,15 @@ export class ProviderSettings {
         if (!entry || entry.kind !== module.id) throw new Error(S.foreignInstance);
         if (method === 'activate') this.activate(name, body.spec as ModelSpec | undefined, language);
         else if (method === 'save') {
-          if (!body.spec || typeof body.spec !== 'object' || Array.isArray(body.spec))
-            throw new Error(S.specRequired);
-          const next: LLMProviderEntry = {
-            ...entry,
-            spec: body.spec as ModelSpec,
-            pricing: validatePrices(body.pricing, language),
-            serviceTier: typeof body.serviceTier === 'string' ? body.serviceTier : entry.serviceTier,
-          };
+          // 面板一格一存,所以给到哪几个键就只并哪几个。
+          const next: LLMProviderEntry = { ...entry };
+          if (body.spec !== undefined) {
+            if (!body.spec || typeof body.spec !== 'object' || Array.isArray(body.spec))
+              throw new Error(S.specRequired);
+            next.spec = body.spec as ModelSpec;
+          }
+          if (body.pricing !== undefined) next.pricing = validatePrices(body.pricing, language);
+          if (typeof body.serviceTier === 'string') next.serviceTier = body.serviceTier;
           if (typeof body.baseUrl === 'string') next.baseUrl = body.baseUrl.trim();
           if (typeof body.secret === 'string') {
             if (body.secret.trim()) next.secret = body.secret.trim();

@@ -1,4 +1,4 @@
-import { ProviderSettings, defaultPricing } from '../src/providers/console/settings.ts';
+import { ProviderSettings } from '../src/providers/console/settings.ts';
 import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { FixtureMessage } from '../tests/core/fixture-messages.ts';
 import { fixtureRecords } from '../tests/core/fixture-messages.ts';
@@ -983,13 +983,13 @@ function devQqEvents(opts?: { conv?: string; limit?: number }): unknown {
 
 
 devCfg.providers={
- deepseek:{kind:'openai-responses-compat',baseUrl:'https://api.deepseek.com',secret:'DEEPSEEK_API_KEY',spec:{model:'deepseek-v4-pro',thinking:true,reasoningEffort:'low',temperature:1},pricing:defaultPricing()},
+ deepseek:{kind:'openai-responses-compat',baseUrl:'https://api.deepseek.com',secret:'DEEPSEEK_API_KEY',spec:{model:'deepseek-v4-pro',thinking:true,reasoningEffort:'low',temperature:1},pricing:[]},
  openrouter:{kind:'openai-responses-compat',baseUrl:'https://openrouter.ai/api/v1',secret:'OPENROUTER_API_KEY',multimodal:true,spec:{model:'anthropic/claude-sonnet-5',thinking:true,reasoningEffort:'medium',contextWindow:200000},
   pricing:[{models:['*'],currency:'USD',basis:'marginal',source:'console',rules:[{meter:'cachedInput',perMillion:0.3},{meter:'uncachedInput',perMillion:3},{meter:'output',perMillion:15}]}]},
- custom:{kind:'openai-responses-compat',baseUrl:'http://127.0.0.1:8090/v1',spec:{model:'local',thinking:false},options:{extraBody:{service_tier:'flex'}},pricing:defaultPricing()},
+ custom:{kind:'openai-responses-compat',baseUrl:'http://127.0.0.1:8090/v1',spec:{model:'local',thinking:false},options:{extraBody:{service_tier:'flex'}},pricing:[]},
  local:{kind:'llamacpp',baseUrl:'http://127.0.0.1:8090/v1',spec:{model:'ggml-org/Qwen3-8B-GGUF:Q4_K_M',thinking:true},
-  options:{runtime:{release:'b10930',backend:'cuda-13.3'},launch:{contextSize:16384,nGpuLayers:99,parallel:1,extraArgs:''},autoStart:false},pricing:defaultPricing()},
- external:{kind:'llamacpp',baseUrl:'http://127.0.0.1:8080/v1',pricing:defaultPricing()},
+  options:{runtime:{release:'b10930',backend:'cuda-13.3'},launch:{contextSize:16384,nGpuLayers:99,parallel:1,extraArgs:''},autoStart:false},pricing:[]},
+ external:{kind:'llamacpp',baseUrl:'http://127.0.0.1:8080/v1',pricing:[]},
 };
 devCfg.activeProvider='deepseek';
 const devProvidersDir=join(tmpData,'providers');

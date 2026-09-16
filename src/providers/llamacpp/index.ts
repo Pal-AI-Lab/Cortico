@@ -1,8 +1,6 @@
-import { connectionGroup } from '../console/config.ts';
 import type { ProviderModule } from '../base.ts';
 import type { ReasoningTier } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
-import type { ConfigProperty } from '../../core/config-schema.ts';
 import { isContextOverflow } from '../transport/errors.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
@@ -32,26 +30,6 @@ export default {
   reasoningTiers: reasoningTiers('zh'),
   localize: (language) => ({ reasoningTiers: reasoningTiers(language) }),
   serviceTiers: [],
-  config: (name, entry, language) => {
-    const S = text(language);
-    const options = llamacppOptions(entry);
-    const managed: Record<string, ConfigProperty> = options.runtime
-      ? {
-          'options.runtime.release': { type: 'string', title: S.release, description: S.releaseDescription, 'x-hot': true },
-          'options.runtime.backend': { type: 'string', title: S.backend, description: S.backendDescription, enum: backendChoices(), 'x-hot': true },
-          'options.runtime.runtimeDir': {
-            type: 'string', title: S.runtimeDir, description: S.runtimeDirDescription, 'x-hot': true,
-            'x-path': { kind: 'directory' },
-          },
-          'options.launch.contextSize': { type: 'integer', title: S.contextSize, description: S.launchNote, minimum: 1, 'x-hot': true },
-          'options.launch.nGpuLayers': { type: 'integer', title: S.nGpuLayers, minimum: 0, 'x-hot': true },
-          'options.launch.parallel': { type: 'integer', title: S.parallel, minimum: 1, 'x-hot': true },
-          'options.launch.extraArgs': { type: 'string', title: S.extraArgs, description: S.extraArgsDescription, 'x-hot': true },
-          'options.autoStart': { type: 'boolean', title: S.autoStart, 'x-hot': true },
-        }
-      : {};
-    return [connectionGroup(name, entry, managed, language)];
-  },
   validateEntry: (entry, language) => {
     const S = text(language);
     const options = llamacppOptions(entry);

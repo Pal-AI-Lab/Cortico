@@ -18,17 +18,12 @@ const entry = (patch: Partial<LLMProviderEntry> = {}): LLMProviderEntry => ({ ki
 
 describe('llamacpp 条目', () => {
   it('外部端点不带任何托管键;开启托管后版本、后端与启动参数补默认值', () => {
-    const external = module.normalize(entry());
-    expect(external.options).toEqual({});
-    expect(module.config('local', external, 'zh')[0].schema.properties).not.toHaveProperty('providers.local.options.runtime.release');
+    expect(module.normalize(entry()).options).toEqual({});
 
     const managed = module.normalize(entry({ options: { runtime: { backend: defaultBackend() } as never } }));
     const options = llamacppOptions(managed);
     expect(options.runtime).toEqual({ release: PINNED_RELEASE, backend: defaultBackend() });
     expect(options.launch).toEqual(LAUNCH_DEFAULTS);
-    const properties = module.config('local', managed, 'zh')[0].schema.properties;
-    expect(properties['providers.local.options.runtime.backend'].enum).toEqual(backendChoices());
-    expect(properties['providers.local.options.runtime.runtimeDir']['x-path']).toEqual({ kind: 'directory' });
   });
 
   it('校验:本机没有的后端只有自备目录才放行;启动参数要正整数', () => {
@@ -41,6 +36,35 @@ describe('llamacpp 条目', () => {
     expect(() => module.validateEntry(managed({ release: PINNED_RELEASE, backend: defaultBackend() }, { ...LAUNCH_DEFAULTS, nGpuLayers: -1 }), 'zh')).toThrow('nGpuLayers');
     expect(() => module.validateEntry(entry({ options: { autoStart: 'yes' } }), 'zh')).toThrow('布尔');
     expect(() => module.validateEntry(entry(), 'zh')).not.toThrow();
+  });
+
+  it('端点页的运行时段落:开启托管、逐格改参数、清空自备目录都只写这一条端点', async () => {
+    const saved: LLMProviderEntry[] = [];
+    let current = entry();
+    const console = module.console!({
+      language: 'zh',
+      entries: () => [{ name: 'local', entry: current }],
+      instance: () => { throw new Error('这几个方法不该去要实例'); },
+      save: (_name, next) => { saved.push(next); current = next; },
+    });
+    const call = (method: string, body: Record<string, unknown>) =>
+      console.invoke!('runtime', method, [{ name: 'local', ...body }]);
+
+    await call('enable', { backend: defaultBackend() });
+    expect(llamacppOptions(current).launch).toEqual(LAUNCH_DEFAULTS);
+    await call('configure', { launch: { nGpuLayers: 40 } });
+    expect(llamacppOptions(current).launch).toEqual({ ...LAUNCH_DEFAULTS, nGpuLayers: 40 });
+    await call('configure', { runtimeDir: 'C:\llama' });
+    expect(llamacppOptions(current).runtime!.runtimeDir).toBe('C:\llama');
+    await call('configure', { runtimeDir: '  ' });
+    expect(llamacppOptions(current).runtime!.runtimeDir).toBeUndefined();
+    await call('configure', { autoStart: true });
+    expect(llamacppOptions(current).autoStart).toBe(true);
+    // 开启托管前没有 runtime 段:这时改参数没有落点
+    current = entry();
+    const writes = saved.length;
+    await expect(call('configure', { launch: { parallel: 2 } })).rejects.toThrow('托管');
+    expect(saved.length).toBe(writes);
   });
 
   it('发布表:Windows CUDA 版搭配 cudart,tar 包剥一层前缀,上游没有的组合给 null', () => {

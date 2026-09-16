@@ -1,5 +1,6 @@
 /**
  * 内置 llm-settings 面板，通过 ctx.invoke 使用声明方的数据面。
+ * 每一格在 change 时写回端点条目，模块自有的段落挂在 `instance` 插槽里。
  * reasoningTiers 非空时限制为所列档位；为空时接受开放字符串。空值使用端点默认，none 关闭推理，其余写入 reasoningEffort。
  */
 import type {
@@ -8,6 +9,7 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
   ConsoleUi,
+  Disposable,
 } from '../../../../shared/client-panel.ts';
 import { pricingEditor, type ModelQuote } from './pricing-panel.ts';
 import { panel } from './strings.ts';
@@ -75,6 +77,9 @@ interface ProbeResult {
 }
 
 const DEFAULT_ENDPOINT_PATH = '/responses';
+
+/** 模块自有段落挂在这个插槽里，排在连接与模型档之间。 */
+const MODULE_SLOT = 'instance';
 
 /** 开放模式的 effort 格 ↔ spec 的 thinking/reasoningEffort。 */
 function effortOf(spec: Spec): string {
@@ -150,12 +155,26 @@ export const llmSettingsPanel: ConsolePanel = {
     // `<datalist>` 靠全局 id 绑定;每次挂载一个前缀,同页两份面板互不串。
     const uid = `llm-${Math.random().toString(36).slice(2, 8)}`;
     let selected = '';
-    let dirty = false;
-    ctx.guardLeave(() => (dirty ? S.unsavedGuard : null));
+    /** 模块段落的句柄，重画前先结束上一批。 */
+    let sections: Disposable | null = null;
+    /** 重画代号：慢一步回来的那次 load 不再往 DOM 上贴。 */
+    let generation = 0;
     const report = ui.msgline();
     const body = ui.h('div');
     root.append(body, report);
-    /** 写类方法:成功即清脏标、重读整页;失败把服务端措辞放进 report。 */
+    /** 写一格:落盘后只更新状态行与页头徽标,表单留在原处。 */
+    const patch = async (fields: Record<string, unknown>): Promise<boolean> => {
+      try {
+        await ctx.invoke('save', [{ name: selected, ...fields }]);
+      } catch (error) {
+        report.textContent = String(error);
+        return false;
+      }
+      report.textContent = S.saved;
+      await ctx.refresh();
+      return true;
+    };
+    /** 改了实例集合或当前实例的动作:落盘后整页重画。 */
     const action = async (method: string, args: unknown[], done = S.saved): Promise<boolean> => {
       try {
         await ctx.invoke(method, args);
@@ -163,13 +182,12 @@ export const llmSettingsPanel: ConsolePanel = {
         report.textContent = String(error);
         return false;
       }
-      dirty = false;
       report.textContent = done;
       await ctx.refresh();
       await load();
       return true;
     };
-    /** 读类方法(取模型、探测):不动脏标,不重读;失败同样进 report。 */
+    /** 读类方法(取模型、探测):不重画;失败把服务端措辞放进 report。 */
     const query = async <T>(method: string, args: unknown[], ...locked: ConsoleDisablable[]) => {
       const release = ui.disable(...locked);
       try {
@@ -182,8 +200,11 @@ export const llmSettingsPanel: ConsolePanel = {
       }
     };
     async function load() {
+      const gen = ++generation;
       const state = await ctx.invoke<SettingsState>('state');
-      if (ctx.signal.aborted) return;
+      if (ctx.signal.aborted || gen !== generation) return;
+      sections?.dispose();
+      sections = null;
       body.replaceChildren();
       if (!state.instances.some((instance) => instance.name === selected))
         selected =
@@ -202,11 +223,6 @@ export const llmSettingsPanel: ConsolePanel = {
           label: instance.name + (instance.name === state.active ? S.activeSuffix : ''),
         })),
         onChange: (name) => {
-          if (dirty) {
-            selector.value = selected;
-            report.textContent = S.saveFirst;
-            return;
-          }
           selected = name;
           void load();
         },
@@ -222,10 +238,13 @@ export const llmSettingsPanel: ConsolePanel = {
         createUrl,
         datalist(ui, `${uid}-baseurls`, state.baseUrlSuggestions ?? []),
         ui.button(S.addInstance, {
-          onClick: () =>
-            void action('create', [
-              { name: createName.value.trim(), baseUrl: createUrl.value.trim() },
-            ]),
+          onClick: async () => {
+            const name = createName.value.trim();
+            const before = selected;
+            selected = name;
+            if (!(await action('create', [{ name, baseUrl: createUrl.value.trim() }])))
+              selected = before;
+          },
         }),
       );
       top.body.append(createRow);
@@ -234,34 +253,26 @@ export const llmSettingsPanel: ConsolePanel = {
       if (!current) return;
       const entry = current.entry;
       const spec: Spec = structuredClone(entry.spec) ?? { model: '', thinking: open };
+      const saveSpec = () => void patch({ spec });
 
       // ---- 连接 ----
       const connection = ui.sheet({ title: S.connectionTitle, desc: S.connectionDescription });
-      let baseUrl = entry.baseUrl;
-      let secretName = entry.secret ?? '';
-      let multimodal = entry.multimodal === true;
       const options = entry.options ?? {};
       let endpointPath =
         typeof options.endpointPath === 'string' ? options.endpointPath : DEFAULT_ENDPOINT_PATH;
       const jsonText = (value: unknown) =>
         value === undefined ? '' : JSON.stringify(value, null, 2);
       const baseUrlInput = ui.input({
-        value: baseUrl,
+        value: entry.baseUrl,
         cls: 'mono',
-        onChange: (value) => {
-          baseUrl = value.trim();
-          dirty = true;
-        },
+        onChange: (value) => void connectionChanged({ baseUrl: value.trim() }),
       });
       baseUrlInput.setAttribute('aria-label', S.baseUrl);
       const secretNameInput = ui.input({
-        value: secretName,
+        value: entry.secret ?? '',
         placeholder: S.secretNamePlaceholder,
         cls: 'mono',
-        onChange: (value) => {
-          secretName = value.trim();
-          dirty = true;
-        },
+        onChange: (value) => void connectionChanged({ secret: value.trim() }),
       });
       secretNameInput.setAttribute('aria-label', S.secretName);
       connection.body.append(
@@ -276,24 +287,17 @@ export const llmSettingsPanel: ConsolePanel = {
         );
         const value = ui.input({ type: 'password', placeholder: S.secretValuePlaceholder });
         value.setAttribute('aria-label', S.secretValue);
-        const write = ui.button(S.saveSecret, {
+        row.append(status, value, ui.button(S.saveSecret, {
           onClick: () =>
             void action('setSecret', [{ name: selected, value: value.value }], S.secretSaved),
-        });
-        const nameSaved = !!entry.secret;
-        value.disabled = !nameSaved;
-        write.disabled = !nameSaved;
-        row.append(status, value, write);
+        }));
         connection.body.append(ui.field(S.secretStatus, row));
-        if (!nameSaved) connection.body.append(ui.msgline(S.secretNameFirst));
+        if (!entry.secret) connection.body.append(ui.msgline(S.secretNameFirst));
       }
       connection.body.append(
         ui.checkbox(S.multimodal, {
-          checked: multimodal,
-          onChange: (checked) => {
-            multimodal = checked;
-            dirty = true;
-          },
+          checked: entry.multimodal === true,
+          onChange: (checked) => void patch({ multimodal: checked }),
         }).el,
       );
       let extraHeaders: HTMLTextAreaElement | null = null;
@@ -304,7 +308,7 @@ export const llmSettingsPanel: ConsolePanel = {
           cls: 'mono',
           onChange: (value) => {
             endpointPath = value.trim();
-            dirty = true;
+            saveOptions();
           },
         });
         path.setAttribute('aria-label', S.endpointPath);
@@ -312,18 +316,14 @@ export const llmSettingsPanel: ConsolePanel = {
           rows: 3,
           cls: 'mono',
           value: jsonText(options.extraHeaders),
-          onChange: () => {
-            dirty = true;
-          },
+          onChange: saveOptions,
         });
         extraHeaders.setAttribute('aria-label', S.extraHeaders);
         extraBody = ui.textarea({
           rows: 3,
           cls: 'mono',
           value: jsonText(options.extraBody),
-          onChange: () => {
-            dirty = true;
-          },
+          onChange: saveOptions,
         });
         extraBody.setAttribute('aria-label', S.extraBody);
         connection.body.append(
@@ -334,7 +334,7 @@ export const llmSettingsPanel: ConsolePanel = {
         );
       }
       body.append(connection.el);
-      /** 面板可编辑的 options 三键并回原 options;空的删掉。非法 JSON 抛错,由保存按钮报出。 */
+      /** 面板可编辑的 options 三键并回原 options;空的删掉。非法 JSON 抛错,由保存时报出。 */
       const optionsPayload = (): Record<string, unknown> => {
         const next = { ...options };
         const object = (textarea: HTMLTextAreaElement, label: string): unknown => {
@@ -356,185 +356,191 @@ export const llmSettingsPanel: ConsolePanel = {
         }
         return next;
       };
+      function saveOptions(): void {
+        try {
+          void patch({ options: optionsPayload() });
+        } catch (error) {
+          report.textContent = String(error);
+        }
+      }
+
+      // ---- 模块自有段落(llama.cpp 的运行时与模型) ----
+      const slot = ui.h('div');
+      body.append(slot);
 
       // ---- 模型档 ----
       const card = ui.sheet({ title: S.specTitle, desc: S.specDescription });
-      {
-        let catalog: ModelEntry[] = [];
-        const numbers: Partial<Record<'maxTokens' | 'contextWindow', HTMLInputElement>> = {};
-        const fillHolder = ui.h('span');
-        const knownContext = () => catalog.find((item) => item.id === spec.model)?.contextWindow;
-        /** 目录里这个模型的窗口与手填值不同时,给一颗一键填入的按钮。 */
-        const syncFill = () => {
-          const known = knownContext();
-          fillHolder.replaceChildren();
-          if (known === undefined || known === spec.contextWindow) return;
-          fillHolder.append(
-            ui.button(S.fillContextWindow(known), {
-              size: 'sm',
-              onClick: () => {
-                spec.contextWindow = known;
-                numbers.contextWindow!.value = String(known);
-                dirty = true;
-                syncFill();
+      let catalog: ModelEntry[] = [];
+      const modelHolder = ui.h('div');
+      const modelNote = ui.msgline();
+      /** 目录取到了就给选单,取不到就自由输入:两种都写同一格 spec.model。 */
+      function renderModelField(): void {
+        const control = catalog.length
+          ? ui.select({
+              value: spec.model,
+              options: [
+                ...(catalog.some((item) => item.id === spec.model)
+                  ? []
+                  : [{ value: spec.model, label: spec.model || S.selectModel }]),
+                ...catalog.map((item) => ({ value: item.id, label: item.id })),
+              ],
+              onChange: (value) => {
+                spec.model = value;
+                const known = catalog.find((item) => item.id === value)?.contextWindow;
+                if (known !== undefined) spec.contextWindow = known;
+                saveSpec();
+                renderModelField();
               },
-            }),
-          );
-        };
-        const name = ui.input({
-          value: spec.model,
-          placeholder: S.modelName,
-          onInput: (value) => {
-            spec.model = value;
-            syncFill();
-          },
-          onChange: (value) => {
-            spec.model = value;
-            dirty = true;
-          },
-        });
-        name.setAttribute('aria-label', S.modelAria);
-        name.setAttribute('list', `${uid}-models`);
-        const models = datalist(ui, `${uid}-models`, []);
+            })
+          : ui.input({
+              value: spec.model,
+              placeholder: S.modelName,
+              onChange: (value) => {
+                spec.model = value;
+                saveSpec();
+              },
+            });
+        control.setAttribute('aria-label', S.modelAria);
+        const row = ui.rowbar();
         const fetchModels = ui.button(S.fetchModels, {
           size: 'sm',
-          onClick: async () => {
-            if (dirty) {
-              report.textContent = S.saveFirst;
-              return;
-            }
-            const result = await query<{ models: ModelEntry[] }>(
-              'models',
-              [{ name: selected }],
-              fetchModels,
-            );
-            if (!result || ctx.signal.aborted) return;
-            catalog = result.models;
-            models.replaceChildren(
-              ...catalog.map((item) => {
-                const option = ui.h('option');
-                option.value = item.id;
-                return option;
-              }),
-            );
-            report.textContent = S.modelsFetched(catalog.length);
-            syncFill();
-          },
+          onClick: () => void fetchCatalog(fetchModels),
         });
-
-        // 1. 模型识别行
-        const modelRow = ui.rowbar();
-        modelRow.append(name, models, fetchModels, fillHolder);
-        card.body.append(ui.field(S.modelFieldLabel, modelRow));
-
-        // 2. 推理强度与温度控制行
-        const effortSuggestions = datalist(ui, `${uid}-effort`, state.effortSuggestions ?? []);
-        let effortControl: HTMLInputElement | HTMLSelectElement;
-        if (open) {
-          const effort = ui.input({
-            value: effortOf(spec),
-            placeholder: S.effortPlaceholder,
-            onChange: (value) => {
-              applyEffort(spec, value);
-              dirty = true;
-            },
-          });
-          effort.setAttribute('list', `${uid}-effort`);
-          effort.setAttribute('aria-label', S.effortAria);
-          effortControl = effort;
-        } else {
-          const hit = state.reasoningTiers.find(
-            (tier) => tier.thinking === spec.thinking && tier.effort === spec.reasoningEffort,
-          );
-          const tiers = state.reasoningTiers.map((tier) => ({ value: tier.id, label: tier.label }));
-          if (!hit)
-            tiers.unshift({
-              value: '__unsupported',
-              label: S.unsupportedTier(
-                spec.reasoningEffort ?? (spec.thinking ? S.thinkingOn : S.thinkingOff),
-              ),
-            });
-          const tier = ui.select({
-            value: hit?.id ?? '__unsupported',
-            options: tiers,
-            onChange: (value) => {
-              const chosen = state.reasoningTiers.find((tier) => tier.id === value);
-              if (!chosen) return;
-              spec.thinking = chosen.thinking;
-              if (chosen.effort) spec.reasoningEffort = chosen.effort;
-              else delete spec.reasoningEffort;
-              dirty = true;
-            },
-          });
-          tier.setAttribute('aria-label', S.tierAria);
-          effortControl = tier;
-        }
-        const temperature = ui.input({
-          type: 'number',
-          placeholder: S.temperaturePlaceholder,
-          value: spec.temperature === undefined ? '' : String(spec.temperature),
-          onChange: (value) => {
-            if (value.trim() === '') delete spec.temperature;
-            else spec.temperature = Number(value);
-            dirty = true;
-          },
-        });
-        temperature.min = '0';
-        temperature.max = '2';
-        temperature.step = '0.1';
-        temperature.setAttribute('aria-label', S.temperatureAria);
-
-        const controlRow = ui.rowbar();
-        controlRow.append(
-          ui.field(open ? S.effortFieldLabel : S.tierAria, effortControl),
-          effortSuggestions,
-          ui.field(S.temperatureFieldLabel, temperature),
-        );
-        card.body.append(controlRow);
-
-        // 3. Token 与上下文限制行
-        const tokenRow = ui.rowbar();
-        for (const [key, label] of [
-          ['maxTokens', S.maxTokens],
-          ['contextWindow', S.contextWindow],
-        ] as const) {
-          const input = ui.input({
-            type: 'number',
-            placeholder: label,
-            value: spec[key] === undefined ? '' : String(spec[key]),
-            onChange: (value) => {
-              if (value.trim() === '') delete spec[key];
-              else spec[key] = Number(value);
-              dirty = true;
-              if (key === 'contextWindow') syncFill();
-            },
-          });
-          input.min = '1';
-          input.step = '1';
-          input.setAttribute('aria-label', label);
-          numbers[key] = input;
-          tokenRow.append(ui.field(label, input));
-        }
-        card.body.append(tokenRow);
+        row.append(control, fetchModels);
+        modelHolder.replaceChildren(ui.field(S.modelFieldLabel, row));
       }
+      /** 取目录:成功换成选单并带出上下文窗口,失败把原因留在模型格下面。 */
+      async function fetchCatalog(...locked: ConsoleDisablable[]): Promise<void> {
+        const release = ui.disable(...locked);
+        try {
+          const result = await ctx.invoke<{ models: ModelEntry[] }>('models', [{ name: selected }]);
+          catalog = result.models;
+          modelNote.textContent = S.modelsFetched(catalog.length);
+          const known = catalog.find((item) => item.id === spec.model)?.contextWindow;
+          if (known !== undefined && known !== spec.contextWindow) {
+            spec.contextWindow = known;
+            contextWindowInput.value = String(known);
+            await patch({ spec });
+          }
+        } catch (error) {
+          catalog = [];
+          modelNote.textContent = S.modelListFailed(String(error));
+        } finally {
+          release.dispose();
+        }
+        if (!ctx.signal.aborted) renderModelField();
+      }
+      /** 地址或密钥改过就重取目录:换了端点,上一份模型表不作数。 */
+      async function connectionChanged(fields: Record<string, unknown>): Promise<void> {
+        if (!(await patch(fields))) return;
+        catalog = [];
+        await fetchCatalog();
+      }
+
+      // 推理强度与温度
+      const effortSuggestions = datalist(ui, `${uid}-effort`, state.effortSuggestions ?? []);
+      let effortControl: HTMLInputElement | HTMLSelectElement;
+      if (open) {
+        const effort = ui.input({
+          value: effortOf(spec),
+          placeholder: S.effortPlaceholder,
+          onChange: (value) => {
+            applyEffort(spec, value);
+            saveSpec();
+          },
+        });
+        effort.setAttribute('list', `${uid}-effort`);
+        effort.setAttribute('aria-label', S.effortAria);
+        effortControl = effort;
+      } else {
+        const hit = state.reasoningTiers.find(
+          (tier) => tier.thinking === spec.thinking && tier.effort === spec.reasoningEffort,
+        );
+        const tiers = state.reasoningTiers.map((tier) => ({ value: tier.id, label: tier.label }));
+        if (!hit)
+          tiers.unshift({
+            value: '__unsupported',
+            label: S.unsupportedTier(
+              spec.reasoningEffort ?? (spec.thinking ? S.thinkingOn : S.thinkingOff),
+            ),
+          });
+        const tier = ui.select({
+          value: hit?.id ?? '__unsupported',
+          options: tiers,
+          onChange: (value) => {
+            const chosen = state.reasoningTiers.find((tier) => tier.id === value);
+            if (!chosen) return;
+            spec.thinking = chosen.thinking;
+            if (chosen.effort) spec.reasoningEffort = chosen.effort;
+            else delete spec.reasoningEffort;
+            saveSpec();
+          },
+        });
+        tier.setAttribute('aria-label', S.tierAria);
+        effortControl = tier;
+      }
+      const temperature = ui.input({
+        type: 'number',
+        placeholder: S.temperaturePlaceholder,
+        value: spec.temperature === undefined ? '' : String(spec.temperature),
+        onChange: (value) => {
+          if (value.trim() === '') delete spec.temperature;
+          else spec.temperature = Number(value);
+          saveSpec();
+        },
+      });
+      temperature.min = '0';
+      temperature.max = '2';
+      temperature.step = '0.1';
+      temperature.setAttribute('aria-label', S.temperatureAria);
+
+      const controlRow = ui.rowbar();
+      controlRow.append(
+        ui.field(open ? S.effortFieldLabel : S.tierAria, effortControl),
+        effortSuggestions,
+        ui.field(S.temperatureFieldLabel, temperature),
+      );
+
+      // Token 与上下文限制
+      const tokenRow = ui.rowbar();
+      const numbers: Partial<Record<'maxTokens' | 'contextWindow', HTMLInputElement>> = {};
+      for (const [key, label] of [
+        ['maxTokens', S.maxTokens],
+        ['contextWindow', S.contextWindow],
+      ] as const) {
+        const input = ui.input({
+          type: 'number',
+          placeholder: label,
+          value: spec[key] === undefined ? '' : String(spec[key]),
+          onChange: (value) => {
+            if (value.trim() === '') delete spec[key];
+            else spec[key] = Number(value);
+            saveSpec();
+          },
+        });
+        input.min = '1';
+        input.step = '1';
+        input.setAttribute('aria-label', label);
+        numbers[key] = input;
+        tokenRow.append(ui.field(label, input));
+      }
+      const contextWindowInput = numbers.contextWindow!;
+      renderModelField();
+      card.body.append(modelHolder, modelNote, controlRow, tokenRow);
       for (const note of new Set(state.reasoningTiers.map((tier) => tier.note).filter(Boolean)))
         card.body.append(ui.msgline(note!));
       if (state.temperatureNote) card.body.append(ui.msgline(state.temperatureNote));
-      let serviceTier = entry.serviceTier ?? '';
       if (state.serviceTiers.length)
         card.body.append(
           ui.field(
             S.serviceTier,
             ui.select({
-              value: serviceTier,
+              value: entry.serviceTier ?? '',
               options: [
                 { value: '', label: S.serverDefault },
                 ...state.serviceTiers.map((tier) => ({ value: tier.id, label: tier.label })),
               ],
-              onChange: (value) => {
-                serviceTier = value;
-                dirty = true;
-              },
+              onChange: (value) => void patch({ serviceTier: value }),
             }),
           ),
         );
@@ -546,9 +552,7 @@ export const llmSettingsPanel: ConsolePanel = {
         ui,
         entry.pricing ?? [],
         current.quotes,
-        () => {
-          dirty = true;
-        },
+        (pricing) => void patch({ pricing }),
         ctx.language,
       );
       body.append(prices.el);
@@ -576,53 +580,19 @@ export const llmSettingsPanel: ConsolePanel = {
       );
       const probe = ui.button(S.probe, {
         onClick: async () => {
-          if (dirty) {
-            report.textContent = S.saveFirst;
-            return;
-          }
           const result = await query<ProbeResult>('probe', [{ name: selected }], probe);
           if (!result || ctx.signal.aborted) return;
           probeBox.replaceChildren(probeCard(ui, S, result));
         },
       });
       buttons.append(
-        ui.button(S.save, {
-          variant: 'primary',
-          onClick: () => {
-            try {
-              void action('save', [
-                {
-                  name: selected,
-                  spec,
-                  pricing: prices.value(),
-                  serviceTier,
-                  baseUrl,
-                  secret: secretName,
-                  multimodal,
-                  ...(open ? { options: optionsPayload() } : {}),
-                },
-              ]);
-            } catch (error) {
-              report.textContent = String(error);
-            }
-          },
-        }),
         ui.button(S.activate, {
-          onClick: () => {
-            if (dirty) {
-              report.textContent = S.saveBeforeActivate;
-              return;
-            }
-            void action('activate', [{ name: selected, spec }]);
-          },
+          variant: 'primary',
+          onClick: () => void action('activate', [{ name: selected }]),
         }),
         probe,
         ui.button(S.duplicate, {
           onClick: () => {
-            if (dirty) {
-              report.textContent = S.saveFirst;
-              return;
-            }
             duplicateHolder.hidden = !duplicateHolder.hidden;
             if (!duplicateHolder.hidden) duplicateName.focus();
           },
@@ -640,6 +610,9 @@ export const llmSettingsPanel: ConsolePanel = {
         }),
       );
       body.append(buttons, duplicateHolder, probeBox);
+      const mounted = await ctx.mountSlot(MODULE_SLOT, slot, { instance: selected });
+      if (gen === generation) sections = mounted;
+      else mounted.dispose();
     }
     await load();
   },

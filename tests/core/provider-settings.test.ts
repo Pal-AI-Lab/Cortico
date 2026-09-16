@@ -2,11 +2,33 @@ import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from './helpers.ts';
-import { ProviderRegistry } from '../../src/providers/registry.ts';
+import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/console/settings.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import type { PriceDefinition } from '../../src/providers/pricebook.ts';
+
+/** 内建模块的连接字段归端点面板;配置组这条路仍留给扩展,用这个夹具核。 */
+const groupModule: ProviderModule = {
+  id: 'group-llm',
+  title: 'Group LLM',
+  reasoningTiers: [],
+  serviceTiers: [],
+  config: (name) => [{
+    id: `llm.group-llm.${name}`,
+    owner: 'provider:group-llm',
+    schema: {
+      type: 'object',
+      title: name,
+      properties: {
+        [`providers.${name}.baseUrl`]: { type: 'string', title: '供应地址', 'x-hot': true },
+        [`providers.${name}.secret`]: { type: 'string', title: '密钥变量名', 'x-hot': true },
+      },
+    },
+  }],
+  create: () => ({ client: null as never }),
+};
+const modules = [...providerModules, groupModule];
 
 const temp = makeTmpDir();
 afterEach(() => vi.unstubAllGlobals());
@@ -31,8 +53,8 @@ function fixture() {
     readBlob: () => null,
     keepThinking: () => true,
     log: nullLogger(),
-  });
-  const settings = new ProviderSettings(cfg, registry, file, providersDir);
+  }, modules);
+  const settings = new ProviderSettings(cfg, registry, file, providersDir, modules);
   /* eslint-disable-next-line */
   const endpoint = (name: string): any =>
     JSON.parse(readFileSync(join(providersDir, name, 'config.json'), 'utf8'));
@@ -42,11 +64,11 @@ describe('Provider 配置事务', () => {
   it('旧实例名按完整字符串读写，点号不被解释为配置层级', () => {
     const { cfg, settings, endpoint } = fixture();
     cfg.providers['old.account'] = {
-      kind: 'openai-responses-compat',
+      kind: 'group-llm',
       baseUrl: 'https://old.test',
       spec: { model: 'deepseek-flash', thinking: true, reasoningEffort: 'low' },
     };
-    const id = 'llm.openai-responses-compat.old.account';
+    const id = 'llm.group-llm.old.account';
     expect(settings.values(id)['providers.old.account.baseUrl']).toBe('https://old.test');
     settings.setConfig(id, { 'providers.old.account.baseUrl': 'https://new.test' });
     // 端点名整串就是目录名(带点也一样),不被拆成层级
@@ -130,9 +152,7 @@ describe('Provider 配置事务', () => {
   it('原生参数按模块验证，未编辑实例的旧档位不阻断保存', () => {
     const { cfg, settings } = fixture();
     cfg.providers.cloud.spec = { model: 'legacy', thinking: true, reasoningEffort: 'high' };
-    settings.setConfig('llm.openai-responses-compat.local', {
-      'providers.local.baseUrl': 'http://localhost:8091',
-    });
+    settings.save('local', { ...cfg.providers.local, baseUrl: 'http://localhost:8091' });
     expect(cfg.providers.local.baseUrl).toBe('http://localhost:8091');
     expect(() =>
       settings.save('local', {
@@ -194,18 +214,16 @@ describe('Provider 配置事务', () => {
 describe('Provider 数据面:建、删、复制、密钥、模型列表、探测', () => {
   const invoke = (settings: ProviderSettings, method: string, body: Record<string, unknown>) =>
     settings.sources().find((source) => source.id === 'llm:openai-responses-compat')!.contribute('zh').invoke!('settings', method, [body]);
-  it('新建只吃名字与地址:缺地址落模块默认,报价默认 0 美元;同名只有在旧条目无模块认领时才能覆盖', async () => {
+  it('新建只吃名字与地址:缺地址落模块默认,报价留空;同名只有在旧条目无模块认领时才能覆盖', async () => {
     const { cfg, settings, endpoint } = fixture();
     cfg.providers.ghost = { kind: 'deleted-module', baseUrl: 'https://ghost.test' };
     await invoke(settings, 'create', { name: 'router', baseUrl: 'https://openrouter.ai/api/v1' });
     // 仅提供地址，其余连接参数由操作者配置。
     expect(cfg.providers.router).toEqual({
-      kind: 'openai-responses-compat', baseUrl: 'https://openrouter.ai/api/v1', options: {}, pricing: expect.anything(),
+      kind: 'openai-responses-compat', baseUrl: 'https://openrouter.ai/api/v1', options: {}, pricing: [],
     });
-    expect(endpoint('router').pricing).toEqual([{
-      models: ['*'], currency: 'USD', basis: 'marginal', source: 'console',
-      rules: [{ meter: 'cachedInput', perMillion: 0 }, { meter: 'uncachedInput', perMillion: 0 }, { meter: 'output', perMillion: 0 }],
-    }]);
+    // 报价留空:用量页把这条端点的调用记成未计价,而不是零元。
+    expect(endpoint('router').pricing).toEqual([]);
     await expect(invoke(settings, 'create', { name: 'router', baseUrl: 'https://x.test' })).rejects.toThrow('已存在');
     await invoke(settings, 'create', { name: 'blank' });
     expect(cfg.providers.blank.baseUrl).toBe('https://api.openai.com/v1');
@@ -269,18 +287,12 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     expect(readFileSync(env, 'utf8')).toBe('AXKEY=another-secret\nA.KEY=sk-mine\n');
     expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('file');
   });
-  it.each(['save', 'setConfig'] as const)('%s 保存自定义密钥变量名后，请求使用对应的文件或环境密钥', async (method) => {
+  it('保存自定义密钥变量名后，请求使用对应的文件或环境密钥', async () => {
     const { cfg, settings, registry, providersDir, endpoint } = fixture();
     const secret = 'my_ModelToken_42';
     vi.stubEnv(secret, '');
     try {
-      if (method === 'save') {
-        await invoke(settings, 'save', {
-          name: 'local', secret, spec: cfg.providers.local.spec, pricing: [],
-        });
-      } else {
-        settings.setConfig('llm.openai-responses-compat.local', { 'providers.local.secret': secret });
-      }
+      await invoke(settings, 'save', { name: 'local', secret });
       expect(endpoint('local').secret).toBe(secret);
       expect(settings.secretStatus('local', cfg.providers.local)).toBe('none');
       registry.resolve('local');
@@ -293,7 +305,7 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
       });
       await registry.bind('local').respond({ model: 'local', input: 'hi' });
       vi.stubEnv(secret, 'sk-custom-env');
-      settings.setConfig('llm.openai-responses-compat.local', { 'providers.local.secret': secret });
+      registry.invalidate('local');
       expect(settings.secretStatus('local', cfg.providers.local)).toBe('env');
       await registry.bind('local').respond({ model: 'local', input: 'hi' });
       expect(seen).toEqual(['Bearer sk-custom-file', 'Bearer sk-custom-env']);

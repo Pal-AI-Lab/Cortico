@@ -14,7 +14,7 @@
 | `registry.ts` | 目录扫描发现内建模块、`registerProviderModules()` 收扩展、实例缓存与 `bind()` |
 | `configuration.ts` | `validateSpec` / `validateEntry`:外部配置校验 |
 | `pricebook.ts` | 价目定义、快照、报价合并 |
-| `console/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活)与通用连接配置组 |
+| `console/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活) |
 | `openai-responses-compat/` | 内建模块:Responses 协议客户端与模型目录 |
 | `llamacpp/` | 内建模块:llama-server 的 Chat 客户端、router 目录、官方 release 的下载安装与进程托管 |
 | `transport/` | HTTP/SSE 引擎、Chat 与 Responses 请求转换、事件装配、计量、错误 |
@@ -26,6 +26,10 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 `baseUrlSuggestions`、`effortSuggestions`、`temperatureNote`、`localize()`、`normalize()`、
 `validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `console()`
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
+
+地址、密钥变量名与图像开关由控制台的端点面板编辑,模块不为它们声明配置组。模块自己的
+`options.*` 要么走 `config()` 的配置组,要么由 `console()` 声明一块挂进 `instance` 插槽的面板——
+内建 llamacpp 的运行时与模型两段走的是后者。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
 `compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。

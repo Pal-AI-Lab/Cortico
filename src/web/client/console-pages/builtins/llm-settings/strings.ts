@@ -1,12 +1,10 @@
 /** 端点表面板与报价编辑器的文案。按 `ctx.language` 选表——面板的语言跟着调用它的那一页走。 */
 const zh = {
-  unsavedGuard: '连接、模型或报价尚未保存。',
   saved: '已保存，下一次请求生效。',
   instancesTitle: '供应实例',
   instancesDescription:
     '每个实例独立保存连接、模型档与报价。当前请求与已启动的后台会话保持原有绑定。',
   activeSuffix: ' · 当前',
-  saveFirst: '请先保存当前修改。',
   instanceField: '供应实例',
   newInstanceName: '新实例名称',
   newInstanceUrl: 'HTTP(S) 供应地址',
@@ -38,7 +36,8 @@ const zh = {
   modelName: '明确模型名',
   fetchModels: '取模型列表',
   modelsFetched: (count: number) => `取到 ${count} 个模型。`,
-  fillContextWindow: (tokens: number) => `填入上下文窗口 ${tokens}`,
+  modelListFailed: (message: string) => `取不到模型列表：${message}`,
+  selectModel: '选择模型',
   unsupportedTier: (current: string) => `当前档位未支持：${current}`,
   thinkingOn: '开启',
   thinkingOff: '关闭',
@@ -52,9 +51,7 @@ const zh = {
   contextWindow: '上下文窗口',
   serviceTier: '服务档',
   serverDefault: '服务端默认',
-  save: '保存',
   activate: '设为当前供应实例',
-  saveBeforeActivate: '请先保存连接、模型、服务档和报价。',
   probe: '测试可用性',
   probeTitle: '测试结果',
   probeStatus: '状态',
@@ -79,6 +76,7 @@ const zh = {
   deleted: '已删除。',
   pricingTitle: '报价',
   pricingDescription: '历史流水固定使用请求时的报价。自定义报价按模型与费用口径覆盖模块默认值。',
+  pricingUnset: '未设报价：这个端点的调用在用量与成本页只计 token，不计金额。',
   meters: {
     input: '输入',
     cachedInput: '缓存命中',
@@ -105,13 +103,11 @@ const zh = {
   viewSnapshot: '查看当前生效报价快照',
 };
 const en: typeof zh = {
-  unsavedGuard: 'Connection, models or pricing are not saved yet.',
   saved: 'Saved; applies from the next request.',
   instancesTitle: 'Provider instances',
   instancesDescription:
     'Each instance keeps its own connection, model spec and pricing. In-flight requests and running background sessions keep their existing binding.',
   activeSuffix: ' · active',
-  saveFirst: 'Save the current changes first.',
   instanceField: 'Provider instance',
   newInstanceName: 'New instance name',
   newInstanceUrl: 'HTTP(S) provider URL',
@@ -144,7 +140,8 @@ const en: typeof zh = {
   modelName: 'Exact model name',
   fetchModels: 'Fetch models',
   modelsFetched: (count: number) => `Fetched ${count} models.`,
-  fillContextWindow: (tokens: number) => `Fill context window ${tokens}`,
+  modelListFailed: (message: string) => `Could not fetch the model list: ${message}`,
+  selectModel: 'Pick a model',
   unsupportedTier: (current: string) => `Unsupported current tier: ${current}`,
   thinkingOn: 'on',
   thinkingOff: 'off',
@@ -158,9 +155,7 @@ const en: typeof zh = {
   contextWindow: 'Context window',
   serviceTier: 'Service tier',
   serverDefault: 'Server default',
-  save: 'Save',
   activate: 'Set as active provider instance',
-  saveBeforeActivate: 'Save connection, models, service tier and pricing first.',
   probe: 'Test endpoint',
   probeTitle: 'Test result',
   probeStatus: 'Status',
@@ -187,6 +182,7 @@ const en: typeof zh = {
   pricingTitle: 'Pricing',
   pricingDescription:
     'Historical records keep the quote in effect at request time. Custom quotes override module defaults per model and cost basis.',
+  pricingUnset: 'No pricing set: calls on this endpoint count tokens but no amount on the usage page.',
   meters: {
     input: 'Input',
     cachedInput: 'Cache hit',

@@ -202,7 +202,6 @@ describe('全系统集成(终端对话链路)', () => {
       'world:terminal', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft:rhythm', 'world:minecraft:client', 'world:minecraft:player',
       'world:websearch',
-      'llm.openai-responses-compat.deepseek', 'llm.openai-responses-compat.local',
     ]);
     // id 标识具体实例；owner 标识与实例无关的架构角色。
     expect(g.groups.map((x) => x.group.owner)).toEqual([
@@ -210,7 +209,6 @@ describe('全系统集成(终端对话链路)', () => {
       'world:terminal', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft', 'world:minecraft', 'world:minecraft',
       'world:websearch',
-      'provider:openai-responses-compat', 'provider:openai-responses-compat',
     ]);
     const pc0 = g.groups.find((x) => x.group.id === PERSONA_CONFIG_GROUP.id)!;
     expect(pc0.group.schema.properties['context.maxTokens']).toBeTruthy();

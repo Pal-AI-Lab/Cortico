@@ -1,3 +1,7 @@
+/**
+ * Model section of one endpoint: what llama-server knows, and pulling more.
+ * The endpoint comes from `ctx.scope.instance`.
+ */
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
 import type { ModelsState } from './server.ts';
 import { panel } from '../strings.ts';
@@ -14,17 +18,18 @@ export const modelsPanel: ConsolePanel = {
   mount: async (ctx: ConsolePanelContext) => {
     const { ui, root } = ctx;
     const S = ctx.language === 'en' ? panel.en : panel.zh;
-    const list = ui.h('div');
+    const name = ctx.scope.instance;
+    const card = ui.sheet({ title: S.modelsTitle });
     const message = ui.msgline();
-    root.append(list, message);
-    /** Pull inputs survive a re-render: the operator types while the poll redraws the cards. */
-    const drafts = new Map<string, string>();
+    root.append(card.el, message);
+    /** The pull input survives a re-render: the operator types while the poll redraws the card. */
+    let draft = '';
     let lastSnapshot = '';
 
-    async function act(method: string, body: Record<string, unknown>): Promise<void> {
+    async function act(method: string, extra: Record<string, unknown> = {}): Promise<void> {
       message.textContent = '';
       try {
-        await ctx.invoke(method, [body]);
+        await ctx.invoke(method, [{ name, ...extra }]);
       } catch (error) {
         message.textContent = String(error);
       }
@@ -44,20 +49,20 @@ export const modelsPanel: ConsolePanel = {
       const pull = ui.input({
         placeholder: S.pullPlaceholder,
         cls: 'mono',
-        value: drafts.get(state.name) ?? '',
-        onInput: (value) => drafts.set(state.name, value),
+        value: draft,
+        onInput: (value) => { draft = value; },
         onCommit: (value) => void submit(value),
       });
       const submit = async (value: string): Promise<void> => {
         const model = value.trim();
         if (!model) return;
-        drafts.set(state.name, '');
-        await act('pull', { name: state.name, model });
+        draft = '';
+        await act('pull', { model });
       };
       bar.append(
         pull,
         ui.button(S.pull, { variant: 'primary', onClick: () => void submit(pull.value) }),
-        ui.button(S.reload, { onClick: () => void act('reload', { name: state.name }) }),
+        ui.button(S.reload, { onClick: () => void act('reload') }),
       );
       body.append(ui.field(S.pull, bar));
       const table = ui.table({ head: [S.modelId, S.modelStatus, S.modality, S.path, S.actions] });
@@ -76,11 +81,11 @@ export const modelsPanel: ConsolePanel = {
         }
         const actions = ui.h('div');
         if (model.status === 'downloading')
-          actions.append(ui.button(S.cancel, { size: 'sm', onClick: () => void act('cancel', { name: state.name, model: model.id }) }));
+          actions.append(ui.button(S.cancel, { size: 'sm', onClick: () => void act('cancel', { model: model.id }) }));
         else if (model.status === 'loaded' || model.status === 'sleeping')
-          actions.append(ui.button(S.unload, { size: 'sm', onClick: () => void act('unload', { name: state.name, model: model.id }) }));
+          actions.append(ui.button(S.unload, { size: 'sm', onClick: () => void act('unload', { model: model.id }) }));
         else if (model.status === 'unloaded' || model.status === 'failed')
-          actions.append(ui.button(S.load, { size: 'sm', onClick: () => void act('load', { name: state.name, model: model.id }) }));
+          actions.append(ui.button(S.load, { size: 'sm', onClick: () => void act('load', { model: model.id }) }));
         table.addRow([
           { text: model.id, cls: 'mono' },
           status,
@@ -93,25 +98,20 @@ export const modelsPanel: ConsolePanel = {
     }
 
     async function load(force = false): Promise<void> {
-      let states: ModelsState[];
+      let state: ModelsState;
       try {
-        states = await ctx.invoke<ModelsState[]>('state');
+        state = await ctx.invoke<ModelsState>('state', [{ name }]);
       } catch (error) {
         message.textContent = String(error);
         return;
       }
       if (ctx.signal.aborted) return;
-      const snapshot = JSON.stringify(states);
-      if (!force && snapshot === lastSnapshot) return;
-      const focused = document.activeElement;
-      if (focused instanceof HTMLInputElement && list.contains(focused)) return;
+      const snapshot = JSON.stringify(state);
+      const focused = card.el.ownerDocument.activeElement;
+      if (!force && (snapshot === lastSnapshot || (focused !== null && card.el.contains(focused)))) return;
       lastSnapshot = snapshot;
-      list.replaceChildren();
-      for (const state of states) {
-        const card = ui.sheet({ title: state.name });
-        render(state, card.body);
-        list.append(card.el);
-      }
+      card.body.replaceChildren();
+      render(state, card.body);
     }
 
     await load(true);

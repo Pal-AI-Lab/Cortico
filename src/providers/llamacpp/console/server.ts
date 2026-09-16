@@ -1,11 +1,12 @@
 /**
- * Named-endpoint operations for the runtime and model panels.
- * Runtime operations manage installation and the process; model operations call llama-server /models*.
+ * Named-endpoint operations for the runtime and model sections of the endpoint page.
+ * Runtime operations manage installation, launch configuration and the process; model operations
+ * call llama-server /models*.
  */
 import type { ConsolePageContribution } from '../../../web/shared/console-protocol.ts';
 import type { ProviderConsoleHost } from '../../console/types.ts';
 import type { RouterCatalog, RouterModel } from '../catalog.ts';
-import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions } from '../options.ts';
+import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions, type LaunchOptions } from '../options.ts';
 import type { LlamaRuntime } from '../runtime.ts';
 import { text } from '../strings.ts';
 
@@ -21,6 +22,9 @@ export interface ModelsState {
   localModelsDir: string;
   models: RouterModel[];
 }
+
+/** The launch fields the panel edits, each optional and applied over the stored values. */
+type LaunchPatch = Partial<Record<keyof LaunchOptions, unknown>>;
 
 export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageContribution> {
   const S = text(host.language);
@@ -39,16 +43,14 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
   };
   return {
     panels: [
-      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, getMethods: ['state'] },
-      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, getMethods: ['state'] },
+      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, slot: 'instance' },
+      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, slot: 'instance' },
     ],
     invoke: async (panel, method, args) => {
       if (panel === 'runtime') {
-        if (method === 'state')
-          return Promise.all(host.entries().map(async ({ name }) => ({ name, ...(await control(name).runtime.state(host.language)) })));
         const value = body(args);
         const name = value.name as string;
-        const { runtime } = control(name);
+        if (method === 'state') return { name, ...(await control(name).runtime.state(host.language)) };
         if (method === 'enable') {
           const entry = entryOf(name);
           const options = llamacppOptions(entry);
@@ -64,35 +66,56 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
           return { ok: true };
         }
         if (method === 'disable') {
-          await runtime.stop(host.language);
+          await control(name).runtime.stop(host.language);
           const entry = entryOf(name);
           const { runtime: _runtime, launch: _launch, ...rest } = entry.options ?? {};
           host.save(name, { ...entry, options: rest });
           return { ok: true };
         }
-        if (method === 'install') {
-          await runtime.install(host.language);
+        if (method === 'configure') {
+          const entry = entryOf(name);
+          const options = llamacppOptions(entry);
+          if (!options.runtime) throw new Error(S.notManaged);
+          const runtimeOptions = { ...options.runtime };
+          if (typeof value.release === 'string') runtimeOptions.release = value.release.trim();
+          if (typeof value.backend === 'string') runtimeOptions.backend = value.backend;
+          if (typeof value.runtimeDir === 'string') {
+            const dir = value.runtimeDir.trim();
+            if (dir) runtimeOptions.runtimeDir = dir;
+            else delete runtimeOptions.runtimeDir;
+          }
+          const launch = { ...LAUNCH_DEFAULTS, ...(options.launch ?? {}), ...((value.launch ?? {}) as LaunchPatch) };
+          host.save(name, {
+            ...entry,
+            options: {
+              ...entry.options,
+              runtime: runtimeOptions,
+              launch,
+              ...(value.autoStart === undefined ? {} : { autoStart: value.autoStart }),
+            },
+          });
           return { ok: true };
         }
-        if (method === 'start') return runtime.start(host.language);
-        if (method === 'stop') return runtime.stop(host.language);
+        if (method === 'install') {
+          await control(name).runtime.install(host.language);
+          return { ok: true };
+        }
+        if (method === 'start') return control(name).runtime.start(host.language);
+        if (method === 'stop') return control(name).runtime.stop(host.language);
         throw new Error(S.unknownMethod);
       }
       if (panel === 'models') {
-        if (method === 'state')
-          return Promise.all(
-            host.entries().map(async ({ name }): Promise<ModelsState> => {
-              const { runtime, catalog } = control(name);
-              const dirs = runtime.modelDirs();
-              try {
-                return { name, reachable: true, ...dirs, models: await catalog.list() };
-              } catch {
-                return { name, reachable: false, ...dirs, models: [] };
-              }
-            }),
-          );
         const value = body(args);
-        const { catalog } = control(value.name as string);
+        const name = value.name as string;
+        const { runtime, catalog } = control(name);
+        if (method === 'state') {
+          const dirs = runtime.modelDirs();
+          try {
+            return { name, reachable: true, ...dirs, models: await catalog.list() } satisfies ModelsState;
+          } catch {
+            return { name, reachable: false, ...dirs, models: [] } satisfies ModelsState;
+          }
+        }
         if (method === 'reload') {
           await catalog.list(true);
           return { ok: true };

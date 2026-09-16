@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mountSettings, change, button, flush } from './provider-settings-fixture.ts';
+import { mountSettings, change, flush } from './provider-settings-fixture.ts';
 type Any = any;
 let cleanup: () => void = () => {};
 afterEach(() => cleanup());
@@ -15,12 +15,10 @@ describe('Provider 服务档', () => {
     expect(select.value).toBe('priority');
     expect([...select.options].map((o: Any) => o.value)).toEqual(['', 'default', 'priority']);
   });
-  it('服务档与模型一起保存，清空恢复服务端默认', async () => {
+  it('清空服务档恢复服务端默认', async () => {
     const view = await mountSettings(undefined, { serviceTier: 'priority' });
     cleanup = view.cleanup;
     change(tierField(view.root).querySelector('select'), '');
-    expect(view.cfg.providers.primary.serviceTier).toBe('priority');
-    button(view.root, '保存').click();
     await flush();
     expect(view.read().providers.primary.serviceTier).toBe('');
   });

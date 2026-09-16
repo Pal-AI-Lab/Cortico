@@ -59,15 +59,16 @@ function writeSimple(cost: SimpleCost): unknown[] {
 
 /**
  * Pricing sheet: effective quotes, the three-rate form, the full-rules JSON (`details`) and the
- * quote snapshot. The JSON textarea is the single draft; form edits write through into it, so
- * `value()` is always the parsed textarea. Saved pricing the form cannot express opens the
- * textarea and leaves the form blank until edited.
+ * quote snapshot. The JSON textarea is the single draft; form edits write through into it, and
+ * every change commits the parsed textarea. An endpoint with no pricing keeps the form blank and
+ * commits an empty definition list until a rate is typed. Saved pricing the form cannot express
+ * opens the textarea and leaves the form blank until edited.
  */
 export function pricingEditor(
   ui: ConsoleUi,
   saved: unknown[],
   quotes: ModelQuote[],
-  changed: () => void,
+  commit: (pricing: unknown[]) => void,
   language?: Language,
 ) {
   const S = language === 'en' ? panel.en : panel.zh;
@@ -99,16 +100,17 @@ export function pricingEditor(
         card.body.append(ui.msgline(S.bandsNote));
     }
   }
-  const simple: SimpleCost | null =
-    saved.length === 0 ? { currency: 'USD', rates: [0, 0, 0] } : readSimple(saved);
-  const draft = simple ? writeSimple(simple) : saved;
+  const unset = saved.length === 0;
+  if (unset) card.body.append(ui.msgline(S.pricingUnset));
+  const simple: SimpleCost | null = unset ? null : readSimple(saved);
   const raw = ui.textarea({
     rows: 10,
-    value: JSON.stringify(draft, null, 2),
-    onChange: changed,
+    value: JSON.stringify(simple ? writeSimple(simple) : saved, null, 2),
+    onChange: commitDraft,
   });
   const currency = ui.input({ value: simple?.currency ?? 'USD', onChange: writeThrough });
   currency.setAttribute('aria-label', S.currencyField);
+  const problem = ui.msgline();
   const rateLabels = [S.rateCached, S.rateUncached, S.rateOutput];
   const rates = rateLabels.map((label, i) => {
     const input = ui.input({
@@ -121,30 +123,46 @@ export function pricingEditor(
     input.setAttribute('aria-label', label);
     return input;
   });
+  /** 三格全空 = 没有报价;填了任何一格,空格按 0 计。 */
   function writeThrough() {
-    raw.value = JSON.stringify(
-      writeSimple({
-        currency: currency.value.trim() || 'USD',
-        rates: rates.map((input) => Number(input.value) || 0) as [number, number, number],
-      }),
-      null,
-      2,
-    );
-    changed();
+    const blank = rates.every((input) => input.value.trim() === '');
+    raw.value = blank
+      ? '[]'
+      : JSON.stringify(
+          writeSimple({
+            currency: currency.value.trim() || 'USD',
+            rates: rates.map((input) => Number(input.value) || 0) as [number, number, number],
+          }),
+          null,
+          2,
+        );
+    commitDraft();
+  }
+  /** 完整规则那格可以写坏;解析不过就停在这张卡上说清楚,不往端点写。 */
+  function commitDraft(): void {
+    try {
+      const pricing = JSON.parse(raw.value) as unknown[];
+      problem.textContent = '';
+      problem.classList.remove('bad');
+      commit(pricing);
+    } catch (error) {
+      problem.textContent = String(error);
+      problem.classList.add('bad');
+    }
   }
   card.body.append(
     ui.field(S.currencyField, currency),
     ...rates.map((input, i) => ui.field(rateLabels[i], input)),
-    ui.msgline(simple ? S.costFormNote : S.costFormOverridden),
+    ui.msgline(simple || unset ? S.costFormNote : S.costFormOverridden),
   );
   const advanced = ui.h('details');
-  advanced.open = !simple;
-  advanced.append(ui.h('summary', null, S.editFull), raw, ui.msgline(S.fullNote));
+  advanced.open = !simple && !unset;
+  advanced.append(ui.h('summary', null, S.editFull), raw, ui.msgline(S.fullNote), problem);
   const preview = ui.h('details');
   preview.append(
     ui.h('summary', null, S.viewSnapshot),
     ui.h('pre', 'mono', JSON.stringify(quotes, null, 2)),
   );
   card.body.append(advanced, preview);
-  return { el: card.el, value: () => JSON.parse(raw.value) as unknown[] };
+  return { el: card.el };
 }

@@ -38,10 +38,12 @@ function fakeSettings(instances: Instance[], options: { suggestions?: boolean } 
     if (method === 'state') return state;
     const body = args[0] as Any;
     calls.push({ method, body });
-    return handlers[method] ? handlers[method](body) : { ok: true };
+    if (handlers[method]) return handlers[method](body);
+    return method === 'models' ? { models: [] } : { ok: true };
   };
   const last = (method: string) => calls.filter((c) => c.method === method).at(-1)?.body;
-  return { state, calls, handlers, invoke, last };
+  const bodies = (method: string) => calls.filter((c) => c.method === method).map((c) => c.body);
+  return { state, calls, handlers, invoke, last, bodies };
 }
 function instance(patch: Partial<Instance> = {}, entry: Record<string, unknown> = {}): Instance {
   return {
@@ -81,11 +83,8 @@ describe('开放推理强度', () => {
       expect([...list.options].map((o: Any) => o.value)).toEqual(['none', 'low', 'high']);
       expect(byLabel(view.root, '推理档位')).toBeNull();
       change(effort, typed);
-      expect(view.guard()).toBeTruthy();
-      button(view.root, '保存').click();
       await flush();
       expect(server.last('save').spec).toEqual(expected);
-      expect(view.guard()).toBeNull();
       cleanup();
     }
   });
@@ -134,7 +133,7 @@ describe('新建实例', () => {
 });
 
 describe('连接表', () => {
-  it('地址、密钥名、多模态与三个 options 键随保存一起送出;面板不认的 options 键原样留着,空的删掉', async () => {
+  it('每格改完即存;面板不认的 options 键原样留着,空的删掉', async () => {
     const server = fakeSettings([
       instance({}, { options: { vendorOnly: 'keep-me', extraBody: { store: false } } }),
     ]);
@@ -148,29 +147,37 @@ describe('连接表', () => {
     change(byLabel(view.root, '请求路径'), '/v1/responses');
     change(byLabel(view.root, '附加请求头（JSON 对象）'), '{"HTTP-Referer": "https://x.test"}');
     change(byLabel(view.root, '附加请求体（JSON 对象）'), '');
-    button(view.root, '保存').click();
     await flush();
-    const body = server.last('save');
-    expect(body.name).toBe('primary');
-    expect(body.baseUrl).toBe('https://alpha.test/v2');
-    expect(body.secret).toBe('ALPHA_KEY_2');
-    expect(body.multimodal).toBe(true);
-    expect(body.options).toEqual({
+    const bodies = server.bodies('save');
+    expect(bodies.every((body: Any) => body.name === 'primary')).toBe(true);
+    expect(bodies.map((body: Any) => body.baseUrl).filter(Boolean)).toEqual(['https://alpha.test/v2']);
+    expect(bodies.map((body: Any) => body.secret).filter(Boolean)).toEqual(['ALPHA_KEY_2']);
+    expect(bodies.some((body: Any) => body.multimodal === true)).toBe(true);
+    expect(server.last('save').options).toEqual({
       vendorOnly: 'keep-me',
       endpointPath: '/v1/responses',
       extraHeaders: { 'HTTP-Referer': 'https://x.test' },
     });
+  });
+  it('地址或密钥变量名改过就重取模型列表', async () => {
+    const server = fakeSettings([instance()]);
+    server.handlers.models = () => ({ models: [{ id: 'alpha-mini' }] });
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    expect(server.bodies('models')).toEqual([]);
+    change(byLabel(view.root, '供应地址'), 'https://beta.test/v1');
+    await flush();
+    expect(server.bodies('models')).toEqual([{ name: 'primary' }]);
+    expect(byLabel(view.root, '模型').tagName).toBe('SELECT');
   });
   it('附加请求头不是 JSON 对象时不保存,报错留在面板', async () => {
     const server = fakeSettings([instance()]);
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
     change(byLabel(view.root, '附加请求头（JSON 对象）'), '["a"]');
-    button(view.root, '保存').click();
     await flush();
     expect(server.calls.filter((c) => c.method === 'save')).toEqual([]);
     expect(view.root.textContent).toContain('附加请求头（JSON 对象） 必须是 JSON 对象');
-    expect(view.guard()).toBeTruthy();
   });
   it('写入密钥:送出变量所属实例与值,成功后输入框清空、来源药丸更新', async () => {
     const current = instance();
@@ -193,18 +200,33 @@ describe('连接表', () => {
     expect(view.root.querySelector('.pill.on').textContent).toBe('端点 .env');
     expect(view.root.textContent).toContain('密钥已写入端点 .env。');
   });
-  it('还没保存密钥变量名的实例,密钥值一行禁用并提示先保存变量名', async () => {
+  it('还没填密钥变量名的实例给出提示', async () => {
     const view = await mountPanel(fakeSettings([instance({}, { secret: undefined })]).invoke);
     cleanup = view.cleanup;
-    expect(byLabel(view.root, '密钥值').disabled).toBe(true);
-    expect(button(view.root, '写入密钥').disabled).toBe(true);
     expect(view.root.textContent).toContain('先保存密钥变量名');
+  });
+});
+
+describe('模块段落', () => {
+  it('连接与模型档之间留给模块,作用域是当前实例;换实例时上一批结束', async () => {
+    const server = fakeSettings([instance(), instance({ name: 'second' })]);
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    expect(view.slots).toEqual([
+      expect.objectContaining({ slot: 'instance', scope: { instance: 'primary' }, disposed: false }),
+    ]);
+    change(view.root.querySelector('select'), 'second');
+    await flush();
+    expect(view.slots.map((s: Any) => [s.scope.instance, s.disposed])).toEqual([
+      ['primary', true],
+      ['second', false],
+    ]);
   });
 });
 
 describe('成本三格表', () => {
   const rateOf = (root: Any, label: string) => byLabel(root, label).value;
-  it('没有报价时三格默认 0、币种 USD,保存落成一条 * 边际规则', async () => {
+  it('没有报价时三格留空并说明未设;填一格才落成一条 * 边际规则', async () => {
     const server = fakeSettings([instance({}, { pricing: [] })]);
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
@@ -213,10 +235,10 @@ describe('成本三格表', () => {
       ['缓存命中 / 百万 token', '未缓存输入 / 百万 token', '输出 / 百万 token'].map((l) =>
         rateOf(view.root, l),
       ),
-    ).toEqual(['0', '0', '0']);
+    ).toEqual(['', '', '']);
+    expect(view.root.textContent).toContain('未设报价');
     expect(view.root.querySelector('details').open).toBe(false);
     change(byLabel(view.root, '输出 / 百万 token'), '15');
-    button(view.root, '保存').click();
     await flush();
     expect(server.last('save').pricing).toEqual([
       {
@@ -232,7 +254,27 @@ describe('成本三格表', () => {
       },
     ]);
   });
-  it('已存的正是那一条 * 规则时回填三格;不动就原样送回', async () => {
+  it('三格全清回到未设', async () => {
+    const server = fakeSettings([
+      instance({}, {
+        pricing: [{
+          models: ['*'], currency: 'USD', basis: 'marginal', source: 'console',
+          rules: [
+            { meter: 'cachedInput', perMillion: 1 },
+            { meter: 'uncachedInput', perMillion: 2 },
+            { meter: 'output', perMillion: 3 },
+          ],
+        }],
+      }),
+    ]);
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    for (const label of ['缓存命中 / 百万 token', '未缓存输入 / 百万 token', '输出 / 百万 token'])
+      change(byLabel(view.root, label), '');
+    await flush();
+    expect(server.last('save').pricing).toEqual([]);
+  });
+  it('已存的正是那一条 * 规则时回填三格;改一格连同其余两格一起送回', async () => {
     const pricing = [
       {
         models: ['*'],
@@ -253,12 +295,12 @@ describe('成本三格表', () => {
     expect(rateOf(view.root, '缓存命中 / 百万 token')).toBe('0.5');
     expect(rateOf(view.root, '未缓存输入 / 百万 token')).toBe('2');
     expect(rateOf(view.root, '输出 / 百万 token')).toBe('8');
-    button(view.root, '保存').click();
+    change(byLabel(view.root, '输出 / 百万 token'), '9');
     await flush();
     expect(server.last('save').pricing[0].rules).toEqual([
       { meter: 'cachedInput', perMillion: 0.5 },
       { meter: 'uncachedInput', perMillion: 2 },
-      { meter: 'output', perMillion: 8 },
+      { meter: 'output', perMillion: 9 },
     ]);
   });
   it('三格表达不了的报价:三格留空、完整规则展开并持有原值;改 JSON 以 JSON 为准,改三格则覆盖', async () => {
@@ -281,16 +323,10 @@ describe('成本三格表', () => {
     expect(advanced.open).toBe(true);
     const raw = advanced.querySelector('textarea');
     expect(JSON.parse(raw.value)).toEqual(pricing);
-    button(view.root, '保存').click();
-    await flush();
-    expect(server.last('save').pricing).toEqual(pricing);
-    // 每次保存成功都重读整页,文本域要重新取
-    change(view.root.querySelector('details textarea'), JSON.stringify([pricing[1]]));
-    button(view.root, '保存').click();
+    change(raw, JSON.stringify([pricing[1]]));
     await flush();
     expect(server.last('save').pricing).toEqual([pricing[1]]);
     change(byLabel(view.root, '缓存命中 / 百万 token'), '1');
-    button(view.root, '保存').click();
     await flush();
     expect(server.last('save').pricing).toEqual([
       expect.objectContaining({
@@ -302,6 +338,15 @@ describe('成本三格表', () => {
         ],
       }),
     ]);
+  });
+  it('完整规则那格写坏时不往端点写,解析错误留在卡上', async () => {
+    const server = fakeSettings([instance({}, { pricing: [] })]);
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    change(view.root.querySelector('details textarea'), '{ 不是 JSON');
+    await flush();
+    expect(server.bodies('save')).toEqual([]);
+    expect(view.root.querySelector('details .msgline.bad').textContent).toContain('SyntaxError');
   });
 });
 
@@ -355,17 +400,7 @@ describe('探测与模型列表', () => {
     const bad = [...view.root.querySelectorAll('.msgline.bad')].map((n: Any) => n.textContent);
     expect(bad).toEqual(['HTTP 404', '该 baseUrl 没有 Responses 端点']);
   });
-  it('有未保存改动时探测不发请求,提示先保存', async () => {
-    const server = fakeSettings([instance()]);
-    const view = await mountPanel(server.invoke);
-    cleanup = view.cleanup;
-    change(byLabel(view.root, '供应地址'), 'https://elsewhere.test');
-    button(view.root, '测试可用性').click();
-    await flush();
-    expect(server.calls).toEqual([]);
-    expect(view.root.textContent).toContain('请先保存当前修改。');
-  });
-  it('取模型列表填进模型 datalist;目录里有上下文窗口时一键填入', async () => {
+  it('取到模型列表就把模型格换成选单,选中的那个带出上下文窗口', async () => {
     const server = fakeSettings([instance()]);
     server.handlers.models = () => ({
       models: [{ id: 'alpha-large', contextWindow: 128000 }, { id: 'alpha-mini' }],
@@ -375,17 +410,26 @@ describe('探测与模型列表', () => {
     button(view.root, '取模型列表').click();
     await flush();
     const model = byLabel(view.root, '模型');
-    const list = view.root.querySelector(`datalist#${model.getAttribute('list')}`);
-    expect([...list.options].map((o: Any) => o.value)).toEqual(['alpha-large', 'alpha-mini']);
+    expect(model.tagName).toBe('SELECT');
+    expect([...model.options].map((o: Any) => o.value)).toEqual(['alpha-large', 'alpha-mini']);
     expect(view.root.textContent).toContain('取到 2 个模型。');
-    const fill = button(view.root, '填入上下文窗口 128000');
-    expect(fill).toBeDefined();
-    fill.click();
     expect(byLabel(view.root, '上下文窗口').value).toBe('128000');
-    expect(button(view.root, '填入上下文窗口 128000')).toBeUndefined();
-    button(view.root, '保存').click();
-    await flush();
     expect(server.last('save').spec.contextWindow).toBe(128000);
+    change(byLabel(view.root, '模型'), 'alpha-mini');
+    await flush();
+    expect(server.last('save').spec.model).toBe('alpha-mini');
+  });
+  it('取不到模型列表就留在自由输入,原因写在模型格下面', async () => {
+    const server = fakeSettings([instance()]);
+    server.handlers.models = () => {
+      throw new Error('端点不提供模型列表');
+    };
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    button(view.root, '取模型列表').click();
+    await flush();
+    expect(byLabel(view.root, '模型').tagName).toBe('INPUT');
+    expect(view.root.textContent).toContain('取不到模型列表：Error: 端点不提供模型列表');
   });
   it('模型名没有默认候选:占位符是通用的,手填一个目录外的名字照样保存', async () => {
     const server = fakeSettings([instance()]);
@@ -393,11 +437,7 @@ describe('探测与模型列表', () => {
     cleanup = view.cleanup;
     const model = byLabel(view.root, '模型');
     expect(model.placeholder).toBe('明确模型名');
-    // 取模型列表之前 datalist 是空的:候选只可能来自端点自己
-    const list = view.root.querySelector(`datalist#${model.getAttribute('list')}`);
-    expect(list.options.length).toBe(0);
     change(model, 'vendor/brand-new-model:2027-preview');
-    button(view.root, '保存').click();
     await flush();
     expect(server.last('save').spec.model).toBe('vendor/brand-new-model:2027-preview');
   });
@@ -456,7 +496,7 @@ describe('英文表', () => {
   it('language=en 时按钮与字段全部走英文', async () => {
     const view = await mountPanel(fakeSettings([instance()]).invoke, 'en');
     cleanup = view.cleanup;
-    for (const label of ['Save', 'Test endpoint', 'Duplicate', 'Delete', 'Fetch models', 'Save key'])
+    for (const label of ['Test endpoint', 'Duplicate', 'Delete', 'Fetch models', 'Save key'])
       expect(button(view.root, label)).toBeDefined();
     expect(byLabel(view.root, 'Reasoning effort')).not.toBeNull();
     expect(byLabel(view.root, 'Cache hit / M tokens')).not.toBeNull();

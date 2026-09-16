@@ -1,4 +1,3 @@
-import { connectionGroup } from '../console/config.ts';
 import type { ProviderModule } from '../base.ts';
 import type { LLMProviderEntry } from '../../core/types.ts';
 import { isContextOverflow } from '../transport/errors.ts';
@@ -49,24 +48,6 @@ export default {
   reasoningTiers: [],
   effortSuggestions: EFFORTS,
   serviceTiers: [],
-  config: (name, entry, language) => {
-    const S = text(language);
-    return [
-      connectionGroup(
-        name,
-        entry,
-        {
-          'options.endpointPath': {
-            type: 'string',
-            title: S.endpointPath,
-            description: S.endpointPathDescription,
-            'x-hot': true,
-          },
-        },
-        language,
-      ),
-    ];
-  },
   validateEntry: (entry, language) => {
     const S = text(language);
     const options = compatOptions(entry);

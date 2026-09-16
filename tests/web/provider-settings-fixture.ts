@@ -88,7 +88,7 @@ export async function mountSettings(
     root: mounted.root,
     cfg,
     settings,
-    guard: mounted.guard,
+    slots: mounted.slots,
     /** 合并全局端点配置与部署选择，提供断言使用的配置视图。 */
     read: () => ({
       ...JSON.parse(readFileSync(file, 'utf8')),
@@ -111,6 +111,8 @@ export async function mountPanel(
   invoke: (method: string, args: unknown[]) => Promise<unknown> | unknown,
   language: 'zh' | 'en' = 'zh',
 ) {
+  /** 宿主挂插槽的记录:挂了哪个插槽、给的作用域,以及有没有被结束。 */
+  const slots: Array<{ slot: string; scope: Record<string, string>; host: Any; disposed: boolean }> = [];
   const { createConsoleUi } = (await import(UI)) as Any;
   const { llmSettingsPanel } = (await import(CLIENT)) as Any;
   const root = doc.createElement('div');
@@ -122,22 +124,23 @@ export async function mountPanel(
   globalThis.AbortController = doc.defaultView.AbortController;
   const memo = { get: (_key: string, fallback: unknown) => fallback, set: () => {} };
   const ui = createConsoleUi({ memo, overlayHost: doc.body, signal: controller.signal, doc });
-  let guard: () => string | null = () => null;
   await llmSettingsPanel.mount({
     root,
     ui,
     language,
     signal: controller.signal,
+    scope: {},
     invoke: async (method: string, args: unknown[] = []) => invoke(method, args),
     refresh: async () => {},
-    guardLeave: (value: () => string | null) => {
-      guard = value;
-      return { dispose() {} };
+    mountSlot: async (slot: string, host: Any, scope: Record<string, string>) => {
+      const record = { slot, scope, host, disposed: false };
+      slots.push(record);
+      return { dispose: () => { record.disposed = true; } };
     },
   });
   return {
     root,
-    guard: () => guard(),
+    slots,
     cleanup: () => {
       controller.abort();
       root.remove();
