@@ -210,6 +210,8 @@ function consoleContribution(loaded: LoadedConfig<BotConfig>, p: ConsoleParts): 
 const definition: BotDefinition<BotConfig> = {
   id: 'corti-soulmate',
   description: 'Yukima:分层记忆、交接后并行梦、QQ 起草-确认门、宪法归梦修订',
+  // 记忆系统与 Cormini 同一套(工作区即记忆,Git 记账),分层记忆建在它上面。
+  memoryName: 'GitMem',
   declares: DECLARES,
   defaults: composeDefaults,
   build,
