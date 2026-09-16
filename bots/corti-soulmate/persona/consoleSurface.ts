@@ -29,7 +29,6 @@ export const MEMORY_PANEL: WorldPanelDecl = {
   title: 'Memory 分层',
 };
 
-/** Memory 页三块;分层排在工作区与版本历史之间。 */
 export function personaPanels(language: Language = 'zh'): WorldPanelDecl[] {
   return [workspacePanelDecl(language), MEMORY_PANEL, historyPanelDecl(language)];
 }
@@ -126,7 +125,6 @@ export interface PersonaConsoleDeps {
   texts?: { path(name: string): string; writePath(name: string): string };
 }
 
-/** git 提交与否都要说清楚:没提交时不能让人以为改动进了历史。 */
 function memoryState(deps: PersonaConsoleDeps): MemoryState {
   const { memory: ws, memo } = deps;
   const resident = memo.residentFiles();

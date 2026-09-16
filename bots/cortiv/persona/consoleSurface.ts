@@ -17,7 +17,6 @@ export const MEMORY_PANEL: WorldPanelDecl = {
   title: 'Memory',
 };
 
-/** Memory 页三块;人物档案概览排在工作区与版本历史之间。 */
 export function personaPanels(language: Language = 'zh'): WorldPanelDecl[] {
   return [workspacePanelDecl(language), MEMORY_PANEL, historyPanelDecl(language)];
 }
