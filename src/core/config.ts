@@ -8,6 +8,10 @@ const CORE_GROUP_TEXT = {
   zh: {
     title: "事件合批、推理与日志",
     description: "",
+    displayName: {
+      title: '展示名',
+      description: '控制台标题与 bot 发出的消息用这个名字。控制台立刻跟上;已经挂载的 World 在自己重启后才跟上。',
+    },
     quietGap: {
       title: '安静窗口',
       description: "参与合批的事件在最后一项到达后等待此时长；达到批次时限或数量上限时提前投递。",
@@ -45,6 +49,10 @@ const CORE_GROUP_TEXT = {
   en: {
     title: "Event batching, reasoning and logging",
     description: "",
+    displayName: {
+      title: 'Display name',
+      description: 'Used for the console title and as the sender name on messages the bot sends. The console picks it up at once; a mounted World does so when that World restarts.',
+    },
     quietGap: {
       title: 'Quiet window',
       description: "Wait this long after the last batched item arrives; the batch time and size limits can trigger earlier delivery.",
@@ -92,6 +100,12 @@ export function coreConfigGroup(language: Language): ConfigGroup {
       title: t.title,
       description: t.description,
       properties: {
+        displayName: {
+          type: 'string',
+          title: t.displayName.title,
+          'x-hot': true,
+          description: t.displayName.description,
+        },
         'batching.quietGapMs': {
           type: 'integer',
           title: t.quietGap.title,

@@ -4,7 +4,7 @@
  * 外壳不探测整站可达性，单个接口失败不代表整站状态。DOM 复用 ConsoleUi 与现存样式，窄屏折叠交给 CSS。
  */
 
-import { get, post } from '../core/api.ts';
+import { get, post, setConfig } from '../core/api.ts';
 import { buildHash, type Route, type Router } from '../core/router.ts';
 import { featureAvailable, type FrameworkFeature } from '../features/feature.ts';
 import { PROVIDER_ROUTE } from '../console-pages/host.ts';
@@ -128,7 +128,8 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   const foot = ui.h('div', 'railfoot');
   const avatar = createAvatarControl({ doc, ui, signal, onError });
-  const botName = ui.h('div', 'rail-name', DEFAULT_BRAND);
+  const botName = ui.h('button', 'rail-name', DEFAULT_BRAND);
+  botName.type = 'button';
   const who = ui.h('div', 'rail-who');
   who.append(avatar.el, botName);
   const footActions = ui.h('div', 'rail-actions');
@@ -450,14 +451,54 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   // ---- bot 实例名 -------------------------------------------------------
 
+  /** 当前展示名；改名时拿它作输入框的初值。 */
+  let shownName = DEFAULT_BRAND;
+
   const setBrand = (name: string | null | undefined): void => {
     const shown = typeof name === 'string' && name.trim() !== '' ? name.trim() : DEFAULT_BRAND;
+    shownName = shown;
     // 名字长起来底栏放不下,截断后仍要读得到全名。
     botName.textContent = shown;
-    botName.title = shown;
+    // 悬停说的是这一下能做什么;全名在改名框里看得到。
+    botName.title = S.renameTitle;
     avatar.setLabel(shown);
     doc.title = S.docTitle(shown);
   };
+
+  /**
+   * 就地改名。写的是 core 配置里的 `displayName`，与配置页上那一项同一个值。
+   * Esc 放弃，回车或失焦提交；名字没变或清空就当放弃。
+   */
+  const startRename = (): void => {
+    const field = ui.input({ value: shownName });
+    field.className = 'field rail-rename';
+    botName.replaceWith(field);
+    field.focus();
+    field.select();
+    let done = false;
+    const finish = (save: boolean): void => {
+      if (done) return;
+      done = true;
+      const next = field.value.trim();
+      field.replaceWith(botName);
+      if (!save || !next || next === shownName) return;
+      setBrand(next);
+      void setConfig('core', { displayName: next }).then(
+        () => ui.toast(S.renameSaved),
+        (err) => {
+          ui.toast(S.renameFailed(String((err as Error)?.message ?? err)), 'bad');
+          onError(err);
+        },
+      );
+    };
+    field.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') finish(true);
+      else if (event.key === 'Escape') finish(false);
+    }, { signal });
+    field.addEventListener('blur', () => finish(true), { signal });
+  };
+  botName.addEventListener('click', startRename, { signal });
+  botName.title = S.renameTitle;
 
   /**
    * 展示名来自部署配置。**取不到只影响这一个字**：不改状态灯、不报错卡——

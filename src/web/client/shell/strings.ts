@@ -38,6 +38,9 @@ const zh = {
   noReceipt: (msg: string) =>
     `未收到关闭结果（${msg}）；进程可能已退出。详情见当前运行的 data/runs/<run>/log.jsonl 中的 shutdown 记录。`,
   docTitle: (name: string) => `控制台 · ${name}`,
+  renameTitle: '点击改名',
+  renameSaved: '展示名已保存',
+  renameFailed: (msg: string) => `展示名没保存成:${msg}`,
 };
 
 const en: typeof zh = {
@@ -78,6 +81,9 @@ const en: typeof zh = {
   noReceipt: (msg: string) =>
     `No shutdown result received (${msg}); the process may have exited. See the shutdown records in data/runs/<run>/log.jsonl for the current run.`,
   docTitle: (name: string) => `Console · ${name}`,
+  renameTitle: 'Click to rename',
+  renameSaved: 'Display name saved',
+  renameFailed: (msg: string) => `Display name not saved: ${msg}`,
 };
 
 export const S = pick({ zh, en });

@@ -98,6 +98,19 @@ class FakeEl {
     this.parent.children.splice(this.parent.children.indexOf(this), 1);
     this.parent = null;
   }
+  /** 就地改名要用:输入框顶掉名字,提交后换回来。 */
+  value = '';
+  focus(): void {}
+  select(): void {}
+  replaceWith(node: FakeEl): void {
+    const parent = this.parent;
+    if (!parent) return;
+    const at = parent.children.indexOf(this);
+    node.parent?.children.splice(node.parent.children.indexOf(node), 1);
+    node.parent = parent;
+    parent.children.splice(at, 1, node);
+    this.parent = null;
+  }
   setAttribute(k: string, v: string): void {
     if (k === 'class') { this.className = v; return; }
     this.attrs.set(k, v);
@@ -172,12 +185,21 @@ function click(el: FakeEl, extra: Record<string, unknown> = {}): void {
   });
 }
 
+/** 这一轮里发出去的 POST，就地改名那组用它核对写了什么。 */
+const posts: Array<{ url: string; body: unknown }> = [];
+
 function stubStatus(payload: unknown, fail = false): void {
-  vi.stubGlobal('fetch', () => Promise.resolve(
-    fail
-      ? { ok: false, status: 500, text: () => Promise.resolve('{"error":"服务端说不行"}') }
-      : { ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) },
-  ));
+  posts.length = 0;
+  vi.stubGlobal('fetch', (url: unknown, init?: { method?: string; body?: string }) => {
+    if (init?.method === 'POST') {
+      posts.push({ url: String(url), body: init.body ? JSON.parse(init.body) : undefined });
+    }
+    return Promise.resolve(
+      fail
+        ? { ok: false, status: 500, text: () => Promise.resolve('{"error":"服务端说不行"}') }
+        : { ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) },
+    );
+  });
 }
 
 async function flush(times = 8): Promise<void> {
@@ -203,6 +225,7 @@ interface Made {
   nav: FakeEl;
   navigated: string[][];
   life: AbortController;
+  posts: Array<{ url: string; body: unknown }>;
 }
 
 async function mkShell(over: Record<string, unknown> = {}): Promise<Made> {
@@ -223,7 +246,7 @@ async function mkShell(over: Record<string, unknown> = {}): Promise<Made> {
   });
   doc.body.appendChild(shell.el as unknown as FakeEl);
   const el = shell.el as unknown as FakeEl;
-  return { shell, doc, el, nav: el.children[1], navigated, life };
+  return { shell, doc, el, nav: el.children[1], navigated, life, posts };
 }
 
 /** 左栏上每一行的显示名。 */
@@ -737,8 +760,8 @@ describe('bot 实例名', () => {
     expect(el.find('rail-name')!.textContent).toBe('bot');   // 到手之前是中性缺省
     await flush();
     expect(el.find('rail-name')!.textContent).toBe('示例');
-    // 名字长起来会被截断,悬停仍读得到全名。
-    expect(el.find('rail-name')!.title).toBe('示例');
+    // 悬停说的是这一下能做什么;全名在改名框里。
+    expect(el.find('rail-name')!.title).toBe('点击改名');
     expect(doc.title).toBe('控制台 · 示例');
   });
 
@@ -850,5 +873,45 @@ describe('外壳源码的规矩', () => {
       expect(src, name).not.toMatch(/document\s*\.\s*body/);
       expect(src, name).not.toMatch(/window\s*\.\s*__/);
     }
+  });
+});
+
+describe('就地改名', () => {
+  it('点名字变输入框,回车写进 core 配置并立刻改标题', async () => {
+    stubStatus({ displayName: '示例' });
+    const { el, doc, posts } = await mkShell();
+    await flush();
+
+    el.find('rail-name')!.dispatchEvent({ type: 'click' });
+    const field = el.find('rail-rename')!;
+    expect(field.value).toBe('示例');
+
+    field.value = '新名字';
+    field.dispatchEvent({ type: 'keydown', key: 'Enter' });
+    await flush();
+
+    expect(el.find('rail-rename')).toBe(null);
+    expect(el.find('rail-name')!.textContent).toBe('新名字');
+    expect(doc.title).toBe('控制台 · 新名字');
+    expect(posts.at(-1)).toMatchObject({
+      url: '/api/config',
+      body: { group: 'core', values: { displayName: '新名字' } },
+    });
+  });
+
+  it('Esc 放弃:名字不动,也不写配置', async () => {
+    stubStatus({ displayName: '示例' });
+    const { el, posts } = await mkShell();
+    await flush();
+    const before = posts.length;
+
+    el.find('rail-name')!.dispatchEvent({ type: 'click' });
+    const field = el.find('rail-rename')!;
+    field.value = '不要这个';
+    field.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    await flush();
+
+    expect(el.find('rail-name')!.textContent).toBe('示例');
+    expect(posts.length).toBe(before);
   });
 });
