@@ -15,7 +15,7 @@ import {
   type WorkspaceWriteResult,
 } from './shared.ts';
 
-/** 新建对话框的一个模板选项;`body` 缺省 = 建空文件。 */
+/** `body` 缺省 = 空文件。 */
 export interface NewFileTemplate {
   value: string;
   label: string;
@@ -23,9 +23,9 @@ export interface NewFileTemplate {
 }
 
 export interface WorkspacePanelOptions {
-  /** 新建对话框的模板下拉,首项默认选中。 */
+  /** 首项默认选中。 */
   templates?: readonly NewFileTemplate[];
-  /** 新建对话框里目录框的默认值与占位符。 */
+  /** 新建文件的默认目录。 */
   defaultDir?: string;
 }
 

@@ -25,20 +25,17 @@ const PANEL_TEXT = {
   },
 };
 
-/** Memory 页第一块;变体把自己那块排在它与版本历史之间。 */
 export function workspacePanelDecl(language: Language = 'zh'): WorldPanelDecl {
   const t = pick(language, PANEL_TEXT);
   return { id: 'workspace', title: t.workspace, description: t.workspaceDesc };
 }
 
-/** Memory 页最后一块。 */
 export function historyPanelDecl(language: Language = 'zh'): WorldPanelDecl {
   return { id: 'history', title: pick(language, PANEL_TEXT).history };
 }
 
 const FILE_MAX_BYTES = 1024 * 1024;
 
-/** 读取返回的 revision 与保存校验的 baseRevision 使用相同的内容指纹算法。 */
 function revisionOf(buf: Buffer | string): string {
   return createHash('sha256').update(buf).digest('hex');
 }
@@ -102,7 +99,6 @@ function buildTree(absDir: string, rel: string): WorkspaceNode[] {
   return nodes;
 }
 
-/** git 提交与否都要说清楚:没提交时不能让人以为改动进了历史。 */
 function commitNote(hash: string | null, ok: string): string {
   return hash ? `${ok}并提交(${hash})` : `${ok}(git 未提交:无改动或不可用)`;
 }
@@ -112,7 +108,7 @@ function str(v: unknown, what: string): string {
   return v.trim();
 }
 
-/** `baseRevision` 可以不给(新建时就没有底本);给了就必须是字符串。 */
+/** 空或非字符串 = 没有底本,不核对。 */
 function optRevision(v: unknown): string | null {
   return typeof v === 'string' && v !== '' ? v : null;
 }
@@ -200,10 +196,7 @@ function renameFilePanel(ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWrit
   return { ok: true, result: commitNote(hash, '已改名'), revision: '' };
 }
 
-/**
- * `workspace` 与 `history` 两块面板的方法分派。变体先处理自己那块面板,剩下的交给它;
- * 面板或方法不认识一律抛,控制台把抛出的错原样显示,所以措辞要写给人看。
- */
+/** `workspace` 与 `history` 两块面板的方法分派;变体先处理自己那块,其余交给它。 */
 export function workspaceInvoke(
   memory: GitWorkspaceMemory,
 ): (panel: string, method: string, args: unknown[]) => Promise<unknown> {
@@ -222,7 +215,6 @@ export function workspaceInvoke(
           return removeFilePanel(ws, args);
         case 'rename':
           return renameFilePanel(ws, args);
-        // 某个文件自己的提交流水(编辑器右上角那颗「历史」)
         case 'history':
           return { commits: git.log({ path: str(args[0], 'path'), limit: 100 }) };
         case 'diff':

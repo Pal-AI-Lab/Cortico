@@ -103,7 +103,7 @@ export function stamp(iso: string | null | undefined): string {
 
 export function gitLine(st: MediumStatus): string {
   if (!st.available) return 'git 不可用';
-  if (!st.repo) return '还没有建仓(第一次写入时自动建仓并打 checkpoint0)';
+  if (!st.repo) return '还没有建仓';
   return `git ${st.head ?? '—'} · ${st.dirty ? '有未提交改动' : '干净'} · ${st.tags.length} 个存档点`;
 }
 
