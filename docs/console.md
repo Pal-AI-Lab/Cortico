@@ -13,22 +13,25 @@
 | 路由 | 页 | 内容 |
 |---|---|---|
 | `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork |
-| `core` | 运行诊断 | run、session、事件、运行日志、工具,以及 Core 自己的数据与参数 |
-| `usage` | 用量·成本 | 按 session、按天的 token 与费用 |
+| `core` | 运行诊断 | run、session、事件、运行日志,以及 Core 自己的数据与配置 |
+| `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `provider` | 语言模型 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
 | `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
-| `settings` / `appearance` | 设置 | 语言、外观 |
+| `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
 
 左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
+左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`)。
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
 存储项按归属分页:Core 的在运行诊断的「数据」子页,一键清空也在那里;World、Persona 与 Memory 页
-各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「参数」子页,其余在声明方自己的页。
+各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「配置」子页,其余在声明方自己的页。
+工具表是装配好的整份,只挂在 Persona 页的「工具表」页签上。
 
 World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `persona:<id>` /
 `llm:<id>`;Persona 的 `console().memory` 子声明另成一页 `memory:<id>`,与 Persona 页共用一份
-浏览器产物,标题取 bot 的 `memoryName`。面板、配置组与提示词文档由贡献方声明;
+浏览器产物,标题取 bot 的 `memoryName`。Persona 页的标题取 Persona 的类名,取不到才用
+bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 框架按声明渲染，新增 World 或 Persona 无需修改 `src/web/**`。
 `tests/web/acceptance-zero-diff.test.ts` 验证此约束。
 
