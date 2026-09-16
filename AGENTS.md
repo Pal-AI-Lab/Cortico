@@ -34,7 +34,8 @@ tracked.
 One name all the way through: a World's config section is `worlds.<id>`, its console page id
 `world:<id>`, its manifest `kind` is `world`; packages are `cortico-world-*`,
 `cortico-provider-*`, `cortico-bot-*`. Chinese UI text keeps Core, Persona, Memory and World
-as proper nouns and calls an extension 扩展.
+as proper nouns, calls an extension 扩展, and calls a config value 配置. 参数 is reserved for
+a tool call's arguments.
 
 Conventions that hold across the repository:
 
