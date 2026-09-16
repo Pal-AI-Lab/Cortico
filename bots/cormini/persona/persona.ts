@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
 import { pick, type Language } from 'cortico/core/language.ts';
+import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './consoleSurface.ts';
 import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
 import { saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
@@ -281,23 +282,27 @@ export class Cormini implements Persona {
           : []),
         ...this.firstTurnDocs(language),
       ],
-      // 工作区记忆跨场保留，但属于“清除所有数据”的范围。宪法由人格检查点管理，不随数据清除。
-      memory: { storage: [
-        {
-          key: 'workspace',
-          label: t.workspaceLabel,
-          kind: 'disk',
-          location: 'workspace/',
-          danger: true,
-          note: t.workspaceNote,
-          stat: () => t.workspaceStat(this.workspaceFiles().length),
-          clear: () => {
-            const files = this.workspaceFiles();
-            for (const f of files) rmSync(join(this.memoryDir, f), { force: true });
-            return t.workspaceCleared(files.length);
+      memory: {
+        panels: [workspacePanelDecl(language), historyPanelDecl(language)],
+        // 工作区记忆跨场保留，但属于“清除所有数据”的范围。宪法由人格检查点管理，不随数据清除。
+        storage: [
+          {
+            key: 'workspace',
+            label: t.workspaceLabel,
+            kind: 'disk',
+            location: 'workspace/',
+            danger: true,
+            note: t.workspaceNote,
+            stat: () => t.workspaceStat(this.workspaceFiles().length),
+            clear: () => {
+              const files = this.workspaceFiles();
+              for (const f of files) rmSync(join(this.memoryDir, f), { force: true });
+              return t.workspaceCleared(files.length);
+            },
           },
-        },
-      ] },
+        ],
+      },
+      invoke: workspaceInvoke(this.memory),
     };
   }
 

@@ -12,7 +12,7 @@ import {
   CORTI_OPS_PANELS, cortiConsolePages,
 } from '../../bots/corti-soulmate/console-page.ts';
 import definition from '../../bots/corti-soulmate/index.ts';
-import { PERSONA_PANELS, personaConsoleDecl } from '../../bots/corti-soulmate/persona/consoleSurface.ts';
+import { personaPanels, personaConsoleDecl } from '../../bots/corti-soulmate/persona/consoleSurface.ts';
 import type {
   OpsCheckpointsState, OpsDreamState, OpsResetState,
 } from '../../bots/corti-soulmate/console-page.ts';
@@ -116,7 +116,7 @@ describe('两条接缝各出一个 provider', () => {
   });
 
   it('Persona那条按 bot id 铸名,面板是认知绑定的三块', () => {
-    const c = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }));
+    const c = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: personaPanels() }));
     expect(c?.id).toBe(pageIdFor('persona', definition.id));
     expect(c?.kind).toBe('persona');
     expect(c?.availability).toBe('active');
@@ -135,14 +135,14 @@ describe('两条接缝各出一个 provider', () => {
   it('两条接缝共用同一个 id,由装配层合成一份', () => {
     // 合并前它们是同 id 的两份,直接一起上线会被判重复——两个都丢掉。
     // 所以 src/bot.ts 的 mergePersonaContributions 必须在校验之前把它们并了。
-    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
+    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: personaPanels() }))!;
     const deploy = ops().contribution;
     expect(deploy.id).toBe(core.id);
     expect(validateContributions([core, deploy]).map((p) => p.message).join()).toContain('重复');
   });
 
   it('合成之后:七个面板同在一个 provider 里,校验干净', () => {
-    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: PERSONA_PANELS }))!;
+    const core = personaPageContribution(definition.id, 'Yukima', fakeCore({ panels: personaPanels() }))!;
     const merged = mergePersonaContributions(pageIdFor('persona', definition.id), 'Yukima', core, [ops().contribution]);
     expect(merged?.id).toBe(pageIdFor('persona', definition.id));
     expect(merged?.panels?.map((p) => p.id)).toEqual(
@@ -226,7 +226,7 @@ describe('统一重置', () => {
 describe('浏览器扩展', () => {
   it('default export 的面板键 = 两个 provider 声明的七个局部 id,且都能 mount', async () => {
     const bundle = ((await import(CORTI_BUNDLE_ENTRY)) as any).default;
-    const declared = [...PERSONA_PANELS, ...CORTI_OPS_PANELS].map((p) => p.id);
+    const declared = [...personaPanels(), ...CORTI_OPS_PANELS].map((p) => p.id);
     expect(Object.keys(bundle.panels).sort()).toEqual([...declared].sort());
     for (const id of declared) expect(typeof bundle.panels[id].mount).toBe('function');
   });

@@ -6,7 +6,8 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
-import { autoload, dimLine, type FileOp, type MemoryState } from './client.ts';
+import { autoload, dimLine } from '../../cormini/console/shared.ts';
+import type { FileOp, MemoryState } from './client.ts';
 
 const ROLE_LABELS: Record<string, string> = {
   main: '主意识 main',

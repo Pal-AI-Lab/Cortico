@@ -364,7 +364,7 @@ export class CortiSoulmate extends Cormini {
       emergences: () => this.emergences(),
       firstTurnDocs: this.firstTurnDocs(language),
       texts: { path: (name) => this.textFile(name), writePath: (name) => this.textWritePath(name) },
-    });
+    }, language);
     return { ...decl, memory: { panels } };
   }
 }

@@ -306,7 +306,7 @@ export class CortiV extends Cormini {
   /** Memory 页是工作区编辑器三块;Cormini 的工作区清除项不要:工作区归版本历史管,一键清空只扫 session/事件/用量。 */
   override console(language: Language = 'zh'): PersonaConsoleDecl {
     const base = super.console(language);
-    const surface = personaConsoleDecl({ memory: this.memory });
+    const surface = personaConsoleDecl({ memory: this.memory }, language);
     return {
       ...base,
       memory: { panels: surface.panels },

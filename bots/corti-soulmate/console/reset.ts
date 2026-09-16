@@ -4,10 +4,8 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
-import {
-  autoload, errText, gitLine, setMsg,
-  type ResetResult, type ResetState,
-} from './client.ts';
+import { autoload, errText, gitLine, setMsg } from '../../cormini/console/shared.ts';
+import type { ResetResult, ResetState } from './client.ts';
 
 export const resetPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {

@@ -7,9 +7,9 @@ import type {
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
 import {
-  autoload, colorDiff, errText, gitLine, stamp,
+  autoload, colorDiff, dimLine, errText, gitLine, stamp,
   type Commit, type MediumStatus,
-} from './client.ts';
+} from './shared.ts';
 
 interface HistoryState {
   status: MediumStatus;
@@ -35,9 +35,9 @@ export const historyPanel: ConsolePanel = {
 function statusCard(ctx: ConsolePanelContext, st: HistoryState): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: '版本状态',
-    en: 'persona/.git',
-    desc: '记忆工具的修改按批提交（署名 corti）；控制台编辑立即提交（署名 operator）。',
+    title: '介质状态',
+    en: '.git',
+    desc: '工作区自己是一个 git 仓(与项目仓无关)。控制台的编辑立即提交(署名 operator)。',
   });
   const rows: Array<{ k: string; v: string | HTMLElement }> = [
     { k: '状态', v: ui.pill(gitLine(st.status), st.status.repo ? 'on' : 'off') },
@@ -60,15 +60,16 @@ function commitsCard(
 ): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: '提交历史',
+    title: '提交流水',
     en: 'git log',
-    desc: '最多显示 100 条提交。',
+    desc: '点一条展开它引入的 diff。最多 100 条;填路径可只看某个档案。',
   });
 
   const filter = ui.input({
     value: st.path,
     cls: 'mono',
-    placeholder: '只看某个路径,如 memo/ 或 note/playbook/x.md',
+    placeholder: '只看某个路径,如 CONSTITUTION.md',
+    // 敲完再问一次服务端:逐次击键去发 git log 是白烧 CPU。
     onCommit: (v) => setPath(v.trim()),
   });
   const bar = ui.rowbar();
@@ -81,7 +82,7 @@ function commitsCard(
 
   if (!st.commits.length) {
     card.body.appendChild(ui.placeholder(
-      st.status.repo ? '这个范围里还没有提交' : 'persona/ 还没有建仓',
+      st.status.repo ? '这个范围里还没有提交' : '工作区还没有建仓',
     ));
     return card.el;
   }
@@ -120,5 +121,6 @@ function commitsCard(
     }, { signal: ctx.signal });
     card.body.append(row, detail);
   }
+  card.body.appendChild(dimLine(ctx, '想看某个版本的全文,去「工作区」打开那份档案再按「历史」。'));
   return card.el;
 }

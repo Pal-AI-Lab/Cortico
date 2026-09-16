@@ -28,7 +28,7 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 `onHandoff(snapshot, { hardTokens })`(回 `{ tail, trim? }`)、`promptVarValues(ctx)`、
 `ownToolNames()`(自有工具名,装配层据此拒绝工具名冲突的 World;未提供时仅告警并保留先注册的工具)、
 `cognition`(处理 World 的后台认知请求)、`console()`(Persona 页的声明;其中 `memory` 子声明是
-Memory 页的面板、模板与存储项)。
+Memory 页的面板、模板与存储项。Cormini 在那里放好工作区编辑器与版本历史,变体把自己那块排在两者之间)。
 钩子的异常处理方式见 [Core 文档](../src/core/README.md)。
 
 工具不在 Persona 上,在每个 `SessionDecl.tools()` 里;`end_turn`、`save_blob` 这类是 bot 侧的
@@ -63,7 +63,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 |---|---|
 | `index.ts` | `BotDefinition`,声明包 id、默认配置与装配方法 |
 | `persona/` | Persona 代码与它的提示词模板(`PREFIX.md`、`ENV_SECTION.md`、`CORE.md`…) |
-| `console/client.ts` | Persona 页的面板 bundle(可选) |
+| `console/client.ts` | Persona 页与 Memory 页的面板 bundle(可选;Cormini 已带工作区与版本历史两块) |
 | `worlds/<id>/config.json`、`worlds/<id>/ENV_PROMPT.md` | 对某个 World 的默认配置与环境提示词覆盖 |
 | `vtuber-pack/` | 挂 `cortico-world-vtuber` 的包才有:演出词表、曲线、参数集 |
 

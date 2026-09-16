@@ -1,5 +1,5 @@
 /*
- * corti-soulmate 面板专有样式，仅补充 ctx.ui 未提供的布局与排版。通用原语、树行、历史行和 diff 框复用控制台样式。
+ * Memory 页面板的专有样式，仅补充 ctx.ui 未提供的布局与排版。通用原语、树行、历史行和 diff 框复用控制台样式。
  * 类名使用 ct- 前缀，颜色和字体使用主题变量，避免跨 provider 的全局样式冲突。
  */
 
@@ -167,6 +167,13 @@
   overflow: auto;
   white-space: pre-wrap;
   font: 12.5px/1.65 var(--mono);
+}
+
+.ct-note {
+  margin: 0;
+  white-space: pre-wrap;
+  font: 12.5px/1.7 var(--mono);
+  color: var(--ink-soft);
 }
 
 .ct-preview blockquote {

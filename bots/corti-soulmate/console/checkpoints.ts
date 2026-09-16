@@ -7,9 +7,9 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
-import {
-  autoload, errText, gitLine, setMsg, stamp,
-  type Applied, type CheckpointEntry, type CheckpointsState, type ResetResult,
+import { autoload, errText, gitLine, setMsg, stamp } from '../../cormini/console/shared.ts';
+import type {
+  Applied, CheckpointEntry, CheckpointsState, ResetResult,
 } from './client.ts';
 
 /** 出厂基线不能删(服务端也会拦,这里先把按钮省掉)。 */

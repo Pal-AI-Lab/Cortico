@@ -6,7 +6,8 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
-import { autoload, errText, setMsg, type DreamState, type DreamTriggered } from './client.ts';
+import { autoload, errText, setMsg } from '../../cormini/console/shared.ts';
+import type { DreamState, DreamTriggered } from './client.ts';
 
 const POLL_MS = 4000;
 

@@ -6,7 +6,26 @@ import type {
   ConsolePanelContext,
   ConsolePanel,
 } from 'cortico/web/shared/client-panel.ts';
-import { autoload, dimLine, type MemoryState } from './client.ts';
+import { autoload, dimLine } from '../../cormini/console/shared.ts';
+
+export interface ViewerArchive {
+  source: string;
+  path: string;
+  summary: string;
+}
+
+export interface MemoryState {
+  workspaceFiles: number;
+  topLevel: string[];
+  constitutionChars: number;
+  viewers: {
+    total: number;
+    bySource: Array<{ source: string; count: number }>;
+    archives: ViewerArchive[];
+    truncated: boolean;
+  };
+  note: string;
+}
 
 export const memoryPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {

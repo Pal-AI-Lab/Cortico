@@ -1,7 +1,8 @@
 /**
- * Persona自报的工作区目录树与编辑器。DOM 在挂载时创建，离开面板后清理。
- * 未保存改动通过 ctx.guardLeave 拦截离开；切换文件另行确认。保存、删除和改名携带内容 sha256 的 baseRevision，冲突通过 invoke 回执返回。
- * 快捷键仅监听编辑器节点，随 ctx.signal 解除。
+ * 面板 `workspace`——工作区的目录树 + 编辑器。路径前缀是服务端回报的工作区目录名。
+ *
+ * 保存/删除/改名带 sha256 `baseRevision`;冲突回执是 `ok:false, conflict:true`。
+ * 未保存改动走 `ctx.guardLeave`。键盘监听只挂在编辑器节点上,随 `ctx.signal` 摘掉。
  */
 
 import type {
@@ -12,22 +13,39 @@ import {
   autoload, colorDiff, dimLine, errText, setMsg, stamp,
   type Commit, type WorkspaceFile, type WorkspaceNode, type WorkspaceTree,
   type WorkspaceWriteResult,
-} from './client.ts';
+} from './shared.ts';
 
-/** 新建档案模板。 */
-const TEMPLATES = [
+/** 新建对话框的一个模板选项;`body` 缺省 = 建空文件。 */
+export interface NewFileTemplate {
+  value: string;
+  label: string;
+  body?(title: string): string;
+}
+
+export interface WorkspacePanelOptions {
+  /** 新建对话框的模板下拉,首项默认选中。 */
+  templates?: readonly NewFileTemplate[];
+  /** 新建对话框里目录框的默认值与占位符。 */
+  defaultDir?: string;
+}
+
+const DEFAULT_TEMPLATES: readonly NewFileTemplate[] = [
   { value: 'blank', label: '空白' },
-  { value: 'note', label: '笔记' },
-  { value: 'person', label: '人' },
-  { value: 'memo', label: '备忘' },
+  { value: 'note', label: '笔记', body: (title) => `# ${title}\n\n` },
 ];
 
-function templateText(type: string, name: string): string {
+function templateText(
+  templates: readonly NewFileTemplate[],
+  type: string,
+  name: string,
+): string {
   const title = String(name || '新档案').replace(/\.[^.]+$/, '');
-  if (type === 'note') return `# ${title}\n\n`;
-  if (type === 'person') return `# ${title}\n\n## 关系\n\n## 已知事实\n\n## 待确认\n`;
-  if (type === 'memo') return `# ${title}\n\n- 状态：active\n- 记录：\n`;
-  return '';
+  return templates.find((t) => t.value === type)?.body?.(title) ?? '';
+}
+
+/** 工作区目录的绝对路径 → 它自己的名字。 */
+function rootName(abs: string): string {
+  return abs.replace(/[\\/]+$/, '').split(/[\\/]/).pop() ?? 'workspace';
 }
 
 const sizeText = (n: number | undefined, ctx: ConsolePanelContext): string =>
@@ -68,17 +86,19 @@ function markdownPreview(ctx: ConsolePanelContext, source: string): string {
 
 // ---------------------------------------------------------------------------
 
-export const workspacePanel: ConsolePanel = {
-  mount(ctx: ConsolePanelContext) {
-    autoload<WorkspaceTree>(ctx, {
-      loading: '读取 persona/ 目录树…',
-      failed: '工作区不可用',
-      load: () => ctx.invoke<WorkspaceTree>('tree'),
-      // 刷新目录树时保留编辑器及未保存修改。
-      render: (tree) => [new WorkspaceView(ctx, tree).el],
-    });
-  },
-};
+export function createWorkspacePanel(options: WorkspacePanelOptions = {}): ConsolePanel {
+  return {
+    mount(ctx: ConsolePanelContext) {
+      autoload<WorkspaceTree>(ctx, {
+        loading: '读取工作区目录树…',
+        failed: '工作区不可用',
+        load: () => ctx.invoke<WorkspaceTree>('tree'),
+        // 刷新目录树时保留编辑器及未保存修改。
+        render: (tree) => [new WorkspaceView(ctx, tree, options).el],
+      });
+    },
+  };
+}
 
 class WorkspaceView {
   readonly el: HTMLElement;
@@ -87,6 +107,11 @@ class WorkspaceView {
 
   private nodes: WorkspaceNode[];
   private filter = '';
+
+  /** 路径前缀:工作区目录自己的名字。 */
+  private readonly root: string;
+  private readonly templates: readonly NewFileTemplate[];
+  private readonly defaultDir: string;
 
   /** 当前打开的档案。null = 还没选。 */
   private cur: { path: string; content: string; revision: string; node: WorkspaceNode | null } | null = null;
@@ -111,14 +136,17 @@ class WorkspaceView {
   /** 仅应用最近一次打开文件请求的结果。 */
   private openSeq = 0;
 
-  constructor(ctx: ConsolePanelContext, tree: WorkspaceTree) {
+  constructor(ctx: ConsolePanelContext, tree: WorkspaceTree, options: WorkspacePanelOptions) {
     this.ctx = ctx;
     this.nodes = tree.nodes;
+    this.root = rootName(tree.root);
+    this.templates = options.templates ?? DEFAULT_TEMPLATES;
+    this.defaultDir = options.defaultDir ?? '';
     const { ui } = ctx;
 
     const card = ui.sheet({
       title: '工作区',
-      en: 'persona/',
+      en: `${this.root}/`,
       desc: '保存时以 operator 署名提交到工作区的 Git 仓库。',
     });
 
@@ -270,7 +298,7 @@ class WorkspaceView {
     const nodes = this.filtered(this.nodes);
     this.treePane.replaceChildren();
     if (!nodes.length) {
-      this.treePane.appendChild(ui.placeholder(this.filter ? '没有匹配的档案' : 'persona/ 是空的'));
+      this.treePane.appendChild(ui.placeholder(this.filter ? '没有匹配的档案' : `${this.root}/ 是空的`));
       return;
     }
     this.renderRows(nodes, this.treePane, 0, !!this.filter);
@@ -352,7 +380,7 @@ class WorkspaceView {
     if (!this.dirty()) return true;
     return this.ctx.ui.confirm({
       title: '放弃未保存的改动?',
-      body: `persona/${this.cur?.path} 改过还没保存。打开别的档案会丢掉这些改动。`,
+      body: `${this.root}/${this.cur?.path} 改过还没保存。打开别的档案会丢掉这些改动。`,
       danger: true,
     });
   }
@@ -361,7 +389,7 @@ class WorkspaceView {
     const path = node.path;
     if (!force && this.cur && this.cur.path !== path && !(await this.canLeaveCurrent())) return;
     const seq = ++this.openSeq;
-    this.pathLabel.textContent = `正在展开 persona/${path}…`;
+    this.pathLabel.textContent = `正在展开 ${this.root}/${path}…`;
     try {
       const file = await this.ctx.invoke<WorkspaceFile>('read', [path]);
       if (seq !== this.openSeq || this.ctx.signal.aborted) return;
@@ -372,8 +400,8 @@ class WorkspaceView {
         node: 'type' in node ? (node as WorkspaceNode) : null,
       };
       this.editor.value = file.content;
-      this.pathLabel.textContent = `persona/${file.path}`;
-      this.pathLabel.title = `persona/${file.path}`;
+      this.pathLabel.textContent = `${this.root}/${file.path}`;
+      this.pathLabel.title = `${this.root}/${file.path}`;
       this.metaLabel.textContent = `${this.ctx.ui.fmt.bytes(file.size)} · ${stamp(file.mtime)}`;
       setMsg(this.msg, '');
       this.setPane('edit');
@@ -426,7 +454,7 @@ class WorkspaceView {
     if (!this.cur) return;
     const path = this.cur.path;
     const ok = await this.ctx.ui.confirm({
-      title: `删除 persona/${path}?`,
+      title: `删除 ${this.root}/${path}?`,
       body: '未保存的修改将丢失。已提交的版本可从「版本历史」恢复。',
       danger: true,
     });
@@ -453,22 +481,22 @@ class WorkspaceView {
     const { ui } = this.ctx;
     const dirOf = this.cur?.path.includes('/')
       ? this.cur.path.slice(0, this.cur.path.lastIndexOf('/'))
-      : 'note';
-    const dir = ui.input({ value: dirOf, placeholder: 'note' });
+      : this.defaultDir;
+    const dir = ui.input({ value: dirOf, placeholder: this.defaultDir });
     const name = ui.input({ placeholder: '文件名.md' });
-    const tpl = ui.select({ options: TEMPLATES });
+    const tpl = ui.select({ options: this.templates.map((t) => ({ value: t.value, label: t.label })) });
     const body = ui.textarea({ rows: 8, cls: 'mono' });
     const path = ui.h('div', 'ct-dim');
     const msg = ui.msgline('');
 
     const fullPath = (): string =>
       [dir.value.trim().replace(/^[\\/]+|[\\/]+$/g, ''), name.value.trim()].filter(Boolean).join('/');
-    const sync = (): void => { path.textContent = `persona/${fullPath()}`; };
+    const sync = (): void => { path.textContent = `${this.root}/${fullPath()}`; };
     for (const el of [dir, name]) {
       el.addEventListener('input', sync, { signal: this.ctx.signal });
     }
     tpl.addEventListener('change', () => {
-      body.value = templateText(tpl.value, name.value);
+      body.value = templateText(this.templates, tpl.value, name.value);
     }, { signal: this.ctx.signal });
     sync();
 
@@ -535,8 +563,8 @@ class WorkspaceView {
     });
     const form = ui.h('div', 'ct-form');
     form.append(
-      dimLine(this.ctx, `当前:persona/${from}`),
-      ui.field('新路径(相对 persona/)', to),
+      dimLine(this.ctx, `当前:${this.root}/${from}`),
+      ui.field(`新路径(相对 ${this.root}/)`, to),
       (() => { const r = ui.actions(); r.append(msg, ui.h('span', 'grow'), apply); return r; })(),
     );
     const drawer = ui.drawer('改名 / 移动', form);
@@ -565,7 +593,7 @@ class WorkspaceView {
     back.append(
       ui.button('← 返回编辑器', { size: 'sm', onClick: () => this.setPane('edit') }),
       ui.h('span', 'grow'),
-      ui.h('span', 'ct-dim', `persona/${path}`),
+      ui.h('span', 'ct-dim', `${this.root}/${path}`),
     );
     this.histWrap.replaceChildren(back);
     if (!commits.length) {
@@ -601,7 +629,7 @@ class WorkspaceView {
           bar.append(
             ui.button('查看全文', {
               size: 'sm',
-              onClick: () => { ui.drawer(`persona/${path} @ ${c.hash}`, f.content); },
+              onClick: () => { ui.drawer(`${this.root}/${path} @ ${c.hash}`, f.content); },
             }),
             ui.button('恢复为当前草稿', {
               size: 'sm',

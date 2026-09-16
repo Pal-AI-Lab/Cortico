@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { personaPageContribution } from '../../src/bot.ts';
 import { validateContributions } from '../../src/web/shared/console-protocol.ts';
 import { CortiV } from '../../bots/cortiv/persona/persona.ts';
-import { PERSONA_PANELS, personaConsoleDecl } from '../../bots/cortiv/persona/consoleSurface.ts';
+import { personaPanels, personaConsoleDecl } from '../../bots/cortiv/persona/consoleSurface.ts';
 import { GitWorkspaceMemory } from '../../bots/cormini/persona/memory.ts';
 import type { PersonaConsoleDecl, Persona } from '../../src/core/types.ts';
 
@@ -22,7 +22,7 @@ describe('CortiV 控制面声明', () => {
   afterEach(() => { rmSync(dir, { recursive: true, force: true }); });
 
   it('Persona按 bot id 铸名,面板是工作区/记忆/历史', () => {
-    const c = personaPageContribution('cortiv', '可缇Corti', fakeCore({ panels: PERSONA_PANELS }));
+    const c = personaPageContribution('cortiv', '可缇Corti', fakeCore({ panels: personaPanels() }));
     expect(c?.id).toBe('persona:cortiv');
     expect(c?.kind).toBe('persona');
     expect(c?.panels?.map((p) => p.id)).toEqual(['workspace', 'memory', 'history']);
@@ -161,7 +161,7 @@ describe('Memory 概览', () => {
 describe('浏览器扩展', () => {
   it('default export 的面板键 = 声明的三个局部 id,且都能 mount', async () => {
     const bundle = ((await import(BUNDLE_ENTRY)) as any).default;
-    const declared = PERSONA_PANELS.map((p) => p.id);
+    const declared = personaPanels().map((p) => p.id);
     expect(Object.keys(bundle.panels).sort()).toEqual([...declared].sort());
     for (const id of declared) expect(typeof bundle.panels[id].mount).toBe('function');
   });

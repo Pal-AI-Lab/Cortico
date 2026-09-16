@@ -53,12 +53,13 @@ describe('Persona卡:只有 ORIENTATION 与宪法', () => {
 
   const FORBIDDEN = ['workspace', 'tree', 'file', 'memory', 'memo', 'checkpoint', 'checkpoints', 'dream', 'reset', 'history', 'diff'];
 
-  it('Cormini 不声明面板或配置组，工作区列入 Memory 页的存储清单', () => {
+  it('Cormini 的 Memory 页是工作区与版本历史两块,工作区同时列入存储清单', () => {
     const { parts } = buildOf(corminiDefinition);
     const decl = parts.persona.console?.();
-    expect(decl?.panels ?? []).toEqual([]);
+    expect(decl?.panels).toBeUndefined();
     expect(decl?.config).toBeUndefined();
-    expect(decl?.invoke).toBeUndefined();
+    expect(decl?.memory?.panels?.map((p) => p.id)).toEqual(['workspace', 'history']);
+    expect(decl?.invoke).toEqual(expect.any(Function));
     // 工作区须进入可清存储清单，避免清空后再次读回原工作文件。
     expect(decl?.storage).toBeUndefined();
     expect(decl?.memory?.storage?.map((s) => s.key)).toEqual(['workspace']);
@@ -81,8 +82,8 @@ describe('Persona卡:只有 ORIENTATION 与宪法', () => {
     ]);
   });
 
-  it('Cormini 没有浏览器扩展目录;CortiV 有', () => {
-    expect(existsSync(join(repoRoot, 'bots/cormini/console'))).toBe(false);
+  it('两台 bot 各有自己的浏览器入口', () => {
+    expect(existsSync(join(repoRoot, 'bots/cormini/console/client.ts'))).toBe(true);
     expect(existsSync(join(repoRoot, 'bots/cortiv/console/client.ts'))).toBe(true);
   });
 });
