@@ -252,7 +252,7 @@ describe('框架页那一段', () => {
     expect(groups.map((g) => labels(g))).toEqual([['终端', '用量'], ['配置']]);
   });
 
-  it('终端是一级入口,World 总览是实例树入口;设置压在 Core 组底,系统提示词归 Persona & Memory 组', async () => {
+  it('终端是一级入口,World 总览是实例树入口;系统提示词归 Persona & Memory 组,hidden 的页不占行', async () => {
     stubStatus({});
     const { nav, navigated } = await mkShell({
       features: [
@@ -264,7 +264,7 @@ describe('框架页那一段', () => {
         feature('extensions', '扩展', undefined, 'Core'),
         feature('prompts', '系统提示词', undefined, undefined, 'persona'),
         feature('appearance', '外观', undefined, undefined, 'hidden'),
-        feature('settings', '设置', undefined, 'Core'),
+        feature('settings', '设置', undefined, undefined, 'hidden'),
       ],
       capabilities: { worlds: true },
     });
@@ -274,14 +274,14 @@ describe('框架页那一段', () => {
     expect(labels(nav.children[0])).toEqual(['终端']);
     const core = nav.children[1];
     expect(core.find('stacklabel')!.textContent).toBe('Core');
-    // 组内按声明顺序;设置声明在最末,所以压组底
-    expect(labels(core)).toEqual(['运行诊断', '用量', '语言模型', '扩展', '设置']);
+    // 组内按声明顺序;设置与外观是 hidden,入口在底栏,不占左栏的行
+    expect(labels(core)).toEqual(['运行诊断', '用量', '语言模型', '扩展']);
     const persona = nav.children[2];
     expect(persona.find('stacklabel')!.textContent).toBe('Persona & Memory');
     expect(labels(persona)).toEqual(['系统提示词']);
     expect(nav.children[3].classList.contains('navgroup-world-tree')).toBe(true);
-    click(core.findAll('navitem')[4]);
-    expect(navigated).toEqual([['settings']]);
+    click(core.findAll('navitem')[0]);
+    expect(navigated).toEqual([['core']]);
   });
 
   it('按 needsAny 过滤：没挂的表面根本不出现在导航里', async () => {
@@ -513,6 +513,19 @@ describe('底部运行控制', () => {
     expect(run.getAttribute('aria-label')).toBe('继续运行');
   });
 
+  it('齿轮在底栏那一排里,点它进设置页,路由到了就跟着高亮', async () => {
+    stubStatus({});
+    const { el, shell, navigated } = await mkShell();
+    const gear = el.findAll('rail-action')
+      .find((b) => b.getAttribute('aria-label') === '设置') as FakeEl;
+    click(gear);
+    expect(navigated).toEqual([['settings']]);
+    shell.setRoute(route('settings'));
+    expect(gear.className).toContain('active');
+    shell.setRoute(route('core'));
+    expect(gear.className).not.toContain('active');
+  });
+
   // 关机等待装配层返回各步骤结果。
 
   const shutdownBtn = (el: FakeEl): FakeEl => el.find('rail-shutdown') as FakeEl;
@@ -714,38 +727,50 @@ describe('当前项高亮', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 品牌名 / 连接状态
+// bot 实例名 / 连接状态
 // ---------------------------------------------------------------------------
 
-describe('品牌名', () => {
-  it('来自 /api/status 的 displayName，顺带改页面标题', async () => {
+describe('bot 实例名', () => {
+  it('来自 /api/status 的 displayName，写在头像旁边,顺带改页面标题', async () => {
     stubStatus({ displayName: '示例' });
     const { el, doc } = await mkShell();
-    expect(el.find('name')!.textContent).toBe('bot');   // 到手之前是中性缺省
+    expect(el.find('rail-name')!.textContent).toBe('bot');   // 到手之前是中性缺省
     await flush();
-    expect(el.find('name')!.textContent).toBe('示例');
+    expect(el.find('rail-name')!.textContent).toBe('示例');
+    // 名字长起来会被截断,悬停仍读得到全名。
+    expect(el.find('rail-name')!.title).toBe('示例');
     expect(doc.title).toBe('控制台 · 示例');
+  });
+
+  it('左上角是框架字标,不随 bot 改', async () => {
+    stubStatus({ displayName: '示例' });
+    const { el } = await mkShell();
+    await flush();
+    const brand = el.find('brand')!;
+    expect(brand.getAttribute('aria-label')).toBe('Cortico');
+    expect(brand.textContent).toBe('');
+    expect(brand.children[0].tagName).toBe('svg');
   });
 
   it('拿不到 / 空串 → 留中性缺省，不报错卡', async () => {
     stubStatus(null, true);
     const { el } = await mkShell();
     await flush();
-    expect(el.find('name')!.textContent).toBe('bot');
+    expect(el.find('rail-name')!.textContent).toBe('bot');
 
     stubStatus({ displayName: '   ' });
     const b = await mkShell();
     await flush();
-    expect(b.el.find('name')!.textContent).toBe('bot');
+    expect(b.el.find('rail-name')!.textContent).toBe('bot');
   });
 
   it('调用方也能直接告知（已经拿过 status 的场合）', async () => {
     stubStatus({});
     const { shell, el } = await mkShell();
     shell.setBrand('示例');
-    expect(el.find('name')!.textContent).toBe('示例');
+    expect(el.find('rail-name')!.textContent).toBe('示例');
     shell.setBrand(null);
-    expect(el.find('name')!.textContent).toBe('bot');
+    expect(el.find('rail-name')!.textContent).toBe('bot');
   });
 });
 

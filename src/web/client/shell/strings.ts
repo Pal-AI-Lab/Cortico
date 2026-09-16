@@ -1,7 +1,6 @@
 import { pick } from '../core/language.ts';
 
 const zh = {
-  tagline: '事件驱动的人格 bot',
   groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World 实例',
@@ -10,6 +9,8 @@ const zh = {
   runPause: '暂停运行',
   runUnavailable: '运行控制不可用',
   shutdownAria: '关机',
+  settingsAria: '设置',
+  settingsTitle: '设置',
   finishing: '正在关闭…',
   shutdownTitle: '关机',
   restartAria: '重启',
@@ -40,7 +41,6 @@ const zh = {
 };
 
 const en: typeof zh = {
-  tagline: 'An event-driven persona bot',
   groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World instances',
@@ -49,6 +49,8 @@ const en: typeof zh = {
   runPause: 'Pause',
   runUnavailable: 'Run control unavailable',
   shutdownAria: 'Shut down',
+  settingsAria: 'Settings',
+  settingsTitle: 'Settings',
   finishing: 'Shutting down…',
   shutdownTitle: 'Shut down',
   restartAria: 'Restart',

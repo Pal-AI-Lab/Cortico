@@ -99,6 +99,61 @@ const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
   ],
 };
 
+/**
+ * Cortico 字标。笔画与 README 横幅(assets/cortico-banner.svg)是同一份,
+ * 差别只在这里全部走 currentColor:左栏顶上要的是一个纯色的名字。
+ */
+const WORDMARK_MARK: readonly Shape[] = [
+  ['path', { d: 'M182 63.66A84 84 0 1 0 182 192.34', 'stroke-width': '30' }],
+  ['circle', { cx: '113', cy: '117', r: '16', 'stroke-width': '11' }],
+  ['circle', { cx: '163', cy: '117', r: '16', 'stroke-width': '11' }],
+];
+
+const WORDMARK_TEXT: readonly Shape[] = [
+  ['path', { d: 'M230.97 93.03A24 24 0 1 0 230.97 126.97' }],
+  ['circle', { cx: '286', cy: '110', r: '24' }],
+  ['path', { d: 'M341 86V134' }],
+  ['path', { d: 'M341 112A24 24 0 0 1 365 88' }],
+  ['path', { d: 'M412 70V134' }],
+  ['path', { d: 'M396 78H428' }],
+  ['path', { d: 'M459 86V134' }],
+  ['path', { d: 'M530.97 93.03A24 24 0 1 0 530.97 126.97' }],
+  ['circle', { cx: '586', cy: '110', r: '24' }],
+];
+
+function shapesInto(doc: Document, parent: SVGElement, shapes: readonly Shape[]): void {
+  for (const [tag, attrs] of shapes) {
+    const child = doc.createElementNS(SVG_NS, tag);
+    for (const [key, value] of Object.entries(attrs)) child.setAttribute(key, value);
+    parent.appendChild(child);
+  }
+}
+
+export function wordmark(doc: Document, cls = 'wordmark'): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '28 32 594 156');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke', 'currentColor');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add(cls);
+  // 字母前那个符号自带一套尺度,照横幅原样缩放,不重算坐标。
+  const mark = doc.createElementNS(SVG_NS, 'g');
+  mark.setAttribute('transform', 'translate(10 14) scale(.75)');
+  shapesInto(doc, mark, WORDMARK_MARK);
+  const text = doc.createElementNS(SVG_NS, 'g');
+  text.setAttribute('stroke-width', '16');
+  shapesInto(doc, text, WORDMARK_TEXT);
+  const dot = doc.createElementNS(SVG_NS, 'circle');
+  for (const [key, value] of Object.entries({ cx: '459', cy: '58', r: '9', fill: 'currentColor', stroke: 'none' })) {
+    dot.setAttribute(key, value);
+  }
+  svg.appendChild(mark);
+  svg.appendChild(text);
+  svg.appendChild(dot);
+  return svg;
+}
+
 export function icon(doc: Document, name: ConsoleIconName, cls = 'icon'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
@@ -109,10 +164,6 @@ export function icon(doc: Document, name: ConsoleIconName, cls = 'icon'): SVGSVG
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');
   svg.classList.add(cls);
-  for (const [tag, attrs] of SHAPES[name]) {
-    const child = doc.createElementNS(SVG_NS, tag);
-    for (const [key, value] of Object.entries(attrs)) child.setAttribute(key, value);
-    svg.appendChild(child);
-  }
+  shapesInto(doc, svg, SHAPES[name]);
   return svg;
 }

@@ -100,10 +100,8 @@
     display: flex; flex-direction: column; min-height: 0;
   }
   .brand { padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
-  .brand .who { display: flex; align-items: baseline; gap: 9px; }
-  .brand .name { font: 600 25px/1 var(--serif); color: var(--ink); letter-spacing: .5px; }
-  .brand .kind { font-size: 11.5px; color: var(--ink-dim); letter-spacing: .06em; }
-  .brand .sub { margin-top: 7px; font-size: 12px; color: var(--ink-soft); }
+  /* 字标是一整块笔画,颜色由 currentColor 取,所以只需要给高度。 */
+  .brand .wordmark { display: block; width: auto; height: 30px; color: var(--ink); }
 
   nav.stack { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 24px; }
   .stacklabel { font-size: 10.5px; letter-spacing: .18em; color: var(--ink-dim); margin: 14px 8px 7px; text-transform: uppercase; }
@@ -136,7 +134,10 @@
   .navdot.warn { background: var(--warn); }
   .navdot.bad { background: var(--danger); }
 
-  .railfoot { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-dim); display: flex; align-items: center; gap: 8px; }
+  .railfoot { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-dim); display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
+  /* 头像与这一台 bot 的名字一行,按钮另起一行:四颗按钮占满宽度后名字只剩几十像素。 */
+  .rail-who { display: flex; align-items: center; gap: 9px; min-width: 0; }
+  .rail-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; color: var(--ink); }
 
 
   .pagehead {
@@ -618,8 +619,6 @@
   body { background: var(--background); }
   #rail { background: var(--paper-2); border-right: 0; box-shadow: none; }
   .brand { padding-top: 22px; border-bottom: 0; }
-  .brand .name { letter-spacing: -.02em; }
-  .brand .sub { letter-spacing: 0; text-transform: none; }
   .navitem { min-height: 40px; transition: background-color .15s ease, color .15s ease; }
   .navitem:hover { text-decoration: none; }
   .navitem.active { box-shadow: none; }
@@ -804,9 +803,7 @@
     box-shadow: none;
   }
   .brand { padding: 22px 18px 10px; border: 0; }
-  .brand .name { font: 600 19px/1.2 var(--sans); letter-spacing: -.025em; }
-  .brand .kind { font-size: 10px; letter-spacing: .05em; }
-  .brand .sub { margin-top: 4px; color: var(--muted-foreground); font-size: 12px; }
+  .brand .wordmark { height: 26px; color: var(--foreground); }
   nav.stack { padding: 16px 10px 20px; }
   .navgroup { display: flex; flex-direction: column; gap: 1px; }
   .navgroup + .navgroup {
@@ -926,7 +923,8 @@
   }
   .rail-avatar-edit .icon { width: 15px; height: 15px; }
   .rail-avatar:hover .rail-avatar-edit { opacity: 1; }
-  .rail-actions { display: flex; gap: 3px; margin-left: auto; }
+  .rail-actions { display: flex; gap: 3px; }
+  .rail-name { color: var(--foreground); }
   .rail-action {
     width: 34px;
     height: 34px;

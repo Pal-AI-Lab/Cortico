@@ -8,7 +8,7 @@ import { get, post } from '../core/api.ts';
 import { buildHash, type Route, type Router } from '../core/router.ts';
 import { featureAvailable, type FrameworkFeature } from '../features/feature.ts';
 import { PROVIDER_ROUTE } from '../console-pages/host.ts';
-import { icon, type ConsoleIconName } from '../ui/icons.ts';
+import { icon, wordmark, type ConsoleIconName } from '../ui/icons.ts';
 import { lampRow, paintLamps } from '../ui/lamp.ts';
 import type { ConsoleUi } from '../../shared/client-panel.ts';
 import type { ConsoleLamp, ConsolePageManifest } from '../../shared/console-protocol.ts';
@@ -17,7 +17,6 @@ import { S } from './strings.ts';
 
 const DEFAULT_BRAND = 'bot';
 const FRAMEWORK_NAME = 'Cortico';
-const FRAMEWORK_TAGLINE = S.tagline;
 
 const GROUP_PERSONAS = S.groupPersonas;
 const GROUP_WORLDS = S.groupWorlds;
@@ -118,17 +117,20 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const el = ui.h('div');
   el.id = 'rail';
 
+  // 左上角只有框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
   const brand = ui.h('div', 'brand');
-  const who = ui.h('div', 'who');
-  const brandName = ui.h('span', 'name', DEFAULT_BRAND);
-  who.append(brandName, ui.h('span', 'kind', FRAMEWORK_NAME));
-  brand.append(who, ui.h('div', 'sub', FRAMEWORK_TAGLINE));
+  brand.setAttribute('role', 'img');
+  brand.setAttribute('aria-label', FRAMEWORK_NAME);
+  brand.appendChild(wordmark(doc));
 
   const nav = ui.h('nav', 'stack');
   nav.setAttribute('aria-label', S.navAria);
 
   const foot = ui.h('div', 'railfoot');
   const avatar = createAvatarControl({ doc, ui, signal, onError });
+  const botName = ui.h('div', 'rail-name', DEFAULT_BRAND);
+  const who = ui.h('div', 'rail-who');
+  who.append(avatar.el, botName);
   const footActions = ui.h('div', 'rail-actions');
   const runButton = ui.h('button', 'rail-action rail-run');
   runButton.type = 'button';
@@ -139,8 +141,13 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const restartButton = ui.h('button', 'rail-action rail-restart');
   restartButton.type = 'button';
   restartButton.appendChild(icon(doc, 'refresh'));
-  footActions.append(runButton, restartButton, shutdownButton);
-  foot.append(avatar.el, footActions);
+  const settingsButton = ui.h('button', 'rail-action');
+  settingsButton.type = 'button';
+  settingsButton.setAttribute('aria-label', S.settingsAria);
+  settingsButton.title = S.settingsTitle;
+  settingsButton.appendChild(icon(doc, 'settings'));
+  footActions.append(runButton, settingsButton, restartButton, shutdownButton);
+  foot.append(who, footActions);
 
   let paused = false;
   let runPending = false;
@@ -262,6 +269,10 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       renderRun();
     });
   }, { signal });
+  settingsButton.addEventListener('click', () => {
+    try { router.navigate(['settings']); } catch (err) { onError(err); }
+  }, { signal });
+
   el.append(brand, nav, foot);
 
   // ---- 导航 -------------------------------------------------------------
@@ -431,13 +442,19 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       if (on) entry.el.setAttribute('aria-current', 'page');
       else entry.el.removeAttribute('aria-current');
     }
+    const settingsOn = route?.segments[0] === 'settings';
+    settingsButton.classList.toggle('active', settingsOn);
+    if (settingsOn) settingsButton.setAttribute('aria-current', 'page');
+    else settingsButton.removeAttribute('aria-current');
   };
 
-  // ---- 品牌名 -----------------------------------------------------------
+  // ---- bot 实例名 -------------------------------------------------------
 
   const setBrand = (name: string | null | undefined): void => {
     const shown = typeof name === 'string' && name.trim() !== '' ? name.trim() : DEFAULT_BRAND;
-    brandName.textContent = shown;
+    // 名字长起来底栏放不下,截断后仍要读得到全名。
+    botName.textContent = shown;
+    botName.title = shown;
     avatar.setLabel(shown);
     doc.title = S.docTitle(shown);
   };

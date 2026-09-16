@@ -73,10 +73,11 @@ export function mountSettings(ctx: FeatureContext): void {
   if (visible[0]) select(visible[0].id);
 }
 
+// 入口是底栏那颗齿轮,不占左栏一行;`hidden` 只保留路由。
 export const settingsFeature: FrameworkFeature = {
   route: 'settings',
   label: S.navLabel,
   icon: 'settings',
-  navGroup: S.navGroup,
+  navMode: 'hidden',
   mount: mountSettings,
 };
