@@ -232,4 +232,3 @@ const panelEn: typeof panelZh = {
   serverDown: "llama-server is unreachable; check the endpoint URL and server status.",
 };
 export const panel = { zh: panelZh, en: panelEn };
-
