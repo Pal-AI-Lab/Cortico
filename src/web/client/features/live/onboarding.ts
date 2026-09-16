@@ -1,6 +1,6 @@
 /**
- * 新部署的开场引导：三条 Cortico 署名的气泡各报一项配置的当前状态，末尾那颗按钮让运行继续
- * 并请对方开口。端点状态由终端页从 providers 灯推进来，另两项在挂载时各读一次接口。
+ * 新部署的开场引导：四条 Cortico 署名的气泡，用 assistant 直接输出那套气泡样式。
+ * 端点状态由终端页从 providers 灯推进来，已启用的 World 在挂载时读一次接口。
  * 是否显示由终端页判定，这里只画。
  */
 
@@ -15,12 +15,6 @@ interface WorldRow {
   status?: unknown;
 }
 
-/** 这一页用得到的 `/api/prompts` 字段。 */
-interface PromptRow {
-  scope?: unknown;
-  origin?: unknown;
-}
-
 export interface OnboardingDeps {
   ui: ConsoleUi;
   doc: Document;
@@ -33,13 +27,14 @@ export interface OnboardingDeps {
 
 export interface OnboardingView {
   el: HTMLElement;
-  /** 端点可用性与悬停说明取自 providers 灯。 */
-  setProvider(ready: boolean, hint: string): void;
+  /** 端点可用性来自 providers 灯。 */
+  setProvider(ready: boolean): void;
 }
 
 interface Bubble {
-  el: HTMLElement;
-  setState(text: string, bad?: boolean): void;
+  /** 状态行；`null` 收起这一行。 */
+  setState(text: string | null): void;
+  button: HTMLButtonElement;
 }
 
 export function createOnboarding(deps: OnboardingDeps): OnboardingView {
@@ -51,41 +46,37 @@ export function createOnboarding(deps: OnboardingDeps): OnboardingView {
   gutter.appendChild(brandMark(doc));
   const col = ui.h('div', 'ob-col');
   col.appendChild(ui.h('div', 'ob-who', S.obWho));
+  const body = ui.h('div', 'turnbody');
+  col.appendChild(body);
   grid.append(gutter, col);
   el.appendChild(grid);
 
-  const bubble = (line: string, action: { label: string; go: readonly string[] }): Bubble => {
-    const box = ui.h('div', 'ob-bubble');
-    box.appendChild(ui.h('div', 'ob-line', line));
-    const state = ui.h('div', 'ob-state');
-    const button = ui.button(action.label, { size: 'sm', onClick: () => deps.go(action.go) });
-    const row = ui.h('div', 'ob-acts');
-    row.append(state, button);
-    box.appendChild(row);
-    col.appendChild(box);
+  const bubble = (line: string, action: { label: string; onClick(): void }): Bubble => {
+    const box = ui.h('div', 'monolog');
+    box.appendChild(ui.h('div', 'monolog-body', line));
+    const state = ui.h('div', 'ob-state hidden');
+    const button = ui.button(action.label, { size: 'sm', onClick: () => action.onClick() });
+    const acts = ui.h('div', 'ob-acts');
+    acts.appendChild(button);
+    box.append(state, acts);
+    body.appendChild(box);
     return {
-      el: box,
-      setState(text, bad) {
-        state.textContent = text;
-        state.className = bad ? 'ob-state bad' : 'ob-state';
+      button,
+      setState(text) {
+        state.className = text === null ? 'ob-state hidden' : 'ob-state';
+        state.textContent = text ?? '';
       },
     };
   };
 
-  const provider = bubble(S.obProvider, { label: S.obProviderAction, go: ['providers'] });
-  const worlds = bubble(S.obWorlds, { label: S.obWorldsAction, go: ['world'] });
-  const prompts = bubble(S.obPrompts, { label: S.obPromptsAction, go: ['prompts'] });
+  const provider = bubble(S.obWelcome, { label: S.obGoConfigure, onClick: () => deps.go(['providers']) });
+  const worlds = bubble(S.obWorlds, { label: S.obGoConfigure, onClick: () => deps.go(['world']) });
+  bubble(S.obPrompts, { label: S.obGoEdit, onClick: () => deps.go(['prompts']) });
 
   const startLabel = S.obStart;
-  const start = ui.button(startLabel, {
-    variant: 'primary',
-    onClick: () => deps.start(startLabel),
-  });
-  const startRow = ui.h('div', 'ob-start');
-  startRow.appendChild(start);
-  col.appendChild(startRow);
+  const ready = bubble(S.obReady, { label: startLabel, onClick: () => deps.start(startLabel) });
 
-  // 读不到就把状态行留空：引导区少一行读数，不该变成错误卡。
+  // 读不到就让这一行空着：引导区少一行读数，不该变成错误卡。
   void get<{ worlds?: WorldRow[] }>('/api/worlds', { signal }).then((data) => {
     const active = (data?.worlds ?? [])
       .filter((w) => w.status === 'active' && typeof w.label === 'string')
@@ -93,20 +84,13 @@ export function createOnboarding(deps: OnboardingDeps): OnboardingView {
     if (active.length) worlds.setState(S.obWorldsState(active));
   }, () => {});
 
-  void get<{ prompts?: PromptRow[] }>('/api/prompts', { signal }).then((data) => {
-    const persona = (data?.prompts ?? []).filter((p) => p.scope === 'persona');
-    if (!persona.length) return;
-    prompts.setState(persona.some((p) => p.origin === 'deployment') ? S.obPromptsOwn : S.obPromptsDefault);
-  }, () => {});
-
   return {
     el,
-    setProvider(ready, hint) {
-      // 灯自己的悬停说明就是这一行要报的读数（可用的端点名，或最后一个端点不可用的原因）。
-      const state = hint || S.obProviderNone;
-      provider.setState(state, !ready);
-      start.disabled = !ready;
-      start.title = ready ? '' : state;
+    setProvider(available) {
+      provider.setState(available ? S.obProviderReady : S.obProviderNone);
+      // 最后一条只在还缺端点时说话：配好了就只剩那颗按钮。
+      ready.setState(available ? null : S.obProviderNone);
+      ready.button.disabled = !available;
     },
   };
 }

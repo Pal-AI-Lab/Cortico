@@ -100,6 +100,8 @@ export interface TimelineView {
   append(m: ContextRecord, index: number, live: boolean): void;
   /** 说话人展示名。头像图片加载不到时,ASSISTANT 组左栏的占位圆里印它的首字;下一次画到组时生效。 */
   setSpeaker(name: string): void;
+  /** 开场引导期间把系统前缀那张卡收起来，下一次重画生效。 */
+  setHideSystem(hide: boolean): void;
 }
 
 export function createTimeline(deps: TimelineDeps): TimelineView {
@@ -127,6 +129,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   let turn: Turn | null = null;
   /** 头像占位圆里的字。 */
   let speakerInitial = 'B';
+  /** 收起系统前缀卡。 */
+  let hideSystem = false;
   let autoScroll = true;
   /** 正在跑的打字机。重画时全部收掉——否则它们会往脱离文档的节点里继续写。 */
   const typing = new Set<Disposable>();
@@ -507,7 +511,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     if (item.type === 'message' && item.role === 'user') {
       node = renderWorld(entry, index, live);
       if (live) showThinking();
-    } else if (isPrefix(item)) node = renderSystem(entry, live);
+    } else if (isPrefix(item)) node = hideSystem ? null : renderSystem(entry, live);
     else if (item.type === 'function_call_output') node = renderToolResult(entry, index, live);
     else node = renderOther(entry, index, live);
     if (node) inner.appendChild(node);
@@ -567,6 +571,9 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     },
     append(entry, index, live) {
       renderOne(entry, index, live);
+    },
+    setHideSystem(hide) {
+      hideSystem = hide;
     },
     setSpeaker(name) {
       speakerInitial = name.trim().slice(0, 1).toUpperCase() || 'B';

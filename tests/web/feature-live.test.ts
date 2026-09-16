@@ -1083,8 +1083,18 @@ describe('开场引导', () => {
 
     const ob = root.find('onboarding')!;
     expect(ob).not.toBe(null);
-    expect(ob.findAll('ob-bubble').length).toBe(3);
-    expect(ob.find('ob-start')!.children[0].disabled).toBe(true);
+    expect(ob.findAll('monolog').length).toBe(4);
+    // 最后一条的按钮:没有端点按不动
+    expect(ob.findAll('ob-acts').at(-1)!.children[0].disabled).toBe(true);
+  });
+
+  it('引导在场时不画系统前缀那张卡,收起后回来', () => {
+    stubFetch(() => ({}));
+    const { root } = mountWith(fresh);
+    expect(root.find('syscard')).toBe(null);
+
+    submitted[0]?.('在吗', []);
+    expect(root.find('syscard')).not.toBe(null);
   });
 
   it('没有标记就不出现:session 空不空、事件多少都不管', () => {
@@ -1112,7 +1122,7 @@ describe('开场引导', () => {
     sockets[1].send = (raw: string): void => { sent.push(raw); };
     sockets[1].up();
 
-    root.find('ob-start')!.children[0].dispatchEvent({ type: 'click' });
+    root.findAll('ob-acts').at(-1)!.children[0].dispatchEvent({ type: 'click' });
     await flush();
 
     expect(fetched).toContain('/api/run/resume');

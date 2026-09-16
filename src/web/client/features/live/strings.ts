@@ -111,17 +111,16 @@ const zh = {
 
   // onboarding.ts
   obWho: 'Cortico',
-  obProvider: '模型端点决定谁来回话。',
-  obProviderAction: '去配置',
-  obProviderNone: '没有可用端点',
-  obWorlds: 'World 是通向一个外部环境的边界：事件从那里进来，工具往那里出去。',
-  obWorldsAction: '查看 World',
-  obWorldsState: (labels: readonly string[]) => `已启用：${labels.join('、')}`,
-  obPrompts: '系统提示词写它是谁、怎么做事。',
-  obPromptsAction: '去编辑',
-  obPromptsDefault: '用的是包内默认',
-  obPromptsOwn: '本部署已覆盖',
-  obStart: '打个招呼',
+  obWelcome: '欢迎使用 Cortico！现在，让我们开始部署你的第一个 Cortico Bot。首先，请配置模型提供商：',
+  obProviderNone: '尚未配置可用的模型提供商',
+  obProviderReady: '模型提供商已配置',
+  obWorlds: '接下来，请启用并配置你的 Bot 接入的外部环境模组（Cortico World）。也可以先仅启用终端对话。',
+  obWorldsState: (labels: readonly string[]) => `已经启用了 ${labels.length} 个外部环境：${labels.join('、')}`,
+  obPrompts: '最后，你可以在这里方便地编辑系统提示词，来提供人格描述、行为规范、语言风格等定制化内容！',
+  obReady: '准备就绪！',
+  obGoConfigure: '前往配置',
+  obGoEdit: '开始编辑',
+  obStart: '打个招呼？',
 };
 
 const en: typeof zh = {
@@ -235,17 +234,17 @@ const en: typeof zh = {
 
   // onboarding.ts
   obWho: 'Cortico',
-  obProvider: 'A model endpoint decides who answers.',
-  obProviderAction: 'Configure',
-  obProviderNone: 'No usable endpoint',
-  obWorlds: 'A World is the boundary to one external environment: events come in, tools go out.',
-  obWorldsAction: 'Open Worlds',
-  obWorldsState: (labels: readonly string[]) => `Enabled: ${labels.join(', ')}`,
-  obPrompts: 'The system prompt says who it is and how it works.',
-  obPromptsAction: 'Edit',
-  obPromptsDefault: 'Package default',
-  obPromptsOwn: 'Overridden by this deployment',
-  obStart: 'Say hello',
+  obWelcome: "Welcome to Cortico! Let's set up your first Cortico Bot. Start with a model provider:",
+  obProviderNone: 'No usable model provider yet',
+  obProviderReady: 'Model provider configured',
+  obWorlds: 'Next, enable and configure the external environments your bot reaches (Cortico Worlds). Terminal chat alone is a fine start.',
+  obWorldsState: (labels: readonly string[]) =>
+    `${labels.length} external environment${labels.length === 1 ? '' : 's'} enabled: ${labels.join(', ')}`,
+  obPrompts: 'Finally, the system prompt is edited here: who it is, how it behaves, how it talks.',
+  obReady: 'Ready to go!',
+  obGoConfigure: 'Configure',
+  obGoEdit: 'Edit',
+  obStart: 'Say hello?',
 };
 
 export const S = pick({ zh, en });

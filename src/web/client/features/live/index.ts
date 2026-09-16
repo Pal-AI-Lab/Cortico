@@ -176,13 +176,11 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
 
   // 没有可用端点时说清楚要去哪儿,而不是让操作员发出一条得不到回复的消息。
   let providerReady = false;
-  let providerHint = '';
   ctx.lifecycle.own(subscribeLamps(ctx.root.ownerDocument, (lamps) => {
     const lamp = lamps[PROVIDERS_LAMP_ID]?.[0];
     composer.setPlaceholder(lamp && lamp.state !== 'online' ? S.composerNoProvider : null);
     providerReady = lamp?.state === 'online';
-    providerHint = lamp?.hint ?? '';
-    onboarding?.setProvider(providerReady, providerHint);
+    onboarding?.setProvider(providerReady);
   }));
 
   const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
@@ -218,13 +216,18 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
           );
         },
       });
-      onboarding.setProvider(providerReady, providerHint);
+      onboarding.setProvider(providerReady);
       view.insertBefore(onboarding.el, timeline.el);
+      // 引导期间系统前缀那张卡先收起来:这一页此刻要说的是怎么把 bot 配起来。
+      timeline.setHideSystem(true);
+      timeline.rebuild(state.messages, { head: state.head });
       return;
     }
     if (!fresh && onboarding) {
       onboarding.el.remove();
       onboarding = null;
+      timeline.setHideSystem(false);
+      timeline.rebuild(state.messages, { head: state.head });
     }
   };
 
