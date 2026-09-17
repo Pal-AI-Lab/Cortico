@@ -1,6 +1,6 @@
 {
   "name": "cortico",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "A TypeScript framework for event-driven, long-running persona bots",
