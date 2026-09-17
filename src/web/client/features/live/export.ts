@@ -95,7 +95,7 @@ export function openExportDialog(deps: ExportDialogDeps): void {
   }, { signal: ac.signal });
 
   const card = ui.h('div', 'modalcard');
-  card.setAttribute('style', 'width:min(460px,92vw)');
+  card.setAttribute('style', 'width:min(560px,92vw)');
   const head = ui.h('div', 'modalhead');
   head.appendChild(ui.h('span', 'modaltitle', S.exportTitle));
   const body = ui.h('div', 'modalbody');
@@ -106,7 +106,7 @@ export function openExportDialog(deps: ExportDialogDeps): void {
     deps.onPick(scope);
   };
   const bar = ui.rowbar();
-  bar.appendChild(ui.h('span', 'grow'));
+  bar.className += ' export-acts';
   for (const [label, scope, variant] of [
     [S.exportAll, 'all', 'danger'],
     [S.exportDialogue, 'dialogue', 'plain'],

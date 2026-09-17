@@ -228,6 +228,7 @@
   .btn.danger:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); border-color: var(--danger); }
   .btn.sm { padding: 4px 11px; font-size: var(--text-detail); }
   .btn-ico { display: inline-flex; align-items: center; gap: 6px; }
+  .export-acts { justify-content: flex-end; margin: 16px 0 0; }
   .btn-ico .icon { width: 14px; height: 14px; }
 
   .msgline { font: var(--text-detail)/1.45 var(--sans); min-height: 16px; color: var(--ok); }
