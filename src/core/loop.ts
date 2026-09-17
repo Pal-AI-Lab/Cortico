@@ -245,8 +245,9 @@ export class MainLoop {
   /** 截断与前缀重载共用的维护串行链，避免两个 session.reset 互相覆盖。 */
   private maintenanceChain: Promise<void> = Promise.resolve();
   private prefixReloadPromise: Promise<void> | null = null;
-  /** 在一轮处理中请求重载时，等自然回合边界再释放。 */
-  private releasePrefixReload: (() => void) | null = null;
+  private clearSessionPromise: Promise<void> | null = null;
+  /** 在一轮处理中请求的前缀重载与清空，等自然回合边界再释放。 */
+  private releaseAtBoundary: Array<() => void> = [];
   /** 当前正在处理一个事件批；手动交接必须等到该批自然结束，不能重置半轮session。 */
   private processingBatch = false;
   private handoffRequested = false;
@@ -904,8 +905,8 @@ export class MainLoop {
         } finally {
           this.processingBatch = false;
         }
-        // 异常退出由 stop 释放排队请求；只有正常批次边界执行重载。
-        await this.flushRequestedPrefixReload(generation);
+        // 异常退出由 stop 释放排队请求；只有正常批次边界执行重载与清空。
+        await this.flushBoundaryMaintenance();
       }
     } finally {
       this.stop();
@@ -1425,9 +1426,25 @@ export class MainLoop {
     return rebuildTail(paired, budget, estimate);
   }
 
-  /** 清空主 session，重建 system 前缀并调用 Persona 开场钩子；事件库保留。 */
-  async clearSession(): Promise<void> {
+  /**
+   * 清空主 session，重建 system 前缀并调用 Persona 开场钩子；事件库保留。
+   * 正在处理批次时等到该批自然结束，不重置半轮 session；并发请求复用同一 Promise。
+   */
+  clearSession(): Promise<void> {
     const generation = this.generation;
+    if (!this.active(generation)) return Promise.resolve();
+    if (this.clearSessionPromise) return this.clearSessionPromise;
+    let tracked: Promise<void>;
+    tracked = this.safeBoundary()
+      .then(() => this.enqueueMaintenance(() => this.performClearSession(generation), generation))
+      .finally(() => {
+        if (this.clearSessionPromise === tracked) this.clearSessionPromise = null;
+      });
+    this.clearSessionPromise = tracked;
+    return tracked;
+  }
+
+  private async performClearSession(generation: number): Promise<void> {
     if (!this.active(generation)) return;
     const { session, log } = this.d;
     const sysMsg = await this.buildSystem();
@@ -1447,11 +1464,8 @@ export class MainLoop {
     const generation = this.generation;
     if (!this.active(generation)) return Promise.resolve();
     if (this.prefixReloadPromise) return this.prefixReloadPromise;
-    const safeBoundary = this.processingBatch
-      ? new Promise<void>((resolve) => { this.releasePrefixReload = resolve; })
-      : Promise.resolve();
     let tracked: Promise<void>;
-    tracked = safeBoundary
+    tracked = this.safeBoundary()
       .then(() => this.enqueueMaintenance(() => this.performSystemPrefixReload(generation), generation))
       .finally(() => {
         if (this.prefixReloadPromise === tracked) this.prefixReloadPromise = null;
@@ -1460,12 +1474,22 @@ export class MainLoop {
     return tracked;
   }
 
-  private async flushRequestedPrefixReload(_generation: number): Promise<boolean> {
-    const release = this.releasePrefixReload;
-    if (!release) return false;
-    this.releasePrefixReload = null;
-    release();
-    await this.prefixReloadPromise;
+  /** 空闲时立即；正在处理批次时等 run() 在批末释放，或 stop() 释放。 */
+  private safeBoundary(): Promise<void> {
+    if (!this.processingBatch) return Promise.resolve();
+    return new Promise<void>((resolve) => { this.releaseAtBoundary.push(resolve); });
+  }
+
+  private releaseBoundary(): void {
+    const waiting = this.releaseAtBoundary;
+    this.releaseAtBoundary = [];
+    for (const release of waiting) release();
+  }
+
+  private async flushBoundaryMaintenance(): Promise<boolean> {
+    if (this.releaseAtBoundary.length === 0) return false;
+    this.releaseBoundary();
+    await Promise.all([this.prefixReloadPromise, this.clearSessionPromise]);
     return true;
   }
 
@@ -1721,9 +1745,7 @@ export class MainLoop {
     this.backoffWake?.();
     if (!this.shutdown.signal.aborted) this.shutdown.abort(new Error('core 正在关机'));
     this.handoffRequested = false;
-    const releasePrefixReload = this.releasePrefixReload;
-    this.releasePrefixReload = null;
-    releasePrefixReload?.();
+    this.releaseBoundary();
     this.stopFn?.();
     const round = this.currentRound;
     if (round && !round.controller.signal.aborted) {

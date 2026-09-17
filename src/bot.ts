@@ -166,7 +166,7 @@ const BOT_TEXT = {
       },
       session: {
         label: '主session(当前对话上下文)',
-        note: '清除对话上下文并重新开场，保留 Memory 和事件库。建议在空闲时操作',
+        note: '清除对话上下文并重新开场，保留 Memory 和事件库。正在处理批次时等该批结束后执行',
         stat: (records: number, ktok: number, size: string) => `${records}条 / ~${ktok}k tok / ${size}`,
         cleared: 'session已清空重开(system前缀+开场消息)',
       },
@@ -260,7 +260,7 @@ const BOT_TEXT = {
       },
       session: {
         label: 'Main session (current conversation context)',
-        note: 'Clears the conversation and reopens the session, keeping Memory and the event store. Prefer clearing while idle',
+        note: 'Clears the conversation and reopens the session, keeping Memory and the event store. Runs after the batch in progress finishes',
         stat: (records: number, ktok: number, size: string) => `${records} records / ~${ktok}k tok / ${size}`,
         cleared: 'Session cleared and reopened (system prefix + opening message)',
       },
