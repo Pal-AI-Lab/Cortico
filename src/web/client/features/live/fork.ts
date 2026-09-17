@@ -45,6 +45,8 @@ export interface ForkView {
   switchTo(id: string, label: string): void;
   /** 主 session 的消息变了(实时帧):在主视图时才需要动。 */
   isMain(): boolean;
+  /** 当前显示的那一份消息。主视图下回主 session 的。 */
+  messages(): readonly ContextRecord[];
   /** session 列表更新后调一次:目标已结束就停轮询。 */
   noteSessions(): void;
 }
@@ -54,6 +56,7 @@ export function createForkView(deps: ForkDeps): ForkView {
   let id = MAIN_ID;
   let label = MAIN_LABEL;
   let lastRevision = '';
+  let shown: readonly ContextRecord[] = [];
   let poll: Disposable | null = null;
 
   const stopPolling = (): void => {
@@ -106,6 +109,7 @@ export function createForkView(deps: ForkDeps): ForkView {
         return;
       }
       lastRevision = revision;
+      shown = messages;
       timeline.rebuild(messages, {
         banner: banner(messages.length, data?.estTokens ?? 0),
         empty: S.forkEmpty,
@@ -137,6 +141,7 @@ export function createForkView(deps: ForkDeps): ForkView {
       id = next;
       label = nextLabel;
       lastRevision = '';
+      shown = [];
       deps.onChange();
       if (next === MAIN_ID) {
         timeline.rebuild(deps.mainMessages(), { head: deps.mainHead?.() ?? null });
@@ -147,6 +152,9 @@ export function createForkView(deps: ForkDeps): ForkView {
     },
     isMain() {
       return id === MAIN_ID;
+    },
+    messages() {
+      return id === MAIN_ID ? deps.mainMessages() : shown;
     },
     noteSessions() {
       maybeStop();
