@@ -306,3 +306,26 @@ export function harvestFact(
   return `${hand}挖${zhName(b.name)}不掉东西${need ? `,要${zhName(need)}及以上` : ''}`;
 }
 
+/** 拿在手上才有用的那几类:镐斧锹锄剑,以及打火石、水桶这些一次性道具不算 */
+export const HANDHELD_SUFFIXES = ['_pickaxe', '_axe', '_shovel', '_hoe', '_sword'];
+
+/**
+ * equip 的目标槽位。盔甲的槽位是物品自带的属性(minecraft-data 的
+ * `equipmentSlot`/`equipDest`),不必自己按名字猜——猜出来的表迟早跟不上版本。
+ * 数据里没写的一律拿主手;盾牌的副手位是协议约定,数据里没有,单列一条。
+ */
+export function equipDestOf(name: string, registry?: Bot['registry']): 'head' | 'torso' | 'legs' | 'feet' | 'off-hand' | 'hand' {
+  if (name === 'shield') return 'off-hand';
+  const def = registry
+    ? (registry.itemsByName as Record<string, { equipDest?: string; equipmentSlot?: string } | undefined>)[name]
+    : undefined;
+  const slot = def?.equipDest ?? def?.equipmentSlot;
+  if (slot === 'head' || slot === 'torso' || slot === 'legs' || slot === 'feet') return slot;
+  // registry 不在手上(纯文案场景)时按后缀兜一层:装备槽这件事本身不靠它做决定
+  if (name.endsWith('helmet')) return 'head';
+  if (name.endsWith('chestplate') || name === 'elytra') return 'torso';
+  if (name.endsWith('leggings')) return 'legs';
+  if (name.endsWith('boots')) return 'feet';
+  return 'hand';
+}
+
