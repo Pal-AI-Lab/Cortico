@@ -360,7 +360,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
     // 只列已装配的:左栏是"能去的地方",不是全量清单。未装配的仍由各自的
     // 总览页负责露面(那里才有"为什么没装上"的位置)。供应模块(kind `llm`)不在
-    // 这里逐个列出:它们的入口是框架的「语言模型」页,模块清单是那一页里的次级菜单。
+    // 这里逐个列出:它们的入口是框架的「模型提供商」页,模块清单是那一页里的次级菜单。
     const listed = consolePages.filter((p) => p.availability === 'active');
     // Persona 页在前,它的 Memory 页跟在后面,再是归这一组的框架页(系统提示词),同一组。
     const personas = [

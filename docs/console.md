@@ -15,7 +15,7 @@
 | `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork;全新部署上多一组开场引导 |
 | `core` | 运行诊断 | run、session、事件、运行日志,以及 Core 自己的数据与配置 |
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
-| `provider` | 语言模型 | 端点表(见 [providers.md](providers.md)) |
+| `provider` | 模型提供商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
 | `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |

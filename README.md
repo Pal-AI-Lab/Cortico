@@ -57,7 +57,7 @@ On your first launch with an empty deployment directory, Cortico automatically i
 
 **`http://127.0.0.1:7788/`**
 
-The terminal page opens with three onboarding steps: configure a model endpoint, inspect active Worlds, and adjust the system prompt. Once an endpoint is configured, click **Say hello** to let the bot initiate conversation. All endpoints, credentials, and runtime parameters can be adjusted directly from the console and take effect upon saving.
+The terminal page opens with three onboarding steps: configure a model endpoint, inspect active Worlds, and adjust the system prompt. Once an endpoint is configured, click **Say hello** to let the bot initiate conversation. All endpoints, credentials, and runtime parameters can be adjusted directly from the console; saved changes apply to the next request, and a managed runtime's launch parameters apply on its next start.
 
 ### 2. Managing Deployments
 Each deployment is an isolated configuration directory inside `deployments/` (see [deployment.md](docs/deployment.md)). To add another one:

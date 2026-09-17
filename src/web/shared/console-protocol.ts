@@ -401,7 +401,7 @@ export interface ConsoleLampsResponse {
 }
 
 /**
- * 「语言模型」那一行的灯在灯表里的键。贡献方的 page id 是 `<kind>:<id>`,
+ * 「模型提供商」那一行的灯在灯表里的键。贡献方的 page id 是 `<kind>:<id>`,
  * kind 取 world / llm / persona,因此这个键与谁都不撞。
  */
 export const PROVIDERS_LAMP_ID = 'framework:providers';

@@ -72,7 +72,7 @@ pnpm start <部署名>
 | `--force-second-instance` | 绕过单实例锁 |
 
 启动前校验 `activeProvider` 必须在端点表里,不在直接退出。它声明的 `secret` 读不到(进程环境
-或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「语言模型」页修改密钥变量名或补填密钥，
+或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「模型提供商」页修改密钥变量名或补填密钥，
 保存后下一次模型调用生效，不必重启。
 
 `pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
