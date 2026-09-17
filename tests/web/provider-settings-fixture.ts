@@ -6,6 +6,9 @@ import { ProviderRegistry, providerModules } from '../../src/providers/registry.
 import { ProviderSettings } from '../../src/providers/console/settings.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import type { LLMProviderEntry, ModelSpec } from '../../src/core/types.ts';
+import { connectionGroup } from '../../src/providers/console/config.ts';
+import { protocolConfig } from '../../src/providers/openai-responses-compat/config.ts';
+import { getByPath, setByPath, type ConfigValues } from '../../src/core/config-schema.ts';
 
 /** 供应模块夹具包含推理强度、服务档与温度提示，用于验证声明驱动的设置项。 */
 export const FIXTURE_KIND = 'fixture-llm';
@@ -38,6 +41,7 @@ export const openFixtureWorld: ProviderModule = {
   reasoningTiers: [],
   effortSuggestions: openEfforts,
   serviceTiers: [],
+  config: protocolConfig,
   create: () => ({ client: null as never }),
 };
 
@@ -83,7 +87,8 @@ export async function mountSettings(
     .sources()
     .find((source) => source.id === `llm:${kind}`)!
     .contribute('zh');
-  const mounted = await mountPanel((method, args) => contribution.invoke!('settings', method, args));
+  const mounted = await mountPanel((method, args) => contribution.invoke!('settings', method, args), 'zh',
+    (groupId, values) => settings.setConfig(groupId, values));
   return {
     root: mounted.root,
     cfg,
@@ -110,6 +115,7 @@ export async function mountSettings(
 export async function mountPanel(
   invoke: (method: string, args: unknown[]) => Promise<unknown> | unknown,
   language: 'zh' | 'en' = 'zh',
+  setConfig?: (groupId: string, values: ConfigValues) => unknown,
 ) {
   /** 宿主挂插槽的记录:挂了哪个插槽、给的作用域,以及有没有被结束。 */
   const slots: Array<{ slot: string; scope: Record<string, string>; host: Any; disposed: boolean }> = [];
@@ -124,13 +130,33 @@ export async function mountPanel(
   globalThis.AbortController = doc.defaultView.AbortController;
   const memo = { get: (_key: string, fallback: unknown) => fallback, set: () => {} };
   const ui = createConsoleUi({ memo, overlayHost: doc.body, signal: controller.signal, doc });
+  const state = async (method: string, args: unknown[]) => {
+    const result = await invoke(method, args) as Any;
+    if (method === 'state') {
+      for (const row of result.instances) {
+        row.config ??= [connectionGroup(row.name, row.entry, language),
+          ...(result.reasoningTiers.length ? [] : protocolConfig(row.name, row.entry, language))]
+          .map(group => ({ group, values: Object.fromEntries(Object.keys(group.schema.properties)
+            .map(path => [path, getByPath(row.entry, path.slice(`providers.${row.name}.`.length)) ?? ''])) }));
+      }
+    }
+    return result;
+  };
   await llmSettingsPanel.mount({
     root,
     ui,
     language,
     signal: controller.signal,
     scope: {},
-    invoke: async (method: string, args: unknown[] = []) => invoke(method, args),
+    invoke: async (method: string, args: unknown[] = []) => state(method, args),
+    setConfig: async (groupId: string, values: ConfigValues) => {
+      if (setConfig) return setConfig(groupId, values);
+      const snapshot = await state('state', []);
+      const row = snapshot.instances.find((row: Any) => row.config.some((item: Any) => item.group.id === groupId));
+      const patch: Record<string, unknown> = { name: row.name };
+      for (const [path, value] of Object.entries(values)) setByPath(patch, path.slice(`providers.${row.name}.`.length), value);
+      return invoke('save', [patch]);
+    },
     refresh: async () => {},
     mountSlot: async (slot: string, host: Any, scope: Record<string, string>) => {
       const record = { slot, scope, host, disposed: false };

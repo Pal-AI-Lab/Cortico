@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts -->
 
 # Provider
 
@@ -36,12 +36,15 @@ provider 模块不预设任何模型名;端点
 删除端点(当前端点不能删),连接与协议扩展,模块自己的段落(llamacpp 的运行时与模型),模型与
 采样参数,价目,探活(发一条 ping,回状态码、耗时、是否带加密推理、这一次的费用)。
 
-每格改完即写入端点条目,校验不过就不落盘、错误留在那一格。每次写入都重建该端点的客户端并
+地址、密钥变量名、图像开关与 Responses 请求路径由 ConfigGroup 声明,
+修改可经 `setConfig` 校验并保存。
+每格改完即写入端点条目,校验不过就不落盘、错误显示在面板状态行。每次写入都重建该端点的客户端并
 重读它的 `.env`,外部填的密钥随下一次请求生效,不必重启进程。地址或密钥变量名改过之后自动
 取一次模型列表:取到就把模型格换成选单并带出上下文窗口,取不到就留在自由输入,原因写在格子
-下面。新建的端点没有价目,在用量页记成未计价。
+下面。新建端点的 `pricing` 为空,不覆盖模块价目。
 
-`secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。密钥值写入端点 `.env` 的同名项。
+控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
+从磁盘直接加载的名字按字面匹配;密钥值写入端点 `.env` 的同名项。
 
 ## 可用性
 
@@ -73,7 +76,8 @@ provider 模块不预设任何模型名;端点
   读上下文窗口、`/models` 列模型(带加载状态与输入模态)。
 - **托管**:端点页的运行时段落点「开启托管」后,`options.runtime` 记版本 tag 与后端,`options.launch`
   记 `-c` / `-ngl` / `--parallel` 与附加参数,`options.autoStart` 决定 bot 启动时是否一并起。
-  这些格子都在同一段里改,改完即存。
+  运行时和启动配置由模块的 `ConfigGroup` 声明,端点面板复用控制台 schema 渲染器,
+  修改经 `setConfig` 校验并保存。
   「下载并安装」把所选官方 release 解压到 `<部署根>/runtimes/llama.cpp/<tag>/<平台-后端-架构>/`;
   「启动」以 router 模式起 llama-server,不带模型,`LLAMA_CACHE` 与 `--models-dir` 指向
   `<部署根>/models/llamacpp/`。启动参数在下一次启动时生效,面板会标出待生效。
@@ -95,8 +99,8 @@ provider 模块不预设任何模型名;端点
 
 每次请求尝试按价目中声明的计量项计费,包括输入、输出、缓存命中与推理用量等,币种默认 USD,写入
 `data/usage.jsonl`;控制台「用量」页与 `/api/usage` 聚合。模块自带价目,端点条目的 `pricing`
-可覆盖;缺计量的项记为未知而不是零。`pricing` 为空表示没设价目,这条端点的调用只记 token,
-不记金额。
+按成本基准覆盖。`pricing` 为空时仍使用模块价目;两者都没有适用价目时,调用只记用量,
+不记金额。缺少所需计量的费用项记为未知。
 
 ## 添加 Provider
 

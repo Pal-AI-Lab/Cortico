@@ -4,6 +4,7 @@ import type { Language } from '../../core/language.ts';
 import { isContextOverflow } from '../transport/errors.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
+import { runtimeConfig } from './config.ts';
 import { llamacppConsole } from './console/server.ts';
 import { LlamaCppProvider } from './native.ts';
 import { backendChoices, llamacppOptions, normalizeLlamaCpp } from './options.ts';
@@ -27,6 +28,7 @@ export default {
   baseUrlSuggestions: ['http://127.0.0.1:8090/v1', 'http://127.0.0.1:8080/v1'],
   normalize: normalizeLlamaCpp,
   console: llamacppConsole,
+  config: runtimeConfig,
   reasoningTiers: reasoningTiers('zh'),
   localize: (language) => ({ reasoningTiers: reasoningTiers(language) }),
   serviceTiers: [],

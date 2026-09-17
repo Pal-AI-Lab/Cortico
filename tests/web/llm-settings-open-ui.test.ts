@@ -7,6 +7,7 @@ import {
   doc,
   openBaseUrls,
   openEfforts,
+  mountSettings,
 } from './provider-settings-fixture.ts';
 
 type Any = any;
@@ -134,10 +135,9 @@ describe('新建实例', () => {
 
 describe('连接表', () => {
   it('每格改完即存;面板不认的 options 键原样留着,空的删掉', async () => {
-    const server = fakeSettings([
-      instance({}, { options: { vendorOnly: 'keep-me', extraBody: { store: false } } }),
-    ]);
-    const view = await mountPanel(server.invoke);
+    const view = await mountSettings('openai-responses-compat', {
+      options: { vendorOnly: 'keep-me', extraBody: { store: false } },
+    });
     cleanup = view.cleanup;
     expect(byLabel(view.root, '请求路径').value).toBe('/responses');
     expect(byLabel(view.root, '附加请求体（JSON 对象）').value).toContain('"store": false');
@@ -148,12 +148,11 @@ describe('连接表', () => {
     change(byLabel(view.root, '附加请求头（JSON 对象）'), '{"HTTP-Referer": "https://x.test"}');
     change(byLabel(view.root, '附加请求体（JSON 对象）'), '');
     await flush();
-    const bodies = server.bodies('save');
-    expect(bodies.every((body: Any) => body.name === 'primary')).toBe(true);
-    expect(bodies.map((body: Any) => body.baseUrl).filter(Boolean)).toEqual(['https://alpha.test/v2']);
-    expect(bodies.map((body: Any) => body.secret).filter(Boolean)).toEqual(['ALPHA_KEY_2']);
-    expect(bodies.some((body: Any) => body.multimodal === true)).toBe(true);
-    expect(server.last('save').options).toEqual({
+    const saved = view.read().providers.primary;
+    expect(saved).toMatchObject({
+      baseUrl: 'https://alpha.test/v2', secret: 'ALPHA_KEY_2', multimodal: true,
+    });
+    expect(saved.options).toEqual({
       vendorOnly: 'keep-me',
       endpointPath: '/v1/responses',
       extraHeaders: { 'HTTP-Referer': 'https://x.test' },

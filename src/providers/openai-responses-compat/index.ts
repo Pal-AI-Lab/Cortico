@@ -3,6 +3,7 @@ import type { LLMProviderEntry } from '../../core/types.ts';
 import { isContextOverflow } from '../transport/errors.ts';
 import { ModelCatalog, ResponsesProvider } from './native.ts';
 import { text } from './strings.ts';
+import { protocolConfig } from './config.ts';
 
 /** Suggested base URLs for the console field; operators may enter other URLs. */
 const BASE_URLS: readonly string[] = [
@@ -45,6 +46,8 @@ export default {
   defaultBaseUrl: BASE_URLS[0],
   baseUrlSuggestions: BASE_URLS,
   normalize: normalizeCompat,
+  config: protocolConfig,
+  console: () => ({ config: [] }),
   reasoningTiers: [],
   effortSuggestions: EFFORTS,
   serviceTiers: [],

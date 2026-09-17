@@ -196,12 +196,17 @@ describe('全系统集成(终端对话链路)', () => {
 
     const g = await cget();
     // 未激活 World 的配置仍可编辑。
+    const endpointGroups = Object.entries(bot.core.config.providers).flatMap(([name, entry]) => [
+      { id: `llm.${entry.kind}.${name}.connection`, owner: `provider:${entry.kind}` },
+      { id: `llm.${entry.kind}.${name}.protocol`, owner: `provider:${entry.kind}` },
+    ]);
 
     expect(g.groups.map((x) => x.group.id)).toEqual([
       'core', PERSONA_CONFIG_GROUP.id,
       'world:terminal', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft:rhythm', 'world:minecraft:client', 'world:minecraft:player',
       'world:websearch',
+      ...endpointGroups.map(group => group.id),
     ]);
     // id 标识具体实例；owner 标识与实例无关的架构角色。
     expect(g.groups.map((x) => x.group.owner)).toEqual([
@@ -209,6 +214,7 @@ describe('全系统集成(终端对话链路)', () => {
       'world:terminal', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft', 'world:minecraft', 'world:minecraft',
       'world:websearch',
+      ...endpointGroups.map(group => group.owner),
     ]);
     const pc0 = g.groups.find((x) => x.group.id === PERSONA_CONFIG_GROUP.id)!;
     expect(pc0.group.schema.properties['context.maxTokens']).toBeTruthy();
