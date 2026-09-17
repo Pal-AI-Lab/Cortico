@@ -48,6 +48,48 @@ describe('Standard Item context storage', () => {
     } finally { tmp.cleanup(); }
   });
 
+  it('cuts off a torn final line, reports it and appends on a fresh line afterwards', () => {
+    const tmp = makeTmpDir();
+    try {
+      const file = join(tmp.dir, 'session-main.jsonl');
+      const log = new ContextLog(file);
+      const kept = message('user', 'kept');
+      log.append(kept);
+      const intact = readFileSync(file, 'utf8');
+      const torn = JSON.stringify(message('assistant', 'lost in a crash')).slice(0, 40);
+      writeFileSync(file, intact + torn);
+
+      const restored = new ContextLog(file);
+      expect(restored.load()).toEqual({ kind: 'torn-tail', bytes: Buffer.byteLength(torn) });
+      expect(restored.records.map(entry => entry.item)).toEqual([kept.item]);
+      expect(readFileSync(file, 'utf8')).toBe(intact);
+
+      restored.append(message('assistant', 'after repair'));
+      const again = new ContextLog(file);
+      expect(again.load()).toBeNull();
+      expect(again.records.map(entry => entry.item)).toEqual(restored.records.map(entry => entry.item));
+    } finally { tmp.cleanup(); }
+  });
+
+  it('keeps a complete final record that lacks its newline and terminates it', () => {
+    const tmp = makeTmpDir();
+    try {
+      const file = join(tmp.dir, 'session-main.jsonl');
+      const log = new ContextLog(file);
+      const kept = message('user', 'kept');
+      log.append(kept);
+      const complete = message('assistant', 'complete');
+      const last = JSON.stringify(complete);
+      writeFileSync(file, readFileSync(file, 'utf8') + last);
+
+      const restored = new ContextLog(file);
+      expect(restored.load()).toEqual({ kind: 'unterminated-tail' });
+      expect(restored.records.map(entry => entry.item)).toEqual([kept.item, complete.item]);
+      expect(readFileSync(file, 'utf8').endsWith(last + '\n')).toBe(true);
+      expect(new ContextLog(file).load()).toBeNull();
+    } finally { tmp.cleanup(); }
+  });
+
   it('rejects damaged input without replacing the session', () => {
     const tmp = makeTmpDir();
     try {
