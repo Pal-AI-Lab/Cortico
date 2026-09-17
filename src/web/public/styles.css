@@ -135,10 +135,21 @@
   .navdot.warn { background: var(--warn); }
   .navdot.bad { background: var(--danger); }
 
-  .railfoot { padding: 10px 16px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-dim); display: flex; flex-direction: column; align-items: stretch; gap: 8px; }
-  /* 头像与这一台 bot 的名字一行,按钮另起一行:四颗按钮占满宽度后名字只剩几十像素。 */
-  .rail-who { display: flex; align-items: center; gap: 9px; min-width: 0; }
-  .rail-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; color: var(--ink); }
+  /* 头像、名字、那几个键在同一行:名字吃掉中间的余量,放不下就省略号。 */
+  .railfoot { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--ink-dim); display: flex; align-items: center; gap: 8px; }
+  .rail-who { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 1; }
+  .rail-name {
+    display: flex; align-items: center; gap: 5px; min-width: 0;
+    padding: 3px 6px; border: 0; border-radius: 7px; background: transparent;
+    font: 600 13px/1.35 var(--sans); color: var(--ink); cursor: pointer; text-align: left;
+  }
+  .rail-name-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  /* 铅笔平时不占视线,悬停/聚焦才露出来——名字可点这件事只在那时才需要说。 */
+  .rail-name-edit { display: grid; place-items: center; flex: none; opacity: 0; transition: opacity .15s ease; }
+  .rail-name-edit .icon { width: 13px; height: 13px; }
+  .rail-name:hover { background: var(--sheet-2); }
+  .rail-name:hover .rail-name-edit, .rail-name:focus-visible .rail-name-edit { opacity: .75; }
+  .rail-rename { flex: 1; min-width: 0; }
 
 
   .pagehead {
@@ -888,7 +899,7 @@
     background: color-mix(in srgb, var(--border) 84%, transparent);
   }
   .navdot { width: 6px; height: 6px; }
-  .railfoot { min-height: 62px; padding: 10px 16px 14px; border: 0; gap: 9px; }
+  .railfoot { min-height: 62px; padding: 10px 12px 14px; border: 0; gap: 8px; }
   .rail-avatar-wrap {
     display: grid;
     flex: none;
@@ -925,11 +936,12 @@
   }
   .rail-avatar-edit .icon { width: 15px; height: 15px; }
   .rail-avatar:hover .rail-avatar-edit { opacity: 1; }
-  .rail-actions { display: flex; gap: 3px; }
-  .rail-name { color: var(--foreground); }
+  .rail-actions { display: flex; flex: none; gap: 2px; }
+  .rail-name { color: var(--foreground); font: 600 13.5px/1.35 var(--sans); }
+  .rail-name:hover { background: var(--hover); }
   .rail-action {
-    width: 34px;
-    height: 34px;
+    width: 30px;
+    height: 30px;
     display: grid;
     place-items: center;
     padding: 0;

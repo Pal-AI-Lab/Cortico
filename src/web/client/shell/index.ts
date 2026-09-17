@@ -128,8 +128,14 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   const foot = ui.h('div', 'railfoot');
   const avatar = createAvatarControl({ doc, ui, signal, onError });
-  const botName = ui.h('button', 'rail-name', DEFAULT_BRAND);
+  const botName = ui.h('button', 'rail-name');
   botName.type = 'button';
+  // 名字自己是按钮(点了就地改名);铅笔只在悬停时露出来,不占额外宽度。
+  const botNameText = ui.h('span', 'rail-name-text', DEFAULT_BRAND);
+  const botNameEdit = ui.h('span', 'rail-name-edit');
+  botNameEdit.setAttribute('aria-hidden', 'true');
+  botNameEdit.appendChild(icon(doc, 'pencil'));
+  botName.append(botNameText, botNameEdit);
   const who = ui.h('div', 'rail-who');
   who.append(avatar.el, botName);
   const footActions = ui.h('div', 'rail-actions');
@@ -138,16 +144,12 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const shutdownButton = ui.h('button', 'rail-action rail-shutdown');
   shutdownButton.type = 'button';
   shutdownButton.appendChild(icon(doc, 'power'));
-  // 重启 = 同一套收尾 + 退出前落重启标志,启动器循环把进程拉起来。
-  const restartButton = ui.h('button', 'rail-action rail-restart');
-  restartButton.type = 'button';
-  restartButton.appendChild(icon(doc, 'refresh'));
   const settingsButton = ui.h('button', 'rail-action');
   settingsButton.type = 'button';
   settingsButton.setAttribute('aria-label', S.settingsAria);
   settingsButton.title = S.settingsTitle;
   settingsButton.appendChild(icon(doc, 'settings'));
-  footActions.append(runButton, settingsButton, restartButton, shutdownButton);
+  footActions.append(runButton, settingsButton, shutdownButton);
   foot.append(who, footActions);
 
   let paused = false;
@@ -162,7 +164,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   };
   renderRun();
 
-  /** 关机和重启共用请求锁，等待请求完成后释放。 */
+  /** 关机请求的锁，等待请求完成后释放。 */
   let shuttingDown = false;
   const renderPower = (): void => {
     const canShutdown = capabilities.shutdown === true;
@@ -170,45 +172,23 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     shutdownButton.disabled = !canShutdown || shuttingDown;
     shutdownButton.setAttribute('aria-label', S.shutdownAria);
     shutdownButton.title = shuttingDown ? S.finishing : S.shutdownTitle;
-    const canRestart = capabilities.restart === true;
-    restartButton.hidden = !canRestart;
-    restartButton.disabled = !canRestart || shuttingDown;
-    restartButton.setAttribute('aria-label', S.restartAria);
-    restartButton.title = shuttingDown
-      ? S.finishing
-      : capabilities.supervised === true
-        ? S.restartTitleSupervised
-        : S.restartTitleUnsupervised;
   };
   renderPower();
 
-  const powerAction = async (kind: 'shutdown' | 'restart'): Promise<void> => {
+  const powerAction = async (): Promise<void> => {
     if (shuttingDown) return;
-    if (kind === 'shutdown' ? capabilities.shutdown !== true : capabilities.restart !== true) return;
-    const supervised = capabilities.supervised === true;
-    const first = await ui.confirm(kind === 'shutdown'
-      ? {
-          title: S.confirmShutdownTitle,
-          body: S.shutdownBody,
-          danger: true,
-        }
-      : {
-          title: S.confirmRestartTitle,
-          body: supervised ? S.restartSupervisedNote : S.restartUnsupervisedNote,
-          danger: true,
-        });
+    if (capabilities.shutdown !== true) return;
+    const first = await ui.confirm({
+      title: S.confirmShutdownTitle,
+      body: S.shutdownBody,
+      danger: true,
+    });
     if (!first || signal.aborted) return;
-    const second = await ui.confirm(kind === 'shutdown'
-      ? {
-          title: S.confirmShutdownAgainTitle,
-          body: S.confirmShutdownAgainBody,
-          danger: true,
-        }
-      : {
-          title: S.confirmRestartAgainTitle,
-          body: supervised ? S.confirmRestartAgainSupervised : S.confirmRestartAgainUnsupervised,
-          danger: true,
-        });
+    const second = await ui.confirm({
+      title: S.confirmShutdownAgainTitle,
+      body: S.confirmShutdownAgainBody,
+      danger: true,
+    });
     if (!second || signal.aborted) return;
     shuttingDown = true;
     renderPower();
@@ -218,7 +198,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
         ok?: boolean; localComplete?: boolean; result?: string; error?: string;
         steps?: Array<{ label: string; ok: boolean; ms: number; detail?: string }>;
         externalChecks?: Array<{ status: 'verified-ended' | 'still-live' | 'unknown' }>;
-      }>(kind === 'shutdown' ? '/api/run/shutdown' : '/api/run/restart', undefined, { signal });
+      }>('/api/run/shutdown', undefined, { signal });
       if (out?.error) throw new Error(out.error);
       const steps = out?.steps ?? [];
       const localComplete = out?.localComplete ?? steps.every((step) => step.ok);
@@ -226,13 +206,12 @@ export function createShell(deps: ShellDeps): ConsoleShell {
         .some((check) => check.status !== 'verified-ended');
       const lines = steps.map((s) =>
         `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.ms / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
-      const done = kind === 'shutdown' ? S.doneShutdown : supervised ? S.doneRestartSupervised : S.doneRestart;
       void ui.confirm({
         title: !localComplete
           ? S.resultLocalIncomplete
           : externalUnverified
             ? S.resultExternalUnverified
-            : out?.ok === false ? S.resultUnverified : done,
+            : out?.ok === false ? S.resultUnverified : S.doneShutdown,
         body: [out?.result ?? S.resultDefault, '', ...lines].join('\n'),
       });
     } catch (err) {
@@ -247,8 +226,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       renderPower();
     }
   };
-  shutdownButton.addEventListener('click', () => { void powerAction('shutdown'); }, { signal });
-  restartButton.addEventListener('click', () => { void powerAction('restart'); }, { signal });
+  shutdownButton.addEventListener('click', () => { void powerAction(); }, { signal });
 
   runButton.addEventListener('click', () => {
     if (runPending || capabilities.run !== true) return;
@@ -457,8 +435,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const setBrand = (name: string | null | undefined): void => {
     const shown = typeof name === 'string' && name.trim() !== '' ? name.trim() : DEFAULT_BRAND;
     shownName = shown;
-    // 名字长起来底栏放不下,截断后仍要读得到全名。
-    botName.textContent = shown;
+    botNameText.textContent = shown;
     // 悬停说的是这一下能做什么;全名在改名框里看得到。
     botName.title = S.renameTitle;
     avatar.setLabel(shown);

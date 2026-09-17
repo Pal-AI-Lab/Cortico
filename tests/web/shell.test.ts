@@ -1,4 +1,4 @@
-/** 验证外壳随 capabilities 与 manifest 更新导航，保留浏览器链接行为；关机和重启需两次确认。DOM 与动态 import 方式见 feature-generic.test.ts。 */
+/** 验证外壳随 capabilities 与 manifest 更新导航，保留浏览器链接行为；关机需两次确认。DOM 与动态 import 方式见 feature-generic.test.ts。 */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
@@ -649,52 +649,6 @@ describe('底部运行控制', () => {
     cancel.dispatchEvent({ type: 'click' });
     await flush();
     expect(seen.some((u) => u === '/api/run/shutdown')).toBe(false);
-  });
-
-
-  const restartBtn = (el: FakeEl): FakeEl => el.find('rail-restart') as FakeEl;
-
-  it('重启键按能力位显示，未受监督时提示手动启动', async () => {
-    stubStatus({});
-    const { shell, el } = await mkShell({ capabilities: { run: true, shutdown: true } });
-    expect(restartBtn(el).hidden).toBe(true);
-    shell.setCapabilities({ run: true, shutdown: true, restart: true });
-    expect(restartBtn(el).hidden).toBe(false);
-    expect(restartBtn(el).getAttribute('aria-label')).toBe('重启');
-    expect(restartBtn(el).title).toContain('手动启动');
-    shell.setCapabilities({ run: true, shutdown: true, restart: true, supervised: true });
-    expect(restartBtn(el).title).not.toContain('手动启动');
-  });
-
-  it('重启也要过两道确认才打 /api/run/restart;关机端点一次都不碰', async () => {
-    const seen: Array<{ url: string; method?: string }> = [];
-    vi.stubGlobal('fetch', (url: unknown, init?: { method?: string }) => {
-      seen.push({ url: String(url), ...(init?.method ? { method: init.method } : {}) });
-      const payload = String(url) === '/api/run/restart'
-        ? { ok: true, localComplete: true, result: '本地关机完成,进程即将退出,启动器随即重新拉起', steps: [{ label: '按住事件投递', ok: true, ms: 2 }] }
-        : {};
-      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
-    });
-    const { doc, el } = await mkShell({ capabilities: { run: true, shutdown: true, restart: true, supervised: true } });
-    await flush();
-    click(restartBtn(el));
-    await flush();
-    expect(seen.some((c) => c.url === '/api/run/restart')).toBe(false);
-    await proceed(doc);
-    expect(seen.some((c) => c.url === '/api/run/restart')).toBe(false);
-    await proceed(doc);
-    expect(seen.find((c) => c.url === '/api/run/restart')?.method).toBe('POST');
-    expect(seen.some((c) => c.url === '/api/run/shutdown')).toBe(false);
-    expect(doc.body.textContent).toContain('✓ 按住事件投递');
-  });
-
-  it('未受监督的进程提示手动重新启动', async () => {
-    stubStatus({});
-    const { doc, el } = await mkShell({ capabilities: { run: true, restart: true } });
-    await flush();
-    click(restartBtn(el));
-    await flush();
-    expect(doc.body.textContent).toContain('手动重新启动');
   });
 });
 
