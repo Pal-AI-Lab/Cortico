@@ -607,6 +607,17 @@ describe('激活 / 停用 / 重启（热生效）', () => {
     expect(bag.ctx.refreshNav).not.toHaveBeenCalled();
   });
 
+  it('左栏重排失败:上面那行仍报激活成功,导航的错另走 onError', async () => {
+    const bag = await mountWith(routes);
+    const error = new Error('navigation refresh failed');
+    bag.ctx.refreshNav.mockRejectedValueOnce(error);
+    cardOf(bag.root, '丙渠道').findButton('激活 World')!.dispatchEvent({ type: 'click' });
+    await flush();
+    expect(bag.root.find('msgline')!.textContent).toBe(routes['/api/worlds/activation'].result);
+    expect(bag.root.find('msgline')!.classList.contains('bad')).toBe(false);
+    expect(bag.ctx.onError.mock.calls.map(([err]: [Error]) => err.message)).toContain(error.message);
+  });
+
   it('服务端拒绝(前置检查没过)→ 一行红字,按钮解禁', async () => {
     const { root } = await mountWith(routes);
     stubFetch({ ...listRoute }, ['/api/worlds/activation']);
