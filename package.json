@@ -21,6 +21,7 @@
     "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
     "build:web": "tsx scripts/build-web.ts && tailwindcss -i src/web/public/styles.css -o dist/web/styles.css --minify",
     "audit:release": "tsx scripts/release-audit.ts",
+    "publish:package": "tsx scripts/publish-package.ts",
     "check:extension": "tsx scripts/extension-check.ts",
     "logq": "tsx scripts/logq.ts",
     "dev:console": "tsx scripts/dev-console.ts",
