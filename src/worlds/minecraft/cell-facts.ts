@@ -183,10 +183,6 @@ export function skyBlocked(bot: Bot, x: number, yFrom: number, z: number): boole
   return false;
 }
 
-/**
- * 探查:只读不动。≤27 格逐格列坐标,大体积报聚合构成;"target" 只报命中格。
- * 同参重复探查且读数没变时只回「与上次相同」——差分记在执行器上,跨任务有效,重启清。
- */
 /** 读取作物 age 前构造 Vec3；真实 Mineflayer 的 blockAt 需要坐标的 floored()。 */
 export function cropAgeOfCell(bot: Bot, c: Cell): { value: number; max: number } | null {
   return cropAgeAt(bot, new Vec3(c.x, c.y, c.z));
@@ -206,14 +202,6 @@ export function cellText(c: Cell): string {
 }
 
 /**
- * 把一块材料放进指定格,返回贴的是哪一面(放不上返回 null)。
- *
- * 放置在原版里就是(参照方块,面)这一对:给了 `face` 就只点那一面,她说了贴哪儿
- * 就不必猜;没给就按 `FACE_TRY_ORDER` 挨个试,回执照实报最后贴上的是哪一面。
- * 成没成看的是"那一格变成了要放的东西",不是"那一格实心了" ——
- * 火把、树苗、种子这些没有碰撞箱,按实心判会把放成功的一律当失败。
- */
-/**
  * 拿它当放置参照面服务端必拒的那些方块。耕地的顶面不是完整实心面,作物根本没有
  * 碰撞箱;两者都点不成一次 use_item_on。这份集合只收原版确定性拒绝的,
  * 悬空/树上那类「有时能成」的不进。
@@ -224,4 +212,8 @@ export const NO_PLACE_REFERENCE = new Set([
   'melon_stem', 'pumpkin_stem', 'attached_melon_stem', 'attached_pumpkin_stem',
   'torchflower_crop', 'pitcher_crop',
 ]);
+
+export function dimensionOf(bot: Bot): string {
+  return String(bot.game?.dimension ?? 'overworld');
+}
 

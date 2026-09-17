@@ -215,11 +215,6 @@ export async function awaitCraftGain(bot: Bot, itemId: number, before: number, c
   return r.moved;
 }
 
-/**
- * 就地挖竖井,用于 collect 无法寻路到达的地下矿物。
- *
- * 每格开挖前重新读取脚下方块并等待落稳。遇到液体或基岩时返回已挖深度和阻挡物。
- */
 /** 全物品栏按物品名计数;配 lootNote 求一步前后的净增 */
 export function invSnapshot(bot: Bot): Map<string, number> {
   const m = new Map<string, number>();

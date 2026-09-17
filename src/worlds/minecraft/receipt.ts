@@ -45,9 +45,6 @@ export function zhErrorText(msg: string): string {
   return msg;
 }
 
-
-export type { Direction };
-
 /** 受阻是谁说的:非 SkillBlocked 的一律算机器自己的问题 */
 export function blockedSourceOf(err: unknown): 'server' | 'local' {
   return err instanceof SkillBlocked ? err.source : 'local';
@@ -287,5 +284,13 @@ export const SIGN_LINE_MARKS = ['①', '②', '③', '④'];
 export function signLinesText(text: string): string {
   const ls = text.split('\n');
   return `${ls.length} 行:${ls.map((l, i) => `${SIGN_LINE_MARKS[i] ?? `(${i + 1})`}${l === '' ? '(空行)' : l}`).join(' ')}`;
+}
+
+/** 耗时的人读写法:不到一秒给一位小数,不到一分钟报秒,再长报「3m20s」 */
+export function fmtDur(ms: number): string {
+  if (ms < 1000) return `${(ms / 1000).toFixed(1)}s`;
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  return `${Math.floor(s / 60)}m${s % 60 > 0 ? `${s % 60}s` : ''}`;
 }
 

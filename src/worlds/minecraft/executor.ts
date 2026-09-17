@@ -140,6 +140,8 @@ import {
   zhErrorText, zhThing,
 } from './receipt.ts';
 import { HANDHELD_SUFFIXES, equipDestOf } from './tools.ts';
+import { dimensionOf } from './cell-facts.ts';
+import { fmtDur } from './receipt.ts';
 /**
  * 放置验收按「目标方块由这份材料放出」匹配。
  * 材料选择仍走精确 ID；落地方块再经 registry 映回物品，收住 torch→wall_torch 等原版形态转换。
@@ -2551,6 +2553,10 @@ function probeWhereText(
   return `${head}${miss}${body}${untilUnknownNote(want.unknown)}${tail}。这一档直接读区块,不受遮挡与视线限制`;
 }
 
+/**
+ * 探查:只读不动。≤27 格逐格列坐标,大体积报聚合构成;"target" 只报命中格。
+ * 同参重复探查且读数没变时只回「与上次相同」——差分记在执行器上,跨任务有效,重启清。
+ */
 async function skillProbe(bot: Bot, call: Extract<SkillCall, { skill: 'probe' }>, ctx: SkillContext): Promise<string> {
   checkAbort(ctx);
   const locating = call.where !== undefined && call.where.length > 0;
@@ -2774,6 +2780,14 @@ function placeReferenceFace(bot: Bot, cell: Cell, face?: BlockFace): BlockFace |
   return (face ? [face] : FACE_TRY_ORDER).find((f) => usableReference(bot, cell, f) !== null) ?? null;
 }
 
+/**
+ * 把一块材料放进指定格,返回贴的是哪一面(放不上返回 null)。
+ *
+ * 放置在原版里就是(参照方块,面)这一对:给了 `face` 就只点那一面,她说了贴哪儿
+ * 就不必猜;没给就按 `FACE_TRY_ORDER` 挨个试,回执照实报最后贴上的是哪一面。
+ * 成没成看的是"那一格变成了要放的东西",不是"那一格实心了" ——
+ * 火把、树苗、种子这些没有碰撞箱,按实心判会把放成功的一律当失败。
+ */
 async function placeIntoCell(
   bot: Bot, cell: Cell, material: string, ctx: SkillContext, face?: BlockFace,
 ): Promise<BlockFace | null> {
@@ -7795,10 +7809,6 @@ function findContainers(bot: Bot, range: number): Array<{ x: number; y: number; 
   return out;
 }
 
-function dimensionOf(bot: Bot): string {
-  return String(bot.game?.dimension ?? 'overworld');
-}
-
 /**
  * 报告本维度账本中最近箱子的上次观测位置与取整直线距离；没有则返回 null。
  * 不跨维度比较坐标，也不决定走过去或放新箱子。
@@ -9947,14 +9957,6 @@ const LONG_GOTO_BLOCKS = 100;
 function fmtWalk(blocks: number): string {
   const sec = blocks / WALK_BLOCKS_PER_SEC;
   return sec < 90 ? `${Math.round(sec)} 秒` : `${Math.round(sec / 60)} 分钟`;
-}
-
-/** 耗时的人读写法:不到一秒给一位小数,不到一分钟报秒,再长报「3m20s」 */
-function fmtDur(ms: number): string {
-  if (ms < 1000) return `${(ms / 1000).toFixed(1)}s`;
-  const s = Math.round(ms / 1000);
-  if (s < 60) return `${s}s`;
-  return `${Math.floor(s / 60)}m${s % 60 > 0 ? `${s % 60}s` : ''}`;
 }
 
 /** 队列此刻的样子。世界快照末行与任务结局回执都读它;没有"查队列"的工具 */
