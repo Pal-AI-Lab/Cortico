@@ -14,15 +14,11 @@ import type { SessionStats } from '../core/sessions.ts';
 import { redactSecrets } from '../core/util.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere, type RunIndexRow } from './files.ts';
 
-/** 每段取多少条。上限只为了让一份包还能被打开,不表达任何诊断口径。 */
-export const DIAGNOSTICS_LIMITS = {
-  events: 500,
-  logWarn: 400,
-  logTail: 200,
-  toolcalls: 200,
-  boundaries: 50,
-  usageRows: 200,
-} as const;
+/**
+ * 每段取最近多少条,与 `/api/log` 的缺省条数一致。事件段非它不可:`store.range` 不给 limit
+ * 会把事件库整份读出来。取到这个数的段名进 `truncated`,拿到包的人据此知道还有更早的记录。
+ */
+export const DIAGNOSTICS_TAIL = 200;
 
 export interface DiagnosticsToolSchema {
   name: string;
@@ -69,52 +65,47 @@ export interface DiagnosticsBundle {
 }
 
 function readJson(file: string): unknown {
-  if (!existsSync(file)) return null;
-  try {
-    return JSON.parse(readFileSync(file, 'utf8')) as unknown;
-  } catch {
-    return null;
-  }
+  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as unknown) : null;
 }
 
 export function buildDiagnostics(sources: DiagnosticsSources): DiagnosticsBundle {
   const { dataDir, runId } = sources;
   const runDir = runId ? join(dataDir, 'runs', runId) : null;
   const warn = runDir
-    ? readTailRecordsWhere<LogRecord>(join(runDir, 'log.jsonl'), DIAGNOSTICS_LIMITS.logWarn, logPredicate({ level: 'warn' }))
+    ? readTailRecordsWhere<LogRecord>(join(runDir, 'log.jsonl'), DIAGNOSTICS_TAIL, logPredicate({ level: 'warn' }))
     : [];
   const tail = runDir
-    ? readTailRecordsWhere<LogRecord>(join(runDir, 'log.jsonl'), DIAGNOSTICS_LIMITS.logTail, () => true)
+    ? readTailRecordsWhere<LogRecord>(join(runDir, 'log.jsonl'), DIAGNOSTICS_TAIL, () => true)
     : [];
   const toolcalls = runDir
-    ? readTailRecordsWhere<unknown>(join(runDir, 'toolcalls.jsonl'), DIAGNOSTICS_LIMITS.toolcalls, () => true)
+    ? readTailRecordsWhere<unknown>(join(runDir, 'toolcalls.jsonl'), DIAGNOSTICS_TAIL, () => true)
     : [];
   const boundaries = runDir
     ? readTailRecordsWhere<{ kind?: string }>(
       join(runDir, 'transcript.jsonl'),
-      DIAGNOSTICS_LIMITS.boundaries,
+      DIAGNOSTICS_TAIL,
       (r) => r?.kind === 'boundary',
     )
     : [];
   const usageRows = runId
     ? readTailRecordsWhere<{ run?: string }>(
       join(dataDir, 'usage.jsonl'),
-      DIAGNOSTICS_LIMITS.usageRows,
+      DIAGNOSTICS_TAIL,
       (r) => r?.run === runId,
     )
     : [];
-  const events = sources.events.slice(-DIAGNOSTICS_LIMITS.events);
+  const events = sources.events.slice(-DIAGNOSTICS_TAIL);
 
   const truncated: string[] = [];
-  for (const [name, rows, limit] of [
-    ['events', events, DIAGNOSTICS_LIMITS.events],
-    ['log.warn', warn, DIAGNOSTICS_LIMITS.logWarn],
-    ['log.tail', tail, DIAGNOSTICS_LIMITS.logTail],
-    ['toolcalls', toolcalls, DIAGNOSTICS_LIMITS.toolcalls],
-    ['transcriptBoundaries', boundaries, DIAGNOSTICS_LIMITS.boundaries],
-    ['usage.rows', usageRows, DIAGNOSTICS_LIMITS.usageRows],
+  for (const [name, rows] of [
+    ['events', events],
+    ['log.warn', warn],
+    ['log.tail', tail],
+    ['toolcalls', toolcalls],
+    ['transcriptBoundaries', boundaries],
+    ['usage.rows', usageRows],
   ] as const) {
-    if (rows.length >= limit) truncated.push(name);
+    if (rows.length >= DIAGNOSTICS_TAIL) truncated.push(name);
   }
 
   const index = runId

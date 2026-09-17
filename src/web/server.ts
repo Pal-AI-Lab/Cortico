@@ -55,7 +55,7 @@ const SERVER_TEXT = {
   },
 };
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
-import { buildDiagnostics, DIAGNOSTICS_LIMITS } from './diagnostics.ts';
+import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
@@ -1338,7 +1338,7 @@ export class WebApp {
         session: dbg ? { messages: dbg.sessionMessages(), head: dbg.sessionHead?.() ?? [] } : null,
         sessions: this.deps.sessions?.list() ?? [],
         toolSchemas: dbg?.toolSchemas() ?? [],
-        events: this.deps.store.range({ limit: DIAGNOSTICS_LIMITS.events }),
+        events: this.deps.store.range({ limit: DIAGNOSTICS_TAIL }),
         latestCursor: this.deps.store.latestCursor(),
         worlds: (await this.deps.worlds?.(this.languageOf(req))) ?? [],
         usage: this.deps.usage?.aggregate({ bucket: 'day' }) ?? null,

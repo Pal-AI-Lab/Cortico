@@ -80,11 +80,11 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 
 ## 诊断包
 
-`GET /api/diagnostics`(终端页输入栏左下角的「导出诊断」)把排查一场跑要看的记录收进一个
+`GET /api/diagnostics`(终端页的「导出诊断」)把排查一场跑要看的记录收进一个
 JSON:运行指纹(`runs/index.jsonl` 的这一行与 `run.json`)、状态快照、常驻 session 的上下文与
 合成开头、session 列表、工具表、最近事件、运行日志(warn 及以上与不分级别的尾部各一段)、
 工具调用、transcript 里的交接记号、用量聚合与本 run 的用量行、`config.json`。每段各有条数
-上限(`DIAGNOSTICS_LIMITS`),取到上限的段名列在 `truncated` 里;键名含 secret / token / key /
+上限(`DIAGNOSTICS_TAIL`),取到上限的段名列在 `truncated` 里;键名含 secret / token / key /
 password 的配置值写出前抹成 `***`。未挂载的接缝那一段为空。
 
 ## 语言

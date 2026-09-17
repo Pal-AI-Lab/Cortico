@@ -1,5 +1,3 @@
-/** 取回诊断包(`GET /api/diagnostics`)并交给浏览器下载。 */
-
 import { get } from '../../core/api.ts';
 
 /** `cortico-diagnostics-r-20260917-104402-c2ab-20260917-142530.json`;没有 run id 时写 norun。 */

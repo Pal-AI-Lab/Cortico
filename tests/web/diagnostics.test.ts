@@ -3,7 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildDiagnostics, DIAGNOSTICS_LIMITS, type DiagnosticsSources } from '../../src/web/diagnostics.ts';
+import { buildDiagnostics, DIAGNOSTICS_TAIL, type DiagnosticsSources } from '../../src/web/diagnostics.ts';
 import { message } from '../../src/protocol/open-responses/context.ts';
 import type { EventEnvelope } from '../../src/core/types.ts';
 
@@ -115,11 +115,21 @@ describe('诊断包', () => {
   });
 
   it('事件取到上限时段名进 truncated', () => {
-    const many = Array.from({ length: DIAGNOSTICS_LIMITS.events + 5 }, (_, i) => event(i + 1, `第 ${i} 条`));
+    const many = Array.from({ length: DIAGNOSTICS_TAIL + 5 }, (_, i) => event(i + 1, `第 ${i} 条`));
     const b = buildDiagnostics(sources({ events: many }));
-    expect(b.events.items).toHaveLength(DIAGNOSTICS_LIMITS.events);
+    expect(b.events.items).toHaveLength(DIAGNOSTICS_TAIL);
     expect(b.events.items[0].text).toBe('第 5 条');
     expect(b.truncated).toContain('events');
+  });
+
+  it('config.json 不是合法 JSON 时照抛,不装成缺文件', () => {
+    const broken = mkdtempSync(join(tmpdir(), 'cortico-diag-broken-'));
+    writeFileSync(join(broken, 'config.json'), '{ 半行', 'utf8');
+    try {
+      expect(() => buildDiagnostics(sources({ dataDir: join(broken, 'data'), runId: null }))).toThrow();
+    } finally {
+      rmSync(broken, { recursive: true, force: true });
+    }
   });
 
   it('没有 run 也没有调试通道时各段为空,不抛', () => {
