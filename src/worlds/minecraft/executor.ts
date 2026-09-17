@@ -82,26 +82,6 @@ import {
 
 const { goals } = pathfinderPkg;
 
-type HurtSource = Parameters<Bot['attack']>[0];
-
-/** entityHurt 不带 source 时(旧协议路径)回退猜攻击者的距离上限,沿用旧判据的 6 格 */
-const REFLEX_HURT_FALLBACK_RANGE = 6;
-
-/** 半径内最近的敌对生物；排除玩家和自身，没有则返回 null。 */
-function nearestHostileWithin(bot: Bot, radius: number): HurtSource | null {
-  let best: HurtSource | null = null;
-  let bestD = radius;
-  for (const id of Object.keys(bot.entities)) {
-    const e = bot.entities[id as unknown as number];
-    if (!e?.position || e.type === 'player' || e === bot.entity) continue;
-    const name = e.name ?? '';
-    if (!HOSTILE.has(name) && !(name === 'piglin' && piglinIsHostile(bot, e))) continue;
-    const d = e.position.distanceTo(bot.entity.position);
-    if (d < bestD) { bestD = d; best = e as unknown as HurtSource; }
-  }
-  return best;
-}
-
 export {
   NEAR_DEFAULT, parseNoteText, parseQueueMode, parseScoutSteps, parseSteps,
   QUEUE_MODES, QUEUE_SCHEMA,
@@ -114,6 +94,7 @@ export type {
 export { dangerNoteText } from './skill-context.ts';
 export { describeSkill, zhErrorText } from './receipt.ts';
 export { dropOwnedGoal, goalOwnerKind, releaseBody, renderRouteMenu, setOwnedGoal } from './travel.ts';
+export { HOSTILE, bestWeapon, meleeCooldownMs } from './melee.ts';
 export type {
   BlueprintDesk, BlueprintSurvey, MarkDesk, ResourcePlacementGate, ResourcePlacementPermit,
   RouteProbe, TargetDiag,
@@ -148,6 +129,12 @@ import {
   findEntity, fmtDist, gotoGoal, levelTravelGoal, matchBlockIds, readStamp, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, type DistanceMetric, withRouteScene,
 } from './travel.ts';
+import {
+  HOSTILE, MELEE_CHASE, MELEE_REACH, REFLEX_HURT_FALLBACK_RANGE, STRAFE_MS, aimAt,
+  attackCooldownMs, attackStats, bestWeapon, forcedRangedIssue, hostilesAround, meleeSwing,
+  nearestHostileTo, nearestHostileWithin, pressMelee, pressRanged, rangedBlockedText,
+  rangedTargetOf, releaseMelee, type HostileRead, type HurtSource, underwaterOxygenNote,
+} from './melee.ts';
 /**
  * 放置验收按「目标方块由这份材料放出」匹配。
  * 材料选择仍走精确 ID；落地方块再经 registry 映回物品，收住 torch→wall_torch 等原版形态转换。
@@ -4530,159 +4517,6 @@ function isKnownTarget(bot: Bot, name: string): boolean {
   return Object.keys(bot.players ?? {}).some((p) => p.toLowerCase() === n);
 }
 
-/** 剑 > 斧 > 镐 > 锹,同种再按材质:下界合金 > 钻石 > 铁 > 石 > 金 > 木 */
-const WEAPON_KIND_SCORE: Record<string, number> = { sword: 40, axe: 30, pickaxe: 20, shovel: 10 };
-const WEAPON_TIER_SCORE: Record<string, number> = {
-  netherite: 6, diamond: 5, iron: 4, stone: 3, golden: 2, wooden: 1,
-};
-
-/** 剑 1.6 攻速 → 满伤间隔 625ms;冷却不满就挥是软伤害。战斗会话与技能共用一份 */
-export function meleeCooldownMs(bot: Bot): number {
-  return attackCooldownMs(bot);
-}
-
-function weaponScore(name: string): number {
-  const kind = Object.keys(WEAPON_KIND_SCORE).find((k) => name.endsWith(`_${k}`));
-  if (!kind) return -1;
-  const tier = Object.keys(WEAPON_TIER_SCORE).find((t) => name.startsWith(`${t}_`));
-  return WEAPON_KIND_SCORE[kind] + (tier ? WEAPON_TIER_SCORE[tier] : 0);
-}
-
-export function bestWeapon(bot: Bot) {
-  let best: ReturnType<Bot['inventory']['items']>[number] | null = null;
-  let score = -1;
-  for (const item of bot.inventory.items()) {
-    const s = weaponScore(item.name);
-    if (s > score) { score = s; best = item; }
-  }
-  return best;
-}
-
-/** 1.9+ 攻速换算的满伤间隔。剑 1.6、斧 1.0,不满就挥是软伤害。 */
-function attackCooldownMs(bot: Bot): number {
-  const name = bot.heldItem?.name ?? '';
-  if (name.endsWith('_sword')) return 625;
-  if (name.endsWith('_axe')) return 1_000;
-  if (name === 'trident' || name.endsWith('_trident')) return 900;
-  if (name.endsWith('_pickaxe')) return 850;
-  if (name.endsWith('_shovel') || name.endsWith('_hoe')) return 1_000;
-  return 250;
-}
-
-const MELEE_REACH = 3.2;
-const MELEE_CHASE = 8;
-const HOP_MS = 280;
-const STRAFE_MS = 400;
-
-function releaseMelee(bot: Bot): void {
-  for (const k of ['forward', 'back', 'left', 'right', 'sprint', 'jump'] as const) {
-    bot.setControlState(k, false);
-  }
-}
-
-async function aimAt(bot: Bot, entity: { position: { offset(x: number, y: number, z: number): unknown }; height?: number }): Promise<void> {
-  await bot.lookAt(entity.position.offset(0, entity.height ?? 1.6, 0) as never, true);
-}
-
-/**
- * 跳劈:落地才跳,下落才出手。冲刺中 crit 不成,先松 sprint。
- * 等不到下落(测试假实体没有速度)就 HOP_MS 后挥,不堵死循环。
- */
-async function hopCrit(bot: Bot): Promise<void> {
-  if ((bot.entity as { isInWater?: boolean }).isInWater) return;
-  if (bot.entity.onGround === false) return;
-  bot.setControlState('sprint', false);
-  bot.setControlState('jump', true);
-  const deadline = Date.now() + HOP_MS;
-  while (Date.now() < deadline) {
-    await sleep(50);
-    const vy = (bot.entity as { velocity?: { y?: number } }).velocity?.y;
-    if (typeof vy === 'number' && vy < 0) break;
-  }
-  bot.setControlState('jump', false);
-}
-
-function pressMelee(bot: Bot, entity: { position: { distanceTo(o: unknown): number }; name?: string }, strafeLeft: boolean | null): void {
-  const d = entity.position.distanceTo(bot.entity.position);
-  if (entity.name === 'creeper' && d < 3) {
-    bot.setControlState('forward', false);
-    bot.setControlState('back', true);
-    bot.setControlState('sprint', false);
-  } else {
-    bot.setControlState('back', false);
-    bot.setControlState('forward', d > 1.6);
-    bot.setControlState('sprint', d > 2.4);
-  }
-  bot.setControlState('left', strafeLeft === true);
-  bot.setControlState('right', strafeLeft === false);
-}
-
-async function meleeSwing(
-  bot: Bot,
-  entity: Parameters<Bot['attack']>[0],
-  beforeAttack?: () => void,
-): Promise<void> {
-  await hopCrit(bot);
-  await aimAt(bot, entity);
-  beforeAttack?.();
-  bot.attack(entity);
-}
-
-/** 水下攻击回执附氧气读数，不额外用氧气阈值阻断主动攻击。 */
-function underwaterOxygenNote(bot: Bot): string {
-  if (!headInWater(bot)) return '';
-  return `;人在水下,氧气 ${Math.max(0, Math.min(20, bot.oxygenLevel ?? 20))}/20`;
-}
-
-function rangedTargetOf(entity: NonNullable<Bot['entities'][string]>): RangedTarget {
-  return {
-    id: entity.id,
-    position: entity.position,
-    ...(entity.height === undefined ? {} : { height: entity.height }),
-    ...(entity.width === undefined ? {} : { width: entity.width }),
-  };
-}
-
-function forcedRangedIssue(bot: Bot, target: RangedTarget): string | null {
-  if (!bestRangedWeapon(bot)) return '包里没有可用的弓';
-  if (!hasUsableArrows(bot)) return '包里没有普通箭';
-  if (!hasRangedLos(bot, target)) return '目标被方块挡住,没有射线';
-  return null;
-}
-
-function rangedBlockedText(result: Exclude<BowShotResult, { kind: 'released' }>): string {
-  if (result.reason === 'no_arrow') return '普通箭用完了';
-  if (result.reason === 'no_los') return '目标被方块挡住,没有射线';
-  if (result.reason === 'no_solution') return '这段距离没有可用的弓箭弹道';
-  if (result.reason === 'too_close') return '目标贴得太近,弓拉不开安全距离';
-  if (result.cause === 'bow_lost') return '可用的弓不在手边了';
-  if (result.cause === 'bot_lost') return '连接断了';
-  if (result.cause === 'target_lost') return '目标离开视野了';
-  return '这一箭在放出前被取消了';
-}
-
-function attackStats(stats: TaskAttackLease): string {
-  return `挥击 ${stats.swings} 次命中 ${stats.meleeHits} 次,放箭 ${stats.arrows} 支命中 ${stats.rangedHits} 支` +
-    `${stats.hurts > 0 ? `,期间挨打 ${stats.hurts} 次` : ''}`;
-}
-
-function pressRanged(
-  bot: Bot,
-  distance: number,
-  mode: AttackMode,
-  strafeLeft: boolean,
-): void {
-  const kite = mode === 'kite';
-  const retreat = distance <= HYBRID_MELEE_AT || (kite && distance < KITE_MIN_RANGE);
-  bot.setControlState('jump', false);
-  bot.setControlState('forward', kite && distance > KITE_MAX_RANGE);
-  bot.setControlState('back', retreat);
-  bot.setControlState('sprint', kite && distance > KITE_MAX_RANGE);
-  const lateral = kite && distance >= KITE_MIN_RANGE && distance <= KITE_MAX_RANGE;
-  bot.setControlState('left', lateral && strafeLeft);
-  bot.setControlState('right', lateral && !strafeLeft);
-}
-
 async function skillAttack(
   bot: Bot,
   target: string,
@@ -8454,29 +8288,6 @@ async function skillTransit(
   const arrived = feetOf(bot);
   return `穿门成功:${zhDimension(fromDimension)} ${cellText(portal)} → `
     + `${zhDimension(toDimension)} ${cellText(arrived)}(两端都由这次维度切换实测)`;
-}
-
-/** 一只在 32 格内的敌对生物读数 */
-interface HostileRead {
-  e: NonNullable<Bot['entities'][string]>;
-  d: number;
-}
-
-/** 32 格内所有敌对生物,由近到远。piglin 只在真敌对时算数(见 piglinIsHostile) */
-function hostilesAround(bot: Bot, from: { x: number; y: number; z: number }): HostileRead[] {
-  const out: HostileRead[] = [];
-  for (const id of Object.keys(bot.entities)) {
-    const e = bot.entities[id];
-    if (!e?.position || !e.name) continue;
-    if (!HOSTILE.has(e.name) && !(e.name === 'piglin' && piglinIsHostile(bot, e))) continue;
-    const d = e.position.distanceTo(from as never);
-    if (d <= 32) out.push({ e, d });
-  }
-  return out.sort((a, b) => a.d - b.d);
-}
-
-function nearestHostileTo(bot: Bot, from: { x: number; y: number; z: number }): HostileRead | null {
-  return hostilesAround(bot, from)[0] ?? null;
 }
 
 /** flee 的自身时限那一路。定时器 unref,不拖住进程退出 */
@@ -12404,11 +12215,3 @@ function findNearbyAirColumn(
   }
   return null;
 }
-
-export const HOSTILE = new Set([
-  'zombie', 'skeleton', 'creeper', 'spider', 'cave_spider', 'enderman', 'witch',
-  'slime', 'phantom', 'drowned', 'husk', 'stray', 'pillager', 'vindicator',
-  'ravager', 'vex', 'evoker', 'silverfish', 'zombie_villager', 'blaze', 'ghast',
-  'magma_cube', 'wither_skeleton', 'warden', 'bogged', 'breeze',
-  'piglin_brute', 'hoglin', 'zoglin', 'endermite', 'illusioner', 'guardian',
-]);
