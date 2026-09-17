@@ -217,3 +217,10 @@ export function dimensionOf(bot: Bot): string {
   return String(bot.game?.dimension ?? 'overworld');
 }
 
+/** 方块状态属性的原值;prismarine 不给 `getProperties` 时返回 null */
+export function blockProp(b: ReturnType<Bot['blockAt']>, key: string): string | null {
+  if (!b || typeof b.getProperties !== 'function') return null;
+  const v = b.getProperties()[key];
+  return v === undefined ? null : String(v);
+}
+

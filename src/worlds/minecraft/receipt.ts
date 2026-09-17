@@ -13,6 +13,8 @@ import { FACE_ZH, SHAPE_ZH } from './cell-facts.ts';
 import { DRINKABLES, readEnchants } from './item-facts.ts';
 import { equipDestOf } from './tools.ts';
 import { type Anchor, type BoxFill, type ShapeName } from './geometry.ts';
+import { LIQUIDS, type RegionReading } from './cell-facts.ts';
+import { minHarvestTool } from './tools.ts';
 
 /**
  * mineflayer/pathfinder 的英文报错翻成中文再进事件:上下文里除方块/物品 id 之外
@@ -301,5 +303,37 @@ export function contentsText(items: ItemStack[]): string {
     .sort((a, b) => b.count - a.count)
     .map((i) => `${zhName(i.name)}×${i.count}`)
     .join('、');
+}
+
+/**
+ * 现有的家伙什(含空手)挖了也不掉东西的材质,各自点名原版要哪一级。
+ * 试算是"出发前"字面意义上的那一刻,挖掘等级这条事实本该在这里就说清。
+ */
+export function noDropMaterials(bot: Bot, reading: RegionReading): string[] {
+  const toolTypes: Array<number | null> = [null, ...bot.inventory.items().map((i) => i.type)];
+  const out: string[] = [];
+  for (const [name, e] of reading.counts) {
+    if (LIQUIDS.has(name)) continue;
+    if (typeof e.sample.canHarvest !== 'function') continue;
+    if (toolTypes.some((t) => e.sample.canHarvest(t))) continue;
+    const need = minHarvestTool(bot, name);
+    out.push(need ? `${zhName(name)}(要${zhName(need)}及以上)` : zhName(name));
+  }
+  return out;
+}
+
+/** 材质构成一句话:量大在前,矿石带最近坐标 */
+export function compositionText(reading: RegionReading): string {
+  const parts = [...reading.counts.entries()]
+    .sort((a, b) => b[1].n - a[1].n)
+    .slice(0, 10)
+    .map(([name, e]) => {
+      const spot = name.endsWith('_ore') ? `(最近的在 (${e.nearest.x}, ${e.nearest.y}, ${e.nearest.z}))` : '';
+      return `${zhName(name)}×${e.n}${spot}`;
+    });
+  const rest = reading.counts.size - Math.min(reading.counts.size, 10);
+  if (rest > 0) parts.push(`另有 ${rest} 种少量`);
+  if (reading.air.length > 0) parts.push(`空气×${reading.air.length}`);
+  return parts.length > 0 ? parts.join('、') : '什么都没有';
 }
 

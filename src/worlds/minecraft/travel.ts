@@ -18,7 +18,7 @@ import { fmtDur, zhErrorText } from './receipt.ts';
 import { type Cell } from './geometry.ts';
 import { probabilisticDropsOf } from './inventory.ts';
 
-const { goals } = pathfinderPkg;
+export const { goals } = pathfinderPkg;
 
 /** 单次寻路上限；超时按不可达处理。 */
 export const GOTO_DEADLINE_MS = 120_000;
@@ -741,5 +741,14 @@ export function matchBlockIds(bot: Bot, name: string): number[] {
     }
   }
   return [...ids];
+}
+
+/** 脚下方块挖开后的下落结束前，不读取下一格位置。 */
+export async function settleOnGround(bot: Bot, ctx: SkillContext, budgetMs = 5_000): Promise<void> {
+  const deadline = Date.now() + budgetMs;
+  while (!bot.entity.onGround && Date.now() < deadline) {
+    checkAbort(ctx);
+    await sleep(100);
+  }
 }
 
