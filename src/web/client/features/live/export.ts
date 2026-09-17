@@ -1,6 +1,6 @@
 /**
  * 把当前观察的 session 存成 JSON 文件。两种范围:整份(含系统前缀与合成开头)、
- * 只留非前缀部分(system / developer 条目与合成开头都不进文件)。
+ * 只留非前缀部分(system / developer 条目不进文件,合成开头本来就不在 session 记录里)。
  */
 
 import type { ContextRecord } from '../../../../protocol/open-responses/context.ts';
@@ -34,7 +34,7 @@ function isPrefix(entry: ContextRecord): boolean {
 export function buildExport(input: ExportInput, scope: ExportScope): ExportFile {
   const items = scope === 'all'
     ? [...(input.head ?? []), ...input.messages]
-    : input.messages.filter((entry) => !isPrefix(entry) && entry.context.head !== true);
+    : input.messages.filter((entry) => !isPrefix(entry));
   return {
     exportedAt: input.exportedAt.toISOString(),
     scope,

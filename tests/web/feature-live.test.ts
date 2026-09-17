@@ -514,7 +514,7 @@ describe('会话导出 · 纯计算', () => {
     expect(file.exportedAt).toBe(at.toISOString());
   });
 
-  it('非前缀部分:system 与 developer 条目和合成开头都不进文件', () => {
+  it('非前缀部分:system 与 developer 条目不进文件,合成开头也不拼进去', () => {
     const file = xp.buildExport({ sessionId: 'main', sessionLabel: '主 session', messages, head, exportedAt: at }, 'dialogue');
     expect(file.items).toEqual(messages.slice(2));
   });
