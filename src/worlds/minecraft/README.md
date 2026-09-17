@@ -8,20 +8,70 @@
 ## 结构
 
 ```
-world.ts        World:事件面、工具面、console 自报、世界变化节流、摄像机编排
+definition.ts / config.ts / world.ts  World 定义、配置段与 World 本体(事件面、工具面、
+                 console 自报、世界变化节流、摄像机编排、PWSR 三张表)
+proxy.ts / engine-child.ts / engine-ipc.ts  主进程代理、引擎子进程与两者之间的协议
+
+连上去
 bridge.ts        mineflayer 连接/断线重连/prismarine-viewer 拉起
 mineflayer-fixes.ts  把 mineflayer 里靠客户端预测的合成与放置换成等服务端回话的版本
-world.ts         纯逻辑:世界快照 → 文本渲染、变化检测(可直接单测)
-server-config.ts server.properties 与 ops.json 读写 + 存档目录枚举(存档与玩法/权限与作弊面板)
-executor.ts      异步执行器:任务队列 + 技能实现 + 自保反射(不经 LLM)
+pathfinder-perf.ts   寻路器的代价与门开关补丁(另见 patches/ 里的 upstream 补丁)
+pathfinder-lib.d.ts  寻路器没带的类型声明
+server.ts / server-config.ts  本地服务端一键启停;server.properties 与 ops.json 读写、
+                 存档目录枚举(存档与玩法/权限与作弊面板)
+client.ts / window.ts / client-launch.ts / client-options.ts / client-skins.ts
+                 观察者客户端:拉起、等窗口、改标题、.minecraft → java 命令行、皮肤
+level-dat.ts     读存档自述(世界名、种子、生成参数)
+
+读世界
+terrain.ts       世界快照 → 文本渲染与变化检测(纯逻辑,可直接单测)
+cell-facts.ts    格的读法:锚点落到哪一格、脚下与参照面、区域扫描、方块名指纹
+geometry.ts      形状与锚点的纯几何:解析、栅格化
+item-facts.ts / entity-facts.ts / item-pick.ts / item-break.ts / piglin.ts
+                 物品与实体的事实读法
+names.ts         方块/实体/生物群系/附魔/效果的中文名表
+
+技能
 skills.ts        技能注册表:SkillCall/parseSteps/SKILL_DOC/schema 全部由一份声明生成
+executor.ts      任务队列、逐步派发(runSkill)与自保反射(不经 LLM)
+skill-context.ts 技能执行的共享契约:上下文、两种终态异常、World 交给技能的只读取用口
+skills-gather.ts   collect / find / fish / trade / probe
+skills-build.ts    build 的两种形态与蓝图施工,含上岸
+skills-dig.ts      excavate / tunnel
+skills-craft.ts    craft / eat / equip
+skills-interact.ts use 的各种形态 + ride / lead / anvil / grindstone
+skills-container.ts pickup / toss / stow / take / smelt / enchant / brew / transit
+travel.ts        寻路一次的时限与卡死判据、寻路目标归属、走不通时的试算现场
+placement.ts     贴哪一面、站哪儿放得着、放完回读确认、补光与耗材许可、工作站
+containers.ts    容器与工作站窗口:找、开得稳、槽位排序、账本登记
+inventory.ts     背包读法与放置/合成/拾取后的确认等待
+tools.ts         选具:拿哪把、够不够级、快断了没有、reserve 被迫动用的记号
+melee.ts         挑兵器、挥击与冷却、远程接管判据、附近敌对生物读数,以及 attack
+until.ts         find 与 tunnel 共用的 `until` 早停名单
+receipt.ts       回执措辞:这一步是什么、受阻现场、核验结论怎么念
+precheck.ts      前置试算:受理与出队两刻的纯读判据
+
+战斗与自保
+combat.ts / combat-context.ts / ranged.ts  被动交战、方位场、弓与投掷物
+escape.ts        脱困与回生:重生点解析、tp 回执
+body-lease.ts    身体租约仲裁:谁在什么时候占着身体
+
+蓝图
+blueprint.ts     方块状态规范化与校验
+blueprint-plan.ts 编译成施工步序、账单、回读对账
+blueprint-registry.ts  原版方块状态与放置方式的对照
+blueprint-repair.ts / blueprint-resource.ts  提交修复与版本/作业登记
+
+账本与规矩
+policy.ts        mc_policy 六格常驻规矩,五格落盘
+goal-plan.ts     PWSR 目标计划的协调与判定
 check.ts         mc_check 的断言器:受理 → 对世界求值 → 只报差异的回执(纯函数)
-client.ts        观察者客户端进程:拉起、等窗口、收干净
-window.ts        客户端那扇窗:按进程号探测有没有出来、改标题(+ client-window.ps1)
-client-launch.ts 纯计算:.minecraft 安装 → java 命令行(认 inheritsFrom)
-client-skins.ts  皮肤:选中的那张留底,启动前按账号名铺进游戏目录
-server.ts     控制台一键启停:本地 MC 服务器(java -jar server.jar)
-log.ts           World 日志转发与面板环形缓冲
+chests.ts / works.ts / explored.ts / deaths.ts  容器、成果、探索覆盖、死亡的持久账
+placed-ledger.ts 挂在 bot 实例上的小账:这一场放过、锄过、没放上的那些格
+search-observation.ts / round.ts / show.ts / readouts.ts / log.ts
+                 find 的短期观察、同轮重复查询、容器演出节拍、三份读数、日志转发
+
+console/         控制台面板两侧:服务器、存档、权限、客户端、皮肤、日志
   (Minecraft 客户端、服务端与启动器放在仓库外,不进 Git)
 ```
 
@@ -375,7 +425,7 @@ collect **只挖看得见的**：`collectVisible` 经 `canSeeBlockAt` 检查视�
 
 `use.face` 接受绝对面名，省略时使用顶面。显式面同时传给 `activateBlock` 和对应的结果核验；读数中的坐标标识实际检查的格子。
 
-### 锚点几何技能族（geometry.ts + executor.ts）
+### 锚点几何技能族（geometry.ts + skills-build.ts + skills-dig.ts）
 
 **锚点几何语言**由 build/excavate/tunnel 的操作、probe 的测量及 dryRun 的试算共用：
 

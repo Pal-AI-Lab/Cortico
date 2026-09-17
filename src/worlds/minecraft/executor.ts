@@ -1,12 +1,13 @@
 /**
- * 异步执行器:任务队列 + 代码技能库 + 自保反射。
+ * 异步执行器:任务队列 + 逐步派发 + 自保反射。
  *
  * mc_do 的契约在这里落地:排队立即返回,技能后台跑,完成/受阻/被抢占一律经
  * report 回调交给 World 转成 minecraft.task 事件。一件做完接着做下一件;
  * 反射不经 LLM,做了什么事后汇报。技能一律经 `getBot()` 现取 bot(重连后实例会换)。
  *
  * 技能的契约面(SkillCall/parseSteps/SKILL_DOC/schema)住在 skills.ts 的注册表里,
- * 长出新技能时四面同步;这里只管执行。公共面经本文件转口,调用方不必分辨两处。
+ * 实现分在 skills-*.ts 各族,`runSkill` 是唯一派发口。公共面经本文件转口,
+ * 调用方不必分辨两处。
  */
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
