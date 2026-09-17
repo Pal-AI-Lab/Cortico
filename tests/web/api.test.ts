@@ -478,3 +478,17 @@ describe('/api/log', () => {
     }
   });
 });
+
+describe('/api/diagnostics', () => {
+  it('没挂调试通道也给得出包:run 段空着,事件与 World 照常带上', async () => {
+    const b = await getJson(base() + '/api/diagnostics');
+    expect(b.kind).toBe('cortico-diagnostics');
+    expect(b.run).toEqual({ id: null, index: null, manifest: null });
+    expect(b.session).toBeNull();
+    expect(b.status).toMatchObject({ dream: 'idle' });
+    expect(b.events.items).toHaveLength(10);
+    expect(b.events.latestCursor).toBe(10);
+    expect(b.worlds.map((w: any) => w.id)).toEqual(['qq', 'terminal']);
+    expect(b.truncated).toEqual([]);
+  });
+});
