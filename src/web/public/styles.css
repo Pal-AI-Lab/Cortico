@@ -54,8 +54,8 @@
     --shadow-soft: color-mix(in srgb, var(--ink) 7%, transparent);
     --shadow-strong: color-mix(in srgb, var(--ink) 20%, transparent);
     --overlay: color-mix(in srgb, var(--ink) 44%, transparent);
-    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans SC", sans-serif;
-    --mono: ui-monospace, "Cascadia Mono", "Sarasa Mono SC", Consolas, "PingFang SC", "Microsoft YaHei", monospace;
+    --sans: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    --mono: ui-monospace, "Cascadia Mono", "Sarasa Mono SC", Consolas, monospace;
     --background: var(--paper);
     --surface: var(--sheet);
     --surface-hover: var(--sheet-2);
