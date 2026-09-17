@@ -46,6 +46,8 @@ pnpm start mybot
 | `avatar.png`、`voices/` | 头像与参考声线 |
 | `.onboarding` | 开场引导的一次性标记,自建部署时写下;控制台见到它才给引导,操作员开口或按下那颗按钮后删除 |
 
+启动时读取的部署配置、共享端点配置与包内 World 配置支持 UTF-8、带 BOM 的 UTF-8 和 UTF-16 LE。
+
 `data/` 里:`runs/index.jsonl` 与 `runs/<run>/`(见 [runs.md](runs.md))、`session-main.jsonl`
 等 session 文件(见 [sessions.md](sessions.md))、`usage.jsonl`、`core-state.json`、
 `timers.json`、单实例锁 `instance.lock`、重启标志 `.restart-request`。

@@ -3,11 +3,12 @@
  * 部署文件中的 providers 字段不参与合并。Core、Persona 与 World 的默认值由各自所有者提供。
  * 运行时共享合并后的配置对象，控制台和调参工具原位更新。
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { CoreConfig, LLMProviderEntry } from './core/types.ts';
 import { deepMerge, type LoadedConfig } from './core/config.ts';
 import { secretReader } from './core/secrets.ts';
+import { readTextFile } from './core/util.ts';
 import { deploymentRoot, repoRoot as codeRepoRoot } from './paths.ts';
 
 export type { LoadedConfig } from './core/config.ts';
@@ -90,7 +91,7 @@ function globalProviders(providersDir: string): Record<string, LLMProviderEntry>
     const file = resolve(providersDir, name, 'config.json');
     if (!existsSync(file)) continue;
     try {
-      table[name] = JSON.parse(readFileSync(file, 'utf8')) as LLMProviderEntry;
+      table[name] = JSON.parse(readTextFile(file)) as LLMProviderEntry;
     } catch (err) {
       throw new Error(`${file} 解析失败:${err instanceof Error ? err.message : String(err)}`);
     }
@@ -110,7 +111,7 @@ function packageWorldOverrides(pkgDir: string): Record<string, unknown> {
     const file = resolve(ioDir, id, 'config.json');
     if (!existsSync(file)) continue;
     try {
-      worlds[id] = JSON.parse(readFileSync(file, 'utf8'));
+      worlds[id] = JSON.parse(readTextFile(file));
     } catch (err) {
       throw new Error(`${file} 解析失败:${err instanceof Error ? err.message : String(err)}`);
     }
@@ -137,7 +138,7 @@ export function loadDeployment<C extends CoreConfig>(
   const providers = resolve(providersDir);
   const cfgPath = resolve(dir, 'config.json');
   const raw: Partial<C> & Record<string, unknown> = existsSync(cfgPath)
-    ? (JSON.parse(readFileSync(cfgPath, 'utf8')) as Partial<C> & Record<string, unknown>)
+    ? (JSON.parse(readTextFile(cfgPath)) as Partial<C> & Record<string, unknown>)
     : {};
   // 部署文件不能覆盖共享端点表。
   delete raw.providers;

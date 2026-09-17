@@ -1,4 +1,4 @@
-<!-- Owner: bin/cortico.mjs, start.bat, src/launcher.ts -->
+<!-- Owner: bin/cortico.mjs, start.bat, src/launcher.ts, src/core/util.ts, src/paths.ts, src/core/secrets.ts, src/config-file.ts, src/deploy.ts -->
 
 # Windows
 
@@ -41,6 +41,6 @@ Windows 把控制台事件发给前台进程组里的每一个进程。`bin/cort
 
 ## 文本文件编码
 
-手写的配置与密钥文件(`deployment.json`、`config.json`、`.env`)按 BOM 解码:UTF-8、
+部署清单、部署配置、共享端点配置、包内 World 配置与密钥文件按 BOM 解码:UTF-8、
 带 BOM 的 UTF-8 与 UTF-16 LE 都读得出来。PowerShell 5.1 的 `>` 与 `Out-File` 默认写 UTF-16 LE,
 `Set-Content` 默认写当前代码页的 ANSI;非 ASCII 内容用 `-Encoding utf8` 指明。
