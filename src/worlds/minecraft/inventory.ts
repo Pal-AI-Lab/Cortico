@@ -1,7 +1,7 @@
 /**
  * 背包的读法与等待:按名字数数、找那一件、以及放置/合成/拾取后等服务端回话确认增量。
  *
- * 只读背包与等确认,不决定拿什么;工具的挑法在 executor.ts 的选具那一段。
+ * 只读背包与等确认,不决定拿什么;该拿哪把工具在 tools.ts。
  */
 import type { Bot } from 'mineflayer';
 import { itemMatchesPick, pickLabel, pickMissText, pickTargetOf } from './item-pick.ts';

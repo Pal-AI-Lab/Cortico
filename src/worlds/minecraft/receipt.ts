@@ -1,7 +1,8 @@
 /**
  * 回执的说法:这一步是什么、受阻那一刻的现场、核验结论怎么念。
  *
- * 只出文本,不读世界也不改世界;判据在各技能族,这里只负责措辞。
+ * 只出文本,不改世界也不发包;两处(bagNow、noDropMaterials)读背包是为了把读数写进那句话。
+ * 判据在各技能族,这里只负责措辞。
  */
 import type { Bot } from 'mineflayer';
 import { zhDimension, zhEntity, zhName } from './names.ts';

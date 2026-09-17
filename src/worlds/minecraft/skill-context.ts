@@ -1,7 +1,8 @@
 /**
  * 技能执行的共享面:执行上下文、两种终态异常,以及 World 交给技能的只读取用口。
  *
- * 这里只有契约,没有技能逻辑。执行器与各技能族都依赖它,它谁也不依赖。
+ * 这里只有契约,没有技能逻辑:除 pathfinder 的目标类型外一律只取类型。
+ * 执行器与各技能族都依赖它,它反过来不依赖两者中的任何一个。
  */
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
