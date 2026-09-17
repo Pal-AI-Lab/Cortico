@@ -290,3 +290,8 @@ export class ChestBook {
     writeFileSync(this.file, `${JSON.stringify(obj)}\n`, 'utf8');
   }
 }
+/** 箱子族在世界里的扫描名单;与账本认箱子的口径同一份(见 chests.ts CHEST_BLOCKS) */
+export const CONTAINER_FIND: readonly string[] = CHEST_BLOCKS;
+
+export const FURNACE_KINDS = new Set<string>(FURNACE_BLOCKS);
+

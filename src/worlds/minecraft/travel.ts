@@ -17,6 +17,7 @@ import { zhName } from './names.ts';
 import { fmtDur, zhErrorText } from './receipt.ts';
 import { type Cell } from './geometry.ts';
 import { probabilisticDropsOf } from './inventory.ts';
+import { PLACE_REACH } from './cell-facts.ts';
 
 export const { goals } = pathfinderPkg;
 
@@ -750,5 +751,13 @@ export async function settleOnGround(bot: Bot, ctx: SkillContext, budgetMs = 5_0
     checkAbort(ctx);
     await sleep(100);
   }
+}
+
+/** 走到够得着那一格的地方 */
+export async function reachCell(bot: Bot, c: Cell, ctx: SkillContext): Promise<void> {
+  const me = bot.entity.position;
+  const d = Math.hypot(me.x - (c.x + 0.5), me.y - (c.y + 0.5), me.z - (c.z + 0.5));
+  if (d <= PLACE_REACH) return;
+  await gotoGoal(bot, new goals.GoalNear(c.x, c.y, c.z, 2), ctx);
 }
 
