@@ -15,6 +15,7 @@ const LIFECYCLE_ENTRY = '../../src/web/client/core/lifecycle.ts';
 const ROUTER_ENTRY = '../../src/web/client/core/router.ts';
 const LIVE_ENTRY = '../../src/web/client/features/live/index.ts';
 const CONTEXT_ENTRY = '../../src/web/client/features/live/context.ts';
+const EXPORT_ENTRY = '../../src/web/client/features/live/export.ts';
 const FEATURE_ENTRY = '../../src/web/client/features/feature.ts';
 
 type Any = any;
@@ -24,6 +25,7 @@ const { Lifecycle } = (await import(LIFECYCLE_ENTRY)) as Any;
 const { Router, parseHash } = (await import(ROUTER_ENTRY)) as Any;
 const live = (await import(LIVE_ENTRY)) as Any;
 const cx = (await import(CONTEXT_ENTRY)) as Any;
+const xp = (await import(EXPORT_ENTRY)) as Any;
 const { featureAvailable } = (await import(FEATURE_ENTRY)) as Any;
 
 // ---------------------------------------------------------------------------
@@ -493,6 +495,35 @@ describe('上下文占用 · 纯计算', () => {
 // ===========================================================================
 // feature 声明
 // ===========================================================================
+
+describe('会话导出 · 纯计算', () => {
+  const head = [message('assistant', '合成开头', { head: true })];
+  const messages = [
+    message('system', '系统前缀'),
+    message('developer', '补充说明'),
+    message('user', '在吗'),
+    message('assistant', '在'),
+  ];
+  const at = new Date('2026-09-17T14:25:30');
+
+  it('整份导出:合成开头排在消息之前,系统前缀照留', () => {
+    const file = xp.buildExport({ sessionId: 'main', sessionLabel: '主 session', messages, head, exportedAt: at }, 'all');
+    expect(file.scope).toBe('all');
+    expect(file.session).toEqual({ id: 'main', label: '主 session' });
+    expect(file.items).toEqual([...head, ...messages]);
+    expect(file.exportedAt).toBe(at.toISOString());
+  });
+
+  it('非前缀部分:system 与 developer 条目和合成开头都不进文件', () => {
+    const file = xp.buildExport({ sessionId: 'main', sessionLabel: '主 session', messages, head, exportedAt: at }, 'dialogue');
+    expect(file.items).toEqual(messages.slice(2));
+  });
+
+  it('文件名带 session id 与本地时间,id 里的非法字符换成下划线', () => {
+    expect(xp.exportFileName('main', at)).toBe('cortico-session-main-20260917-142530.json');
+    expect(xp.exportFileName('run/2026', at)).toBe('cortico-session-run_2026-20260917-142530.json');
+  });
+});
 
 describe('live feature 声明', () => {
   it('认领 live 路由,两条通道任一挂着就有意义', () => {

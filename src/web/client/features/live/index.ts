@@ -14,6 +14,13 @@ import { get, post } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
 import { browserSocketEnv, openFrameworkSocket, type SocketEnv } from '../../core/websocket.ts';
 import { buildCtxPanel, computeCtx, type ContextBreakdown } from './context.ts';
+import {
+  buildExport,
+  downloadJson,
+  exportFileName,
+  openExportDialog,
+  type ExportScope,
+} from './export.ts';
 import { createForkView, MAIN_ID, MAIN_LABEL } from './fork.ts';
 import {
   arr,
@@ -22,6 +29,7 @@ import {
   type StatusSnapshot,
   type ToolSchemaDoc,
 } from './protocol.ts';
+import { icon } from '../../ui/icons.ts';
 import { subscribeLamps } from '../../ui/lamp.ts';
 import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
@@ -153,10 +161,17 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   summary.append(status.el, ui.h('span', 'grow'), netEl);
   band.append(summary, sessionBand.el);
 
+  const exportButton = ui.button('', {
+    size: 'sm',
+    onClick: () => openExportDialog({ ui, doc, signal: ctx.signal, onPick: exportSession }),
+  });
+  exportButton.className += ' btn-ico';
+  exportButton.append(icon(doc, 'download'), ui.h('span', null, S.exportSession));
+
   const composer = ui.promptInput({
     label: S.composerLabel,
     placeholder: S.composerPlaceholder,
-    hint: S.composerHint,
+    leading: exportButton,
     tools: ctxAnchor,
     images: { max: 8 },
     onSubmit: (text, images) => {
@@ -246,6 +261,18 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onChange: () => sessionBand.render(state.sessions, fork.id),
     onError: (err) => ctx.onError(err),
   });
+
+  const exportSession = (scope: ExportScope): void => {
+    const at = new Date();
+    const data = buildExport({
+      sessionId: fork.id,
+      sessionLabel: fork.label,
+      messages: fork.messages(),
+      head: fork.isMain() ? state.head : [],
+      exportedAt: at,
+    }, scope);
+    downloadJson(doc, exportFileName(fork.id, at), data);
+  };
 
   const updateCtx = (): void => {
     const d = computeCtx({
