@@ -294,3 +294,12 @@ export function fmtDur(ms: number): string {
   return `${Math.floor(s / 60)}m${s % 60 > 0 ? `${s % 60}s` : ''}`;
 }
 
+export function contentsText(items: ItemStack[]): string {
+  if (items.length === 0) return '空的';
+  return items
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .map((i) => `${zhName(i.name)}×${i.count}`)
+    .join('、');
+}
+
