@@ -14,13 +14,7 @@ import { get, post } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
 import { browserSocketEnv, openFrameworkSocket, type SocketEnv } from '../../core/websocket.ts';
 import { buildCtxPanel, computeCtx, type ContextBreakdown } from './context.ts';
-import {
-  buildExport,
-  downloadJson,
-  exportFileName,
-  openExportDialog,
-  type ExportScope,
-} from './export.ts';
+import { exportDiagnostics } from './diagnostics.ts';
 import { createForkView, MAIN_ID, MAIN_LABEL } from './fork.ts';
 import {
   arr,
@@ -163,10 +157,15 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
 
   const exportButton = ui.button('', {
     size: 'sm',
-    onClick: () => openExportDialog({ ui, doc, signal: ctx.signal, onPick: exportSession }),
+    onClick: () => {
+      void exportDiagnostics({ doc, signal: ctx.signal }).catch((err: unknown) => {
+        ui.toast(S.exportFailed, 'bad');
+        ctx.onError(err);
+      });
+    },
   });
   exportButton.className += ' btn-ico';
-  exportButton.append(icon(doc, 'download'), ui.h('span', null, S.exportSession));
+  exportButton.append(icon(doc, 'download'), ui.h('span', null, S.exportDiagnostics));
 
   const composer = ui.promptInput({
     label: S.composerLabel,
@@ -261,18 +260,6 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onChange: () => sessionBand.render(state.sessions, fork.id),
     onError: (err) => ctx.onError(err),
   });
-
-  const exportSession = (scope: ExportScope): void => {
-    const at = new Date();
-    const data = buildExport({
-      sessionId: fork.id,
-      sessionLabel: fork.label,
-      messages: fork.messages(),
-      head: fork.isMain() ? state.head : [],
-      exportedAt: at,
-    }, scope);
-    downloadJson(doc, exportFileName(fork.id, at), data);
-  };
 
   const updateCtx = (): void => {
     const d = computeCtx({

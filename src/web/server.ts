@@ -55,6 +55,7 @@ const SERVER_TEXT = {
   },
 };
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
+import { buildDiagnostics, DIAGNOSTICS_LIMITS } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
@@ -1324,6 +1325,24 @@ export class WebApp {
         grep: strParam(req.query.grep), since: strParam(req.query.since), round: intParam(req.query.round), call: strParam(req.query.call),
       });
       res.json(readTailRecordsWhere(join(this.deps.dataDir, 'runs', runId, 'log.jsonl'), limit, pred));
+    }));
+
+    // 诊断包:一次导出把排查一场跑要看的记录收进一个 JSON。缺席的接缝那一段为空。
+    app.get('/api/diagnostics', wrap(async (req, res) => {
+      const dbg = this.deps.debug;
+      res.json(buildDiagnostics({
+        dataDir: this.deps.dataDir,
+        runId: dbg?.runId?.() ?? null,
+        exportedAt: new Date(),
+        status: this.deps.getStatus(),
+        session: dbg ? { messages: dbg.sessionMessages(), head: dbg.sessionHead?.() ?? [] } : null,
+        sessions: this.deps.sessions?.list() ?? [],
+        toolSchemas: dbg?.toolSchemas() ?? [],
+        events: this.deps.store.range({ limit: DIAGNOSTICS_LIMITS.events }),
+        latestCursor: this.deps.store.latestCursor(),
+        worlds: (await this.deps.worlds?.(this.languageOf(req))) ?? [],
+        usage: this.deps.usage?.aggregate({ bucket: 'day' }) ?? null,
+      }));
     }));
 
     app.get('/api/runs', wrap((_req, res) => {

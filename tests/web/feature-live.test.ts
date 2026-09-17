@@ -15,7 +15,7 @@ const LIFECYCLE_ENTRY = '../../src/web/client/core/lifecycle.ts';
 const ROUTER_ENTRY = '../../src/web/client/core/router.ts';
 const LIVE_ENTRY = '../../src/web/client/features/live/index.ts';
 const CONTEXT_ENTRY = '../../src/web/client/features/live/context.ts';
-const EXPORT_ENTRY = '../../src/web/client/features/live/export.ts';
+const DIAG_ENTRY = '../../src/web/client/features/live/diagnostics.ts';
 const FEATURE_ENTRY = '../../src/web/client/features/feature.ts';
 
 type Any = any;
@@ -25,7 +25,7 @@ const { Lifecycle } = (await import(LIFECYCLE_ENTRY)) as Any;
 const { Router, parseHash } = (await import(ROUTER_ENTRY)) as Any;
 const live = (await import(LIVE_ENTRY)) as Any;
 const cx = (await import(CONTEXT_ENTRY)) as Any;
-const xp = (await import(EXPORT_ENTRY)) as Any;
+const diag = (await import(DIAG_ENTRY)) as Any;
 const { featureAvailable } = (await import(FEATURE_ENTRY)) as Any;
 
 // ---------------------------------------------------------------------------
@@ -86,6 +86,8 @@ class FakeEl {
   disabled = false;
   placeholder = '';
   title = '';
+  href = '';
+  download = '';
   children: FakeEl[] = [];
   parent: FakeEl | null = null;
   attrs = new Map<string, string>();
@@ -151,6 +153,7 @@ class FakeEl {
   }
   focus(): void {}
   select(): void {}
+  click(): void {}
   addEventListener(type: string, fn: Listener, opts?: ListenOptions): void {
     this.listeners.add(type, fn, opts);
   }
@@ -199,8 +202,12 @@ class FakeDoc {
   constructor() {
     this.body = new FakeEl('body', this);
   }
+  /** 建过的元素;下载那条链把 a 建出来又马上摘掉,断言只能从这里看。 */
+  created: FakeEl[] = [];
   createElement(tag: string): FakeEl {
-    return new FakeEl(tag, this);
+    const el = new FakeEl(tag, this);
+    this.created.push(el);
+    return el;
   }
   /** 标识用的内联 SVG 走这条；命名空间在这套桩里不影响任何断言。 */
   createElementNS(_ns: string, tag: string): FakeEl {
@@ -349,6 +356,7 @@ function mkCtx(capabilities: Record<string, boolean>, hash = '#/live'): Ctx {
   ui.promptInput = (opts: Any): Any => {
     const el = ui.h('div', 'prompt-input-host');
     el.appendChild(ui.h('textarea', 'prompt-textarea'));
+    if (opts.leading) el.appendChild(opts.leading);
     if (opts.tools) el.appendChild(opts.tools);
     submitted.push(opts.onSubmit);
     return {
@@ -496,32 +504,17 @@ describe('上下文占用 · 纯计算', () => {
 // feature 声明
 // ===========================================================================
 
-describe('会话导出 · 纯计算', () => {
-  const head = [message('assistant', '合成开头', { head: true })];
-  const messages = [
-    message('system', '系统前缀'),
-    message('developer', '补充说明'),
-    message('user', '在吗'),
-    message('assistant', '在'),
-  ];
+describe('诊断导出 · 文件名', () => {
   const at = new Date('2026-09-17T14:25:30');
 
-  it('整份导出:合成开头排在消息之前,系统前缀照留', () => {
-    const file = xp.buildExport({ sessionId: 'main', sessionLabel: '主 session', messages, head, exportedAt: at }, 'all');
-    expect(file.scope).toBe('all');
-    expect(file.session).toEqual({ id: 'main', label: '主 session' });
-    expect(file.items).toEqual([...head, ...messages]);
-    expect(file.exportedAt).toBe(at.toISOString());
+  it('带 run id 与本地时间,非法字符换成下划线', () => {
+    expect(diag.diagnosticsFileName('r-20260917-104402-c2ab', at))
+      .toBe('cortico-diagnostics-r-20260917-104402-c2ab-20260917-142530.json');
+    expect(diag.diagnosticsFileName('run/2026', at)).toBe('cortico-diagnostics-run_2026-20260917-142530.json');
   });
 
-  it('非前缀部分:system 与 developer 条目不进文件,合成开头也不拼进去', () => {
-    const file = xp.buildExport({ sessionId: 'main', sessionLabel: '主 session', messages, head, exportedAt: at }, 'dialogue');
-    expect(file.items).toEqual(messages.slice(2));
-  });
-
-  it('文件名带 session id 与本地时间,id 里的非法字符换成下划线', () => {
-    expect(xp.exportFileName('main', at)).toBe('cortico-session-main-20260917-142530.json');
-    expect(xp.exportFileName('run/2026', at)).toBe('cortico-session-run_2026-20260917-142530.json');
+  it('没有 run id 时写 norun', () => {
+    expect(diag.diagnosticsFileName(null, at)).toBe('cortico-diagnostics-norun-20260917-142530.json');
   });
 });
 
@@ -917,6 +910,46 @@ describe('live feature 挂载', () => {
 // ===========================================================================
 // fork 视图
 // ===========================================================================
+
+const stamp = (at: Date): string => {
+  const p = (n: number): string => String(n).padStart(2, '0');
+  return `${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}`
+    + `-${p(at.getHours())}${p(at.getMinutes())}${p(at.getSeconds())}`;
+};
+
+describe('导出诊断', () => {
+  it('按一下就取诊断包,文件名带包里的 run id', () => {
+    stubFetch(() => ({ kind: 'cortico-diagnostics', run: { id: 'r-20260917-104402-c2ab' } }));
+    const { env, sockets } = fakeEnv();
+    const { ctx, root, doc, errors } = mkCtx({ debug: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].emit({ t: 'hello', session: [message('user', '在吗')] });
+
+    const button = root.find('btn-ico') as FakeEl;
+    expect(button.textContent).not.toBe('');
+    button.dispatchEvent({ type: 'click' });
+    return flush().then(() => {
+      expect(fetched).toContain('/api/diagnostics');
+      expect(doc.created.filter((el) => el.tagName === 'a').at(-1)?.download)
+        .toBe('cortico-diagnostics-r-20260917-104402-c2ab-' + stamp(new Date()) + '.json');
+      expect(errors).toEqual([]);
+    });
+  });
+
+  it('端点取不回来时只报一条错,不静默', async () => {
+    vi.stubGlobal('fetch', (url: unknown) => {
+      fetched.push(String(url));
+      return Promise.resolve(new Response('{"error":"没有调试通道"}', { status: 503 }));
+    });
+    const { env } = fakeEnv();
+    const { ctx, root, errors } = mkCtx({ debug: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    (root.find('btn-ico') as FakeEl).dispatchEvent({ type: 'click' });
+    await flush();
+    expect(fetched).toContain('/api/diagnostics');
+    expect(errors).toHaveLength(1);
+  });
+});
 
 describe('fork 视图', () => {
   const helloWithSessions = (ended: string | null) => ({
