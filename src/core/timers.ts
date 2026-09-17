@@ -47,7 +47,8 @@ export class TimerStore implements TimersApi {
     const entry: TimerEntry = { id: shortId('wake_'), atIso, payload };
     this.entries.push(entry);
     this.save();
-    if (this.started) this.arm(entry);
+    // 已到期的也等 set 返回后再回调,持有方先拿到 id。
+    if (this.started) this.arm(entry, 'next-tick');
     return { ok: true, id: entry.id };
   }
 
@@ -76,9 +77,10 @@ export class TimerStore implements TimersApi {
     return n;
   }
 
-  private arm(entry: TimerEntry): void {
+  /** 已到期的条目按 whenDue 立即回调或下一个宏任务回调;start() 用前者。 */
+  private arm(entry: TimerEntry, whenDue: 'now' | 'next-tick' = 'now'): void {
     const delay = Date.parse(entry.atIso) - Date.now();
-    if (delay <= 0) {
+    if (delay <= 0 && whenDue === 'now') {
       this.fire(entry.id);
       return;
     }
@@ -88,7 +90,7 @@ export class TimerStore implements TimersApi {
       // 超长延迟按 MAX_TIMEOUT 分段重新 arm。
       this.timers.set(entry.id, setTimeout(() => this.arm(entry), MAX_TIMEOUT));
     } else {
-      this.timers.set(entry.id, setTimeout(() => this.fire(entry.id), delay));
+      this.timers.set(entry.id, setTimeout(() => this.fire(entry.id), Math.max(0, delay)));
     }
   }
 

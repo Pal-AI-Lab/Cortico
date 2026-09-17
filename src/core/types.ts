@@ -516,6 +516,7 @@ export interface TimerEntry {
 
 /** 跨重启恢复的定时器。 */
 export interface TimersApi {
+  /** 到期回调在 set 返回之后才发生,包括 atIso 已经过去的条目。 */
   set(atIso: string, payload?: Record<string, unknown>): { ok: true; id: string } | { ok: false; error: string };
   cancel(id: string): boolean;
   list(): ReadonlyArray<TimerEntry>;

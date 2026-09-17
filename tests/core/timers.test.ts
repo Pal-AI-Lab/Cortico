@@ -79,6 +79,26 @@ describe('TimerStore', () => {
     expect(left[0].id).toBe('wk2');
   });
 
+  it('set 一个已过去的时间:回调在 set 返回之后,持有方先拿到 id;返回前 cancel 则不回调', async () => {
+    const due: TimerEntry[] = [];
+    const ts = new TimerStore(tmp.dir);
+    ts.onDue((e) => due.push(e));
+    ts.start();
+    const r = ts.set(new Date(Date.now() - 1000).toISOString(), { note: '早就该响' });
+    expect(r.ok).toBe(true);
+    expect(due).toHaveLength(0);
+    expect(ts.list().map((e) => e.id)).toEqual([r.ok ? r.id : '']);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(due.map((e) => e.id)).toEqual([r.ok ? r.id : '']);
+    expect(ts.list()).toHaveLength(0);
+
+    const cancelled = ts.set(new Date(Date.now() - 1000).toISOString(), { note: '立刻撤回' });
+    expect(cancelled.ok && ts.cancel(cancelled.id)).toBe(true);
+    await vi.advanceTimersByTimeAsync(0);
+    ts.stop();
+    expect(due).toHaveLength(1);
+  });
+
   it("没有 handler 的到期项记录日志后丢弃", async () => {
     const ts = new TimerStore(tmp.dir);
     ts.set(new Date(Date.now() + 40).toISOString(), {});
