@@ -1,6 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/** renameSync 的旁观钩子:node 内建模块的属性不可重定义,只能整module代理一次。 */
+const fsHooks = vi.hoisted(() => ({ onRename: null as null | ((from: string, to: string) => void) }));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    default: actual,
+    renameSync: (from: string, to: string) => {
+      fsHooks.onRename?.(from, to);
+      return actual.renameSync(from, to);
+    },
+  };
+});
 import { TimerStore } from '../../src/core/timers.ts';
 import type { TimerEntry } from '../../src/core/types.ts';
 import { makeTmpDir } from './helpers.ts';
@@ -77,6 +91,38 @@ describe('TimerStore', () => {
     const left = JSON.parse(readFileSync(join(tmp.dir, 'timers.json'), 'utf8'));
     expect(left).toHaveLength(1);
     expect(left[0].id).toBe('wk2');
+  });
+
+  // 定时器文件替换期间必须保留原文件,避免崩溃后闹钟全部丢失。
+  it('落盘期间任何一刻定时器文件都在盘上(rename 直接覆盖,不先删)', () => {
+    const file = join(tmp.dir, 'timers.json');
+    const ts = new TimerStore(tmp.dir);
+    ts.set(new Date(Date.now() + 3600_000).toISOString(), { note: 'a' });
+
+    const seen: boolean[] = [];
+    fsHooks.onRename = () => { seen.push(existsSync(file)); };
+    try {
+      ts.set(new Date(Date.now() + 7200_000).toISOString(), { note: 'b' });
+    } finally {
+      fsHooks.onRename = null;
+    }
+    expect(seen).toEqual([true]);
+    expect(new TimerStore(tmp.dir).list().map((e) => e.payload.note)).toEqual(['a', 'b']);
+  });
+
+  it('rename 失败时旧定时器文件原样留在盘上', () => {
+    const file = join(tmp.dir, 'timers.json');
+    const ts = new TimerStore(tmp.dir);
+    ts.set(new Date(Date.now() + 3600_000).toISOString(), { note: 'a' });
+
+    fsHooks.onRename = () => { throw new Error('盘满'); };
+    try {
+      expect(() => ts.set(new Date(Date.now() + 7200_000).toISOString(), { note: 'b' })).toThrow('盘满');
+    } finally {
+      fsHooks.onRename = null;
+    }
+    expect(existsSync(file)).toBe(true);
+    expect(new TimerStore(tmp.dir).list().map((e) => e.payload.note)).toEqual(['a']);
   });
 
   it("没有 handler 的到期项记录日志后丢弃", async () => {

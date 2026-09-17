@@ -2,7 +2,7 @@
  * 通用持久定时器:到点回调持有方、跨重启恢复。载荷不透明——
  * 闹钟的备注、阻断、关键词这些语义归持有它的Persona。
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Logger, TimerEntry, TimersApi } from './types.ts';
 import { nullLogger, shortId } from './util.ts';
@@ -123,7 +123,7 @@ export class TimerStore implements TimersApi {
     if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = this.file + '.tmp';
     writeFileSync(tmp, JSON.stringify(this.entries, null, 2), 'utf8');
-    if (existsSync(this.file)) rmSync(this.file);
+    // 通过 rename 原子覆盖，不先删除，避免崩溃后定时器全部丢失。
     renameSync(tmp, this.file);
   }
 }
