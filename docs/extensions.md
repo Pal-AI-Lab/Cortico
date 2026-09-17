@@ -27,8 +27,8 @@ lockfile。
 ## 起步
 
 `templates/extension/` 为三种 kind 各提供一个可安装的模板,测试会验证构造和声明接口。
-复制一份出来,改包名与 id,把 `tsconfig.json` 的 `paths` 与 `vitest.config.ts` 的 alias 指到你的 Cortico
-checkout,`corepack pnpm install`,`pnpm test`。每个模板的 README 说它验证什么、装进实例后该看见什么。
+复制一份出来,改包名与 id,`corepack pnpm install`,`pnpm test`。每个模板的 README 说它验证什么、
+装进实例后该看见什么。
 扩展开发相关项目:[Cortina](https://github.com/Pal-AI-Lab/Cortina)。
 
 ## 写一个 World 扩展
@@ -53,9 +53,16 @@ export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), cre
 ```
 
 框架以 `cortico/<src 下的路径>` import:`cortico/world.ts`、`cortico/core/types.ts`、
-`cortico/core/util.ts`。运行时由 `src/extensions/runtime.ts` 的模块钩子解析到框架源码本身;
-开发期在包的 `tsconfig.json` 里写 `"paths": { "cortico/*": ["../BOT/src/*"] }`,vitest 里加同样
-的 alias。`"type": "module"` 是硬要求。
+`cortico/core/util.ts`。运行时由 `src/extensions/runtime.ts` 的模块钩子解析到框架源码本身,
+早于 `node_modules`;开发期装 `cortico` 这个开发依赖,编辑器、`tsc` 与 vitest 按包的 `exports`
+解析同一批文件。`"type": "module"` 是硬要求。
+
+```bash
+corepack pnpm add -D cortico
+```
+
+npm 上的 `cortico` 只有 `src/` 与清单,没有入口。它的版本跟着框架走,`cortico.api` 契约版本是
+**4**;按你写扩展时的版本钉住范围。仓库根的 `pnpm publish:package` 生成它。
 
 控制台面板可选。自定义面板的 `src/console/client.ts` 默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
 用 esbuild 打成 `dist/console.js`(+ `.css`),路径写进 manifest;浏览器侧对 `cortico/*` 只能
