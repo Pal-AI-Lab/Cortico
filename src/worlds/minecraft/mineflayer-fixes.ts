@@ -8,7 +8,10 @@
  * 一律本地换位，原版服务端不换。一次换位两边状态就此分家，之后所有合成都在错的格子上做。
  *
  * 光照段随包到来时必须按 nibble 原序落位,prismarine-chunk 把它当长整型数组读了。
+ *
+ * 水平碰撞停在离方块面 `WALL_GAP` 处:服务端拒绝包围盒恰好贴着方块侧面的位置(见 `installWallGap`)。
  */
+import { createRequire } from 'node:module';
 import type { Bot } from 'mineflayer';
 import type { Logger } from '../../core/types.ts';
 import type { MinecraftLog } from './log.ts';
@@ -36,6 +39,11 @@ const DIG_CONFIRM_FACTOR = 3;
 const DIG_GROUND_WAIT_MS = 600;
 /** 服务端认账比本地定时器晚这么多就记一条:整片挖掘不刷屏,慢的那些留痕 */
 const DIG_SLOW_ACK_MS = 200;
+/**
+ * 水平碰撞停在离方块面这么远的地方。服务端只要缝隙大于零就收(实测 1e-7 也收),
+ * 取 1e-5 让坐标到三千万格时的浮点误差也吃不掉它。
+ */
+export const WALL_GAP = 1e-5;
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -136,7 +144,53 @@ export function installMineflayerFixes(
   installConfirmedCraft(bot, diag, trace, (n) => { tracing += n; }, showTempo);
   installLightRelay(bot, log, diag);
   installDismountFix(bot, diag);
-  log.info(`mineflayer 修补已装上:合成取服务端产物、放置短超时重发、附魔按组件格式计入挖掘、挖掘等服务端改掉那一格、stateId 认当前窗口、光照段重新落位${diag ? '' : '(没给 World 日志,包流不留痕)'}`);
+  installWallGap();
+  log.info(`mineflayer 修补已装上:合成取服务端产物、放置短超时重发、附魔按组件格式计入挖掘、挖掘等服务端改掉那一格、stateId 认当前窗口、光照段重新落位、水平碰撞留缝${diag ? '' : '(没给 World 日志,包流不留痕)'}`);
+}
+
+/** 原型上的标记:同一进程里多个连接、多份模块实例只改一次 */
+const WALL_GAP_MARK = Symbol.for('cortico.minecraft.wallGap');
+
+interface PhysicsBox {
+  minX: number; minY: number; minZ: number; maxX: number; maxY: number; maxZ: number;
+  computeOffsetX(other: PhysicsBox, offset: number): number;
+  computeOffsetZ(other: PhysicsBox, offset: number): number;
+}
+
+/**
+ * 1.21.11 的服务端把「包围盒恰好贴着方块侧面」的位置当成撞进方块:不打 moved wrongly,
+ * 静默把人传送回上一个好位置(1.21.10 及更早照收)。prismarine-physics 的碰撞解算恰好停在
+ * 贴面处,于是贴墙、上台阶、贴墙起跳每一拍都被打回,人钉在原地。竖直方向贴面照收,这里只改 X/Z:
+ * 朝方块走的那一步停在离面 `WALL_GAP` 处;已经贴着(服务端传送来的位置就是贴面的)
+ * 再往里走时退开同样的距离。bot 的物理与寻路器的模拟共用这一个类,一处改两处生效。
+ */
+export function installWallGap(): void {
+  const mfRequire = createRequire(createRequire(import.meta.url).resolve('mineflayer/package.json'));
+  const AABB = mfRequire('prismarine-physics/lib/aabb.js') as { prototype: PhysicsBox & { [WALL_GAP_MARK]?: true } };
+  const proto = AABB.prototype;
+  if (proto[WALL_GAP_MARK]) return;
+  // this 是方块的盒子,other 是正在挪的实体的盒子(prismarine-physics 这么调)
+  proto.computeOffsetX = function (this: PhysicsBox, other: PhysicsBox, offsetX: number): number {
+    if (other.maxY > this.minY && other.minY < this.maxY && other.maxZ > this.minZ && other.minZ < this.maxZ) {
+      if (offsetX > 0 && other.maxX <= this.minX + WALL_GAP) {
+        offsetX = Math.min(this.minX - other.maxX - WALL_GAP, offsetX);
+      } else if (offsetX < 0 && other.minX >= this.maxX - WALL_GAP) {
+        offsetX = Math.max(this.maxX - other.minX + WALL_GAP, offsetX);
+      }
+    }
+    return offsetX;
+  };
+  proto.computeOffsetZ = function (this: PhysicsBox, other: PhysicsBox, offsetZ: number): number {
+    if (other.maxX > this.minX && other.minX < this.maxX && other.maxY > this.minY && other.minY < this.maxY) {
+      if (offsetZ > 0 && other.maxZ <= this.minZ + WALL_GAP) {
+        offsetZ = Math.min(this.minZ - other.maxZ - WALL_GAP, offsetZ);
+      } else if (offsetZ < 0 && other.minZ >= this.maxZ - WALL_GAP) {
+        offsetZ = Math.max(this.maxZ - other.minZ + WALL_GAP, offsetZ);
+      }
+    }
+    return offsetZ;
+  };
+  proto[WALL_GAP_MARK] = true;
 }
 
 /**

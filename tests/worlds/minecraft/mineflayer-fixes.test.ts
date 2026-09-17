@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import {
-  installMineflayerFixes, installPathfinderToolSelection,
+  WALL_GAP, installMineflayerFixes, installPathfinderToolSelection, installWallGap,
 } from '../../../src/worlds/minecraft/mineflayer-fixes.ts';
 import { MinecraftLog } from '../../../src/worlds/minecraft/log.ts';
 import type { Logger } from '../../../src/core/types.ts';
@@ -1564,4 +1565,100 @@ describe('挖掘速度表修正:incorrect_for_*_tool 伪 material', () => {
     expect(blocks[1].material).toBe('incorrect_for_wooden_tool');
   });
 
+});
+
+/**
+ * 真 prismarine-physics 在真 prismarine-world 上走:地面 y=63,北边 z≤0 与西边 x≤-3 各一堵
+ * 两格高的墙。断言的是碰撞解算停下来的位置。
+ */
+describe('installWallGap:水平碰撞停在离方块面 WALL_GAP 处', () => {
+  const req = createRequire(createRequire(import.meta.url).resolve('mineflayer/package.json'));
+  const registry = req('prismarine-registry')('1.20.6');
+  const World = req('prismarine-world')(registry);
+  const Chunk = req('prismarine-chunk')(registry);
+  const { Vec3 } = req('vec3');
+  const { Physics, PlayerState } = req('prismarine-physics');
+  const mcData = req('minecraft-data')('1.20.6');
+  const STONE = registry.blocksByName.stone.defaultState as number;
+  const HALF = 0.3;
+
+  function makeWorld(ceiling: boolean) {
+    const world = new World(null).sync;
+    for (let cx = -1; cx <= 1; cx++) {
+      for (let cz = -1; cz <= 1; cz++) world.setColumn(cx, cz, new Chunk({ minY: -64, worldHeight: 384 }));
+    }
+    for (let x = -8; x < 8; x++) {
+      for (let z = -8; z < 8; z++) {
+        world.setBlockStateId(new Vec3(x, 63, z), STONE);
+        for (let y = 64; y <= 65; y++) {
+          if (z <= 0 || x <= -3) world.setBlockStateId(new Vec3(x, y, z), STONE);
+        }
+        if (ceiling) world.setBlockStateId(new Vec3(x, 66, z), STONE);
+      }
+    }
+    return world;
+  }
+
+  /** yaw 0 朝 -z,π/2 朝 -x(prismarine-physics 的 applyHeading 口径) */
+  function stateAt(x: number, y: number, z: number, yaw: number, control: Record<string, boolean>) {
+    const bot = {
+      version: '1.20.6',
+      entity: {
+        position: new Vec3(x, y, z), velocity: new Vec3(0, 0, 0), onGround: false,
+        isInWater: false, isInLava: false, isInWeb: false, isCollidedHorizontally: false, isCollidedVertically: false,
+        elytraFlying: false, attributes: {}, yaw, pitch: 0, effects: {},
+      },
+      jumpTicks: 0, jumpQueued: false, fireworkRocketDuration: 0,
+      inventory: { slots: [] },
+    };
+    return new PlayerState(bot, {
+      forward: false, back: false, left: false, right: false, jump: false, sprint: false, sneak: false, ...control,
+    });
+  }
+
+  function walk(world: unknown, state: { pos: { x: number; y: number; z: number }; onGround: boolean }, ticks: number) {
+    const physics = Physics(mcData, world);
+    for (let i = 0; i < ticks; i++) physics.simulatePlayer(state, world);
+    return state;
+  }
+
+  it('朝墙走:两轴都停在离墙面 WALL_GAP 处', () => {
+    installWallGap();
+    const world = makeWorld(false);
+    const north = walk(world, stateAt(0.5, 64, 3.5, 0, { forward: true }), 60);
+    expect(north.pos.z - HALF - 1).toBeCloseTo(WALL_GAP, 9);
+    expect(north.pos.y).toBe(64);
+    const west = walk(world, stateAt(0.5, 64, 3.5, Math.PI / 2, { forward: true }), 60);
+    expect(west.pos.x - HALF - (-2)).toBeCloseTo(WALL_GAP, 9);
+  });
+
+  it('已经贴着面(服务端传送来的位置)再往里走:一拍退到 WALL_GAP 处', () => {
+    installWallGap();
+    const world = makeWorld(false);
+    const s = walk(world, stateAt(0.5, 64, 1 + HALF, 0, { forward: true }), 1);
+    expect(s.pos.z - HALF - 1).toBeCloseTo(WALL_GAP, 9);
+  });
+
+  it('竖直方向不留缝:落地贴地、起跳顶天花板都停在整面上', () => {
+    installWallGap();
+    const world = makeWorld(true);
+    const landed = walk(world, stateAt(0.5, 64.5, 3.5, 0, {}), 20);
+    expect(landed.pos.y).toBe(64);
+    expect(landed.onGround).toBe(true);
+    const physics = Physics(mcData, world);
+    const jumper = stateAt(0.5, 64, 3.5, 0, { jump: true });
+    let top = 0;
+    for (let i = 0; i < 20; i++) {
+      physics.simulatePlayer(jumper, world);
+      top = Math.max(top, jumper.pos.y);
+    }
+    expect(top).toBeCloseTo(66 - 1.8, 10);
+  });
+
+  it('装两遍只改一次:缝隙仍是一个 WALL_GAP', () => {
+    installWallGap();
+    installWallGap();
+    const s = walk(makeWorld(false), stateAt(0.5, 64, 3.5, 0, { forward: true }), 60);
+    expect(s.pos.z - HALF - 1).toBeCloseTo(WALL_GAP, 9);
+  });
 });

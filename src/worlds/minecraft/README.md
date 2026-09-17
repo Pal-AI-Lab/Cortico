@@ -523,6 +523,7 @@ surface 是尽力而为：先浮上水面换气（这步永远做得到），再
 2. **合成前清空合成格。** 光标物品无法放回时返回错误；徒手 2×2 合成使用不会关闭的窗口 0，失败后由补丁取回格内材料。
 3. **放置后回读目标格。** 每次等待 400ms，最多尝试三次；最终错误保留 Mineflayer 的文本契约，供寻路器处理。
 4. **丢弃 `windowId=-2` 的 `set_slot`。** 其他窗口的 `set_slot` 和 `window_items` 继续传递；已收到当前窗口的 `stateId` 时，用该值替换其他窗口包中的 `stateId`。
+5. **水平碰撞停在离方块面 `WALL_GAP` 处。** 服务端拒绝包围盒恰好贴着方块侧面的位置(静默传送回上一个好位置,不打 `moved wrongly`),prismarine-physics 原本停在贴面处;竖直方向贴面服务端照收,不改。改的是 `prismarine-physics` 的 AABB 原型,bot 物理与寻路器模拟同时生效。
 
 合成与放置期间的包流记为 World 日志 `craft` 类别（`click-out`、`slot-in`、
 `items-in`、`stateid-guard`、`result-slot`、`grid-clear`);窗口外的高频 `set_slot`
