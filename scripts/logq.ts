@@ -15,6 +15,8 @@ import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LOG_LEVEL_RANK, type EventEnvelope, type LogLevel, type LogRecord, type UsageRecord } from '../src/core/types.ts';
 import { deploymentRoot } from '../src/paths.ts';
+import { redactSecrets } from '../src/core/util.ts';
+export { redactSecrets };
 import type { ToolCallEntry } from '../src/core/tool-log.ts';
 import type { TranscriptItemRecord, TranscriptRecord } from '../src/core/transcript.ts';
 
@@ -855,18 +857,6 @@ export async function doctor(ctx: RunContext): Promise<string> {
 // ---------------------------------------------------------------------------
 // bundle
 // ---------------------------------------------------------------------------
-
-const SECRET_KEY = /secret|token|key|password/i;
-
-export function redactSecrets(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(redactSecrets);
-  if (value && typeof value === 'object') {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) out[k] = SECRET_KEY.test(k) ? '***' : redactSecrets(v);
-    return out;
-  }
-  return value;
-}
 
 function copyTree(src: string, dest: string, files: string[]): void {
   mkdirSync(dest, { recursive: true });
