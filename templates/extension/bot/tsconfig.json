@@ -13,12 +13,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noEmit": true,
-    // 开发期把 `cortico/*` 指到平级的框架 checkout;装进宿主运行时不靠它,
-    // 那时由框架 `src/extensions/runtime.ts` 的模块钩子解析。改成你的 checkout 路径。
-    "paths": {
-      "cortico/*": ["../Cortico/src/*"]
-    }
+    "noEmit": true
   },
   "include": ["index.ts", "persona/**/*.ts", "tests/**/*.ts"],
   "exclude": ["node_modules", "dist"]
