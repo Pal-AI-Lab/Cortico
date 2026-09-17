@@ -44,7 +44,7 @@ const TEXTAREA_CLASS =
 
 /** 两枚圆形图标钮共用的底:尺寸、焦点环、禁用态。 */
 const ICON_BUTTON =
-  'inline-flex size-8 shrink-0 items-center justify-center rounded-full p-0 outline-none transition-[background-color,color,opacity,transform] duration-150 disabled:pointer-events-none disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:pointer-events-none [&_svg]:size-4';
+  'inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full p-0 outline-none transition-[background-color,color,opacity,transform] duration-150 disabled:pointer-events-none disabled:opacity-40 focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:pointer-events-none [&_svg]:size-4';
 
 /** 发送钮:实底,是这一栏唯一的主动作。 */
 const SEND_CLASS = `${ICON_BUTTON} self-end bg-foreground text-background hover:bg-foreground/90 active:translate-y-px focus-visible:ring-offset-2 focus-visible:ring-offset-background`;
@@ -124,6 +124,7 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
     const [placeholder, setPlaceholder] = React.useState<string | null>(null);
     const textarea = React.useRef<HTMLTextAreaElement>(null);
     const tools = React.useRef<HTMLSpanElement>(null);
+    const leading = React.useRef<HTMLSpanElement>(null);
     const picker = React.useRef<HTMLInputElement>(null);
     const nextId = React.useRef(1);
     const imagesOpts = opts.images;
@@ -136,6 +137,14 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
       host.appendChild(node);
       return () => node.remove();
     }, [opts.tools]);
+
+    React.useLayoutEffect(() => {
+      const node = opts.leading;
+      const host = leading.current;
+      if (!node || !host) return;
+      host.appendChild(node);
+      return () => node.remove();
+    }, [opts.leading]);
 
     React.useImperativeHandle(ref, () => ({
       focus: () => textarea.current?.focus(),
@@ -237,10 +246,13 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
           />
         </div>
         <div className="flex min-h-9 items-center justify-between gap-2 px-1">
-          <span className="truncate px-2 text-xs text-muted-foreground">
-            {note ? <span className="text-danger">{note}</span>
-              : pending > 0 ? S.processingImages(pending)
-              : opts.hint ?? S.enterToSend}
+          <span className="flex min-w-0 items-center gap-1">
+            <span ref={leading} className="flex items-center" />
+            <span className="truncate px-1 text-xs text-muted-foreground">
+              {note ? <span className="text-danger">{note}</span>
+                : pending > 0 ? S.processingImages(pending)
+                : opts.hint}
+            </span>
           </span>
           <div className="flex items-center gap-1">
             {imagesOpts && (

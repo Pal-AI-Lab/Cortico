@@ -423,10 +423,13 @@ export interface ConsolePromptImagesOptions {
 export interface ConsolePromptInputOptions {
   label?: string;
   placeholder?: string;
+  /** 底栏左侧的灰字。不给就不占字。 */
   hint?: string;
   disabled?: boolean;
   /** 发送键左侧的紧凑工具入口。节点所有权随 prompt input 一起结束。 */
   tools?: HTMLElement;
+  /** 底栏最左的入口，排在 `hint` 之前。节点所有权随 prompt input 一起结束。 */
+  leading?: HTMLElement;
   /** 图片通道。不给 = 不收图,`onSubmit` 的第二参恒为空数组。 */
   images?: ConsolePromptImagesOptions;
   /**
