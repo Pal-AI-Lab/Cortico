@@ -55,6 +55,19 @@ describe('SessionLog', () => {
     expect(readFileSync(join(tmp.dir, 'session-main.jsonl'), 'utf8')).toBe(original);
   });
 
+  it('追加中途断掉的末行:启动时截掉并报告,完整的行原样恢复', () => {
+    const s = new SessionLog(tmp.dir);
+    s.append(sys);
+    s.append(asst);
+    const file = join(tmp.dir, 'session-main.jsonl');
+    const intact = readFileSync(file, 'utf8');
+    appendFileSync(file, '{"version":2,"item":{"type":"message","role":"user","con', 'utf8');
+    const s2 = new SessionLog(tmp.dir);
+    expect(s2.load()).toMatchObject({ kind: 'torn-tail' });
+    expect(s2.messages).toHaveLength(2);
+    expect(readFileSync(file, 'utf8')).toBe(intact);
+  });
+
   it('reset整体替换+原子重写,重启读到的是新内容', () => {
     const s = new SessionLog(tmp.dir);
     s.append(sys);

@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ContextRecord } from './context.ts';
 
@@ -10,6 +10,20 @@ function freeze<T>(value: T): T {
   return value;
 }
 
+function isRecord(row: unknown): row is ContextRecord {
+  const r = row as ContextRecord | null;
+  return !!r && r.version === 2 && !!r.item && typeof r.item === 'object' && !Array.isArray(r.item)
+    && !!r.context && typeof r.context === 'object' && !Array.isArray(r.context);
+}
+
+/**
+ * The repair `load()` applied to a final line that has no trailing newline. A line that does not
+ * parse is cut off; a complete record only gets its newline.
+ */
+export type ContextLoadRepair =
+  | { kind: 'torn-tail'; bytes: number }
+  | { kind: 'unterminated-tail' };
+
 /** Immutable standard Items with runtime metadata stored in a separate field. */
 export class ContextLog {
   private entries: readonly ContextRecord[] = Object.freeze([]);
@@ -19,18 +33,32 @@ export class ContextLog {
 
   get records(): readonly ContextRecord[] { return this.entries; }
 
-  load(): void {
-    if (!existsSync(this.file)) { this.entries = Object.freeze([]); return; }
-    const rows = readFileSync(this.file, 'utf8').split(/\r?\n/).filter(line => line.trim()).map((line, index) => {
-      let row: ContextRecord;
-      try { row = JSON.parse(line) as ContextRecord; }
+  /** Any other damaged line throws and leaves the file untouched. */
+  load(): ContextLoadRepair | null {
+    if (!existsSync(this.file)) { this.entries = Object.freeze([]); return null; }
+    const raw = readFileSync(this.file, 'utf8');
+    let body = raw;
+    let repair: ContextLoadRepair | null = null;
+    if (raw.length > 0 && !raw.endsWith('\n')) {
+      const cut = raw.lastIndexOf('\n') + 1;
+      const tail = raw.slice(cut);
+      let parsed: unknown = null;
+      try { parsed = JSON.parse(tail); } catch { /* torn */ }
+      if (isRecord(parsed)) repair = { kind: 'unterminated-tail' };
+      else { body = raw.slice(0, cut); repair = { kind: 'torn-tail', bytes: Buffer.byteLength(tail, 'utf8') }; }
+    }
+    const rows = body.split(/\r?\n/).filter(line => line.trim()).map((line, index) => {
+      let row: unknown;
+      try { row = JSON.parse(line); }
       catch { throw new Error(`Invalid session JSON at ${this.file}:${index + 1}`); }
-      if (!row || row.version !== 2 || !row.item || typeof row.item !== 'object' || Array.isArray(row.item)
-        || !row.context || typeof row.context !== 'object' || Array.isArray(row.context))
-        throw new Error(`Invalid context record at ${this.file}:${index + 1}`);
+      if (!isRecord(row)) throw new Error(`Invalid context record at ${this.file}:${index + 1}`);
       return freeze(row);
     });
+    // Written only after every kept line validated.
+    if (repair?.kind === 'torn-tail') truncateSync(this.file, Buffer.byteLength(body, 'utf8'));
+    else if (repair) appendFileSync(this.file, '\n');
     this.entries = Object.freeze(rows);
+    return repair;
   }
 
   append(entry: ContextRecord): ContextRecord {

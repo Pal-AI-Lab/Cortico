@@ -587,7 +587,13 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const dataDir = this.loaded.dataDir;
     if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
     // 构造期已加载状态；此处再次 load 会覆盖装配后、启动前的修改。
-    this.session.load();
+    const repair = this.session.load();
+    if (repair) {
+      this.log.warn(
+        repair.kind === 'torn-tail' ? 'session 末行未写完,已截掉' : 'session 末行缺换行,已补上',
+        { ...repair, file: 'session-main.jsonl' },
+      );
+    }
     for (const mod of this.worlds) {
       try {
         await mod.start(this.makeHost(mod));
