@@ -18,6 +18,7 @@ Node 22+,pnpm 11(版本由 `package.json` 的 `packageManager` 指定)。规则�
 | `pnpm logq` | 查运行日志(见 [runs.md](runs.md)) |
 | `pnpm check:extension <目录>` | 校验一个扩展包 |
 | `pnpm audit:release` | 发布审计:部署资源、明文凭证、异常大文件 |
+| `pnpm publish:package` | 生成 npm 发布包 `dist/package`;`--pack` 出 tarball,`--publish` 发布 |
 
 提交前必须通过 `pnpm test` 与 `pnpm run typecheck`;修改浏览器代码还需通过
 `pnpm typecheck:web` 与 `pnpm build:web`。bot 运行期间禁止构建其正在使用的控制台文件。
@@ -61,7 +62,7 @@ Node 侧与浏览器侧分别配置类型库:`tsconfig.json` 排掉 `src/web/cli
 | `src/extensions/`、`src/extensions.ts` | 扩展装载 |
 | `src/worlds/<id>/` | 内建 World |
 | `bots/<名>/` | bot 包 |
-| `scripts/` | `build-web`、`dev-console`、`logq`、`extension-check`、`release-audit`、`migrate-rename`、`generate-open-responses` |
+| `scripts/` | `build-web`、`dev-console`、`logq`、`extension-check`、`release-audit`、`publish-package`、`migrate-rename`、`generate-open-responses` |
 | `templates/extension/<kind>/` | World、Provider、bot 三类扩展的可安装模板 |
 | `scratch/`、`deprecated/`、`deployments/`、`extensions/` | 都不进版本控制 |
 

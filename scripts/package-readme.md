@@ -15,8 +15,7 @@ import type { EventEnvelope, WorldHost } from 'cortico/core/types.ts';
 
 Inside a running instance those specifiers are resolved by the host's module hook to the
 framework that instance runs. This package supplies the same files to the editor, the type
-checker and the test runner before the extension is installed anywhere, which is the whole of
-what it does: it has no entry point and starts nothing.
+checker and the test runner. It has no entry point and starts nothing.
 
 ## Install
 
@@ -34,14 +33,8 @@ the packaging rules.
 
 ## Running a bot
 
-Running Cortico itself means cloning the repository; deployments, bot packages and the web
-console live in the checkout.
-
-```bash
-git clone https://github.com/Pal-AI-Lab/Cortico.git
-cd Cortico
-corepack pnpm install
-pnpm start
-```
+Deployments, bot packages and the web console live in a checkout of the repository, which is
+where a bot runs from:
+[Quick Start](https://github.com/Pal-AI-Lab/Cortico#quick-start).
 
 MIT licensed.

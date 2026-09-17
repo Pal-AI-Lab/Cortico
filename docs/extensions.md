@@ -61,8 +61,8 @@ export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), cre
 corepack pnpm add -D cortico
 ```
 
-npm 上的 `cortico` 只有 `src/` 与清单,没有入口。它的版本跟着框架走,`cortico.api` 契约版本是
-**4**;按你写扩展时的版本钉住范围。仓库根的 `pnpm publish:package` 生成它。
+npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 bot。它的版本跟着框架走,
+`cortico.api` 契约版本是 **4**;按你写扩展时的版本钉住范围。仓库根的 `pnpm publish:package` 生成它。
 
 控制台面板可选。自定义面板的 `src/console/client.ts` 默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
 用 esbuild 打成 `dist/console.js`(+ `.css`),路径写进 manifest;浏览器侧对 `cortico/*` 只能
