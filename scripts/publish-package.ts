@@ -18,8 +18,6 @@ export const PUBLISHED_DEPENDENCIES = [
   '@types/express',
   '@types/ws',
   'express',
-  'fflate',
-  'tar-stream',
   'ws',
 ] as const;
 
@@ -81,7 +79,6 @@ export function buildManifest(root: RootPackageJson): PublishManifest {
 const FROM_RE = /(?:^|[\s;])(?:import|export)\b[^'"]*?from\s*['"]([^'"]+)['"]/g;
 const SIDE_EFFECT_RE = /(?:^|[\s;])import\s*['"]([^'"]+)['"]/g;
 
-/** 一个 TypeScript 文件里的全部 import 说明符。 */
 export function importSpecifiers(text: string): string[] {
   const specs: string[] = [];
   for (const m of text.matchAll(FROM_RE)) specs.push(m[1] as string);
