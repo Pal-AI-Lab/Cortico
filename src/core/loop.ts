@@ -722,13 +722,15 @@ export class MainLoop {
     const latest = store.latestCursor();
     for (let c = top + 1; c <= latest; c++) {
       const next = store.get(c);
-      if (!next) break;
-      // 未处理的 archive-only 项必须保留在水位之后，重启才会补投。
-      // 已处理项由 settledArchives 标识。
-      const skippable = next.origin === 'internal'
-        || (next.contextDelivery === 'archive-only' && this.settledArchives.has(c));
-      // 集合记录存储位置；装载期重排保证 next.cursor === c。
-      if (!skippable && !this.deliveredCursors.has(c)) break;
+      // 清空分片或跳过损坏行留下的空位没有可投递内容，不阻止水位推进。
+      if (next) {
+        // 未处理的 archive-only 项必须保留在水位之后，重启才会补投。
+        // 已处理项由 settledArchives 标识。
+        const skippable = next.origin === 'internal'
+          || (next.contextDelivery === 'archive-only' && this.settledArchives.has(c));
+        // 集合记录存储位置；装载期重排保证 next.cursor === c。
+        if (!skippable && !this.deliveredCursors.has(c)) break;
+      }
       this.deliveredCursors.delete(c);
       this.settledArchives.delete(c);
       top = c;

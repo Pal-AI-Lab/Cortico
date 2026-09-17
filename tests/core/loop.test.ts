@@ -1051,6 +1051,24 @@ describe('MainLoop user事件协议', () => {
     expect(rig.state.data.lastDeliveredCursor).toBeLessThan(waiting.cursor);
   });
 
+  // 清空当前 run 的分片后游标不回退,水位之后留下没有事件的空位;空位没有可投递内容,不能挡住水位。
+  it('事件库清空留下的游标空位不挡水位:之后的事件照常结清', async () => {
+    rig = makeRig({ silent: true });
+    rig.start();
+    rig.pushEvent('清空前');
+    await until(() => rig.state.data.lastDeliveredCursor === rig.store.latestCursor());
+
+    const gap = rig.store.append({
+      type: 'qq.message', ts: '2026-07-17T09:00:00+08:00', source: 'qq', origin: 'external', text: '清空时还没投递',
+    });
+    rig.store.clear();
+    expect(rig.store.get(gap.cursor)).toBeUndefined();
+
+    const after = rig.pushEvent('清空后');
+    expect(after.cursor).toBeGreaterThan(gap.cursor);
+    await until(() => rig.state.data.lastDeliveredCursor === after.cursor);
+  });
+
   it('运维丢弃的即时事件结清连续水位', async () => {
     rig = makeRig();
     const first = rig.store.append({
