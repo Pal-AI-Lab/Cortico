@@ -1,7 +1,7 @@
 /** Session context is append-only between lifecycle resets. */
 import { join } from 'node:path';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
-import { ContextLog } from '../protocol/open-responses/context-log.ts';
+import { ContextLog, type ContextLoadRepair } from '../protocol/open-responses/context-log.ts';
 import { estimateMessagesTokens } from './util.ts';
 
 
@@ -38,7 +38,8 @@ export class SessionLog {
     }
   }
 
-  load(): void { this.context.load(); }
+  /** 返回对未写完末行的修复；其他损坏行抛错。 */
+  load(): ContextLoadRepair | null { return this.context.load(); }
 
   /** 整体替换：先写临时文件，再 rename 覆盖目标文件。 */
   reset(messages: readonly ContextRecord[]): void {
