@@ -65,7 +65,7 @@ export const runtimePanel: ConsolePanel = {
           if (field.read) void saveConfig(group.id, { [path]: field.read() });
         }, ctx.signal);
         field.node.setAttribute('aria-label', property.title);
-        // 自备目录里的二进制自己决定后端,这一格此时不参与:与手写面板时的禁用一致。
+        // 自备运行时目录时后端由目录里的二进制决定,后端那一格禁用。
         if (path.endsWith('.runtime.backend') && row.own) {
           (field.node as HTMLSelectElement).disabled = true;
         }
