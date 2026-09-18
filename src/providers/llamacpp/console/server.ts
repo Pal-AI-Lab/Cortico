@@ -8,6 +8,9 @@ import type { ProviderConsoleHost } from '../../console/types.ts';
 import type { RouterCatalog, RouterModel } from '../catalog.ts';
 import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions, type LaunchOptions } from '../options.ts';
 import type { LlamaRuntime } from '../runtime.ts';
+import type { RuntimeState } from '../runtime.ts';
+import { runtimeConfig } from '../config.ts';
+import { getByPath, type ConfigGroup, type ConfigValues } from '../../../core/config-schema.ts';
 import { text } from '../strings.ts';
 
 interface Control {
@@ -22,6 +25,11 @@ export interface ModelsState {
   localModelsDir: string;
   models: RouterModel[];
 }
+
+export type RuntimePanelState = RuntimeState & {
+  name: string;
+  config: Array<{ group: ConfigGroup; values: ConfigValues }>;
+};
 
 /** The launch fields the panel edits, each optional and applied over the stored values. */
 type LaunchPatch = Partial<Record<keyof LaunchOptions, unknown>>;
@@ -42,6 +50,7 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
     return found.entry;
   };
   return {
+    config: [],
     panels: [
       { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, slot: 'instance' },
       { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, slot: 'instance' },
@@ -50,7 +59,17 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
       if (panel === 'runtime') {
         const value = body(args);
         const name = value.name as string;
-        if (method === 'state') return { name, ...(await control(name).runtime.state(host.language)) };
+        if (method === 'state') {
+          const entry = entryOf(name);
+          const prefix = `providers.${name}.`;
+          const config = runtimeConfig(name, entry, host.language).map((group) => ({
+            group,
+            values: Object.fromEntries(Object.keys(group.schema.properties).map((path) => [
+              path, getByPath(entry as unknown as Record<string, unknown>, path.slice(prefix.length)) ?? '',
+            ])) as ConfigValues,
+          }));
+          return { name, ...(await control(name).runtime.state(host.language)), config } satisfies RuntimePanelState;
+        }
         if (method === 'enable') {
           const entry = entryOf(name);
           const options = llamacppOptions(entry);

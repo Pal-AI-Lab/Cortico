@@ -27,13 +27,14 @@ import { responseRequest } from '../../protocol/open-responses/context-helpers.t
 import { record } from '../../protocol/open-responses/context.ts';
 import { text } from './strings.ts';
 import type { ProviderConsoleHost } from './types.ts';
+import { connectionGroup } from './config.ts';
 
 export type SecretStatus = 'env' | 'file' | 'none';
 
 /** Output token limit used by the connectivity probe. */
 const PROBE_MAX_OUTPUT_TOKENS = 256;
 
-/** 密钥变量名由操作员自由填写,拼进正则前按字面转义。 */
+/** 密钥变量名由操作员自由填写,也可能是直接写在磁盘上的任意名字,拼进正则前按字面转义。 */
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -70,7 +71,8 @@ export class ProviderSettings {
   private declaredGroups(language: Language) {
     return this.modules.flatMap((module) =>
       this.entries(module).flatMap(({ name, entry }) =>
-        (module.config?.(name, entry, language) ?? []).map((group) => ({ name, group })),
+        [connectionGroup(name, entry, language), ...(module.config?.(name, entry, language) ?? [])]
+          .map((group) => ({ name, group })),
       ),
     );
   }
@@ -334,7 +336,7 @@ export class ProviderSettings {
         },
         ...(extra.panels ?? []),
       ],
-      config: entries.flatMap(
+      config: extra.config ?? entries.flatMap(
         ({ name, entry }) => module.config?.(name, entry, language) ?? [],
       ),
       invoke: async (panel, method, args) => {
@@ -358,6 +360,8 @@ export class ProviderSettings {
             instances: this.entries(module).map(({ name, entry }) => ({
               name,
               entry,
+              config: this.declaredGroups(language).filter((item) => item.name === name)
+                .map(({ group }) => ({ group, values: this.values(group.id, language) })),
               secretConfigured: this.secretStatus(name, entry),
               quotes: (entry.spec ? [entry.spec] : []).map((spec) => ({
                 model: spec.model,
@@ -383,7 +387,7 @@ export class ProviderSettings {
         const name = body.name;
         if (method === 'create') {
           this.assertNewName(name, language);
-          // 报价留空:用量页把这条端点的调用记成未计价,而不是零元。
+          // 报价留空:不覆盖模块价目;模块也没给价目时,这条端点的调用只记 token,不记金额。
           this.save(name, {
             kind: module.id,
             baseUrl: String(body.baseUrl || module.defaultBaseUrl || ''),

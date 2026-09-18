@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts -->
+<!-- Owner: src/web/server.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts -->
 
 # src/web
 
@@ -52,6 +52,8 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 `createBot()` 通过 `WebAppDeps` 注入事件库、session、运行控制、配置、存储、`consolePageSources` 和扩展信息。
 
 ## 浏览器
+
+`llm-settings` 从端点状态中的 ConfigGroup 渲染连接字段与声明的请求路径,使用 `ctx.setConfig` 保存。
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、
 `appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。

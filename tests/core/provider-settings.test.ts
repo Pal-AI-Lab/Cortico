@@ -5,10 +5,10 @@ import { makeCfg, makeTmpDir } from './helpers.ts';
 import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/console/settings.ts';
 import { nullLogger } from '../../src/core/util.ts';
+import { loadDeployment } from '../../src/deploy.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import type { PriceDefinition } from '../../src/providers/pricebook.ts';
 
-/** 内建模块的连接字段归端点面板;配置组这条路仍留给扩展,用这个夹具核。 */
 const groupModule: ProviderModule = {
   id: 'group-llm',
   title: 'Group LLM',
@@ -61,6 +61,34 @@ function fixture() {
   return { cfg, file, providersDir, registry, settings, endpoint };
 }
 describe('Provider 配置事务', () => {
+  it('连接与协议配置按声明保存，非法值不改变磁盘或运行配置', () => {
+    const { cfg, settings, endpoint, providersDir } = fixture();
+    const connection = 'llm.openai-responses-compat.local.connection';
+    const protocol = 'llm.openai-responses-compat.local.protocol';
+    settings.setConfig(connection, {
+      'providers.local.baseUrl': 'https://changed.test',
+      'providers.local.secret': 'SERVICE_TOKEN',
+      'providers.local.multimodal': true,
+    });
+    settings.setConfig(protocol, { 'providers.local.options.endpointPath': '/generate' });
+    expect(endpoint('local')).toMatchObject({
+      baseUrl: 'https://changed.test', secret: 'SERVICE_TOKEN', multimodal: true,
+      options: { endpointPath: '/generate' },
+    });
+    expect(settings.values(protocol)['providers.local.options.endpointPath']).toBe('/generate');
+    const file = join(providersDir, 'local', 'config.json');
+    const before = readFileSync(file, 'utf8');
+    const current = structuredClone(cfg.providers.local);
+    for (const [group, values] of [
+      [connection, { 'providers.local.baseUrl': 'invalid-url' }],
+      [connection, { 'providers.local.secret': 'invalid.name' }],
+      [protocol, { 'providers.local.options.endpointPath': 'generate' }],
+    ] as const) {
+      expect(() => settings.setConfig(group, values)).toThrow();
+      expect(readFileSync(file, 'utf8')).toBe(before);
+      expect(cfg.providers.local).toEqual(current);
+    }
+  });
   it('旧实例名按完整字符串读写，点号不被解释为配置层级', () => {
     const { cfg, settings, endpoint } = fixture();
     cfg.providers['old.account'] = {
@@ -222,7 +250,6 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     expect(cfg.providers.router).toEqual({
       kind: 'openai-responses-compat', baseUrl: 'https://openrouter.ai/api/v1', options: {}, pricing: [],
     });
-    // 报价留空:用量页把这条端点的调用记成未计价,而不是零元。
     expect(endpoint('router').pricing).toEqual([]);
     await expect(invoke(settings, 'create', { name: 'router', baseUrl: 'https://x.test' })).rejects.toThrow('已存在');
     await invoke(settings, 'create', { name: 'blank' });
@@ -275,13 +302,15 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     }
     await expect(invoke(settings, 'setSecret', { name: 'local', value: 'x' })).rejects.toThrow('变量名');
   });
-  it('密钥变量名里的正则元字符按字面处理:既不认成别的变量,也不覆盖它', async () => {
+  it('从磁盘加载的密钥变量名按字面匹配，保留其它变量', async () => {
     const { cfg, settings, providersDir } = fixture();
-    cfg.providers.cloud.secret = 'A.KEY';
     mkdirSync(join(providersDir, 'cloud'), { recursive: true });
+    writeFileSync(join(providersDir, 'cloud', 'config.json'), JSON.stringify({
+      kind: 'openai-responses-compat', baseUrl: 'https://example.invalid', secret: 'A.KEY',
+    }));
+    cfg.providers = loadDeployment({ defaults: makeCfg }, temp.dir, temp.dir, temp.dir, providersDir).config.providers;
     const env = join(providersDir, 'cloud', '.env');
     writeFileSync(env, 'AXKEY=another-secret\n', 'utf8');
-    // 文件里没有 A.KEY,只有一个名字长得像的 AXKEY
     expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('none');
     await invoke(settings, 'setSecret', { name: 'cloud', value: 'sk-mine' });
     expect(readFileSync(env, 'utf8')).toBe('AXKEY=another-secret\nA.KEY=sk-mine\n');

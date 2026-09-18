@@ -13,6 +13,7 @@ import type {
 } from '../../../../shared/client-panel.ts';
 import { pricingEditor, type ModelQuote } from './pricing-panel.ts';
 import { panel } from './strings.ts';
+import { configField, type ConfigGroupEntry } from '../../../features/config/view.ts';
 
 /** 每个端点实例的模型与推理配置。 */
 interface Spec {
@@ -45,6 +46,7 @@ interface Instance {
   entry: Entry;
   quotes: ModelQuote[];
   secretConfigured: 'env' | 'file' | 'none';
+  config: ConfigGroupEntry[];
 }
 interface SettingsState {
   active: string;
@@ -255,26 +257,37 @@ export const llmSettingsPanel: ConsolePanel = {
       const spec: Spec = structuredClone(entry.spec) ?? { model: '', thinking: open };
       const saveSpec = () => void patch({ spec });
 
+      function configInput(suffix: string, label: string, changed?: (value: unknown) => void | Promise<void>): HTMLElement {
+        const path = `providers.${current!.name}.${suffix}`;
+        const { group, values } = current!.config.find(({ group }) => path in group.schema.properties!)!;
+        const field = configField(ui, group.schema.properties![path], values?.[path], () => {
+          void (async () => {
+            const raw = field.read!();
+            const value = typeof raw === 'string' ? raw.trim() : raw;
+            try {
+              await ctx.setConfig(group.id, { [path]: value });
+              report.textContent = S.saved;
+              await ctx.refresh();
+              await changed?.(value);
+            } catch (error) {
+              report.textContent = String(error);
+            }
+          })();
+        }, ctx.signal);
+        (field.node.querySelector('input, select, textarea') ?? field.node).setAttribute('aria-label', label);
+        return field.node;
+      }
+
       // ---- 连接 ----
       const connection = ui.sheet({ title: S.connectionTitle, desc: S.connectionDescription });
       const options = entry.options ?? {};
-      let endpointPath =
+      const endpointPath =
         typeof options.endpointPath === 'string' ? options.endpointPath : DEFAULT_ENDPOINT_PATH;
       const jsonText = (value: unknown) =>
         value === undefined ? '' : JSON.stringify(value, null, 2);
-      const baseUrlInput = ui.input({
-        value: entry.baseUrl,
-        cls: 'mono',
-        onChange: (value) => void connectionChanged({ baseUrl: value.trim() }),
-      });
-      baseUrlInput.setAttribute('aria-label', S.baseUrl);
-      const secretNameInput = ui.input({
-        value: entry.secret ?? '',
-        placeholder: S.secretNamePlaceholder,
-        cls: 'mono',
-        onChange: (value) => void connectionChanged({ secret: value.trim() }),
-      });
-      secretNameInput.setAttribute('aria-label', S.secretName);
+      const baseUrlInput = configInput('baseUrl', S.baseUrl, connectionChanged);
+      const secretNameInput = configInput('secret', S.secretName, connectionChanged);
+      (secretNameInput as HTMLInputElement).placeholder = S.secretNamePlaceholder;
       connection.body.append(
         ui.field(S.baseUrl, baseUrlInput),
         ui.field(S.secretName, secretNameInput),
@@ -294,24 +307,18 @@ export const llmSettingsPanel: ConsolePanel = {
         connection.body.append(ui.field(S.secretStatus, row));
         if (!entry.secret) connection.body.append(ui.msgline(S.secretNameFirst));
       }
-      connection.body.append(
-        ui.checkbox(S.multimodal, {
-          checked: entry.multimodal === true,
-          onChange: (checked) => void patch({ multimodal: checked }),
-        }).el,
-      );
+      connection.body.append(ui.field(S.multimodal, configInput('multimodal', S.multimodal)));
       let extraHeaders: HTMLTextAreaElement | null = null;
       let extraBody: HTMLTextAreaElement | null = null;
+      let path: HTMLInputElement | null = null;
       if (open) {
-        const path = ui.input({
-          value: endpointPath,
-          cls: 'mono',
-          onChange: (value) => {
-            endpointPath = value.trim();
-            saveOptions();
-          },
-        });
-        path.setAttribute('aria-label', S.endpointPath);
+        const pathKey = `providers.${current.name}.options.endpointPath`;
+        const hasPath = current.config.some(({ group }) => pathKey in group.schema.properties!);
+        path = hasPath ? configInput('options.endpointPath', S.endpointPath) as HTMLInputElement : null;
+        if (path) {
+          path.value = endpointPath;
+          path.placeholder = DEFAULT_ENDPOINT_PATH;
+        }
         extraHeaders = ui.textarea({
           rows: 3,
           cls: 'mono',
@@ -328,7 +335,7 @@ export const llmSettingsPanel: ConsolePanel = {
         extraBody.setAttribute('aria-label', S.extraBody);
         connection.body.append(
           ui.section(S.advancedProtocolTitle, S.advancedProtocolDescription),
-          ui.field(S.endpointPath, path),
+          ...(path ? [ui.field(S.endpointPath, path)] : []),
           ui.field(S.extraHeaders, extraHeaders),
           ui.field(S.extraBody, extraBody),
         );
@@ -346,7 +353,7 @@ export const llmSettingsPanel: ConsolePanel = {
           return parsed;
         };
         const edited: Record<string, unknown> = {
-          endpointPath,
+          endpointPath: path?.value.trim() ?? options.endpointPath,
           extraHeaders: object(extraHeaders!, S.extraHeaders),
           extraBody: object(extraBody!, S.extraBody),
         };
@@ -431,8 +438,7 @@ export const llmSettingsPanel: ConsolePanel = {
         if (!ctx.signal.aborted) renderModelField();
       }
       /** 地址或密钥改过就重取目录:换了端点,上一份模型表不作数。 */
-      async function connectionChanged(fields: Record<string, unknown>): Promise<void> {
-        if (!(await patch(fields))) return;
+      async function connectionChanged(): Promise<void> {
         catalog = [];
         await fetchCatalog();
       }

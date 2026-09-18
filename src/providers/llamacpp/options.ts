@@ -42,6 +42,8 @@ export function normalizeLlamaCpp(entry: LLMProviderEntry): LLMProviderEntry {
   if (options.runtime && typeof options.runtime === 'object') {
     const runtime = options.runtime as Partial<RuntimeOptions>;
     options.runtime = { ...runtime, release: runtime.release ?? PINNED_RELEASE, backend: runtime.backend ?? defaultBackend() };
+    if (typeof options.runtime.release === 'string') options.runtime.release = options.runtime.release.trim();
+    if (typeof options.runtime.runtimeDir === 'string') options.runtime.runtimeDir = options.runtime.runtimeDir.trim();
     if (options.runtime.runtimeDir === '') delete options.runtime.runtimeDir;
     options.launch = { ...LAUNCH_DEFAULTS, ...(options.launch ?? {}) };
   }

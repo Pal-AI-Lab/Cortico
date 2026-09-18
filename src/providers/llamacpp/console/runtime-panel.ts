@@ -3,11 +3,12 @@
  * The endpoint comes from `ctx.scope.instance`; edits are written on change.
  */
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
-import type { LaunchOptions } from '../options.ts';
-import type { RuntimeState } from '../runtime.ts';
+import type { ConfigValues } from '../../../core/config-schema.ts';
+import { configField } from '../../../web/client/features/config/view.ts';
+import type { RuntimePanelState } from './server.ts';
 import { panel } from '../strings.ts';
 
-type Row = RuntimeState & { name: string };
+type Row = RuntimePanelState;
 
 const POLL_MS = 2_000;
 
@@ -42,18 +43,35 @@ export const runtimePanel: ConsolePanel = {
       await load(true);
     }
 
-    /** One launch field; empty input sends NaN so the endpoint reports the same error as a bad value. */
-    function launchNumber(row: Row, key: keyof LaunchOptions, label: string, min: number): HTMLElement {
-      const current = row.launch?.[key];
-      const input = ui.input({
-        type: 'number',
-        value: current === undefined ? '' : String(current),
-        onChange: (value) => void act('configure', { launch: { [key]: Number(value) } }),
-      });
-      input.min = String(min);
-      input.step = '1';
-      input.setAttribute('aria-label', label);
-      return ui.field(label, input);
+    async function saveConfig(groupId: string, values: ConfigValues): Promise<void> {
+      if (busy) return;
+      busy = true;
+      message.textContent = '';
+      try {
+        await ctx.setConfig(groupId, values);
+      } catch (error) {
+        message.textContent = String(error);
+      } finally {
+        busy = false;
+      }
+      await load(true);
+    }
+
+    function renderConfig(row: Row, index: number, body: HTMLElement): void {
+      const { group, values } = row.config[index];
+      body.append(ui.section(group.schema.title, group.schema.description));
+      for (const [path, property] of Object.entries(group.schema.properties)) {
+        const field = configField(ui, property, values[path], () => {
+          if (field.read) void saveConfig(group.id, { [path]: field.read() });
+        }, ctx.signal);
+        field.node.setAttribute('aria-label', property.title);
+        // 自备运行时目录时后端由目录里的二进制决定,后端那一格禁用。
+        if (path.endsWith('.runtime.backend') && row.own) {
+          (field.node as HTMLSelectElement).disabled = true;
+        }
+        body.append(ui.field(property.title, field.node));
+        if (property.description) body.append(ui.msgline(property.description));
+      }
     }
 
     function renderUnmanaged(row: Row, body: HTMLElement): void {
@@ -74,42 +92,8 @@ export const runtimePanel: ConsolePanel = {
         : install.phase === 'extracting' ? ui.pill(S.extracting, 'plain')
         : ui.pill(S.absent, 'off');
 
-      body.append(ui.section(S.runtimeSection, S.runtimeSectionDesc));
-      const release = ui.input({
-        value: row.release ?? '',
-        cls: 'mono',
-        onChange: (value) => void act('configure', { release: value }),
-      });
-      release.setAttribute('aria-label', S.release);
-      const backend = ui.select({
-        value: row.backend ?? '',
-        options: row.backendChoices,
-        onChange: (value) => void act('configure', { backend: value }),
-      });
-      backend.setAttribute('aria-label', S.backend);
-      backend.disabled = row.own;
-      const dir = ui.input({
-        value: row.own ? row.runtimeDir ?? '' : '',
-        cls: 'mono',
-        onChange: (value) => void act('configure', { runtimeDir: value }),
-      });
-      dir.setAttribute('aria-label', S.runtimeDir);
-      const dirRow = ui.rowbar();
-      dirRow.append(dir, ui.button(S.browse, {
-        size: 'sm',
-        onClick: async () => {
-          const picked = await ctx.pickPath({ kind: 'directory', title: S.runtimeDir, currentPath: dir.value });
-          if (picked) await act('configure', { runtimeDir: picked });
-        },
-      }));
-      body.append(
-        ui.field(S.release, release),
-        ui.msgline(S.releaseHint),
-        ui.field(S.backend, backend),
-        ui.field(S.runtimeDir, dirRow),
-        ui.msgline(S.runtimeDirHint),
-        ui.kv([{ k: S.installStatus, v: installPill }]),
-      );
+      renderConfig(row, 0, body);
+      body.append(ui.kv([{ k: S.installStatus, v: installPill }]));
       if (row.smartAppControl === 1) body.append(ui.msgline(S.sacWarning, true));
       if (install.phase === 'downloading' || install.phase === 'extracting') {
         const progress = ui.progress({
@@ -133,28 +117,7 @@ export const runtimePanel: ConsolePanel = {
       installBar.append(ui.h('span', 'grow'), ui.button(S.disable, { onClick: () => void act('disable') }));
       body.append(installBar);
 
-      body.append(ui.section(S.launchSection, S.launchSectionDesc));
-      const launchRow = ui.rowbar();
-      launchRow.append(
-        launchNumber(row, 'contextSize', S.contextSize, 1),
-        launchNumber(row, 'nGpuLayers', S.nGpuLayers, 0),
-        launchNumber(row, 'parallel', S.parallel, 1),
-      );
-      const extraArgs = ui.input({
-        value: row.launch?.extraArgs ?? '',
-        cls: 'mono',
-        onChange: (value) => void act('configure', { launch: { extraArgs: value } }),
-      });
-      extraArgs.setAttribute('aria-label', S.extraArgs);
-      body.append(
-        launchRow,
-        ui.field(S.extraArgs, extraArgs),
-        ui.msgline(S.extraArgsHint),
-        ui.checkbox(S.autoStart, {
-          checked: row.autoStart,
-          onChange: (checked) => void act('configure', { autoStart: checked }),
-        }).el,
-      );
+      renderConfig(row, 1, body);
 
       body.append(ui.section(S.serverSection, S.serverSectionDesc));
       const server = row.server;

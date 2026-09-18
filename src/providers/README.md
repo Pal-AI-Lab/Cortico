@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts -->
 
 # src/providers
 
@@ -27,9 +27,11 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 `validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `console()`
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
 
-地址、密钥变量名与图像开关由控制台的端点面板编辑,模块不为它们声明配置组。模块自己的
-`options.*` 要么走 `config()` 的配置组,要么由 `console()` 声明一块挂进 `instance` 插槽的面板——
-内建 llamacpp 的运行时与模型两段走的是后者。
+地址、密钥变量名与图像开关不归模块:框架在 `console/config.ts` 里为每个端点声明这一组,
+扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,面板在 `instance` 插槽里
+用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 存——内建 llamacpp 的运行时与启动
+两段走的是这条。`console()` 显式给空 `config` 表示这一页不另开配置页签,声明仍参与服务端
+校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
 `compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。

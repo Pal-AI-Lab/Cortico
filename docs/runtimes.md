@@ -1,4 +1,4 @@
-<!-- Owner: src/paths.ts, src/providers/llamacpp/runtime-store.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/server.ts -->
+<!-- Owner: src/paths.ts, src/providers/llamacpp/runtime-store.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/server.ts -->
 
 # 运行时与模型文件
 
@@ -27,6 +27,8 @@
 3. **不代装系统依赖。** CUDA 版只搭配上游的 cudart 包;Cortico 不修改系统驱动、运行库和应用控制策略;
    启动失败时报告已知错误。
 4. **自备目录优先。** 配置里给了运行时目录就不下载:自编译、Linux CUDA、签过名的构建走这里。
+
+版本 tag 与自备目录去除首尾空白;自备目录为空时使用托管下载目录。
 
 ## 模型文件的两条约定
 
