@@ -630,7 +630,7 @@ export class TerminalWorld implements World {
     this.sendJson(client.peer, { type: 'sys', text: t.unknownType(String(msg.type)) });
   }
 
-  /** 已保存的终端事件里有没有人说过话。这颗按钮只在事件库还空着时露面,全扫一遍不贵。 */
+  /** 已保存的终端事件里有没有人说过话。 */
   private spokenBefore(): boolean {
     if (!this.host) return false;
     return this.host.store
