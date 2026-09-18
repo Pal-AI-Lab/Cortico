@@ -1144,7 +1144,8 @@ export class WebApp {
     // 固定端口被占时顺延;0 交给 OS 分配且只尝试一次。
     //
     // 固定端口最多尝试 5 个候选端口。
-    const maxAttempts = port === 0 ? 1 : 5;
+    // 候选不越过 65535:listen(65536) 抛的是非法端口,会盖住真正的监听错误。
+    const maxAttempts = port === 0 ? 1 : Math.min(5, 65536 - port);
     let server: Server | null = null;
     let lastErr: unknown;
     for (let i = 0; i < maxAttempts; i++) {
