@@ -1,4 +1,5 @@
 import { messages as legacyMessages } from '../core/fixture-protocol.ts';
+import { WEB_PASSWORD_SECRET } from '../../src/bot.ts';
 /**
  * 真实 CortiV / WebApp / 事件总线，只替换模型与 B 站长连。
  * 同一进程串起弹幕合批、付费插队、控制台输入、工作区写入、热配置与关机。
@@ -79,7 +80,7 @@ describe.sequential('CortiV 集成测试', () => {
       rootDir: tmp.dir,
       memoryDir,
       dataDir,
-      secret: () => 'fake-key',
+      secret: (name) => (name === WEB_PASSWORD_SECRET ? '' : 'fake-key'),
     };
     const fakeBilibili = new BilibiliWorld({
       roomId: 6,

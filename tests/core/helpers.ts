@@ -12,6 +12,7 @@ import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import { composeDefaults, type LoadedConfig } from '../../bots/corti-soulmate/assemble.ts';
 import { validatePairing } from "./fixture-truncate.ts";
 import { nullLogger } from '../../src/core/util.ts';
+import { WEB_PASSWORD_SECRET } from '../../src/bot.ts';
 
 export function makeTmpDir(): { dir: string; cleanup: () => void } {
   const dir = mkdtempSync(join(tmpdir(), 'bot-core-test-'));
@@ -49,7 +50,8 @@ export function makeLoaded(opts: {
 }): LoadedConfig<BotConfig> {
   return {
     config: opts.config,
-    secret: (name) => opts.secrets?.[name] ?? (opts.secrets ? '' : 'fake-key'),
+    // 测试部署不设控制台访问密码;其余密钥名默认返回同一假密钥。
+    secret: (name) => opts.secrets?.[name] ?? (opts.secrets || name === WEB_PASSWORD_SECRET ? '' : 'fake-key'),
     rootDir: opts.rootDir,
     memoryDir: opts.memoryDir,
     dataDir: opts.dataDir,
