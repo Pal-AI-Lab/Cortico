@@ -1707,9 +1707,11 @@ describe('MainLoop user事件协议', () => {
     rig = makeRig();
     rig.start();
     await until(() => rig.llm.calls.length >= 1);
+    expect(JSON.stringify(rig.session.messages)).toContain('Session started.');
     await rig.loop.clearSession();
-    expect(rig.session.messages).toHaveLength(1);
+    // 清空后的开场随即作为 user 消息投递,这里只断言旧内容一条不剩。
     expect(rig.session.messages[0].role).toBe('system');
+    expect(JSON.stringify(rig.session.messages)).not.toContain('Session started.');
 
     await until(() => rig.session.messages.some(
       (message) => message.role === 'user' && message.content.includes('Session cleared'),
@@ -1776,6 +1778,42 @@ describe('MainLoop user事件协议', () => {
     expect(rig.session.messages.some(
       (message) => message.role === 'user' && message.content.includes('new event arrived'),
     )).toBe(true);
+    assertPairing(rig.session.messages);
+  });
+
+  it('推理中清空 session 会排队到自然回合边界,半轮的回答不会落进新 session', async () => {
+    rig = makeRig();
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+
+    let entered = false;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const originalChat = rig.llm.chat.bind(rig.llm);
+    rig.llm.chat = async (...args) => {
+      entered = true;
+      await gate;
+      return originalChat(...args);
+    };
+    rig.llm.script(textReply('清空时仍在生成的回答'));
+    rig.pushEvent('清空时仍在处理的消息');
+    await until(() => entered);
+
+    const before = rig.session.messages.length;
+    let cleared = false;
+    const clear = rig.loop.clearSession().then(() => { cleared = true; });
+    await sleep(20);
+    expect(cleared).toBe(false);
+    expect(rig.session.messages).toHaveLength(before);
+    // 等待期间的重复请求复用同一事务。
+    expect(rig.loop.clearSession()).toBe(rig.loop.clearSession());
+
+    release();
+    await clear;
+    const dumped = JSON.stringify(rig.session.messages);
+    expect(rig.session.messages[0].role).toBe('system');
+    expect(dumped).not.toContain('清空时仍在生成的回答');
+    expect(dumped).not.toContain('清空时仍在处理的消息');
     assertPairing(rig.session.messages);
   });
 
