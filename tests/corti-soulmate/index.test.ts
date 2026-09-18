@@ -1,6 +1,3 @@
-/**
- * 页 id 曾经错位:build 报的页与 Persona 自己的页不是同一个 id,那些面板没有产物可挂。
- */
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
