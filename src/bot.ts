@@ -1058,6 +1058,8 @@ export function createBot<C extends CoreConfig>(
       dataDir: loaded.dataDir,
       botDir: loaded.rootDir,
       language,
+      ...(cfg.web.host ? { host: cfg.web.host } : {}),
+      allowedHosts: cfg.web.allowedHosts ?? [],
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: consoleStorage,
