@@ -281,7 +281,7 @@ export class ProviderSettings {
     return { label: S.availableLamp, state: 'offline', hint: reason };
   }
 
-  /** 所有模块合起来有没有一个可用端点。控制台左栏「语言模型」那一行点的就是它。 */
+  /** 所有模块合起来有没有一个可用端点。控制台左栏「模型提供商」那一行点的就是它。 */
   providersLamp(language: Language = 'zh'): ConsoleLamp {
     return this.availableLamp(
       this.modules.flatMap((module) => this.entries(module)),

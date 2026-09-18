@@ -29,6 +29,8 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 `ownToolNames()`(自有工具名,装配层据此拒绝工具名冲突的 World;未提供时仅告警并保留先注册的工具)、
 `cognition`(处理 World 的后台认知请求)、`console()`(Persona 页的声明;其中 `memory` 子声明是
 Memory 页的面板、模板与存储项)。
+Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefinition.memoryName`,
+没给就取 `Persona.memory` 的类名,两者都没有时是 `Memory`。
 钩子的异常处理方式见 [Core 文档](../src/core/README.md)。
 
 工具不在 Persona 上,在每个 `SessionDecl.tools()` 里;`end_turn`、`save_blob` 这类是 bot 侧的
@@ -49,6 +51,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 | 字段 | 含义 |
 |---|---|
 | `id` | 包 id;仓内包与目录同名 |
+| `memoryName` | 可选,Memory 页的标题 |
 | `defaults()` | bot 默认配置,可包含 World 段。启动器用 `withWorlds()` 补充内建与扩展 World 中缺失的默认段,保留此处已有的段 |
 | `declares` | 默认启用的 World id;未安装时显示为不可用。已安装但未声明的 World 默认关闭,部署可自行启用 |
 | `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, console? }` |

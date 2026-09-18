@@ -17,6 +17,12 @@ function tempFile(): string {
 }
 
 describe('config.json persistence', () => {
+  it('带 BOM 的 config.json 解析得出来', () => {
+    const file = tempFile();
+    writeFileSync(file, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('{ "language": "en" }', 'utf8')]));
+    expect(readJsonObject(file)).toEqual({ language: 'en' });
+  });
+
   it('updates one section without replacing unrelated configuration', () => {
     const file = tempFile();
     writeFileSync(file, JSON.stringify({ models: { main: { model: 'old' } }, worlds: { web: { enabled: true } } }));

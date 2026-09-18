@@ -442,16 +442,16 @@ export interface ConsoleSurface {
   toolSchemas?: WebAppToolSchemasDeps;
   /** 当前 session 的非破坏性前缀重载。 */
   sessionControl?: WebAppSessionControlDeps;
-  /**
-   * 可选的运行控制，未挂载时 /api/run/* 返回 503；暂停期间事件仍落库排队。
-   * shutdown 按装配层顺序停止投递、IO、托管 LLM server 并落盘，各步有时间预算并返回结果；未提供时不显示关机键，进程退出由装配层决定。
-   */
   /** 开场引导的一次性标记；缺席时控制台不给引导。 */
   onboarding?: {
     /** 删除标记；已经删过时不报错。 */
     dismiss(): void;
   };
 
+  /**
+   * 可选的运行控制，未挂载时 /api/run/* 返回 503；暂停期间事件仍落库排队。
+   * shutdown 按装配层顺序停止投递、IO、托管 LLM server 并落盘，各步有时间预算并返回结果；未提供时不显示关机键，进程退出由装配层决定。
+   */
   run?: {
     pause(): void;
     resume(): void;
@@ -474,7 +474,7 @@ export interface ConsoleSurface {
    */
   consolePageSources?: () => ConsolePageSource[];
   /**
-   * 有没有一个可用的端点。缺省不挂:「语言模型」那一行不点灯。
+   * 有没有一个可用的端点。缺省不挂:「模型提供商」那一行不点灯。
    */
   providersLamp?: (language: Language) => ConsoleLamp;
   /**

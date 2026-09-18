@@ -74,8 +74,7 @@ const MODEL_TEXT = {
   selfLine: (time: string, text: string) => `[${time}] you: ${text}`,
   inviteLine: (time: string, name: string, label: string, spokenBefore: boolean) =>
     `[${time}] ${name} pressed the "${label}" button on the terminal.`
-    + (spokenBefore ? '' : ' Nothing has been said here before.')
-    + ' You may say hello and introduce yourself.',
+    + (spokenBefore ? '' : ' No speech is recorded in the retained terminal history.'),
   imageFallback: (from: string, i: number, total: number) => `image ${i}/${total} from ${from}`,
   deliveredTo: (delivered: number, names: string[]) =>
     `Sent to the chat channel on the console's "Terminal" page; ${delivered} connection${delivered === 1 ? '' : 's'} online right now`
@@ -631,11 +630,11 @@ export class TerminalWorld implements World {
     this.sendJson(client.peer, { type: 'sys', text: t.unknownType(String(msg.type)) });
   }
 
-  /** 这个终端上有没有人说过话。末尾几十条够判断:这颗按钮只在事件库还空着时露面。 */
+  /** 已保存的终端事件里有没有人说过话。 */
   private spokenBefore(): boolean {
     if (!this.host) return false;
     return this.host.store
-      .range({ source: this.id, limit: 50 })
+      .range({ source: this.id })
       .some((e) => e.type === 'terminal.message' || e.type === 'terminal.self');
   }
 

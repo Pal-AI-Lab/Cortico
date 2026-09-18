@@ -591,7 +591,7 @@ describe('开场那颗按钮', () => {
     expect(invite.opts?.trigger).toBe('flush');
     expect(invite.e.senderKey).toBe('控制台');
     expect(invite.e.text).toContain('"打个招呼"');
-    expect(invite.e.text).toContain('Nothing has been said here before');
+    expect(invite.e.text).toContain('No speech is recorded in the retained terminal history');
   });
 
   it('这个终端上说过话以后,不再报那一句', async () => {
@@ -608,7 +608,7 @@ describe('开场那颗按钮', () => {
 
     const invite = host.pushed.find((p) => p.e.type === 'terminal.invite')!;
     expect(invite.e.text).toContain('"Say hello"');
-    expect(invite.e.text).not.toContain('Nothing has been said');
+    expect(invite.e.text).not.toContain('No speech is recorded');
     await mod.stop();
   });
 
@@ -616,5 +616,32 @@ describe('开场那颗按钮', () => {
     const host = new FakeHost();
     await press(host);
     expect(host.pushed.some((p) => p.e.type === 'terminal.invite')).toBe(false);
+  });
+
+  it('较早的发言不会被后面几十条按钮事件挤出判断范围', async () => {
+    const host = new FakeHost();
+    await host.pushEvent({
+      type: 'terminal.message', source: 'terminal', origin: 'external',
+      ts: '2026-01-01T00:00:00Z', text: 'hello', senderKey: 'operator',
+      meta: { from: 'operator', body: 'hello' },
+    });
+    for (let i = 0; i < 60; i++) {
+      await host.pushEvent({
+        type: 'terminal.invite', source: 'terminal', origin: 'internal',
+        ts: '2026-01-01T00:00:00Z', text: 'pressed a button', senderKey: 'operator',
+      });
+    }
+    await press(host, 'Say hello');
+    expect(host.pushed.at(-1)!.e.text).not.toContain('No speech is recorded');
+  });
+
+  it('正文只记录按下按钮这件事,不附带该做什么', async () => {
+    const host = new FakeHost();
+    await press(host, 'Say hello');
+    const invite = host.pushed.at(-1)!.e;
+    expect(stripClock(invite.text)).toBe(
+      '[TT] 控制台 pressed the "Say hello" button on the terminal.'
+      + ' No speech is recorded in the retained terminal history.',
+    );
   });
 });

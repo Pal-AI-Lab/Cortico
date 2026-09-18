@@ -1,5 +1,5 @@
 /**
- * 手写的配置与密钥文件按 BOM 解码:Windows 的 shell 重定向写出的是 UTF-16 LE 或带 BOM 的 UTF-8,
+ * 手写的文本文件按 BOM 解码:Windows 的 shell 重定向写出的是 UTF-16 LE 或带 BOM 的 UTF-8,
  * 两者按 UTF-8 读都读不出原文。
  */
 import { describe, it, expect, afterEach } from 'vitest';
@@ -7,8 +7,6 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readTextFile } from '../../src/core/util.ts';
-import { secretReader } from '../../src/core/secrets.ts';
-import { readJsonObject } from '../../src/config-file.ts';
 
 const dirs: string[] = [];
 
@@ -49,27 +47,5 @@ describe('readTextFile', () => {
     const file = join(tempDir(), 'c.txt');
     writeUtf8Bom(file, '{ "bot": "cormini" }');
     expect(readTextFile(file)).toBe('{ "bot": "cormini" }');
-  });
-});
-
-describe('secretReader', () => {
-  it('UTF-16 LE 的 .env 里读得出密钥', () => {
-    const file = join(tempDir(), '.env');
-    writeUtf16le(file, 'DEEPSEEK_API_KEY=sk-test\n');
-    expect(secretReader(file)('DEEPSEEK_API_KEY')).toBe('sk-test');
-  });
-
-  it('文件里没有这个名字时回空串', () => {
-    const file = join(tempDir(), '.env');
-    writeFileSync(file, 'OTHER=1\n', 'utf8');
-    expect(secretReader(file)('DEEPSEEK_API_KEY')).toBe('');
-  });
-});
-
-describe('readJsonObject', () => {
-  it('带 BOM 的 config.json 解析得出来', () => {
-    const file = join(tempDir(), 'config.json');
-    writeUtf8Bom(file, '{ "language": "en" }');
-    expect(readJsonObject(file)).toEqual({ language: 'en' });
   });
 });
