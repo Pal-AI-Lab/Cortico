@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # 控制台
 
@@ -7,7 +7,22 @@
 时给 `http://127.0.0.1:<端口>/`,IPv6 地址加方括号。Host 头不是回环名、
 监听地址或 `web.allowedHosts` 里的名字的请求回 421,带跨站 Origin 的写请求与 WebSocket 升级被拒;
 `web.allowedHosts` 里的名字作 Origin 时算本站,反向代理改写 Host 时靠它放行。监听 `0.0.0.0` 或 `::`
-时不校验 Host。控制台没有身份认证,监听非回环地址时启动记一条 warn。
+时不校验 Host。监听非回环地址而没有设访问密码时,启动记一条 warn。
+
+## 访问密码
+
+`web.password` 或密钥 `CORTICO_WEB_PASSWORD`(进程环境或 `<部署>/.env`,非空时优先)为空时不要求登录。设了之后,
+未登录访问 `/` 得到登录页,其余路径回 401 并带 `x-cortico-auth` 头,WebSocket 升级被断开;这道检查排在
+各路由的 body 解析之前。`POST /api/auth/login` 校验密码并发 `cortico_session` Cookie(HttpOnly、
+SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向代理报告 `X-Forwarded-Proto: https` 时带 Secure),
+`POST /api/auth/logout` 清掉它,`GET /api/auth/status` 报告是否要求登录与当前是否已登录。设置页在设了密码时
+多一颗「退出登录」。
+
+令牌是由密码与 `data/web-auth.key` 里的随机盐导出的 HMAC,自身不设到期:进程重启后登录态仍在,有效到改密码
+或退出登录为止。密码在启动时读一次,改了之后重启生效,旧登录态随之全部失效。错误的登录串行处理,每次等 1 秒才回应;正确的密码不排队。
+
+控制台不终结 TLS。经公网使用时放在终结 HTTPS 的反向代理后面,否则密码与 Cookie 明文传输;登录请求从非回环对端
+经明文连接送来时记一条 warn。
 
 ## 页
 

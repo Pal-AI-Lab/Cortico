@@ -1,4 +1,5 @@
 import { LANGUAGE, saveLanguage, type Language } from '../../core/language.ts';
+import { post } from '../../core/api.ts';
 import type { FeatureContext } from '../feature.ts';
 import { S } from './strings.ts';
 
@@ -19,6 +20,17 @@ export function mountGeneral(ctx: FeatureContext): void {
     button.disabled = language === LANGUAGE;
     button.addEventListener('click', () => { void changeLanguage(language).catch(ctx.onError); }, { signal });
     group.append(button);
+  }
+
+  if (ctx.capabilities.auth) {
+    const access = ui.sheet({ title: S.access, en: 'access', desc: S.accessDesc });
+    const signOut = ui.h('button', 'btn', S.signOut);
+    signOut.type = 'button';
+    signOut.addEventListener('click', () => {
+      void post('/api/auth/logout', {}, { signal }).then(() => win.location.reload()).catch(ctx.onError);
+    }, { signal });
+    access.body.appendChild(signOut);
+    root.append(access.el);
   }
 
   async function changeLanguage(language: Language): Promise<void> {

@@ -14,6 +14,8 @@ export const CONSOLE_PROTOCOL_VERSION = 1;
  * WebSocket 构造器带不了头)。值是 `zh` / `en`;缺席或不认识时服务端用部署默认语言。
  */
 export const CONSOLE_LANGUAGE_HEADER = 'x-cortico-language';
+/** 设了访问密码而请求未登录时,401 响应带这个头;浏览器端据此回到入口页。 */
+export const CONSOLE_AUTH_HEADER = 'x-cortico-auth';
 export const CONSOLE_LANGUAGE_QUERY = 'language';
 
 /** world：World 控制面；llm：LLM 供应模块；persona：bot/Persona 控制面；memory：Persona 的 Memory 页。framework 为保留类别，不经贡献协议提供页面。 */
