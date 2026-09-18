@@ -1,7 +1,24 @@
 /**
  * 控制台 listen:固定端口被占时顺延到下一个空闲端口。
  */
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+/** listen 的旁观钩子:指定端口报 EACCES。node 内建模块的属性不可重定义,只能整 module 代理一次。 */
+const netHooks = vi.hoisted(() => ({ deniedPort: null as number | null }));
+vi.mock('node:http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:http')>();
+  const createServer = ((...args: unknown[]) => {
+    const server = (actual.createServer as (...a: unknown[]) => import('node:http').Server)(...args);
+    const listen = server.listen.bind(server) as (...a: unknown[]) => import('node:http').Server;
+    server.listen = ((...listenArgs: unknown[]) => {
+      if (listenArgs[0] !== netHooks.deniedPort) return listen(...listenArgs);
+      const denied = Object.assign(new Error(`listen EACCES: permission denied 127.0.0.1:${String(listenArgs[0])}`), { code: 'EACCES' });
+      process.nextTick(() => server.emit('error', denied));
+      return server;
+    }) as typeof server.listen;
+    return server;
+  }) as typeof actual.createServer;
+  return { ...actual, default: { ...actual, createServer }, createServer };
+});
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -76,5 +93,18 @@ describe('WebApp.listen 端口顺延', () => {
     const hit = warns.find((m) => m.includes('被占用'));
     expect(hit).toBeDefined();
 
+  });
+
+  it('候选端口 listen 回 EACCES 时试下一个,不当成启动失败', async () => {
+    const blocker = createServer();
+    blockers.push(blocker);
+    const busy = await listen(blocker);
+    netHooks.deniedPort = busy + 1;
+    try {
+      const actual = await makeApp().start(busy);
+      expect(actual).toBeGreaterThan(busy + 1);
+    } finally {
+      netHooks.deniedPort = null;
+    }
   });
 });
