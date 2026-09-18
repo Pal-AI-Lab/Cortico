@@ -1121,6 +1121,13 @@ export interface CoreConfig {
   };
   web: {
     port: number;
+    /** 控制台监听地址；缺省 127.0.0.1。`0.0.0.0` 或 `::` 监听所有网卡。 */
+    host?: string;
+    /**
+     * 回环名与监听地址之外还接受的 Host 名（域名、反向代理对外的名字），同时放行以它为
+     * Origin 的写请求与 WebSocket；缺省为空。
+     */
+    allowedHosts?: string[];
     /** 控制台配色方案 id；浏览器没有保存过选择时用它，认不出的 id 落到框架默认方案。 */
     theme: string;
   };
