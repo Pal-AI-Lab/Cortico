@@ -68,6 +68,7 @@ pnpm start <部署名>
 | 不给名字 | 取 `CORTICO_BOT`;交互终端弹菜单,非交互终端只有一份部署时可省略 |
 | `--paused`、`CORTICO_START_PAUSED=1` | 启动时暂停事件投递，事件仍写入事件库并排队 |
 | `--open`、`CORTICO_OPEN_BROWSER=1` | 启动后打开控制台 |
+| `--host=<地址>`、`--port=<端口>` | 控制台监听地址与端口,覆盖 `config.json` 的 `web.host` / `web.port`,不写回 |
 | `--log-level=<级别>`、`CORTICO_LOG` | 写入日志文件的最低级别，覆盖 `config.json` |
 | `--force-second-instance` | 绕过单实例锁 |
 
