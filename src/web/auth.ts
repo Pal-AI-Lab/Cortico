@@ -55,7 +55,6 @@ export class ConsoleAuth {
     if (this.token === null) {
       let salt = existsSync(this.keyFile) ? Buffer.from(readFileSync(this.keyFile, 'utf8').trim(), 'hex') : Buffer.alloc(0);
       if (salt.length !== SALT_BYTES) {
-        // 坏盐算出的令牌只由密码决定；它签出的登录态本来就对不上，重新生成不多作废任何东西。
         salt = randomBytes(SALT_BYTES);
         mkdirSync(dirname(this.keyFile), { recursive: true });
         writeFileSync(this.keyFile, `${salt.toString('hex')}\n`, { encoding: 'utf8', mode: 0o600 });
