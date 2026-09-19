@@ -98,14 +98,16 @@ export class BilibiliOverlayServer {
         this.boundPort = (server.address() as AddressInfo).port;
         if (index > 0) {
           log.warn(
-            `B站 Overlay 端口 ${preferred} 被占用,改用 ${this.boundPort}`,
+            `B站 Overlay 端口 ${preferred} 被占用或不可监听,改用 ${this.boundPort}`,
           );
         }
         break;
       } catch (error) {
         lastError = error;
         server.close();
-        if ((error as NodeJS.ErrnoException)?.code !== 'EADDRINUSE' || preferred === 0) throw error;
+        const code = (error as NodeJS.ErrnoException)?.code;
+        // EACCES 与 EADDRINUSE 一样只说明这个候选端口此刻不能监听,成因不论(Windows 的排除端口段、权限、安全策略);试下一个,候选用尽时抛最后一个错误。
+        if ((code !== 'EADDRINUSE' && code !== 'EACCES') || preferred === 0) throw error;
       }
     }
     if (!this.http) throw lastError instanceof Error ? lastError : new Error('B站 Overlay 没有可用端口');

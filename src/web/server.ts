@@ -1172,14 +1172,15 @@ export class WebApp {
         if (i > 0) {
           // 端口顺延记录 warn，便于发现预期端口被其他实例占用。
           this.deps.log.warn(
-            `端口 ${port} 被占用，改用 ${candidate}。`,
+            `端口 ${port} 被占用或不可监听，改用 ${candidate}。`,
           );
         }
         break;
       } catch (err) {
         lastErr = err;
         const code = (err as NodeJS.ErrnoException)?.code;
-        if (code !== 'EADDRINUSE' || port === 0) throw err;
+        // EACCES 与 EADDRINUSE 一样只说明这个候选端口此刻不能监听,成因不论(Windows 的排除端口段、权限、安全策略);试下一个,候选用尽时抛最后一个错误。
+        if ((code !== 'EADDRINUSE' && code !== 'EACCES') || port === 0) throw err;
       }
     }
     if (!server) {

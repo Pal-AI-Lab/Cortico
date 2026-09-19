@@ -113,7 +113,7 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 
 World 在 `127.0.0.1` 启动独立页面：`GET /overlay` 是 OBS browser source，`GET /editor`
 是编辑器，`GET /stream` 是同源 SSE 数据面，`GET /assets/<id>` 提供上传素材。端口默认 7795，
-被占用时顺延,含配置端口最多尝试 5 个端口,并记录 warn。
+被占用或不可监听(`listen` 回 `EADDRINUSE` 或 `EACCES`)时顺延,含配置端口最多尝试 5 个端口,并记录 warn。
 编辑接口只接受浏览器携带的同源 `Origin` 与 JSON 请求，并限制请求体大小；
 服务不发送 wildcard CORS。设计和公告分别使用修订号做冲突检测，素材、设计与公告写入共用串行队列，
 避免保存过程中删除素材或后完成的旧请求覆盖新状态。

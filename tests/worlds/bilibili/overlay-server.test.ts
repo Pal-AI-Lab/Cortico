@@ -1,7 +1,24 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+/** listen 的旁观钩子:指定端口报 EACCES。node 内建模块的属性不可重定义,只能整 module 代理一次。 */
+const netHooks = vi.hoisted(() => ({ deniedPort: null as number | null }));
+vi.mock('node:http', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:http')>();
+  const createServer = ((...args: unknown[]) => {
+    const server = (actual.createServer as (...a: unknown[]) => import('node:http').Server)(...args);
+    const listen = server.listen.bind(server) as (...a: unknown[]) => import('node:http').Server;
+    server.listen = ((...listenArgs: unknown[]) => {
+      if (listenArgs[0] !== netHooks.deniedPort) return listen(...listenArgs);
+      const denied = Object.assign(new Error(`listen EACCES: permission denied 127.0.0.1:${String(listenArgs[0])}`), { code: 'EACCES' });
+      process.nextTick(() => server.emit('error', denied));
+      return server;
+    }) as typeof server.listen;
+    return server;
+  }) as typeof actual.createServer;
+  return { ...actual, default: { ...actual, createServer }, createServer };
+});
 import type { Logger } from '../../../src/core/types.ts';
 import { AgentAnnouncementStore } from '../../../src/worlds/bilibili/overlay/announcement.ts';
 import { OverlayAssetStore } from '../../../src/worlds/bilibili/overlay/assets.ts';
@@ -200,6 +217,29 @@ describe('Bilibili Overlay 服务', () => {
       await stream.close();
     } finally {
       await server.stop();
+    }
+  });
+
+  it('候选端口 listen 回 EACCES 时试下一个,不当成启动失败', async () => {
+    const root = tempRoot();
+    const assets = new OverlayAssetStore(join(root, 'assets'));
+    const options = {
+      assets,
+      snapshot: () => ({ design: { schemaVersion: 1 }, agentAnnouncement: { text: '' } }),
+      editor: editorActions(assets),
+    };
+    const blocker = new BilibiliOverlayServer({ preferredPort: 0, ...options });
+    await blocker.start(log);
+    const busy = Number(new URL(blocker.baseUrl).port);
+    const server = new BilibiliOverlayServer({ preferredPort: busy, ...options });
+    netHooks.deniedPort = busy + 1;
+    try {
+      await server.start(log);
+      expect(Number(new URL(server.baseUrl).port)).toBeGreaterThan(busy + 1);
+    } finally {
+      netHooks.deniedPort = null;
+      await server.stop();
+      await blocker.stop();
     }
   });
 
