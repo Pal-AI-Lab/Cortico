@@ -11,6 +11,7 @@
 | `CORTICO_OPEN_BROWSER` | `src/launcher.ts` | `1` / `true`:启动后打开控制台 |
 | `CORTICO_SUPERVISED` | `src/boot.ts` | 由 `bin/cortico.mjs` 设置,表示由父进程处理重启;启用子进程的重启 IPC 通知和控制台重启功能 |
 | `CORTICO_LANGUAGE` | `src/core/language.ts` | 控制台默认语言,次于 `config.json` 的 `language` |
+| `CORTICO_WEB_PASSWORD` | `src/bot.ts` | 控制台访问密码,按密钥读取(进程环境或 `<部署>/.env`);非空时优先于 `config.json` 的 `web.password` |
 | 任意密钥名 | `src/core/secrets.ts` | 进程环境里有就用它,否则读对应 `.env` |
 
 密钥优先读取非空的进程环境变量，否则读取对应文件。文件内容在首次读取时缓存。
@@ -26,5 +27,5 @@
 控制台写密钥只写不读回。
 
 安装扩展时向子进程传入 `COREPACK_ENABLE_DOWNLOAD_PROMPT=0`;本机路径选择器使用
-`CORTICO_PICKER_*` 传参。`CORTICO_DEV_MINIMAL=1` 使 `pnpm dev:console` 只挂载终端 World,`CORTICO_PORT` 设置开发控制台端口
+`CORTICO_PICKER_*` 传参。`CORTICO_DEV_MINIMAL=1` 使 `pnpm dev:console` 只挂载终端 World,`CORTICO_DEV_PASSWORD` 给开发控制台设访问密码,`CORTICO_PORT` 设置开发控制台端口
 (默认 8848)。

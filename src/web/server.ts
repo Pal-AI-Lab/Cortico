@@ -55,13 +55,14 @@ const SERVER_TEXT = {
   },
 };
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
+import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
 import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
 import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
 import {
-  CONSOLE_LAMPS_ROUTE, CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY, CONSOLE_PROTOCOL_VERSION,
+  CONSOLE_AUTH_HEADER, CONSOLE_LAMPS_ROUTE, CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY, CONSOLE_PROTOCOL_VERSION,
   PROVIDERS_LAMP_ID,
   isBinaryResult, isFileResult,
   type ConsoleFileResult, type ConsoleLamp, type ConsoleStream,
@@ -418,6 +419,10 @@ export interface ConsoleSurface {
   host?: string;
   /** 回环名与监听地址之外还接受的 Host 名；以它为 Origin 的写请求与 WebSocket 同样放行。 */
   allowedHosts?: readonly string[];
+  /** 访问密码;缺省或空串时不要求登录。 */
+  password?: string;
+  /** 登录失败的回应延迟(毫秒);缺省见 FAILED_LOGIN_DELAY_MS,测试里调到 0。 */
+  failedLoginDelayMs?: number;
   /** 主循环状态快照(token/截断/梦状态…有什么给什么) */
   getStatus(): Record<string, unknown>;
   /** 调试通道(可选;不挂载时 /ws/debug 拒绝连接) */
@@ -573,6 +578,11 @@ function namesHost(names: readonly string[], host: string): boolean {
     const n = name.trim().toLowerCase();
     return n !== '' && (n === full || n === bare);
   });
+}
+
+/** 对端地址是不是本机回环(含 IPv4 映射的 IPv6 写法)。 */
+function isLoopbackPeer(address: string | undefined): boolean {
+  return address === '127.0.0.1' || address === '::1' || address === '::ffff:127.0.0.1';
 }
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -732,6 +742,7 @@ export class WebApp {
   private readonly app: express.Express;
   private readonly listenHost: string;
   private readonly allowedHosts: readonly string[];
+  private readonly auth: ConsoleAuth;
   /** 控制台页聚合。没挂 consolePageSources 时它也在,只是永远收到空清单。 */
   private readonly consolePages: ConsolePageRegistry;
   private readonly assets: ConsoleAssets;
@@ -751,6 +762,7 @@ export class WebApp {
     this.deps = deps;
     this.listenHost = deps.host ?? '127.0.0.1';
     this.allowedHosts = deps.allowedHosts ?? [];
+    this.auth = new ConsoleAuth(deps.password ?? '', join(deps.dataDir, AUTH_KEY_FILE), deps.failedLoginDelayMs);
     this.language = deps.language ?? systemLanguage();
     this.webDistDir = deps.webDistDir ?? fileURLToPath(new URL('../../dist/web', import.meta.url));
     this.extensionAssets = deps.extensions?.consoleAssets?.() ?? [];
@@ -834,6 +846,7 @@ export class WebApp {
       supervised: this.deps.run?.supervised === true,
       extensions: !!this.deps.extensions,
       avatar: !!this.deps.botDir,
+      auth: this.auth.enabled,
     };
   }
 
@@ -955,6 +968,29 @@ export class WebApp {
     } finally {
       await handle.close();
     }
+  }
+
+  private authorized(req: { headers: Record<string, unknown> }): boolean {
+    return !this.auth.enabled || this.auth.verify(cookieValue(req.headers.cookie, SESSION_COOKIE));
+  }
+
+  /** 直连 HTTPS,或反向代理报告 X-Forwarded-Proto: https。 */
+  private overHttps(req: Request): boolean {
+    return req.secure || req.headers['x-forwarded-proto'] === 'https';
+  }
+
+  /** HTTPS 下加 Secure;HttpOnly 使页面脚本读不到令牌。 */
+  private sessionCookie(value: string, maxAgeSec: number, req: Request): string {
+    const secure = this.overHttps(req);
+    return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSec}${secure ? '; Secure' : ''}`;
+  }
+
+  private serveLogin(res: Response): void {
+    const file = fileURLToPath(new URL('./public/login.html', import.meta.url));
+    let html = readFileSync(file, 'utf8');
+    if (this.language === 'en') html = html.replace('<html lang="zh-CN">', '<html lang="en">');
+    res.setHeader('Cache-Control', 'no-store');
+    res.type('html').send(html);
   }
 
   private safeSessionList(): SessionStats[] {
@@ -1126,6 +1162,11 @@ export class WebApp {
           socket.destroy();
           return;
         }
+        if (!this.authorized(req)) {
+          this.deps.log.warn('拒绝未登录的 WebSocket 连接', { path: pathname });
+          socket.destroy();
+          return;
+        }
         wss.handleUpgrade(req, socket, head, (ws) => {
           if (stream) {
             this.handleConsolePageStream(ws, stream.pageId, stream.panelId, this.languageOf(req));
@@ -1193,8 +1234,8 @@ export class WebApp {
     this.wss = wss;
     const actual = (server.address() as AddressInfo).port;
     this.deps.log.info(`web面板已启动 http://${this.listenHost}:${actual}/`);
-    if (!LOOPBACK_HOSTS.has(this.listenHost) && this.listenHost !== '::1') {
-      this.deps.log.warn('控制台监听在非回环地址且没有身份认证,能连到这个端口的人都能操作 bot', { host: this.listenHost });
+    if (!LOOPBACK_HOSTS.has(this.listenHost) && this.listenHost !== '::1' && !this.auth.enabled) {
+      this.deps.log.warn('控制台监听在非回环地址且没有设访问密码,能连到这个端口的人都能操作 bot', { host: this.listenHost });
     }
     return actual;
   }
@@ -1264,6 +1305,40 @@ export class WebApp {
         if (!res.headersSent) res.status(500).json({ error: String(err) });
       }
     };
+    // 登录、登出与状态三条路由在闸前;其余路由连同各自的 body 解析都在闸后。
+    app.get('/api/auth/status', wrap((req, res) => {
+      res.json({ required: this.auth.enabled, authenticated: this.authorized(req) });
+    }));
+    app.post('/api/auth/login', express.json(), (req: Request, res: Response) => {
+      void (async () => {
+        if (!this.auth.enabled) { res.json({ ok: true }); return; }
+        if (!this.overHttps(req) && !isLoopbackPeer(req.socket.remoteAddress)) {
+          this.deps.log.warn('登录请求从非回环对端经明文连接送来,密码与登录态 Cookie 可被途中截获;公网使用请放在终结 HTTPS 的反向代理后面', { from: req.socket.remoteAddress });
+        }
+        const candidate = (req.body as { password?: unknown } | undefined)?.password;
+        if (typeof candidate !== 'string' || !(await this.auth.login(candidate))) {
+          this.deps.log.warn('控制台登录失败', { from: req.socket.remoteAddress });
+          res.status(401).json({ error: '密码不对' });
+          return;
+        }
+        res.setHeader('Set-Cookie', this.sessionCookie(this.auth.issue(), SESSION_COOKIE_MAX_AGE_SEC, req));
+        this.deps.log.info('控制台登录', { from: req.socket.remoteAddress });
+        res.json({ ok: true });
+      })().catch((err: unknown) => {
+        if (!res.headersSent) res.status(500).json({ error: String(err) });
+      });
+    });
+    app.post('/api/auth/logout', wrap((req, res) => {
+      res.setHeader('Set-Cookie', this.sessionCookie('', 0, req));
+      res.json({ ok: true });
+    }));
+    app.use((req, res, next) => {
+      if (this.authorized(req)) { next(); return; }
+      if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) { this.serveLogin(res); return; }
+      res.setHeader(CONSOLE_AUTH_HEADER, 'required');
+      res.status(401).json({ error: '需要登录' });
+    });
+
     app.get('/api/status', wrap((_req, res) => {
       res.json({ ...this.safeStatus(), uptimeSec: Math.round(process.uptime()) });
     }));

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>登录 · Cortico</title>
+<style>
+  :root { color-scheme: light dark; --bg: #f4f5f4; --card: #fff; --ink: #1d2321; --dim: #66706c; --line: #d5dad7; --accent: #2f7d62; --bad: #b3261e; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #141716; --card: #1d2120; --ink: #e6ebe8; --dim: #98a39e; --line: #333a37; --accent: #5fc29f; --bad: #f2867f; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  form { width: min(360px, calc(100vw - 32px)); padding: 28px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; }
+  h1 { margin: 0 0 4px; font-size: 18px; font-weight: 600; }
+  p { margin: 0 0 20px; color: var(--dim); font-size: 13px; }
+  label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--dim); }
+  input { width: 100%; padding: 9px 11px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+  input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  button { width: 100%; margin-top: 16px; padding: 9px 11px; font: inherit; font-weight: 600; color: var(--card); background: var(--accent); border: 0; border-radius: 8px; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  #error { min-height: 20px; margin: 12px 0 0; color: var(--bad); font-size: 13px; }
+</style>
+</head>
+<body>
+<form id="login" autocomplete="on">
+  <h1 data-t="title"></h1>
+  <p data-t="hint"></p>
+  <label for="password" data-t="label"></label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+  <button type="submit" data-t="submit"></button>
+  <div id="error" role="alert"></div>
+</form>
+<script>
+(() => {
+  const en = document.documentElement.lang === 'en';
+  const T = en
+    ? { title: 'Cortico console', hint: 'This console is protected by an access password.', label: 'Password', submit: 'Sign in', wrong: 'Wrong password.', failed: 'Sign-in failed: ' }
+    : { title: 'Cortico 控制台', hint: '这个控制台设置了访问密码。', label: '密码', submit: '登录', wrong: '密码不对。', failed: '登录失败:' };
+  document.title = (en ? 'Sign in' : '登录') + ' · Cortico';
+  for (const el of document.querySelectorAll('[data-t]')) el.textContent = T[el.dataset.t];
+  const form = document.getElementById('login');
+  const input = document.getElementById('password');
+  const button = form.querySelector('button');
+  const error = document.getElementById('error');
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    button.disabled = true;
+    error.textContent = '';
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: input.value }),
+      });
+      if (res.ok) { location.reload(); return; }
+      error.textContent = res.status === 401 ? T.wrong : T.failed + 'HTTP ' + res.status;
+    } catch (err) {
+      error.textContent = T.failed + String(err);
+    }
+    button.disabled = false;
+    input.select();
+  });
+})();
+</script>
+</body>
+</html>

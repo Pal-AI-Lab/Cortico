@@ -6,6 +6,7 @@
  */
 
 import {
+  CONSOLE_AUTH_HEADER,
   CONSOLE_MANIFEST_ROUTE,
   panelRoute,
   type ConsoleManifest,
@@ -57,12 +58,15 @@ function normalizeError(err: unknown, status: number): never {
 
 async function send(path: string, init: RequestInit, opts?: RequestOptions): Promise<Response> {
   try {
-    return await fetch(path, {
+    const res = await fetch(path, {
       ...init,
       headers: { ...languageHeaders(), ...(init.headers as Record<string, string> | undefined) },
       ...(opts?.signal ? { signal: opts.signal } : {}),
       ...(opts?.keepalive ? { keepalive: true } : {}),
     });
+    // 登录态失效:重新载入入口页,服务端在那里给出登录页。
+    if (res.status === 401 && res.headers.get(CONSOLE_AUTH_HEADER) !== null) location.reload();
+    return res;
   } catch (err) {
     // fetch reject = 网络层没走到 HTTP，没有状态码可言，记 0。
     normalizeError(err, 0);

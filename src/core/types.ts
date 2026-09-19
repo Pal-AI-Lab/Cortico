@@ -1128,6 +1128,11 @@ export interface CoreConfig {
      * Origin 的写请求与 WebSocket；缺省为空。
      */
     allowedHosts?: string[];
+    /**
+     * 控制台访问密码；缺省或空串时不要求登录。密钥 `CORTICO_WEB_PASSWORD`（进程环境或部署
+     * `.env`）非空时优先于此键。
+     */
+    password?: string;
     /** 控制台配色方案 id；浏览器没有保存过选择时用它，认不出的 id 落到框架默认方案。 */
     theme: string;
   };

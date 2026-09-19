@@ -61,13 +61,13 @@ describe('WebApp 监听地址与对外名字', () => {
     expect(await call(port, { method: 'POST', path: '/api/run/pause', host: upstream, origin: 'https://evil.example.test' })).toBe(403);
   });
 
-  it('监听 0.0.0.0 时绑定所有网卡,不校验 Host,并记一条没有身份认证的 warn', async () => {
+  it('监听 0.0.0.0 时绑定所有网卡,不校验 Host,并记一条没有设访问密码的 warn', async () => {
     const warns: string[] = [];
     const log: Logger = { ...nullLogger(), warn: (msg) => { warns.push(msg); } };
     const port = await start({ host: '0.0.0.0', log });
     expect(app!.boundAddress).toBe('0.0.0.0');
     expect(await call(port, { host: 'anything.example.test' })).toBe(200);
-    expect(warns.some((msg) => msg.includes('没有身份认证'))).toBe(true);
+    expect(warns.some((msg) => msg.includes('没有设访问密码'))).toBe(true);
   });
 
   it('缺省监听回环时不记这条 warn', async () => {

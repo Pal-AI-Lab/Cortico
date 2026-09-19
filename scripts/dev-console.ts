@@ -9,6 +9,7 @@ import { responseTimelineFixture } from '../tests/web/response-timeline-fixture.
  *   npx tsx scripts/dev-console.ts          → http://127.0.0.1:8848/
  *   CORTICO_PORT=9000 npx tsx scripts/dev-console.ts
  *   CORTICO_DEV_MINIMAL=1 npx tsx scripts/dev-console.ts   → 只挂框架级那一套(见下方 MINIMAL)
+ *   CORTICO_DEV_PASSWORD=xxx npx tsx scripts/dev-console.ts → 带访问密码起,用来看登录页
  */
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -1019,6 +1020,7 @@ const app = new WebApp({
   memoryDir: tmpPersona,
   dataDir: tmpData,
   botDir: tmpPersona,
+  password: process.env.CORTICO_DEV_PASSWORD ?? '',
   defaultScheme: cfg.web.theme,
   getStatus: () => ({
     loop: { estTokens: 90200, messageCount: session.length, roundsLastBatch: 3, batchesHandled: 37, paused, truncating: false, softNoticeSent: false, lastUsage: { promptTokens: 358000, cacheHitTokens: 322000, cacheMissTokens: 36000, completionTokens: 420, reasoningTokens: 180 } },

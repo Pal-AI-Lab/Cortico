@@ -51,6 +51,9 @@ import {
   type ConsolePageContribution,
 } from './web/shared/console-protocol.ts';
 
+/** 控制台访问密码的密钥名;进程环境或部署 .env 里非空时优先于 web.password。 */
+export const WEB_PASSWORD_SECRET = 'CORTICO_WEB_PASSWORD';
+
 /** 启动器使用的 bot 包装配契约。 */
 export interface BotDefinition<C extends CoreConfig = CoreConfig> {
   /** 控制台页 id `persona:<id>` 与产物键取它;仓内包的 id 与目录同名。 */
@@ -1060,6 +1063,7 @@ export function createBot<C extends CoreConfig>(
       language,
       ...(cfg.web.host ? { host: cfg.web.host } : {}),
       allowedHosts: cfg.web.allowedHosts ?? [],
+      password: loaded.secret(WEB_PASSWORD_SECRET) || (cfg.web.password ?? ''),
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: consoleStorage,

@@ -7,6 +7,9 @@ const zh = {
   languageDesc: '仅保存在当前浏览器，刷新页面后生效。',
   reloadTitle: '切换界面语言？',
   reloadBody: '页面将刷新，未保存的编辑会丢失。Bot 将继续运行。',
+  access: '访问',
+  accessDesc: '这个控制台设置了访问密码;登录态保存在当前浏览器的 Cookie 里。',
+  signOut: '退出登录',
   appearance: '外观',
   appearanceDesc: '控制台主题、明暗模式与自定义配色。',
 
@@ -22,6 +25,9 @@ const en: typeof zh = {
   languageDesc: 'Saved in this browser; takes effect after reloading.',
   reloadTitle: 'Change interface language?',
   reloadBody: 'The page will reload and unsaved edits will be lost. The bot will keep running.',
+  access: 'Access',
+  accessDesc: 'This console is protected by an access password; the sign-in is kept in a cookie in this browser.',
+  signOut: 'Sign out',
   appearance: 'Appearance',
   appearanceDesc: 'Console theme, light/dark mode and custom palettes.',
 

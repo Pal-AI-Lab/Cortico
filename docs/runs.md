@@ -18,7 +18,7 @@
 | `incidents/` | 事故包 |
 
 `data/` 根下与 run 无关的:`session-main.jsonl`、`usage.jsonl`、`core-state.json`(投递水位、
-模型停滞、Persona 的不透明状态、World 可见性)、`timers.json`、`instance.lock`。
+模型停滞、Persona 的不透明状态、World 可见性)、`timers.json`、`instance.lock`、`web-auth.key`(控制台登录令牌的随机盐,设了访问密码才生成)。
 
 ## 日志格式
 
