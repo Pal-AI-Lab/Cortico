@@ -13,7 +13,7 @@ import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
-import { announceDataDir, consumeBootFlags } from './boot.ts';
+import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface } from './boot.ts';
 import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
@@ -160,6 +160,22 @@ async function main(): Promise<void> {
     cfg.logging.file = levelArg as LogLevel;
   }
 
+  // 监听地址与端口:--host= / --port= 只覆盖本次运行,不写回 config.json。
+  const hostArg = flagValue('host');
+  if (hostArg !== null) {
+    if (!hostArg.trim()) { console.error('--host 需要一个地址,如 0.0.0.0'); process.exit(1); }
+    cfg.web.host = hostArg.trim();
+  }
+  const portArg = flagValue('port');
+  if (portArg !== null) {
+    const port = Number(portArg);
+    if (!Number.isInteger(port) || port < 0 || port > 65535) {
+      console.error(`无效端口: ${portArg}(0–65535 的整数,0 由系统分配)`);
+      process.exit(1);
+    }
+    cfg.web.port = port;
+  }
+
   // 重启标志必须在装配与 session 加载之前处理
   consumeBootFlags(loaded.dataDir);
 
@@ -188,8 +204,9 @@ async function main(): Promise<void> {
   const { port } = await bot.start();
 
   console.log(`\n  Bot:       ${botName}${cfg.displayName && cfg.displayName !== botName ? ` (${cfg.displayName})` : ''}`);
+  const consoleUrl = port === null ? null : consoleUrlOf(bot.webApp?.boundAddress ?? null, port);
   if (port !== null) {
-    console.log(`  控制台:    http://127.0.0.1:${port}/`);
+    console.log(`  控制台:    ${consoleUrl}${listensOnEveryInterface(bot.webApp?.boundAddress ?? null) ? `(监听 ${bot.webApp?.boundAddress},所有网卡)` : ''}`);
     const assetsProblem = webAssetsProblem(fileURLToPath(new URL('../dist/web', import.meta.url)));
     if (assetsProblem) {
       console.log(`  ⚠ 控制台产物不完整(${assetsProblem});停止 bot 后运行 pnpm build:web`);
@@ -223,7 +240,7 @@ async function main(): Promise<void> {
     process.env.CORTICO_OPEN_BROWSER === '1' ||
     process.env.CORTICO_OPEN_BROWSER === 'true' ||
     process.argv.includes('--open');
-  if (openBrowserFlag && port !== null) openBrowser(`http://127.0.0.1:${port}/`);
+  if (openBrowserFlag && consoleUrl !== null) openBrowser(consoleUrl);
 
   // 此时限覆盖整个关机流程；各步骤的时限由 bot.shutdown() 管理。
   const SHUTDOWN_GRACE_MS = 35_000;

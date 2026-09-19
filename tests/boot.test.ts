@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   announceDataDir,
+  consoleUrlOf,
   consumeBootFlags,
   isSupervised,
   READY_MESSAGE,
@@ -78,5 +79,15 @@ describe('isSupervised', () => {
     expect(isSupervised({ CORTICO_SUPERVISED: 'true' })).toBe(true);
     expect(isSupervised({})).toBe(false);
     expect(isSupervised({ CORTICO_SUPERVISED: '0' })).toBe(false);
+  });
+});
+
+describe('consoleUrlOf', () => {
+  it('监听所有网卡时给回环地址,具体地址原样,IPv6 加方括号', () => {
+    expect(consoleUrlOf('0.0.0.0', 7777)).toBe('http://127.0.0.1:7777/');
+    expect(consoleUrlOf('::', 7777)).toBe('http://127.0.0.1:7777/');
+    expect(consoleUrlOf('192.168.1.20', 7777)).toBe('http://192.168.1.20:7777/');
+    expect(consoleUrlOf('::1', 7777)).toBe('http://[::1]:7777/');
+    expect(consoleUrlOf(null, 7777)).toBe('http://127.0.0.1:7777/');
   });
 });

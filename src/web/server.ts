@@ -416,6 +416,8 @@ export interface ConsoleSurface {
    * 要放到反向代理后面或有意让别的机器访问,才显式换成 `0.0.0.0`。
    */
   host?: string;
+  /** 回环名与监听地址之外还接受的 Host 名；以它为 Origin 的写请求与 WebSocket 同样放行。 */
+  allowedHosts?: readonly string[];
   /** 主循环状态快照(token/截断/梦状态…有什么给什么) */
   getStatus(): Record<string, unknown>;
   /** 调试通道(可选;不挂载时 /ws/debug 拒绝连接) */
@@ -544,7 +546,7 @@ const hasPort = (h: string): boolean => /:\d+$/.test(h);
 const barePort = (h: string): string => h.replace(/:\d+$/, '');
 
 /** 按 Host 校验 Origin；缺失 Origin 时放行，null、非法或主机不匹配时拒绝。 */
-function isForeignOrigin(origin: unknown, hostHeader: unknown): boolean {
+function isForeignOrigin(origin: unknown, hostHeader: unknown, allowedHosts: readonly string[] = []): boolean {
   if (typeof origin !== 'string' || origin === '') return false;
   if (origin === 'null') return true; // 沙箱 iframe / file:// 一类,不是本控制台
   let originHost: string;
@@ -553,12 +555,24 @@ function isForeignOrigin(origin: unknown, hostHeader: unknown): boolean {
   } catch {
     return true;
   }
+  // 反向代理改写 Host 时 Origin 与 Host 不同名；操作员点名的对外名字照样算本站。
+  if (namesHost(allowedHosts, originHost)) return false;
   const host = typeof hostHeader === 'string' ? hostHeader : '';
   if (!originHost || !host) return true;
   if (originHost === host) return false;
   // 任一侧省了端口(走默认端口时浏览器会省)→ 只比主机名
   if ((!hasPort(originHost) || !hasPort(host)) && barePort(originHost) === barePort(host)) return false;
   return true;
+}
+
+/** 表里的名字可带端口也可不带；不带端口的匹配任意端口。比较不分大小写。 */
+function namesHost(names: readonly string[], host: string): boolean {
+  const full = host.toLowerCase();
+  const bare = barePort(full);
+  return names.some((name) => {
+    const n = name.trim().toLowerCase();
+    return n !== '' && (n === full || n === bare);
+  });
 }
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -569,11 +583,12 @@ const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
  * 同源闸门因此失效;这一关把请求钉在浏览器真正访问的名字上。绑到通配地址即操作员
  * 已选择对外露面,不校验。
  */
-function isAllowedHost(hostHeader: unknown, listenHost: string): boolean {
+function isAllowedHost(hostHeader: unknown, listenHost: string, allowedHosts: readonly string[] = []): boolean {
   if (WILDCARD_HOSTS.has(listenHost)) return true;
   if (typeof hostHeader !== 'string' || hostHeader === '') return false;
   const name = barePort(hostHeader).toLowerCase();
-  return LOOPBACK_HOSTS.has(name) || name === listenHost.toLowerCase() || name === `[${listenHost.toLowerCase()}]`;
+  return LOOPBACK_HOSTS.has(name) || name === listenHost.toLowerCase() || name === `[${listenHost.toLowerCase()}]`
+    || namesHost(allowedHosts, hostHeader);
 }
 
 /**
@@ -716,6 +731,7 @@ export class WebApp {
   private readonly deps: WebAppDeps;
   private readonly app: express.Express;
   private readonly listenHost: string;
+  private readonly allowedHosts: readonly string[];
   /** 控制台页聚合。没挂 consolePageSources 时它也在,只是永远收到空清单。 */
   private readonly consolePages: ConsolePageRegistry;
   private readonly assets: ConsoleAssets;
@@ -734,6 +750,7 @@ export class WebApp {
   constructor(deps: WebAppDeps) {
     this.deps = deps;
     this.listenHost = deps.host ?? '127.0.0.1';
+    this.allowedHosts = deps.allowedHosts ?? [];
     this.language = deps.language ?? systemLanguage();
     this.webDistDir = deps.webDistDir ?? fileURLToPath(new URL('../../dist/web', import.meta.url));
     this.extensionAssets = deps.extensions?.consoleAssets?.() ?? [];
@@ -1094,7 +1111,7 @@ export class WebApp {
           socket.destroy();
           return;
         }
-        if (!isAllowedHost(req.headers.host, this.listenHost)) {
+        if (!isAllowedHost(req.headers.host, this.listenHost, this.allowedHosts)) {
           this.deps.log.warn('拒绝 Host 不在白名单的 WebSocket 连接', {
             path: pathname, host: String(req.headers.host),
           });
@@ -1102,7 +1119,7 @@ export class WebApp {
           return;
         }
         // 跨站页面开的 WS 不受同源策略限制,只能在 upgrade 这一关自己拦(见 isForeignOrigin)
-        if (isForeignOrigin(req.headers.origin, req.headers.host)) {
+        if (isForeignOrigin(req.headers.origin, req.headers.host, this.allowedHosts)) {
           this.deps.log.warn('拒绝跨站WebSocket连接', {
             path: pathname, origin: String(req.headers.origin),
           });
@@ -1144,7 +1161,8 @@ export class WebApp {
     // 固定端口被占时顺延;0 交给 OS 分配且只尝试一次。
     //
     // 固定端口最多尝试 5 个候选端口。
-    const maxAttempts = port === 0 ? 1 : 5;
+    // 候选不越过 65535:listen(65536) 抛的是非法端口,会盖住真正的监听错误。
+    const maxAttempts = port === 0 ? 1 : Math.min(5, 65536 - port);
     let server: Server | null = null;
     let lastErr: unknown;
     for (let i = 0; i < maxAttempts; i++) {
@@ -1175,6 +1193,9 @@ export class WebApp {
     this.wss = wss;
     const actual = (server.address() as AddressInfo).port;
     this.deps.log.info(`web面板已启动 http://${this.listenHost}:${actual}/`);
+    if (!LOOPBACK_HOSTS.has(this.listenHost) && this.listenHost !== '::1') {
+      this.deps.log.warn('控制台监听在非回环地址且没有身份认证,能连到这个端口的人都能操作 bot', { host: this.listenHost });
+    }
     return actual;
   }
 
@@ -1211,7 +1232,7 @@ export class WebApp {
     app.disable('x-powered-by');
 
     app.use((req, res, next) => {
-      if (isAllowedHost(req.headers.host, this.listenHost)) {
+      if (isAllowedHost(req.headers.host, this.listenHost, this.allowedHosts)) {
         next();
         return;
       }
@@ -1227,7 +1248,7 @@ export class WebApp {
         next();
         return;
       }
-      if (!isForeignOrigin(req.headers.origin, req.headers.host)) {
+      if (!isForeignOrigin(req.headers.origin, req.headers.host, this.allowedHosts)) {
         next();
         return;
       }

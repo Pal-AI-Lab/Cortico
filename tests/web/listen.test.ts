@@ -81,6 +81,18 @@ describe('WebApp.listen 端口顺延', () => {
     expect(actual).toBe(free);
   });
 
+  it('偏好端口是 65535 且不可用:候选不越过 65535,抛出的是监听错误而不是非法端口', async ({ skip }) => {
+    const blocker = createServer();
+    try {
+      await listen(blocker, 65535);
+      blockers.push(blocker);
+    } catch (err) {
+      // 别的进程占着 65535 时它同样不可用;回别的错误码的机器上走不到这条路径。
+      if ((err as NodeJS.ErrnoException).code !== 'EADDRINUSE') skip();
+    }
+    await expect(makeApp().start(65535)).rejects.toMatchObject({ code: 'EADDRINUSE' });
+  });
+
   it('目标端口被占时改用下一个空闲端口', async () => {
     const blocker = createServer();
     blockers.push(blocker);
