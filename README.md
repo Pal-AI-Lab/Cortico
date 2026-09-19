@@ -3,7 +3,7 @@
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/cortico-banner-dark.svg">
-    <img src="assets/cortico-banner.svg" alt="Cortico" width="620">
+    <img src="assets/cortico-banner.svg" alt="Cortico" width="806">
   </picture>
 </p>
 
@@ -42,6 +42,26 @@ Cortico is an agent harness designed around an event stream, built for autonomou
 5. 🧩 An extension system (Cortico World), isolated from the inside, with event delivery and tool calls as its input and output: excellent compatibility and nearly unlimited extensibility.
 6. 🖥️ A WebUI that is straightforward to operate.
 7. 🪄 An Extension Creator system built for AI development ([Cortina](https://github.com/Pal-AI-Lab/Cortina)): a non-developer can use an AI agent to build the extension they want, or move an existing implementation onto Cortico!
+
+## Build Extensions with Cortina
+
+Use Cortina to build the Cortico extension or adaptation you want, fast!
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png">
+    <img src="assets/cortina-banner.png" alt="Cortina" width="400">
+  </picture>
+</p>
+
+How to use: first, clone the repository from [https://github.com/Pal-AI-Lab/Cortina](https://github.com/Pal-AI-Lab/Cortina) to your machine.
+
+1. Open that workspace with any coding agent.
+2. Say hello! Cortina assists and guides you through the Cortico extension development / adaptation you want, all through conversation.
+3. No coding experience or knowledge needed.
+4. Once the extension is finished, publish it to npm to share it with everyone~
+
+<sub>Cortina is designed on the [TINA (There Is No App) Spec](https://github.com/Pal-AI-Lab/ThereIsNoApp) proposed by Pal AI Lab. There is no app here: language is the code, the agent is the runtime.</sub>
 
 ## Quick Start
 
