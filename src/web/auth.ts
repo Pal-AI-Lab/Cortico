@@ -10,6 +10,8 @@ import { dirname } from 'node:path';
 
 export const SESSION_COOKIE = 'cortico_session';
 export const AUTH_KEY_FILE = 'web-auth.key';
+/** 盐的字节数；文件解码后不是这个长度即视同不存在，重新生成。 */
+export const SALT_BYTES = 32;
 /** Cookie 的 Max-Age：浏览器对 Cookie 寿命的上限是 400 天（RFC 6265bis），取它即一直保留。 */
 export const SESSION_COOKIE_MAX_AGE_SEC = 400 * 24 * 60 * 60;
 /**
@@ -48,14 +50,13 @@ export class ConsoleAuth {
     return this.password !== '';
   }
 
-  /** 这个密码在这个数据目录下的登录令牌；盐文件在第一次用到时生成。 */
+  /** 这个密码在这个数据目录下的登录令牌；盐文件在第一次用到时生成，解码后不是 SALT_BYTES 字节时重新生成。 */
   issue(): string {
     if (this.token === null) {
-      let salt: Buffer;
-      if (existsSync(this.keyFile)) {
-        salt = Buffer.from(readFileSync(this.keyFile, 'utf8').trim(), 'hex');
-      } else {
-        salt = randomBytes(32);
+      let salt = existsSync(this.keyFile) ? Buffer.from(readFileSync(this.keyFile, 'utf8').trim(), 'hex') : Buffer.alloc(0);
+      if (salt.length !== SALT_BYTES) {
+        // 坏盐算出的令牌只由密码决定；它签出的登录态本来就对不上，重新生成不多作废任何东西。
+        salt = randomBytes(SALT_BYTES);
         mkdirSync(dirname(this.keyFile), { recursive: true });
         writeFileSync(this.keyFile, `${salt.toString('hex')}\n`, { encoding: 'utf8', mode: 0o600 });
       }

@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { request } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHmac } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { WebApp } from '../../src/web/server.ts';
-import { ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from '../../src/web/auth.ts';
+import { ConsoleAuth, SALT_BYTES, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from '../../src/web/auth.ts';
 import { CONSOLE_AUTH_HEADER } from '../../src/web/shared/console-protocol.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { Logger } from '../../src/core/types.ts';
@@ -70,6 +71,22 @@ describe('ConsoleAuth', () => {
     expect(auth.verify(null)).toBe(false);
     expect(new ConsoleAuth('second', file).verify(token)).toBe(false);
     expect(new ConsoleAuth('first', join(dir, 'other.key')).verify(token)).toBe(false);
+  });
+
+  it('盐文件被截空或改坏时重新生成:令牌不退化成只由密码决定,文件换成新盐', () => {
+    const file = keyFile();
+    const good = new ConsoleAuth('pw', file).issue();
+    // 0 字节盐算出的令牌
+    const weak = createHmac('sha256', createHmac('sha256', Buffer.alloc(0)).update('pw', 'utf8').digest())
+      .update(SESSION_COOKIE, 'utf8').digest('hex');
+    for (const broken of ['', 'zz\n']) {
+      writeFileSync(file, broken);
+      const auth = new ConsoleAuth('pw', file);
+      expect(auth.verify(weak)).toBe(false);
+      expect(auth.verify(good)).toBe(false);
+      expect(readFileSync(file, 'utf8').trim()).toMatch(new RegExp(`^[0-9a-f]{${SALT_BYTES * 2}}$`));
+      expect(new ConsoleAuth('pw', file).verify(auth.issue())).toBe(true);
+    }
   });
 
   it('错误的登录串行等待:三次并发失败耗时不少于三个延迟,正确的密码不排队', async () => {
