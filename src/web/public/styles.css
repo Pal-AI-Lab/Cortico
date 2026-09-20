@@ -1455,6 +1455,15 @@
     font-family: var(--sans);
     font-size: 13px;
   }
+  select.field:not([multiple]):not([size]) {
+    appearance: none;
+    padding-right: 36px;
+    background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
+      linear-gradient(135deg, var(--muted-foreground) 50%, transparent 50%);
+    background-position: right 18px center, right 14px center;
+    background-size: 4px 4px;
+    background-repeat: no-repeat;
+  }
   input.field:focus, select.field:focus, textarea.field:focus { border-color: var(--border-strong); }
   .fieldrow .fieldlabel { margin-bottom: 6px; color: var(--muted-foreground); font-size: 11px; letter-spacing: 0; text-transform: none; }
   .segwrap { gap: 2px; padding: 2px; background: var(--surface-hover); border: 0; border-radius: var(--radius-md); }
@@ -1773,7 +1782,7 @@
 .connection-hub .btn:hover { border-color:var(--ink-soft); }
 .connection-hub .btn.danger { border-color:currentColor; }
 .connection-hub .btn.primary, .connection-hub .btn.primary:hover { color:#fff; border-color:var(--accent); }
-.connection-module-readonly:disabled { opacity:1; background:var(--surface); color:var(--foreground); cursor:default; }
+.connection-module-readonly:disabled { opacity:1; background-color:var(--surface); color:var(--foreground); cursor:default; }
 .field-note, .tdesc, .trow .tdesc, .sheet .sh-desc, .pagedesc, p.muted, small.muted,
 .connection-detail .msgline:not(.bad), .connection-shared {
   font:var(--text-detail)/1.55 var(--sans); color:var(--muted-foreground);
