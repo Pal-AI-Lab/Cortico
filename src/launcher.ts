@@ -13,7 +13,7 @@ import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
-import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface } from './boot.ts';
+import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused } from './boot.ts';
 import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
@@ -195,11 +195,8 @@ async function main(): Promise<void> {
   const bot = createBot(loaded, definition, { extensions });
 
   // 必须在启动主循环前暂停，避免首批事件提前投递。
-  const startPaused =
-    process.env.CORTICO_START_PAUSED === '1' ||
-    process.env.CORTICO_START_PAUSED === 'true' ||
-    process.argv.includes('--paused');
-  if (startPaused) bot.core.bus.setPaused(true);
+  const paused = startsPaused();
+  if (paused) bot.core.bus.setPaused(true);
 
   const { port } = await bot.start();
 
@@ -231,7 +228,7 @@ async function main(): Promise<void> {
     const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
     console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「模型提供商」页修改密钥变量名或补填密钥`);
   }
-  if (startPaused) {
+  if (paused) {
     console.log('  ⏸ 已暂停');
   }
   console.log('');

@@ -78,7 +78,8 @@ pnpm start <部署名>
 
 `pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
 在一份部署都没有时建一份、在交互终端上提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
-`CORTICO_START_PAUSED` 未设置时默认为 `1`。首次启动默认打开控制台，
+`CORTICO_START_PAUSED` 未设置时默认为 `1`,重启也走这条路,所以重启回来时事件投递同样是暂停的,
+重启回执里写明了这一点。首次启动默认打开控制台，
 `CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。控制台的「重启进程」由此启动器执行。
 
 菜单里一份部署占两行:相对部署根的路径,以及 `bot id - 名字`;颜色取这份部署控制台里的配色方案

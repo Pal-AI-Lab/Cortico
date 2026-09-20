@@ -19,7 +19,7 @@ import { coreConfigGroup } from './core/config.ts';
 import { pick, resolveLanguage, type Language } from './core/language.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
-import { isSupervised, requestRestart } from './boot.ts';
+import { isSupervised, requestRestart, startsPaused } from './boot.ts';
 import { ExtensionManager, type ExtensionSet } from './extensions.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
@@ -1135,6 +1135,7 @@ export function createBot<C extends CoreConfig>(
           return beginShutdown('控制台重启键', { closeWeb: false, exit: true, language });
         },
         supervised: isSupervised(),
+        startsPaused: startsPaused(),
       },
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
