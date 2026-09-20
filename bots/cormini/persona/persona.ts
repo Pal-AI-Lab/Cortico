@@ -690,7 +690,10 @@ export class Cormini implements Persona {
    * session 不走流式。每批投递时现取,World 运行中挂载/卸载即生效。
    */
   private outputTap(): OutputTap | undefined {
-    const taps = this.sortedWorlds().flatMap((m) => (m.outputTap ? [m.outputTap()] : []));
+    const taps = this.sortedWorlds().flatMap((m) => {
+      const tap = m.outputTap?.();
+      return tap ? [tap] : [];
+    });
     if (taps.length === 0) return undefined;
     if (taps.length === 1) return taps[0];
     return {
