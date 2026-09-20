@@ -1,22 +1,37 @@
 /** Stateless native Responses input: the whole context is replayed on every request. */
 import type { Request } from '../../protocol/open-responses/index.ts';
-import { inputItem } from '../../protocol/open-responses/context.ts';
+import { inputItem, itemText, type ContextRecord } from '../../protocol/open-responses/context.ts';
 import type { GenerateOptions } from '../../core/generation.ts';
 import { requestContext } from './native-input.ts';
 import type { CompatMediaOptions } from './history.ts';
 
 type Item = Record<string, unknown>;
 
+/**
+ * How past reasoning re-enters the context. `encrypted`: the signed `encrypted_content` block, only
+ * when the recorded origin matches this request. `plaintext`: the reasoning text itself, for
+ * endpoints whose thinking mode requires the text of every tool-call turn back.
+ */
+export const REASONING_REPLAYS = ['encrypted', 'plaintext'] as const;
+export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
+
+/** Reasoning text sent before a locally synthesized function call in plaintext replay. */
+export const SYNTHETIC_REASONING_TEXT = 'The runtime issued the next call to deliver external events; there is no reasoning behind it.';
+
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
   /** Whether past reasoning re-enters the context; the first synthetic turn is exempt. */
   keepThinking?: () => boolean;
+  /** Default `encrypted`. */
+  reasoningReplay?: ReasoningReplay;
 }
 
 /**
- * Replay reasoning only when encrypted_content exists and the recorded instance, module,
- * compatibility domain and model match this request. These are local eligibility checks.
- * Plaintext reasoning is omitted. System and developer text is joined into instructions.
+ * Encrypted replay: a reasoning item re-enters only with `encrypted_content` and when the recorded
+ * instance, module, compatibility domain and model match this request. Plaintext replay: a reasoning
+ * item re-enters as `reasoning_text`; the turn after the last user message is always replayed, earlier
+ * turns follow `keepThinking`; a function call without an origin gets a synthetic reasoning item
+ * unless one already precedes it. System and developer text is joined into instructions.
  */
 export function responsesInput(
   request: Request,
@@ -25,20 +40,34 @@ export function responsesInput(
 ): { input: Item[]; instructions: string | undefined } {
   const input: Item[] = [];
   const systems = request.instructions ? [request.instructions] : [];
-  for (const entry of requestContext(request, options)) {
+  const plaintext = opts.reasoningReplay === 'plaintext';
+  const entries = requestContext(request, options);
+  const roundStart = plaintext ? lastUserMessage(entries) : -1;
+  entries.forEach((entry, index) => {
     const item = entry.item;
     if (item.type === 'reasoning') {
-      if (!item.encrypted_content) continue;
-      if (!entry.context.head && opts.keepThinking?.() === false) continue;
+      if (plaintext) {
+        const text = itemText(item);
+        if (!text && !item.encrypted_content) return;
+        if (!entry.context.head && index < roundStart && opts.keepThinking?.() === false) return;
+        const wire = inputItem(entry) as Item;
+        if (text) wire.content = [{ type: 'reasoning_text', text }];
+        input.push(wire);
+        return;
+      }
+      if (!item.encrypted_content) return;
+      if (!entry.context.head && opts.keepThinking?.() === false) return;
       const owner = entry.context.origin;
       const current = options.origin;
       if (!owner || !current || owner.instance !== current.instance || owner.module !== current.module
-        || owner.compatibilityDomain !== current.compatibilityDomain || owner.model !== request.model) continue;
+        || owner.compatibilityDomain !== current.compatibilityDomain || owner.model !== request.model) return;
     }
     if (item.type === 'message' && (item.role === 'system' || item.role === 'developer')) {
       systems.push(typeof item.content === 'string' ? item.content : item.content.map(part => 'text' in part ? part.text : '').join(''));
-      continue;
+      return;
     }
+    if (plaintext && item.type === 'function_call' && !entry.context.origin && input.at(-1)?.type !== 'reasoning')
+      input.push({ type: 'reasoning', id: `rs_${item.call_id}`, summary: [], content: [{ type: 'reasoning_text', text: SYNTHETIC_REASONING_TEXT }] });
     const wire = inputItem(entry) as Item;
     if (opts.media?.enabled() && entry.context.blobs?.length && (item.type === 'message' || item.type === 'function_call_output')) {
       const field = item.type === 'message' ? 'content' : 'output';
@@ -51,6 +80,15 @@ export function responsesInput(
       wire[field] = parts;
     }
     input.push(wire);
-  }
+  });
   return { input, instructions: systems.length ? systems.join('\n') : undefined };
+}
+
+/** Index of the last user message, -1 when there is none. */
+function lastUserMessage(entries: readonly ContextRecord[]): number {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const item = entries[index].item;
+    if (item.type === 'message' && item.role === 'user') return index;
+  }
+  return -1;
 }
