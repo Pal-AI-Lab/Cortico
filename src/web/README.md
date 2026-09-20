@@ -85,3 +85,5 @@ esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`
 浏览器代码使用 `tsconfig.web.json` 检查：`pnpm typecheck:web`。
 
 模型提供商入口使用连接卡片双栏页。卡片选中与当前连接分别管理，编辑在浏览器中暂存，点击保存后提交整个连接。模型配置默认展开，计价与高级协议默认折叠；模块面板通过连接作用域挂载，setConfig 写入本地表单。配置预览使用隔离的 Provider 实例，模块运行时操作要求已保存配置。
+
+`client/features/providers/drafts.ts` 将草稿按部署 scope 保存在 localStorage，排除 API Key。连接页自行处理切卡的未保存保护，并向路由注册页面离开保护。复制只产生草稿。

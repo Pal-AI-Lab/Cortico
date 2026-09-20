@@ -1,3 +1,4 @@
+import { coerceGroupValues, getByPath, setByPath } from '../../core/config-schema.ts';
 /** Connection configuration transactions serialize writers across deployments and roll back all touched files on failure. */
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -18,6 +19,7 @@ export class ProviderHubError extends Error {
 }
 export interface ConnectionSave {
   name: string;
+  copyFrom?: { name: string; revision: string };
   entry: LLMProviderEntry;
   expectedRevision?: string;
   secretValue?: string;
@@ -75,7 +77,7 @@ export class ProviderHub {
   }
   list(language: Language) {
     this.refresh();
-    return { active: this.config.activeProvider, providers: Object.entries(this.config.providers).map(([name, entry]) => ({
+    return { scope: createHash('sha256').update(resolve(this.file)).digest('hex'), active: this.config.activeProvider, providers: Object.entries(this.config.providers).map(([name, entry]) => ({
       id: name, name, module: entry.kind, moduleTitle: this.modules.find(m => m.id === entry.kind)?.title ?? entry.kind,
       model: entry.spec?.model ?? null, baseUrl: entry.baseUrl, active: name === this.config.activeProvider,
       readiness: this.readiness(name, entry, language), revision: this.revision(name),
@@ -160,7 +162,29 @@ export class ProviderHub {
         throw new ProviderHubError('API Key must be nonempty and contain no whitespace.');
       if (input.secretValue && !requested.secret) requested.secret = 'CORTICO_PROVIDER_API_KEY';
       const entry = validateEntry(module, requested, language);
-      if (entry.secret && !input.secretValue && (!original || this.settings.secretStatus(original, entry) === 'none'))
+      const prefix = `providers.${name}.`;
+      for (const group of this.groups(name, entry, language)) {
+        const values = Object.fromEntries(Object.keys(group.schema.properties).filter(path => path.startsWith(prefix))
+          .map(path => [path, getByPath(entry as unknown as Record<string, unknown>, path.slice(prefix.length))])
+          .filter(([, value]) => value !== undefined));
+        const result = coerceGroupValues(group, values, language);
+        if ('error' in result) throw new ProviderHubError(result.error);
+        for (const [path, value] of Object.entries(result.values)) setByPath(entry as unknown as Record<string, unknown>, path.slice(prefix.length), value);
+      }
+      validateEntry(module, entry, language);
+      let copiedSecret: Buffer | null = null;
+      let credentialSource = original;
+      if (!original && input.copyFrom) {
+        const source = this.config.providers[input.copyFrom.name];
+        if (!source) throw new ProviderHubError('Copy source no longer exists.', 409);
+        this.checkRevision(input.copyFrom.name, input.copyFrom.revision);
+        if (source.secret === entry.secret) {
+          credentialSource = input.copyFrom.name;
+          const file = join(this.path(input.copyFrom.name), '.env');
+          if (existsSync(file)) copiedSecret = readFileSync(file);
+        }
+      }
+      if (entry.secret && !input.secretValue && (!credentialSource || this.settings.secretStatus(credentialSource, entry) === 'none'))
         throw new ProviderHubError('API Key is required.');
       const target = this.path(name);
       const source = original ? this.path(original) : null;
@@ -174,6 +198,7 @@ export class ProviderHub {
         if (!source) mkdirSync(stage);
         const dir = source ?? stage;
         updateJsonObject(join(dir, 'config.json'), raw => { for (const key of Object.keys(raw)) delete raw[key]; Object.assign(raw, entry); });
+        if (copiedSecret) writeFileSync(join(dir, '.env'), copiedSecret);
         if (input.secretValue) {
           const file = join(dir, '.env');
           const lines = (existsSync(file) ? readTextFile(file) : '').split(/\r?\n/).filter(line => line.split('=')[0]?.trim() !== entry.secret);

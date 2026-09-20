@@ -70,3 +70,12 @@ it('missing modules remain visible and cannot be activated', () => {
 it.each(['../escape', 'CON', 'lpt1', 'Name ', 'name.', '中文', 'two words', 'x'.repeat(65)])('rejects unsafe new name %s', name => {
   expect(validateProviderName(name)).not.toBeNull();
 });
+
+it('copies saved credentials only on final creation, without exposing them in detail responses', () => {
+  const { hub, root } = fixture();
+  const source = hub.save(null, { name: 'Source', entry, secretValue: 'test-secret' }, 'en');
+  expect(JSON.stringify(source)).not.toContain('test-secret');
+  expect(existsSync(join(root, 'Copy'))).toBe(false);
+  hub.save(null, { name: 'Copy', entry: source.entry, copyFrom: { name: source.name, revision: source.revision } }, 'en');
+  expect(readFileSync(join(root, 'Copy', '.env'), 'utf8')).toContain('test-secret');
+});

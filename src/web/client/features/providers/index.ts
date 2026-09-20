@@ -1,3 +1,4 @@
+import { providerDrafts } from './drafts.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { get, post } from '../../core/api.ts';
 import { S } from './strings.ts';
@@ -15,10 +16,13 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   layout.append(index, detailRoot); root.append(report, layout);
   const opts = { signal: ctx.signal };
   let state = await get<HubState>('/api/providers', opts);
+  state.providers.sort((a, b) => Number(b.name === state.active) - Number(a.name === state.active));
   const modules = await get<Module[]>('/api/provider-modules', opts);
   if (ctx.signal.aborted) return;
+  const drafts = providerDrafts(root.ownerDocument.defaultView!.localStorage, state.scope);
   let selected = '';
-  let newDraft: Editing | null = null;
+  let newDraft: Editing | null = drafts.get('~draft');
+  const invalid = new Set<string>();
   let controller: DetailController | null = null;
   let renderId = 0;
   const nodes = new Map<string, { el: HTMLElement; title: HTMLElement; model: HTMLElement; url: HTMLElement; status: HTMLElement; secondary: HTMLElement; activate: HTMLButtonElement }>();
@@ -44,14 +48,15 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
         }) });
         actions.append(configure, activate); el.append(title, model, url, status, secondary, actions);
         el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
-        cards.append(el); node = { el, title, model, url, status, secondary, activate }; nodes.set(identity, node);
+        if (identity === '~draft') cards.prepend(el); else cards.append(el); node = { el, title, model, url, status, secondary, activate }; nodes.set(identity, node);
       }
       const active = identity === state.active;
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
       node.title.textContent = identity === '~draft' ? newDraft?.name || S.newName : identity;
       node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
-      node.status.textContent = active ? S.active : S.readiness[item.readiness.state];
-      node.secondary.textContent = active && item.readiness.state !== 'ready' ? S.readiness[item.readiness.state] : '';
+      const readiness = invalid.has(identity) && identity !== '~draft' ? 'invalid' : item.readiness.state;
+      node.status.textContent = active ? S.active : S.readiness[readiness];
+      node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== '~draft' && drafts.has(identity) ? S.readiness.draft : '';
       node.activate.hidden = active || identity === '~draft';
       node.activate.disabled = item.readiness.state !== 'ready';
     }
@@ -69,12 +74,19 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     }
     const saved = identity === '~draft' ? null : await get<Detail>(connectionPath(identity), opts);
     if (gen !== renderId || ctx.signal.aborted) return;
-    const mounted = await mountDetail({ ctx, root: detailRoot, modules, saved, draft: identity === '~draft' ? newDraft : null,
-      changed: editing => { if (identity === '~draft') { newDraft = editing; paint(); } },
-      onSaved: async name => { newDraft = null; await refresh(); await select(name, true); },
-      cancelled: async () => { if (identity === '~draft') newDraft = null; await select(identity === '~draft' ? state.active || state.providers[0]?.name || '' : identity, true); },
-      deleted: async () => { await refresh(); await select(state.active || state.providers[0]?.name || '', true); },
-      duplicate: async editing => { newDraft = editing; await select('~draft', true); },
+    const mounted = await mountDetail({ ctx, root: detailRoot, modules, saved, draft: identity === '~draft' ? newDraft : drafts.get(identity),
+      saveDraft: editing => { drafts.set(editing); paint(); },
+      changed: (editing, hasErrors) => { if (hasErrors) invalid.add(identity); else invalid.delete(identity); if (identity === '~draft') newDraft = editing; paint(); },
+      onSaved: async (name, show = true) => { drafts.remove(identity); invalid.delete(identity); if (identity === '~draft') newDraft = null; await refresh(); if (show) await select(name, true); },
+      cancelled: async () => { drafts.remove(identity); invalid.delete(identity); if (identity === '~draft') newDraft = null; await select(identity === '~draft' ? state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '' : identity, true); },
+      deleted: async () => { drafts.remove(identity); invalid.delete(identity); await refresh(); await select(state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '', true); },
+      duplicate: async editing => {
+        if (newDraft) { await select('~draft'); return; }
+        const used = new Set(state.providers.map(item => item.name.toLowerCase()));
+        const base = editing.name.slice(0, 56); let candidate = base; let number = 2;
+        while (used.has(candidate.toLowerCase())) candidate = `${base}-${number++}`;
+        editing.name = candidate; newDraft = editing; await select('~draft', true);
+      },
     });
     if (gen !== renderId || ctx.signal.aborted) mounted.dispose(); else controller = mounted;
   }
@@ -91,7 +103,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     if (route.segments[0] === 'providers' && route.segments[1]) run(() => select(route.segments[1]));
   }));
   paint();
-  const wanted = ctx.route.segments[1];
-  await select(wanted && state.providers.some(item => item.name === wanted) ? wanted : state.providers.find(item => item.name === state.active)?.name ?? state.providers[0]?.name ?? '', true);
+  const wanted = ctx.route.segments[1] ?? (newDraft ? '~draft' : undefined);
+  await select(wanted && (wanted === '~draft' || state.providers.some(item => item.name === wanted)) ? wanted : state.providers.find(item => item.name === state.active)?.name ?? state.providers[0]?.name ?? '', true);
 }
 export const providersFeature: FrameworkFeature = { route: 'providers', label: S.navLabel, icon: 'cpu', navGroup: S.navGroup, mount: mountProviders };

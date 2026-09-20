@@ -5,6 +5,7 @@ export type Detail = ReturnType<ProviderHubApi['detail']>;
 export type Module = ReturnType<ProviderHubApi['moduleList']>[number];
 export interface Editing {
   original: string | null;
+  copyFrom?: { name: string; revision: string };
   name: string;
   entry: Detail['entry'];
   revision?: string;

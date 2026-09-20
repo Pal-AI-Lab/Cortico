@@ -71,3 +71,25 @@ it('missing active references are displayed without selecting a replacement as a
   expect(root.textContent).toContain('当前模型供应商不存在，配置中引用：Gone');
   expect(root.querySelector('.is-active')).toBeNull();
 });
+
+it('saved drafts restore after remount without changing the server configuration', async () => {
+  const { root, ctx, calls } = await fixture();
+  const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
+  input.value = 'https://draft.test'; input.dispatchEvent(new Event('input'));
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '保存草稿') as HTMLButtonElement).click(); await flush();
+  expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
+  ctx.lifecycle.dispose(); root.remove();
+  const remounted = await fixture();
+  expect((remounted.root.querySelector('[aria-label="API 地址"]') as HTMLInputElement).value).toBe('https://draft.test');
+});
+it('switching away from edits offers stay, discard and save', async () => {
+  const { root } = await fixture();
+  const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
+  input.value = 'https://draft.test'; input.dispatchEvent(new Event('input'));
+  (root.querySelectorAll('.connection-card')[1].querySelector('button') as HTMLButtonElement).click(); await flush();
+  const dialog = document.querySelector('dialog')!;
+  expect(dialog.textContent).toContain('放弃更改并切换');
+  expect(dialog.textContent).toContain('保存');
+  (dialog.querySelector('button') as HTMLButtonElement).click(); await flush();
+  expect(root.querySelectorAll('.connection-card')[0].classList.contains('is-selected')).toBe(true);
+});

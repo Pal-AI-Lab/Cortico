@@ -9,7 +9,7 @@ import { S } from './strings.ts';
 export interface DetailController { dispose(): void; dirty(): boolean; leave(): Promise<boolean>; }
 interface Options {
   ctx: FeatureContext; root: HTMLElement; modules: Module[]; saved: Detail | null; draft: Editing | null;
-  changed(editing: Editing): void; onSaved(name: string): Promise<void>; cancelled(): Promise<void>;
+  changed(editing: Editing, invalid: boolean): void; saveDraft(editing: Editing): void; onSaved(name: string, select?: boolean): Promise<void>; cancelled(): Promise<void>;
   deleted(): Promise<void>; duplicate(editing: Editing): Promise<void>;
 }
 export async function mountDetail(options: Options): Promise<DetailController> {
@@ -27,12 +27,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   let rendering = 0;
   let panelHandle: { dispose(): void } | null = null;
   let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
-  const change = () => options.changed(editing);
+  const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'));
   const run = (work: () => Promise<unknown>) => { void work().catch(error => { if (!lifecycle.disposed) report.textContent = String(error); }); };
   function field(body: HTMLElement, key: string, label: string, value: string, set: (value: string) => void, validate?: (value: string) => string | null, type = 'text') {
     const input = ui.input({ value, type: type as 'text' }); input.setAttribute('aria-label', label);
     const note = ui.h('div', 'field-error');
-    const row = ui.h('div', 'connection-field'); row.append(ui.field(label + (validate ? ' *' : ''), input), note); body.append(row);
+    const row = ui.h('div', 'connection-field'); row.append(ui.field(label + (['name', 'baseUrl', 'model'].includes(key) ? ' *' : ''), input), note); body.append(row);
     const check = () => { const error = validate?.(input.value); note.textContent = error ?? ''; input.setAttribute('aria-invalid', String(!!error)); return !error; };
     errors.set(key, check);
     input.addEventListener('input', () => { set(input.value); check(); change(); }, opts);
@@ -50,6 +50,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       } catch { error.textContent = array ? S.jsonArray : S.jsonObject; input.setAttribute('aria-invalid', 'true'); return false; }
     };
     errors.set(key, check);
+    if (editing.raw[key] !== undefined) check();
     input.addEventListener('input', () => { editing.raw[key] = input.value; check(); change(); }, opts);
   }
   function section(title: string, id?: string, open = false) {
@@ -138,15 +139,20 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); baseline = JSON.stringify(editing); await options.deleted();
       }) }), ui.button(S.duplicate, { onClick: () => run(async () => {
         if (!(await leave())) return;
-        await options.duplicate({ original: null, name: saved.name + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} });
+        await options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} });
       }) }));
     }
-    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) }), ui.button(S.save, { variant: 'primary', onClick: () => run(save) }));
+    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) }), ui.button(S.draft, { onClick: () => { try { options.saveDraft(editing); baseline = JSON.stringify(editing); report.textContent = S.drafted; } catch (error) { report.textContent = String(error); } } }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
     form.append(actions);
     if (!selectedModule) { moduleBody.append(ui.msgline(S.readiness['module-missing'])); return; }
     const identity = saved?.name ?? 'draft';
     const groups = await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts);
     if (gen !== rendering || lifecycle.disposed) return;
+    if (ctx.consolePageHost) {
+      panelHost ??= ctx.consolePageHost({ root: moduleBody, route: () => ['providers', saved?.name ?? ''] });
+      await panelHost.load();
+    }
+    const hasPanels = panelHost?.find(`llm:${editing.entry.kind}`)?.panels?.some(panel => panel.id !== 'settings');
     for (const group of groups.filter(group => !group.id.endsWith('.connection'))) {
       for (const [path, property] of Object.entries(group.schema.properties ?? {})) {
         const suffix = path.slice(`providers.${identity}.`.length);
@@ -159,6 +165,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           target[parts.at(-1)!] = value;
         };
         const body = suffix.includes('endpointPath') || suffix.includes('extraHeaders') || suffix.includes('extraBody') ? advanced : moduleBody;
+        if (body === moduleBody && hasPanels) continue;
         const control = configField(ui, property, getValue(), () => { if (control.read) { setValue(control.read()); change(); } }, lifecycle.signal);
         control.node.setAttribute('aria-label', property.title ?? suffix);
         body.append(ui.field(property.title ?? suffix, control.node));
@@ -200,14 +207,27 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       jsonField(advanced, suffix, property.title ?? suffix, value, false, value => { editing.entry.options ??= {}; if (value === undefined) delete editing.entry.options[suffix]; else editing.entry.options[suffix] = value; });
     }
   }
-  async function save(): Promise<boolean> {
+  async function save(select = true): Promise<boolean> {
     if (![...errors.values()].map(check => check()).every(Boolean)) { report.textContent = S.readiness.invalid; return false; }
     try {
-      const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
-      baseline = JSON.stringify(editing); await options.onSaved(result.name); return true;
+      const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
+      baseline = JSON.stringify(editing); await options.onSaved(result.name, select); return true;
     } catch (error) { report.textContent = String(error); return false; }
   }
-  async function leave(): Promise<boolean> { return !dirty() || await ui.confirm({ title: S.unsaved, body: S.discard }); }
+  async function leave(): Promise<boolean> {
+    if (!dirty()) return true;
+    return new Promise(resolve => {
+      const dialog = ui.h('dialog', 'connection-guard');
+      const buttons = ui.rowbar();
+      const finish = (answer: boolean) => { dialog.remove(); resolve(answer); };
+      dialog.append(ui.h('h3', '', S.unsaved), buttons);
+      buttons.append(ui.button(S.stay, { onClick: () => finish(false) }), ui.button(S.discard, { onClick: () => finish(true) }), ui.button(S.save, { variant: 'primary', onClick: () => { void save(false).then(ok => finish(ok)); } }));
+      dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); }, opts);
+      lifecycle.signal.addEventListener('abort', () => finish(false), { once: true });
+      root.ownerDocument.body.append(dialog);
+      if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
+    });
+  }
   await render();
   return { dispose: () => { lifecycle.dispose(); panelHandle?.dispose(); panelHost?.unmount(); }, dirty, leave };
 }
