@@ -1,16 +1,17 @@
 /**
  * 在临时部署中检查扩展构造与声明接口，不调用 start()。
- * World 使用默认配置、无密钥，检查 create、tools、envPromptVars、console 与工具名冲突；
+ * World 使用默认配置、无密钥，检查 create、tools、envPromptVars、console、工具名冲突与配置路径；
  * provider 使用测试端点 create，bot 使用测试部署 build。
  * World 构造失败为错误；provider 仅在绑定端点时构造，测试条目不完整导致的失败记为警告。
  * 临时文件位于 scratchDir，调用方负责创建与清理。
  */
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CoreConfig, World } from '../core/types.ts';
+import type { ConfigGroup, CoreConfig, World } from '../core/types.ts';
 import { MODULE_LAMP_MAX } from '../core/types.ts';
 import type { LoadedConfig } from '../core/config.ts';
 import { CORE_DEFAULTS } from '../core/config.ts';
+import { getByPath } from '../core/config-schema.ts';
 import { RESERVED_FRAME_NAMES } from '../core/loop.ts';
 import { nullLogger } from '../core/util.ts';
 import type { Language } from '../core/language.ts';
@@ -37,6 +38,24 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/**
+ * 声明过的每个配置路径都要在 `defaults()` 里有对应项,且落在 prefix 指的段内。
+ * 缺默认值时控制台照样渲染旋钮、也照样写回 config.json,而读到的是代码里另一处的兜底值。
+ */
+function configPathProblems(group: ConfigGroup, defaults: Record<string, unknown>, prefix: string): string[] {
+  const problems: string[] = [];
+  for (const path of Object.keys(group.schema.properties ?? {})) {
+    if (!path.startsWith(prefix)) {
+      problems.push(`配置组「${group.id}」声明的「${path}」不在 ${prefix} 段里:写回按路径走,值会落到别人的段上。`);
+      continue;
+    }
+    if (getByPath(defaults, path.slice(prefix.length)) === undefined) {
+      problems.push(`配置组「${group.id}」声明的「${path}」在 defaults() 里没有对应项:旋钮能改、能写回 config.json,读到的仍是代码里的兜底值。`);
+    }
+  }
+  return problems;
+}
 
 /** 面板 id 的形状:控制台一页内的局部 id。 */
 const PANEL_ID = /^[a-z0-9-]+$/;
@@ -190,6 +209,7 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
       }
       for (const group of decl.config ?? []) {
         if (group.owner !== `world:${def.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,World 的配置组 owner 应为 world:${def.id}。`);
+        failures.push(...configPathProblems(group, defaults, `worlds.${def.id}.`));
       }
       const keys = new Set<string>();
       for (const doc of decl.promptDocs ?? []) {
@@ -385,6 +405,7 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
 
   for (const group of parts.console?.configGroups ?? []) {
     if (group.owner !== 'persona') warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,Persona 的配置组 owner 应为 persona。`);
+    failures.push(...configPathProblems(group, config, ''));
   }
   return report;
 }
