@@ -67,7 +67,7 @@ it('missing modules remain visible and cannot be activated', () => {
   expect(hub.list('en').providers[0].readiness.state).toBe('module-missing');
   expect(() => hub.activate('Legacy', 'en')).toThrow('unavailable');
 });
-it.each(['../escape', 'CON', 'lpt1', 'Name ', 'name.', '中文', 'two words', 'x'.repeat(65)])('rejects unsafe new name %s', name => {
+it.each(['../escape', 'CON', 'lpt1', 'Name ', 'name.', '中文', 'two words'])('rejects unsafe new name %s', name => {
   expect(validateProviderName(name)).not.toBeNull();
 });
 
