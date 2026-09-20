@@ -89,6 +89,7 @@ export default {
         apiKey,
         log: host.log,
         media: { enabled: () => entry.multimodal === true, read: host.readBlob },
+        keepThinking: host.keepThinking,
       }),
     };
   },
