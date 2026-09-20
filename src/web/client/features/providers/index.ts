@@ -7,7 +7,7 @@ import { LANGUAGE } from '../../core/language.ts';
 import { panel } from '../../console-pages/builtins/llm-settings/strings.ts';
 import { probeCard, type ProbeResult } from '../../console-pages/builtins/llm-settings/panel.ts';
 import { S } from './strings.ts';
-import { connectionPath, moduleEntry, type HubState, type Connection, type Module, type Detail, type Editing } from './types.ts';
+import { connectionPath, type HubState, type Connection, type Module, type Detail, type Editing } from './types.ts';
 import { mountDetail, type DetailController } from './detail.ts';
 
 export async function mountProviders(ctx: FeatureContext): Promise<void> {
@@ -139,9 +139,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     controller?.dispose(); controller = null;
     selected = identity; paint(); detailRoot.replaceChildren();
     if (!identity) {
-      const start = ui.button(S.create, { onClick: () => setMenu(true) });
-      start.classList.add('connection-create-trigger');
-      detailRoot.append(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), start);
+      detailRoot.append(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), ui.button(S.create, { onClick: () => run(create) }));
       return;
     }
     const saved = identity === NEW_DRAFT_ID ? null : await get<Detail>(connectionPath(identity), opts);
@@ -164,36 +162,17 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     });
     if (gen !== renderId || ctx.signal.aborted) mounted.dispose(); else controller = mounted;
   }
-  async function create(kind: string) {
+  async function create() {
     if (newDraft) return select(NEW_DRAFT_ID);
     if (controller && !(await controller.leave())) return;
-    newDraft = { original: null, name: '', entry: moduleEntry(modules.find(module => module.id === kind), kind), secretValue: '', raw: {} };
+    newDraft = { original: null, name: '', entry: { kind: '', baseUrl: '' }, secretValue: '', raw: {} };
     await select(NEW_DRAFT_ID, true);
   }
   const moduleName = (kind: string) => modules.find(module => module.id === kind)?.title ?? kind;
-  const createButton = ui.button(S.create, { variant: 'primary', onClick: () => setMenu(!menu.classList.contains('is-open')) });
-  createButton.setAttribute('aria-haspopup', 'menu');
-  const menu = ui.h('div', 'connection-create-menu'); menu.setAttribute('role', 'menu');
-  const setMenu = (open: boolean) => {
-    menu.classList.toggle('is-open', open);
-    createButton.setAttribute('aria-expanded', String(open));
-    if (open) disarm();
-  };
-  setMenu(false);
-  menu.append(ui.h('div', 'connection-create-title', S.pickModule));
-  for (const module of modules) {
-    const item = ui.h('button', 'connection-create-item') as HTMLButtonElement;
-    item.type = 'button'; item.setAttribute('role', 'menuitem');
-    item.append(ui.h('span', 'connection-create-name', module.title), ui.h('span', 'connection-create-desc', module.description));
-    item.addEventListener('click', () => { setMenu(false); run(() => create(module.id)); }, opts);
-    menu.append(item);
-  }
-  doc.addEventListener('click', event => {
-    if (!(event.target as Element).closest('.connection-erase')) disarm();
-    if (!(event.target as Element).closest('.connection-create, .connection-create-trigger')) setMenu(false);
-  }, opts);
-  doc.addEventListener('keydown', event => { if (event.key === 'Escape') { disarm(); setMenu(false); } }, opts);
-  const creator = ui.h('div', 'connection-create'); creator.append(createButton, ui.h('p', 'connection-create-hint', S.createHint), menu);
+  doc.addEventListener('click', event => { if (!(event.target as Element).closest('.connection-erase')) disarm(); }, opts);
+  doc.addEventListener('keydown', event => { if (event.key === 'Escape') disarm(); }, opts);
+  const creator = ui.h('div', 'connection-create');
+  creator.append(ui.button(S.create, { variant: 'primary', onClick: () => run(create) }), ui.h('p', 'connection-create-hint', S.createHint));
   index.append(creator, cards);
   ctx.lifecycle.own({ dispose: () => { renderId++; controller?.dispose(); } });
   ctx.lifecycle.own(ctx.router.addLeaveDecision(async () => controller ? controller.leave() : true));

@@ -1802,18 +1802,10 @@
 .coreview > .scroll { scrollbar-gutter: auto; }
 .panelslot > :first-child > .sheet:first-child { padding-top: 0; }
 
-/* 新建按钮下弹的类型选单;卡片上的删除与探活。 */
-.connection-create { position:relative; margin-bottom:16px; }
+/* 卡片上的删除与探活。 */
+.connection-create { margin-bottom:16px; }
 .connection-create-hint { margin:7px 2px 0; font:var(--text-detail)/1.5 var(--sans); color:var(--muted-foreground); }
 .connection-create > .btn { width:100%; }
-.connection-create-menu { position:absolute; z-index:30; left:0; right:0; top:calc(100% + 6px); display:grid; gap:2px; padding:6px; border:1px solid var(--border-strong); border-radius:12px; background:color-mix(in srgb,var(--ink) 8%,var(--paper)); box-shadow:0 14px 34px #00000038; transform-origin:top center; transition:opacity .16s ease, transform .16s ease, visibility .16s; }
-.connection-create-menu:not(.is-open) { opacity:0; visibility:hidden; transform:translateY(-6px) scaleY(.96); pointer-events:none; }
-.connection-create-menu.is-open { opacity:1; visibility:visible; transform:none; }
-.connection-create-title { padding:6px 8px 8px; font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted-foreground); }
-.connection-create-item { display:grid; gap:3px; width:100%; padding:9px 10px; border:0; border-radius:9px; background:none; color:inherit; text-align:left; cursor:pointer; transition:background .14s ease; }
-.connection-create-item:hover, .connection-create-item:focus-visible { background:var(--hover); }
-.connection-create-name { font:600 13px/1.3 var(--sans); }
-.connection-create-desc { font:var(--text-detail)/1.5 var(--sans); color:var(--muted-foreground); }
 .connection-card { position:relative; }
 .connection-erase { position:absolute; top:10px; right:10px; display:flex; align-items:center; gap:0; height:26px; padding:0 6px; border:1px solid transparent; border-radius:8px; background:none; color:var(--ink-dim); cursor:pointer; transition:color .14s ease, background .14s ease, border-color .14s ease, gap .18s ease; }
 .connection-erase .icon { width:14px; height:14px; flex:none; }
