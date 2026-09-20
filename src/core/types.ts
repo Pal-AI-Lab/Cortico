@@ -834,8 +834,11 @@ export interface World {
    * 语言不缓存，不影响发给模型的文本；未实现时仅显示通用信息。
    */
   console?(language?: Language): WorldConsoleDecl;
-  /** 主 session 的输出流接收器；装配层合并已挂载 World 的接收器，随挂载变化更新。 */
-  outputTap?(): OutputTap;
+  /**
+   * 主 session 的输出流接收器；装配层合并已挂载 World 的接收器，随挂载变化更新。
+   * 这一刻没有接收器（未连接、模式关着）时返回 undefined，合并侧跳过。
+   */
+  outputTap?(): OutputTap | undefined;
   /** 挂载时接收宿主并开始连接平台、推送事件。 */
   start(host: WorldHost): Promise<void>;
   stop(): Promise<void>;
