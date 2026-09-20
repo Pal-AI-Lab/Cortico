@@ -195,18 +195,64 @@ export interface ExtensionInfo {
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
 }
 
+/**
+ * 搜索结果里的一条。字段全部来自 registry 的搜索端点，够列表排序与筛选;
+ * 契约版本、体积、版本史这些要另取包文档，见 `ExtensionPackageDetail`。
+ */
 export interface ExtensionSearchHit {
   name: string;
   version: string;
   description: string;
+  /** 这个版本的发布时间 */
   date?: string;
   publisher?: string;
+  license?: string;
+  keywords?: string[];
   /** 月下载量 */
   downloads: number;
+  /** npm 上依赖这个包的包数 */
+  dependents: number;
   links: { npm?: string; repository?: string; homepage?: string };
   installed: boolean;
   /** 按哪一类关键字搜到的(`cortico-world` → world,`cortico-provider` → provider,`cortico-bot` → bot) */
   kind?: 'world' | 'provider' | 'bot';
+}
+
+/** 一个 npm 包的详情。操作员点开某条搜索结果时才取。 */
+export interface ExtensionPackageDetail {
+  name: string;
+  /** dist-tag `latest` 指的版本 */
+  version: string;
+  description?: string;
+  license?: string;
+  keywords?: string[];
+  /** latest 版本的发布时间 */
+  published?: string;
+  /** 这个包第一次发布的时间 */
+  created?: string;
+  versionCount: number;
+  /** 最近几个版本,新的在前 */
+  history: Array<{ version: string; date: string }>;
+  /** npm 上标了 deprecated 时是那句话 */
+  deprecated?: string;
+  /** package.json 的 cortico 块解析通过时给出 */
+  manifest?: { kind: 'world' | 'provider' | 'bot'; api: number; consoleClient?: string; consoleStyle?: string };
+  /** 解析不通过的理由,与本机装载时用的是同一套判据 */
+  problems?: string[];
+  warnings: string[];
+  /** 本进程的扩展契约版本 */
+  frameworkApi: number;
+  /** `engines.node` */
+  engines?: string;
+  unpackedSize?: number;
+  fileCount?: number;
+  dependencies: string[];
+  maintainers: string[];
+  publisher?: string;
+  links: { npm: string; repository?: string; homepage?: string; bugs?: string };
+  installed: boolean;
+  /** 已安装时 extensions/package.json 里写的那个版本范围 */
+  installedSpec?: string;
 }
 
 /** 装 npm 上的包(可带版本或 dist-tag),或本机一个含 package.json 的目录。 */
@@ -215,8 +261,10 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
   list(): { dir: string; extensions: ExtensionInfo[] };
-  /** 不给 kind = world(`cortico-world`)。 */
-  search(query: string, kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
+  /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
+  search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
+  /** 单个包的详情(另取一次包文档)。 */
+  packageInfo(name: string): Promise<ExtensionPackageDetail>;
   /**
    * 已加载扩展的浏览器端产物。服务端据此把页 id 映到 `/assets/extensions/<包>/<版本>/<文件>`
    * 并只发这几个文件;缺席 = 没有扩展带面板。
@@ -1653,9 +1701,23 @@ export class WebApp {
         return;
       }
       try {
-        res.json({ hits: await src.search(strParam(req.query.q) ?? '', kind) });
+        res.json({ hits: await src.search(kind) });
       } catch (err) {
         res.status(502).json({ error: `npm 搜索失败: ${String(err)}` });
+      }
+    }));
+
+    app.get('/api/extensions/package', wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      const name = strParam(req.query.name)?.trim();
+      if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
+      try {
+        res.json(await src.packageInfo(name));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // 包名不合法是请求的问题,其余当成 registry 那一头的问题
+        res.status(msg.includes('包名') ? 400 : 502).json({ error: msg });
       }
     }));
 

@@ -14,8 +14,14 @@ import type { CoreConfig, Logger } from './core/types.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
-import type { ExtensionInfo, ExtensionInstallTarget, ExtensionSearchHit } from './web/server.ts';
+import type {
+  ExtensionInfo,
+  ExtensionInstallTarget,
+  ExtensionPackageDetail,
+  ExtensionSearchHit,
+} from './web/server.ts';
 import {
+  EXTENSION_API_VERSION,
   EXTENSION_KEYWORDS,
   parseExtensionManifest,
   type ExtensionConsoleAsset,
@@ -368,11 +374,59 @@ interface RegistrySearchResponse {
       description?: string;
       keywords?: string[];
       date?: string;
+      license?: string;
       links?: { npm?: string; homepage?: string; repository?: string };
       publisher?: { username?: string };
     };
+    /** 被依赖的包数。热门包回字符串,新包回数字。 */
+    dependents?: number | string;
     downloads?: { monthly?: number };
   }>;
+  total?: number;
+}
+
+/** registry 的包文档(`GET /<name>`)。只列我们要读的字段。 */
+interface RegistryPackument {
+  'dist-tags'?: Record<string, string>;
+  versions?: Record<string, ExtensionPackageJson & {
+    license?: string;
+    deprecated?: string;
+    engines?: Record<string, string>;
+    maintainers?: Array<{ username?: string; name?: string }>;
+    _npmUser?: { name?: string };
+    dist?: { unpackedSize?: number; fileCount?: number };
+    homepage?: string;
+    bugs?: { url?: string } | string;
+    repository?: { url?: string } | string;
+  }>;
+  /** `created`、`modified` 和每个版本号各一条发布时间 */
+  time?: Record<string, string>;
+}
+
+/** 一页取满 250:registry 的上限(传更大也只回 250)。 */
+const SEARCH_PAGE_SIZE = 250;
+/**
+ * 最多翻四页。`keywords:` 过滤后的全集现在是个位数;真涨到一千条,说明关键字被滥用,
+ * 再往后翻的也不是操作员要找的包。
+ */
+const SEARCH_MAX_HITS = 1000;
+
+/**
+ * registry 给的仓库地址是 npm 规范化过的 `git+https://….git`:浏览器不认这个 scheme。
+ * 收成可点的 https；认不出形状就原样返回，让操作员自己看。
+ */
+export function repositoryWebUrl(raw: string): string {
+  let url = raw.trim().replace(/^git\+/, '').replace(/^git:\/\//, 'https://');
+  const ssh = /^(?:ssh:\/\/)?git@([^:/]+)[:/](.+)$/.exec(url);
+  if (ssh) url = `https://${ssh[1]}/${ssh[2]}`;
+  url = url.replace(/\.git$/, '');
+  return /^https?:\/\//.test(url) ? url : raw;
+}
+
+/** `{ url }` 或裸串两种写法都收。 */
+function urlOf(v: { url?: string } | string | undefined): string | undefined {
+  const raw = typeof v === 'string' ? v : v?.url;
+  return raw && raw.trim() ? raw.trim() : undefined;
 }
 
 export interface ExtensionManagerOptions {
@@ -441,33 +495,102 @@ export class ExtensionManager {
     return { dir: this.dir, extensions: out };
   }
 
-  async search(query: string, kind: ExtensionKind = 'world'): Promise<ExtensionSearchHit[]> {
+  /**
+   * 列出 npm 上带这一类关键字的全部包。**不接文本查询**:registry 的 `text=` 在
+   * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
+   * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
+   */
+  async search(kind: ExtensionKind = 'world'): Promise<ExtensionSearchHit[]> {
     const keyword = EXTENSION_KEYWORDS[kind];
-    const text = `keywords:${keyword} ${query.trim()}`.trim();
-    const url = `${this.registry}/-/v1/search?text=${encodeURIComponent(text)}&size=50`;
-    const data = (await this.fetchJson(url)) as RegistrySearchResponse;
     const installed = new Set(readInstalled(this.dir).map((p) => p.name));
     const hits: ExtensionSearchHit[] = [];
-    for (const obj of data.objects ?? []) {
-      const p = obj.package;
-      if (!p?.name || !p.version || !(p.keywords ?? []).includes(keyword)) continue;
-      hits.push({
-        name: p.name,
-        version: p.version,
-        description: p.description ?? '',
-        kind,
-        ...(p.date ? { date: p.date } : {}),
-        ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
-        downloads: obj.downloads?.monthly ?? 0,
-        links: {
-          ...(p.links?.npm ? { npm: p.links.npm } : {}),
-          ...(p.links?.repository ? { repository: p.links.repository } : {}),
-          ...(p.links?.homepage ? { homepage: p.links.homepage } : {}),
-        },
-        installed: installed.has(p.name),
-      });
+    const seen = new Set<string>();
+    for (let from = 0; from < SEARCH_MAX_HITS; from += SEARCH_PAGE_SIZE) {
+      const text = encodeURIComponent(`keywords:${keyword}`);
+      const url = `${this.registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
+      const data = (await this.fetchJson(url)) as RegistrySearchResponse;
+      const objects = data.objects ?? [];
+      for (const obj of objects) {
+        const p = obj.package;
+        if (!p?.name || !p.version || !(p.keywords ?? []).includes(keyword)) continue;
+        if (seen.has(p.name)) continue;
+        seen.add(p.name);
+        const repository = p.links?.repository;
+        hits.push({
+          name: p.name,
+          version: p.version,
+          description: p.description ?? '',
+          kind,
+          ...(p.date ? { date: p.date } : {}),
+          ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
+          ...(p.license ? { license: p.license } : {}),
+          ...(p.keywords?.length ? { keywords: p.keywords } : {}),
+          downloads: obj.downloads?.monthly ?? 0,
+          dependents: Number(obj.dependents) || 0,
+          links: {
+            ...(p.links?.npm ? { npm: p.links.npm } : {}),
+            ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
+            ...(p.links?.homepage ? { homepage: p.links.homepage } : {}),
+          },
+          installed: installed.has(p.name),
+        });
+      }
+      if (objects.length < SEARCH_PAGE_SIZE) break;
     }
     return hits;
+  }
+
+  /**
+   * 一个包的详情。控制台在操作员点开某张卡片时才调，因此这里取整份包文档
+   * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
+   * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
+   */
+  async packageInfo(name: string): Promise<ExtensionPackageDetail> {
+    if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
+    const doc = (await this.fetchJson(`${this.registry}/${name.replace('/', '%2F')}`)) as RegistryPackument;
+    const latest = doc['dist-tags']?.latest;
+    const v = latest ? doc.versions?.[latest] : undefined;
+    if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 latest 版本`);
+
+    const parsed = parseExtensionManifest(v);
+    const times = Object.entries(doc.time ?? {}).filter(([k]) => k !== 'created' && k !== 'modified');
+    const history = times
+      .sort((a, b) => (a[1] < b[1] ? 1 : -1))
+      .slice(0, 6)
+      .map(([version, date]) => ({ version, date }));
+    const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
+    const repository = urlOf(v.repository);
+    const bugs = urlOf(v.bugs);
+
+    return {
+      name,
+      version: latest,
+      ...(v.description ? { description: v.description } : {}),
+      ...(v.license ? { license: v.license } : {}),
+      ...(v.keywords?.length ? { keywords: v.keywords } : {}),
+      ...(doc.time?.[latest] ? { published: doc.time[latest] } : {}),
+      ...(doc.time?.created ? { created: doc.time.created } : {}),
+      versionCount: times.length,
+      history,
+      ...(v.deprecated ? { deprecated: v.deprecated } : {}),
+      ...(parsed.ok ? { manifest: parsed.manifest } : { problems: parsed.reasons }),
+      warnings: parsed.warnings,
+      frameworkApi: EXTENSION_API_VERSION,
+      ...(v.engines?.node ? { engines: v.engines.node } : {}),
+      ...(v.dist?.unpackedSize ? { unpackedSize: v.dist.unpackedSize } : {}),
+      ...(v.dist?.fileCount ? { fileCount: v.dist.fileCount } : {}),
+      dependencies: Object.keys(v.dependencies ?? {}),
+      maintainers: (v.maintainers ?? []).map((m) => m.username ?? m.name ?? '').filter(Boolean),
+      ...(v._npmUser?.name ? { publisher: v._npmUser.name } : {}),
+      links: {
+        npm: `https://www.npmjs.com/package/${name}`,
+        ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
+        ...(v.homepage ? { homepage: v.homepage } : {}),
+        ...(bugs ? { bugs } : {}),
+      },
+      installed: spec !== undefined,
+      ...(spec !== undefined ? { installedSpec: spec } : {}),
+    };
   }
 
   async install(target: ExtensionInstallTarget): Promise<string> {

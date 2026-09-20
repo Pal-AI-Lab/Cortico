@@ -9,7 +9,9 @@ provider 仅包含参考 bot 所需的实现;其他平台或模型通信协议�
 
 安装会向 `extensions/package.json` 添加依赖,重启进程后加载。支持以下方式:
 
-- 控制台「扩展」页:搜索 npm 上带 `cortico-world` / `cortico-provider` / `cortico-bot` 关键字的包,点安装;
+- 控制台「扩展」页:一进页就列出 npm 上带 `cortico-world` / `cortico-provider` / `cortico-bot`
+  关键字的包,可按名字、描述、关键字筛选,按下载量 / 发布时间 / 名字 / 被依赖数排序,一页 12 张。
+  点开一张卡才取那个包的详情(契约版本、是否自带控制台面板、体积、依赖、版本史),安装键在详情里。
   或在「手动安装」里填 `name@version`。
 - 控制台「手动安装」填本机目录的绝对路径:以 link 方式装入,改源码后重启生效。
 - 命令行,在仓库根下:
