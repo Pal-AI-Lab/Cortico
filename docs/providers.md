@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
 
 # Provider
 
@@ -21,8 +21,7 @@ Provider 适配模型服务的通信协议。仓库内建 `openai-responses-comp
 
 主 session 每次模型调用读取当前 `activeProvider`;fork 在创建时固定端点与模型配置。
 provider 模块不预设任何模型名;端点
-没有 `spec` 就不能被设为 active。代码里只有一条默认端点 `deepseek`(`deepseek-flash`),
-部署根 `providers/` 里有同名目录时以那份为准。
+没有 `spec` 就不能被设为 active。新环境端点表为空；已有端点目录与原 activeProvider 引用继续读取。
 
 ## 端点目录
 
@@ -32,16 +31,15 @@ provider 模块不预设任何模型名;端点
 
 ## 控制台
 
-每个 provider 模块一页,页 id `llm:<kind>`。页顶选端点,以下都属于选中的那一条:新建、复制、
-删除端点(当前端点不能删),连接与协议扩展,模块自己的段落(llamacpp 的运行时与模型),模型与
-采样参数,价目,探活(发一条 ping,回状态码、耗时、是否带加密推理、这一次的费用)。
+模型供应商页列出共享端点,一次编辑其中一条。选中一条不改变 `activeProvider`,「设为当前」只写
+当前部署的那一项。字段改动暂存在浏览器,保存时整条端点一次写入配置与密钥;暂存不进共享配置,
+API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥已被别处改过就返回 409,重新加载后
+再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;还被引用的端点不能删。
+`kind` 保存后不可更改。
 
-地址、密钥变量名、图像开关与 Responses 请求路径由 ConfigGroup 声明,
-修改可经 `setConfig` 校验并保存。
-每格改完即写入端点条目,校验不过就不落盘、错误显示在面板状态行。每次写入都重建该端点的客户端并
-重读它的 `.env`,外部填的密钥随下一次请求生效,不必重启进程。地址或密钥变量名改过之后自动
-取一次模型列表:取到就把模型格换成选单并带出上下文窗口,取不到就留在自由输入,原因写在格子
-下面。新建端点的 `pricing` 为空,不覆盖模块价目。
+模块自己的配置与面板照旧由 ConfigGroup 和 `instance` 插槽声明,面板的 `setConfig` 同样只进
+暂存;运行时启停、安装与模型列表要求端点已保存。「测试连接」按磁盘上的配置发一次请求,不参与
+可用性判断。
 
 控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 从磁盘直接加载的名字按字面匹配;密钥值写入端点 `.env` 的同名项。
@@ -52,8 +50,8 @@ provider 模块不预设任何模型名;端点
 也满足。判断只看本地状态,不连上游——探活是操作员按出来的另一件事。模块的那部分由
 `ProviderModule.availability` 回答,不实现就只有通用条件(`llamacpp` 用它回答托管运行时装没装)。
 
-模块页上的「可用端点」灯标这个模块的端点里有没有一个可用;左栏「模型提供商」那一行的灯标
-所有模块合起来有没有一个。一个都没有时,终端页的输入框灰字会写明去哪儿设置。
+终端页从状态帧读取当前端点的名称、模型、模块与地址,点开就是那条端点;一条都不可用时,输入框
+的灰字写明去哪儿设置。
 
 ## 内建 openai-responses-compat
 

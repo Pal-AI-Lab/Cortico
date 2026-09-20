@@ -1,3 +1,4 @@
+import type { ProviderHubApi as ProviderHub } from '../providers/hub-api.ts';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import type { EnvPromptOrigin } from '../core/prefix.ts';
 /**
@@ -483,6 +484,7 @@ export interface ConsoleSurface {
   /**
    * 有没有一个可用的端点。缺省不挂:「模型提供商」那一行不点灯。
    */
+  providers?: ProviderHub;
   providersLamp?: (language: Language) => ConsoleLamp;
   /**
    * 浏览器端构建产物目录(含 asset-manifest.json)。缺省取仓库的 `dist/web`。
@@ -1338,6 +1340,25 @@ export class WebApp {
       res.setHeader(CONSOLE_AUTH_HEADER, 'required');
       res.status(401).json({ error: '需要登录' });
     });
+
+    const providerRoute = (handler: (hub: ProviderHub, req: Request) => unknown) => wrap(async (req, res) => {
+      if (!this.deps.providers) { res.status(503).json({ error: 'Provider configuration unavailable.' }); return; }
+      try { res.json((await handler(this.deps.providers, req)) ?? { ok: true });
+        if (req.method === 'POST' && /^\/api\/providers(?:$|\/[^/]+\/(save|delete|activate)$)/.test(req.path)) this.debugBroadcast({ t: 'status', status: this.safeStatus() });
+      }
+      catch (error) { res.status(error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 400).json({ error: error instanceof Error ? error.message : String(error) }); }
+    });
+    app.get('/api/providers', providerRoute((hub, req) => hub.list(this.languageOf(req))));
+    app.get('/api/provider-modules', providerRoute((hub, req) => hub.moduleList(this.languageOf(req))));
+    app.post('/api/provider-modules/config', express.json(), providerRoute((hub, req) => hub.groups(req.body.name || 'draft', req.body.entry, this.languageOf(req))));
+    app.post('/api/provider-modules/preview', express.json(), providerRoute((hub, req) => hub.preview(req.body.name, req.body.entry, req.body.panel, req.body.method, req.body.args ?? [], this.languageOf(req))));
+    app.get('/api/providers/:name', providerRoute((hub, req) => hub.detail(String(req.params.name), this.languageOf(req))));
+    app.post('/api/providers', express.json(), providerRoute((hub, req) => hub.save(null, req.body, this.languageOf(req))));
+    app.post('/api/providers/:name/save', express.json(), providerRoute((hub, req) => hub.save(String(req.params.name), req.body, this.languageOf(req))));
+    app.post('/api/providers/:name/delete', express.json(), providerRoute((hub, req) => hub.delete(String(req.params.name), req.body.expectedRevision)));
+    app.post('/api/providers/:name/activate', providerRoute((hub, req) => hub.activate(String(req.params.name), this.languageOf(req))));
+    app.post('/api/providers/:name/test', providerRoute((hub, req) => hub.action(String(req.params.name), 'test', this.languageOf(req))));
+    app.post('/api/providers/:name/models', providerRoute((hub, req) => hub.action(String(req.params.name), 'models', this.languageOf(req))));
 
     app.get('/api/status', wrap((_req, res) => {
       res.json({ ...this.safeStatus(), uptimeSec: Math.round(process.uptime()) });

@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
 
 # src/providers
 
@@ -22,14 +22,14 @@
 ## ProviderModule
 
 `id` 必须等于目录名(扩展包里则是包声明的 id)。必填:`title`、`reasoningTiers`(空表 = 开放,
-effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`defaultBaseUrl` 与
+effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`description`、`defaultBaseUrl` 与
 `baseUrlSuggestions`、`effortSuggestions`、`temperatureNote`、`localize()`、`normalize()`、
 `validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `console()`
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
 
 地址、密钥变量名与图像开关不归模块:框架在 `console/config.ts` 里为每个端点声明这一组,
 扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,面板在 `instance` 插槽里
-用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 存——内建 llamacpp 的运行时与启动
+用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 暂存到连接草稿——内建 llamacpp 的运行时与启动
 两段走的是这条。`console()` 显式给空 `config` 表示这一页不另开配置页签,声明仍参与服务端
 校验。启停与模型操作这类动作走面板 invoke。
 
@@ -88,3 +88,23 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 模块默认,快照带 sha256 id 与 `capturedAt`。计量键:`input` / `output` / `total` /
 `cachedInput` / `uncachedInput` / `reasoning` 与 `detail:*`,单价按每百万 token。实际扣费在
 `src/core/generation.ts` 的 `priceUsage()`,缺计量记 `amount: null`。
+
+## 端点配置接口
+
+`console/hub.ts` 的 `ProviderHub` 是控制台改端点的唯一入口,`hub-api.ts` 把它接到
+`/api/providers`(聚合、按名读取、保存、删除、设为当前、测试、模型列表)与
+`/api/provider-modules`(已注册模块)。列表保留 `kind` 没有对应模块的端点,active 与可用性
+分别报告;状态帧的 `modelConnection` 带当前端点的名称、模型、模块与地址。
+
+新名称由 `name.ts` 校验:英文字母、数字、`-` 或 `_`,首字符是字母或数字,不收空格与 Windows
+设备名——名字就是 `<部署根>/providers/` 下的目录名。已在磁盘上的名字不改就继续有效。保存带
+读取时的 revision(端点 `config.json` 与 `.env` 的 sha256),对不上返回 409。共享目录上的写锁
+`.write-lock` 串行化各进程的写入。改名同时改目录和部署根内各 `deployment.json` 的
+`activeProvider`,中途失败回滚已动过的文件和目录;还被引用的端点不能删。
+
+保存一次校验模型、连接与模块配置,再写 `config.json` 和可选密钥;密钥进该端点的 `.env`,读取
+接口不返回密钥值。写完清掉本进程的实例缓存,已绑定的请求与 fork 保持原客户端;其他进程在下次
+重读共享配置时跟上。
+
+`ProviderConsoleHost.editing` 表示这个实例来自还没保存的表单,模块据此拒绝运行时副作用,
+`host.save` 把配置交回浏览器暂存。`ProviderRegistry.preview` 拿到的实例不进运行实例缓存。

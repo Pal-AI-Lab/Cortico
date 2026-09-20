@@ -70,6 +70,7 @@ export class Router {
   private readonly deps: RouterDeps;
   private readonly listeners = new Set<(route: Route) => void>();
   private readonly guards = new Set<LeaveGuard>();
+  private readonly decisions = new Set<() => Promise<boolean>>();
   private current: Route;
   /** 待处理的回拨 hash；写入相同 hash 不触发 hashchange，因此按目标值识别回拨。 */
   private pendingRevert: string | null = null;
@@ -106,6 +107,11 @@ export class Router {
   addLeaveGuard(guard: LeaveGuard): Disposable {
     this.guards.add(guard);
     return toDisposable(() => this.guards.delete(guard));
+  }
+
+  addLeaveDecision(decide: () => Promise<boolean>): Disposable {
+    this.decisions.add(decide);
+    return toDisposable(() => this.decisions.delete(decide));
   }
 
   navigate(segments: readonly string[], query?: Record<string, string>): void {
@@ -166,6 +172,15 @@ export class Router {
       return;
     }
 
+    if (this.decisions.size) {
+      this.confirming = true;
+      let allowed = true;
+      try {
+        for (const decide of this.decisions) if (!(await decide())) { allowed = false; break; }
+      } catch (error) { allowed = false; this.deps.onError?.(error); }
+      finally { this.confirming = false; }
+      if (!allowed) { this.revertTo(this.current.raw); return; }
+    }
     const block = this.firstBlock();
     if (block) {
       this.confirming = true;

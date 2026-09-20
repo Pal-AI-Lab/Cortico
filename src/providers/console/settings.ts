@@ -311,16 +311,7 @@ export class ProviderSettings {
       kind: 'llm',
       label: module.title,
       availability: 'active',
-      lamps: [
-        {
-          label: S.activeInstanceLamp,
-          state: entries.some((value) => value.name === this.config.activeProvider)
-            ? 'online'
-            : 'offline',
-        },
-        this.availableLamp(this.entries(module), language),
-        ...(extra.lamps ?? []),
-      ],
+      lamps: [],
       badges: [{ label: S.instancesBadge, value: String(entries.length) }, ...(extra.badges ?? [])],
       panels: [
         {

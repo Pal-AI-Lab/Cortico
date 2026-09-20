@@ -1,6 +1,6 @@
 /** 验收最小人格定义的派生控制台,以及未安装 World 的控制台目录状态。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { createBot, type Bot } from '../../src/bot.ts';
@@ -35,7 +35,9 @@ const postJ = async (path: string, body: unknown) => {
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'cormini-def-'));
-  // 从一个空目录加载:没有 config.json,四层里只剩框架默认 + Persona建议
+  mkdirSync(join(dir, 'providers', 'fixture'), { recursive: true });
+  writeFileSync(join(dir, 'providers', 'fixture', 'config.json'), JSON.stringify({ kind: 'openai-responses-compat', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } }));
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ activeProvider: 'fixture' }));
   const loaded = loadDeployment(definition, dir, resolve(import.meta.dirname, '../..'));
   loaded.config.web.port = 0;
   // cormini 自己声明的那份指向仓库里的源文件;测试改指临时文件,免得写坏它
@@ -106,7 +108,7 @@ describe('统一入口:框架派生的控制台', () => {
     expect(cfg.displayName).toBe('可缇mini');
     // 模型归 provider,不再是Persona的配置段
     expect(cfg.model).toBeUndefined();
-    expect(cfg.providers.deepseek.spec?.model).toBe('deepseek-flash');
+    expect(cfg.providers.fixture.spec?.model).toBe('test-model');
     // 起 cormini 不该把 corti 的段合进来
     expect(cfg.models).toBeUndefined();
     expect(cfg.memo).toBeUndefined();
@@ -160,22 +162,22 @@ describe('统一入口:框架派生的控制台', () => {
     expect(status).toBe(200);
     // 角色矩阵没了:一个端点一份档
     expect(body.roles).toBeUndefined();
-    expect(body.active).toBe('deepseek');
+    expect(body.active).toBe('fixture');
     expect((body.instances as any[])[0].quotes.length).toBeGreaterThan(0);
     for (const path of ['/api/models', '/api/pricing']) expect((await fetch(`http://127.0.0.1:${port}${path}`)).status).toBe(404);
   });
 
   it('模块保存模型档位后热生效，非法档位不改变配置', async () => {
-    const save = (spec: Record<string, unknown>) => postJ('/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'deepseek', spec, pricing: [] }] });
+    const save = (spec: Record<string, unknown>) => postJ('/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'fixture', spec, pricing: [] }] });
     const effective = () => bot.core.mainSessionSpec();
-    expect((await save({ model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'max' })).status).toBe(200);
-    expect(effective()).toMatchObject({ model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'max' });
-    expect((await save({ model: 'deepseek-flash', thinking: false })).status).toBe(200);
+    expect((await save({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' })).status).toBe(200);
+    expect(effective()).toMatchObject({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' });
+    expect((await save({ model: 'test-model', thinking: false })).status).toBe(200);
     expect('reasoningEffort' in effective()).toBe(false);
     const invalid = await save({ model: 'x', thinking: false, reasoningEffort: 'high' });
     expect(invalid.status).toBe(500);
     expect(invalid.body.error).toContain('推理强度');
-    expect(effective().model).toBe('deepseek-flash');
+    expect(effective().model).toBe('test-model');
   });
 
   it('cormini 没有的那些面板:provider 里根本没声明,一律 404', async () => {

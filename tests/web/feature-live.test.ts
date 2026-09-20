@@ -1154,6 +1154,19 @@ describe('开场引导', () => {
     expect(ob.findAll('ob-acts').at(-1)!.children[0].disabled).toBe(true);
   });
 
+  it('当前供应商随状态帧更新，缺失时显示空态且不另查供应商列表', () => {
+    const { root, sockets } = mountWith(fresh);
+    expect(root.find('live-connection-value')!.textContent).toBe('未选择模型供应商');
+    const modelConnection = { name: 'Alpha', model: 'test-model', module: 'fixture', moduleTitle: 'Fixture', baseUrl: 'https://example.invalid', ready: true };
+    sockets[0].emit({ t: 'status', status: { modelConnection, onboardingPending: true } });
+    expect(root.find('live-connection-value')!.textContent).toBe('Alpha · test-model');
+    expect(root.find('live-connection')!.title).toContain('https://example.invalid');
+    expect(root.findAll('ob-acts').at(-1)!.children[0].disabled).toBe(false);
+    sockets[0].emit({ t: 'status', status: { modelConnection: { ...modelConnection, name: 'Beta', model: 'other-model' } } });
+    expect(root.find('live-connection-value')!.textContent).toBe('Beta · other-model');
+    expect(fetched).not.toContain('/api/providers');
+  });
+
   it('引导在场时不画系统前缀那张卡,收起后回来', () => {
     stubFetch(() => ({}));
     const { root } = mountWith(fresh);

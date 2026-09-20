@@ -71,6 +71,7 @@ export interface StatusChip {
 }
 
 export interface StatusSnapshot {
+  modelConnection?: { name: string; model: string | null; module: string; moduleTitle: string; baseUrl: string; ready: boolean } | null;
   displayName?: string;
   loop?: LoopStatus | null;
   /**

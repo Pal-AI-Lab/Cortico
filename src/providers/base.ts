@@ -70,6 +70,7 @@ export interface ProviderAvailability {
 export interface ProviderModule {
   id: string;
   title: string;
+  description?: string;
   defaultBaseUrl?: string;
   /** Candidate endpoint URLs offered on the URL field. Candidates only: any URL is accepted. */
   baseUrlSuggestions?: readonly string[];
@@ -83,6 +84,7 @@ export interface ProviderModule {
    * Absent (or a field left out) = the tables above are shown as written.
    */
   localize?(language: Language): {
+    description?: string;
     reasoningTiers?: readonly ReasoningTier[];
     serviceTiers?: readonly ServiceTier[];
     temperatureNote?: string;

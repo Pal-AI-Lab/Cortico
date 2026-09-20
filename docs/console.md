@@ -33,7 +33,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 | `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork;全新部署上多一组开场引导 |
 | `core` | 运行诊断 | run、session、事件、运行日志,以及 Core 自己的数据与配置 |
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
-| `provider` | 模型提供商 | 端点表(见 [providers.md](providers.md)) |
+| `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
 | `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
@@ -72,8 +72,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 
 面板带 `slot` 就没有自己的页签,由同页某块面板调 `ctx.mountSlot(slot, 容器, 作用域)` 挂进去,
 同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。内建的
-`llm-settings` 开的插槽叫 `instance`,排在连接与模型档之间,作用域是当前端点名——llamacpp 的
-运行时与模型两段就是这么挂在端点页上的。
+连接详情将当前连接名称传给 `instance` 插槽，挂载模块的运行时与模型面板。旧 `llm-settings` 接口保留兼容，模块页面路由转到连接页。
 
 自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/console/client.ts`(Persona 是
 `bots/<名>/console/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,

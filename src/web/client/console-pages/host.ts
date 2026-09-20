@@ -8,7 +8,7 @@ import {
   type ConsolePageManifest,
   type ConsolePanelManifest,
 } from '../../shared/console-protocol.ts';
-import type { ConsoleMemo, ConsolePanel, Disposable } from '../../shared/client-panel.ts';
+import type { ConsoleMemo, ConsolePanel, ConsolePanelContext, Disposable } from '../../shared/client-panel.ts';
 import { get, post } from '../core/api.ts';
 import { Lifecycle } from '../core/lifecycle.ts';
 import type { Router } from '../core/router.ts';
@@ -119,6 +119,23 @@ export class ConsolePageHost {
       }
     }
     this.emitNav();
+  }
+
+  /** Mount module panels inside a connection editor while its adapter stages configuration edits. */
+  async mountConnection(pageId: string, root: HTMLElement, scope: Readonly<Record<string, string>>,
+    adapt: (context: ConsolePanelContext) => ConsolePanelContext): Promise<Disposable> {
+    const lifecycle = new Lifecycle(this.deps.onError);
+    const page = this.find(pageId);
+    for (const panel of asArray(page?.panels).filter(panel => panel.id !== 'settings')) {
+      const box = this.deps.doc.createElement('div'); root.append(box);
+      try {
+        const impl = panel.builtin ? this.builtinPanel(panel.builtin) : await this.deps.loader.resolvePanel(pageId, panel.id, page?.client);
+        if (lifecycle.disposed) break;
+        const result = await impl.mount(adapt(this.panelContext(pageId, panel.id, box, lifecycle, this.generation, scope)));
+        if (result) lifecycle.own(result);
+      } catch (error) { box.textContent = String(error); }
+    }
+    return lifecycle;
   }
 
   /** 重取 manifest 并刷新导航与当前页头，**不重挂面板**。 */
@@ -515,7 +532,8 @@ export class ConsolePageHost {
         ? page.lamps ?? []
         : [{ label: S.assembly, state: 'offline', hint: page.availability === 'missing' ? S.notInstalled : S.notActivated }],
     ));
-    head.append(title, ui.h('p', 'pagedesc', page.id));
+    head.appendChild(title);
+    chrome.append(head, ui.h('p', 'pagedesc', page.id));
     const bar = ui.rowbar();
 
     for (const badge of asArray(page.badges)) {
@@ -547,9 +565,8 @@ export class ConsolePageHost {
       });
       bar.appendChild(open);
     }
-    head.appendChild(bar);
-    if (page.reason) head.appendChild(ui.msgline(page.reason, true));
-    chrome.appendChild(head);
+    if (bar.children.length > 1) chrome.appendChild(bar);
+    if (page.reason) chrome.appendChild(ui.msgline(page.reason, true));
 
     const panels = tabbed(page);
     const prompts = asArray(page.prompts);

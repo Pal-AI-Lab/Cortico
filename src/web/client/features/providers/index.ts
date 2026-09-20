@@ -1,100 +1,114 @@
-/**
- * 「模型提供商」页 —— 模型供应模块的入口。
- *
- * 左侧次级菜单列出 manifest 里 kind 为 `llm` 的页(每个供应模块一条),右侧由
- * 嵌入的控制台页宿主渲染选中模块的面板:实例与模型、授权、托管、配置。这一页不认识
- * 任何具体模块——名字、灯、徽标与面板全部来自 manifest。
- *
- * 路由 `#/providers/<pageId>/<panelId>`:第二段选模块,第三段选面板;缺省取第一个
- * 模块及其第一个面板。面板页签由宿主渲染并指向同一前缀,所以切换留在本页内。
- */
-
-import { PROVIDERS_LAMP_ID } from '../../../shared/console-protocol.ts';
-import { lampRow, paintLamps, subscribeLamps } from '../../ui/lamp.ts';
 import { pageIntro } from '../../ui/page.ts';
-import type { Route } from '../../core/router.ts';
+import { NEW_DRAFT_ID, providerDrafts } from './drafts.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
+import { get, post } from '../../core/api.ts';
 import { S } from './strings.ts';
-
-const PROVIDERS_ROUTE = 'providers';
-/** 这一页只列供应模块;人格与 IO 各有自己的入口。 */
-const PROVIDER_KIND = 'llm';
+import { connectionPath, type HubState, type Connection, type Module, type Detail, type Editing } from './types.ts';
+import { mountDetail, type DetailController } from './detail.ts';
 
 export async function mountProviders(ctx: FeatureContext): Promise<void> {
   const { ui, root } = ctx;
-  const doc = root.ownerDocument;
-  const intro = pageIntro(ui, S.pageTitle);
-  const layout = ui.h('div', 'settings-layout providerhub');
-  const index = ui.h('nav', 'settings-index');
-  index.setAttribute('aria-label', S.modulesAria);
-  index.setAttribute('role', 'tablist');
-  const content = ui.h('div', 'settings-content');
-  layout.append(index, content);
-  root.append(intro, layout);
-
-  if (!ctx.consolePageHost) {
-    content.appendChild(ui.placeholder(S.needHost));
-    return;
-  }
-  const host = ctx.consolePageHost({
-    root: content,
-    route: (pageId, panelId) => [PROVIDERS_ROUTE, pageId, panelId],
-  });
-  ctx.lifecycle.own({ dispose: () => host.unmount() });
-  content.appendChild(ui.placeholder(S.loading));
-  await host.load();
+  root.append(pageIntro(ui, S.pageTitle));
+  const report = ui.msgline();
+  const layout = ui.h('div', 'connection-hub');
+  const index = ui.h('div', 'connection-index');
+  const cards = ui.h('div', 'connection-cards');
+  const detailRoot = ui.h('div', 'connection-detail');
+  layout.append(index, detailRoot); root.append(report, layout);
+  const opts = { signal: ctx.signal };
+  let state = await get<HubState>('/api/providers', opts);
+  state.providers.sort((a, b) => Number(b.name === state.active) - Number(a.name === state.active));
+  const modules = await get<Module[]>('/api/provider-modules', opts);
   if (ctx.signal.aborted) return;
-
-  const providers = host.pages.filter((p) => p.kind === PROVIDER_KIND);
-  if (!providers.length) {
-    content.replaceChildren(ui.placeholder(S.none));
-    return;
-  }
-
-  const jumps = new Map<string, HTMLButtonElement>();
-  const lampNodes = new Map<string, HTMLSpanElement>();
-  for (const p of providers) {
-    const jump = ui.h('button', 'settings-jump providerhub-jump');
-    jump.type = 'button';
-    jump.setAttribute('role', 'tab');
-    jump.append(ui.h('span', 'lbl', p.label || p.id));
-    const lamps = lampRow(doc, p.lamps ?? []);
-    jump.appendChild(lamps);
-    lampNodes.set(p.id, lamps);
-    jump.addEventListener('click', () => {
-      try { ctx.router.navigate([PROVIDERS_ROUTE, p.id]); } catch (err) { ctx.onError(err); }
-    }, { signal: ctx.signal });
-    index.appendChild(jump);
-    jumps.set(p.id, jump);
-  }
-  // 灯的活数据只改那几个点,不重排菜单(与左栏同一节拍)。
-  ctx.lifecycle.own(subscribeLamps(doc, (lamps) => {
-    for (const [id, el] of lampNodes) paintLamps(el, lamps[id] ?? []);
-  }));
-
-  const show = (route: Route): void => {
-    const wanted = route.segments[1];
-    const provider = providers.find((p) => p.id === wanted) ?? providers[0]!;
-    for (const [id, jump] of jumps) {
-      const on = id === provider.id;
-      jump.classList.toggle('active', on);
-      jump.setAttribute('aria-selected', String(on));
+  const drafts = providerDrafts(root.ownerDocument.defaultView!.localStorage, state.scope);
+  let selected = '';
+  let newDraft: Editing | null = drafts.get(NEW_DRAFT_ID);
+  const invalid = new Set<string>();
+  let controller: DetailController | null = null;
+  let renderId = 0;
+  const nodes = new Map<string, { el: HTMLElement; title: HTMLElement; model: HTMLElement; url: HTMLElement; status: HTMLElement; secondary: HTMLElement; activate: HTMLButtonElement }>();
+  const run = (work: () => Promise<unknown>) => { void work().catch(error => { if (!ctx.signal.aborted) report.textContent = String(error); }); };
+  function paint() {
+    report.textContent = state.active && !state.providers.some(item => item.name === state.active) ? S.missing + state.active : '';
+    const all: Array<Connection | { name: string; model: string | null; baseUrl: string; readiness: { state: string } }> = [...state.providers];
+    if (newDraft) all.unshift({ name: NEW_DRAFT_ID, model: newDraft.entry.spec?.model ?? null, baseUrl: newDraft.entry.baseUrl, readiness: { state: 'draft' } });
+    for (const [name, node] of nodes) if (!all.some(item => item.name === name)) { node.el.remove(); nodes.delete(name); }
+    for (const item of all) {
+      const identity = item.name;
+      let node = nodes.get(identity);
+      if (!node) {
+        const el = ui.h('article', 'connection-card'); el.dataset.provider = identity;
+        const title = ui.h('div', 'connection-name'); const model = ui.h('div', 'connection-model'); const url = ui.h('div', 'connection-url');
+        const status = ui.h('div', 'connection-status'); const secondary = ui.h('div', 'connection-secondary');
+        const actions = ui.rowbar();
+        const configure = ui.button(S.configure, { size: 'sm', onClick: () => run(() => select(identity)) });
+        const activate = ui.button(S.activate, { size: 'sm', onClick: () => run(async () => {
+          activate.disabled = true;
+          try { await post(connectionPath(identity) + '/activate', {}, opts); state.active = identity; paint(); }
+          finally { activate.disabled = false; }
+        }) });
+        actions.append(configure, activate); el.append(title, model, url, status, secondary, actions);
+        el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
+        if (identity === NEW_DRAFT_ID) cards.prepend(el); else cards.append(el); node = { el, title, model, url, status, secondary, activate }; nodes.set(identity, node);
+      }
+      const active = identity === state.active;
+      node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
+      node.title.textContent = identity === NEW_DRAFT_ID ? newDraft?.name || S.newName : identity;
+      node.title.title = node.title.textContent;
+      node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
+      node.model.title = item.model ?? ''; node.url.title = item.baseUrl ?? '';
+      const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
+      node.status.textContent = active ? S.active : S.readiness[readiness];
+      node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== NEW_DRAFT_ID && drafts.has(identity) ? S.readiness.draft : '';
+      node.activate.hidden = active || identity === NEW_DRAFT_ID;
+      node.activate.disabled = item.readiness.state !== 'ready';
     }
-    const panel = route.segments[2];
-    void host.show(provider.id, typeof panel === 'string' && panel !== '' ? panel : undefined);
-  };
-  show(ctx.route);
-  ctx.lifecycle.own(ctx.router.onChange((route) => {
-    if (route.segments[0] !== PROVIDERS_ROUTE) return;
-    show(route);
+  }
+  async function refresh() { state = await get<HubState>('/api/providers', opts); paint(); }
+  async function select(identity: string, force = false): Promise<void> {
+    if (!force && identity === selected) return;
+    if (!force && controller && !(await controller.leave())) return;
+    const gen = ++renderId;
+    controller?.dispose(); controller = null;
+    selected = identity; paint(); detailRoot.replaceChildren();
+    if (!identity) {
+      detailRoot.append(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), ui.button(S.create, { onClick: () => run(create) }));
+      return;
+    }
+    const saved = identity === NEW_DRAFT_ID ? null : await get<Detail>(connectionPath(identity), opts);
+    if (gen !== renderId || ctx.signal.aborted) return;
+    const detailView = ui.h('div'); detailRoot.replaceChildren(detailView);
+    const mounted = await mountDetail({ ctx, root: detailView, modules, saved, draft: identity === NEW_DRAFT_ID ? newDraft : drafts.get(identity),
+      discarded: () => { invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = drafts.get(NEW_DRAFT_ID); paint(); },
+      saveDraft: editing => { drafts.set(editing); paint(); },
+      changed: (editing, hasErrors) => { if (hasErrors) invalid.add(identity); else invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = editing; paint(); },
+      onSaved: async (name, show = true) => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await refresh(); if (show) await select(name, true); },
+      cancelled: async () => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await select(identity === NEW_DRAFT_ID ? state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '' : identity, true); },
+      deleted: async () => { drafts.remove(identity); invalid.delete(identity); await refresh(); await select(state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '', true); },
+      duplicate: async editing => {
+        if (newDraft) { await select(NEW_DRAFT_ID); return; }
+        const used = new Set(state.providers.map(item => item.name.toLowerCase()));
+        const base = editing.name.slice(0, 56); let candidate = base; let number = 2;
+        while (used.has(candidate.toLowerCase())) candidate = `${base}-${number++}`;
+        editing.name = candidate; newDraft = editing; await select(NEW_DRAFT_ID, true);
+      },
+    });
+    if (gen !== renderId || ctx.signal.aborted) mounted.dispose(); else controller = mounted;
+  }
+  async function create() {
+    if (newDraft) return select(NEW_DRAFT_ID);
+    if (controller && !(await controller.leave())) return;
+    newDraft = { original: null, name: '', entry: { kind: '', baseUrl: '' }, secretValue: '', raw: {} };
+    await select(NEW_DRAFT_ID, true);
+  }
+  index.append(ui.button(S.create, { variant: 'primary', onClick: () => run(create) }), cards);
+  ctx.lifecycle.own({ dispose: () => { renderId++; controller?.dispose(); } });
+  ctx.lifecycle.own(ctx.router.addLeaveDecision(async () => controller ? controller.leave() : true));
+  ctx.lifecycle.own(ctx.router.onChange(route => {
+    if (route.segments[0] === 'providers' && route.segments[1]) run(() => select(route.segments[1]));
   }));
+  paint();
+  const wanted = ctx.route.segments[1] ?? (newDraft ? NEW_DRAFT_ID : undefined);
+  await select(wanted && (wanted === NEW_DRAFT_ID || state.providers.some(item => item.name === wanted)) ? wanted : state.providers.find(item => item.name === state.active)?.name ?? state.providers[0]?.name ?? '', true);
 }
-
-export const providersFeature: FrameworkFeature = {
-  route: PROVIDERS_ROUTE,
-  label: S.navLabel,
-  icon: 'cpu',
-  lampId: PROVIDERS_LAMP_ID,
-  navGroup: S.navGroup,
-  mount: mountProviders,
-};
+export const providersFeature: FrameworkFeature = { route: 'providers', label: S.navLabel, icon: 'cpu', navGroup: S.navGroup, mount: mountProviders };

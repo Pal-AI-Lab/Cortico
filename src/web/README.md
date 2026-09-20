@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts -->
+<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -56,7 +56,11 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 ## 浏览器
 
-`llm-settings` 从端点状态中的 ConfigGroup 渲染连接字段与声明的请求路径,使用 `ctx.setConfig` 保存。
+`features/providers` 一次编辑一条端点,改动只进浏览器暂存,保存时整条提交。模块面板挂在所选端点
+的作用域里,面板的 `setConfig` 同样进暂存;`llm-settings` 的服务接口保留,旧的 `llm:<kind>` 路由
+转到这一页。`features/providers/drafts.ts` 的暂存按部署分 scope 存进 localStorage,不含 API Key;
+这一页自己拦切换端点,并向路由登记离开保护。端点保存、删除或设为当前之后推送状态帧,终端页顶部
+的统计行显示当前端点的名称与模型,点开进该端点。
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、
 `appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。

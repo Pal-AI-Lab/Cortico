@@ -30,6 +30,8 @@ export function makeTmpDir(): { dir: string; cleanup: () => void } {
 
 export function makeCfg(patch?: Partial<BotConfig>): BotConfig {
   const cfg: BotConfig = JSON.parse(JSON.stringify(composeDefaults()));
+  cfg.providers = { fixture: { kind: 'openai-responses-compat', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: true, reasoningEffort: 'low', temperature: 1 } } };
+  cfg.activeProvider = 'fixture';
   return Object.assign(cfg, patch);
 }
 

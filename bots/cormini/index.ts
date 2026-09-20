@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
-import type { CoreConfig, World, ModelSpec } from 'cortico/core/types.ts';
+import type { CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { WorldDeclaration } from 'cortico/world.ts';
@@ -11,9 +11,6 @@ import { CORMINI_CONTEXT_DEFAULTS, Cormini, type ContextStagePolicy } from './pe
 import { contextStageConfigGroup } from './persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
-
-/** 层 2 给云端那条端点的模型档:全局端点表里没写时用它。 */
-const DEEPSEEK_SPEC: ModelSpec = { model: 'deepseek-flash', thinking: false, contextWindow: 1_000_000 };
 
 export interface CorminiConfig extends CoreConfig {
   /** 阶段长度三项与首轮对话开关归 Persona,摘思维链归 core;同住 context 段。 */
@@ -70,11 +67,7 @@ const definition: BotDefinition<CorminiConfig> = {
   defaults: () => ({
     ...CORE_DEFAULTS,
     displayName: '可缇mini',
-    providers: {
-      ...structuredClone(CORE_DEFAULTS.providers),
-      // 模型归 provider:这条端点默认跑哪个模型是部署事实,Persona不参与。
-      deepseek: { ...structuredClone(CORE_DEFAULTS.providers.deepseek), spec: { ...DEEPSEEK_SPEC } },
-    },
+    providers: {},
     web: { port: 7788, theme: 'mint' },
     paths: { memory: 'workspace', data: 'data' },
     batching: { ...CORE_DEFAULTS.batching },

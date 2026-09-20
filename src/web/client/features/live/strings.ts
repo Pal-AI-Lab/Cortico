@@ -3,6 +3,8 @@ import { pick } from '../../core/language.ts';
 const zh = {
   // index.ts
   navLabel: '终端',
+  currentProvider: '当前模型供应商',
+  noProvider: '未选择模型供应商',
   ctxOpenAria: '查看 token 分类',
   ctxPanelAria: 'Token 分类',
   netConnecting: '连接中…',
@@ -12,7 +14,7 @@ const zh = {
   composerPlaceholder: "输入消息…",
   exportDiagnostics: '导出诊断',
   exportFailed: '诊断包取不回来',
-  composerNoProvider: '当前无可用 Provider,请前往「模型提供商」页设置',
+  composerNoProvider: '当前模型供应商不可用，请前往「模型供应商」页设置',
   composerQueued: '终端通道正在重连，消息已排队',
   emptyConnecting: '连接调试通道中…',
   ctxTitle: (total: string, max: string | null) =>
@@ -128,6 +130,8 @@ const zh = {
 const en: typeof zh = {
   // index.ts
   navLabel: 'Terminal',
+  currentProvider: 'Current model provider',
+  noProvider: 'No provider selected',
   ctxOpenAria: 'View token breakdown',
   ctxPanelAria: 'Token breakdown',
   netConnecting: 'Connecting…',

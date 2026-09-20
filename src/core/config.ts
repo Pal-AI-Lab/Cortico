@@ -1,6 +1,5 @@
 /** Core 默认配置与深合并工具。Persona 和 World 参数由各自声明，部署合并顺序见 src/deploy.ts。 */
 import type { CoreConfig } from './types.ts';
-import type { PriceDefinition } from '../providers/pricebook.ts';
 import type { ConfigGroup } from './config-schema.ts';
 import { pick, type Language } from './language.ts';
 
@@ -186,21 +185,8 @@ export const CORE_DEFAULTS = {
   /** 用于控制台标题和终端消息的发送方名称。 */
   displayName: 'Cortico Bot',
   timezone: 'Asia/Shanghai',
-  /** 默认端点；部署根 providers/ 中的同名端点配置覆盖此项。 */
-  providers: {
-    deepseek: {
-      kind: 'openai-responses-compat' as const,
-      baseUrl: 'https://api.deepseek.com',
-      secret: 'DEEPSEEK_API_KEY',
-      spec: { model: 'deepseek-flash', thinking: false },
-      // 默认价目为零；操作者可在控制台填写实际价格。
-      pricing: [{
-        models: ['*'], currency: 'USD', basis: 'marginal', source: 'console',
-        rules: [{ meter: 'cachedInput', perMillion: 0 }, { meter: 'uncachedInput', perMillion: 0 }, { meter: 'output', perMillion: 0 }],
-      }] as PriceDefinition[],
-    },
-  },
-  activeProvider: 'deepseek',
+  providers: {} as Record<string, import('./types.ts').LLMProviderEntry>,
+  activeProvider: '',
   web: { port: 7777, theme: 'mint' },
   paths: { memory: 'memory', data: 'data' },
   batching: { quietGapMs: 2500, minBatchAgeMs: 0, maxBatchAgeMs: 15000, maxBatchSize: 100 },

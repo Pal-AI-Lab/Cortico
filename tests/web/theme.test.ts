@@ -746,4 +746,12 @@ describe('部署默认方案', () => {
     for (const id of ids) expect(registry.resolveDefaultSchemeId(id)).toBe(id);
     expect(ids.slice(1)).toEqual(['mint', 'navigator', 'crab-daisy']);
   });
+
+  it('终端页当前端点那块徽标只用主题变量取色,换方案跟着走', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(new URL('../../src/web/public/styles.css', import.meta.url), 'utf8');
+    const rule = /^\.live-connection-value \{([^}]*)\}/m.exec(css);
+    expect(rule).not.toBeNull();
+    expect(rule![1]).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
+  });
 });

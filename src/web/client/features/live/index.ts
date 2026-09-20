@@ -8,7 +8,7 @@ import type {
   ConsoleStreamHandle,
   Disposable,
 } from '../../../shared/client-panel.ts';
-import { PROVIDERS_LAMP_ID, panelStreamRoute } from '../../../shared/console-protocol.ts';
+import { panelStreamRoute } from '../../../shared/console-protocol.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { get, post } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
@@ -24,7 +24,6 @@ import {
   type ToolSchemaDoc,
 } from './protocol.ts';
 import { icon } from '../../ui/icons.ts';
-import { subscribeLamps } from '../../ui/lamp.ts';
 import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
 import { applyDisplayName, createStatusBand } from './status.ts';
@@ -152,7 +151,11 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const summary = ui.h('div', 'live-summary');
-  summary.append(status.el, ui.h('span', 'grow'), netEl);
+  const connection = ui.button('', { onClick: () => ctx.router.navigate(state.status?.modelConnection ? ['providers', state.status.modelConnection.name] : ['providers']) });
+  connection.className = 'live-connection';
+  const connectionValue = ui.h('span', 'live-connection-value');
+  connection.append(ui.h('span', 'live-connection-label', S.currentProvider), connectionValue);
+  summary.append(status.el, ui.h('span', 'grow'), connection, netEl);
   band.append(summary, sessionBand.el);
 
   const exportButton = ui.button('', {
@@ -188,14 +191,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   view.append(timeline.el, composer.el);
   timeline.rebuild([], { empty: S.emptyConnecting });
 
-  // 没有可用端点时说清楚要去哪儿,而不是让操作员发出一条得不到回复的消息。
   let providerReady = false;
-  ctx.lifecycle.own(subscribeLamps(ctx.root.ownerDocument, (lamps) => {
-    const lamp = lamps[PROVIDERS_LAMP_ID]?.[0];
-    composer.setPlaceholder(lamp && lamp.state !== 'online' ? S.composerNoProvider : null);
-    providerReady = lamp?.state === 'online';
-    onboarding?.setProvider(providerReady);
-  }));
 
   const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
 
@@ -282,6 +278,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const setStatus = (st: StatusSnapshot | null): void => {
     state.status = st;
     status.render(st);
+    const current = st?.modelConnection;
+    connectionValue.textContent = current ? `${current.name} · ${current.model ?? '—'}` : S.noProvider;
+    connection.title = current ? `${current.moduleTitle} (${current.module})\n${current.baseUrl}` : S.noProvider;
+    providerReady = current?.ready === true;
+    composer.setPlaceholder(providerReady ? null : S.composerNoProvider);
+    onboarding?.setProvider(providerReady);
     if (st && applyDisplayName(doc, st.displayName, state.displayName)) {
       state.displayName = str(st.displayName);
     }

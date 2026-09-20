@@ -85,7 +85,7 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
           return { ok: true };
         }
         if (method === 'disable') {
-          await control(name).runtime.stop(host.language);
+          if (!host.editing) await control(name).runtime.stop(host.language);
           const entry = entryOf(name);
           const { runtime: _runtime, launch: _launch, ...rest } = entry.options ?? {};
           host.save(name, { ...entry, options: rest });
@@ -115,6 +115,7 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
           });
           return { ok: true };
         }
+        if (host.editing) throw new Error(host.language === 'zh' ? '请先保存配置，再执行运行时操作。' : 'Save configuration before runtime operations.');
         if (method === 'install') {
           await control(name).runtime.install(host.language);
           return { ok: true };
@@ -139,6 +140,7 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
           await catalog.list(true);
           return { ok: true };
         }
+        if (host.editing) throw new Error(host.language === 'zh' ? '请先保存配置，再操作模型。' : 'Save configuration before model operations.');
         if (typeof value.model !== 'string' || !value.model.trim()) throw new Error(S.modelIdRequired);
         const model = value.model.trim();
         if (method === 'pull') await catalog.download(model);

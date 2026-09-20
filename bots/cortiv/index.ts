@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
-import type { ConfigGroup, CoreConfig, World, ModelSpec } from 'cortico/core/types.ts';
+import type { ConfigGroup, CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { WorldDeclaration, WorldSection } from 'cortico/world.ts';
@@ -13,19 +13,6 @@ import type { ContextStagePolicy } from '../cormini/persona/persona.ts';
 import { contextStageConfigGroup } from '../cormini/persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
-
-/**
- * 层 2 给云端那条端点的模型档:全局端点表里没写时用它。
- *
- * `maxTokens` 是单轮生成的硬封顶:云端供应商有服务端默认上限,但 llama-server
- * 默认**无限生成**——本地模型在工具 JSON 里复读时若不封顶,这一轮永不结束。
- */
-const DEEPSEEK_SPEC: ModelSpec = {
-  model: 'deepseek-flash',
-  thinking: false,
-  contextWindow: 1_000_000,
-  maxTokens: 4096,
-};
 
 /** 存在方式自述的源文件;控制台「Persona」页可编辑,重载前缀即生效。 */
 const ORIENTATION_FILE = resolve(HERE, 'persona/ORIENTATION.md');
@@ -136,13 +123,8 @@ const definition: BotDefinition<CortiVConfig> = {
   defaults: () => ({
     ...CORE_DEFAULTS,
     displayName: '可缇Corti',
-    // 端点表是全局部署事实(`<部署根>/providers/`),不归代码包:本机那条 `local`
-    // (端口、llama-server 路径、采样参数)已经搬出去了。这里只剩层 1 那两条默认。
-    providers: {
-      ...structuredClone(CORE_DEFAULTS.providers),
-      // 模型归 provider:这条端点默认跑哪个模型是部署事实,Persona不参与。
-      deepseek: { ...structuredClone(CORE_DEFAULTS.providers.deepseek), spec: { ...DEEPSEEK_SPEC } },
-    },
+    // 端点表是全局部署事实(`<部署根>/providers/`),不归代码包。
+    providers: {},
     web: { port: 7789, theme: 'navigator' },
     paths: { memory: 'workspace', data: 'data' },
     batching: { ...CORE_DEFAULTS.batching },

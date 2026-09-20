@@ -57,8 +57,10 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 | `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, console? }` |
 
 `createBot()` 的顺序:算提示词覆盖目录 → 定默认语言 → `WorldAssembly` → `build()` → `Core` →
-装配层绑定挂载钩子 → 收配置组(含未激活槽位)→ provider 设置页 → `WebApp`。`start()`:单实例锁
-→ 控制台 → 启动 active provider → `onStart` → `core.start()`。
+装配层绑定挂载钩子 → 收配置组(含未激活槽位)→ provider 设置页与端点编辑 → `WebApp`。
+`start()`:单实例锁 → 控制台 → 启动 active provider → `onStart` → `core.start()`。
+`activeProvider` 为空或指向不存在的端点时跳过这一步,控制台照常起来,由操作员在模型供应商页
+配置;状态里的 `modelConnection` 报当前端点。
 
 ## 包里有什么
 

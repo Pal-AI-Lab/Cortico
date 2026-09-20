@@ -30,6 +30,7 @@ import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource,
 import { aggregateUsage } from './core/cost.ts';
 import { nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
+import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
 import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
@@ -993,6 +994,7 @@ export function createBot<C extends CoreConfig>(
 
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
   const providerSettings = new ProviderSettings(cfg,core.providers,join(loaded.rootDir,'config.json'),loaded.providersDir ?? join(loaded.rootDir,'providers'));
+  const providerHub = new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers'));
   const allConfigGroups = (language: Language) => [...configGroups(language),...providerSettings.groups(language)];
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
@@ -1105,7 +1107,7 @@ export function createBot<C extends CoreConfig>(
           ? (language) => contribution.consolePages!({ storage: consoleStorage(language), language })
           : undefined,
       )(),...providerSettings.sources()],
-      providersLamp: (language) => providerSettings.providersLamp(language),
+      providers: providerHub,
       worldVisibility: {
         state: () => core.worldVisibility(),
         set: (id, visible, language) => {
@@ -1172,6 +1174,7 @@ export function createBot<C extends CoreConfig>(
       },
       getStatus: () => ({
         displayName: cfg.displayName,
+        modelConnection: providerHub.current(language),
         startedAt,
         loop: core.loop.getStatus(),
         eventCount: core.store.latestCursor(),
@@ -1205,7 +1208,7 @@ export function createBot<C extends CoreConfig>(
 
       const orphans = Object.entries(cfg.providers).filter(([, entry]) => !providerModules.some((m) => m.id === entry.kind)).map(([name, entry]) => `${name}(kind=${entry.kind})`);
       if (orphans.length) core.runlog.logger('provider').warn('端点条目没有对应的 Provider 模块,不可用', { orphans });
-      void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
+      if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
       await core.start();
       return { port };

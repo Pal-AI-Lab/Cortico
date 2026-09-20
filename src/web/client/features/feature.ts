@@ -11,7 +11,7 @@ import type { ConsolePageHost } from '../console-pages/host.ts';
 import type { ConsoleIconName } from '../ui/icons.ts';
 
 /** 嵌在框架页里的控制台页宿主:manifest 与面板加载都由它管,页面只给容器与路由前缀。 */
-export type EmbeddedConsolePageHost = Pick<ConsolePageHost, 'load' | 'show' | 'unmount' | 'pages' | 'find'>;
+export type EmbeddedConsolePageHost = Pick<ConsolePageHost, 'load' | 'show' | 'unmount' | 'pages' | 'find' | 'mountConnection'>;
 
 export interface FeatureContext {
   /** 本页面的 DOM 根。离开时由 host 清空。 */

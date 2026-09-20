@@ -32,7 +32,8 @@ describe("部署配置合并与默认值归属", () => {
     expect(cfg.batching).toEqual(CORE_DEFAULTS.batching);
     // Persona 可提供自有参数及 Core 参数的建议值。
     expect(PERSONA_DEFAULTS).not.toHaveProperty('models');
-    expect(cfg.providers.deepseek.spec?.model).toBe('deepseek-flash');
+    expect(cfg.providers).toEqual(CORE_DEFAULTS.providers);
+    expect(cfg.activeProvider).toBe(CORE_DEFAULTS.activeProvider);
     expect(cfg.memo).toEqual(PERSONA_DEFAULTS.memo);
     expect(cfg.context.maxTokens).toBe(PERSONA_DEFAULTS.context.maxTokens);
     // Persona 设置阶段预算，模型容量由 provider 配置决定。
@@ -111,15 +112,15 @@ describe('loadConfig:worlds.qq.groups/privates', () => {
       const loaded = loadConfig(first.dir).config;
       expect(loaded.worlds.qq.groups).toEqual([{ id: 555, enabled: true }]);
       loaded.context.maxTokens = 42;
-      loaded.providers.deepseek.baseUrl = 'https://changed.test';
+      loaded.providers.fixture = { kind: 'openai-responses-compat', baseUrl: 'https://changed.test' };
 
       const fresh = loadConfig(second.dir).config;
       expect(fresh.worlds.qq.groups).toEqual([]);
       expect(fresh.context.maxTokens).toBe(PERSONA_DEFAULTS.context.maxTokens);
-      expect(fresh.providers.deepseek.baseUrl).toBe(CORE_DEFAULTS.providers.deepseek.baseUrl);
+      expect(fresh.providers).toEqual(CORE_DEFAULTS.providers);
       expect(composeDefaults().worlds.qq.groups).toEqual([]);
       expect(composeDefaults().context.maxTokens).toBe(PERSONA_DEFAULTS.context.maxTokens);
-      expect(composeDefaults().providers.deepseek.baseUrl).toBe(CORE_DEFAULTS.providers.deepseek.baseUrl);
+      expect(composeDefaults().providers).toEqual(CORE_DEFAULTS.providers);
     } finally {
       first.cleanup();
       second.cleanup();
