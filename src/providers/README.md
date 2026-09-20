@@ -70,7 +70,8 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 `LLMError`;每次请求尝试记录 `meters` 与 `charges`。
 
 `responses-input.ts` 是原生 Responses 的无状态重放(system / developer 上提为
-`instructions`);`chat.ts` + `native-input.ts` / `history.ts` 转换 Chat Completions 请求(历史
+`instructions`;思维链按 `reasoningReplay` 以签名块或 `reasoning_text` 回传,明文形态下没有记录来源
+的调用前补一项合成推理);`chat.ts` + `native-input.ts` / `history.ts` 转换 Chat Completions 请求(历史
 思维链不回传);`response-assembly.ts` 把两种流归一成 Open Responses 的 Item 流,
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。

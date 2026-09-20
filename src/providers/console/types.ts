@@ -2,6 +2,9 @@ import type { LLMProviderEntry } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import type { ProviderInstance } from '../base.ts';
 
+/** Output token limit for the connectivity probe and module probes. */
+export const PROBE_MAX_OUTPUT_TOKENS = 256;
+
 export interface ProviderConsoleHost {
   /** Console language for panel titles, receipts and error texts. */
   readonly language: Language;

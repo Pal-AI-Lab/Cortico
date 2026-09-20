@@ -130,8 +130,10 @@ describe('模块声明与条目校验', () => {
     expect(() => validateEntry(module, entry({ options: { endpointPath: 'responses' } }))).toThrow('以 / 开头');
     expect(() => validateEntry(module, entry({ options: { extraHeaders: { a: 1 } } }))).toThrow('附加请求头');
     expect(() => validateEntry(module, entry({ options: { extraBody: [] } }))).toThrow('附加请求体');
-    const normalized = validateEntry(module, entry({ options: { endpointPath: '', extraHeaders: {}, extraBody: {} } }));
+    expect(() => validateEntry(module, entry({ options: { reasoningReplay: 'signed' } }))).toThrow('encrypted 或 plaintext');
+    const normalized = validateEntry(module, entry({ options: { endpointPath: '', extraHeaders: {}, extraBody: {}, reasoningReplay: '' } }));
     expect(compatOptions(normalized)).toEqual({});
+    expect(compatOptions(validateEntry(module, entry({ options: { reasoningReplay: 'plaintext' } }))).reasoningReplay).toBe('plaintext');
   });
   it('实例:密钥经 host 取,模型目录与窗口挂在实例上,兼容键含端点路径', () => {
     const instance = module.create('cloud', entry({ secret: 'K', options: { endpointPath: '/x' } }), {

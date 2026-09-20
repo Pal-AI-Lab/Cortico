@@ -26,13 +26,10 @@ import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
 import { record } from '../../protocol/open-responses/context.ts';
 import { text } from './strings.ts';
-import type { ProviderConsoleHost } from './types.ts';
+import { PROBE_MAX_OUTPUT_TOKENS, type ProviderConsoleHost } from './types.ts';
 import { connectionGroup } from './config.ts';
 
 export type SecretStatus = 'env' | 'file' | 'none';
-
-/** Output token limit used by the connectivity probe. */
-const PROBE_MAX_OUTPUT_TOKENS = 256;
 
 /** 密钥变量名由操作员自由填写,也可能是直接写在磁盘上的任意名字,拼进正则前按字面转义。 */
 function escapeRegExp(s: string): string {

@@ -7,7 +7,7 @@ import { createResponse, type Request } from '../../protocol/open-responses/inde
 import { standardUsage, type GenerateOptions } from '../../core/generation.ts';
 import { NativeResponseAssembly, type ResponseAssembly, type parseChatResponse } from '../transport/response-assembly.ts';
 import { responseMeters } from '../transport/response-meters.ts';
-import { responsesInput, type ResponsesInputOptions } from '../transport/responses-input.ts';
+import { responsesInput, type ReasoningReplay, type ResponsesInputOptions } from '../transport/responses-input.ts';
 
 type Item = Record<string, unknown>;
 
@@ -21,13 +21,14 @@ export interface ResponsesProviderOptions {
   extraBody?: Record<string, unknown>;
   media?: ResponsesInputOptions['media'];
   keepThinking?: () => boolean;
+  reasoningReplay?: ReasoningReplay;
   log?: Logger;
 }
 
 /**
  * Send reasoning only when an effort is supplied; otherwise leave it to the endpoint.
- * Requests set store=false and request encrypted reasoning content for local stateless replay.
- * Endpoint extraBody fields are merged last.
+ * Requests set store=false and request encrypted reasoning content for local stateless replay;
+ * how recorded reasoning is replayed follows `reasoningReplay`. Endpoint extraBody fields are merged last.
  */
 export function buildResponsesBody(
   request: Request,
@@ -61,7 +62,9 @@ export class ResponsesProvider extends OpenAIHttpClient {
   }
 
   protected override buildResponseBody(request: Request, options: GenerateOptions): Record<string, unknown> {
-    return buildResponsesBody(request, options, { media: this.opts.media, keepThinking: this.opts.keepThinking }, this.opts.extraBody);
+    return buildResponsesBody(request, options, {
+      media: this.opts.media, keepThinking: this.opts.keepThinking, reasoningReplay: this.opts.reasoningReplay,
+    }, this.opts.extraBody);
   }
 
   /** The Chat body builder is unreachable here: `buildResponseBody` is overridden whole. */
