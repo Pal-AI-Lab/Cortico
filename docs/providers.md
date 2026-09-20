@@ -57,8 +57,12 @@ provider 模块不预设任何模型名;端点
 
 ## 内建 openai-responses-compat
 
-`POST <baseUrl>/responses`,每次请求重放完整上下文。历史推理通过 `encrypted_content` 回传;
-本地仅保留来源实例、模块、兼容域与模型均匹配的推理项,并受 `keepPastThinking` 控制。
+`POST <baseUrl>/responses`,每次请求重放完整上下文。历史推理按 `options.reasoningReplay` 回传:
+`encrypted`(默认)只回 `encrypted_content`,且只回来源实例、模块、兼容域与模型均匹配的项,受
+`keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传,最后一条 user 消息之后的
+那一轮不受 `keepPastThinking` 约束,本地合成的工具调用前补一项合成推理。端点页的「思维链」段落
+手选这一项,或按「我不知道,测一下」:发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种
+写回。
 `options.endpointPath`、
 `options.extraHeaders`、`options.extraBody` 分别改路径、加头、并进请求体(`extraBody` 最后
 合并,能覆盖 `service_tier` 之类)。模型列表走 `GET <baseUrl>/models`。

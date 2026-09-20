@@ -1,9 +1,12 @@
 import type { ProviderModule } from '../base.ts';
 import type { LLMProviderEntry } from '../../core/types.ts';
+import type { ResponseClient } from '../../core/generation.ts';
 import { isContextOverflow } from '../transport/errors.ts';
-import { ModelCatalog, ResponsesProvider } from './native.ts';
+import { REASONING_REPLAYS, type ReasoningReplay } from '../transport/responses-input.ts';
+import { ModelCatalog, ResponsesProvider, type ResponsesProviderOptions } from './native.ts';
 import { text } from './strings.ts';
 import { protocolConfig } from './config.ts';
+import { compatConsole } from './console/server.ts';
 
 /** Suggested base URLs for the console field; operators may enter other URLs. */
 const BASE_URLS: readonly string[] = [
@@ -20,15 +23,23 @@ export interface CompatOptions {
   endpointPath?: string;
   extraHeaders?: Record<string, string>;
   extraBody?: Record<string, unknown>;
+  /** Default `encrypted`. */
+  reasoningReplay?: ReasoningReplay;
 }
 export function compatOptions(entry: LLMProviderEntry): CompatOptions {
   return (entry.options ?? {}) as CompatOptions;
 }
 
+/** Module-owned control object, used by the endpoint page's reasoning section. */
+export interface CompatControl {
+  /** A client for this endpoint with the given replay form; the stored entry is unchanged. */
+  probeClient(replay: ReasoningReplay): ResponseClient;
+}
+
 /** Empty strings and empty objects are the console's "unset"; they do not reach the wire. */
 function normalizeCompat(entry: LLMProviderEntry): LLMProviderEntry {
   const options: Record<string, unknown> = { ...entry.options };
-  if (options.endpointPath === '') delete options.endpointPath;
+  for (const key of ['endpointPath', 'reasoningReplay'] as const) if (options[key] === '') delete options[key];
   for (const key of ['extraHeaders', 'extraBody'] as const) {
     const value = options[key];
     if (value && typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length) delete options[key];
@@ -47,7 +58,7 @@ export default {
   baseUrlSuggestions: BASE_URLS,
   normalize: normalizeCompat,
   config: protocolConfig,
-  console: () => ({ config: [] }),
+  console: compatConsole,
   reasoningTiers: [],
   effortSuggestions: EFFORTS,
   serviceTiers: [],
@@ -60,6 +71,8 @@ export default {
       || Object.values(options.extraHeaders).some((value) => typeof value !== 'string')))
       throw new Error(S.extraHeadersObject);
     if (options.extraBody !== undefined && !isPlainObject(options.extraBody)) throw new Error(S.extraBodyObject);
+    if (options.reasoningReplay !== undefined && !REASONING_REPLAYS.includes(options.reasoningReplay))
+      throw new Error(S.reasoningReplayValue);
   },
   contextOverflow: isContextOverflow,
   create(name, entry, host) {
@@ -70,20 +83,23 @@ export default {
       ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     });
     const catalog = new ModelCatalog(() => ({ baseUrl: entry.baseUrl, headers: headers() }));
+    const clientOptions = (reasoningReplay: ReasoningReplay | undefined): ResponsesProviderOptions => ({
+      baseUrl: entry.baseUrl,
+      apiKey,
+      endpointPath: options.endpointPath,
+      extraHeaders: options.extraHeaders,
+      extraBody: options.extraBody,
+      log: host.log,
+      media: { enabled: () => entry.multimodal === true, read: host.readBlob },
+      keepThinking: host.keepThinking,
+      reasoningReplay,
+    });
     return {
       listModels: () => catalog.list(),
       contextWindow: (model) => catalog.contextWindow(model),
       compatibilityKey: () => [options.endpointPath ?? '/responses', name],
-      client: new ResponsesProvider({
-        baseUrl: entry.baseUrl,
-        apiKey,
-        endpointPath: options.endpointPath,
-        extraHeaders: options.extraHeaders,
-        extraBody: options.extraBody,
-        log: host.log,
-        media: { enabled: () => entry.multimodal === true, read: host.readBlob },
-        keepThinking: host.keepThinking,
-      }),
+      control: { probeClient: (replay) => new ResponsesProvider(clientOptions(replay)) } satisfies CompatControl,
+      client: new ResponsesProvider(clientOptions(options.reasoningReplay)),
     };
   },
 } satisfies ProviderModule;
