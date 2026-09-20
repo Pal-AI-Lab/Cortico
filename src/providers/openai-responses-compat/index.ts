@@ -56,7 +56,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 export default {
   id: 'openai-responses-compat',
   title: 'OpenAI Responses Compatible',
-  description: '连接兼容 Responses API 的模型服务 / Connect to Responses-compatible model services.',
+  description: 'Connect to Responses-compatible model services.',
+  localize: (language) => ({ description: language === 'zh' ? '连接兼容 Responses API 的模型服务。' : 'Connect to Responses-compatible model services.' }),
   defaultBaseUrl: BASE_URLS[0],
   baseUrlSuggestions: BASE_URLS,
   normalize: normalizeCompat,

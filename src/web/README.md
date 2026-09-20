@@ -88,4 +88,4 @@ esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`
 
 `client/features/providers/drafts.ts` 将草稿按部署 scope 保存在 localStorage，排除 API Key。连接页自行处理切卡的未保存保护，并向路由注册页面离开保护。复制只产生草稿。
 
-Terminal 的 `status.modelConnection` 包含当前连接的 `name`、`model`、`module`、`moduleTitle`、`baseUrl` 与 `ready`。供应商保存、删除及切换后推送状态帧；会话行右侧显示名称与模型，并链接至连接详情。
+Terminal 的 `status.modelConnection` 包含当前连接的 `name`、`model`、`module`、`moduleTitle`、`baseUrl` 与 `ready`。供应商保存、删除及切换后推送状态帧；顶部统计行右侧显示名称与模型，并链接至连接详情。

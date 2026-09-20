@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
 
 # src/providers
 
@@ -22,14 +22,14 @@
 ## ProviderModule
 
 `id` 必须等于目录名(扩展包里则是包声明的 id)。必填:`title`、`reasoningTiers`(空表 = 开放,
-effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`defaultBaseUrl` 与
+effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`description`、`defaultBaseUrl` 与
 `baseUrlSuggestions`、`effortSuggestions`、`temperatureNote`、`localize()`、`normalize()`、
 `validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `console()`
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
 
 地址、密钥变量名与图像开关不归模块:框架在 `console/config.ts` 里为每个端点声明这一组,
 扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,面板在 `instance` 插槽里
-用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 存——内建 llamacpp 的运行时与启动
+用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 暂存到连接草稿——内建 llamacpp 的运行时与启动
 两段走的是这条。`console()` 显式给空 `config` 表示这一页不另开配置页签,声明仍参与服务端
 校验。启停与模型操作这类动作走面板 invoke。
 

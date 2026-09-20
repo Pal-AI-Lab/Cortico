@@ -151,14 +151,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const summary = ui.h('div', 'live-summary');
-  summary.append(status.el, ui.h('span', 'grow'), netEl);
   const connection = ui.button('', { onClick: () => ctx.router.navigate(state.status?.modelConnection ? ['providers', state.status.modelConnection.name] : ['providers']) });
   connection.className = 'live-connection';
   const connectionValue = ui.h('span', 'live-connection-value');
-  connection.append(ui.h('small', '', S.currentProvider), connectionValue);
-  const sessionRow = ui.h('div', 'live-session-row');
-  sessionRow.append(sessionBand.el, connection);
-  band.append(summary, sessionRow);
+  connection.append(ui.h('span', 'live-connection-label', S.currentProvider), connectionValue);
+  summary.append(status.el, ui.h('span', 'grow'), connection, netEl);
+  band.append(summary, sessionBand.el);
 
   const exportButton = ui.button('', {
     size: 'sm',

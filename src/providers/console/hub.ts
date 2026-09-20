@@ -59,7 +59,7 @@ export class ProviderHub {
   }
   moduleList(language: Language) {
     return this.modules.map(module => ({ id: module.id, title: module.title,
-      description: module.description ?? module.title, defaultBaseUrl: module.defaultBaseUrl ?? '',
+      description: module.localize?.(language)?.description ?? module.description ?? module.title, defaultBaseUrl: module.defaultBaseUrl ?? '',
       reasoningTiers: module.localize?.(language)?.reasoningTiers ?? module.reasoningTiers,
       effortSuggestions: module.effortSuggestions ?? [], serviceTiers: module.localize?.(language)?.serviceTiers ?? module.serviceTiers,
       temperatureNote: module.localize?.(language)?.temperatureNote ?? module.temperatureNote,

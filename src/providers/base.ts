@@ -84,6 +84,7 @@ export interface ProviderModule {
    * Absent (or a field left out) = the tables above are shown as written.
    */
   localize?(language: Language): {
+    description?: string;
     reasoningTiers?: readonly ReasoningTier[];
     serviceTiers?: readonly ServiceTier[];
     temperatureNote?: string;

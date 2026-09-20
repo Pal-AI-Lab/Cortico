@@ -112,3 +112,9 @@ it('discarding a new unsaved draft removes its card', async () => {
   expect(root.querySelectorAll('.connection-card')).toHaveLength(2);
   expect(root.querySelector('.is-selected')?.getAttribute('data-provider')).toBe('Alpha');
 });
+
+it('ordinary connection names do not inherit phantom browser drafts', async () => {
+  const { root } = await fixture(['constructor']);
+  expect(root.querySelector('.connection-secondary')?.textContent).toBe('');
+  expect(root.querySelector('[aria-label="供应商名称"]')?.getAttribute('aria-invalid')).not.toBe('true');
+});

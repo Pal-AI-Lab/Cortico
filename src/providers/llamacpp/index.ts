@@ -24,14 +24,14 @@ const reasoningTiers = (language: Language): ReasoningTier[] => {
 export default {
   id: 'llamacpp',
   title: 'llama.cpp',
-  description: '连接或托管本地 llama.cpp 模型 / Connect to or manage local llama.cpp models.',
+  description: 'Connect to or manage local llama.cpp models.',
   defaultBaseUrl: 'http://127.0.0.1:8090/v1',
   baseUrlSuggestions: ['http://127.0.0.1:8090/v1', 'http://127.0.0.1:8080/v1'],
   normalize: normalizeLlamaCpp,
   console: llamacppConsole,
   config: runtimeConfig,
   reasoningTiers: reasoningTiers('zh'),
-  localize: (language) => ({ reasoningTiers: reasoningTiers(language) }),
+  localize: (language) => ({ description: language === 'zh' ? '连接或托管本地 llama.cpp 模型。' : 'Connect to or manage local llama.cpp models.', reasoningTiers: reasoningTiers(language) }),
   serviceTiers: [],
   validateEntry: (entry, language) => {
     const S = text(language);

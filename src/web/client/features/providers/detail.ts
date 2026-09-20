@@ -28,6 +28,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   root.append(form, report);
   const errors = new Map<string, () => boolean>();
   let rendering = 0;
+  let saving = false;
   let panelHandle: { dispose(): void } | null = null;
   let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
   const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'));
@@ -77,7 +78,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           editing.raw = {}; change(); run(render);
         } });
       select.setAttribute('aria-label', S.module); basic.append(ui.field(S.module + ' *', select));
-      errors.set('module', () => !!editing.entry.kind);
+      const required = ui.h('div', 'field-error'); basic.append(required);
+      errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.required; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
     }
     if (selectedModule) basic.append(ui.msgline(selectedModule.description), ui.h('small', 'muted', selectedModule.id));
     const connection = section(S.connection);
@@ -99,12 +101,18 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const spec = editing.entry.spec ??= { model: '', thinking: false };
     const modelInput = field(model, 'model', S.model, spec.model, value => { spec.model = value; }, value => value.trim() ? null : S.required);
     const catalog = ui.h('datalist'); catalog.id = 'connection-models-' + Math.random().toString(36).slice(2); modelInput.setAttribute('list', catalog.id); model.append(catalog);
+    let listedModels: Array<{ id: string; contextWindow?: number }> = [];
+    let contextInput: HTMLInputElement | null = null;
+    modelInput.addEventListener('change', () => {
+      const known = listedModels.find(item => item.id === modelInput.value)?.contextWindow;
+      if (known && contextInput) { spec.contextWindow = known; contextInput.value = String(known); delete editing.raw.contextWindow; change(); }
+    }, opts);
     const fetch = ui.button(S.fetchModels, { onClick: () => run(async () => {
       if (!saved || dirty()) { report.textContent = S.savedFirst; return; }
       fetch.disabled = true;
       try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(saved.name) + '/models', {}, opts);
         catalog.replaceChildren(...result.models.map(item => { const option = ui.h('option'); option.value = item.id; return option; }));
-        modelInput.addEventListener('change', () => { const known = result.models.find(item => item.id === modelInput.value)?.contextWindow; if (known) { spec.contextWindow = known; change(); } }, opts);
+        listedModels = result.models;
       } finally { fetch.disabled = false; }
     }) }); model.append(fetch);
     const tiers = selectedModule?.reasoningTiers ?? [];
@@ -117,9 +125,10 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       spec.thinking = value !== 'none'; if (value && value !== 'none') spec.reasoningEffort = value; else delete spec.reasoningEffort;
     });
     for (const [name, label] of [['temperature', S.temperature], ['maxTokens', S.maxTokens], ['contextWindow', S.context]] as const) {
-      field(model, name, label, editing.raw[name] ?? String(spec[name] ?? ''), value => {
+      const input = field(model, name, label, editing.raw[name] ?? String(spec[name] ?? ''), value => {
         editing.raw[name] = value; if (!value) delete spec[name]; else spec[name] = Number(value);
       }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : S.invalidNumber, 'number');
+      if (name === 'contextWindow') contextInput = input;
     }
     if (selectedModule?.serviceTiers.length) {
       const select = ui.select({ value: editing.entry.serviceTier ?? '', options: [{ value: '', label: '—' }, ...selectedModule.serviceTiers.map(tier => ({ value: tier.id, label: tier.label }))], onChange: value => { editing.entry.serviceTier = value; change(); } });
@@ -176,6 +185,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         const control = configField(ui, property, getValue(), () => { if (control.read) { setValue(control.read()); change(); } }, lifecycle.signal);
         control.node.setAttribute('aria-label', property.title ?? suffix);
         body.append(ui.field(property.title ?? suffix, control.node));
+        if (property.description) body.append(ui.h('p', 'tdesc', property.description));
       }
     }
     if (ctx.consolePageHost) {
@@ -219,11 +229,15 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     }
   }
   async function save(select = true): Promise<boolean> {
-    if (![...errors.values()].map(check => check()).every(Boolean)) { report.textContent = S.readiness.invalid; return false; }
+    if (saving) return false;
+    const valid = [...errors.values()].map(check => check()).every(Boolean); change();
+    if (!valid) { report.textContent = S.readiness.invalid; return false; }
+    saving = true;
     try {
       const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
       baseline = JSON.stringify(editing); await options.onSaved(result.name, select); return true;
     } catch (error) { report.textContent = String(error); return false; }
+    finally { saving = false; }
   }
   async function leave(): Promise<boolean> {
     if (!dirty()) return true;
@@ -239,6 +253,6 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
     });
   }
-  await render();
+  await render(); change();
   return { dispose: () => { lifecycle.dispose(); panelHandle?.dispose(); panelHost?.unmount(); }, dirty, leave };
 }

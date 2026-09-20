@@ -54,7 +54,9 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       const active = identity === state.active;
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
       node.title.textContent = identity === NEW_DRAFT_ID ? newDraft?.name || S.newName : identity;
+      node.title.title = node.title.textContent;
       node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
+      node.model.title = item.model ?? ''; node.url.title = item.baseUrl ?? '';
       const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
       node.status.textContent = active ? S.active : S.readiness[readiness];
       node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== NEW_DRAFT_ID && drafts.has(identity) ? S.readiness.draft : '';

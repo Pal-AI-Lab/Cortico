@@ -14,7 +14,7 @@ const zh = {
   composerPlaceholder: "输入消息…",
   exportDiagnostics: '导出诊断',
   exportFailed: '诊断包取不回来',
-  composerNoProvider: '当前无可用 Provider,请前往「模型提供商」页设置',
+  composerNoProvider: '当前模型供应商不可用，请前往「模型供应商」页设置',
   composerQueued: '终端通道正在重连，消息已排队',
   emptyConnecting: '连接调试通道中…',
   ctxTitle: (total: string, max: string | null) =>
