@@ -18,7 +18,8 @@ export type ConsoleIconName =
   | 'eye'
   | 'eye-off'
   | 'pencil'
-  | 'refresh';
+  | 'refresh'
+  | 'trash';
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect' | 'line', attrs: Readonly<Record<string, string>>];
 
@@ -101,6 +102,13 @@ const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
   refresh: [
     ['path', { d: 'M21 12a9 9 0 1 1-2.6-6.4' }],
     ['path', { d: 'M21 3v6h-6' }],
+  ],
+  trash: [
+    ['path', { d: 'M4 7h16' }],
+    ['path', { d: 'M9.5 7V5h5v2' }],
+    ['path', { d: 'M6.5 7v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2V7' }],
+    ['path', { d: 'M10 11v6' }],
+    ['path', { d: 'M14 11v6' }],
   ],
 };
 

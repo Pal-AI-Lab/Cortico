@@ -19,6 +19,8 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '') {
     else if (path === '/api/provider-modules') result = [{ id: 'sample', title: 'Sample driver', description: 'A sample connection', defaultBaseUrl: entry.baseUrl, reasoningTiers: [], serviceTiers: [] }];
     else if (path === '/api/provider-modules/config') result = [];
     else if (/\/activate$/.test(path)) active = decodeURIComponent(path.split('/')[3]);
+    else if (/\/delete$/.test(path)) names = names.filter(name => name !== decodeURIComponent(path.split('/')[3]));
+    else if (/\/test$/.test(path)) result = { ok: true, status: 200, elapsedMs: 1234, model: 'probe-model', usage: { input: 10, cachedInput: 0, output: 5, reasoning: 0 }, encryptedReasoning: false, charges: [] };
     else if (/^\/api\/providers\/[^/]+$/.test(path)) result = detail(decodeURIComponent(path.split('/')[3]));
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
   });
@@ -29,11 +31,17 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '') {
   await mountProviders(ctx); await flush(); return { root, calls, ctx };
 }
 afterEach(() => { lifecycles.splice(0).forEach(life => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); localStorage.clear(); });
+/** 新建走「按钮开选单 → 选类型」两步。 */
+async function startDraft(root: HTMLElement, title = 'Sample driver') {
+  (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
+  const item = [...root.querySelectorAll('.connection-create-item')].find(node => node.querySelector('.connection-create-name')?.textContent === title);
+  (item as HTMLButtonElement).click(); await flush();
+}
 it('uses one connection navigation entry without provider lamps', () => { expect(providersFeature.route).toBe('providers'); expect(providersFeature.lampId).toBeUndefined(); });
 it('selection preserves active connection and card DOM', async () => {
   const { root, calls } = await fixture();
   const cards = [...root.querySelectorAll('.connection-card')];
-  (cards[1].querySelector('button') as HTMLButtonElement).click(); await flush();
+  (cards[1].querySelector('.rowbar button') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')[0]).toBe(cards[0]);
   expect(cards[0].classList.contains('is-active')).toBe(true);
   expect(cards[1].classList.contains('is-selected')).toBe(true);
@@ -43,7 +51,7 @@ it('activation leaves selected detail and unsaved input in place', async () => {
   const { root } = await fixture();
   const input = root.querySelector('[aria-label="供应商名称"]') as HTMLInputElement;
   input.value = 'Edited'; input.dispatchEvent(new Event('input'));
-  (root.querySelectorAll('.connection-card')[1].querySelectorAll('button')[1] as HTMLButtonElement).click(); await flush();
+  (root.querySelectorAll('.connection-card')[1].querySelectorAll('.rowbar button')[2] as HTMLButtonElement).click(); await flush();
   expect(root.querySelector('[aria-label="供应商名称"]')).toBe(input);
   expect(input.value).toBe('Edited');
   expect(root.querySelectorAll('.connection-card')[1].classList.contains('is-active')).toBe(true);
@@ -51,7 +59,7 @@ it('activation leaves selected detail and unsaved input in place', async () => {
 it('new drafts make no server mutation and cancel removes the card', async () => {
   const { root, calls } = await fixture([]);
   expect(root.textContent).toContain('还没有模型供应商');
-  (root.querySelector('.connection-index>button') as HTMLButtonElement).click(); await flush();
+  await startDraft(root);
   expect(root.querySelectorAll('.connection-card')).toHaveLength(1);
   expect(root.querySelector('.connection-status')?.textContent).toBe('草稿');
   expect(calls.filter(call => call.body && call.path !== '/api/provider-modules/config')).toHaveLength(0);
@@ -86,7 +94,7 @@ it('switching away from edits offers stay, discard and save', async () => {
   const { root } = await fixture();
   const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
   input.value = 'https://draft.test'; input.dispatchEvent(new Event('input'));
-  (root.querySelectorAll('.connection-card')[1].querySelector('button') as HTMLButtonElement).click(); await flush();
+  (root.querySelectorAll('.connection-card')[1].querySelector('.rowbar button') as HTMLButtonElement).click(); await flush();
   const dialog = document.querySelector('dialog')!;
   expect(dialog.textContent).toContain('放弃更改并切换');
   expect(dialog.textContent).toContain('保存');
@@ -104,10 +112,10 @@ it('uses the shared page heading and never persists API Keys in browser drafts',
 });
 it('discarding a new unsaved draft removes its card', async () => {
   const { root } = await fixture();
-  (root.querySelector('.connection-index>button') as HTMLButtonElement).click(); await flush();
+  await startDraft(root);
   const input = root.querySelector('[aria-label="供应商名称"]') as HTMLInputElement;
   input.value = 'Unsaved'; input.dispatchEvent(new Event('input'));
-  (root.querySelector('[data-provider="Alpha"] button') as HTMLButtonElement).click(); await flush();
+  (root.querySelector('[data-provider="Alpha"] .rowbar button') as HTMLButtonElement).click(); await flush();
   ([...document.querySelectorAll('dialog button')].find(button => button.textContent === '放弃更改并切换') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')).toHaveLength(2);
   expect(root.querySelector('.is-selected')?.getAttribute('data-provider')).toBe('Alpha');
@@ -117,4 +125,46 @@ it('ordinary connection names do not inherit phantom browser drafts', async () =
   const { root } = await fixture(['constructor']);
   expect(root.querySelector('.connection-secondary')?.textContent).toBe('');
   expect(root.querySelector('[aria-label="供应商名称"]')?.getAttribute('aria-invalid')).not.toBe('true');
+});
+
+it('a new connection starts from a chosen module, not from an empty kind', async () => {
+  const { root } = await fixture([]);
+  const create = root.querySelector('.connection-create > button') as HTMLButtonElement;
+  create.click(); await flush();
+  expect(create.getAttribute('aria-expanded')).toBe('true');
+  expect(root.querySelectorAll('.connection-card')).toHaveLength(0);
+  (root.querySelector('.connection-create-item') as HTMLButtonElement).click(); await flush();
+  expect(create.getAttribute('aria-expanded')).toBe('false');
+  expect(root.querySelectorAll('.connection-card')).toHaveLength(1);
+  expect((root.querySelector('select[aria-label="供应商类型"]') as HTMLSelectElement).value).toBe('sample');
+  expect((root.querySelector('[aria-label="API 地址"]') as HTMLInputElement).value).toBe(entry.baseUrl);
+});
+
+it('deleting from a card asks once on the button and carries the revision it listed', async () => {
+  const { root, calls } = await fixture();
+  const erase = root.querySelector('[data-provider="Beta"] .connection-erase') as HTMLButtonElement;
+  erase.click(); await flush();
+  expect(erase.classList.contains('is-armed')).toBe(true);
+  expect(calls.some(call => call.path.endsWith('/delete'))).toBe(false);
+  root.click(); await flush();
+  expect(erase.classList.contains('is-armed')).toBe(false);
+  erase.click(); erase.click(); await flush();
+  const deletion = calls.find(call => call.path.endsWith('/delete'))!;
+  expect(deletion.path).toBe('/api/providers/Beta/delete');
+  expect(deletion.body).toEqual({ expectedRevision: 'r1' });
+  expect(root.querySelector('[data-provider="Beta"]')).toBeNull();
+});
+
+it('a card probe reports the diagnostics it received below that card', async () => {
+  const { root, calls } = await fixture();
+  const card = root.querySelector('[data-provider="Alpha"]') as HTMLElement;
+  const probe = [...card.querySelectorAll('.rowbar button')].find(button => button.textContent?.startsWith('测试可用性')) as HTMLButtonElement;
+  probe.click(); await flush();
+  expect(calls.some(call => call.path === '/api/providers/Alpha/test')).toBe(true);
+  const panel = card.querySelector('.connection-probe') as HTMLElement;
+  expect(panel.classList.contains('is-open')).toBe(true);
+  expect(panel.textContent).toContain('probe-model');
+  expect(panel.textContent).toContain('成功 · 200');
+  (panel.querySelector('.btn') as HTMLButtonElement).click();
+  expect(panel.classList.contains('is-open')).toBe(false);
 });

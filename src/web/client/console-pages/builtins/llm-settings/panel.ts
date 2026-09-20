@@ -61,7 +61,7 @@ interface ModelEntry {
   id: string;
   contextWindow?: number;
 }
-interface ProbeResult {
+export interface ProbeResult {
   ok: boolean;
   status: number | null;
   elapsedMs: number;
@@ -106,7 +106,8 @@ function datalist(ui: ConsoleUi, id: string, values: readonly string[]): HTMLDat
   return list;
 }
 
-function probeCard(ui: ConsoleUi, S: typeof panel.zh, result: ProbeResult): HTMLElement {
+/** 探活结果的呈现,模块页与连接卡片共用。 */
+export function probeCard(ui: ConsoleUi, S: typeof panel.zh, result: ProbeResult): HTMLElement {
   const fmt: ConsoleFormat = ui.fmt;
   const usage = result.usage;
   const rows = [

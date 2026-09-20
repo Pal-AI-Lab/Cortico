@@ -1,8 +1,10 @@
 import { pick } from '../../core/language.ts';
 const zh = {
-  pageTitle: '模型供应商', navLabel: '模型供应商', navGroup: 'Core', create: '+ 新建供应商', newName: '新建供应商',
+  pageTitle: '模型供应商', navLabel: '模型供应商', navGroup: 'Core', create: '+ 新建供应商实例', newName: '新建实例',
+  createHint: '实例 = 填一组供应商配置保存成卡片',
   empty: '还没有模型供应商', emptyHint: '添加一条模型连接后，Cortico 才能进行模型推理。',
   configure: '⚙ 配置', activate: '⇄ 设为当前', active: '当前模型', missing: '当前模型供应商不存在，配置中引用：',
+  pickModule: '选择供应商类型', eraseConfirm: '确认删除', probe: '测试可用性', probeClose: '收起',
   readiness: { ready: '配置完成', 'needs-setup': '需要完善配置', 'runtime-unavailable': '运行环境未就绪', invalid: '配置错误', 'module-missing': '模块不可用', draft: '草稿' } as Record<string, string>,
   basic: '基本信息', connection: '连接', modelSection: '模型与生成', moduleSection: '模块设置', pricing: '成本与计价', advanced: '高级协议',
   name: '供应商名称', module: '供应商类型', url: 'API 地址', key: 'API Key', model: '模型',
@@ -22,9 +24,11 @@ const zh = {
   deleteConfirm: '删除供应商及其目录中的全部文件？', referenced: '此供应商正在被以下 Bot 使用，不能删除：', reload: '重新加载',
 };
 const en: typeof zh = {
-  pageTitle: 'Model connections', navLabel: 'Model connections', navGroup: 'Core', create: '+ New connection', newName: 'New connection',
+  pageTitle: 'Model connections', navLabel: 'Model connections', navGroup: 'Core', create: '+ New connection instance', newName: 'New instance',
+  createHint: 'An instance is one set of provider settings saved as a card.',
   empty: 'No model connections yet', emptyHint: 'Add a model connection to enable inference.',
   configure: '⚙ Configure', activate: '⇄ Set current', active: 'Current model', missing: 'Current model connection is missing: ',
+  pickModule: 'Choose a connection type', eraseConfirm: 'Confirm delete', probe: 'Test endpoint', probeClose: 'Hide',
   readiness: { ready: 'Configured', 'needs-setup': 'Needs setup', 'runtime-unavailable': 'Runtime unavailable', invalid: 'Invalid configuration', 'module-missing': 'Module unavailable', draft: 'Draft' },
   basic: 'Basic information', connection: 'Connection', modelSection: 'Model and generation', moduleSection: 'Module settings', pricing: 'Pricing', advanced: 'Advanced protocol',
   name: 'Connection name', module: 'Connection type', url: 'API URL', key: 'API Key', model: 'Model',

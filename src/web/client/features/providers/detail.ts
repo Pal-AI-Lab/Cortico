@@ -3,7 +3,7 @@ import { get, post } from '../../core/api.ts';
 import { Lifecycle } from '../../core/lifecycle.ts';
 import { configField, type ConfigGroup } from '../config/view.ts';
 import { validateProviderName } from '../../../../providers/name.ts';
-import { connectionPath, type Detail, type Editing, type Module } from './types.ts';
+import { connectionPath, moduleEntry, type Detail, type Editing, type Module } from './types.ts';
 import { LANGUAGE } from '../../core/language.ts';
 import { pricingEditor } from '../../console-pages/builtins/llm-settings/pricing-panel.ts';
 import { S } from './strings.ts';
@@ -77,8 +77,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     else {
       const select = ui.select({ value: editing.entry.kind, options: [{ value: '', label: '—' }, ...modules.map(module => ({ value: module.id, label: module.title }))],
         onChange: kind => {
-          const module = modules.find(module => module.id === kind);
-          editing.entry = { kind, baseUrl: module?.defaultBaseUrl ?? '', spec: { model: '', thinking: module?.reasoningTiers[0]?.thinking ?? true, ...(module?.reasoningTiers[0]?.effort ? { reasoningEffort: module.reasoningTiers[0].effort } : {}) } };
+          editing.entry = moduleEntry(modules.find(module => module.id === kind), kind);
           editing.raw = {}; change(); run(render);
         } });
       select.setAttribute('aria-label', S.module); basic.append(ui.field(S.module + ' *', select));

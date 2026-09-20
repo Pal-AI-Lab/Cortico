@@ -1740,12 +1740,12 @@
   .ob-btn.ob-go:hover:not(:disabled) { filter: brightness(1.06); }
 .connection-hub{display:grid;grid-template-columns:minmax(210px,280px) minmax(0,1fr);gap:24px;align-items:start}
 .connection-index{position:sticky;top:16px;min-width:0;max-height:calc(100vh - 140px);overflow:auto;padding:4px}
-.connection-index>.btn{width:100%;margin-bottom:14px}.connection-cards{display:grid;gap:12px;padding:3px}
+.connection-cards{display:grid;gap:12px;padding:3px}
 .connection-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--paper);cursor:pointer;transition:background .15s,border-color .15s}
 .connection-card.is-active{border-color:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
 .connection-card.is-selected{background:color-mix(in srgb,var(--ink) 5%,var(--paper));outline:2px solid var(--ink-dim);outline-offset:1px}
-.connection-name,.connection-model,.connection-url,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.connection-name{font:600 15.5px/1.3 var(--sans)}.connection-model{margin-top:5px}.connection-url{font-size:11px;color:var(--ink-dim);margin-top:3px}
+.connection-name,.connection-kind,.connection-model,.connection-url,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.connection-name{font:700 17px/1.25 var(--sans)}.connection-kind{margin-top:4px;font:600 11.5px/1.3 var(--sans);color:var(--muted-foreground)}.connection-model{margin-top:9px;font-size:13px}.connection-url{font-size:11px;color:var(--ink-dim);margin-top:3px}
 .connection-status{font-size:12px;margin-top:14px}.connection-secondary{font-size:11px;color:var(--ink-dim)}
 .connection-card .rowbar{margin-top:12px;justify-content:space-between;gap:4px}
 .connection-detail{min-width:0}.connection-detail .sheet{margin-bottom:16px}
@@ -1801,3 +1801,35 @@
 .providerchrome > .rowbar { margin-bottom: 10px; }
 .coreview > .scroll { scrollbar-gutter: auto; }
 .panelslot > :first-child > .sheet:first-child { padding-top: 0; }
+
+/* 新建按钮下弹的类型选单;卡片上的删除与探活。 */
+.connection-create { position:relative; margin-bottom:16px; }
+.connection-create-hint { margin:7px 2px 0; font:var(--text-detail)/1.5 var(--sans); color:var(--muted-foreground); }
+.connection-create > .btn { width:100%; }
+.connection-create-menu { position:absolute; z-index:30; left:0; right:0; top:calc(100% + 6px); display:grid; gap:2px; padding:6px; border:1px solid var(--border-strong); border-radius:12px; background:color-mix(in srgb,var(--ink) 8%,var(--paper)); box-shadow:0 14px 34px #00000038; transform-origin:top center; transition:opacity .16s ease, transform .16s ease, visibility .16s; }
+.connection-create-menu:not(.is-open) { opacity:0; visibility:hidden; transform:translateY(-6px) scaleY(.96); pointer-events:none; }
+.connection-create-menu.is-open { opacity:1; visibility:visible; transform:none; }
+.connection-create-title { padding:6px 8px 8px; font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted-foreground); }
+.connection-create-item { display:grid; gap:3px; width:100%; padding:9px 10px; border:0; border-radius:9px; background:none; color:inherit; text-align:left; cursor:pointer; transition:background .14s ease; }
+.connection-create-item:hover, .connection-create-item:focus-visible { background:var(--hover); }
+.connection-create-name { font:600 13px/1.3 var(--sans); }
+.connection-create-desc { font:var(--text-detail)/1.5 var(--sans); color:var(--muted-foreground); }
+.connection-card { position:relative; }
+.connection-erase { position:absolute; top:10px; right:10px; display:flex; align-items:center; gap:0; height:26px; padding:0 6px; border:1px solid transparent; border-radius:8px; background:none; color:var(--ink-dim); cursor:pointer; transition:color .14s ease, background .14s ease, border-color .14s ease, gap .18s ease; }
+.connection-erase .icon { width:14px; height:14px; flex:none; }
+.connection-erase:hover { color:var(--danger,#b43c38); background:var(--hover); }
+.connection-erase-text { display:grid; grid-template-columns:0fr; overflow:hidden; font:600 12px/1 var(--sans); white-space:nowrap; transition:grid-template-columns .18s ease; }
+.connection-erase-text > span { overflow:hidden; }
+.connection-erase.is-armed { gap:6px; color:var(--danger,#b43c38); border-color:currentColor; background:var(--paper); }
+.connection-erase.is-armed .connection-erase-text { grid-template-columns:1fr; }
+.connection-name { padding-right:34px; }
+.connection-probe-btn .connection-spin { display:none; width:12px; height:12px; margin-left:6px; border:2px solid currentColor; border-right-color:transparent; border-radius:50%; animation:connection-spin .7s linear infinite; }
+.connection-probe-btn.is-busy .connection-spin { display:inline-block; }
+@keyframes connection-spin { to { transform:rotate(360deg); } }
+.connection-probe { display:grid; grid-template-rows:0fr; margin-top:0; transition:grid-template-rows .2s ease, margin-top .2s ease, opacity .2s ease; opacity:0; }
+.connection-probe.is-open { grid-template-rows:1fr; margin-top:12px; opacity:1; }
+.connection-probe-body { overflow:hidden; }
+.connection-probe .sheet { margin:0; padding:10px 12px; border:1px solid var(--border); border-radius:10px; background:var(--surface); }
+.connection-probe .kvtable td { padding:3px 0; font-size:11.5px; word-break:break-word; }
+.connection-probe .kvtable td:first-child { padding-right:8px; color:var(--muted-foreground); white-space:nowrap; }
+.connection-probe > .connection-probe-body > .btn { margin-top:8px; }
