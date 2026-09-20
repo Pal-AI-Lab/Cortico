@@ -30,7 +30,7 @@ const tool = (name: string, extra: Partial<ToolDef> = {}): ToolDef => ({
   ...extra,
 });
 
-function worldDef(id: string, tools: ToolDef[], patch: Partial<World> = {}, defaults: WorldSection = { enabled: false }): WorldDefinition<WorldSection> {
+function worldDef(id: string, tools: ToolDef[], patch: Partial<World> = {}, defaults: WorldSection & Record<string, unknown> = { enabled: false }): WorldDefinition<WorldSection> {
   return {
     id,
     label: `${id} 扩展`,
