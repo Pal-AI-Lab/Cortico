@@ -109,6 +109,8 @@ interface PendingDraft {
   replyMessageId?: number | string;
   /** 要发送的图片的句柄(`log:` 她看见过的 / `mem:` 她收藏的);无=纯文本 */
   imageRef?: string;
+  /** 要发送的语音的句柄;语音条独占一条消息,与 text、imageRef 互斥 */
+  voiceRef?: string;
 }
 
 interface ForwardNode {
@@ -1235,7 +1237,14 @@ export class QQWorld implements World {
   /** 实际发送到目标会话,回录 qq.self,返回回执文本 */
   private async sendToTarget(
     target: Conv,
-    opts: { text: string; replyMessageId?: number | string; imageRef?: string; imageBytes?: Uint8Array },
+    opts: {
+      text: string;
+      replyMessageId?: number | string;
+      imageRef?: string;
+      imageBytes?: Uint8Array;
+      voiceRef?: string;
+      voiceBytes?: Uint8Array;
+    },
   ): Promise<string> {
     const host = this.host!;
     const driver = this.driver!;
@@ -1247,6 +1256,7 @@ export class QQWorld implements World {
       text: opts.text,
       reply_to_message_id: opts.replyMessageId,
       image_base64: imageBase64,
+      ...(opts.voiceBytes ? { record_base64: Buffer.from(opts.voiceBytes).toString('base64') } : {}),
     });
     const action = target.kind === 'group' ? 'send_group_msg' : 'send_private_msg';
     const params =
@@ -1259,7 +1269,13 @@ export class QQWorld implements World {
     // 回录正文:文字 + (如有)图片标记,保证自己发的图在历史里也可见。
     // 行首保留平台消息号,使历史查询结果可引用自身消息。
     const imgMark = opts.imageRef ? `[图片: ${opts.imageRef}]` : '';
-    const selfBody = [opts.text, imgMark].filter(Boolean).join(' ');
+    const voiceMark = opts.voiceRef ? `[语音: ${opts.voiceRef}]` : '';
+    const selfBody = [opts.text, imgMark, voiceMark].filter(Boolean).join(' ');
+    const selfBlob = opts.imageRef
+      ? { handle: opts.imageRef, fallbackText: '你发出的图片' }
+      : opts.voiceRef
+        ? { handle: opts.voiceRef, fallbackText: '你发出的语音' }
+        : null;
     const idTag = messageId !== undefined ? `#${messageId} ` : '';
     const env = await host.pushEvent(
       {
@@ -1267,8 +1283,8 @@ export class QQWorld implements World {
         ts: nowIso(this.timezone),
         source: this.id,
         text: `${idTag}[${this.convLabel(target)} ${shortTime(this.timezone)}] 你: ${selfBody}`,
-        // 发出去的图按句柄附在自己这条记录上:时间线与吃图的模型都看得到发了什么
-        ...(opts.imageRef ? { blobs: [{ handle: opts.imageRef, fallbackText: '你发出的图片' }] } : {}),
+        // 发出去的图和语音按句柄附在自己这条记录上:时间线与吃这些类型的模型都看得到发了什么
+        ...(selfBlob ? { blobs: [selfBlob] } : {}),
         senderKey: String(driver.identity?.selfId ?? 'self'),
         meta: {
           message_id: messageId,
@@ -1320,6 +1336,13 @@ export class QQWorld implements World {
               'Optional. An image to send, given by handle: a log: handle from a [blob ...] line you saw, '
               + 'or a mem: handle of one kept in your workspace.',
           },
+          voice: {
+            type: 'string',
+            description:
+              'Optional. Audio to send as a QQ voice bar, given by handle the same way as image. '
+              + 'A voice bar is a message of its own: leave text, image and reply_to out. '
+              + 'The protocol end converts the audio it accepts (wav, mp3) to what QQ plays.',
+          },
           reply_to: {
             type: 'string',
             description:
@@ -1335,7 +1358,12 @@ export class QQWorld implements World {
         const rawText = typeof args.text === 'string' ? args.text : '';
         const imageArg =
           typeof args.image === 'string' && args.image.trim() ? args.image.trim() : undefined;
-        if (!rawText.trim() && !imageArg) return '[bad input] provide at least one of text or image';
+        const voiceArg =
+          typeof args.voice === 'string' && args.voice.trim() ? args.voice.trim() : undefined;
+        if (!rawText.trim() && !imageArg && !voiceArg) return '[bad input] provide at least one of text, image or voice';
+        if (voiceArg && (rawText.trim() || imageArg || (args.reply_to !== undefined && args.reply_to !== null && String(args.reply_to) !== ''))) {
+          return '[bad input] a voice bar is a message of its own; it carries no text, image or quote-reply';
+        }
         // 纯空白正文视为不带字(避免只发图时混进一个空白 text 段)
         const text = rawText.trim() ? rawText : '';
 
@@ -1373,7 +1401,17 @@ export class QQWorld implements World {
             : `[will send image: ${imageArg}]`;
         }
 
-        this.pendingDraft = { target, text, replyMessageId: rep.mid, imageRef };
+        // 语音:同样按句柄确认取得到,MIME 必须是音频
+        let voiceRef: string | undefined;
+        if (voiceArg) {
+          const got = host.blob(voiceArg);
+          if (!got) return `[send failed] no blob for ${voiceArg}; use a log: handle from a [blob ...] line or a mem: handle from your workspace`;
+          if (!got.mime.startsWith('audio/')) return `[send failed] ${voiceArg} is ${got.mime}, not audio`;
+          voiceRef = voiceArg;
+          previewLine = `[will send voice: ${voiceArg}]`;
+        }
+
+        this.pendingDraft = { target, text, replyMessageId: rep.mid, imageRef, voiceRef };
 
         // 排出当下已积、尚未投递的QQ会话事件(consume-once)。正文不能伪装成
         // draft 工具结果:交回 loop 按常规投递,本轮下一次推理前它们就在眼前,
@@ -1382,7 +1420,7 @@ export class QQWorld implements World {
         ctx.queueExternalEvents?.(drained);
 
         const lines = [`[draft staged → ${this.targetDesc(target)}]`];
-        lines.push(text.trim() ? `Text: ${text}` : '(image only, no text)');
+        lines.push(text.trim() ? `Text: ${text}` : voiceRef ? '(voice bar, no text)' : '(image only, no text)');
         if (previewLine) lines.push(previewLine);
         lines.push(
           '',
@@ -1433,11 +1471,19 @@ export class QQWorld implements World {
               if (!got) return `[send failed] blob ${draft.imageRef} is gone (draft kept)`;
               imageBytes = got.bytes;
             }
+            let voiceBytes: Uint8Array | undefined;
+            if (draft.voiceRef) {
+              const got = host.blob(draft.voiceRef);
+              if (!got) return `[send failed] blob ${draft.voiceRef} is gone (draft kept)`;
+              voiceBytes = got.bytes;
+            }
             const receipt = await this.sendToTarget(draft.target, {
               text: draft.text,
               replyMessageId: draft.replyMessageId,
               imageRef: draft.imageRef,
               imageBytes,
+              voiceRef: draft.voiceRef,
+              voiceBytes,
             });
             this.pendingDraft = null; // 成功才清;失败保留草稿,可再 confirm 重试
             return receipt;
