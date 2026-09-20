@@ -12,7 +12,7 @@ import type { CoreConfig } from './types.ts';
 import { pick, type Language } from './language.ts';
 
 export interface ConfigProperty {
-  type: 'integer' | 'number' | 'boolean' | 'string' | 'array';
+  type: 'integer' | 'number' | 'boolean' | 'string' | 'array' | 'object';
   title: string;
   description?: string;
   minimum?: number;

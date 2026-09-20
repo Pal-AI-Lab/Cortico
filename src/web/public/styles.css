@@ -1728,3 +1728,18 @@
   .ob-btn:disabled { opacity: .55; cursor: not-allowed; }
   .ob-btn.ob-go { background: var(--accent); color: var(--on-accent); }
   .ob-btn.ob-go:hover:not(:disabled) { filter: brightness(1.06); }
+.connection-hub{display:grid;grid-template-columns:minmax(210px,280px) minmax(0,1fr);gap:24px;align-items:start}
+.connection-index{position:sticky;top:16px;min-width:0;max-height:calc(100vh - 140px);overflow:auto;padding:4px}
+.connection-index>.btn{width:100%;margin-bottom:14px}.connection-cards{display:grid;gap:12px;padding:3px}
+.connection-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--paper);cursor:pointer;transition:background .15s,border-color .15s}
+.connection-card.is-active{border-color:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
+.connection-card.is-selected{background:color-mix(in srgb,var(--ink) 5%,var(--paper));outline:2px solid var(--ink-dim);outline-offset:1px}
+.connection-name,.connection-model,.connection-url,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.connection-name{font-weight:650;font-size:15px}.connection-model{margin-top:5px}.connection-url{font-size:11px;color:var(--ink-dim);margin-top:3px}
+.connection-status{font-size:12px;margin-top:14px}.connection-secondary{font-size:11px;color:var(--ink-dim)}
+.connection-card .rowbar{margin-top:12px;justify-content:space-between;gap:4px}.connection-card .btn{font-size:11px}
+.connection-detail{min-width:0}.connection-detail .sheet{margin-bottom:16px}.connection-detail .fold>summary{padding:16px;cursor:pointer}.connection-detail .foldbody{padding:16px}
+.connection-detail .connection-field{margin-bottom:15px}.connection-detail input:not([type=checkbox]),.connection-detail select,.connection-detail textarea{max-width:100%;width:100%}
+.connection-detail .field-error{color:var(--danger,#b43c38);font-size:12px;min-height:0}.connection-shared{color:var(--ink-dim);font-size:12px;line-height:1.7;margin:20px 0 12px}
+.connection-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.connection-actions .grow{flex:1}
+@media(max-width:760px){.connection-hub{grid-template-columns:1fr}.connection-index{position:static;max-height:320px}.connection-cards{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}

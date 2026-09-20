@@ -1,3 +1,4 @@
+import { ProviderHub } from '../src/providers/console/hub.ts';
 import { ProviderSettings } from '../src/providers/console/settings.ts';
 import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { FixtureMessage } from '../tests/core/fixture-messages.ts';
@@ -994,7 +995,15 @@ devCfg.providers={
 };
 devCfg.activeProvider='deepseek';
 const devProvidersDir=join(tmpData,'providers');
-const devProviders=new ProviderSettings(devCfg,new ProviderRegistry(()=>devCfg.providers,{stateRoot:devProvidersDir,readBlob:()=>null,keepThinking:()=>true,log:nullLogger()}),join(tmpData,'config.json'),devProvidersDir);
+const devRegistry = new ProviderRegistry(()=>devCfg.providers,{stateRoot:devProvidersDir,readBlob:()=>null,keepThinking:()=>true,log:nullLogger()});
+for (const [name, entry] of Object.entries(devCfg.providers)) {
+  mkdirSync(join(devProvidersDir, name), { recursive: true });
+  writeFileSync(join(devProvidersDir, name, 'config.json'), JSON.stringify(entry));
+}
+writeFileSync(join(tmpData, 'config.json'), JSON.stringify({ activeProvider: devCfg.activeProvider }));
+const devProviders=new ProviderSettings(devCfg, devRegistry,join(tmpData,'config.json'),devProvidersDir);
+const devHub = new ProviderHub(devCfg, devRegistry, devProviders, join(tmpData, 'config.json'), devProvidersDir);
+
 function devConsolePageSources(){return devProviders.sources();}
 
 /**
@@ -1064,6 +1073,7 @@ const app = new WebApp({
       return c;
     },
   }))],
+  providers: devHub,
   providersLamp: (language) => devProviders.providersLamp(language),
   worlds: async () => [
     ...(await Promise.all([...worlds, ...devFakeWorlds].map(async (m) => {

@@ -1349,6 +1349,7 @@ export class WebApp {
     app.get('/api/providers', providerRoute((hub, req) => hub.list(this.languageOf(req))));
     app.get('/api/provider-modules', providerRoute((hub, req) => hub.moduleList(this.languageOf(req))));
     app.post('/api/provider-modules/config', express.json(), providerRoute((hub, req) => hub.groups(req.body.name || 'draft', req.body.entry, this.languageOf(req))));
+    app.post('/api/provider-modules/preview', express.json(), providerRoute((hub, req) => hub.preview(req.body.name, req.body.entry, req.body.panel, req.body.method, req.body.args ?? [], this.languageOf(req))));
     app.get('/api/providers/:name', providerRoute((hub, req) => hub.detail(String(req.params.name), this.languageOf(req))));
     app.post('/api/providers', express.json(), providerRoute((hub, req) => hub.save(null, req.body, this.languageOf(req))));
     app.post('/api/providers/:name/save', express.json(), providerRoute((hub, req) => hub.save(String(req.params.name), req.body, this.languageOf(req))));

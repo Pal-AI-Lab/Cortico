@@ -24,6 +24,7 @@ const reasoningTiers = (language: Language): ReasoningTier[] => {
 export default {
   id: 'llamacpp',
   title: 'llama.cpp',
+  description: '连接或托管本地 llama.cpp 模型 / Connect to or manage local llama.cpp models.',
   defaultBaseUrl: 'http://127.0.0.1:8090/v1',
   baseUrlSuggestions: ['http://127.0.0.1:8090/v1', 'http://127.0.0.1:8080/v1'],
   normalize: normalizeLlamaCpp,

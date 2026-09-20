@@ -23,6 +23,7 @@ export interface ConnectionSave {
   secretValue?: string;
 }
 export class ProviderHub {
+  private readonly revisions = new Map<string, string>();
   constructor(private readonly config: CoreConfig, private readonly registry: ProviderRegistry,
     private readonly settings: ProviderSettings, private readonly file: string,
     private readonly root: string, private readonly modules: readonly ProviderModule[] = providerModules) {}
@@ -40,12 +41,14 @@ export class ProviderHub {
   private refresh(): void {
     const entries: Record<string, LLMProviderEntry> = {};
     if (existsSync(this.root)) for (const dir of readdirSync(this.root, { withFileTypes: true })) {
-      if (!dir.isDirectory() || dir.name.startsWith('.')) continue;
+      if (!dir.isDirectory() || (dir.name === '.write-lock' || dir.name.startsWith('.transaction-') || dir.name.startsWith('.deleted-'))) continue;
       const file = join(this.root, dir.name, 'config.json');
       if (existsSync(file)) entries[dir.name] = JSON.parse(readTextFile(file));
     }
     for (const name of new Set([...Object.keys(entries), ...Object.keys(this.config.providers)])) {
-      if (JSON.stringify(entries[name]) !== JSON.stringify(this.config.providers[name])) this.registry.invalidate(name);
+      const revision = entries[name] ? this.revision(name) : '';
+      if (JSON.stringify(entries[name]) !== JSON.stringify(this.config.providers[name]) || this.revisions.get(name) !== revision) this.registry.invalidate(name);
+      this.revisions.set(name, revision);
     }
     this.config.providers = entries;
     const disk = readJsonObject(this.file);
@@ -91,6 +94,28 @@ export class ProviderHub {
   groups(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);
     return [connectionGroup(name, entry, language), ...(module?.config?.(name, entry, language) ?? [])];
+  }
+  async preview(name: string, entry: LLMProviderEntry, panel: string, method: string, args: unknown[], language: Language) {
+    this.path(name);
+    const module = this.modules.find(module => module.id === entry.kind);
+    if (!module?.console) throw new ProviderHubError('Module panel unavailable.');
+    this.refresh();
+    const current = this.config.providers[name];
+    const persisted = !!current && JSON.stringify(current) === JSON.stringify(entry);
+    let draft = structuredClone(entry);
+    const contribution = module.console({ language, editing: !persisted,
+      entries: () => [{ name, entry: draft }],
+      instance: requested => {
+        if (requested !== name) throw new ProviderHubError('Foreign provider.');
+        return persisted ? this.registry.resolve(name) : this.registry.preview(name, draft);
+      },
+      save: (requested, next) => {
+        if (requested !== name || next.kind !== entry.kind) throw new ProviderHubError('Foreign provider.');
+        draft = structuredClone(next);
+      },
+    });
+    const result = await contribution.invoke?.(panel, method, args);
+    return { result, entry: draft };
   }
   private references(name: string): string[] {
     const files = new Set([this.file]);

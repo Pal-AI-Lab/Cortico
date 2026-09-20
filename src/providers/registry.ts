@@ -64,6 +64,11 @@ export class ProviderRegistry {
     return module;
   }
 
+  /** Preview instances use a detached entry and never enter the live instance cache. */
+  preview(name: string, entry: LLMProviderEntry): ProviderInstance {
+    return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules).resolve(name);
+  }
+
   resolve(name: string): ProviderInstance {
     const raw = this.entries()[name];
     if (!raw) throw new Error(`没有这个 LLM provider: ${name}`);

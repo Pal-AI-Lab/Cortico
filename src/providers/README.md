@@ -96,3 +96,5 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 新名称由 `src/providers/name.ts` 校验：1–64 位英文字母、数字、连字符或下划线，以字母或数字开头，不允许空格或 Windows 设备名。历史名称未修改时继续有效。保存必须携带读取时的 revision；配置或密钥已变化时返回 409。共享目录写锁串行化连接事务。重命名更新目录及部署根内各 deployment.json 所属部署的 activeProvider 引用，写入异常时恢复原文件和目录。引用中的连接不可删除。
 
 正式保存统一校验模型、连接和模块配置后写入配置与可选密钥；密钥保存在连接 .env。读取接口不返回密钥值。端点配置、密钥更新会清除当前进程实例缓存，已绑定请求与 fork 保持原客户端。其他运行进程在重新读取共享配置后更新。
+
+`ProviderConsoleHost.editing` 表示实例来自尚未保存的表单，模块应拒绝运行时副作用；host.save 将配置返回浏览器。连接编辑器拦截面板 setConfig，统一在正式保存时持久化。`ProviderRegistry.preview` 不写入运行实例缓存。

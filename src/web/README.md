@@ -83,3 +83,5 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`；Tailwind 输出 `styles.css`。
 浏览器代码使用 `tsconfig.web.json` 检查：`pnpm typecheck:web`。
+
+模型提供商入口使用连接卡片双栏页。卡片选中与当前连接分别管理，编辑在浏览器中暂存，点击保存后提交整个连接。模型配置默认展开，计价与高级协议默认折叠；模块面板通过连接作用域挂载，setConfig 写入本地表单。配置预览使用隔离的 Provider 实例，模块运行时操作要求已保存配置。
