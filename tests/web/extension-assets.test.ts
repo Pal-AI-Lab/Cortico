@@ -56,6 +56,7 @@ const asset = (): ExtensionConsoleAsset => ({
 const extensionDeps = (assets: readonly ExtensionConsoleAsset[]): WebAppExtensionDeps => ({
   list: () => ({ dir: '/repo/extensions', extensions: [] }),
   search: async () => [],
+  packageInfo: async () => { throw new Error('这个用例不取包详情'); },
   consoleAssets: () => assets,
   install: async () => '',
   uninstall: async () => '',

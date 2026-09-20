@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ExtensionManager, loadExtensions, readInstalled, type ExtensionSet } from '../src/extensions.ts';
+import { ExtensionManager, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
 import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
 
 let root: string;
@@ -116,7 +116,7 @@ describe('loadExtensions', () => {
 
 describe('ExtensionManager', () => {
   interface Run { args: string[]; cwd: string }
-  function manager(booted: Partial<ExtensionSet> = {}, opts: { code?: number; hang?: boolean } = {}) {
+  function manager(booted: Partial<ExtensionSet> = {}, opts: { code?: number; hang?: boolean; packument?: unknown } = {}) {
     const runs: Run[] = [];
     let release: (() => void) | null = null;
     const urls: string[] = [];
@@ -131,9 +131,10 @@ describe('ExtensionManager', () => {
       },
       fetchJson: async (url) => {
         urls.push(url);
+        if (opts.packument) return opts.packument;
         return {
           objects: [
-            { package: { name: 'a-mod', version: '1.0.0', description: 'A', keywords: ['cortico-world'], links: { npm: 'https://npm/a', repository: 'https://git/a' }, publisher: { username: 'me' } }, downloads: { monthly: 12 } },
+            { package: { name: 'a-mod', version: '1.0.0', description: 'A', keywords: ['cortico-world'], license: 'MIT', links: { npm: 'https://npm/a', repository: 'git+https://github.com/me/a.git' }, publisher: { username: 'me' } }, downloads: { monthly: 12 }, dependents: '7' },
             { package: { name: 'a-prov', version: '3.0.0', description: 'P', keywords: ['cortico-provider'] }, downloads: { monthly: 3 } },
             { package: { name: 'not-a-mod', version: '2.0.0', description: 'N', keywords: ['other'] }, downloads: { monthly: 999 } },
           ],
@@ -229,17 +230,102 @@ describe('ExtensionManager', () => {
   it('search:关键字按 kind 换,只留带那个关键字的包,标出已安装', async () => {
     installFake('a-mod');
     const { mgr, urls } = manager();
-    expect(await mgr.search('anything')).toEqual([{
-      name: 'a-mod', version: '1.0.0', description: 'A', publisher: 'me', downloads: 12, kind: 'world',
-      links: { npm: 'https://npm/a', repository: 'https://git/a' }, installed: true,
+    expect(await mgr.search()).toEqual([{
+      name: 'a-mod', version: '1.0.0', description: 'A', publisher: 'me', license: 'MIT',
+      downloads: 12, dependents: 7, keywords: ['cortico-world'], kind: 'world',
+      // git+https 的仓库地址收成能点的 https
+      links: { npm: 'https://npm/a', repository: 'https://github.com/me/a' }, installed: true,
     }]);
-    expect(await mgr.search('anything', 'provider')).toEqual([{
-      name: 'a-prov', version: '3.0.0', description: 'P', downloads: 3, kind: 'provider',
-      links: {}, installed: false,
+    expect(await mgr.search('provider')).toEqual([{
+      name: 'a-prov', version: '3.0.0', description: 'P', downloads: 3, dependents: 0, kind: 'provider',
+      keywords: ['cortico-provider'], links: {}, installed: false,
     }]);
     expect(urls.map((u) => decodeURIComponent(u).match(/keywords:[a-z-]+/)?.[0])).toEqual([
       'keywords:cortico-world', 'keywords:cortico-provider',
     ]);
+    // 一页没取满就不翻下一页
+    expect(urls[0]).toContain('size=250&from=0');
+  });
+
+  it('search:一页取满就接着翻,同名包只留一条,翻到上限为止', () => {
+    const full = {
+      objects: Array.from({ length: 250 }, (_, i) => ({
+        package: { name: `w-${i}`, version: '1.0.0', keywords: ['cortico-world'] },
+        downloads: { monthly: 0 },
+      })),
+    };
+    const urls: string[] = [];
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+    const mgr = new ExtensionManager(root, set, {
+      run: async () => ({ code: 0, output: '' }),
+      // 每页都满:只有条数上限能让它停
+      fetchJson: async (url) => { urls.push(url); return full; },
+    });
+    return mgr.search().then((hits) => {
+      expect(urls.map((u) => u.match(/from=\d+/)?.[0])).toEqual(['from=0', 'from=250', 'from=500', 'from=750']);
+      // 每页是同一批名字:去重之后只剩一页
+      expect(hits).toHaveLength(250);
+    });
+  });
+
+  it('packageInfo:latest 版本的 cortico 块按本机同一套判据解析,已安装的带上版本范围', async () => {
+    installFake('a-mod');
+    const version = {
+      name: 'a-mod', version: '2.0.0', type: 'module', main: './index.js', license: 'MIT',
+      keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' },
+      engines: { node: '>=22' }, dependencies: { ws: '^8' }, dist: { unpackedSize: 2048, fileCount: 9 },
+      maintainers: [{ username: 'me' }], _npmUser: { name: 'me' },
+      repository: { url: 'git+ssh://git@github.com/me/a-mod.git' }, homepage: 'https://example.invalid',
+    };
+    const { mgr, urls } = manager({}, {
+      packument: {
+        'dist-tags': { latest: '2.0.0' },
+        versions: { '1.0.0': { ...version, version: '1.0.0' }, '2.0.0': version },
+        time: {
+          created: '2026-01-01T00:00:00.000Z', modified: '2026-03-03T00:00:00.000Z',
+          '1.0.0': '2026-01-01T00:00:00.000Z', '2.0.0': '2026-03-02T00:00:00.000Z',
+        },
+      },
+    });
+    const info = await mgr.packageInfo('a-mod');
+    expect(urls[0]).toBe('https://registry.npmjs.org/a-mod');
+    expect(info).toMatchObject({
+      name: 'a-mod', version: '2.0.0', license: 'MIT', published: '2026-03-02T00:00:00.000Z',
+      created: '2026-01-01T00:00:00.000Z', versionCount: 2,
+      manifest: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' },
+      frameworkApi: EXTENSION_API_VERSION, engines: '>=22', unpackedSize: 2048, fileCount: 9,
+      dependencies: ['ws'], maintainers: ['me'], installed: true, installedSpec: '^1.0.0',
+      links: { npm: 'https://www.npmjs.com/package/a-mod', repository: 'https://github.com/me/a-mod', homepage: 'https://example.invalid' },
+    });
+    // 新的在前
+    expect(info.history.map((h) => h.version)).toEqual(['2.0.0', '1.0.0']);
+    expect(info.problems).toBeUndefined();
+  });
+
+  it('packageInfo:装不上的包给出理由;包名不合法与没有 latest 各自抛错', async () => {
+    const { mgr } = manager({}, {
+      packument: {
+        'dist-tags': { latest: '1.0.0' },
+        versions: { '1.0.0': { name: 'b', version: '1.0.0', keywords: [], cortico: { kind: 'world', api: 99 } } },
+        time: { '1.0.0': '2026-02-02T00:00:00.000Z' },
+      },
+    });
+    const info = await mgr.packageInfo('b');
+    expect(info.manifest).toBeUndefined();
+    expect(info.problems?.join(' ')).toContain('type');
+    expect(info.problems?.join(' ')).toContain('v99');
+    await expect(mgr.packageInfo('Bad Name')).rejects.toThrow('包名');
+    const { mgr: empty } = manager({}, { packument: { 'dist-tags': {}, versions: {} } });
+    await expect(empty.packageInfo('c')).rejects.toThrow('latest');
+  });
+
+  it('repositoryWebUrl:npm 那几种写法都收成 https,认不出的原样退回', () => {
+    expect(repositoryWebUrl('git+https://github.com/me/a.git')).toBe('https://github.com/me/a');
+    expect(repositoryWebUrl('git://github.com/me/a.git')).toBe('https://github.com/me/a');
+    expect(repositoryWebUrl('git+ssh://git@github.com/me/a.git')).toBe('https://github.com/me/a');
+    expect(repositoryWebUrl('git@gitlab.com:me/a.git')).toBe('https://gitlab.com/me/a');
+    expect(repositoryWebUrl('https://example.invalid/me/a')).toBe('https://example.invalid/me/a');
+    expect(repositoryWebUrl('me/a')).toBe('me/a');
   });
 
   it('readInstalled:没有 extensions/ 或没有 dependencies 都是空表', () => {

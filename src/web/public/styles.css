@@ -1071,6 +1071,11 @@
   details.sheet.fold { margin-bottom: 10px; }
   details.sheet.fold > summary { padding: 0; }
   details.sheet.fold > .foldbody { padding: 14px 0 0; }
+  /* 整张点开详细页的卡(npm 搜索结果)。取值与 .connection-card 一致。 */
+  .iocard-open { cursor: pointer; transition: background .15s, border-color .15s; }
+  .iocard-open:hover { border-color: var(--border-strong); background: color-mix(in srgb, var(--surface) 92%, transparent); }
+  .iocard-open:focus-visible { outline: 2px solid var(--ink-dim); outline-offset: 1px; }
+  .iocard-open.is-installed { border-color: var(--accent); box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 12%, transparent); }
   .featureslot > :not(.sheet) + .sheet,
   .featureslot > .sheet + .sheet,
   .panelslot > :not(.sheet) + .sheet,

@@ -37,7 +37,8 @@ import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bi
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
-import { PromptRevisionConflict, WebApp, type ExtensionInfo, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
+import { PromptRevisionConflict, WebApp, type ExtensionInfo, type ExtensionSearchHit, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
+import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
 import { deriveConsolePageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
@@ -1024,6 +1025,43 @@ const devExtensions: ExtensionInfo[] = [
   { name: 'cortico-world-weather', spec: 'link:../cortico-world-weather', version: '0.0.1', kind: 'world', description: '本机开发中的天气播报 (dev 假数据)', consoleClient: false, loaded: false, state: 'pending-restart' },
 ];
 
+/**
+ * 扩展搜索的假命中表。条数超过一页,下载量、发布时间、许可证、发布者各不相同:
+ * 筛选、排序、分页在这张表上能各自看出效果。
+ */
+const devSearchHits: ExtensionSearchHit[] = [
+  ['@acme/cortico-world-discord', '0.3.1', 'Discord 频道接入', 'acme', 412, 3, 'MIT', '2026-08-30', ['chat']],
+  ['cortico-world-rss', '1.0.0', 'RSS 订阅轮询,按源分栏投递', 'feedworks', 38, 0, 'MIT', '2026-09-11', ['feed']],
+  ['cortico-world-matrix', '0.7.2', 'Matrix 房间接入,支持端到端加密房', 'kyoka', 1240, 12, 'Apache-2.0', '2026-09-18', ['chat']],
+  ['cortico-world-telegram', '2.1.0', 'Telegram bot 接入', 'acme', 8800, 41, 'MIT', '2026-09-02', ['chat']],
+  ['cortico-world-obs', '0.2.0', 'OBS 场景切换与录制控制', 'streamkit', 96, 1, 'MIT', '2026-07-21', ['stream']],
+  ['cortico-world-home', '1.4.3', 'Home Assistant 实体读写', 'hausen', 520, 5, 'GPL-3.0', '2026-06-14', ['iot']],
+  ['cortico-world-terminal-plus', '0.9.0', '本机终端增强:多标签与会话录制', 'phantivia', 77, 0, 'MIT', '2026-09-19', ['tool']],
+  ['cortico-world-calendar', '1.1.1', '日历读写与提醒投递', 'hausen', 205, 2, 'MIT', '2026-05-30', ['tool']],
+  ['cortico-world-minecraft-lite', '0.4.0', '精简版 Minecraft 接入,只做观察不做操作', 'blockish', 640, 0, 'MIT', '2026-08-02', ['game']],
+  ['cortico-world-webhook', '1.0.2', '收发 webhook,把外部事件变成事件帧', 'feedworks', 310, 7, 'ISC', '2026-09-15', ['tool']],
+  ['cortico-world-broken', '0.1.4', '契约版本对不上的包', 'someone', 4, 0, 'MIT', '2025-11-08', ['broken']],
+  ['cortico-world-weather', '0.0.1', '天气播报', 'phantivia', 12, 0, 'MIT', '2026-09-20', ['tool']],
+  ['cortico-world-notion', '0.6.0', 'Notion 数据库读写', 'kyoka', 1502, 9, 'MIT', '2026-04-27', ['docs']],
+  ['cortico-world-shell-sandbox', '0.3.3', '受限 shell 沙箱', 'blockish', 58, 0, 'BSD-3-Clause', '2026-03-19', ['tool']],
+].map(([name, version, description, publisher, downloads, dependents, license, date, tags]) => ({
+  name: name as string,
+  version: version as string,
+  description: `${description as string} (dev 假数据)`,
+  publisher: publisher as string,
+  downloads: downloads as number,
+  dependents: dependents as number,
+  license: license as string,
+  date: `${date as string}T09:00:00.000Z`,
+  keywords: ['cortico-world', ...(tags as string[])],
+  kind: 'world' as const,
+  links: {
+    npm: `https://www.npmjs.com/package/${name as string}`,
+    repository: `https://github.com/${publisher as string}/${(name as string).replace(/^@[^/]+\//, '')}`,
+  },
+  installed: false,
+}));
+
 const app = new WebApp({
   store,
   memoryDir: tmpPersona,
@@ -1151,12 +1189,50 @@ const app = new WebApp({
   // 扩展面的假数据:四种状态各一;装卸只改这张表,不跑 pnpm。
   extensions: {
     list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: devExtensions.map((p) => ({ ...p })) }),
-    search: async (q) => {
+    search: async (kind) => {
       await new Promise((r) => setTimeout(r, 300));
-      return [
-        { name: '@acme/cortico-world-discord', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', publisher: 'acme', downloads: 412, links: { npm: 'https://www.npmjs.com/package/@acme/cortico-world-discord', repository: 'https://github.com/acme/cortico-world-discord' }, installed: devExtensions.some((p) => p.name === '@acme/cortico-world-discord' && p.state !== 'removed') },
-        { name: 'cortico-world-rss', version: '1.0.0', description: `RSS 订阅轮询${q ? `(匹配「${q}」)` : ''} (dev 假数据)`, downloads: 38, links: { repository: 'https://github.com/example/cortico-world-rss' }, installed: false },
-      ];
+      if ((kind ?? 'world') !== 'world') return [];
+      return devSearchHits.map((hit) => ({
+        ...hit,
+        installed: devExtensions.some((p) => p.name === hit.name && p.state !== 'removed'),
+      }));
+    },
+    packageInfo: async (name) => {
+      await new Promise((r) => setTimeout(r, 400));
+      const hit = devSearchHits.find((h) => h.name === name);
+      if (!hit) throw new Error(`registry 没有给出 ${name} 的 latest 版本 (dev)`);
+      // 一个契约版本对不上、一个已弃用:详细页的两种警示态在 dev 里也能看见
+      const broken = name === 'cortico-world-broken';
+      const stale = name === 'cortico-world-calendar';
+      return {
+        name,
+        version: hit.version,
+        description: hit.description,
+        license: hit.license,
+        keywords: hit.keywords,
+        published: hit.date,
+        created: '2025-10-01T00:00:00.000Z',
+        versionCount: 7,
+        history: [
+          { version: hit.version, date: hit.date ?? '' },
+          { version: '0.9.0', date: '2026-03-02T00:00:00.000Z' },
+          { version: '0.8.0', date: '2026-01-19T00:00:00.000Z' },
+        ],
+        ...(stale ? { deprecated: '不再维护,改用 cortico-world-webhook (dev 假数据)' } : {}),
+        ...(broken
+          ? { problems: [`扩展要求契约 v9,本框架只到 v${EXTENSION_API_VERSION}:框架需要升级。`] }
+          : { manifest: { kind: 'world' as const, api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' } }),
+        warnings: [],
+        frameworkApi: EXTENSION_API_VERSION,
+        engines: '>=22',
+        unpackedSize: 184074,
+        fileCount: 41,
+        dependencies: ['ws', 'undici'],
+        maintainers: [hit.publisher ?? 'someone'],
+        publisher: hit.publisher,
+        links: { ...hit.links, npm: hit.links.npm ?? `https://www.npmjs.com/package/${name}`, bugs: `${hit.links.repository ?? ''}/issues` },
+        installed: devExtensions.some((p) => p.name === name && p.state !== 'removed'),
+      };
     },
     install: async (target) => {
       await new Promise((r) => setTimeout(r, 500));

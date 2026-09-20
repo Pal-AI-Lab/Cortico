@@ -12,7 +12,8 @@ let port: number;
 let dir: string;
 const installed: ExtensionInstallTarget[] = [];
 const uninstalled: string[] = [];
-let searched: Array<{ q: string; kind?: string }> = [];
+let searched: Array<{ kind?: string }> = [];
+const asked: string[] = [];
 
 const base = () => `http://127.0.0.1:${port}`;
 const get = async (path: string): Promise<{ status: number; body: any }> => {
@@ -40,9 +41,18 @@ beforeAll(async () => {
         dir: '/repo/extensions',
         extensions: [{ name: 'a', spec: '^1', version: '1.0.0', consoleClient: false, loaded: true, worldId: 'a', label: 'A', state: 'loaded' }],
       }),
-      search: async (q, kind) => {
-        searched.push({ q, ...(kind ? { kind } : {}) });
-        return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: 1, links: {}, installed: false, ...(kind ? { kind } : {}) }];
+      search: async (kind) => {
+        searched.push({ ...(kind ? { kind } : {}) });
+        return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: 1, dependents: 0, links: {}, installed: false, ...(kind ? { kind } : {}) }];
+      },
+      packageInfo: async (name) => {
+        asked.push(name);
+        if (name === 'bad name') throw new Error('不是合法的 npm 包名: bad name');
+        if (name === 'gone') throw new Error('registry 没有给出 gone 的 latest 版本');
+        return {
+          name, version: '1.0.0', versionCount: 1, history: [], warnings: [], frameworkApi: 4,
+          dependencies: [], maintainers: [], links: { npm: `https://www.npmjs.com/package/${name}` }, installed: false,
+        };
       },
       install: async (target) => {
         if ('name' in target && target.name === 'boom') throw new Error('不是合法的 npm 包名: boom');
@@ -69,29 +79,41 @@ describe('/api/extensions', () => {
     expect(r.body.extensions[0]).toMatchObject({ name: 'a', state: 'loaded' });
   });
 
-  it('搜索把 q 交给依赖,回 { hits }', async () => {
+  it('搜索列出一整类,回 { hits }', async () => {
     searched = [];
-    const r = await get('/api/extensions/search?q=disc%20ord');
+    const r = await get('/api/extensions/search');
     expect(r.status).toBe(200);
-    expect(searched).toEqual([{ q: 'disc ord' }]);
+    expect(searched).toEqual([{}]);
     expect(r.body.hits[0].name).toBe('hit');
-    await get('/api/extensions/search');
-    expect(searched).toEqual([{ q: 'disc ord' }, { q: '' }]);
   });
 
   it('kind 原样透传;不给等于不限定;只认 worlds / provider,别的 400 且不打依赖', async () => {
     searched = [];
-    const worlds = await get('/api/extensions/search?q=x&kind=world');
+    const worlds = await get('/api/extensions/search?kind=world');
     expect(worlds.status).toBe(200);
     expect(worlds.body.hits[0].kind).toBe('world');
-    await get('/api/extensions/search?q=x&kind=provider');
-    expect(searched).toEqual([{ q: 'x', kind: 'world' }, { q: 'x', kind: 'provider' }]);
-    const bad = await get('/api/extensions/search?q=x&kind=persona');
+    await get('/api/extensions/search?kind=provider');
+    expect(searched).toEqual([{ kind: 'world' }, { kind: 'provider' }]);
+    const bad = await get('/api/extensions/search?kind=persona');
     expect(bad.status).toBe(400);
     expect(bad.body.error).toContain('persona');
     // 空串当没给:前端拼 URL 时少一个值不该变成一次 400
-    expect((await get('/api/extensions/search?q=x&kind=')).status).toBe(200);
+    expect((await get('/api/extensions/search?kind=')).status).toBe(200);
     expect(searched.length).toBe(3);
+  });
+
+  it('包详情:name 必给;包名不合法 400,registry 那头的失败 502', async () => {
+    asked.length = 0;
+    const ok = await get('/api/extensions/package?name=%40acme%2Fcortico-world-x');
+    expect(ok.status).toBe(200);
+    expect(ok.body).toMatchObject({ name: '@acme/cortico-world-x', frameworkApi: 4 });
+    expect(asked).toEqual(['@acme/cortico-world-x']);
+    expect((await get('/api/extensions/package')).status).toBe(400);
+    expect((await get('/api/extensions/package?name=%20')).status).toBe(400);
+    expect((await get('/api/extensions/package?name=bad%20name')).status).toBe(400);
+    const upstream = await get('/api/extensions/package?name=gone');
+    expect(upstream.status).toBe(502);
+    expect(upstream.body.error).toContain('latest');
   });
 
   it('安装:name(+version)与 path 两种载荷;缺参 400;依赖拒绝 → 400 带原话', async () => {
@@ -124,6 +146,7 @@ describe('/api/extensions', () => {
       expect(caps.capabilities.restart).toBe(false);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/search`)).status).toBe(503);
+      expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/package?name=x`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/install`, { method: 'POST' })).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/uninstall`, { method: 'POST' })).status).toBe(503);
     } finally {
