@@ -2,9 +2,8 @@
  * Chat Completions against llama-server. Thinking is the template's `enable_thinking` switch
  * sent per request through `chat_template_kwargs`; templates without that variable ignore it.
  * The server returns the chain of thought as `reasoning_content` (`--reasoning-format deepseek`),
- * which the shared Chat assembly already maps, and history carries it back: the chat template
- * decides what to do with it, and a model that interleaves thinking with tool calls needs it.
- * `keepPastThinking` off blanks every turn but the synthetic opening; thinking off replays none.
+ * which the shared Chat assembly already maps; history sends it back on every request.
+ * `keepPastThinking` off blanks every turn but the synthetic opening; thinking off sends none.
  */
 import type { NativeChatMessage } from '../transport/native-types.ts';
 import type { ModelSpec, ToolSchema, Logger } from '../../core/types.ts';
