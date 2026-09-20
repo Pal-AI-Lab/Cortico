@@ -126,5 +126,3 @@ Persona 的文本使用作者选择的语言。
 不连任何真实平台。改了 `src/web/client/`、`src/web/shared/` 或任何 `console/client.ts` 都要
 `pnpm build:web`;bot 运行期间禁止覆盖其正在使用的控制台产物。内部结构见
 [src/web/README.md](../src/web/README.md)。
-
-模型供应商入口使用连接卡片双栏页。卡片选中与当前连接分别管理，编辑在浏览器中暂存，点击保存后提交整个连接。模型配置默认展开，计价与高级协议默认折叠；模块面板通过连接作用域挂载，setConfig 写入本地表单。配置预览使用隔离的 Provider 实例，模块运行时操作要求已保存配置。

@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
 
 # Provider
 
@@ -31,9 +31,15 @@ provider 模块不预设任何模型名;端点
 
 ## 控制台
 
-模型提供商页左栏列出全部共享连接，右栏编辑所选连接。选中连接不改变 activeProvider；卡片的“设为当前”只修改当前部署的选择。字段编辑暂存于浏览器，正式保存统一写入连接配置与密钥。基础信息和连接始终展开，模型配置默认展开，计价与高级协议默认折叠。模块类型保存后不可更改。
+模型供应商页列出共享端点,一次编辑其中一条。选中一条不改变 `activeProvider`,「设为当前」只写
+当前部署的那一项。字段改动暂存在浏览器,保存时整条端点一次写入配置与密钥;暂存不进共享配置,
+API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥已被别处改过就返回 409,重新加载后
+再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;还被引用的端点不能删。
+`kind` 保存后不可更改。
 
-模块继续通过 ConfigGroup 和 instance 插槽声明专有配置及面板。面板配置写入浏览器编辑状态；运行时启停、安装和模型操作要求已保存配置。“测试连接”检查已保存连接，不参与本地 readiness 判断。
+模块自己的配置与面板照旧由 ConfigGroup 和 `instance` 插槽声明,面板的 `setConfig` 同样只进
+暂存;运行时启停、安装与模型列表要求端点已保存。「测试连接」按磁盘上的配置发一次请求,不参与
+可用性判断。
 
 控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 从磁盘直接加载的名字按字面匹配;密钥值写入端点 `.env` 的同名项。
@@ -44,7 +50,8 @@ provider 模块不预设任何模型名;端点
 也满足。判断只看本地状态,不连上游——探活是操作员按出来的另一件事。模块的那部分由
 `ProviderModule.availability` 回答,不实现就只有通用条件(`llamacpp` 用它回答托管运行时装没装)。
 
-连接卡片以文字显示配置状态。Terminal 从状态帧读取当前连接名称、模型、模块和地址，点击可打开对应连接。当前连接不可用时，输入框提示前往模型供应商页设置。
+终端页从状态帧读取当前端点的名称、模型、模块与地址,点开就是那条端点;一条都不可用时,输入框
+的灰字写明去哪儿设置。
 
 ## 内建 openai-responses-compat
 
@@ -101,15 +108,3 @@ provider 模块不预设任何模型名;端点
 
 写一个 provider 扩展:`kind: 'provider'`,默认导出 `ProviderModule`。接口与注册流程见
 [src/providers/README.md](../src/providers/README.md),打包见 [extensions.md](extensions.md)。
-
-## 连接配置接口
-
-`src/providers/console/hub.ts` 提供 `/api/providers` 聚合与按名称读取、保存、删除、启用、测试和模型列表接口；`/api/provider-modules` 返回已注册模块。列表保留模块缺失的连接，分别报告 active 和 readiness。`modelConnection` 状态字段提供当前连接名称、模型、模块与地址。
-
-新名称由 `src/providers/name.ts` 校验：1–64 位英文字母、数字、连字符或下划线，以字母或数字开头，不允许空格或 Windows 设备名。历史名称未修改时继续有效。保存必须携带读取时的 revision；配置或密钥已变化时返回 409。共享目录写锁串行化连接事务。重命名更新目录及部署根内各 deployment.json 所属部署的 activeProvider 引用，写入异常时恢复原文件和目录。引用中的连接不可删除。
-
-正式保存统一校验模型、连接和模块配置后写入配置与可选密钥；密钥保存在连接 .env。读取接口不返回密钥值。端点配置、密钥更新会清除当前进程实例缓存，已绑定请求与 fork 保持原客户端。其他运行进程在重新读取共享配置后更新。
-
-浏览器草稿按部署隔离，保存草稿不会修改共享配置。草稿保留底本 revision，恢复后正式保存仍检查冲突。API Key 不写入浏览器存储。复制生成新草稿，正式保存时可从源连接复制 .env，源连接的 revision 也必须匹配。取消会删除对应草稿；切卡有未保存修改时可选择留下、放弃或保存。
-
-模块可通过 `localize(language).description` 提供供应商类型说明的译文；未提供时显示模块的 `description` 或标题。

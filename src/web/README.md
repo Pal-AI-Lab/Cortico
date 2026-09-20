@@ -1,4 +1,4 @@
-<!-- Owner: src/web/public/styles.css, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
+<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -56,7 +56,11 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 ## 浏览器
 
-`features/providers` 管理连接卡片与本地编辑状态，正式保存时提交完整配置。模块面板挂入所选连接，配置编辑进入同一草稿；`llm-settings` 的服务接口作为兼容路径保留，旧模块路由转到连接页。
+`features/providers` 一次编辑一条端点,改动只进浏览器暂存,保存时整条提交。模块面板挂在所选端点
+的作用域里,面板的 `setConfig` 同样进暂存;`llm-settings` 的服务接口保留,旧的 `llm:<kind>` 路由
+转到这一页。`features/providers/drafts.ts` 的暂存按部署分 scope 存进 localStorage,不含 API Key;
+这一页自己拦切换端点,并向路由登记离开保护。端点保存、删除或设为当前之后推送状态帧,终端页顶部
+的统计行显示当前端点的名称与模型,点开进该端点。
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、
 `appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。
@@ -83,11 +87,3 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`；Tailwind 输出 `styles.css`。
 浏览器代码使用 `tsconfig.web.json` 检查：`pnpm typecheck:web`。
-
-模型提供商入口使用连接卡片双栏页。卡片选中与当前连接分别管理，编辑在浏览器中暂存，点击保存后提交整个连接。模型配置默认展开，计价与高级协议默认折叠；模块面板通过连接作用域挂载，setConfig 写入本地表单。配置预览使用隔离的 Provider 实例，模块运行时操作要求已保存配置。
-
-`client/features/providers/drafts.ts` 将草稿按部署 scope 保存在 localStorage，排除 API Key。连接页自行处理切卡的未保存保护，并向路由注册页面离开保护。复制只产生草稿。
-
-Terminal 的 `status.modelConnection` 包含当前连接的 `name`、`model`、`module`、`moduleTitle`、`baseUrl` 与 `ready`。供应商保存、删除及切换后推送状态帧；顶部统计行右侧显示名称与模型，并链接至连接详情。
-
-页面大标题使用固定页头或滚动容器内的 sticky 页头，下方分割线与内容保持统一间距。框架页与模块页共用内容宽度、左右边距和双侧滚动条预留；模块标识和操作位于分割线下，空操作行不占空间。主色按钮使用白色文字。单选下拉框的箭头距右边缘 14px，并为文字预留空间。说明文字使用统一注释字号与颜色。计价编辑器不显示空报价行；未设自定义报价的注释随费率编辑更新，并说明模块价目的回退规则。
