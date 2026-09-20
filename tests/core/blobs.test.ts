@@ -49,6 +49,25 @@ describe('LogBlobStore', () => {
     expect(store.read('log:deadbeefdeadbeefdead.jpg')).toBeNull(); // 合形状但不存在
   });
 
+  it('stat 报现存份数与占用;目录还没建时是 0', () => {
+    dir = mkdtempSync(join(tmpdir(), 'blob-store-'));
+    const store = new LogBlobStore(dir);
+    expect(store.stat()).toEqual({ count: 0, bytes: 0 });
+    store.put(JPEG, 'image/jpeg');
+    store.put(Buffer.from([1, 2, 3]), 'audio/wav');
+    expect(store.stat()).toEqual({ count: 2, bytes: JPEG.length + 3 });
+  });
+
+  it('clear 删掉全部附件并报份数;之后按句柄读不到', () => {
+    dir = mkdtempSync(join(tmpdir(), 'blob-store-'));
+    const store = new LogBlobStore(dir);
+    const handle = store.put(JPEG, 'image/jpeg');
+    expect(store.clear()).toBe(1);
+    expect(store.read(handle)).toBeNull();
+    expect(store.stat()).toEqual({ count: 0, bytes: 0 });
+    expect(store.clear()).toBe(0);
+  });
+
   it('read 拒绝不合形状的句柄(路径穿越/绝对路径/别的 scheme)', () => {
     dir = mkdtempSync(join(tmpdir(), 'blob-store-'));
     const store = new LogBlobStore(dir);

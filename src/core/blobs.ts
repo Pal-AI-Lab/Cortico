@@ -4,7 +4,7 @@
  * `mem:<后端标识>` 由 Persona 的 BlobStore 解析，后端决定标识格式。
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BlobRef } from './types.ts';
 
@@ -58,7 +58,7 @@ export function withBlobLines(text: string, refs: readonly BlobRef[] | undefined
 }
 
 /**
- * 字节按内容哈希存入 data/media/，重复写入不增加副本；删除由运维处理。
+ * 字节按内容哈希存入 data/media/，重复写入不增加副本。
  * 读取接受完整句柄或唯一的十六进制前缀（至少 8 位）。
  */
 export class LogBlobStore {
@@ -79,6 +79,27 @@ export class LogBlobStore {
       writeFileSync(path, bytes);
     }
     return `${LOG_SCHEME}${name}`;
+  }
+
+  /** 现存份数与占用字节;目录还没建时都是 0。 */
+  stat(): { count: number; bytes: number } {
+    if (!existsSync(this.dir)) return { count: 0, bytes: 0 };
+    const names = readdirSync(this.dir);
+    return { count: names.length, bytes: names.reduce((sum, name) => sum + statSync(join(this.dir, name)).size, 0) };
+  }
+
+  /**
+   * 删掉目录里的全部附件,返回删掉的份数。附件那一行正文在落库时已写定
+   * (句柄、mime 与 fallbackText),此后 read() 返回 null,投递时不再附字节。
+   */
+  clear(): number {
+    if (!existsSync(this.dir)) return 0;
+    let removed = 0;
+    for (const name of readdirSync(this.dir)) {
+      rmSync(join(this.dir, name), { force: true });
+      removed += 1;
+    }
+    return removed;
   }
 
   /** 按句柄取回;句柄不合形状、前缀不唯一或文件不在了返回 null。 */
