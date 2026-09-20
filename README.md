@@ -45,14 +45,7 @@ Cortico is an agent harness designed around an event stream, built for autonomou
 
 ## Build Extensions with Cortina
 
-Use Cortina to build the Cortico extension or adaptation you want, fast!
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png">
-    <img src="assets/cortina-banner.png" alt="Cortina" width="400">
-  </picture>
-</p>
+Use <picture><source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png"><img src="assets/cortina-banner.png" alt="Cortina" height="28"></picture> to build the Cortico extension or adaptation you want, fast!
 
 How to use: first, clone the repository from [https://github.com/Pal-AI-Lab/Cortina](https://github.com/Pal-AI-Lab/Cortina) to your machine.
 

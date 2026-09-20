@@ -45,14 +45,7 @@ Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、�
 
 ## 用 Cortina 编写扩展
 
-使用 Cortina 快速完成你想要的 Cortico 扩展和适配！
-
-<p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png">
-    <img src="assets/cortina-banner.png" alt="Cortina" width="400">
-  </picture>
-</p>
+使用 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png"><img src="assets/cortina-banner.png" alt="Cortina" height="28"></picture> 快速完成你想要的 Cortico 扩展和适配！
 
 如何使用：首先，从 [https://github.com/Pal-AI-Lab/Cortina](https://github.com/Pal-AI-Lab/Cortina) 克隆仓库到本地。
 
