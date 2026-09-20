@@ -45,7 +45,6 @@ export interface BotConfig extends CoreConfig {
 /** 这个Persona为之设计的渠道,默认启用。 */
 const DECLARES: readonly WorldDeclaration[] = ['qq', 'terminal', 'websearch'];
 
-
 /** 层1+层2:框架默认 ← Persona的建议。World 段由启动器补。 */
 export function composeDefaults(): BotConfig {
   return {

@@ -14,7 +14,6 @@ import { contextStageConfigGroup } from '../cormini/persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
 
-
 /** 存在方式自述的源文件;控制台「Persona」页可编辑,重载前缀即生效。 */
 const ORIENTATION_FILE = resolve(HERE, 'persona/ORIENTATION.md');
 
@@ -124,8 +123,7 @@ const definition: BotDefinition<CortiVConfig> = {
   defaults: () => ({
     ...CORE_DEFAULTS,
     displayName: '可缇Corti',
-    // 端点表是全局部署事实(`<部署根>/providers/`),不归代码包:本机那条 `local`
-    // (端口、llama-server 路径、采样参数)已经搬出去了。这里只剩层 1 那两条默认。
+    // 端点表是全局部署事实(`<部署根>/providers/`),不归代码包。
     providers: {},
     web: { port: 7789, theme: 'navigator' },
     paths: { memory: 'workspace', data: 'data' },

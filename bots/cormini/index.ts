@@ -12,7 +12,6 @@ import { contextStageConfigGroup } from './persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
 
-
 export interface CorminiConfig extends CoreConfig {
   /** 阶段长度三项与首轮对话开关归 Persona,摘思维链归 core;同住 context 段。 */
   context: CoreConfig['context'] & ContextStagePolicy;

@@ -1,4 +1,3 @@
-import { ProviderHub } from './providers/console/hub.ts';
 /** 装配 Core、Persona、World 与控制台；具体 bot 的配置和行为由 BotDefinition 提供。 */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -31,6 +30,7 @@ import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource,
 import { aggregateUsage } from './core/cost.ts';
 import { nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
+import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
 import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
