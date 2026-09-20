@@ -30,6 +30,16 @@ describe('responsesInput 明文形态', () => {
     expect(SYNTHETIC_REASONING_TEXT.trim()).not.toBe('');
   });
 
+  it('填充由端点配置给出,缺省用默认', () => {
+    const context = [message('user', 'hi'), functionCall('evf_1', 'external_event_frame', '{}'), functionResult('evf_1', 'x')];
+    const textOf = (syntheticReasoningText?: string) => {
+      const input = responsesInput(request, { context, origin }, { reasoningReplay: 'plaintext', ...(syntheticReasoningText ? { syntheticReasoningText } : {}) }).input;
+      return (input.find((item) => item.type === 'reasoning')!.content as Array<{ text: string }>)[0].text;
+    };
+    expect(textOf()).toBe(SYNTHETIC_REASONING_TEXT);
+    expect(textOf('这条调用由运行时发出。')).toBe('这条调用由运行时发出。');
+  });
+
   it('推理项以 reasoning_text 出线,不看 origin;签名块照带;没有文字也没有签名的不出线', () => {
     const context = [
       message('user', 'hi'),

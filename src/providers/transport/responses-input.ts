@@ -16,10 +16,11 @@ export const REASONING_REPLAYS = ['encrypted', 'plaintext'] as const;
 export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
 
 /**
- * Placeholder `reasoning_text` sent before a function call without a recorded origin in plaintext
+ * Default `reasoning_text` sent before a function call without a recorded origin in plaintext
  * replay. A missing field, an empty `content`, an empty string and a summary without
  * `reasoning_text` are each rejected, so the padding is one character; it is non-whitespace in case
- * an endpoint trims. It carries no prose: what these calls are is the Persona's to say.
+ * an endpoint trims. It carries no prose by default: what these calls are is the Persona's to say.
+ * The operator replaces it per endpoint.
  */
 export const SYNTHETIC_REASONING_TEXT = '-';
 
@@ -29,6 +30,8 @@ export interface ResponsesInputOptions {
   keepThinking?: () => boolean;
   /** Default `encrypted`. */
   reasoningReplay?: ReasoningReplay;
+  /** Plaintext replay only; defaults to `SYNTHETIC_REASONING_TEXT`. Endpoints reject an empty one. */
+  syntheticReasoningText?: string;
 }
 
 /**
@@ -72,7 +75,10 @@ export function responsesInput(
       return;
     }
     if (plaintext && item.type === 'function_call' && !entry.context.origin && input.at(-1)?.type !== 'reasoning')
-      input.push({ type: 'reasoning', id: `rs_${item.call_id}`, summary: [], content: [{ type: 'reasoning_text', text: SYNTHETIC_REASONING_TEXT }] });
+      input.push({
+        type: 'reasoning', id: `rs_${item.call_id}`, summary: [],
+        content: [{ type: 'reasoning_text', text: opts.syntheticReasoningText ?? SYNTHETIC_REASONING_TEXT }],
+      });
     const wire = inputItem(entry) as Item;
     if (opts.media?.enabled() && entry.context.blobs?.length && (item.type === 'message' || item.type === 'function_call_output')) {
       const field = item.type === 'message' ? 'content' : 'output';

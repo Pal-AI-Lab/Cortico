@@ -131,7 +131,8 @@ describe('模块声明与条目校验', () => {
     expect(() => validateEntry(module, entry({ options: { extraHeaders: { a: 1 } } }))).toThrow('附加请求头');
     expect(() => validateEntry(module, entry({ options: { extraBody: [] } }))).toThrow('附加请求体');
     expect(() => validateEntry(module, entry({ options: { reasoningReplay: 'signed' } }))).toThrow('encrypted 或 plaintext');
-    const normalized = validateEntry(module, entry({ options: { endpointPath: '', extraHeaders: {}, extraBody: {}, reasoningReplay: '' } }));
+    expect(() => validateEntry(module, entry({ options: { syntheticReasoningText: '   ' } }))).toThrow('空串或全空白');
+    const normalized = validateEntry(module, entry({ options: { endpointPath: '', extraHeaders: {}, extraBody: {}, reasoningReplay: '', syntheticReasoningText: '' } }));
     expect(compatOptions(normalized)).toEqual({});
     expect(compatOptions(validateEntry(module, entry({ options: { reasoningReplay: 'plaintext' } }))).reasoningReplay).toBe('plaintext');
   });

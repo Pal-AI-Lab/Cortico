@@ -10,6 +10,10 @@ const zh = {
   reasoningReplay: '思维链回传形态',
   reasoningReplayDescription: '加密回签名块,明文回推理文字;上游接受哪种由端点决定,不确定就探测。',
   reasoningReplayValue: '思维链回传形态只能是 encrypted 或 plaintext',
+  syntheticReasoningText: '合成推理填充',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `明文回传时,没有记录来源的工具调用前补的那一段推理,模型会读到。留空用默认「${fallback}」;端点拒收空串与全空白。`,
+  syntheticReasoningTextValue: '合成推理填充不能是空串或全空白:端点会拒收整条请求',
   reasoningPanel: '思维链',
   reasoningPanelDescription: '思维链回传给上游的形态。',
   bodyRequired: '需要请求体',
@@ -28,6 +32,10 @@ const en: typeof zh = {
   reasoningReplay: 'Reasoning replay',
   reasoningReplayDescription: 'Encrypted sends the signed block back, plaintext the reasoning text; which one the endpoint accepts is the endpoint\'s, probe when unsure.',
   reasoningReplayValue: 'Reasoning replay must be encrypted or plaintext',
+  syntheticReasoningText: 'Synthetic reasoning text',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `In plaintext replay, the reasoning sent before a tool call with no recorded origin; the model reads it. Empty uses the default "${fallback}"; endpoints reject an empty or blank string.`,
+  syntheticReasoningTextValue: 'Synthetic reasoning text cannot be empty or blank: the endpoint rejects the whole request',
   reasoningPanel: 'Reasoning',
   reasoningPanelDescription: 'The form in which reasoning is sent back to the endpoint.',
   bodyRequired: 'Request body required',

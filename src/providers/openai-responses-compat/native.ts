@@ -22,6 +22,7 @@ export interface ResponsesProviderOptions {
   media?: ResponsesInputOptions['media'];
   keepThinking?: () => boolean;
   reasoningReplay?: ReasoningReplay;
+  syntheticReasoningText?: string;
   log?: Logger;
 }
 
@@ -64,6 +65,7 @@ export class ResponsesProvider extends OpenAIHttpClient {
   protected override buildResponseBody(request: Request, options: GenerateOptions): Record<string, unknown> {
     return buildResponsesBody(request, options, {
       media: this.opts.media, keepThinking: this.opts.keepThinking, reasoningReplay: this.opts.reasoningReplay,
+      syntheticReasoningText: this.opts.syntheticReasoningText,
     }, this.opts.extraBody);
   }
 
