@@ -76,7 +76,7 @@ const zh = {
   deleted: '已删除。',
   pricingTitle: '报价',
   pricingDescription: '历史流水固定使用请求时的报价。自定义报价按模型与费用口径覆盖模块默认值。',
-  pricingUnset: '未设报价：这个端点的调用在用量与成本页只计 token，不计金额。',
+  pricingUnset: '未设自定义报价：优先使用模块价目；若无适用价目，仅记录 token，不计金额。',
   meters: {
     input: '输入',
     cachedInput: '缓存命中',
@@ -85,7 +85,6 @@ const zh = {
     reasoning: '推理',
     total: '总量',
   },
-  quoteUnknown: (model: string) => `${model}：报价未知`,
   marginal: '边际费用',
   equivalent: 'API 等价费用',
   perMillion: (label: string, rate: number) => `${label} ${rate}/百万`,
@@ -182,7 +181,7 @@ const en: typeof zh = {
   pricingTitle: 'Pricing',
   pricingDescription:
     'Historical records keep the quote in effect at request time. Custom quotes override module defaults per model and cost basis.',
-  pricingUnset: 'No pricing set: calls on this endpoint count tokens but no amount on the usage page.',
+  pricingUnset: 'No custom pricing: module prices apply when available; otherwise only tokens are recorded.',
   meters: {
     input: 'Input',
     cachedInput: 'Cache hit',
@@ -191,7 +190,6 @@ const en: typeof zh = {
     reasoning: 'Reasoning',
     total: 'Total',
   },
-  quoteUnknown: (model: string) => `${model}: quote unknown`,
   marginal: 'Marginal cost',
   equivalent: 'API-equivalent cost',
   perMillion: (label: string, rate: number) => `${label} ${rate}/M`,

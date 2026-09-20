@@ -63,7 +63,7 @@ it('field editing is local and saved modules stay readonly', async () => {
   const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
   input.value = 'https://edited.test'; input.dispatchEvent(new Event('input')); await flush();
   expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
-  expect(root.querySelector('select[aria-label="供应商类型"]')).toBeNull();
+  expect((root.querySelector('select[aria-label="供应商类型"]') as HTMLSelectElement).disabled).toBe(true);
   expect(root.querySelectorAll('details')[2]?.open).toBe(false);
 });
 it('missing active references are displayed without selecting a replacement as active', async () => {

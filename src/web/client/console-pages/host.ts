@@ -532,7 +532,8 @@ export class ConsolePageHost {
         ? page.lamps ?? []
         : [{ label: S.assembly, state: 'offline', hint: page.availability === 'missing' ? S.notInstalled : S.notActivated }],
     ));
-    head.append(title, ui.h('p', 'pagedesc', page.id));
+    head.appendChild(title);
+    chrome.append(head, ui.h('p', 'pagedesc', page.id));
     const bar = ui.rowbar();
 
     for (const badge of asArray(page.badges)) {
@@ -564,9 +565,8 @@ export class ConsolePageHost {
       });
       bar.appendChild(open);
     }
-    head.appendChild(bar);
-    if (page.reason) head.appendChild(ui.msgline(page.reason, true));
-    chrome.appendChild(head);
+    if (bar.children.length > 1) chrome.appendChild(bar);
+    if (page.reason) chrome.appendChild(ui.msgline(page.reason, true));
 
     const panels = tabbed(page);
     const prompts = asArray(page.prompts);

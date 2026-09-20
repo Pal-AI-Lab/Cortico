@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
+<!-- Owner: src/web/public/styles.css, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -89,3 +89,5 @@ esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`
 `client/features/providers/drafts.ts` 将草稿按部署 scope 保存在 localStorage，排除 API Key。连接页自行处理切卡的未保存保护，并向路由注册页面离开保护。复制只产生草稿。
 
 Terminal 的 `status.modelConnection` 包含当前连接的 `name`、`model`、`module`、`moduleTitle`、`baseUrl` 与 `ready`。供应商保存、删除及切换后推送状态帧；顶部统计行右侧显示名称与模型，并链接至连接详情。
+
+页面大标题使用固定页头或滚动容器内的 sticky 页头，下方分割线与内容保持统一间距。框架页与模块页共用内容宽度、左右边距和双侧滚动条预留；模块标识和操作位于分割线下，空操作行不占空间。主色按钮使用白色文字。说明文字使用统一注释字号与颜色。计价编辑器不显示空报价行；未设自定义报价的注释随费率编辑更新，并说明模块价目的回退规则。

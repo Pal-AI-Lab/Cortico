@@ -69,7 +69,11 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     field(basic, 'name', S.name, editing.name, value => { editing.name = value; }, value => value === saved?.name ? null : validateProviderName(value) ? S.nameHint : null);
     basic.append(ui.msgline(S.nameHint));
     const selectedModule = modules.find(module => module.id === editing.entry.kind);
-    if (saved) basic.append(ui.field(S.module, ui.h('span', '', selectedModule?.title ?? editing.entry.kind)), ui.msgline(S.fixedModule));
+    if (saved) {
+      const module = ui.select({ value: editing.entry.kind, options: [{ value: editing.entry.kind, label: selectedModule?.title ?? editing.entry.kind }], disabled: true });
+      module.setAttribute('aria-label', S.module); module.classList.add('connection-module-readonly');
+      basic.append(ui.field(S.module, module), ui.msgline(S.fixedModule));
+    }
     else {
       const select = ui.select({ value: editing.entry.kind, options: [{ value: '', label: '—' }, ...modules.map(module => ({ value: module.id, label: module.title }))],
         onChange: kind => {
@@ -81,7 +85,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       const required = ui.h('div', 'field-error'); basic.append(required);
       errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.required; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
     }
-    if (selectedModule) basic.append(ui.msgline(selectedModule.description), ui.h('small', 'muted', selectedModule.id));
+    if (selectedModule) basic.append(ui.h('p', 'field-note', S.moduleNote(selectedModule.description, selectedModule.id)));
     const connection = section(S.connection);
     field(connection, 'baseUrl', S.url, editing.entry.baseUrl, value => { editing.entry.baseUrl = value; }, value => {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
@@ -137,7 +141,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const images = ui.h('input'); images.type = 'checkbox'; images.checked = editing.entry.multimodal === true; images.setAttribute('aria-label', S.images);
     images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts); model.append(ui.field(S.images, images));
     const moduleBody = section(S.moduleSection, 'module', true);
-    const pricing = section(S.pricing, 'pricing'); pricing.append(ui.msgline(S.priceHint));
+    const pricing = section(S.pricing, 'pricing');
     const prices = pricingEditor(ui, editing.entry.pricing ?? [], saved?.quotes ?? [], value => {
       editing.entry.pricing = value as Detail['entry']['pricing']; change();
     }, LANGUAGE, { raw: editing.raw.pricing, onRaw: value => { editing.raw.pricing = value; change(); } });

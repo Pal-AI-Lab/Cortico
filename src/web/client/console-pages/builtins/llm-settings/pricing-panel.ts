@@ -79,7 +79,6 @@ export function pricingEditor(
   });
   const labels: Record<string, string> = S.meters;
   for (const row of quotes) {
-    if (!row.quotes.length) card.body.append(ui.msgline(S.quoteUnknown(row.model)));
     for (const quote of row.quotes) {
       card.body.append(
         ui.kv([
@@ -102,7 +101,12 @@ export function pricingEditor(
     }
   }
   const unset = saved.length === 0;
-  if (unset) card.body.append(ui.msgline(S.pricingUnset));
+  const pricingNote = ui.h('p', 'field-note pricing-note');
+  const updateNote = (pricing: unknown[]) => {
+    pricingNote.textContent = pricing.length ? '' : S.pricingUnset;
+    pricingNote.hidden = pricing.length > 0;
+  };
+  updateNote(saved); card.body.append(pricingNote);
   const simple: SimpleCost | null = unset ? null : readSimple(saved);
   const raw = ui.textarea({
     rows: 10,
@@ -147,6 +151,7 @@ export function pricingEditor(
       problem.textContent = '';
       problem.classList.remove('bad');
       raw.setAttribute('aria-invalid', 'false');
+      updateNote(pricing);
       commit(pricing);
       draft?.onRaw(raw.value);
       return true;
@@ -163,10 +168,10 @@ export function pricingEditor(
     ...rates.map((input, i) => ui.field(rateLabels[i], input)),
     ui.msgline(simple || unset ? S.costFormNote : S.costFormOverridden),
   );
-  const advanced = ui.h('details');
+  const advanced = ui.h('details', 'pricing-rules');
   advanced.open = !simple && !unset;
   advanced.append(ui.h('summary', null, S.editFull), raw, ui.msgline(S.fullNote), problem);
-  const preview = ui.h('details');
+  const preview = ui.h('details', 'pricing-snapshot');
   preview.append(
     ui.h('summary', null, S.viewSnapshot),
     ui.h('pre', 'mono', JSON.stringify(quotes, null, 2)),

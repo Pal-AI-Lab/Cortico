@@ -235,10 +235,13 @@ describe('成本三格表', () => {
         rateOf(view.root, l),
       ),
     ).toEqual(['', '', '']);
-    expect(view.root.textContent).toContain('未设报价');
+    expect(view.root.textContent).toContain('未设自定义报价');
+    expect(view.root.textContent).not.toContain('报价未知');
+    expect(view.root.querySelector('.pricing-note').hidden).toBe(false);
     expect(view.root.querySelector('details').open).toBe(false);
     change(byLabel(view.root, '输出 / 百万 token'), '15');
     await flush();
+    expect(view.root.querySelector('.pricing-note').hidden).toBe(true);
     expect(server.last('save').pricing).toEqual([
       {
         models: ['*'],
@@ -272,6 +275,7 @@ describe('成本三格表', () => {
       change(byLabel(view.root, label), '');
     await flush();
     expect(server.last('save').pricing).toEqual([]);
+    expect(view.root.querySelector('.pricing-note').hidden).toBe(false);
   });
   it('已存的正是那一条 * 规则时回填三格;改一格连同其余两格一起送回', async () => {
     const pricing = [
