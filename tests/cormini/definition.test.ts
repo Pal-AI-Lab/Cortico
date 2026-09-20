@@ -140,11 +140,11 @@ describe('统一入口:框架派生的控制台', () => {
     expect(owners.get('write_file')).toEqual({ kind: 'persona' });
   });
 
-  it('存储清单是框架派生的九条,加Persona的工作区,再加各 World 槽位自报的', async () => {
+  it('存储清单是框架派生的十条,加Persona的工作区,再加各 World 槽位自报的', async () => {
     const { body } = await getJ('/api/storage');
     const keys = (body.parts as Array<{ key: string }>).map((p) => p.key);
     const slotKeys = new Set(bot.assembly.slots.flatMap((s) => s.instance.console?.()?.storage ?? []).map((p) => p.key));
-    expect(keys.filter((k) => !slotKeys.has(k)).sort()).toEqual(['events', 'pending', 'runlog', 'session', 'state', 'toolcalls', 'tracker', 'usage', 'wakes', 'workspace']);
+    expect(keys.filter((k) => !slotKeys.has(k)).sort()).toEqual(['events', 'media', 'pending', 'runlog', 'session', 'state', 'toolcalls', 'tracker', 'usage', 'wakes', 'workspace']);
   });
 
   it('工作区可清:她写的文件删掉,宪法留下', async () => {

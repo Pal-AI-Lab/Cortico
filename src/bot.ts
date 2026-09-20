@@ -216,6 +216,12 @@ const BOT_TEXT = {
         stat: (n: number) => `${n}条待投递`,
         cleared: (n: number) => `已丢弃${n}条待投递事件`,
       },
+      media: {
+        label: '附件库(事件与工具回执里的图片、音频)',
+        note: '删除全部附件文件，保留引用它们的事件与 session 记录；删掉的附件在上下文里只剩文字说明',
+        stat: (n: number, size: string) => `${n}份 / ${size}`,
+        cleared: (n: number) => `已删除${n}份附件`,
+      },
     },
     config: {
       unknownGroup: (id: string) => `没有这一组配置: ${id}`,
@@ -309,6 +315,12 @@ const BOT_TEXT = {
           'Discards pending events and keeps archived records. Deferred rendering items remain queued; discarded items will not be replayed after restart',
         stat: (n: number) => `${n} pending`,
         cleared: (n: number) => `Discarded ${n} pending events`,
+      },
+      media: {
+        label: 'Attachment store (images and audio from events and tool results)',
+        note: 'Deletes every attachment file and keeps the events and session records that reference them; a deleted attachment leaves only its text description in context',
+        stat: (n: number, size: string) => `${n} files / ${size}`,
+        cleared: (n: number) => `Deleted ${n} attachments`,
       },
     },
     config: {
@@ -469,6 +481,19 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
       stat: () => s.pending.stat(core.bus.pending()),
       // 保留延迟渲染项，其回调还负责复位 World 的排队状态。
       clear: () => s.pending.cleared(core.discardPendingEvents()),
+    },
+    {
+      key: 'media',
+      label: s.media.label,
+      kind: 'disk',
+      location: 'data/media/',
+      danger: true,
+      note: s.media.note,
+      stat: () => {
+        const { count, bytes } = core.logBlobs.stat();
+        return s.media.stat(count, `${(bytes / 1024).toFixed(1)}KB`);
+      },
+      clear: () => s.media.cleared(core.logBlobs.clear()),
     },
   ];
 }

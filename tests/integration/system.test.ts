@@ -264,6 +264,7 @@ describe('全系统集成(终端对话链路)', () => {
     expect(r.status).toBe(200);
     expect(out.ok).toBe(true);
     expect(out.results[out.results.length - 1].key).toBe('session');
+    expect(out.results.map((x) => x.key)).toContain('media');
     // Clear-all 会用内部事件重开会话；外部事件库保持为空。
     expect(bot.core.store.range({ origin: 'external' })).toHaveLength(0);
     await waitFor(() => legacyMessages(bot.core.session.records).some(
