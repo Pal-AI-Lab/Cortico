@@ -15,8 +15,11 @@ type Item = Record<string, unknown>;
 export const REASONING_REPLAYS = ['encrypted', 'plaintext'] as const;
 export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
 
-/** Reasoning text sent before a locally synthesized function call in plaintext replay. */
-export const SYNTHETIC_REASONING_TEXT = 'The runtime issued the next call to deliver external events; there is no reasoning behind it.';
+/**
+ * Reasoning text sent before a function call without a recorded origin in plaintext replay. The
+ * model reads it; it states only what the transport can confirm.
+ */
+export const SYNTHETIC_REASONING_TEXT = 'No reasoning was recorded for the next call.';
 
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
