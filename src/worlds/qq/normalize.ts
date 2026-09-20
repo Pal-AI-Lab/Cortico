@@ -178,6 +178,9 @@ export function renderSegmentsPlain(segments: Segment[]): string {
       case 'image':
         parts.push({ text: '[图片]', isToken: true });
         break;
+      case 'record':
+        parts.push({ text: '[语音]', isToken: true });
+        break;
       case 'face': {
         const name = QFACE_NAMES[String(data.id ?? '')];
         parts.push({ text: name ? `[表情:${name}]` : '[QQ表情]', isToken: true });
@@ -253,6 +256,11 @@ export function renderIncoming(
         parts.push({ text: renderImage(data), isToken: true });
         break;
       }
+      // 语音条的音频不随消息到达,取回它要另一次动作调用;这里只说这是一条语音。
+      case 'record': {
+        parts.push({ text: '[语音]', isToken: true });
+        break;
+      }
       case 'face': {
         const name = QFACE_NAMES[String(data.id ?? '')];
         parts.push({ text: name ? `[表情:${name}]` : '[QQ表情]', isToken: true });
@@ -301,14 +309,20 @@ interface OutgoingArgs {
   reply_to_message_id?: number | string;
   /** 图片base64(不含data:前缀);有则编译成image段(OneBot base64://) */
   image_base64?: string;
+  /** 语音base64(不含data:前缀);有则整条消息只有这一个record段 */
+  record_base64?: string;
 }
 
 /**
  * 出站 → segment数组:reply段(如有)在前,然后image段(如有),最后text段
  * (text非空才加——支持只发图不带字)。
+ * 语音条独占一条消息:QQ 的 record 段不与别的段同发,给了它就只发它。
  * 不做 @ 编译：agent 写出的“@某人”作为纯文本原样发出。
  */
 export function buildOutgoing(args: OutgoingArgs): Segment[] {
+  if (args.record_base64) {
+    return [{ type: 'record', data: { file: `base64://${args.record_base64}` } }];
+  }
   const segments: Segment[] = [];
   if (args.reply_to_message_id !== undefined) {
     segments.push({ type: 'reply', data: { id: String(args.reply_to_message_id) } });

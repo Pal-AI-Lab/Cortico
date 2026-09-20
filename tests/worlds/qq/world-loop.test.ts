@@ -569,6 +569,32 @@ describe('起草-确认门(draft/confirm)', () => {
     expect(host.pendingForDrain).toHaveLength(0); // 消费一次
   });
 
+  it('draft带voice(句柄):confirm(send)只发一个record段,回录标出语音并附句柄', async () => {
+    const bytes = new Uint8Array([1, 2, 3]);
+    const handle = host.putBlob(bytes, 'audio/wav', 'mem:external/qq/voice/晚安.wav');
+    const d = (await tool('qq_draft').handler({ to: `group:${GROUP}`, voice: handle }, toolCtx)) as string;
+    expect(d).toContain('will send voice');
+    expect(d).toContain('voice bar, no text');
+
+    expect(await tool('qq_confirm').handler({ decision: 'send' }, toolCtx)).toContain('sent #');
+    expect(mock.outbox[0].params.message).toEqual([
+      { type: 'record', data: { file: `base64://${Buffer.from(bytes).toString('base64')}` } },
+    ]);
+    const self = host.pushed.find((p) => p.event.type === 'qq.self')!;
+    expect(self.event.text).toContain(`[语音: ${handle}]`);
+    expect(self.event.blobs?.[0].handle).toBe(handle);
+  });
+
+  it('语音条不与正文、图片、引用同发;句柄不是音频就拒,且不暂存', async () => {
+    const voice = host.putBlob(new Uint8Array([9]), 'audio/wav', 'mem:external/qq/voice/a.wav');
+    expect(await tool('qq_draft').handler({ to: `group:${GROUP}`, voice, text: '顺便说一句' }, toolCtx))
+      .toContain('message of its own');
+    const png = host.putBlob(new Uint8Array([7]), 'image/png');
+    expect(await tool('qq_draft').handler({ to: `group:${GROUP}`, voice: png }, toolCtx)).toContain('not audio');
+    expect(await tool('qq_confirm').handler({ decision: 'send' }, toolCtx)).toContain('no draft to confirm');
+    expect(mock.outbox).toHaveLength(0);
+  });
+
   it('confirm(cancel):草稿放弃,不发送', async () => {
     await tool('qq_draft').handler({ to: `group:${GROUP}`, text: '算了' }, toolCtx);
     const c = await tool('qq_confirm').handler({ decision: 'cancel' }, toolCtx);

@@ -204,11 +204,11 @@ describe('renderIncoming', () => {
         { type: 'face', data: { id: '14' } },
         { type: 'face', data: { id: '348' } },
         { type: 'face', data: { id: '999999' } },
-        { type: 'record', data: {} },
+        { type: 'dice', data: {} },
       ]),
       ctx(),
     );
-    expect(r.text).toBe('#900 [群「测试群」 21:32] 阿明(1001): [表情:微笑] [表情:福萝卜] [QQ表情] [record]');
+    expect(r.text).toBe('#900 [群「测试群」 21:32] 阿明(1001): [表情:微笑] [表情:福萝卜] [QQ表情] [dice]');
   });
 });
 
@@ -294,6 +294,20 @@ describe('makeImagePolicy(取图有没有意义)', () => {
   it('能用图 → file 字段同样带标记', () => {
     const policy = makeImagePolicy(true);
     expect(policy({ file: 'abc.png' })).toBe('[图片 abc.png]');
+  });
+});
+
+describe('语音条', () => {
+  it('入站 record 段渲染成 [语音];独立渲染也一样', () => {
+    const r = renderIncoming(msg([{ type: 'record', data: { file: '1.silk' } }]), ctx());
+    expect(r.text).toBe('#900 [群「测试群」 21:32] 阿明(1001): [语音]');
+    expect(renderSegmentsPlain([{ type: 'record', data: { file: '1.silk' } }])).toBe('[语音]');
+  });
+
+  it('出站给了语音就只发 record 段,引用与正文都不随行', () => {
+    expect(buildOutgoing({ text: '顺便说一句', reply_to_message_id: 888, record_base64: 'QUJD' })).toEqual([
+      { type: 'record', data: { file: 'base64://QUJD' } },
+    ]);
   });
 });
 
