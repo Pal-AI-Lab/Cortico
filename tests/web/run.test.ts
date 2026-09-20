@@ -181,7 +181,7 @@ describe('/api/run/shutdown', () => {
 describe('/api/run/restart', () => {
   it('挂了 restart 才有能力位与端点;回执尾句按 supervised 说清会不会被拉起', async () => {
     const calls: boolean[] = [];
-    const make = async (supervised: boolean) => {
+    const make = async (supervised: boolean, startsPaused = false) => {
       const a = new WebApp({
         store: new FakeStore(),
         memoryDir: dir,
@@ -191,6 +191,7 @@ describe('/api/run/restart', () => {
           pause: () => {}, resume: () => {}, isPaused: () => false,
           restart: async () => { calls.push(supervised); return { complete: true, steps: [{ label: '按住事件投递', ok: true, elapsedMs: 1 }] }; },
           supervised,
+          startsPaused,
         },
         log: nullLogger(),
       });
@@ -214,6 +215,29 @@ describe('/api/run/restart', () => {
     } finally {
       await sup.a.stop();
       await un.a.stop();
+    }
+  });
+
+  it('重启后以暂停态回来时,回执说明要按继续', async () => {
+    const app2 = new WebApp({
+      store: new FakeStore(),
+      memoryDir: dir,
+      dataDir: dir,
+      getStatus: () => ({}),
+      run: {
+        pause: () => {}, resume: () => {}, isPaused: () => false,
+        restart: async () => ({ complete: true, steps: [] }),
+        supervised: true,
+        startsPaused: true,
+      },
+      log: nullLogger(),
+    });
+    const p = await app2.start(0);
+    try {
+      const r = await (await fetch(`http://127.0.0.1:${p}/api/run/restart`, { method: 'POST' })).json() as any;
+      expect(r.result).toContain('事件投递是暂停的');
+    } finally {
+      await app2.stop();
     }
   });
 

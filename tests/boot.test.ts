@@ -11,6 +11,7 @@ import {
   requestRestart,
   RESTART_FLAG_FILE,
   RESTART_MESSAGE,
+  startsPaused,
 } from '../src/boot.ts';
 
 const dirs: string[] = [];
@@ -79,6 +80,16 @@ describe('isSupervised', () => {
     expect(isSupervised({ CORTICO_SUPERVISED: 'true' })).toBe(true);
     expect(isSupervised({})).toBe(false);
     expect(isSupervised({ CORTICO_SUPERVISED: '0' })).toBe(false);
+  });
+});
+
+describe('startsPaused', () => {
+  it('认环境变量的 1 与 true,也认 --paused', () => {
+    expect(startsPaused({ CORTICO_START_PAUSED: '1' }, [])).toBe(true);
+    expect(startsPaused({ CORTICO_START_PAUSED: 'true' }, [])).toBe(true);
+    expect(startsPaused({ CORTICO_START_PAUSED: '0' }, [])).toBe(false);
+    expect(startsPaused({}, [])).toBe(false);
+    expect(startsPaused({}, ['node', 'launcher.ts', '--paused'])).toBe(true);
   });
 });
 

@@ -34,6 +34,7 @@ const SERVER_TEXT = {
     paused: '已暂停:事件照常落库排队,不投递唤醒',
     resumed: '已继续:积压事件一次性投递',
     exitSupervised: '进程即将退出,启动器随即重新拉起',
+    exitSupervisedPaused: '进程即将退出,启动器随即重新拉起;回来时事件投递是暂停的,要在运行状态里按继续',
     exitUnsupervised: '进程即将退出;没有检测到启动器循环,需要手动重新启动',
     shutdownSkipped: (n: number, labels: string[]) => `本地关机完成,但有 ${n} 步没走完:${labels.join('、')}`,
     shutdownComplete: (n: number) => `本地关机完成(${n} 步全部走完)`,
@@ -46,6 +47,7 @@ const SERVER_TEXT = {
     paused: 'Paused: events are still stored and queued, no wake is delivered',
     resumed: 'Resumed: the backlog is delivered in one batch',
     exitSupervised: 'The process is about to exit; the launcher will start it again',
+    exitSupervisedPaused: 'The process is about to exit; the launcher will start it again with event delivery paused, so resume it in the run status',
     exitUnsupervised: 'The process is about to exit; no launcher loop was detected, so it must be started again by hand',
     shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step(s) did not complete: ${labels.join(', ')}`,
     shutdownComplete: (n: number) => `Local shutdown finished (all ${n} steps completed)`,
@@ -472,6 +474,8 @@ export interface ConsoleSurface {
      */
     restart?(language: Language): Promise<WebAppShutdownReport>;
     supervised?: boolean;
+    /** 重启后是否以暂停态回来;重启回执据此说清楚。 */
+    startsPaused?: boolean;
   };
   /** 扩展装卸(可选;不挂载时 /api/extensions* 503)。 */
   extensions?: WebAppExtensionDeps;
@@ -1563,13 +1567,16 @@ export class WebApp {
       );
     });
 
-    // 重启 = 落下重启标志 + 规范关机。有没有启动器循环把它拉起来,回执里说明。
+    // 重启 = 落下重启标志 + 规范关机。有没有启动器循环把它拉起来、回来时投递是不是暂停的,回执里说明。
     app.post('/api/run/restart', (req: Request, res: Response) => {
       const supervised = this.deps.run?.supervised === true;
       const language = this.languageOf(req);
+      const text = pick(language, SERVER_TEXT);
       void this.respondPowerAction(
         res, language, this.deps.run?.restart, '重启控制不可用', '收到重启请求(人工操作)',
-        supervised ? pick(language, SERVER_TEXT).exitSupervised : pick(language, SERVER_TEXT).exitUnsupervised,
+        !supervised ? text.exitUnsupervised
+          : this.deps.run?.startsPaused ? text.exitSupervisedPaused
+          : text.exitSupervised,
       );
     });
 

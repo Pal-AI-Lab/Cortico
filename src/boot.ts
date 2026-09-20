@@ -19,6 +19,14 @@ export function isSupervised(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[SUPERVISED_ENV] === '1' || env[SUPERVISED_ENV] === 'true';
 }
 
+/**
+ * 启动时是否暂停事件投递。每一轮受监管的启动拿到同一份环境和同一串参数，
+ * 所以这个值也是重启后的状态。
+ */
+export function startsPaused(env: NodeJS.ProcessEnv = process.env, argv: readonly string[] = process.argv): boolean {
+  return env.CORTICO_START_PAUSED === '1' || env.CORTICO_START_PAUSED === 'true' || argv.includes('--paused');
+}
+
 function notifyLauncher(message: { type: string; dataDir?: string }, env = process.env): void {
   if (!isSupervised(env)) return;
   process.send?.(message);
