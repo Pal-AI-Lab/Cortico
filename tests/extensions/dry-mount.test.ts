@@ -14,7 +14,7 @@ import { CORE_DEFAULTS } from '../../src/core/config.ts';
 import cormini from '../../bots/cormini/index.ts';
 import type { BotDefinition } from '../../src/bot.ts';
 import type { WorldDefinition, WorldSection } from '../../src/world.ts';
-import type { CoreConfig, ToolDef, World } from '../../src/core/types.ts';
+import type { ConfigGroup, CoreConfig, ToolDef, World } from '../../src/core/types.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 
 let scratchDir: string;
@@ -30,7 +30,7 @@ const tool = (name: string, extra: Partial<ToolDef> = {}): ToolDef => ({
   ...extra,
 });
 
-function worldDef(id: string, tools: ToolDef[], patch: Partial<World> = {}, defaults: WorldSection = { enabled: false }): WorldDefinition<WorldSection> {
+function worldDef(id: string, tools: ToolDef[], patch: Partial<World> = {}, defaults: WorldSection & Record<string, unknown> = { enabled: false }): WorldDefinition<WorldSection> {
   return {
     id,
     label: `${id} 扩展`,
@@ -106,6 +106,37 @@ describe("World 构造检查", () => {
     const report = await dryMountWorld(worldDef('alpha', [], {}, { enabled: true }), { scratchDir });
     expect(report.failures).toEqual([]);
     expect(report.warnings.join('\n')).toContain('enabled');
+  });
+
+  it('声明的配置路径在 defaults() 里没有对应项是失败', async () => {
+    const group: ConfigGroup = {
+      id: 'world:alpha',
+      owner: 'world:alpha',
+      schema: { type: 'object', title: 'alpha', properties: { 'worlds.alpha.retries': { type: 'integer', title: '重试次数' } } },
+    };
+    const def = worldDef('alpha', [], { console: () => ({ config: [group] }) });
+    const report = await dryMountWorld(def, { scratchDir });
+    expect(report.failures.join('\n')).toContain('worlds.alpha.retries');
+
+    const withDefault = worldDef('alpha', [], { console: () => ({ config: [group] }) }, { enabled: false, retries: 3 });
+    expect((await dryMountWorld(withDefault, { scratchDir })).failures).toEqual([]);
+  });
+
+  it('声明的配置路径越出本段是失败', async () => {
+    const group: ConfigGroup = {
+      id: 'world:alpha',
+      owner: 'world:alpha',
+      schema: { type: 'object', title: 'alpha', properties: { 'batching.quietGapMs': { type: 'integer', title: '安静窗口' } } },
+    };
+    const report = await dryMountWorld(worldDef('alpha', [], { console: () => ({ config: [group] }) }), { scratchDir });
+    expect(report.failures.join('\n')).toContain('worlds.alpha. 段');
+  });
+
+  it('内建 World 声明的每个配置路径都在自己的 defaults() 里', async () => {
+    for (const def of BUILTIN_WORLDS) {
+      const report = await dryMountWorld(def, { scratchDir });
+      expect(report.failures, def.id).toEqual([]);
+    }
   });
 
   it('内建 World 全部在假环境下构造得出来,工具名可供对照', () => {

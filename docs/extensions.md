@@ -105,6 +105,9 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
+配置组声明的每个路径都要落在自己的段内(World 是 `worlds.<id>.`),并在 `defaults()` 里有对应项,
+否则是失败:控制台照声明渲染旋钮、照路径写回 config.json,而读到的是代码里另一处的兜底值。
+
 ## 契约版本
 
 `cortico.api` 必须等于框架的 `EXTENSION_API_VERSION`(现在是 4)。`WorldDefinition`、
