@@ -9,7 +9,8 @@ import module from '../../src/providers/llamacpp/index.ts';
 import { LlamaCppProvider, buildLlamaCppRequestBody } from '../../src/providers/llamacpp/native.ts';
 import { RouterCatalog } from '../../src/providers/llamacpp/catalog.ts';
 import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions, releasePlan } from '../../src/providers/llamacpp/options.ts';
-import type { LLMProviderEntry } from '../../src/core/types.ts';
+import type { LLMProviderEntry, ModelSpec } from '../../src/core/types.ts';
+import type { NativeChatMessage } from '../../src/providers/transport/native-types.ts';
 import { nullLogger } from '../../src/core/util.ts';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -104,6 +105,27 @@ describe('llamacpp Chat 请求', () => {
     expect(off.chat_template_kwargs).toEqual({ enable_thinking: false });
     expect(off).not.toHaveProperty('reasoning_effort');
     expect(off).not.toHaveProperty('tools');
+  });
+
+  it('历史思维链默认回传;keepPastThinking 关时只留合成开头;思维链关时一条不带', () => {
+    const history: NativeChatMessage[] = [
+      { role: 'user', content: '开场' },
+      { role: 'assistant', content: '开场白', reasoning_content: '开头的思考', head: true },
+      { role: 'user', content: '问题' },
+      { role: 'assistant', content: '上一答', reasoning_content: '上一轮的思考' },
+      { role: 'assistant', content: '', reasoning_content: '这一轮的思考', tool_calls: [{ id: 'c1', type: 'function', function: { name: 'look', arguments: '{}' } }] },
+      { role: 'tool', tool_call_id: 'c1', content: '看到了' },
+    ];
+    const spec: ModelSpec = { model: 'qwen', thinking: true };
+    const reasoning = (body: Record<string, unknown>) =>
+      (body.messages as Array<{ reasoning_content?: string }>).map((m) => m.reasoning_content ?? null);
+
+    expect(reasoning(buildLlamaCppRequestBody(spec, history)))
+      .toEqual([null, '开头的思考', null, '上一轮的思考', '这一轮的思考', null]);
+    expect(reasoning(buildLlamaCppRequestBody(spec, history, undefined, undefined, { keepThinking: false })))
+      .toEqual([null, '开头的思考', null, null, null, null]);
+    expect(reasoning(buildLlamaCppRequestBody({ ...spec, thinking: false }, history)))
+      .toEqual([null, null, null, null, null, null]);
   });
 
   it('打到 <baseUrl>/chat/completions,密钥进 bearer,reasoning_content 归一成推理项', async () => {

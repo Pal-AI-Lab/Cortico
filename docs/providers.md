@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
 
 # Provider
 
@@ -72,7 +72,8 @@ provider 模块不预设任何模型名;端点
 ## 内建 llamacpp
 
 `POST <baseUrl>/chat/completions`,思维链是模板开关(`chat_template_kwargs.enable_thinking`),
-回执里的 `reasoning_content` 归一成推理项,历史思维链不回传。两种用法由 `options.runtime` 有无
+回执里的 `reasoning_content` 归一成推理项,历史里的随每次请求照原样发回;
+`keepPastThinking` 关时只留合成开头那一条,思维链关时一条不带。两种用法由 `options.runtime` 有无
 决定:
 
 - **外部**:连接独立运行的 llama-server。通过 `/health` 检查状态、`/props?model=`
