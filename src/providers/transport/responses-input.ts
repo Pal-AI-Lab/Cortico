@@ -16,10 +16,12 @@ export const REASONING_REPLAYS = ['encrypted', 'plaintext'] as const;
 export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
 
 /**
- * Reasoning text sent before a function call without a recorded origin in plaintext replay. The
- * model reads it; it states only what the transport can confirm.
+ * Placeholder `reasoning_text` sent before a function call without a recorded origin in plaintext
+ * replay. A missing field, an empty `content`, an empty string and a summary without
+ * `reasoning_text` are each rejected, so the padding is one character; it is non-whitespace in case
+ * an endpoint trims. It carries no prose: what these calls are is the Persona's to say.
  */
-export const SYNTHETIC_REASONING_TEXT = 'No reasoning was recorded for the next call.';
+export const SYNTHETIC_REASONING_TEXT = '-';
 
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
