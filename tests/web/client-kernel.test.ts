@@ -578,6 +578,23 @@ describe('Router —— 广播与订阅', () => {
   });
 });
 
+describe('Router — asynchronous editor decisions', () => {
+  it('keeps the editor after cancellation and navigates only after a successful save decision', async () => {
+    const win = makeWin('#/providers');
+    const router = new Router({ win, confirmLeave: async () => true });
+    router.start();
+    let accept: (value: boolean) => void = () => {};
+    router.addLeaveDecision(() => new Promise<boolean>(resolve => { accept = resolve; }));
+    router.navigate(['live']); await flush();
+    expect(router.route.segments).toEqual(['providers']);
+    accept(false); await flush();
+    expect(win.location.hash).toBe('#/providers');
+    router.navigate(['live']); await flush();
+    accept(true); await flush();
+    expect(router.route.segments).toEqual(['live']);
+  });
+});
+
 describe('Router —— navigate', () => {
   it('navigate 改 hash 并触发广播', async () => {
     const win = makeWin('#/a');

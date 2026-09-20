@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts -->
+<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -56,7 +56,7 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 ## 浏览器
 
-`llm-settings` 从端点状态中的 ConfigGroup 渲染连接字段与声明的请求路径,使用 `ctx.setConfig` 保存。
+`features/providers` 管理连接卡片与本地编辑状态，正式保存时提交完整配置。模块面板挂入所选连接，配置编辑进入同一草稿；`llm-settings` 的服务接口作为兼容路径保留，旧模块路由转到连接页。
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、
 `appearance`、`settings`。贡献页由 manifest 加载，保留路由段 `provider` 交由 `ConsolePageHost` 处理。
@@ -87,3 +87,5 @@ esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`
 模型提供商入口使用连接卡片双栏页。卡片选中与当前连接分别管理，编辑在浏览器中暂存，点击保存后提交整个连接。模型配置默认展开，计价与高级协议默认折叠；模块面板通过连接作用域挂载，setConfig 写入本地表单。配置预览使用隔离的 Provider 实例，模块运行时操作要求已保存配置。
 
 `client/features/providers/drafts.ts` 将草稿按部署 scope 保存在 localStorage，排除 API Key。连接页自行处理切卡的未保存保护，并向路由注册页面离开保护。复制只产生草稿。
+
+Terminal 的 `status.modelConnection` 包含当前连接的 `name`、`model`、`module`、`moduleTitle`、`baseUrl` 与 `ready`。供应商保存、删除及切换后推送状态帧；会话行右侧显示名称与模型，并链接至连接详情。

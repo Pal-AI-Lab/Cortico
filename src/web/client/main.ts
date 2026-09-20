@@ -215,6 +215,10 @@ export function boot(doc: Document = document): { dispose(): void } {
     }
     const head = route.segments[0];
 
+    if (head === PROVIDER_ROUTE && route.segments[1]?.startsWith('llm:')) {
+      router.replace(['providers']);
+      return;
+    }
     if (head === PROVIDER_ROUTE) {
       unmountFeature();
       const pageId = route.segments[1];

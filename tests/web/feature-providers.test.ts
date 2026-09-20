@@ -25,7 +25,7 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '') {
   const root = document.createElement('div'); document.body.append(root);
   const lifecycle = new Lifecycle(() => {}); lifecycles.push(lifecycle);
   const ui = createConsoleUi({ memo: { get: (_: string, fallback: unknown) => fallback, set: () => {} }, overlayHost: document.body, signal: lifecycle.signal, doc: document });
-  const ctx = { root, ui, lifecycle, signal: lifecycle.signal, route: { segments: ['providers'] }, router: { addLeaveGuard: () => ({ dispose() {} }), onChange: () => ({ dispose() {} }) }, onError: (error: unknown) => { throw error; }, capabilities: {} };
+  const ctx = { root, ui, lifecycle, signal: lifecycle.signal, route: { segments: ['providers'] }, router: { addLeaveDecision: () => ({ dispose() {} }), onChange: () => ({ dispose() {} }) }, onError: (error: unknown) => { throw error; }, capabilities: {} };
   await mountProviders(ctx); await flush(); return { root, calls, ctx };
 }
 afterEach(() => { lifecycles.splice(0).forEach(life => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); localStorage.clear(); });
@@ -92,4 +92,23 @@ it('switching away from edits offers stay, discard and save', async () => {
   expect(dialog.textContent).toContain('保存');
   (dialog.querySelector('button') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')[0].classList.contains('is-selected')).toBe(true);
+});
+
+it('uses the shared page heading and never persists API Keys in browser drafts', async () => {
+  const { root } = await fixture();
+  expect(root.querySelector('header.featureintro > h1.pagetitle')?.textContent).toBe('模型供应商');
+  const key = root.querySelector('[aria-label="API Key"]') as HTMLInputElement;
+  key.value = 'private-test-key'; key.dispatchEvent(new Event('input'));
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '保存草稿') as HTMLButtonElement).click();
+  expect(Object.values(localStorage).join('')).not.toContain('private-test-key');
+});
+it('discarding a new unsaved draft removes its card', async () => {
+  const { root } = await fixture();
+  (root.querySelector('.connection-index>button') as HTMLButtonElement).click(); await flush();
+  const input = root.querySelector('[aria-label="供应商名称"]') as HTMLInputElement;
+  input.value = 'Unsaved'; input.dispatchEvent(new Event('input'));
+  (root.querySelector('[data-provider="Alpha"] button') as HTMLButtonElement).click(); await flush();
+  ([...document.querySelectorAll('dialog button')].find(button => button.textContent === '放弃更改并切换') as HTMLButtonElement).click(); await flush();
+  expect(root.querySelectorAll('.connection-card')).toHaveLength(2);
+  expect(root.querySelector('.is-selected')?.getAttribute('data-provider')).toBe('Alpha');
 });

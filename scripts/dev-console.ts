@@ -1032,6 +1032,7 @@ const app = new WebApp({
   password: process.env.CORTICO_DEV_PASSWORD ?? '',
   defaultScheme: cfg.web.theme,
   getStatus: () => ({
+    modelConnection: devHub.current(devCfg.language ?? 'zh'),
     loop: { estTokens: 90200, messageCount: session.length, roundsLastBatch: 3, batchesHandled: 37, paused, truncating: false, softNoticeSent: false, lastUsage: { promptTokens: 358000, cacheHitTokens: 322000, cacheMissTokens: 36000, completionTokens: 420, reasoningTokens: 180 } },
     chips: devDreaming ? [{ label: '梦中', tone: 'accent' }] : [],
     terminalOnline: terminal.onlineCount(),
@@ -1074,7 +1075,6 @@ const app = new WebApp({
     },
   }))],
   providers: devHub,
-  providersLamp: (language) => devProviders.providersLamp(language),
   worlds: async () => [
     ...(await Promise.all([...worlds, ...devFakeWorlds].map(async (m) => {
       const decl = m.console?.();

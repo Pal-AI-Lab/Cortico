@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
 
 # Provider
 
@@ -44,8 +44,7 @@ provider 模块不预设任何模型名;端点
 也满足。判断只看本地状态,不连上游——探活是操作员按出来的另一件事。模块的那部分由
 `ProviderModule.availability` 回答,不实现就只有通用条件(`llamacpp` 用它回答托管运行时装没装)。
 
-模块页上的「可用端点」灯标这个模块的端点里有没有一个可用;左栏「模型提供商」那一行的灯标
-所有模块合起来有没有一个。一个都没有时,终端页的输入框灰字会写明去哪儿设置。
+连接卡片以文字显示配置状态。Terminal 从状态帧读取当前连接名称、模型、模块和地址，点击可打开对应连接。当前连接不可用时，输入框提示前往模型供应商页设置。
 
 ## 内建 openai-responses-compat
 

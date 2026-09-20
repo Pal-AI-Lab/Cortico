@@ -20,7 +20,7 @@ function fixture() {
   const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: root, readBlob: () => null, keepThinking: () => true, log: nullLogger() });
   const settings = new ProviderSettings(cfg, registry, file, root);
   const hub = new ProviderHub(cfg, registry, settings, file, root);
-  return { hub, cfg, root, file, temp };
+  return { hub, cfg, root, file, temp, registry };
 }
 const entry = { kind: 'openai-responses-compat', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
 
@@ -78,4 +78,23 @@ it('copies saved credentials only on final creation, without exposing them in de
   expect(existsSync(join(root, 'Copy'))).toBe(false);
   hub.save(null, { name: 'Copy', entry: source.entry, copyFrom: { name: source.name, revision: source.revision } }, 'en');
   expect(readFileSync(join(root, 'Copy', '.env'), 'utf8')).toContain('test-secret');
+});
+
+it('switches the current connection without replacing instances already serving requests', () => {
+  const { hub, registry } = fixture();
+  hub.save(null, { name: 'Alpha', entry }, 'en');
+  hub.save(null, { name: 'Beta', entry: { ...entry, spec: { model: 'other-model', thinking: false } } }, 'en');
+  hub.activate('Alpha', 'en');
+  const instance = registry.resolve('Alpha');
+  hub.activate('Beta', 'en');
+  expect(registry.resolve('Alpha')).toBe(instance);
+  expect(hub.current('en')).toMatchObject({ name: 'Beta', model: 'other-model', ready: true });
+});
+
+it('rejects credentials changed in another process without overwriting them', () => {
+  const { hub, root } = fixture();
+  const saved = hub.save(null, { name: 'Alpha', entry, secretValue: 'first-key' }, 'en');
+  writeFileSync(join(root, 'Alpha', '.env'), 'CORTICO_PROVIDER_API_KEY=changed-key\n');
+  expect(() => hub.save('Alpha', { ...saved, expectedRevision: saved.revision, secretValue: 'stale-key' }, 'en')).toThrow('changed');
+  expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('changed-key');
 });

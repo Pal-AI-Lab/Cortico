@@ -1,5 +1,7 @@
 import type { Editing } from './types.ts';
 
+export const NEW_DRAFT_ID = '/new';
+
 /** Drafts are scoped to the deployment and never retain API Key input. */
 export function providerDrafts(storage: Storage, scope: string) {
   const key = `cortico:provider-drafts:v2:${scope}`;
@@ -13,7 +15,7 @@ export function providerDrafts(storage: Storage, scope: string) {
       return value && typeof value.name === 'string' && value.entry && typeof value.entry.kind === 'string' && value.raw
         ? structuredClone({ ...value, secretValue: '' }) : null;
     },
-    set(value: Editing): void { values[value.original ?? '~draft'] = structuredClone({ ...value, secretValue: '' }); persist(); },
+    set(value: Editing): void { values[value.original ?? NEW_DRAFT_ID] = structuredClone({ ...value, secretValue: '' }); persist(); },
     remove(name: string): void { delete values[name]; persist(); },
     has(name: string): boolean { return !!values[name]; },
   };

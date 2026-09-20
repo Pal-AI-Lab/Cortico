@@ -12,6 +12,7 @@ import { validateEntry } from '../configuration.ts';
 import { validateProviderName } from '../name.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
+import { quotePrices } from '../pricebook.ts';
 import { connectionGroup } from './config.ts';
 
 export class ProviderHubError extends Error {
@@ -41,7 +42,7 @@ export class ProviderHub {
       existsSync(join(dir, file)) ? readFileSync(join(dir, file)).toString('base64') : '').join(':')).digest('hex');
   }
   private refresh(): void {
-    const entries: Record<string, LLMProviderEntry> = {};
+    const entries: Record<string, LLMProviderEntry> = Object.create(null);
     if (existsSync(this.root)) for (const dir of readdirSync(this.root, { withFileTypes: true })) {
       if (!dir.isDirectory() || (dir.name === '.write-lock' || dir.name.startsWith('.transaction-') || dir.name.startsWith('.deleted-'))) continue;
       const file = join(this.root, dir.name, 'config.json');
@@ -66,14 +67,21 @@ export class ProviderHub {
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);
-    if (!module) return { state: 'module-missing', reason: 'Provider module is unavailable.' };
+    if (!module) return { state: 'module-missing', reason: language === 'zh' ? '供应商模块不可用。' : 'Provider module is unavailable.' };
     try { validateEntry(module, entry, language); }
     catch (error) { return { state: 'invalid', reason: String(error) }; }
     if (!entry.spec?.model || (entry.secret && this.settings.secretStatus(name, entry) === 'none'))
-      return { state: 'needs-setup', reason: !entry.spec?.model ? 'Model is required.' : 'API Key is required.' };
+      return { state: 'needs-setup', reason: !entry.spec?.model ? (language === 'zh' ? '请选择模型。' : 'Model is required.') : (language === 'zh' ? '请配置 API Key。' : 'API Key is required.') };
     const available = module.availability?.(name, entry, language);
     if (available && !available.ready) return { state: 'runtime-unavailable', reason: available.reason };
     return { state: 'ready' };
+  }
+  current(language: Language) {
+    const name = this.config.activeProvider;
+    const entry = this.config.providers[name];
+    return entry ? { name, model: entry.spec?.model ?? null, module: entry.kind,
+      moduleTitle: this.modules.find(module => module.id === entry.kind)?.title ?? entry.kind,
+      baseUrl: entry.baseUrl, ready: this.readiness(name, entry, language).state === 'ready' } : null;
   }
   list(language: Language) {
     this.refresh();
@@ -91,7 +99,14 @@ export class ProviderHub {
       secretConfigured: this.settings.secretStatus(name, entry), readiness: this.readiness(name, entry, language),
       references: this.references(name).map(file => dirname(file).split(/[\\/]/).at(-1)),
       config: this.groups(name, entry, language),
+      quotes: entry.spec ? [{ model: entry.spec.model, quotes: this.quotes(entry) }] : [],
     };
+  }
+  private quotes(entry: LLMProviderEntry) {
+    const module = this.modules.find(module => module.id === entry.kind);
+    const request = { model: entry.spec?.model };
+    const at = { startedAt: new Date().toISOString(), requestedServiceTier: entry.serviceTier ?? null };
+    return quotePrices(entry, request, at, module?.prices?.(entry, request, at) ?? []);
   }
   groups(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);

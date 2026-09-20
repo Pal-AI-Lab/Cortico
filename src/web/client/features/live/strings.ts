@@ -3,6 +3,8 @@ import { pick } from '../../core/language.ts';
 const zh = {
   // index.ts
   navLabel: '终端',
+  currentProvider: '当前模型供应商',
+  noProvider: '未选择模型供应商',
   ctxOpenAria: '查看 token 分类',
   ctxPanelAria: 'Token 分类',
   netConnecting: '连接中…',
@@ -128,6 +130,8 @@ const zh = {
 const en: typeof zh = {
   // index.ts
   navLabel: 'Terminal',
+  currentProvider: 'Current model provider',
+  noProvider: 'No provider selected',
   ctxOpenAria: 'View token breakdown',
   ctxPanelAria: 'Token breakdown',
   netConnecting: 'Connecting…',

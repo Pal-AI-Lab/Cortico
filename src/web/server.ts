@@ -1343,7 +1343,9 @@ export class WebApp {
 
     const providerRoute = (handler: (hub: ProviderHub, req: Request) => unknown) => wrap(async (req, res) => {
       if (!this.deps.providers) { res.status(503).json({ error: 'Provider configuration unavailable.' }); return; }
-      try { res.json((await handler(this.deps.providers, req)) ?? { ok: true }); }
+      try { res.json((await handler(this.deps.providers, req)) ?? { ok: true });
+        if (req.method === 'POST' && /^\/api\/providers(?:$|\/[^/]+\/(save|delete|activate)$)/.test(req.path)) this.debugBroadcast({ t: 'status', status: this.safeStatus() });
+      }
       catch (error) { res.status(error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 400).json({ error: error instanceof Error ? error.message : String(error) }); }
     });
     app.get('/api/providers', providerRoute((hub, req) => hub.list(this.languageOf(req))));

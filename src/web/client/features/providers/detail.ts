@@ -4,13 +4,15 @@ import { Lifecycle } from '../../core/lifecycle.ts';
 import { configField, type ConfigGroup } from '../config/view.ts';
 import { validateProviderName } from '../../../../providers/name.ts';
 import { connectionPath, type Detail, type Editing, type Module } from './types.ts';
+import { LANGUAGE } from '../../core/language.ts';
+import { pricingEditor } from '../../console-pages/builtins/llm-settings/pricing-panel.ts';
 import { S } from './strings.ts';
 
 export interface DetailController { dispose(): void; dirty(): boolean; leave(): Promise<boolean>; }
 interface Options {
   ctx: FeatureContext; root: HTMLElement; modules: Module[]; saved: Detail | null; draft: Editing | null;
   changed(editing: Editing, invalid: boolean): void; saveDraft(editing: Editing): void; onSaved(name: string, select?: boolean): Promise<void>; cancelled(): Promise<void>;
-  deleted(): Promise<void>; duplicate(editing: Editing): Promise<void>;
+  discarded(): void; deleted(): Promise<void>; duplicate(editing: Editing): Promise<void>;
 }
 export async function mountDetail(options: Options): Promise<DetailController> {
   const { ctx, root, saved, modules } = options;
@@ -18,6 +20,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   const lifecycle = new Lifecycle(ctx.onError);
   const opts = { signal: lifecycle.signal };
   const editing: Editing = structuredClone(options.draft ?? { original: saved!.name, name: saved!.name, entry: saved!.entry, revision: saved!.revision, secretValue: '', raw: {} });
+  editing.entry.spec ??= { model: '', thinking: false };
   let baseline = JSON.stringify(editing);
   const dirty = () => JSON.stringify(editing) !== baseline;
   const report = ui.msgline();
@@ -116,7 +119,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     for (const [name, label] of [['temperature', S.temperature], ['maxTokens', S.maxTokens], ['contextWindow', S.context]] as const) {
       field(model, name, label, editing.raw[name] ?? String(spec[name] ?? ''), value => {
         editing.raw[name] = value; if (!value) delete spec[name]; else spec[name] = Number(value);
-      }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : 'Invalid number', 'number');
+      }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : S.invalidNumber, 'number');
     }
     if (selectedModule?.serviceTiers.length) {
       const select = ui.select({ value: editing.entry.serviceTier ?? '', options: [{ value: '', label: '—' }, ...selectedModule.serviceTiers.map(tier => ({ value: tier.id, label: tier.label }))], onChange: value => { editing.entry.serviceTier = value; change(); } });
@@ -126,7 +129,11 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts); model.append(ui.field(S.images, images));
     const moduleBody = section(S.moduleSection, 'module', true);
     const pricing = section(S.pricing, 'pricing'); pricing.append(ui.msgline(S.priceHint));
-    jsonField(pricing, 'pricing', S.priceRules, editing.entry.pricing, true, value => { editing.entry.pricing = value as Detail['entry']['pricing']; });
+    const prices = pricingEditor(ui, editing.entry.pricing ?? [], saved?.quotes ?? [], value => {
+      editing.entry.pricing = value as Detail['entry']['pricing']; change();
+    }, LANGUAGE, { raw: editing.raw.pricing, onRaw: value => { editing.raw.pricing = value; change(); } });
+    pricing.append(prices.body);
+    errors.set('pricing', prices.validate);
     const advanced = section(S.advanced, 'advanced'); advanced.append(ui.msgline(S.advancedHint));
     field(advanced, 'secret', S.secret, editing.entry.secret ?? '', value => { if (value) editing.entry.secret = value; else delete editing.entry.secret; });
     form.append(ui.h('div', 'connection-shared', S.shared));
@@ -144,7 +151,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     }
     actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) }), ui.button(S.draft, { onClick: () => { try { options.saveDraft(editing); baseline = JSON.stringify(editing); report.textContent = S.drafted; } catch (error) { report.textContent = String(error); } } }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
     form.append(actions);
-    if (!selectedModule) { moduleBody.append(ui.msgline(S.readiness['module-missing'])); return; }
+    if (!selectedModule) { moduleBody.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
     const identity = saved?.name ?? 'draft';
     const groups = await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts);
     if (gen !== rendering || lifecycle.disposed) return;
@@ -202,9 +209,13 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     // Object-valued protocol fields remain JSON editors; their presence is declared by the module schema.
     for (const group of groups) for (const [path, property] of Object.entries(group.schema.properties ?? {})) {
       if (property.type !== 'object') continue;
-      const suffix = path.slice(`providers.${identity}.options.`.length);
-      const value = editing.entry.options?.[suffix];
-      jsonField(advanced, suffix, property.title ?? suffix, value, false, value => { editing.entry.options ??= {}; if (value === undefined) delete editing.entry.options[suffix]; else editing.entry.options[suffix] = value; });
+      const parts = path.slice(`providers.${identity}.`.length).split('.');
+      const value = parts.reduce<unknown>((object, key) => (object as Record<string, unknown> | undefined)?.[key], editing.entry);
+      jsonField(advanced, path, property.title ?? parts.at(-1)!, value, false, value => {
+        let object = editing.entry as unknown as Record<string, unknown>;
+        for (const key of parts.slice(0, -1)) object = (object[key] ??= {}) as Record<string, unknown>;
+        if (value === undefined) delete object[parts.at(-1)!]; else object[parts.at(-1)!] = value;
+      });
     }
   }
   async function save(select = true): Promise<boolean> {
@@ -221,7 +232,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       const buttons = ui.rowbar();
       const finish = (answer: boolean) => { dialog.remove(); resolve(answer); };
       dialog.append(ui.h('h3', '', S.unsaved), buttons);
-      buttons.append(ui.button(S.stay, { onClick: () => finish(false) }), ui.button(S.discard, { onClick: () => finish(true) }), ui.button(S.save, { variant: 'primary', onClick: () => { void save(false).then(ok => finish(ok)); } }));
+      buttons.append(ui.button(S.stay, { onClick: () => finish(false) }), ui.button(S.discard, { onClick: () => { baseline = JSON.stringify(editing); options.discarded(); finish(true); } }), ui.button(S.save, { variant: 'primary', onClick: () => { void save(false).then(ok => finish(ok)); } }));
       dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); }, opts);
       lifecycle.signal.addEventListener('abort', () => finish(false), { once: true });
       root.ownerDocument.body.append(dialog);

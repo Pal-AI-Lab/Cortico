@@ -70,6 +70,7 @@ export function pricingEditor(
   quotes: ModelQuote[],
   commit: (pricing: unknown[]) => void,
   language?: Language,
+  draft?: { raw?: string; onRaw(value: string): void },
 ) {
   const S = language === 'en' ? panel.en : panel.zh;
   const card = ui.sheet({
@@ -105,7 +106,7 @@ export function pricingEditor(
   const simple: SimpleCost | null = unset ? null : readSimple(saved);
   const raw = ui.textarea({
     rows: 10,
-    value: JSON.stringify(simple ? writeSimple(simple) : saved, null, 2),
+    value: draft?.raw ?? JSON.stringify(simple ? writeSimple(simple) : saved, null, 2),
     onChange: commitDraft,
   });
   const currency = ui.input({ value: simple?.currency ?? 'USD', onChange: writeThrough });
@@ -139,15 +140,22 @@ export function pricingEditor(
     commitDraft();
   }
   /** 完整规则那格可以写坏;解析不过就停在这张卡上说清楚,不往端点写。 */
-  function commitDraft(): void {
+  function commitDraft(): boolean {
     try {
-      const pricing = JSON.parse(raw.value) as unknown[];
+      const pricing: unknown = JSON.parse(raw.value.trim() || '[]');
+      if (!Array.isArray(pricing)) throw new Error(S.pricingTitle + ': JSON array required');
       problem.textContent = '';
       problem.classList.remove('bad');
+      raw.setAttribute('aria-invalid', 'false');
       commit(pricing);
+      draft?.onRaw(raw.value);
+      return true;
     } catch (error) {
       problem.textContent = String(error);
       problem.classList.add('bad');
+      raw.setAttribute('aria-invalid', 'true');
+      draft?.onRaw(raw.value);
+      return false;
     }
   }
   card.body.append(
@@ -164,5 +172,6 @@ export function pricingEditor(
     ui.h('pre', 'mono', JSON.stringify(quotes, null, 2)),
   );
   card.body.append(advanced, preview);
-  return { el: card.el };
+  if (draft?.raw !== undefined) commitDraft();
+  return { el: card.el, body: card.body, validate: commitDraft };
 }

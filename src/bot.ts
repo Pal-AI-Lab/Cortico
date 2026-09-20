@@ -994,6 +994,7 @@ export function createBot<C extends CoreConfig>(
 
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
   const providerSettings = new ProviderSettings(cfg,core.providers,join(loaded.rootDir,'config.json'),loaded.providersDir ?? join(loaded.rootDir,'providers'));
+  const providerHub = new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers'));
   const allConfigGroups = (language: Language) => [...configGroups(language),...providerSettings.groups(language)];
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
@@ -1106,8 +1107,7 @@ export function createBot<C extends CoreConfig>(
           ? (language) => contribution.consolePages!({ storage: consoleStorage(language), language })
           : undefined,
       )(),...providerSettings.sources()],
-      providers: new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers')),
-      providersLamp: (language) => providerSettings.providersLamp(language),
+      providers: providerHub,
       worldVisibility: {
         state: () => core.worldVisibility(),
         set: (id, visible, language) => {
@@ -1174,12 +1174,7 @@ export function createBot<C extends CoreConfig>(
       },
       getStatus: () => ({
         displayName: cfg.displayName,
-        modelConnection: cfg.providers[cfg.activeProvider] ? {
-          name: cfg.activeProvider, model: cfg.providers[cfg.activeProvider].spec?.model ?? null,
-          module: cfg.providers[cfg.activeProvider].kind,
-          moduleTitle: providerModules.find(module => module.id === cfg.providers[cfg.activeProvider].kind)?.title ?? cfg.providers[cfg.activeProvider].kind,
-          baseUrl: cfg.providers[cfg.activeProvider].baseUrl,
-        } : null,
+        modelConnection: providerHub.current(language),
         startedAt,
         loop: core.loop.getStatus(),
         eventCount: core.store.latestCursor(),
