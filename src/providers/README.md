@@ -88,3 +88,11 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 模块默认,快照带 sha256 id 与 `capturedAt`。计量键:`input` / `output` / `total` /
 `cachedInput` / `uncachedInput` / `reasoning` 与 `detail:*`,单价按每百万 token。实际扣费在
 `src/core/generation.ts` 的 `priceUsage()`,缺计量记 `amount: null`。
+
+## 连接配置接口
+
+`src/providers/console/hub.ts` 提供 `/api/providers` 聚合与按名称读取、保存、删除、启用、测试和模型列表接口；`/api/provider-modules` 返回已注册模块。列表保留模块缺失的连接，分别报告 active 和 readiness。`modelConnection` 状态字段提供当前连接名称、模型、模块与地址。
+
+新名称由 `src/providers/name.ts` 校验：1–64 位英文字母、数字、连字符或下划线，以字母或数字开头，不允许空格或 Windows 设备名。历史名称未修改时继续有效。保存必须携带读取时的 revision；配置或密钥已变化时返回 409。共享目录写锁串行化连接事务。重命名更新目录及部署根内各 deployment.json 所属部署的 activeProvider 引用，写入异常时恢复原文件和目录。引用中的连接不可删除。
+
+正式保存统一校验模型、连接和模块配置后写入配置与可选密钥；密钥保存在连接 .env。读取接口不返回密钥值。端点配置、密钥更新会清除当前进程实例缓存，已绑定请求与 fork 保持原客户端。其他运行进程在重新读取共享配置后更新。

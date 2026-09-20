@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 
 import type { BotDefinition, BotParts, ConsoleContribution } from 'cortico/bot.ts';
-import type { World, ModelSpec } from 'cortico/core/types.ts';
+import type { World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { WorldDeclaration } from 'cortico/world.ts';
@@ -45,23 +45,12 @@ export interface BotConfig extends CoreConfig {
 /** 这个Persona为之设计的渠道,默认启用。 */
 const DECLARES: readonly WorldDeclaration[] = ['qq', 'terminal', 'websearch'];
 
-/** 层 2 给云端那条端点的模型档:全局端点表里没写时用它。 */
-const DEEPSEEK_SPEC: ModelSpec = {
-  model: 'deepseek-flash',
-  thinking: true,
-  reasoningEffort: 'low',
-  temperature: 1.0,
-};
 
 /** 层1+层2:框架默认 ← Persona的建议。World 段由启动器补。 */
 export function composeDefaults(): BotConfig {
   return {
     ...CORE_DEFAULTS,
-    providers: {
-      ...structuredClone(CORE_DEFAULTS.providers),
-      // 模型归 provider:云端那条端点默认跑哪个模型是部署事实,不是Persona的选择。
-      deepseek: { ...structuredClone(CORE_DEFAULTS.providers.deepseek), spec: { ...DEEPSEEK_SPEC } },
-    },
+    providers: {},
     displayName: '雪午Yukima',
     web: { ...CORE_DEFAULTS.web, theme: 'crab-daisy' },
     paths: { ...CORE_DEFAULTS.paths },

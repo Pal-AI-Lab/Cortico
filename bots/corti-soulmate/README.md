@@ -19,3 +19,5 @@ pnpm start corti-soulmate
 ## 控制台
 
 Persona 自报工作区、Memory 与版本历史三块;`console-page.ts` 另外贡献存档点、统一重置与强制入梦三块,与 Persona 那半合成同一页。
+
+新部署的 Provider 表为空，模型连接由部署根共享端点目录提供。控制台支持未配置模型时读取状态；完成连接配置后才可发起模型请求。

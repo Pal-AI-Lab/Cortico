@@ -70,6 +70,7 @@ export interface ProviderAvailability {
 export interface ProviderModule {
   id: string;
   title: string;
+  description?: string;
   defaultBaseUrl?: string;
   /** Candidate endpoint URLs offered on the URL field. Candidates only: any URL is accepted. */
   baseUrlSuggestions?: readonly string[];

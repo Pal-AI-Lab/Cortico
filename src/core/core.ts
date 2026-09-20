@@ -32,7 +32,7 @@ import { SessionLog } from './session.ts';
 import { CoreState } from './state.ts';
 import { ProviderRegistry } from '../providers/registry.ts';
 import { runForkLoop } from './fork.ts';
-import { providerModule } from '../providers/registry.ts';
+import { providerModule, providerModules } from '../providers/registry.ts';
 import { LogBlobStore, blobScheme, mimeOfHandle, withBlobLines } from './blobs.ts';
 import { TimerStore } from './timers.ts';
 import { SessionTracker, type SessionHandle } from './sessions.ts';
@@ -289,15 +289,19 @@ export class Core<C extends CoreConfig = CoreConfig> {
 
   /** 按当前活跃端点读取模型上下文事实。 */
   private contextFacts(): ContextFacts {
-    const module = () => providerModule(this.activeProviderEntry().entry.kind);
+    const module = () => {
+      const entry = this.config.providers[this.config.activeProvider];
+      return entry ? providerModules.find(module => module.id === entry.kind) : undefined;
+    };
     return {
       hardTokens: () => {
+        if (!module() || !this.config.providers[this.config.activeProvider]?.spec) return null;
         const spec = this.activeSpec();
         const window = this.contextWindowOf(spec);
         return window === undefined ? null : Math.max(0, window - (spec.maxTokens ?? 0));
       },
-      estimateTokens: (records) => module().estimateTokens?.(records, this.activeSpec()) ?? estimateMessagesTokens(records),
-      contextOverflow: (error) => module().contextOverflow?.(error) ?? false,
+      estimateTokens: (records) => module()?.estimateTokens?.(records, this.activeSpec()) ?? estimateMessagesTokens(records),
+      contextOverflow: (error) => module()?.contextOverflow?.(error) ?? false,
     };
   }
 

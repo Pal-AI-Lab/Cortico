@@ -21,8 +21,7 @@ Provider 适配模型服务的通信协议。仓库内建 `openai-responses-comp
 
 主 session 每次模型调用读取当前 `activeProvider`;fork 在创建时固定端点与模型配置。
 provider 模块不预设任何模型名;端点
-没有 `spec` 就不能被设为 active。代码里只有一条默认端点 `deepseek`(`deepseek-flash`),
-部署根 `providers/` 里有同名目录时以那份为准。
+没有 `spec` 就不能被设为 active。新环境端点表为空；已有端点目录与原 activeProvider 引用继续读取。
 
 ## 端点目录
 
@@ -110,3 +109,11 @@ provider 模块不预设任何模型名;端点
 
 写一个 provider 扩展:`kind: 'provider'`,默认导出 `ProviderModule`。接口与注册流程见
 [src/providers/README.md](../src/providers/README.md),打包见 [extensions.md](extensions.md)。
+
+## 连接配置接口
+
+`src/providers/console/hub.ts` 提供 `/api/providers` 聚合与按名称读取、保存、删除、启用、测试和模型列表接口；`/api/provider-modules` 返回已注册模块。列表保留模块缺失的连接，分别报告 active 和 readiness。`modelConnection` 状态字段提供当前连接名称、模型、模块与地址。
+
+新名称由 `src/providers/name.ts` 校验：1–64 位英文字母、数字、连字符或下划线，以字母或数字开头，不允许空格或 Windows 设备名。历史名称未修改时继续有效。保存必须携带读取时的 revision；配置或密钥已变化时返回 409。共享目录写锁串行化连接事务。重命名更新目录及部署根内各 deployment.json 所属部署的 activeProvider 引用，写入异常时恢复原文件和目录。引用中的连接不可删除。
+
+正式保存统一校验模型、连接和模块配置后写入配置与可选密钥；密钥保存在连接 .env。读取接口不返回密钥值。端点配置、密钥更新会清除当前进程实例缓存，已绑定请求与 fork 保持原客户端。其他运行进程在重新读取共享配置后更新。

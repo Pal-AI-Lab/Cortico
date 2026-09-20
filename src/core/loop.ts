@@ -936,7 +936,11 @@ export class MainLoop {
     for (let round = 1; ; round++) {
       if (!this.active(generation)) return;
       this.roundsLastBatch = round;
-      const spec = this.d.spec();
+      let spec: ModelSpec;
+      try { spec = this.d.spec(); } catch (error) {
+        log.warn('模型配置不可用', { error: String(error) });
+        return;
+      }
       // 后续轮输入超限时结束本批，由批末检查执行交接。
       // 首轮仍处理本批新投递的事件；上一批的容量检查已在批末执行。
       if (round > 1) {

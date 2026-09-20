@@ -1,3 +1,4 @@
+import { makeCfg } from '../core/helpers.ts';
 import { messages as legacyMessages } from '../core/fixture-protocol.ts';
 import { WEB_PASSWORD_SECRET } from '../../src/bot.ts';
 /**
@@ -60,6 +61,8 @@ describe.sequential('CortiV 集成测试', () => {
 
   beforeAll(async () => {
     const config = structuredClone(definition.defaults());
+    config.providers = makeCfg().providers;
+    config.activeProvider = makeCfg().activeProvider;
     config.web.port = 0;
     config.batching.quietGapMs = 40;
     config.batching.maxBatchAgeMs = 300;

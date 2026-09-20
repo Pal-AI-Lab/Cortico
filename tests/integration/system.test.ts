@@ -164,21 +164,21 @@ describe('全系统集成(终端对话链路)', () => {
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ args: [{ name: 'deepseek', spec, pricing: [] }] }),
+        body: JSON.stringify({ args: [{ name: 'fixture', spec, pricing: [] }] }),
       },
     );
 
-    let r = await setModel({ model: 'deepseek-v4-pro', thinking: false });
+    let r = await setModel({ model: 'test-reasoner', thinking: false });
     expect(r.status).toBe(200);
 
-    expect(bot.core.activeSpec()).toEqual({ model: 'deepseek-v4-pro', thinking: false });
+    expect(bot.core.activeSpec()).toEqual({ model: 'test-reasoner', thinking: false });
     expect(bot.core.mainSessionSpec()).toEqual(bot.core.activeSpec());
-    expect(entryOnDisk('deepseek').spec).toEqual({ model: 'deepseek-v4-pro', thinking: false });
+    expect(entryOnDisk('fixture').spec).toEqual({ model: 'test-reasoner', thinking: false });
 
-    r = await setModel({ model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'high' });
+    r = await setModel({ model: 'test-reasoner', thinking: true, reasoningEffort: 'high' });
     expect(r.status).toBe(200);
-    const onDisk = entryOnDisk('deepseek');
-    expect(onDisk.spec).toEqual({ model: 'deepseek-v4-pro', thinking: true, reasoningEffort: 'high' });
+    const onDisk = entryOnDisk('fixture');
+    expect(onDisk.spec).toEqual({ model: 'test-reasoner', thinking: true, reasoningEffort: 'high' });
 
     expect(onDisk.profiles).toBeUndefined();
 
@@ -238,13 +238,13 @@ describe('全系统集成(终端对话链路)', () => {
     let onDisk = JSON.parse(readFileSync(join(tmp.dir, 'config.json'), 'utf8'));
 
     expect(onDisk.context.maxTokens).toBe(100000);
-    expect(entryOnDisk('deepseek').spec).toBeTruthy();
+    expect(entryOnDisk('fixture').spec).toBeTruthy();
 
     r = await cpost({ group: PERSONA_CONFIG_GROUP.id, values: { 'context.maxTokens': 111000 } });
     expect(r.status).toBe(200);
     onDisk = JSON.parse(readFileSync(join(tmp.dir, 'config.json'), 'utf8'));
     expect(onDisk.context.maxTokens).toBe(111000);
-    expect(entryOnDisk('deepseek').spec.model).toBe('deepseek-v4-pro');
+    expect(entryOnDisk('fixture').spec.model).toBe('test-reasoner');
 
     r = await cpost({ group: PERSONA_CONFIG_GROUP.id, values: { 'context.maxTokens': 100 /* < min 8000 */ } });
     expect(r.status).toBe(400);

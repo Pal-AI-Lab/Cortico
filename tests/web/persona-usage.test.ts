@@ -137,7 +137,7 @@ describe('/api/config', () => {
       values: { 'providers.deepseek.baseUrl': 'http://evil', activeProvider: 'evil' },
     });
     expect(sneak.status).toBe(200);
-    expect(cfg.providers.deepseek.baseUrl).not.toBe('http://evil');
-    expect(cfg.activeProvider).toBe('deepseek');
+    expect(cfg.providers).toEqual({});
+    expect(cfg.activeProvider).toBe('');
   });
 });

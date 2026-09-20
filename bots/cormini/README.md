@@ -56,3 +56,5 @@ version history and checkpoints · usage accounting
 comes from the terminal module's own provider. `createBot()` derives events, logs, sessions, status,
 storage, pause/resume, configuration, tool-library, and IO-module console surfaces from
 the Core fields.
+
+新部署的 Provider 表为空，模型连接由部署根共享端点目录提供。控制台支持未配置模型时读取状态；完成连接配置后才可发起模型请求。

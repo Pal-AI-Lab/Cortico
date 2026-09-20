@@ -1,3 +1,4 @@
+import { ProviderHub } from './providers/console/hub.ts';
 /** 装配 Core、Persona、World 与控制台；具体 bot 的配置和行为由 BotDefinition 提供。 */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -1105,6 +1106,7 @@ export function createBot<C extends CoreConfig>(
           ? (language) => contribution.consolePages!({ storage: consoleStorage(language), language })
           : undefined,
       )(),...providerSettings.sources()],
+      providers: new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers')),
       providersLamp: (language) => providerSettings.providersLamp(language),
       worldVisibility: {
         state: () => core.worldVisibility(),
@@ -1172,6 +1174,12 @@ export function createBot<C extends CoreConfig>(
       },
       getStatus: () => ({
         displayName: cfg.displayName,
+        modelConnection: cfg.providers[cfg.activeProvider] ? {
+          name: cfg.activeProvider, model: cfg.providers[cfg.activeProvider].spec?.model ?? null,
+          module: cfg.providers[cfg.activeProvider].kind,
+          moduleTitle: providerModules.find(module => module.id === cfg.providers[cfg.activeProvider].kind)?.title ?? cfg.providers[cfg.activeProvider].kind,
+          baseUrl: cfg.providers[cfg.activeProvider].baseUrl,
+        } : null,
         startedAt,
         loop: core.loop.getStatus(),
         eventCount: core.store.latestCursor(),
@@ -1205,7 +1213,7 @@ export function createBot<C extends CoreConfig>(
 
       const orphans = Object.entries(cfg.providers).filter(([, entry]) => !providerModules.some((m) => m.id === entry.kind)).map(([name, entry]) => `${name}(kind=${entry.kind})`);
       if (orphans.length) core.runlog.logger('provider').warn('端点条目没有对应的 Provider 模块,不可用', { orphans });
-      void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
+      if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
       await core.start();
       return { port };

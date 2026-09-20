@@ -77,8 +77,8 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'modvis-'));
   // 保留扩展配置的静态类型,使未知字段继续触发编译错误。
   const config: ReturnType<typeof makeCfg> = {
-    ...makeCfg(),
     ...CORE_DEFAULTS,
+    ...makeCfg(),
     web: { ...CORE_DEFAULTS.web, port: 0 },
     paths: { memory: 'workspace', data: 'data' },
     context: { maxTokens: 64000, keepRatio: 1 / 3, softRatio: 0.85, firstTurn: false, ...CORE_DEFAULTS.context },

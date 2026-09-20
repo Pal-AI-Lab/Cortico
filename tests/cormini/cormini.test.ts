@@ -8,7 +8,7 @@ import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
 import type { CoreConfig } from '../../src/core/types.ts';
 import { TerminalWorld } from '../../src/worlds/terminal/world.ts';
 import { Cormini } from '../../bots/cormini/persona/persona.ts';
-import { FakeLLM, toolReply, sleep } from '../core/helpers.ts';
+import { makeCfg, FakeLLM, toolReply, sleep } from '../core/helpers.ts';
 
 let dir: string;
 let memoryDir: string;
@@ -30,6 +30,8 @@ beforeAll(async () => {
 
   const config: CoreConfig = {
     ...CORE_DEFAULTS,
+    providers: makeCfg().providers,
+    activeProvider: makeCfg().activeProvider,
     displayName: 'Cormini',
     web: { ...CORE_DEFAULTS.web, port: 0 },
     paths: { memory: 'workspace', data: 'data' },

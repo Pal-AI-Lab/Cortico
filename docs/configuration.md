@@ -23,8 +23,8 @@
 |---|---|---|
 | `displayName` | `Cortico Bot` | 控制台标题与终端消息的 bot 名称 |
 | `timezone` | `Asia/Shanghai` | 时间戳与时刻表用的时区 |
-| `providers` | `deepseek` 端点 | 共享端点配置,从部署根 `providers/` 读取(见 [providers.md](providers.md)) |
-| `activeProvider` | `deepseek` | 当前端点 |
+| `providers` | 空表 | 共享端点配置,从部署根 `providers/` 读取(见 [providers.md](providers.md)) |
+| `activeProvider` | 空字符串 | 当前端点 |
 | `web.port` | `7777` | 控制台端口;三个参考 bot 各自改成 7777 / 7788 / 7789 |
 | `web.host` | `127.0.0.1` | 控制台监听地址;`0.0.0.0` 或 `::` 监听所有网卡。`--host=` 覆盖本次运行 |
 | `web.allowedHosts` | `[]` | 回环名与监听地址之外还接受的 Host 名(域名、反向代理对外的名字),可带端口;作 Origin 时同样放行 |
