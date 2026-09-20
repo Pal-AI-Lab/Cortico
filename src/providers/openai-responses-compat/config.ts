@@ -1,7 +1,7 @@
 import type { ConfigGroup } from '../../core/config-schema.ts';
 import type { LLMProviderEntry } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
-import { REASONING_REPLAYS } from '../transport/responses-input.ts';
+import { REASONING_REPLAYS, SYNTHETIC_REASONING_TEXT } from '../transport/responses-input.ts';
 import { text } from './strings.ts';
 
 export function protocolConfig(name: string, entry: LLMProviderEntry, language: Language): ConfigGroup[] {
@@ -17,6 +17,9 @@ export function protocolConfig(name: string, entry: LLMProviderEntry, language: 
         },
         [`providers.${name}.options.reasoningReplay`]: {
           type: 'string', enum: [...REASONING_REPLAYS], title: S.reasoningReplay, description: S.reasoningReplayDescription, 'x-hot': true,
+        },
+        [`providers.${name}.options.syntheticReasoningText`]: {
+          type: 'string', title: S.syntheticReasoningText, description: S.syntheticReasoningTextDescription(SYNTHETIC_REASONING_TEXT), 'x-hot': true,
         },
       },
     },

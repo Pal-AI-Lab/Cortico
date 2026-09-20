@@ -19,6 +19,8 @@ vi.mock('node:http', async (importOriginal) => {
   }) as typeof actual.createServer;
   return { ...actual, default: { ...actual, createServer }, createServer };
 });
+import { createServer as createNetServer, type Server as NetServer } from 'node:net';
+import type { AddressInfo } from 'node:net';
 import type { Logger } from '../../../src/core/types.ts';
 import { AgentAnnouncementStore } from '../../../src/worlds/bilibili/overlay/announcement.ts';
 import { OverlayAssetStore } from '../../../src/worlds/bilibili/overlay/assets.ts';
@@ -223,37 +225,34 @@ describe('Bilibili Overlay 服务', () => {
   it('候选端口 listen 回 EACCES 时试下一个,不当成启动失败', async () => {
     const root = tempRoot();
     const assets = new OverlayAssetStore(join(root, 'assets'));
-    const options = {
+    const port = await bindablePair();
+    const server = new BilibiliOverlayServer({
+      preferredPort: port,
       assets,
       snapshot: () => ({ design: { schemaVersion: 1 }, agentAnnouncement: { text: '' } }),
       editor: editorActions(assets),
-    };
-    const blocker = new BilibiliOverlayServer({ preferredPort: 0, ...options });
-    await blocker.start(log);
-    const busy = Number(new URL(blocker.baseUrl).port);
-    const server = new BilibiliOverlayServer({ preferredPort: busy, ...options });
-    netHooks.deniedPort = busy + 1;
+    });
+    netHooks.deniedPort = port;
     try {
       await server.start(log);
-      expect(Number(new URL(server.baseUrl).port)).toBeGreaterThan(busy + 1);
+      expect(Number(new URL(server.baseUrl).port)).toBe(port + 1);
     } finally {
       netHooks.deniedPort = null;
       await server.stop();
-      await blocker.stop();
     }
   });
 
   it('偏好端口被占时顺延并记录 warn', async () => {
     const root = tempRoot();
     const assets = new OverlayAssetStore(join(root, 'assets'));
+    const busy = await bindablePair();
     const blocker = new BilibiliOverlayServer({
-      preferredPort: 0,
+      preferredPort: busy,
       assets,
       snapshot: () => ({ design: { schemaVersion: 1 }, agentAnnouncement: { text: '' } }),
       editor: editorActions(assets),
     });
     await blocker.start(log);
-    const busy = Number(new URL(blocker.baseUrl).port);
 
     const warns: string[] = [];
     const recording = {
@@ -269,7 +268,7 @@ describe('Bilibili Overlay 服务', () => {
     });
     await server.start(recording);
     try {
-      expect(Number(new URL(server.baseUrl).port)).toBeGreaterThan(busy);
+      expect(Number(new URL(server.baseUrl).port)).toBe(busy + 1);
       const hit = warns.find((msg) => msg.includes('被占用'));
       expect(hit).toBeDefined();
       expect(hit).toContain(`改用 ${new URL(server.baseUrl).port}`);
@@ -279,6 +278,36 @@ describe('Bilibili Overlay 服务', () => {
     }
   });
 });
+
+/**
+ * 相邻两个当场能监听的端口里的第一个。顺延测试要的是「下一个候选」,Windows 的排除端口段会让
+ * 临时端口的邻居监听不了,所以先验后用,不假设内核给的端口周围是空的。
+ */
+async function bindablePair(): Promise<number> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const first = createNetServer();
+    const port = await listenOn(first, 0);
+    if (port === null) continue;
+    const second = createNetServer();
+    const next = await listenOn(second, port + 1);
+    await close(first);
+    await close(second);
+    if (next !== null) return port;
+  }
+  throw new Error('找不到相邻两个可监听端口');
+}
+
+/** 绑上了给端口,绑不上(占用、排除段、权限)给 null。 */
+function listenOn(server: NetServer, port: number): Promise<number | null> {
+  return new Promise((resolve) => {
+    server.once('error', () => resolve(null));
+    server.listen(port, '127.0.0.1', () => resolve((server.address() as AddressInfo).port));
+  });
+}
+
+function close(server: NetServer): Promise<void> {
+  return new Promise((resolve) => server.close(() => resolve()));
+}
 
 async function openSse(url: string): Promise<{
   readUntil(text: string): Promise<string>;

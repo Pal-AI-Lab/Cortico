@@ -25,6 +25,8 @@ export interface CompatOptions {
   extraBody?: Record<string, unknown>;
   /** Default `encrypted`. */
   reasoningReplay?: ReasoningReplay;
+  /** Plaintext replay only; defaults to `SYNTHETIC_REASONING_TEXT`. */
+  syntheticReasoningText?: string;
 }
 export function compatOptions(entry: LLMProviderEntry): CompatOptions {
   return (entry.options ?? {}) as CompatOptions;
@@ -39,7 +41,7 @@ export interface CompatControl {
 /** Empty strings and empty objects are the console's "unset"; they do not reach the wire. */
 function normalizeCompat(entry: LLMProviderEntry): LLMProviderEntry {
   const options: Record<string, unknown> = { ...entry.options };
-  for (const key of ['endpointPath', 'reasoningReplay'] as const) if (options[key] === '') delete options[key];
+  for (const key of ['endpointPath', 'reasoningReplay', 'syntheticReasoningText'] as const) if (options[key] === '') delete options[key];
   for (const key of ['extraHeaders', 'extraBody'] as const) {
     const value = options[key];
     if (value && typeof value === 'object' && !Array.isArray(value) && !Object.keys(value).length) delete options[key];
@@ -73,6 +75,10 @@ export default {
     if (options.extraBody !== undefined && !isPlainObject(options.extraBody)) throw new Error(S.extraBodyObject);
     if (options.reasoningReplay !== undefined && !REASONING_REPLAYS.includes(options.reasoningReplay))
       throw new Error(S.reasoningReplayValue);
+    // 端点拒收空的 reasoning_text:全空白与空串一样会让明文形态整条请求 400。
+    if (options.syntheticReasoningText !== undefined
+      && (typeof options.syntheticReasoningText !== 'string' || !options.syntheticReasoningText.trim()))
+      throw new Error(S.syntheticReasoningTextValue);
   },
   contextOverflow: isContextOverflow,
   create(name, entry, host) {
@@ -93,6 +99,7 @@ export default {
       media: { enabled: () => entry.multimodal === true, read: host.readBlob },
       keepThinking: host.keepThinking,
       reasoningReplay,
+      syntheticReasoningText: options.syntheticReasoningText,
     });
     return {
       listModels: () => catalog.list(),

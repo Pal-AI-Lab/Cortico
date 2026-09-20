@@ -3,6 +3,7 @@
  * determines it. The endpoint comes from `ctx.scope.instance`.
  */
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
+import { configField } from '../../../web/client/features/config/view.ts';
 import type { DetectResult, ProbeOutcome, ReasoningPanelState } from './server.ts';
 import { panel } from '../strings.ts';
 
@@ -12,6 +13,7 @@ export const reasoningPanel: ConsolePanel = {
     const S = ctx.language === 'en' ? panel.en : panel.zh;
     const name = ctx.scope.instance;
     const path = `providers.${name}.options.reasoningReplay`;
+    const textPath = `providers.${name}.options.syntheticReasoningText`;
     const labels: Record<string, string> = { encrypted: S.encrypted, plaintext: S.plaintext };
     const card = ui.sheet({ title: S.title });
     const message = ui.msgline();
@@ -22,9 +24,9 @@ export const reasoningPanel: ConsolePanel = {
     const describe = (result: DetectResult): string =>
       `${S.outcome(outcome(result.bare), outcome(result.withReasoning))}。${result.verdict ? S.applied(labels[result.verdict]) : S.undetermined}`;
 
-    async function save(groupId: string, value: string): Promise<void> {
+    async function save(groupId: string, key: string, value: string): Promise<void> {
       try {
-        await ctx.setConfig(groupId, { [path]: value });
+        await ctx.setConfig(groupId, { [key]: value });
         message.textContent = S.saved;
       } catch (error) {
         message.textContent = String(error);
@@ -59,7 +61,7 @@ export const reasoningPanel: ConsolePanel = {
       const select = ui.select({
         value: typeof current === 'string' && current ? current : 'encrypted',
         options: Object.entries(labels).map(([value, label]) => ({ value, label })),
-        onChange: (value) => void save(group.id, value),
+        onChange: (value) => void save(group.id, path, value),
       });
       select.setAttribute('aria-label', property.title);
       const button = ui.button(S.detect, { onClick: () => void detect(button) });
@@ -67,6 +69,14 @@ export const reasoningPanel: ConsolePanel = {
       row.append(select, button);
       card.body.replaceChildren(ui.field(property.title, row));
       if (property.description) card.body.append(ui.msgline(property.description));
+
+      const textProperty = group.schema.properties[textPath];
+      const text = configField(ui, textProperty, values[textPath], () => {
+        if (text.read) void save(group.id, textPath, String(text.read()).trim());
+      }, ctx.signal);
+      text.node.setAttribute('aria-label', textProperty.title);
+      card.body.append(ui.field(textProperty.title, text.node));
+      if (textProperty.description) card.body.append(ui.msgline(textProperty.description));
     }
 
     await load();

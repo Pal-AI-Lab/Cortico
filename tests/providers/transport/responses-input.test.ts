@@ -25,6 +25,21 @@ const replay = (context: ContextRecord[], keep = true, form: (typeof REASONING_R
 const reasoningItems = (input: Item[]) => input.filter((item) => item.type === 'reasoning');
 
 describe('responsesInput 明文形态', () => {
+  it('合成推理的填充非空且非空白:端点拒收缺字段、空 content、空串与只有 summary 的推理项', () => {
+    expect(SYNTHETIC_REASONING_TEXT).not.toBe('');
+    expect(SYNTHETIC_REASONING_TEXT.trim()).not.toBe('');
+  });
+
+  it('填充由端点配置给出,缺省用默认', () => {
+    const context = [message('user', 'hi'), functionCall('evf_1', 'external_event_frame', '{}'), functionResult('evf_1', 'x')];
+    const textOf = (syntheticReasoningText?: string) => {
+      const input = responsesInput(request, { context, origin }, { reasoningReplay: 'plaintext', ...(syntheticReasoningText ? { syntheticReasoningText } : {}) }).input;
+      return (input.find((item) => item.type === 'reasoning')!.content as Array<{ text: string }>)[0].text;
+    };
+    expect(textOf()).toBe(SYNTHETIC_REASONING_TEXT);
+    expect(textOf('这条调用由运行时发出。')).toBe('这条调用由运行时发出。');
+  });
+
   it('推理项以 reasoning_text 出线,不看 origin;签名块照带;没有文字也没有签名的不出线', () => {
     const context = [
       message('user', 'hi'),
