@@ -1749,7 +1749,7 @@
 .live-summary { flex-wrap:wrap; }
 .live-connection { display:inline-flex; align-items:center; gap:7px; min-width:0; max-width:48%; background:none; border:0; color:var(--ink-soft); cursor:pointer; padding:0; font:11.5px/1 var(--sans); }
 .live-connection-label { flex-shrink:0; }
-.live-connection-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:6px 9px; border-radius:7px; background:#202724; border:1px solid color-mix(in srgb,var(--accent) 40%,#202724); color:color-mix(in srgb,var(--accent) 65%,white); font-weight:600; }
+.live-connection-value { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:4px 8px; border-radius:7px; background:var(--hover); border:1px solid var(--border); color:var(--ink-blue); font-weight:600; }
 .live-connection:hover .live-connection-value { border-color:var(--accent); }
 .live-connection:focus-visible { outline:2px solid var(--accent); outline-offset:3px; border-radius:7px; }
 @media(max-width:760px) { .live-connection { max-width:100%; margin-left:auto; } }
