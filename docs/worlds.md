@@ -16,7 +16,7 @@ World 不直接访问 Memory 或调用 Persona 的工具。
 | `tools()` | 这个 World 暴露的工具 |
 | `start(host)` / `stop()` | 启动与停止;运行中挂载时先调用 `start`,成功后加入挂载表 |
 | `console?()` | 控制台页声明(见 [console.md](console.md)) |
-| `outputTap?()` | 主 session 输出流的接收器(演出、字幕) |
+| `outputTap?()` | 主 session 输出流的接收器(演出、字幕);这一刻没有接收器时返回 `undefined` |
 | `onHandoffEnded?()`、`onTurnEnded?()` | 交接结束与主循环一轮结束的通知;隐藏的 World 不接收 |
 | `shutdownVerification?()` | 关机前要核对的外部状态,同步只读快照 |
 
