@@ -15,7 +15,7 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "world",
-    "api": 4
+    "api": 5
   },
   "files": [
     "src",

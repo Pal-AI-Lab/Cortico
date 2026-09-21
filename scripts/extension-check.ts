@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import {
-  EXTENSION_API_VERSION,
+  EXTENSION_API_VERSIONS,
+  EXTENSION_KINDS,
   parseExtensionManifest,
   extensionAssetUrl,
   type ExtensionPackageJson,
@@ -64,7 +65,7 @@ async function main(): Promise<void> {
 
   console.log(`扩展目录: ${pkgDir}`);
   console.log(`包:       ${pkg.name ?? '(package.json 没有 name)'}@${pkg.version ?? '(没有 version)'}`);
-  console.log(`框架契约: v${EXTENSION_API_VERSION}`);
+  console.log(`框架契约: ${EXTENSION_KINDS.map((kind) => `${kind} v${EXTENSION_API_VERSIONS[kind]}`).join(' / ')}`);
   console.log('');
 
   if (!pkg.name) fail('package.json 缺少 name:pnpm 装不了没有名字的包。');

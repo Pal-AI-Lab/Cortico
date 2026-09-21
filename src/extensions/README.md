@@ -19,7 +19,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
   "keywords": ["cortico-world"],          // npm 搜索按类关键字:cortico-world / cortico-provider / cortico-bot
   "cortico": {
     "kind": "world",                      // world | provider | bot
-    "api": 4,                             // 扩展契约版本,与 EXTENSION_API_VERSION 相等才加载
+    "api": 5,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载
     "consoleClient": "dist/console.js",   // 可选:预构建的面板 bundle,包内相对路径
     "consoleStyle": "dist/console.css"    // 可选:随 bundle 注入的样式
   }
@@ -27,9 +27,11 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 ```
 
 `parseExtensionManifest(pkg)` 只做解析与校验,不碰文件系统;装载器与
-`pnpm check:extension <dir>` 共用它。`api` 与框架不等时不加载,扩展页说明哪一边旧。
-`WorldDefinition`、`ProviderModule`、`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)
-或 `ConsolePanelContext` 任一不兼容变更就把 `EXTENSION_API_VERSION` 加一。同一次发布里的多处变更合计加一。
+`pnpm check:extension <dir>` 共用它。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
+
+`EXTENSION_API_VERSIONS` 按 kind 各记一个版本:`WorldDefinition` 不兼容变更只加 world,
+`ProviderModule` 只加 provider,`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;
+`ConsolePanelContext` 与其余共用接口变更时三类一起加一。同一次发布里的多处变更合计加一。
 
 ## 装载
 

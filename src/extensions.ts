@@ -21,7 +21,7 @@ import type {
   ExtensionSearchHit,
 } from './web/server.ts';
 import {
-  EXTENSION_API_VERSION,
+  EXTENSION_API_VERSIONS,
   EXTENSION_KEYWORDS,
   parseExtensionManifest,
   type ExtensionConsoleAsset,
@@ -573,9 +573,10 @@ export class ExtensionManager {
       versionCount: times.length,
       history,
       ...(v.deprecated ? { deprecated: v.deprecated } : {}),
-      ...(parsed.ok ? { manifest: parsed.manifest } : { problems: parsed.reasons }),
+      ...(parsed.ok
+        ? { manifest: parsed.manifest, frameworkApi: EXTENSION_API_VERSIONS[parsed.manifest.kind] }
+        : { problems: parsed.reasons }),
       warnings: parsed.warnings,
-      frameworkApi: EXTENSION_API_VERSION,
       ...(v.engines?.node ? { engines: v.engines.node } : {}),
       ...(v.dist?.unpackedSize ? { unpackedSize: v.dist.unpackedSize } : {}),
       ...(v.dist?.fileCount ? { fileCount: v.dist.fileCount } : {}),

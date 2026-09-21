@@ -7,7 +7,7 @@
   "keywords": ["cortico-world"],
   "cortico": {
     "kind": "world",
-    "api": 4,
+    "api": 5,
     "consoleClient": "dist/console.js",
     "consoleStyle": "dist/console.css"
   }

@@ -38,7 +38,7 @@ import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
 import { PromptRevisionConflict, WebApp, type ExtensionInfo, type ExtensionSearchHit, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
-import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
+import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
 import { deriveConsolePageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
@@ -1220,10 +1220,12 @@ const app = new WebApp({
         ],
         ...(stale ? { deprecated: '不再维护,改用 cortico-world-webhook (dev 假数据)' } : {}),
         ...(broken
-          ? { problems: [`扩展要求契约 v9,本框架只到 v${EXTENSION_API_VERSION}:框架需要升级。`] }
-          : { manifest: { kind: 'world' as const, api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' } }),
+          ? { problems: [`扩展要求 world 契约 v9,本框架的 world 契约只到 v${EXTENSION_API_VERSIONS.world}:框架需要升级。`] }
+          : {
+              manifest: { kind: 'world' as const, api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
+              frameworkApi: EXTENSION_API_VERSIONS.world,
+            }),
         warnings: [],
-        frameworkApi: EXTENSION_API_VERSION,
         engines: '>=22',
         unpackedSize: 184074,
         fileCount: 41,
