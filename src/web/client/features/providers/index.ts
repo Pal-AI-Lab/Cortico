@@ -53,7 +53,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       if (!node) {
         const el = ui.h('article', 'connection-card'); el.dataset.provider = identity;
         const title = ui.h('div', 'connection-name');
-        // Field name and value in one chip, the same shape the terminal gives a tool call's fields.
         const facts = ui.h('div', 'connection-facts');
         const fact = (key: string) => { const box = ui.h('span', `kv kv-${key}`); const value = ui.h('span', 'kv-v'); box.append(ui.h('span', 'kv-k', key), value); facts.append(box); return value; };
         const kind = fact('kind'); const model = fact('model'); const url = fact('baseUrl');
@@ -80,7 +79,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
       node.title.textContent = identity === NEW_DRAFT_ID ? newDraft?.name || S.newName : identity;
       node.title.title = node.title.textContent;
-      // A card with a draft shows what the draft holds; the 草稿 line says it is not saved yet.
       const draft = identity === NEW_DRAFT_ID ? null : drafts.get(identity);
       const model = draft?.entry.spec?.model || item.model || '—'; const url = draft?.entry.baseUrl || item.baseUrl || '—';
       node.kind.textContent = item.moduleTitle; node.kind.title = item.moduleTitle;

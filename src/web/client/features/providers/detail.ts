@@ -24,9 +24,9 @@ const snapshot = (editing: Editing) => JSON.stringify({ name: editing.name, entr
 /** Protocol knobs the editor keeps under the protocol block; the rest of a module's scalars belong to its own sections. */
 const PROTOCOL_FIELDS = ['endpointPath', 'extraHeaders', 'extraBody'];
 /**
- * One connection's editor: the identity card (name and type) on top, then the module's sections in
- * the order it declared them. Blocks the editor draws itself are named by `section.builtin`; the
- * rest are the module's own panels, mounted with their edits staged into `editing`.
+ * One connection's editor. Sections come from `module.sections` in declared order: a `builtin`
+ * names a block drawn here, the rest are the module's own panels, mounted with their edits staged
+ * into `editing`.
  */
 export async function mountDetail(options: Options): Promise<DetailController> {
   const { ctx, root, saved, modules } = options;
@@ -79,7 +79,6 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     if (editing.raw[key] !== undefined) check();
     input.addEventListener('input', () => { editing.raw[key] = input.value; check(); change(); }, opts);
   }
-  /** A section's card; folded ones remember their state per section id. */
   function block(box: HTMLElement, section: Section, fold = false) {
     const card = fold ? ui.foldSheet('connection-' + section.id, { title: section.title, desc: section.description }) : ui.sheet({ title: section.title, desc: section.description });
     box.append(card.el); return card.body;
