@@ -228,9 +228,8 @@ export function buildClientLaunch(input: ClientLaunchInput): ClientLaunch | { er
   const separator = os === 'windows' ? ';' : ':';
   const vars: Record<string, string> = {
     auth_player_name: input.username,
-    // 加载器版本靠 `-DignoreList=...,${version_name}.jar` 把主 jar 挡在模块路径外,名字对不上时它
-    // 变成自动模块,和 client-extra 导出同一个包,JVM 在建模块层时就崩。继承链上的版本没有自己的
-    // jar,借的是 jarId 那个,所以这里给的是 jarId 而非版本目录名。
+    // 加载器版本靠 `-DignoreList=...,${version_name}.jar` 把主 jar 挡在模块路径外,所以这个名字
+    // 必须是实际加载的那个 jar;继承链上的版本没有自己的 jar,用的是 jarId 那个。
     version_name: jarId,
     game_directory: gameDir,
     assets_root: join(gameDir, 'assets'),
