@@ -3,7 +3,7 @@ import type { Request, Response, StreamEvent } from '../../protocol/open-respons
 import type { ItemOrigin } from '../../protocol/open-responses/context.ts';
 import { GenerationError, priceUsage, unknownMeters, type GenerateOptions, type Generation, type ProviderAttempt, type PriceSnapshot, type TokenMeters } from '../../core/generation.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
-import { LLMError, abortError, retryDelay, reqIdSuffix } from './errors.ts';
+import { LLMError, abortError, parseRetryAfter, retryDelay, reqIdSuffix } from './errors.ts';
 import type { ResponseAssembly } from './response-assembly.ts';
 
 export interface ResponseTransport {
@@ -59,6 +59,11 @@ const FRAME_IDLE_MS = 120_000;
  * 该计时器独立于字节接收计时，以覆盖持续收到空帧的响应。
  */
 const CONTENT_IDLE_MS = 300_000;
+/**
+ * 按 `Retry-After` 退避的上限。更长的要求意味着配额按分钟级恢复,把本轮
+ * 挂在等待上不如立刻把失败交给调用方;六倍于固定间隔里最长的一档。
+ */
+const RETRY_AFTER_CAP_MS = 60_000;
 
 /** Every fetch attempt produces its own immutable metering and price snapshot. */
 export async function generate(request: Request, options: GenerateOptions, origin: ItemOrigin, transport: ResponseTransport): Promise<Generation> {
@@ -67,14 +72,17 @@ export async function generate(request: Request, options: GenerateOptions, origi
   let lastError: unknown;
   let partial: Response | null = null;
   let authRetried = false;
+  // 上一次尝试的 `Retry-After`;没有头或解析不成形时按固定间隔退避。
+  let retryAfterMs: number | null = null;
   const delays = options.diagnostic ? [] : [1000, 4000, 10000];
   const fail = (error: unknown): GenerationError => new GenerationError((error instanceof Error ? error.message : String(error)) + reqIdSuffix(attempts.filter(attempt => attempt.purpose !== 'diagnostic').at(-1)?.requestId), attempts,
     partial, origin, error instanceof LLMError ? error.status : 0, error instanceof LLMError ? error.body : '', { cause: error });
   for (let ordinal = 0; ordinal <= delays.length; ordinal++) {
     try {
       if (options.signal?.aborted) throw abortError(options.signal);
-      if (ordinal) await retryDelay(delays[ordinal - 1], options.signal);
+      if (ordinal) await retryDelay(retryAfterMs ?? delays[ordinal - 1], options.signal);
     } catch (error) { throw fail(error); }
+    retryAfterMs = null;
     const attempt: ProviderAttempt = {
       id: crypto.randomUUID(), generationId, ordinal, origin: structuredClone(origin), startedAt: new Date().toISOString(), elapsedMs: 0,
       requestId: null, responseId: null, outcome: 'failed', status: null, serviceTier: null, requestedServiceTier: typeof transport.body.service_tier === 'string' ? transport.body.service_tier : request.service_tier ?? null, purpose: options.diagnostic ? 'diagnostic' : 'generation', meters: unknownMeters(), charges: [],
@@ -123,6 +131,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
         const error = new LLMError(`LLM API ${response.status}`, response.status, await response.text());
+        retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
         if (!options.diagnostic && (response.status === 401 || response.status === 403) && !authRetried && await transport.refresh()) {
           authRetried = true;
           lastError = error;
@@ -176,7 +185,8 @@ export async function generate(request: Request, options: GenerateOptions, origi
       lastError = error;
       if (!sent || committed || runaway || (!streaming && error instanceof ResponseProtocolError)) break;
       const status = error instanceof LLMError ? error.status : 0;
-      if (status !== 0 && status !== 429 && status < 500) break;
+      if (status !== 0 && status !== 408 && status !== 429 && status < 500) break;
+      if (retryAfterMs !== null && retryAfterMs > RETRY_AFTER_CAP_MS) break;
       if (!options.diagnostic && observed && Date.now() - started >= 20000 && !await transport.failure({
         model: request.model ?? '', role: options.role, elapsedMs: Date.now() - started, status,
         requestId: attempt.requestId, body: error instanceof LLMError ? error.body : '', message: String(error),
