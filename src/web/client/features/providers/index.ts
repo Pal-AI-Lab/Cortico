@@ -55,9 +55,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
         const title = ui.h('div', 'connection-name'); const kind = ui.h('div', 'connection-kind');
         const model = ui.h('div', 'connection-model'); const url = ui.h('div', 'connection-url');
         const status = ui.h('div', 'connection-status'); const secondary = ui.h('div', 'connection-secondary');
-        const actions = ui.rowbar();
-        const configure = ui.button(S.configure, { size: 'sm', onClick: () => run(() => select(identity)) });
-        const activate = ui.button(S.activate, { size: 'sm', onClick: () => run(async () => {
+        const activate = ui.button('⇄', { size: 'sm', onClick: () => run(async () => {
           activate.disabled = true;
           try { await post(connectionPath(identity) + '/activate', {}, opts); state.active = identity; paint(); }
           finally { activate.disabled = false; }
@@ -68,7 +66,13 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
         const probe = ui.button(S.probe, { size: 'sm', onClick: () => run(() => runProbe(identity)) });
         probe.classList.add('connection-probe-btn'); probe.append(ui.h('span', 'connection-spin'));
         const erase = eraseButton(identity);
-        actions.append(configure, probe, activate); el.append(erase, title, kind, model, url, status, secondary, actions, probePanel);
+        activate.classList.add('connection-activate');
+        activate.setAttribute('aria-label', S.activate); activate.title = S.activate;
+        const connect = ui.h('div', 'connection-connect'); connect.append(activate, ui.h('span', 'connection-connect-label', S.connect));
+        const actions = ui.h('div', 'rowbar'); actions.append(probe);
+        el.append(erase, title, kind, model, url, status, secondary, connect, actions, probePanel);
+        el.tabIndex = 0;
+        el.addEventListener('keydown', event => { if (event.target === el && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); run(() => select(identity)); } }, opts);
         el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
         if (identity === NEW_DRAFT_ID) cards.prepend(el); else cards.append(el);
         node = { el, title, kind, model, url, status, secondary, activate, erase, probe, probePanel, probeBody }; nodes.set(identity, node);
@@ -83,7 +87,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
       node.status.textContent = active ? S.active : S.readiness[readiness];
       node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== NEW_DRAFT_ID && drafts.has(identity) ? S.readiness.draft : '';
-      node.activate.hidden = active || identity === NEW_DRAFT_ID;
+      node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID;
       node.activate.disabled = item.readiness.state !== 'ready';
       node.probe.hidden = identity === NEW_DRAFT_ID;
       if (identity === NEW_DRAFT_ID) rows.delete(identity); else rows.set(identity, item as Connection);

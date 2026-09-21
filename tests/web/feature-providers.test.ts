@@ -35,7 +35,7 @@ it('uses one connection navigation entry without provider lamps', () => { expect
 it('selection preserves active connection and card DOM', async () => {
   const { root, calls } = await fixture();
   const cards = [...root.querySelectorAll('.connection-card')];
-  (cards[1].querySelector('.rowbar button') as HTMLButtonElement).click(); await flush();
+  (cards[1] as HTMLElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')[0]).toBe(cards[0]);
   expect(cards[0].classList.contains('is-active')).toBe(true);
   expect(cards[1].classList.contains('is-selected')).toBe(true);
@@ -45,7 +45,7 @@ it('activation leaves selected detail and unsaved input in place', async () => {
   const { root } = await fixture();
   const input = root.querySelector('[aria-label="供应商名称"]') as HTMLInputElement;
   input.value = 'Edited'; input.dispatchEvent(new Event('input'));
-  (root.querySelectorAll('.connection-card')[1].querySelectorAll('.rowbar button')[2] as HTMLButtonElement).click(); await flush();
+  (root.querySelectorAll('.connection-card')[1].querySelector('.connection-activate') as HTMLButtonElement).click(); await flush();
   expect(root.querySelector('[aria-label="供应商名称"]')).toBe(input);
   expect(input.value).toBe('Edited');
   expect(root.querySelectorAll('.connection-card')[1].classList.contains('is-active')).toBe(true);
@@ -88,7 +88,7 @@ it('switching away from edits offers stay, discard and save', async () => {
   const { root } = await fixture();
   const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
   input.value = 'https://draft.test'; input.dispatchEvent(new Event('input'));
-  (root.querySelectorAll('.connection-card')[1].querySelector('.rowbar button') as HTMLButtonElement).click(); await flush();
+  (root.querySelectorAll('.connection-card')[1] as HTMLElement).click(); await flush();
   const dialog = document.querySelector('dialog')!;
   expect(dialog.textContent).toContain('放弃更改并切换');
   expect(dialog.textContent).toContain('保存');
@@ -109,7 +109,7 @@ it('discarding a new unsaved draft removes its card', async () => {
   (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
   const input = root.querySelector('[aria-label="供应商名称"]') as HTMLInputElement;
   input.value = 'Unsaved'; input.dispatchEvent(new Event('input'));
-  (root.querySelector('[data-provider="Alpha"] .rowbar button') as HTMLButtonElement).click(); await flush();
+  (root.querySelector('[data-provider="Alpha"]') as HTMLButtonElement).click(); await flush();
   ([...document.querySelectorAll('dialog button')].find(button => button.textContent === '放弃更改并切换') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')).toHaveLength(2);
   expect(root.querySelector('.is-selected')?.getAttribute('data-provider')).toBe('Alpha');
@@ -148,4 +148,22 @@ it('a card probe reports the diagnostics it received below that card', async () 
   expect(panel.textContent).toContain('成功 · 200');
   (panel.querySelector('.btn') as HTMLButtonElement).click();
   expect(panel.classList.contains('is-open')).toBe(false);
+});
+
+it('saved connections expose cancellation only after saving a browser draft', async () => {
+  const { root } = await fixture();
+  const cancel = [...root.querySelectorAll('button')].find(button => button.textContent === '取消')!;
+  expect(cancel.hidden).toBe(true);
+  [...root.querySelectorAll('button')].find(button => button.textContent === '保存草稿')!.click();
+  expect(cancel.hidden).toBe(false);
+  cancel.click(); await flush();
+  expect([...root.querySelectorAll('button')].find(button => button.textContent === '取消')!.hidden).toBe(true);
+});
+it('new connection sections start collapsed and identify required model settings', async () => {
+  const { root } = await fixture();
+  (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
+  expect([...root.querySelectorAll('details')].every(section => !section.open)).toBe(true);
+  expect(root.querySelector('details summary .required-mark')?.textContent).toContain('*');
+  expect(root.querySelector('.fieldlabel .required-mark')?.textContent).toContain('*');
+  expect(root.textContent).not.toContain('⚙ 配置');
 });

@@ -1830,3 +1830,24 @@
 .connection-probe .kvtable td { padding:3px 0; font-size:11.5px; word-break:break-word; }
 .connection-probe .kvtable td:first-child { padding-right:8px; color:var(--muted-foreground); white-space:nowrap; }
 .connection-probe > .connection-probe-body > .btn { margin-top:8px; }
+.required-mark { color:var(--danger); }
+.connection-card { position:relative; padding-right:64px; }
+.connection-connect { position:absolute; top:12px; right:12px; width:32px; text-align:center; }
+.connection-connect[hidden] { display:none; }
+.connection-hub .btn.connection-activate { display:block; width:32px; height:28px; min-height:28px; padding:0; border:0; font-size:22px; line-height:28px; }
+.connection-connect-label { display:block; font-size:10px; line-height:14px; color:var(--muted-foreground); }
+.connection-index { scrollbar-width:none; }
+.connection-index::-webkit-scrollbar { display:none; }
+.connection-detail .connection-transport { border-top:0; padding-top:0; }
+.connection-test { gap:12px; align-items:center; }
+.connection-test .msgline { margin:0; }
+.connection-detail details.connection-module > .foldbody { padding-top:12px; padding-bottom:0; }
+.connection-detail .connection-module .sheet { padding:0; margin:0; }
+.connection-module-panels > div + div { margin-top:20px; }
+.connection-module .rowbar:has(> .fieldrow > select) { align-items:flex-end; }
+.connection-module .rowbar > .fieldrow:has(> select) { flex:1; min-width:0; margin:0; }
+.connection-module .rowbar > .fieldrow > select { width:100%; }
+.connection-module .placeholder { padding:10px 0; min-height:0; text-align:left; font:var(--text-detail)/1.55 var(--sans); color:var(--muted-foreground); }
+
+.connection-erase { top:auto; bottom:12px; }
+.connection-name { padding-right:0; }

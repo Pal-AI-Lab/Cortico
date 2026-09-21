@@ -29,6 +29,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   const errors = new Map<string, () => boolean>();
   let rendering = 0;
   let saving = false;
+  let hasDraft = !!options.draft;
   let panelHandle: { dispose(): void } | null = null;
   let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
   const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'));
@@ -59,6 +60,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   }
   function section(title: string, id?: string, open = false) {
     const card = id ? ui.foldSheet('connection-' + id, { title, defaultOpen: open }) : ui.sheet({ title });
+    if (id && !saved) (card.el as HTMLDetailsElement).open = false;
+    if (id === 'model') card.el.querySelector('h3')?.append(ui.h('span', 'required-mark', ' *'));
+    if (id === 'module') card.el.classList.add('connection-module');
     form.append(card.el); return card.body;
   }
   async function render() {
@@ -85,8 +89,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       const required = ui.h('div', 'field-error'); basic.append(required);
       errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.required; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
     }
-    if (selectedModule) basic.append(ui.h('p', 'field-note', S.moduleNote(selectedModule.description, selectedModule.id)));
     const connection = section(S.connection);
+    connection.parentElement!.classList.add('connection-transport');
     field(connection, 'baseUrl', S.url, editing.entry.baseUrl, value => { editing.entry.baseUrl = value; }, value => {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
     });
@@ -99,8 +103,10 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         const result = await post<{ ok: boolean; status: number | null; elapsedMs: number; model?: string; error?: string; hint?: string }>(connectionPath(saved.name) + '/test', {}, opts);
         report.textContent = result.ok ? `${S.testOk} · HTTP ${result.status ?? '—'} · ${(result.elapsedMs / 1000).toFixed(1)}s · ${result.model ?? ''}` : `${S.testFailed}: ${result.hint ?? result.error ?? ''}`;
       } finally { test.disabled = false; }
-    }) }); connection.append(test);
-    if (saved?.readiness.reason) connection.append(ui.msgline(saved.readiness.reason, true));
+    }) });
+    const testRow = ui.rowbar(); testRow.classList.add('connection-test'); testRow.append(test);
+    if (saved?.readiness.reason) testRow.append(ui.msgline(saved.readiness.reason, true));
+    connection.append(testRow);
     const model = section(S.modelSection, 'model', true);
     const spec = editing.entry.spec ??= { model: '', thinking: false };
     const modelInput = field(model, 'model', S.model, spec.model, value => { spec.model = value; }, value => value.trim() ? null : S.required);
@@ -162,7 +168,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         await options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} });
       }) }));
     }
-    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) }), ui.button(S.draft, { onClick: () => { try { options.saveDraft(editing); baseline = JSON.stringify(editing); report.textContent = S.drafted; } catch (error) { report.textContent = String(error); } } }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
+    const cancel = ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) });
+    cancel.hidden = !!saved && !hasDraft;
+    actions.append(ui.h('span', 'grow'), cancel, ui.button(S.draft, { onClick: () => { try { options.saveDraft(editing); hasDraft = true; cancel.hidden = false; baseline = JSON.stringify(editing); report.textContent = S.drafted; } catch (error) { report.textContent = String(error); } } }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
     form.append(actions);
     if (!selectedModule) { moduleBody.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
     const identity = saved?.name ?? 'draft';
@@ -193,7 +201,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       }
     }
     if (ctx.consolePageHost) {
-      const slot = ui.h('div'); moduleBody.append(slot);
+      const slot = ui.h('div', 'connection-module-panels'); moduleBody.append(slot);
       panelHost ??= ctx.consolePageHost({ root: slot, route: () => ['providers', saved?.name ?? ''] });
       await panelHost.load();
       if (gen !== rendering || lifecycle.disposed) return;
@@ -235,7 +243,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   async function save(select = true): Promise<boolean> {
     if (saving) return false;
     const valid = [...errors.values()].map(check => check()).every(Boolean); change();
-    if (!valid) { report.textContent = S.readiness.invalid; return false; }
+    if (!valid) {
+      for (const input of form.querySelectorAll('[aria-invalid="true"]')) {
+        const section = input.closest('details'); if (section) section.open = true;
+      }
+      report.textContent = S.readiness.invalid; return false;
+    }
     saving = true;
     try {
       const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
