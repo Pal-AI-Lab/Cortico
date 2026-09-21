@@ -23,9 +23,9 @@ checker and the test runner. It has no entry point and starts nothing.
 pnpm add -D cortico
 ```
 
-The extension contract is API version 4; a package declares it as `"cortico": { "kind": ..., "api": 4 }`
-in its own `package.json`. This package's minor version tracks the framework, so pin the range
-your extension was written against.
+Each extension kind has its own contract version — world 5, provider 5, bot 5 — and a package
+declares its own as `"cortico": { "kind": "world", "api": 5 }` in its `package.json`. This
+package's minor version tracks the framework, so pin the range your extension was written against.
 
 `templates/extension/` in the repository holds a ready package for each kind, and
 [docs/extensions.md](https://github.com/Pal-AI-Lab/Cortico/blob/main/docs/extensions.md) states

@@ -242,8 +242,8 @@ export interface ExtensionPackageDetail {
   /** 解析不通过的理由,与本机装载时用的是同一套判据 */
   problems?: string[];
   warnings: string[];
-  /** 本进程的扩展契约版本 */
-  frameworkApi: number;
+  /** 本进程对这个包所属那一类的契约版本;manifest 解析不通过时缺席 */
+  frameworkApi?: number;
   /** `engines.node` */
   engines?: string;
   unpackedSize?: number;
@@ -1409,8 +1409,10 @@ export class WebApp {
     app.post('/api/providers/:name/save', express.json(), providerRoute((hub, req) => hub.save(String(req.params.name), req.body, this.languageOf(req))));
     app.post('/api/providers/:name/delete', express.json(), providerRoute((hub, req) => hub.delete(String(req.params.name), req.body.expectedRevision)));
     app.post('/api/providers/:name/activate', providerRoute((hub, req) => hub.activate(String(req.params.name), this.languageOf(req))));
-    app.post('/api/providers/:name/test', providerRoute((hub, req) => hub.action(String(req.params.name), 'test', this.languageOf(req))));
-    app.post('/api/providers/:name/models', providerRoute((hub, req) => hub.action(String(req.params.name), 'models', this.languageOf(req))));
+    // A body with `entry` probes the browser's draft instead of the saved connection.
+    const draftOf = (req: Request) => (req.body && typeof req.body === 'object' && req.body.entry ? { entry: req.body.entry, secretValue: req.body.secretValue } : undefined);
+    app.post('/api/providers/:name/test', express.json(), providerRoute((hub, req) => hub.action(String(req.params.name), 'test', this.languageOf(req), draftOf(req))));
+    app.post('/api/providers/:name/models', express.json(), providerRoute((hub, req) => hub.action(String(req.params.name), 'models', this.languageOf(req), draftOf(req))));
 
     app.get('/api/status', wrap((_req, res) => {
       res.json({ ...this.safeStatus(), uptimeSec: Math.round(process.uptime()) });

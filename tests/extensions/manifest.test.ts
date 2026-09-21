@@ -8,8 +8,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
 import {
-  EXTENSION_API_VERSION,
+  EXTENSION_API_VERSIONS,
   EXTENSION_ASSET_PREFIX,
+  EXTENSION_KINDS,
   parseExtensionManifest,
   extensionAssetUrl,
 } from '../../src/extensions/manifest.ts';
@@ -34,8 +35,8 @@ describe('按 kind 分派', () => {
     const { set, records } = await byName();
     expect(set.worlds.map((m) => m.id)).toEqual(['fixture-world']);
     expect(set.providers.map((p) => p.id)).toEqual(['fixture-provider']);
-    expect(records['world-ok']).toMatchObject({ kind: 'world', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-world', label: '夹具 World' });
-    expect(records['provider-ok']).toMatchObject({ kind: 'provider', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-provider', label: '夹具端点' });
+    expect(records['world-ok']).toMatchObject({ kind: 'world', api: EXTENSION_API_VERSIONS.world, loaded: true, worldId: 'fixture-world', label: '夹具 World' });
+    expect(records['provider-ok']).toMatchObject({ kind: 'provider', api: EXTENSION_API_VERSIONS.provider, loaded: true, worldId: 'fixture-provider', label: '夹具端点' });
   });
 
   it('没有 cortico 块 / 不是 ESM 的包一律不 import,原因说清要改哪里', async () => {
@@ -61,7 +62,7 @@ describe('bot 包', () => {
   const treeDirOf = (name: string): string => join(root, 'bots', name);
 
   it('manifest 认 kind: "bot";关键字缺席只是 warning', () => {
-    const parsed = parseExtensionManifest({ type: 'module', cortico: { kind: 'bot', api: EXTENSION_API_VERSION } });
+    const parsed = parseExtensionManifest({ type: 'module', cortico: { kind: 'bot', api: EXTENSION_API_VERSIONS.bot } });
     expect(parsed.ok && parsed.manifest.kind).toBe('bot');
     expect(parsed.warnings.join('')).toContain('cortico-bot');
   });
@@ -107,7 +108,7 @@ describe('bot 包', () => {
     const other = installFixture(root, 'bot-ok', { as: 'other-bot' });
     writeFileSync(join(other, 'index.js'), 'throw new Error("must not be imported");');
     const { set, records } = await byName({ activeBot: { name: 'bot-with-console', id: 'fixture-bot-console' } });
-    expect(records['bot-with-console']).toMatchObject({ kind: 'bot', api: EXTENSION_API_VERSION, loaded: true, worldId: 'fixture-bot-console', console: 'served' });
+    expect(records['bot-with-console']).toMatchObject({ kind: 'bot', api: EXTENSION_API_VERSIONS.bot, loaded: true, worldId: 'fixture-bot-console', console: 'served' });
     expect(records['other-bot']).toMatchObject({ kind: 'bot', loaded: false, idle: true });
     expect(records['other-bot'].reason).toBeUndefined();
     expect(set.consoleAssets.map((a) => a.pageId)).toEqual(['persona:fixture-bot-console']);
@@ -137,13 +138,13 @@ describe('契约版本', () => {
     installFixture(root, 'api-too-new');
     const { set, records } = await byName();
     expect(set.worlds).toEqual([]);
-    expect(records['api-too-new'].reason).toContain(`扩展要求契约 v99,本框架只到 v${EXTENSION_API_VERSION}`);
+    expect(records['api-too-new'].reason).toContain(`扩展要求 world 契约 v99,本框架的 world 契约只到 v${EXTENSION_API_VERSIONS.world}`);
     expect(records['api-too-new'].reason).toContain('框架需要升级');
   });
 
   it('反方向(扩展比框架旧)与非正整数各有各的措辞', () => {
     const parse = (api: unknown) => parseExtensionManifest({ type: 'module', cortico: { kind: 'world', api } });
-    const old = parse(EXTENSION_API_VERSION - 1);
+    const old = parse(EXTENSION_API_VERSIONS.world - 1);
     expect(old.ok).toBe(false);
     expect((old as { reasons: string[] }).reasons.join('')).toContain('扩展需要升级');
     for (const bad of [0, -1, 1.5, '1', undefined]) {
@@ -151,7 +152,25 @@ describe('契约版本', () => {
       expect(r.ok).toBe(false);
       expect((r as { reasons: string[] }).reasons.join('')).toContain('必须是正整数');
     }
-    expect(parse(EXTENSION_API_VERSION).ok).toBe(true);
+    expect(parse(EXTENSION_API_VERSIONS.world).ok).toBe(true);
+  });
+
+  it('每一类拿自己那一类的版本比,措辞里带着是哪一类', () => {
+    for (const kind of EXTENSION_KINDS) {
+      const parse = (api: number) => parseExtensionManifest({ type: 'module', cortico: { kind, api } });
+      expect(parse(EXTENSION_API_VERSIONS[kind]).ok).toBe(true);
+      const off = parse(EXTENSION_API_VERSIONS[kind] + 1);
+      expect(off.ok).toBe(false);
+      expect((off as { reasons: string[] }).reasons.join('')).toContain(`本框架的 ${kind} 契约只到 v${EXTENSION_API_VERSIONS[kind]}`);
+    }
+  });
+
+  it('kind 认不出时只说 kind,不比版本', () => {
+    const r = parseExtensionManifest({ type: 'module', cortico: { kind: 'plugin', api: 1 } });
+    expect(r.ok).toBe(false);
+    const reasons = (r as { reasons: string[] }).reasons.join('');
+    expect(reasons).toContain('cortico.kind');
+    expect(reasons).not.toContain('契约');
   });
 });
 
@@ -244,8 +263,8 @@ describe("ExtensionManager 安装与加载状态", () => {
     const mgr = manager(booted);
     expect(mgr.consoleAssets()).toBe(booted.consoleAssets);
     const extensions = Object.fromEntries(mgr.list().extensions.map((p) => [p.name, p]));
-    expect(extensions['world-with-console']).toMatchObject({ state: 'loaded', kind: 'world', api: EXTENSION_API_VERSION, console: 'served' });
-    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: EXTENSION_API_VERSION, console: 'none' });
+    expect(extensions['world-with-console']).toMatchObject({ state: 'loaded', kind: 'world', api: EXTENSION_API_VERSIONS.world, console: 'served' });
+    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: EXTENSION_API_VERSIONS.provider, console: 'none' });
   });
 });
 

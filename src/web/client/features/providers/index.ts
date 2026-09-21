@@ -7,6 +7,8 @@ import { S } from './strings.ts';
 import { connectionPath, type HubState, type Connection, type Module, type Detail, type Editing } from './types.ts';
 import { mountDetail, type DetailController } from './detail.ts';
 
+/** How often the card list re-reads other deployments' usage. */
+const USAGE_REFRESH_MS = 5000;
 export async function mountProviders(ctx: FeatureContext): Promise<void> {
   const { ui, root } = ctx;
   root.append(pageIntro(ui, S.pageTitle));
@@ -49,19 +51,21 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       let node = nodes.get(identity);
       if (!node) {
         const el = ui.h('article', 'connection-card'); el.dataset.provider = identity;
-        const title = ui.h('div', 'connection-name'); const kind = ui.h('div', 'connection-kind');
-        const model = ui.h('div', 'connection-model'); const url = ui.h('div', 'connection-url');
+        const title = ui.h('div', 'connection-name');
+        const facts = ui.h('div', 'connection-facts');
+        const fact = (key: string) => { const box = ui.h('span', `kv kv-${key}`); const value = ui.h('span', 'kv-v'); box.append(ui.h('span', 'kv-k', key), value); facts.append(box); return value; };
+        const kind = fact('kind'); const model = fact('model'); const url = fact('baseUrl');
         const status = ui.h('div', 'connection-status'); const secondary = ui.h('div', 'connection-secondary');
         const activate = ui.button('⇄', { size: 'sm', onClick: () => run(async () => {
           activate.disabled = true;
           try { await post(connectionPath(identity) + '/activate', {}, opts); state.active = identity; paint(); }
           finally { activate.disabled = false; }
         }) });
-        const erase = eraseButton(identity);
         activate.classList.add('connection-activate');
         activate.setAttribute('aria-label', S.activate); activate.title = S.activate;
         const connect = ui.h('div', 'connection-connect'); connect.append(activate, ui.h('span', 'connection-connect-label', S.connect));
-        el.append(erase, title, kind, model, url, status, secondary, connect);
+        const erase = eraseButton(identity);
+        el.append(erase, title, facts, status, secondary, connect);
         el.tabIndex = 0;
         el.addEventListener('keydown', event => { if (event.target === el && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); run(() => select(identity)); } }, opts);
         el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
@@ -72,26 +76,26 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
       node.title.textContent = identity === NEW_DRAFT_ID ? newDraft?.name || S.newName : identity;
       node.title.title = node.title.textContent;
+      const draft = identity === NEW_DRAFT_ID ? null : drafts.get(identity);
+      const model = draft?.entry.spec?.model || item.model || '—'; const url = draft?.entry.baseUrl || item.baseUrl || '—';
       node.kind.textContent = item.moduleTitle; node.kind.title = item.moduleTitle;
-      node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
-      node.model.title = item.model ?? ''; node.url.title = item.baseUrl ?? '';
+      node.model.textContent = model; node.url.textContent = url;
+      node.model.title = model; node.url.title = url;
       const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
-      const users = 'usage' in item ? item.usage ?? [] : [];
-      const running = users.filter(user => user.running);
+      const users = 'usage' in item ? item.usage : [];
+      const running = users.filter(user => user.running).map(user => user.name);
+      const stopped = users.filter(user => !user.running).map(user => user.name);
       const tone = active || running.length ? 'active' : readiness === 'draft' ? 'draft' : readiness === 'ready' ? 'ready' : 'error';
-      const icon = { active: '●', ready: '✓', error: '!', draft: '✎' }[tone];
       node.status.dataset.tone = tone;
-      node.status.textContent = `${icon} ${active ? S.active : running.length ? S.inUse(running.map(user => user.name).join('、')) : S.readiness[readiness]}`;
+      node.status.textContent = `${{ active: '●', ready: '✓', error: '!', draft: '✎' }[tone]} ${active ? S.active : running.length ? S.inUse(running.join('、')) : S.readiness[readiness]}`;
       const notes: string[] = [];
       if ((active || running.length) && readiness !== 'ready') notes.push('! ' + S.readiness[readiness]);
       if (identity !== NEW_DRAFT_ID && drafts.has(identity)) notes.push('✎ ' + S.readiness.draft);
-      if (active && running.length) notes.push(S.inUse(running.map(user => user.name).join('、')));
-      const stopped = users.filter(user => !user.running);
-      if (stopped.length) notes.push(S.selectedBy(stopped.map(user => user.name).join('、')));
+      if (active && running.length) notes.push(S.inUse(running.join('、')));
+      if (stopped.length) notes.push(S.selectedBy(stopped.join('、')));
       node.secondary.textContent = notes.join(' · ');
       node.secondary.dataset.tone = (active || running.length) && readiness !== 'ready' ? 'error' : 'draft';
       node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID || readiness !== 'ready' || running.length > 0;
-      node.activate.disabled = item.readiness.state !== 'ready';
       if (identity === NEW_DRAFT_ID) rows.delete(identity); else rows.set(identity, item as Connection);
     }
   }
@@ -127,7 +131,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   async function refresh() { state = await get<HubState>('/api/providers', opts); paint(); }
   async function select(identity: string, force = false): Promise<void> {
     if (!force && identity === selected) return;
-    if (!force && controller && !(await controller.leave())) return;
     const gen = ++renderId;
     controller?.dispose(); controller = null;
     selected = identity; paint(); detailRoot.replaceChildren();
@@ -139,9 +142,13 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     if (gen !== renderId || ctx.signal.aborted) return;
     const detailView = ui.h('div'); detailRoot.replaceChildren(detailView);
     const mounted = await mountDetail({ ctx, root: detailView, modules, saved, draft: identity === NEW_DRAFT_ID ? newDraft : drafts.get(identity),
-      discarded: () => { invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = drafts.get(NEW_DRAFT_ID); paint(); },
-      saveDraft: editing => { drafts.set(editing); paint(); },
-      changed: (editing, hasErrors) => { if (hasErrors) invalid.add(identity); else invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = editing; paint(); },
+      // Edits persist as a browser draft as they happen; a form back at its saved state drops the draft.
+      changed: (editing, hasErrors, dirty) => {
+        if (hasErrors) invalid.add(identity); else invalid.delete(identity);
+        if (identity === NEW_DRAFT_ID) { newDraft = editing; drafts.set(editing); }
+        else if (dirty) drafts.set(editing); else drafts.remove(identity);
+        paint();
+      },
       onSaved: async (name, show = true) => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await refresh(); if (show) await select(name, true); },
       cancelled: async () => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await select(identity === NEW_DRAFT_ID ? state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '' : identity, true); },
       deleted: async () => { drafts.remove(identity); invalid.delete(identity); await refresh(); await select(state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '', true); },
@@ -157,8 +164,8 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   }
   async function create() {
     if (newDraft) return select(NEW_DRAFT_ID);
-    if (controller && !(await controller.leave())) return;
     newDraft = { original: null, name: '', entry: { kind: '', baseUrl: '' }, secretValue: '', raw: {} };
+    drafts.set(newDraft);
     await select(NEW_DRAFT_ID, true);
   }
   const moduleName = (kind: string) => modules.find(module => module.id === kind)?.title ?? kind;
@@ -168,16 +175,16 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   creator.append(ui.button(S.create, { variant: 'primary', onClick: () => run(create) }), ui.h('p', 'connection-create-hint', S.createHint));
   index.append(creator, cards);
   ctx.lifecycle.own({ dispose: () => { renderId++; controller?.dispose(); } });
-  ctx.lifecycle.own(ctx.router.addLeaveDecision(async () => controller ? controller.leave() : true));
   ctx.lifecycle.own(ctx.router.onChange(route => {
     if (route.segments[0] === 'providers' && route.segments[1]) run(() => select(route.segments[1]));
   }));
+  // Other deployments' selections and liveness change without this page; the detail form is left alone.
   let refreshing = false;
   ctx.lifecycle.interval(() => {
     if (refreshing) return;
     refreshing = true;
     run(async () => { try { await refresh(); } finally { refreshing = false; } });
-  }, 5000);
+  }, USAGE_REFRESH_MS);
   paint();
   const wanted = ctx.route.segments[1] ?? (newDraft ? NEW_DRAFT_ID : undefined);
   await select(wanted && (wanted === NEW_DRAFT_ID || state.providers.some(item => item.name === wanted)) ? wanted : state.providers.find(item => item.name === state.active)?.name ?? state.providers[0]?.name ?? '', true);

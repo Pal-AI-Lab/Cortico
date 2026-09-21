@@ -215,6 +215,10 @@ export class GameClient {
       return this.state();
     }
     this.activeGameDir = gameDir;
+    if ('missingLibraries' in launch && launch.missingLibraries.length > 0) {
+      this.opts.log.warn(`${this.opts.label}版本 JSON 点名的 ${launch.missingLibraries.length} 个库`
+        + `不在 libraries 目录,类路径里没有它们:${launch.missingLibraries.join(' ')}`);
+    }
     if ('nativeJars' in launch) prepareNatives(launch.nativeJars, launch.nativesDir, this.opts.log);
     if (!this.opts.commandOverride) {
       if (this.opts.noPauseOnLostFocus()) {

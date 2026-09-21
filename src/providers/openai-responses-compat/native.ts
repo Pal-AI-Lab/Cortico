@@ -28,8 +28,8 @@ export interface ResponsesProviderOptions {
 
 /**
  * Send reasoning only when an effort is supplied; otherwise leave it to the endpoint.
- * Requests set store=false and request encrypted reasoning content for local stateless replay;
- * how recorded reasoning is replayed follows `reasoningReplay`. Endpoint extraBody fields are merged last.
+ * Requests set store=false, so replay is local and follows `reasoningReplay`; encrypted replay asks
+ * for the signed blocks back through `include`. Endpoint extraBody fields are merged last.
  */
 export function buildResponsesBody(
   request: Request,
@@ -41,10 +41,15 @@ export function buildResponsesBody(
   const body: Item = {
     ...request,
     input: replay.input,
-    include: [...new Set([...(request.include ?? []), 'reasoning.encrypted_content'])],
     store: false,
     stream: Boolean(options.onEvent),
   };
+  // 加密形态靠 include 把签名推理块取回来,明文形态用不上它;端点不支持 include 时整条请求被拒,
+  // 所以只在用得上的形态带。
+  const include = new Set<string>(request.include ?? []);
+  if (input.reasoningReplay !== 'plaintext') include.add('reasoning.encrypted_content');
+  if (include.size) body.include = [...include];
+  else delete body.include;
   delete body.previous_response_id;
   if (replay.instructions !== undefined) body.instructions = replay.instructions;
   else delete body.instructions;

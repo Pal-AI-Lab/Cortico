@@ -13,6 +13,7 @@ import { responseTimelineFixture } from '../tests/web/response-timeline-fixture.
  *   CORTICO_DEV_PASSWORD=xxx npx tsx scripts/dev-console.ts → 带访问密码起,用来看登录页
  */
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
@@ -38,7 +39,7 @@ import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
 import { PromptRevisionConflict, WebApp, type ExtensionInfo, type ExtensionSearchHit, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
-import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
+import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
 import { deriveConsolePageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
@@ -985,12 +986,52 @@ function devQqEvents(opts?: { conv?: string; limit?: number }): unknown {
 }
 
 
+/**
+ * A stand-in llama-server in router mode for the `local` endpoint: `/models` with one loaded
+ * and one unloaded model, `POST /models` starting a download that finishes on its own, load and
+ * unload, `/health` and `/props`. Nothing runs a model.
+ */
+const fakeLlamaModels: Array<{ id: string; status: string; path: string | null; failed?: boolean; progress?: { done: number; total: number } }> = [
+  { id: 'ggml-org/Qwen3-8B-GGUF:Q4_K_M', status: 'loaded', path: 'C:/models/Qwen3-8B-Q4_K_M.gguf' },
+  { id: 'unsloth/gemma-3-4b-it-GGUF:Q8_0', status: 'unloaded', path: 'C:/models/gemma-3-4b-it-Q8_0.gguf' },
+];
+const fakeLlama = createServer((req, res) => {
+  const url = new URL(req.url ?? '/', 'http://fake');
+  const json = (body: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(body)); };
+  if (req.method === 'GET' && url.pathname === '/health') return json({ status: 'ok' });
+  if (req.method === 'GET' && url.pathname === '/props') return json({ default_generation_settings: { n_ctx: 16384 } });
+  if (req.method === 'GET' && url.pathname === '/models') return json({ data: fakeLlamaModels.map((model) => ({ id: model.id, path: model.path, status: { value: model.status, failed: model.failed === true, ...(model.progress ? { progress: { file: model.progress } } : {}) }, architecture: { input_modalities: ['text'] } })) });
+  if (req.method === 'GET' && url.pathname === '/models/sse') { res.setHeader('Content-Type', 'text/event-stream'); res.write(':\n\n'); return; }
+  let body = '';
+  req.on('data', (chunk) => { body += chunk; });
+  req.on('end', () => {
+    const { model } = JSON.parse(body || '{}') as { model?: string };
+    const found = fakeLlamaModels.find((item) => item.id === model);
+    if (url.pathname === '/models' && model && !found) {
+      const row: (typeof fakeLlamaModels)[number] = { id: model, status: 'downloading', path: null, progress: { done: 0, total: 4_000_000_000 } };
+      fakeLlamaModels.push(row);
+      const tick = setInterval(() => {
+        row.progress!.done = Math.min(row.progress!.total, row.progress!.done + 250_000_000);
+        if (row.progress!.done >= row.progress!.total) { clearInterval(tick); row.status = 'unloaded'; row.path = 'C:/models/' + model.replace(/[/:]/g, '_') + '.gguf'; delete (row as { progress?: unknown }).progress; }
+      }, 1000);
+      return json({ ok: true });
+    }
+    if (url.pathname === '/models/load' && found) { found.status = 'loaded'; return json({ ok: true }); }
+    if (url.pathname === '/models/unload' && found) {
+      if (found.status === 'downloading') fakeLlamaModels.splice(fakeLlamaModels.indexOf(found), 1); else found.status = 'unloaded';
+      return json({ ok: true });
+    }
+    res.statusCode = 404; json({ error: 'not found' });
+  });
+});
+await new Promise<void>((resolve) => fakeLlama.listen(0, '127.0.0.1', resolve));
+const fakeLlamaUrl = `http://127.0.0.1:${(fakeLlama.address() as { port: number }).port}/v1`;
 devCfg.providers={
  deepseek:{kind:'openai-responses-compat',baseUrl:'https://api.deepseek.com',secret:'DEEPSEEK_API_KEY',spec:{model:'deepseek-v4-pro',thinking:true,reasoningEffort:'low',temperature:1},pricing:[]},
  openrouter:{kind:'openai-responses-compat',baseUrl:'https://openrouter.ai/api/v1',secret:'OPENROUTER_API_KEY',multimodal:true,spec:{model:'anthropic/claude-sonnet-5',thinking:true,reasoningEffort:'medium',contextWindow:200000},
   pricing:[{models:['*'],currency:'USD',basis:'marginal',source:'console',rules:[{meter:'cachedInput',perMillion:0.3},{meter:'uncachedInput',perMillion:3},{meter:'output',perMillion:15}]}]},
  custom:{kind:'openai-responses-compat',baseUrl:'http://127.0.0.1:8090/v1',spec:{model:'local',thinking:false},options:{extraBody:{service_tier:'flex'}},pricing:[]},
- local:{kind:'llamacpp',baseUrl:'http://127.0.0.1:8090/v1',spec:{model:'ggml-org/Qwen3-8B-GGUF:Q4_K_M',thinking:true},
+ local:{kind:'llamacpp',baseUrl:fakeLlamaUrl,spec:{model:'ggml-org/Qwen3-8B-GGUF:Q4_K_M',thinking:true},
   options:{runtime:{release:'b10930',backend:'cuda-13.3'},launch:{contextSize:16384,nGpuLayers:99,parallel:1,extraArgs:''},autoStart:false},pricing:[]},
  external:{kind:'llamacpp',baseUrl:'http://127.0.0.1:8080/v1',pricing:[]},
 };
@@ -1220,10 +1261,12 @@ const app = new WebApp({
         ],
         ...(stale ? { deprecated: '不再维护,改用 cortico-world-webhook (dev 假数据)' } : {}),
         ...(broken
-          ? { problems: [`扩展要求契约 v9,本框架只到 v${EXTENSION_API_VERSION}:框架需要升级。`] }
-          : { manifest: { kind: 'world' as const, api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' } }),
+          ? { problems: [`扩展要求 world 契约 v9,本框架的 world 契约只到 v${EXTENSION_API_VERSIONS.world}:框架需要升级。`] }
+          : {
+              manifest: { kind: 'world' as const, api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
+              frameworkApi: EXTENSION_API_VERSIONS.world,
+            }),
         warnings: [],
-        frameworkApi: EXTENSION_API_VERSION,
         engines: '>=22',
         unpackedSize: 184074,
         fileCount: 41,

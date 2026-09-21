@@ -1749,17 +1749,23 @@
 .connection-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--paper);cursor:pointer;transition:background .15s,border-color .15s}
 .connection-card.is-active{border-color:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
 .connection-card.is-selected{background:color-mix(in srgb,var(--ink) 5%,var(--paper));outline:2px solid var(--ink-dim);outline-offset:1px}
-.connection-name,.connection-kind,.connection-model,.connection-url,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.connection-name{font:700 17px/1.25 var(--sans)}.connection-kind{margin-top:4px;font:600 11.5px/1.3 var(--sans);color:var(--muted-foreground)}.connection-model{margin-top:9px;font-size:13px}.connection-url{font-size:11px;color:var(--ink-dim);margin-top:3px}
+.connection-name,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.connection-name{font:700 17px/1.25 var(--sans)}
+.connection-facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-width:0}
+.connection-facts .kv{max-width:100%}.connection-facts .kv-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv-kind{--kv-line:color-mix(in srgb,var(--ink-blue) 60%,transparent)}.kv-model{--kv-line:color-mix(in srgb,var(--accent-2) 75%,transparent)}.kv-baseUrl{--kv-line:var(--line-strong)}
 .connection-status{font-size:12px;margin-top:14px}.connection-secondary{font-size:11px;color:var(--ink-dim)}
-.connection-card .rowbar{margin-top:12px;justify-content:space-between;gap:4px}
 .connection-detail{min-width:0}.connection-detail .sheet{margin-bottom:16px}
+.connection-identity{background:var(--paper-2);border-color:var(--line-2)}
+.connection-identity+.connection-flow{margin-top:22px;padding-top:18px;border-top:1px dashed var(--line-2)}
+.connection-flow{counter-reset:step}.connection-step{counter-increment:step;min-width:0}
+.connection-step td.mono{white-space:normal;overflow-wrap:anywhere}
+.connection-step table.data .btn{white-space:nowrap}
+.connection-step>.sheet>h3::before,.connection-step>details.sheet>summary>h3::before{content:counter(step);display:inline-grid;place-items:center;width:20px;height:20px;margin-right:9px;border-radius:50%;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font:600 11px/1 var(--mono);vertical-align:2px}
 .connection-detail .connection-field{margin-bottom:15px}.connection-detail input:not([type=checkbox]),.connection-detail select,.connection-detail textarea{max-width:100%;width:100%}
 .connection-detail .field-error{color:var(--danger,#b43c38);font-size:12px;min-height:0}.connection-shared{color:var(--ink-dim);font-size:12px;line-height:1.7;margin:20px 0 12px}
 .connection-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.connection-actions .grow{flex:1}
 @media(max-width:760px){.connection-hub{grid-template-columns:1fr}.connection-index{position:static;max-height:320px}.connection-cards{grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}}
-.connection-guard{position:fixed;inset:0;margin:auto;width:fit-content;max-height:calc(100dvh - 32px);overflow:auto;border:1px solid var(--line);border-radius:16px;padding:24px;background:var(--paper);color:var(--ink);max-width:min(560px,calc(100vw - 32px));box-shadow:0 12px 60px #0003}
-.connection-guard::backdrop{background:#0005}.connection-guard h3{margin-bottom:20px}
 
 .live-summary { flex-wrap:wrap; }
 .live-connection { display:inline-flex; align-items:center; gap:7px; min-width:0; max-width:48%; background:none; border:0; color:var(--ink-soft); cursor:pointer; padding:0; font:11.5px/1 var(--sans); }
@@ -1807,11 +1813,11 @@
 .coreview > .scroll { scrollbar-gutter: auto; }
 .panelslot > :first-child > .sheet:first-child { padding-top: 0; }
 
-/* 卡片删除。 */
+/* 卡片:连接在右上,删除在右下,图标底边对齐状态行。 */
 .connection-create { margin-bottom:16px; }
 .connection-create-hint { margin:7px 2px 0; font:var(--text-detail)/1.5 var(--sans); color:var(--muted-foreground); }
 .connection-create > .btn { width:100%; }
-.connection-card { position:relative; }
+.connection-card { position:relative; padding-right:64px; }
 .connection-erase { position:absolute; bottom:13px; right:13px; display:flex; align-items:center; gap:0; height:28px; padding:0 4px; border:1px solid transparent; border-radius:8px; background:none; color:var(--ink-dim); cursor:pointer; transition:color .14s ease, background .14s ease, border-color .14s ease, gap .18s ease; }
 .connection-erase .icon { width:20px; height:20px; flex:none; }
 .connection-erase:hover { color:var(--danger,#b43c38); background:var(--hover); }
@@ -1819,29 +1825,15 @@
 .connection-erase-text > span { overflow:hidden; }
 .connection-erase.is-armed { gap:6px; color:var(--danger,#b43c38); border-color:currentColor; background:var(--paper); }
 .connection-erase.is-armed .connection-erase-text { grid-template-columns:1fr; }
-.connection-name { padding-right:34px; }
-.required-mark { color:var(--danger); }
-.connection-card { position:relative; padding-right:64px; }
 .connection-connect { position:absolute; top:12px; right:12px; width:32px; text-align:center; }
 .connection-connect[hidden] { display:none; }
-.connection-hub .btn.connection-activate { display:block; width:32px; height:28px; min-height:28px; padding:0; border:0; font-size:22px; line-height:28px; }
+.connection-hub .btn.connection-activate { display:block; width:32px; height:28px; min-height:28px; padding:0; border:0; font-size:17px; line-height:28px; }
 .connection-connect-label { display:block; font-size:10px; line-height:14px; color:var(--muted-foreground); }
 .connection-index { scrollbar-width:none; }
 .connection-index::-webkit-scrollbar { display:none; }
-.connection-detail .connection-transport { border-top:0; padding-top:0; }
+.required-mark { color:var(--danger); }
 .connection-test { gap:12px; align-items:center; }
 .connection-test .msgline { margin:0; }
-.connection-detail details.connection-module > .foldbody { padding-top:12px; padding-bottom:0; }
-.connection-detail .connection-module .sheet { padding:0; margin:0; }
-.connection-module-panels > div + div { margin-top:20px; }
-.connection-module .rowbar:has(> .fieldrow > select) { align-items:flex-end; }
-.connection-module .rowbar > .fieldrow:has(> select) { flex:1; min-width:0; margin:0; }
-.connection-module .rowbar > .fieldrow > select { width:100%; }
-.connection-module .placeholder { padding:10px 0; min-height:0; text-align:left; font:var(--text-detail)/1.55 var(--sans); color:var(--muted-foreground); }
-
-.connection-name { padding-right:0; }
-.connection-detail .connection-basic { padding-bottom:4px; margin-bottom:8px; }
-.connection-hub .btn.connection-activate { font-size:17px; }
 .connection-status[data-tone="active"] { color:var(--accent); }
 .connection-status[data-tone="ready"] { color:var(--ok); }
 .connection-status[data-tone="error"], .connection-secondary[data-tone="error"] { color:var(--danger); }

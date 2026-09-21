@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
-import { EXTENSION_API_VERSION } from '../src/extensions/manifest.ts';
+import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extensions-')); });
@@ -39,7 +39,7 @@ function installFake(name: string, opts: {
   mkdirSync(pkgDir, { recursive: true });
   writeFileSync(join(pkgDir, 'package.json'), JSON.stringify({
     name, version: '1.2.3', type: 'module', main: './index.js',
-    keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSION },
+    keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world },
     ...(opts.pkg ?? {}),
   }));
   writeFileSync(join(pkgDir, 'index.js'), opts.body ?? definitionSource('x'));
@@ -61,7 +61,7 @@ describe('loadExtensions', () => {
     expect(set.worlds.map((m) => m.id)).toEqual(['alpha']);
     expect(set.records).toEqual([{
       name: '@acme/cortico-world-alpha', spec: '^1.0.0', version: '1.2.3', description: '甲',
-      kind: 'world', api: EXTENSION_API_VERSION, consoleClient: false, console: 'none',
+      kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: false, console: 'none',
       loaded: true, worldId: 'alpha', label: 'alpha 扩展',
     }]);
     // 定义是活的:defaults / create 都能调
@@ -102,7 +102,7 @@ describe('loadExtensions', () => {
       pkg: {
         main: undefined,
         exports: { '.': { import: './esm.js', require: './cjs.js' } },
-        cortico: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/client.js' },
+        cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/client.js' },
       },
       body: 'nope',
     });
@@ -272,7 +272,7 @@ describe('ExtensionManager', () => {
     installFake('a-mod');
     const version = {
       name: 'a-mod', version: '2.0.0', type: 'module', main: './index.js', license: 'MIT',
-      keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' },
+      keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
       engines: { node: '>=22' }, dependencies: { ws: '^8' }, dist: { unpackedSize: 2048, fileCount: 9 },
       maintainers: [{ username: 'me' }], _npmUser: { name: 'me' },
       repository: { url: 'git+ssh://git@github.com/me/a-mod.git' }, homepage: 'https://example.invalid',
@@ -292,8 +292,8 @@ describe('ExtensionManager', () => {
     expect(info).toMatchObject({
       name: 'a-mod', version: '2.0.0', license: 'MIT', published: '2026-03-02T00:00:00.000Z',
       created: '2026-01-01T00:00:00.000Z', versionCount: 2,
-      manifest: { kind: 'world', api: EXTENSION_API_VERSION, consoleClient: 'dist/console.js' },
-      frameworkApi: EXTENSION_API_VERSION, engines: '>=22', unpackedSize: 2048, fileCount: 9,
+      manifest: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
+      frameworkApi: EXTENSION_API_VERSIONS.world, engines: '>=22', unpackedSize: 2048, fileCount: 9,
       dependencies: ['ws'], maintainers: ['me'], installed: true, installedSpec: '^1.0.0',
       links: { npm: 'https://www.npmjs.com/package/a-mod', repository: 'https://github.com/me/a-mod', homepage: 'https://example.invalid' },
     });

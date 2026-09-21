@@ -176,6 +176,21 @@ describe("Provider 构造检查", () => {
     expect(report.failures.join('\n')).toContain('reasoningTiers');
   });
 
+  it('声明的配置路径越出本端点的 options 段是失败', () => {
+    const group = (path: string): ConfigGroup => ({
+      id: `llm.fixture.check.${path}`,
+      owner: 'provider:fixture',
+      schema: { type: 'object', title: '夹具', properties: { [path]: { type: 'string', title: '一格' } } },
+    });
+    // 框架的连接配置组占着地址与密钥;别的端点的 options 也不归这次声明。
+    for (const path of ['providers.check.baseUrl', 'providers.other.options.token', 'batching.quietGapMs']) {
+      const report = dryMountProvider(module({ config: () => [group(path)] }), { scratchDir });
+      expect(report.failures.join('\n'), path).toContain(path);
+    }
+    const own = dryMountProvider(module({ config: () => [group('providers.check.options.token')] }), { scratchDir });
+    expect(own.failures).toEqual([]);
+  });
+
   it('create() 在假端点条目下抛错只是警告', () => {
     const report = dryMountProvider(module({ create: () => { throw new Error('要 token'); } }), { scratchDir });
     expect(report.failures).toEqual([]);

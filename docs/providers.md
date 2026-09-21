@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/transport/responses-input.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts -->
 
 # Provider
 
@@ -32,14 +32,18 @@ provider 模块不预设任何模型名;端点
 ## 控制台
 
 模型供应商页列出共享端点,一次编辑其中一条。选中一条不改变 `activeProvider`,「设为当前」只写
-当前部署的那一项。字段改动暂存在浏览器,保存时整条端点一次写入配置与密钥;暂存不进共享配置,
-API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥已被别处改过就返回 409,重新加载后
-再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;还被引用的端点不能删。
-`kind` 保存后不可更改。
+当前部署的那一项。字段改动随手暂存在浏览器,切走再回来接着编,「放弃更改」丢掉暂存;保存时整条端点
+一次写入配置与密钥;暂存不进共享配置,API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥
+已被别处改过就返回 409,重新加载后再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;
+还被引用的端点不能删。`kind` 保存后不可更改。
 
-模块自己的配置与面板照旧由 ConfigGroup 和 `instance` 插槽声明,面板的 `setConfig` 同样只进
-暂存;运行时启停、安装与模型列表要求端点已保存。「测试连接」按磁盘上的配置发一次请求,不参与
-可用性判断。
+编辑页的段落顺序由模块声明:模块在 `console()` 的 `panels` 里把编辑页自带的
+四块(`connection-endpoint` 地址与密钥、`connection-model` 模型与生成、`connection-pricing` 计价、
+`connection-protocol` 协议,默认文案由 `connectionBlocks` 给)与自己的面板排成一列,标题与说明可改;
+一块都不声明的模块得到默认顺序,自家面板排在模型与计价之间。`openai-responses-compat` 是
+连接→模型→思维链→计价→协议,`llamacpp` 是服务地址→运行时→模型→模型与生成→计价→协议。
+面板的 `setConfig` 同样只进暂存;运行时启停、安装与拉取模型要求端点已保存。「测试连接」与
+「获取模型列表」按编辑页当前内容(含刚输入的 API Key)发请求,不写盘,不参与可用性判断。
 
 控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 从磁盘直接加载的名字按字面匹配;密钥值写入端点 `.env` 的同名项。
@@ -58,7 +62,9 @@ API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥�
 `POST <baseUrl>/responses`,每次请求重放完整上下文。历史推理按 `options.reasoningReplay` 回传:
 `encrypted`(默认)只回 `encrypted_content`,且只回来源实例、模块、兼容域与模型均匹配的项,受
 `keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传,最后一条 user 消息之后的
-那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理。模块的 `detect`
+那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理。签名块要靠
+`include` 取回,所以只有 `encrypted` 形态的请求带 `include: ['reasoning.encrypted_content']`;
+不认 `include` 的端点因此只在这一形态上会拒收整条请求。模块的 `detect`
 探测发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种写回 `reasoningReplay`。
 `options.endpointPath`、
 `options.extraHeaders`、`options.extraBody` 分别改路径、加头、并进请求体(`extraBody` 最后
@@ -86,8 +92,11 @@ API Key 不写入浏览器。保存带上读取时的 revision,配置或密钥�
   端点已有外部服务时不接管该进程。
 
 模型段落调用 llama-server 的 `/models*` 接口。输入 HuggingFace 仓库 id 后，由服务器
-下载到缓存，面板从接口读取进度和状态。本机 GGUF 放入 `local/` 目录后需要重新扫描。
-`spec.model` 使用模型列表中的 id，首次请求时由 router 自动加载。
+下载到缓存，面板从接口读取进度和状态。搜索框查 HuggingFace 上带 `gguf` 标签的仓库,站点与
+llama-server 拉取的同一个(`MODEL_ENDPOINT`,其次 `HF_ENDPOINT`,缺省 huggingface.co);点开一个仓库
+列出它的 GGUF 文件,量化标签从文件名读出,「拉取」按 `仓库:标签` 下载。本机 GGUF 放入 `local/`
+目录后需要重新扫描。`spec.model` 使用模型列表中的 id，「选用」把它填进模型段落,首次请求时由
+router 自动加载。
 目录约定见 [runtimes.md](runtimes.md)。
 
 ## 传输

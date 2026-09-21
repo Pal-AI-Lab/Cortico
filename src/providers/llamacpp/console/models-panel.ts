@@ -1,10 +1,13 @@
 /**
- * Model section of one endpoint: what llama-server knows, and pulling more.
- * The endpoint comes from `ctx.scope.instance`.
+ * Model section of one endpoint: what llama-server knows, a HuggingFace search that feeds the
+ * pull field, and `use` to put a served model into the model section. The endpoint comes from
+ * `ctx.scope.instance`.
  */
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
+import type { HfFile, HfRepo } from '../huggingface.ts';
 import type { ModelsState } from './server.ts';
 import { panel } from '../strings.ts';
+import { HITS_PER_PAGE } from '../../../web/client/features/extensions/index.ts';
 
 const POLL_MS = 2_000;
 
@@ -22,8 +25,12 @@ export const modelsPanel: ConsolePanel = {
     const card = ui.sheet({ title: S.modelsTitle });
     const message = ui.msgline();
     root.append(card.el, message);
-    /** The pull input survives a re-render: the operator types while the poll redraws the card. */
+    /** Typed text and search results survive a re-render: the poll redraws the card around them. */
     let draft = '';
+    let query = '';
+    let repos: HfRepo[] | null = null;
+    let searchNote = '';
+    let chosen: { repo: string; files: HfFile[] } | null = null;
     let lastSnapshot = '';
 
     async function act(method: string, extra: Record<string, unknown> = {}): Promise<void> {
@@ -34,6 +41,76 @@ export const modelsPanel: ConsolePanel = {
         message.textContent = String(error);
       }
       await load(true);
+    }
+
+    async function search(text: string): Promise<void> {
+      const wanted = text.trim();
+      if (!wanted) return;
+      query = wanted;
+      chosen = null;
+      try {
+        // One page of results, the console's page size for search hits.
+        const result = await ctx.invoke<{ repos: HfRepo[] }>('search', [{ name, query: wanted, limit: HITS_PER_PAGE }]);
+        repos = result.repos;
+        searchNote = repos.length ? '' : S.noRepos;
+      } catch (error) {
+        repos = [];
+        searchNote = S.searchFailed(String(error));
+      }
+      await load(true);
+    }
+
+    async function showFiles(repo: string): Promise<void> {
+      try {
+        chosen = { repo, files: (await ctx.invoke<{ files: HfFile[] }>('files', [{ name, repo }])).files };
+      } catch (error) {
+        message.textContent = String(error);
+        return;
+      }
+      await load(true);
+    }
+
+    function renderSearch(body: HTMLElement): void {
+      const bar = ui.rowbar();
+      const input = ui.input({
+        placeholder: S.searchPlaceholder,
+        value: query,
+        onCommit: (value) => void search(value),
+      });
+      input.setAttribute('aria-label', S.search);
+      bar.append(input, ui.button(S.search, { onClick: () => void search(input.value) }));
+      body.append(ui.field(S.search, bar));
+      if (repos === null) return;
+      if (searchNote) body.append(ui.msgline(searchNote, repos.length === 0 && searchNote !== S.noRepos));
+      if (repos.length) {
+        const table = ui.table({ head: [S.repo, S.downloads, S.likes, S.updated, ''] });
+        for (const repo of repos) {
+          const open = ui.button(S.showFiles, { size: 'sm', onClick: () => void showFiles(repo.id) });
+          table.addRow([
+            { text: repo.id, cls: 'mono' },
+            ui.fmt.count(repo.downloads),
+            ui.fmt.count(repo.likes),
+            repo.updatedAt ? repo.updatedAt.slice(0, 10) : '',
+            open,
+          ]);
+        }
+        body.append(table.el);
+      }
+      if (!chosen) return;
+      body.append(ui.section(S.filesOf(chosen.repo)));
+      const files = ui.table({ head: [S.file, S.size, S.tag, ''] });
+      if (chosen.files.length === 0) files.clear(S.noFiles);
+      for (const file of chosen.files) {
+        const pull = ui.button(S.pull, { size: 'sm', variant: 'primary', onClick: () => void act('pull', { model: file.pull }) });
+        pull.title = file.pull;
+        files.addRow([
+          { text: file.name, cls: 'mono' },
+          file.bytes === null ? '' : bytes(file.bytes),
+          { text: file.tag ?? '', cls: 'mono' },
+          pull,
+        ]);
+      }
+      body.append(files.el);
     }
 
     function render(state: ModelsState, body: HTMLElement): void {
@@ -79,13 +156,18 @@ export const modelsPanel: ConsolePanel = {
           });
           status.append(progress.el);
         }
-        const actions = ui.h('div');
+        const actions = ui.rowbar();
         if (model.status === 'downloading')
           actions.append(ui.button(S.cancel, { size: 'sm', onClick: () => void act('cancel', { model: model.id }) }));
         else if (model.status === 'loaded' || model.status === 'sleeping')
           actions.append(ui.button(S.unload, { size: 'sm', onClick: () => void act('unload', { model: model.id }) }));
         else if (model.status === 'unloaded' || model.status === 'failed')
           actions.append(ui.button(S.load, { size: 'sm', onClick: () => void act('load', { model: model.id }) }));
+        if (model.status !== 'downloading') {
+          const use = ui.button(S.use, { size: 'sm', onClick: () => void act('use', { model: model.id }) });
+          use.title = S.useTitle;
+          actions.append(use);
+        }
         table.addRow([
           { text: model.id, cls: 'mono' },
           status,
@@ -95,6 +177,7 @@ export const modelsPanel: ConsolePanel = {
         ]);
       }
       body.append(table.el);
+      renderSearch(body);
     }
 
     async function load(force = false): Promise<void> {

@@ -56,6 +56,8 @@ export class ProviderRegistry {
     private readonly entries: () => Record<string, LLMProviderEntry>,
     private readonly host: ProviderHostBase,
     private readonly modules: readonly ProviderModule[] = providerModules,
+    /** Secrets read before the process environment and the endpoint `.env`; preview registries carry the typed, unsaved key here. */
+    private readonly secretOverrides: Readonly<Record<string, string>> = {},
   ) {}
 
   private module(kind: string): ProviderModule {
@@ -64,9 +66,16 @@ export class ProviderRegistry {
     return module;
   }
 
-  /** Preview instances use a detached entry and never enter the live instance cache. */
+  /**
+   * A registry over one detached entry. Its instances never enter the live cache; `secrets`
+   * are the values the console holds but has not written to the endpoint's `.env`.
+   */
+  previewRegistry(name: string, entry: LLMProviderEntry, secrets: Readonly<Record<string, string>> = {}): ProviderRegistry {
+    return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules, secrets);
+  }
+
   preview(name: string, entry: LLMProviderEntry): ProviderInstance {
-    return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules).resolve(name);
+    return this.previewRegistry(name, entry).resolve(name);
   }
 
   resolve(name: string): ProviderInstance {
@@ -81,10 +90,11 @@ export class ProviderRegistry {
     // 按端点名分岔的两样在这里填:模块自己的目录,与只读那个目录的密钥链。
     const { stateRoot, ...base } = this.host;
     const stateDir = join(stateRoot, name);
+    const stored = secretReader(join(stateDir, '.env'));
     const value = module.create(name, entry, {
       ...base,
       stateDir,
-      secret: secretReader(join(stateDir, '.env')),
+      secret: (key) => this.secretOverrides[key] ?? stored(key),
       currentEntry: () =>
         module.normalize?.(structuredClone(this.entries()[name])) ?? this.entries()[name],
       resource: <T>(resource: string, create: () => T): T => {

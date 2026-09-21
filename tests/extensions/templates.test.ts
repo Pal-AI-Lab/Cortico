@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { EXTENSION_API_VERSION, EXTENSION_KEYWORDS, parseExtensionManifest, type ExtensionPackageJson } from '../../src/extensions/manifest.ts';
+import { EXTENSION_API_VERSIONS, EXTENSION_KEYWORDS, parseExtensionManifest, type ExtensionPackageJson } from '../../src/extensions/manifest.ts';
 import { isBotDefinition, isProviderModule, isWorldDefinition, resolveExtensionEntry } from '../../src/extensions.ts';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld } from '../../src/extensions/dry-mount.ts';
 import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
@@ -29,7 +29,7 @@ async function loadTemplate(kind: 'world' | 'provider' | 'bot') {
   if (!parsed.ok) throw new Error('unreachable');
   expect(parsed.warnings).toEqual([]);
   expect(parsed.manifest.kind).toBe(kind);
-  expect(parsed.manifest.api).toBe(EXTENSION_API_VERSION);
+  expect(parsed.manifest.api).toBe(EXTENSION_API_VERSIONS[kind]);
   expect(pkg.keywords).toContain(EXTENSION_KEYWORDS[kind]);
   const entry = resolveExtensionEntry(pkgDir, pkg);
   expect(existsSync(entry)).toBe(true);
