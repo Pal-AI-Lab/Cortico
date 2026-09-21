@@ -4,6 +4,7 @@
  */
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { CoreConfig, LLMProviderEntry } from './core/types.ts';
 
 export const RESTART_FLAG_FILE = '.restart-request';
 
@@ -61,4 +62,14 @@ export function listensOnEveryInterface(bound: string | null): boolean {
 export function consoleUrlOf(bound: string | null, port: number): string {
   const host = bound === null || listensOnEveryInterface(bound) ? '127.0.0.1' : bound.includes(':') ? `[${bound}]` : bound;
   return `http://${host}:${port}/`;
+}
+
+/** 空选择允许进入控制台完成配置；非空名称必须引用已有连接。 */
+export function providerAtBoot(config: Pick<CoreConfig, 'activeProvider' | 'providers'>): LLMProviderEntry | undefined {
+  if (!config.activeProvider) return undefined;
+  const entry = config.providers[config.activeProvider];
+  if (!entry) {
+    throw new Error(`activeProvider="${config.activeProvider}" 在 providers 段里不存在(现有: ${Object.keys(config.providers).join(' / ') || '无'})`);
+  }
+  return entry;
 }

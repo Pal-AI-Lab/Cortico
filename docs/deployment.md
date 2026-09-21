@@ -72,7 +72,7 @@ pnpm start <部署名>
 | `--log-level=<级别>`、`CORTICO_LOG` | 写入日志文件的最低级别，覆盖 `config.json` |
 | `--force-second-instance` | 绕过单实例锁 |
 
-启动前校验 `activeProvider` 必须在端点表里,不在直接退出。它声明的 `secret` 读不到(进程环境
+`activeProvider` 为空或选中连接尚未配置模型时允许启动，可进入控制台完成配置。非空名称必须在端点表里，不在则退出。连接声明的 `secret` 读不到(进程环境
 或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「模型提供商」页修改密钥变量名或补填密钥，
 保存后下一次模型调用生效，不必重启。
 

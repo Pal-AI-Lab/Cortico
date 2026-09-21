@@ -13,7 +13,7 @@ import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
-import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused } from './boot.ts';
+import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
 import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
@@ -179,16 +179,10 @@ async function main(): Promise<void> {
   // 重启标志必须在装配与 session 加载之前处理
   consumeBootFlags(loaded.dataDir);
 
-  const activeProvider = cfg.providers?.[cfg.activeProvider];
-  if (!activeProvider) {
-    console.error(
-      `activeProvider="${cfg.activeProvider}" 在 providers 段里不存在(现有: ${Object.keys(cfg.providers ?? {}).join(' / ') || '无'})`,
-    );
-    process.exit(1);
-  }
-  const endpointDir = providerDir(cfg.activeProvider);
+  const activeProvider = providerAtBoot(cfg);
+  const endpointDir = activeProvider ? providerDir(cfg.activeProvider) : null;
   const missingSecret =
-    activeProvider.secret && !secretReader(resolve(endpointDir, '.env'))(activeProvider.secret)
+    activeProvider?.secret && endpointDir && !secretReader(resolve(endpointDir, '.env'))(activeProvider.secret)
       ? activeProvider.secret
       : null;
 
@@ -222,8 +216,8 @@ async function main(): Promise<void> {
         ? `  扩展:      ${ext.name}@${ext.version} · bot 包,本部署未引用`
         : `  扩展:      ${ext.name} 未加载: ${ext.reason}`);
   }
-  console.log(`  主模型:    ${bot.core.mainSessionSpec().model}`);
-  if (missingSecret) {
+  console.log(`  主模型:    ${activeProvider?.spec?.model || '未配置；请在控制台「模型供应商」页选择连接与模型'}`);
+  if (missingSecret && endpointDir) {
     const envFile = resolve(endpointDir, '.env');
     const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
     console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「模型提供商」页修改密钥变量名或补填密钥`);

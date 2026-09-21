@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import type { LLMProviderEntry } from '../src/core/types.ts';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   announceDataDir,
+  providerAtBoot,
   consoleUrlOf,
   consumeBootFlags,
   isSupervised,
@@ -100,5 +102,26 @@ describe('consoleUrlOf', () => {
     expect(consoleUrlOf('192.168.1.20', 7777)).toBe('http://192.168.1.20:7777/');
     expect(consoleUrlOf('::1', 7777)).toBe('http://[::1]:7777/');
     expect(consoleUrlOf(null, 7777)).toBe('http://127.0.0.1:7777/');
+  });
+});
+
+describe('启动时的供应商选择', () => {
+  const entry = { kind: 'fixture', baseUrl: 'https://example.invalid' };
+
+  const providerTables: Record<string, LLMProviderEntry>[] = [{}, { endpoint: entry }];
+  it.each(providerTables)('未选择连接时允许进入控制台，保留已有端点', (providers) => {
+    const config = { activeProvider: '', providers };
+    expect(providerAtBoot(config)).toBeUndefined();
+    expect(config.activeProvider).toBe('');
+    expect(config.providers).toEqual(providers);
+  });
+
+  it('已有连接尚未配置模型时允许启动', () => {
+    expect(providerAtBoot({ activeProvider: 'endpoint', providers: { endpoint: entry } })).toEqual(entry);
+  });
+
+  it('显式选择不存在的连接时给出可用名称', () => {
+    expect(() => providerAtBoot({ activeProvider: 'missing', providers: { endpoint: entry } }))
+      .toThrow('activeProvider="missing" 在 providers 段里不存在(现有: endpoint)');
   });
 });
