@@ -38,4 +38,13 @@ describe('secretReader', () => {
     const file = envFile(Buffer.from('OTHER=1\n', 'utf8'));
     expect(secretReader(file)(NAME)).toBe('');
   });
+
+  it('进程不重启时改写 .env 后读到新值', () => {
+    vi.stubEnv(NAME, '');
+    const file = envFile(Buffer.from(`${NAME}=first\n`, 'utf8'));
+    const read = secretReader(file);
+    expect(read(NAME)).toBe('first');
+    writeFileSync(file, Buffer.from(`${NAME}=second\n`, 'utf8'));
+    expect(read(NAME)).toBe('second');
+  });
 });
