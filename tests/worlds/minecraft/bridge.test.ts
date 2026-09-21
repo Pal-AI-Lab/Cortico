@@ -681,6 +681,16 @@ describe('bridge 挖掘失败退避', () => {
  * 夹具使用真实 HTTP 和 socket.io，并复现上游 close 语义；以端口能否重新绑定验证释放。
  */
 describe('bridge viewer 端口生命周期', () => {
+  /**
+   * 这一条加载真模块,下面的用例用假模块只测端口生命周期。`lib/mineflayer.js` 经
+   * `viewer/index.js` → `viewer/lib/viewer.js` → `viewer/lib/entities.js` 顶层 require canvas,
+   * 上游只把 canvas 列进自己的 devDependencies,所以它由本仓库声明。
+   */
+  it('viewer 模块装得起来', async () => {
+    const mod = (await import('prismarine-viewer')) as { default: { mineflayer: unknown } };
+    expect(typeof mod.default.mineflayer).toBe('function');
+  });
+
   const viewerReq = createRequire(createRequire(import.meta.url).resolve('prismarine-viewer/package.json'));
   const { Server: IOServer } = viewerReq('socket.io') as {
     Server: new (srv: unknown, opts: unknown) => {
