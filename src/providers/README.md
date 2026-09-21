@@ -38,7 +38,7 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 `compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。
 
 `ProviderHost` 给实例:`stateDir`(`<部署根>/providers/<端点名>/`,归实例独占)、`repoRoot`、
-`resource()`、`currentEntry()`、`secret(name)`(进程环境优先,否则读 `stateDir/.env` 一次)、
+`resource()`、`currentEntry()`、`secret(name)`(进程环境优先,否则现读 `stateDir/.env`)、
 `readBlob()`、`keepThinking()`、`log`。
 
 ## 注册与解析
@@ -47,10 +47,11 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 之前通过 `registerProviderModules()` 注册,id 重复时抛错。
 
 `ProviderRegistry.resolve(name)`:按 `entry.kind` 找模块,`normalize`,以去掉 `pricing` 与
-`spec` 的条目 JSON 为缓存键(改模型或价格不重建实例),填 `stateDir` 与 `secret`。
+`spec` 的条目 JSON 加端点 `.env` 的内容指纹为缓存键(改模型或价格不重建实例,密钥文件变更后
+下一次解析重建),填 `stateDir` 与 `secret`。
 `bind(name)` 在实例外包一层:注入 `quote`(报价快照)与 `origin`(实例、模块、模型、
 `compatibilityDomain` = sha256(kind + baseUrl + `compatibilityKey()`))。Responses 历史推理仅在实例、
-模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存;写入 `.env` 后必须调用,每个实例仅缓存一次文件内容。
+模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,控制台保存端点后调用;`.env` 变更经缓存键在下一次解析生效。
 
 ## 配置形状
 

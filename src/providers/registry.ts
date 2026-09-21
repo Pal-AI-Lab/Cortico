@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 import type { LLMProviderEntry } from '../core/types.ts';
@@ -84,13 +84,16 @@ export class ProviderRegistry {
     const module = this.module(raw.kind);
     const entry = module.normalize?.(structuredClone(raw)) ?? structuredClone(raw);
     const { pricing: _pricing, spec: _spec, ...transportEntry } = entry;
-    const key = JSON.stringify(transportEntry);
+    // 密钥在实例创建时定格,`.env` 的内容指纹进缓存键:文件变更后下一次解析重建实例。
+    const stateDir = join(this.host.stateRoot, name);
+    const envFile = join(stateDir, '.env');
+    const fingerprint = existsSync(envFile) ? createHash('sha256').update(readFileSync(envFile)).digest('hex') : '';
+    const key = JSON.stringify([transportEntry, fingerprint]);
     const previous = this.instances.get(name);
     if (previous?.key === key) return previous.value;
     // 按端点名分岔的两样在这里填:模块自己的目录,与只读那个目录的密钥链。
-    const { stateRoot, ...base } = this.host;
-    const stateDir = join(stateRoot, name);
-    const stored = secretReader(join(stateDir, '.env'));
+    const { stateRoot: _stateRoot, ...base } = this.host;
+    const stored = secretReader(envFile);
     const value = module.create(name, entry, {
       ...base,
       stateDir,
@@ -134,11 +137,7 @@ export class ProviderRegistry {
     return client;
   }
 
-  /**
-   * Drop the cached instance so the next resolve rebuilds it; `host.resource` objects
-   * survive. Secrets are read once per instance, so a key written to the endpoint's `.env`
-   * takes effect only through this.
-   */
+  /** Drop the cached instance so the next resolve rebuilds it; `host.resource` objects survive. */
   invalidate(name: string): void {
     this.instances.delete(name);
   }

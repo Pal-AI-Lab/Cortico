@@ -9,7 +9,7 @@ import { readJsonObject, updateJsonObject } from '../../config-file.ts';
 import { readTextFile } from '../../core/util.ts';
 import type { ProviderModule } from '../base.ts';
 import { validateEntry } from '../configuration.ts';
-import { validateProviderName } from '../name.ts';
+import { validateProviderName, defaultSecretName } from '../name.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
 import { quotePrices } from '../pricebook.ts';
@@ -185,7 +185,7 @@ export class ProviderHub {
       if (prior && prior.kind !== input.entry.kind) throw new ProviderHubError('Provider module cannot be changed.');
       const module = this.modules.find(m => m.id === input.entry.kind);
       if (!module) throw new ProviderHubError('Provider module is unavailable.');
-      const requested = withTypedSecret(structuredClone(input.entry), input.secretValue);
+      const requested = withTypedSecret(name, structuredClone(input.entry), input.secretValue);
       if (!requested.spec?.model) throw new ProviderHubError('Model is required.');
       const entry = validateEntry(module, requested, language);
       const prefix = `providers.${name}.`;
@@ -287,7 +287,7 @@ export class ProviderHub {
     if (!draft.entry || typeof draft.entry !== 'object') throw new ProviderHubError('Provider configuration is required.');
     const module = this.modules.find(m => m.id === draft.entry.kind);
     if (!module) throw new ProviderHubError('Provider module is unavailable.');
-    const entry = validateEntry(module, withTypedSecret(draft.entry, draft.secretValue), language);
+    const entry = validateEntry(module, withTypedSecret(name, draft.entry, draft.secretValue), language);
     const registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
     if (action === 'models') {
       const instance = registry.resolve(name);
@@ -299,10 +299,9 @@ export class ProviderHub {
   }
 }
 
-const DEFAULT_SECRET_NAME = 'CORTICO_PROVIDER_API_KEY';
-/** A typed key with no variable name declared is stored under the console's default name. */
-function withTypedSecret(entry: LLMProviderEntry, secretValue: string | undefined): LLMProviderEntry {
+/** A typed key with no variable name declared is stored under the name derived from the endpoint name. */
+function withTypedSecret(name: string, entry: LLMProviderEntry, secretValue: string | undefined): LLMProviderEntry {
   if (secretValue !== undefined && (typeof secretValue !== 'string' || !secretValue || /\s/.test(secretValue)))
     throw new ProviderHubError('API Key must be nonempty and contain no whitespace.');
-  return secretValue && !entry.secret ? { ...entry, secret: DEFAULT_SECRET_NAME } : entry;
+  return secretValue && !entry.secret ? { ...entry, secret: defaultSecretName(name) } : entry;
 }
