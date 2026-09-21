@@ -51,7 +51,7 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 下一次解析重建),填 `stateDir` 与 `secret`。
 `bind(name)` 在实例外包一层:注入 `quote`(报价快照)与 `origin`(实例、模块、模型、
 `compatibilityDomain` = sha256(kind + baseUrl + `compatibilityKey()`))。Responses 历史推理仅在实例、
-模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,控制台保存端点后调用;`.env` 变更经缓存键自动生效,不需要它。
+模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,控制台保存端点后调用;`.env` 变更经缓存键在下一次解析生效。
 
 ## 配置形状
 

@@ -84,8 +84,7 @@ export class ProviderRegistry {
     const module = this.module(raw.kind);
     const entry = module.normalize?.(structuredClone(raw)) ?? structuredClone(raw);
     const { pricing: _pricing, spec: _spec, ...transportEntry } = entry;
-    // 密钥在实例创建时定格,`.env` 的内容指纹进缓存键:文件变更后下一次解析重建实例,
-    // 手工改写或另一进程的控制台写入不需要本进程先 invalidate。
+    // 密钥在实例创建时定格,`.env` 的内容指纹进缓存键:文件变更后下一次解析重建实例。
     const stateDir = join(this.host.stateRoot, name);
     const envFile = join(stateDir, '.env');
     const fingerprint = existsSync(envFile) ? createHash('sha256').update(readFileSync(envFile)).digest('hex') : '';
@@ -138,11 +137,7 @@ export class ProviderRegistry {
     return client;
   }
 
-  /**
-   * Drop the cached instance so the next resolve rebuilds it; `host.resource` objects
-   * survive. Secrets are read once per instance, so a key written to the endpoint's `.env`
-   * takes effect only through this.
-   */
+  /** Drop the cached instance so the next resolve rebuilds it; `host.resource` objects survive. */
   invalidate(name: string): void {
     this.instances.delete(name);
   }

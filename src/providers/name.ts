@@ -8,8 +8,8 @@ export function validateProviderName(name: string): string | null {
 }
 
 /**
- * 密钥变量名缺省时的默认名,按端点名派生。读取是进程环境优先:所有端点共用一个默认名时,
- * 环境里的一个值会遮蔽每个端点各自的 `.env`,按名派生后互不遮蔽。
+ * 密钥变量名缺省时的默认名。按端点名派生(`-` 折成 `_`,与 validateEntry 的
+ * 环境变量名格式一致):读取进程环境优先,名字按端点隔离。
  */
 export function defaultSecretName(name: string): string {
   return `CORTICO_KEY_${name.toUpperCase().replace(/-/g, '_')}`;

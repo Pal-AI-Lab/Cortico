@@ -1,7 +1,4 @@
-/**
- * 实例缓存键要感知端点 `.env` 的内容:密钥在实例创建时定格,文件变更后
- * 下一次解析必须重建实例,否则手工改写或另一进程的控制台写入永不生效。
- */
+/** 实例缓存键感知端点 `.env` 的内容:文件变更后下一次解析重建实例。 */
 import { afterEach, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
