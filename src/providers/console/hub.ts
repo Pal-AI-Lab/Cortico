@@ -171,11 +171,8 @@ export class ProviderHub {
       if (prior && prior.kind !== input.entry.kind) throw new ProviderHubError('Provider module cannot be changed.');
       const module = this.modules.find(m => m.id === input.entry.kind);
       if (!module) throw new ProviderHubError('Provider module is unavailable.');
-      const requested = structuredClone(input.entry);
+      const requested = withTypedSecret(structuredClone(input.entry), input.secretValue);
       if (!requested.spec?.model) throw new ProviderHubError('Model is required.');
-      if (input.secretValue !== undefined && (typeof input.secretValue !== 'string' || !input.secretValue || /\s/.test(input.secretValue)))
-        throw new ProviderHubError('API Key must be nonempty and contain no whitespace.');
-      if (input.secretValue && !requested.secret) requested.secret = 'CORTICO_PROVIDER_API_KEY';
       const entry = validateEntry(module, requested, language);
       const prefix = `providers.${name}.`;
       for (const group of this.groups(name, entry, language)) {
@@ -259,12 +256,39 @@ export class ProviderHub {
       rmSync(tomb, { recursive: true, force: true });
     });
   }
-  async action(name: string, action: string, language: Language) {
+  /**
+   * Probe (`test`) or list models (`models`). With `draft`, the request goes through an instance
+   * built from the browser's entry and typed key; nothing is written, and `name` may not exist yet.
+   */
+  async action(name: string, action: 'test' | 'models', language: Language, draft?: { entry: LLMProviderEntry; secretValue?: string }) {
     this.refresh();
-    const entry = this.config.providers[name];
-    if (!entry) throw new ProviderHubError('Provider does not exist.', 404);
-    const source = this.settings.sources().find(source => source.id === `llm:${entry.kind}`);
-    if (!source) throw new ProviderHubError('Provider module is unavailable.');
-    return source.contribute(language).invoke!('settings', action === 'test' ? 'probe' : 'models', [{ name }]);
+    if (!draft) {
+      const entry = this.config.providers[name];
+      if (!entry) throw new ProviderHubError('Provider does not exist.', 404);
+      const source = this.settings.sources().find(source => source.id === `llm:${entry.kind}`);
+      if (!source) throw new ProviderHubError('Provider module is unavailable.');
+      return source.contribute(language).invoke!('settings', action === 'test' ? 'probe' : 'models', [{ name }]);
+    }
+    this.path(name);
+    if (!draft.entry || typeof draft.entry !== 'object') throw new ProviderHubError('Provider configuration is required.');
+    const module = this.modules.find(m => m.id === draft.entry.kind);
+    if (!module) throw new ProviderHubError('Provider module is unavailable.');
+    const entry = validateEntry(module, withTypedSecret(draft.entry, draft.secretValue), language);
+    const registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
+    if (action === 'models') {
+      const instance = registry.resolve(name);
+      if (!instance.listModels) throw new ProviderHubError('This module does not list models.');
+      return { models: await instance.listModels() };
+    }
+    if (!entry.spec) throw new ProviderHubError('Model is required.');
+    return this.settings.probeClient(registry.bind(name), entry.spec, language);
   }
+}
+
+const DEFAULT_SECRET_NAME = 'CORTICO_PROVIDER_API_KEY';
+/** A typed key with no variable name declared is stored under the console's default name. */
+function withTypedSecret(entry: LLMProviderEntry, secretValue: string | undefined): LLMProviderEntry {
+  if (secretValue !== undefined && (typeof secretValue !== 'string' || !secretValue || /\s/.test(secretValue)))
+    throw new ProviderHubError('API Key must be nonempty and contain no whitespace.');
+  return secretValue && !entry.secret ? { ...entry, secret: DEFAULT_SECRET_NAME } : entry;
 }

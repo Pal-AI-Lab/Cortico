@@ -157,3 +157,17 @@ it('a card probe reports the diagnostics it received below that card', async () 
   (panel.querySelector('.btn') as HTMLButtonElement).click();
   expect(panel.classList.contains('is-open')).toBe(false);
 });
+
+it('the editor probes and lists models on the unsaved form, key included, without saving', async () => {
+  const { root, calls } = await fixture();
+  const url = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
+  url.value = 'https://edited.test'; url.dispatchEvent(new Event('input'));
+  const key = root.querySelector('[aria-label="API Key"]') as HTMLInputElement;
+  key.value = 'typed-key'; key.dispatchEvent(new Event('input'));
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '测试连接') as HTMLButtonElement).click(); await flush();
+  const probe = calls.find(call => call.path === '/api/providers/Alpha/test')!;
+  expect(probe.body).toMatchObject({ entry: { baseUrl: 'https://edited.test' }, secretValue: 'typed-key' });
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '获取模型列表') as HTMLButtonElement).click(); await flush();
+  expect(calls.find(call => call.path === '/api/providers/Alpha/models')!.body).toMatchObject({ entry: { baseUrl: 'https://edited.test' } });
+  expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
+});

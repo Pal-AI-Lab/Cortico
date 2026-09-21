@@ -66,6 +66,10 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const card = id ? ui.foldSheet('connection-' + id, { title, defaultOpen: open }) : ui.sheet({ title });
     form.append(card.el); return card.body;
   }
+  /** Preview name for an unsaved connection; the server resolves secrets by it. */
+  const identity = saved?.name ?? 'draft';
+  /** The probe and the model list run on what the form holds, key included, before anything is saved. */
+  const draftBody = () => ({ entry: editing.entry, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) });
   async function render() {
     const gen = ++rendering;
     panelHandle?.dispose(); panelHandle = null;
@@ -98,10 +102,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const key = field(connection, 'key', S.key, editing.secretValue, value => { editing.secretValue = value; }, undefined, 'password');
     key.placeholder = saved?.secretConfigured !== 'none' && saved ? S.keySet : S.keyEmpty;
     const test = ui.button(S.test, { onClick: () => run(async () => {
-      if (!saved || dirty()) { report.textContent = S.savedFirst; return; }
       test.disabled = true;
       try {
-        const result = await post<{ ok: boolean; status: number | null; elapsedMs: number; model?: string; error?: string; hint?: string }>(connectionPath(saved.name) + '/test', {}, opts);
+        const result = await post<{ ok: boolean; status: number | null; elapsedMs: number; model?: string; error?: string; hint?: string }>(connectionPath(identity) + '/test', draftBody(), opts);
         report.textContent = result.ok ? `${S.testOk} · HTTP ${result.status ?? '—'} · ${(result.elapsedMs / 1000).toFixed(1)}s · ${result.model ?? ''}` : `${S.testFailed}: ${result.hint ?? result.error ?? ''}`;
       } finally { test.disabled = false; }
     }) }); connection.append(test);
@@ -117,9 +120,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       if (known && contextInput) { spec.contextWindow = known; contextInput.value = String(known); delete editing.raw.contextWindow; change(); }
     }, opts);
     const fetch = ui.button(S.fetchModels, { onClick: () => run(async () => {
-      if (!saved || dirty()) { report.textContent = S.savedFirst; return; }
       fetch.disabled = true;
-      try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(saved.name) + '/models', {}, opts);
+      try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(identity) + '/models', draftBody(), opts);
         catalog.replaceChildren(...result.models.map(item => { const option = ui.h('option'); option.value = item.id; return option; }));
         listedModels = result.models;
       } finally { fetch.disabled = false; }
@@ -167,7 +169,6 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(() => options.cancelled()) }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
     form.append(actions, ui.h('div', 'connection-shared', S.draftNote));
     if (!selectedModule) { moduleBody.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
-    const identity = saved?.name ?? 'draft';
     const groups = await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts);
     if (gen !== rendering || lifecycle.disposed) return;
     if (ctx.consolePageHost) {

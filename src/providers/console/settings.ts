@@ -21,7 +21,7 @@ import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
 import { endpointAvailability, validateEntry } from '../configuration.ts';
 import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
-import { GenerationError } from '../../core/generation.ts';
+import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
 import { record } from '../../protocol/open-responses/context.ts';
@@ -199,18 +199,24 @@ export class ProviderSettings {
     return readdirSync(dir).filter((file) => file !== 'config.json');
   }
 
-  private async probe(name: string, language: Language) {
+  private probe(name: string, language: Language) {
     const S = text(language);
     const entry = this.config.providers[name];
     if (!entry) throw new Error(S.unknownInstance);
     if (!entry.spec) throw new Error(S.specRequired);
+    return this.probeClient(this.registry.bind(name), entry.spec, language);
+  }
+
+  /** One diagnostic request through `client`; the receipt carries status, latency, usage and charges, or the failure and a hint. */
+  async probeClient(client: ResponseClient, spec: ModelSpec, language: Language) {
+    const S = text(language);
     const request = {
-      ...responseRequest(entry.spec, [record({ type: 'message', role: 'user', content: 'ping' })]),
-      max_output_tokens: Math.min(entry.spec.maxTokens ?? PROBE_MAX_OUTPUT_TOKENS, PROBE_MAX_OUTPUT_TOKENS),
+      ...responseRequest(spec, [record({ type: 'message', role: 'user', content: 'ping' })]),
+      max_output_tokens: Math.min(spec.maxTokens ?? PROBE_MAX_OUTPUT_TOKENS, PROBE_MAX_OUTPUT_TOKENS),
     };
     const started = Date.now();
     try {
-      const generation = await this.registry.bind(name).respond(request, { diagnostic: true, nativeSpec: entry.spec, role: 'probe' });
+      const generation = await client.respond(request, { diagnostic: true, nativeSpec: spec, role: 'probe' });
       const attempt = generation.attempts.at(-1);
       return {
         ok: true,
