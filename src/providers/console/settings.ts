@@ -15,7 +15,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { updateJsonObject } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
-import type { ConsoleLamp, ConsolePageContribution } from '../../web/shared/console-protocol.ts';
+import { isConnectionEditorBlock, type ConsoleLamp, type ConsolePageContribution } from '../../web/shared/console-protocol.ts';
 import type { ConsolePageSource } from '../../web/console-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
@@ -27,7 +27,7 @@ import { responseRequest } from '../../protocol/open-responses/context-helpers.t
 import { record } from '../../protocol/open-responses/context.ts';
 import { text } from './strings.ts';
 import { PROBE_MAX_OUTPUT_TOKENS, type ProviderConsoleHost } from './types.ts';
-import { connectionGroup } from './config.ts';
+import { connectionBlocks, connectionGroup } from './config.ts';
 
 export type SecretStatus = 'env' | 'file' | 'none';
 
@@ -311,6 +311,12 @@ export class ProviderSettings {
       },
     };
     const extra = module.console?.(host) ?? {};
+    // A module that places none of the editor's blocks gets the default order, its own sections between model and pricing.
+    const declared = extra.panels ?? [];
+    const blocks = connectionBlocks(language);
+    const sections = declared.some((panel) => isConnectionEditorBlock(panel.builtin))
+      ? declared
+      : [blocks.endpoint, blocks.model, ...declared, blocks.pricing, blocks.protocol];
     return {
       ...extra,
       id: `llm:${module.id}`,
@@ -328,7 +334,7 @@ export class ProviderSettings {
           // 使用控制台内建端点面板，操作由下方 invoke 提供。
           builtin: 'llm-settings',
         },
-        ...(extra.panels ?? []),
+        ...sections,
       ],
       config: extra.config ?? entries.flatMap(
         ({ name, entry }) => module.config?.(name, entry, language) ?? [],

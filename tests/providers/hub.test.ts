@@ -117,3 +117,11 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
     await expect(hub.action('draft', 'test', 'en', { entry: { ...entry, kind: 'removed-module' } })).rejects.toThrow('unavailable');
   } finally { vi.unstubAllGlobals(); }
 });
+
+it('module list carries the editor sections of each module in its declared order', () => {
+  const { hub } = fixture();
+  const sections = Object.fromEntries(hub.moduleList('en').map(module => [module.id, module.sections.map(section => section.id)]));
+  expect(sections.llamacpp).toEqual(['endpoint', 'runtime', 'models', 'model', 'pricing', 'protocol']);
+  expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
+  expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
+});

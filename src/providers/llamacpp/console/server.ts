@@ -5,6 +5,7 @@
  */
 import type { ConsolePageContribution } from '../../../web/shared/console-protocol.ts';
 import type { ProviderConsoleHost } from '../../console/types.ts';
+import { connectionBlocks } from '../../console/config.ts';
 import type { RouterCatalog, RouterModel } from '../catalog.ts';
 import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions, type LaunchOptions } from '../options.ts';
 import type { LlamaRuntime } from '../runtime.ts';
@@ -49,11 +50,17 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
     if (!found) throw new Error(S.instanceNameRequired);
     return found.entry;
   };
+  const blocks = connectionBlocks(host.language);
   return {
     config: [],
+    // The editor in workflow order: address, runtime install, server and models, then the model to generate with.
     panels: [
-      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, slot: 'instance' },
-      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, slot: 'instance' },
+      { ...blocks.endpoint, title: S.endpointPanel, description: S.endpointPanelDescription },
+      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription },
+      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription },
+      blocks.model,
+      blocks.pricing,
+      blocks.protocol,
     ],
     invoke: async (panel, method, args) => {
       if (panel === 'runtime') {

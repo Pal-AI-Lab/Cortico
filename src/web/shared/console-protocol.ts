@@ -58,6 +58,17 @@ export function isBuiltinPanel(name: unknown): name is string {
   return typeof name === 'string' && BUILTIN_PANEL_RE.test(name);
 }
 
+/**
+ * 端点编辑页自带的四块段落。`llm:*` 页除 `settings` 外的面板按声明顺序就是编辑页的段落:
+ * `builtin` 取这里的名字的由编辑页自己画,标题与说明用声明的;其余是模块自己的浏览器实现。
+ */
+export const CONNECTION_EDITOR_BLOCKS = ['connection-endpoint', 'connection-model', 'connection-pricing', 'connection-protocol'] as const;
+export type ConnectionEditorBlock = (typeof CONNECTION_EDITOR_BLOCKS)[number];
+
+export function isConnectionEditorBlock(name: unknown): name is ConnectionEditorBlock {
+  return (CONNECTION_EDITOR_BLOCKS as readonly unknown[]).includes(name);
+}
+
 /** 构建脚本与服务端注册表共用的目录到 page id 映射。 */
 export function pageIdFor(kind: ContributingKind, name: string): string {
   return `${kind}:${name}`;

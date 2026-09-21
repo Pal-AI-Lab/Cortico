@@ -9,14 +9,16 @@ const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
-async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '') {
+const BLOCKS = { endpoint: { id: 'endpoint', title: '连接', builtin: 'connection-endpoint' }, model: { id: 'model', title: '模型与生成', builtin: 'connection-model' }, pricing: { id: 'pricing', title: '成本与计价', builtin: 'connection-pricing' }, protocol: { id: 'protocol', title: '高级协议', builtin: 'connection-protocol' } };
+const DEFAULT_SECTIONS = [BLOCKS.endpoint, BLOCKS.model, BLOCKS.pricing, BLOCKS.protocol];
+async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', sections = DEFAULT_SECTIONS) {
   const calls: Array<{ path: string; body: any }> = [];
   const detail = (name: string) => ({ name, entry: structuredClone(entry), revision: 'r1', secretConfigured: 'none', readiness: { state: 'ready' }, config: [], references: [] });
   vi.stubGlobal('fetch', async (path: string, init: any) => {
     calls.push({ path, body: init.body ? JSON.parse(init.body) : null });
     let result: unknown = {};
     if (path === '/api/providers') result = { active, providers: names.map(name => ({ id: name, name, module: 'sample', moduleTitle: 'Sample driver', model: 'test-model', baseUrl: entry.baseUrl, active: name === active, readiness: { state: 'ready' }, revision: 'r1' })) };
-    else if (path === '/api/provider-modules') result = [{ id: 'sample', title: 'Sample driver', description: 'A sample connection', defaultBaseUrl: entry.baseUrl, reasoningTiers: [], serviceTiers: [] }];
+    else if (path === '/api/provider-modules') result = [{ id: 'sample', title: 'Sample driver', description: 'A sample connection', defaultBaseUrl: entry.baseUrl, reasoningTiers: [], serviceTiers: [], sections }];
     else if (path === '/api/provider-modules/config') result = [];
     else if (/\/activate$/.test(path)) active = decodeURIComponent(path.split('/')[3]);
     else if (/\/delete$/.test(path)) names = names.filter(name => name !== decodeURIComponent(path.split('/')[3]));
@@ -66,7 +68,12 @@ it('field editing is local and saved modules stay readonly', async () => {
   input.value = 'https://edited.test'; input.dispatchEvent(new Event('input')); await flush();
   expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
   expect((root.querySelector('select[aria-label="供应商类型"]') as HTMLSelectElement).disabled).toBe(true);
-  expect(root.querySelectorAll('details')[2]?.open).toBe(false);
+  expect(([...root.querySelectorAll('details')].find(card => card.textContent?.includes('成本与计价')) as HTMLDetailsElement).open).toBe(false);
+});
+it('the editor lays its sections out in the order the module declared', async () => {
+  const { root } = await fixture(['Alpha'], 'Alpha', [BLOCKS.model, BLOCKS.protocol, BLOCKS.endpoint]);
+  expect([...root.querySelectorAll('.connection-flow .connection-step h3')].map(node => node.textContent)).toEqual(['模型与生成', '高级协议', '连接']);
+  expect(root.querySelector('.connection-identity [aria-label="供应商名称"]')).not.toBeNull();
 });
 it('missing active references are displayed without selecting a replacement as active', async () => {
   const { root } = await fixture(['Alpha'], 'Gone');

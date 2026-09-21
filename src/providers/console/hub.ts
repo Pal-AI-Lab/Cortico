@@ -63,7 +63,14 @@ export class ProviderHub {
       reasoningTiers: module.localize?.(language)?.reasoningTiers ?? module.reasoningTiers,
       effortSuggestions: module.effortSuggestions ?? [], serviceTiers: module.localize?.(language)?.serviceTiers ?? module.serviceTiers,
       temperatureNote: module.localize?.(language)?.temperatureNote ?? module.temperatureNote,
+      sections: this.sections(module.id, language),
     }));
+  }
+  /** The editor's sections for one module, in order: the page's panels minus the endpoint table. */
+  private sections(kind: string, language: Language) {
+    const source = this.settings.sources().find(source => source.id === `llm:${kind}`);
+    return (source?.contribute(language).panels ?? []).filter(panel => panel.id !== 'settings')
+      .map(({ id, title, description, builtin }) => ({ id, title, ...(description ? { description } : {}), ...(builtin ? { builtin } : {}) }));
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);

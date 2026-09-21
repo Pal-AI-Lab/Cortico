@@ -6,6 +6,7 @@
  */
 import type { ConsolePageContribution } from '../../../web/shared/console-protocol.ts';
 import { PROBE_MAX_OUTPUT_TOKENS, type ProviderConsoleHost } from '../../console/types.ts';
+import { connectionBlocks } from '../../console/config.ts';
 import { getByPath, type ConfigGroup, type ConfigValues } from '../../../core/config-schema.ts';
 import type { LLMProviderEntry, ModelSpec } from '../../../core/types.ts';
 import { GenerationError, type Generation, type ResponseClient } from '../../../core/generation.ts';
@@ -103,9 +104,17 @@ export function compatConsole(host: ProviderConsoleHost): Partial<ConsolePageCon
     if (verdict) host.save(name, { ...entry, options: { ...entry.options, reasoningReplay: verdict } });
     return { verdict, bare, withReasoning };
   };
+  const blocks = connectionBlocks(host.language);
   return {
     config: [],
-    panels: [{ id: 'reasoning', title: S.reasoningPanel, description: S.reasoningPanelDescription, slot: 'instance' }],
+    // The editor in workflow order: address and key, model, the reasoning replay form, pricing, protocol details.
+    panels: [
+      blocks.endpoint,
+      blocks.model,
+      { id: 'reasoning', title: S.reasoningPanel, description: S.reasoningPanelDescription },
+      blocks.pricing,
+      blocks.protocol,
+    ],
     invoke: async (panel, method, args) => {
       if (panel !== 'reasoning') throw new Error(S.unknownPanel);
       const name = body(args);
