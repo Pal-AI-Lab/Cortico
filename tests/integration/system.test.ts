@@ -8,6 +8,7 @@ import { assembleBot, type AssembledBot } from '../../bots/corti-soulmate/assemb
 import { PERSONA_CONFIG_GROUP } from '../../bots/corti-soulmate/persona/config.ts';
 import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, toolReply, sleep } from '../core/helpers.ts';
 import { validatePairing } from "../core/fixture-truncate.ts";
+import { providerAtBoot } from '../../src/boot.ts';
 import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
 
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
@@ -274,3 +275,30 @@ describe('全系统集成(终端对话链路)', () => {
     await waitFor(() => bot.core.store.range({}).some((e) => e.text.includes('还在吗?')));
   });
 });
+
+it.each(['empty', 'unselected', 'modelless'] as const)('控制台在供应商 %s 状态下可启动', async (state) => {
+  const tmp = makeTmpDir();
+  const cfg = makeCfg();
+  cfg.providers = state === 'empty' ? {} : {
+    endpoint: { kind: 'openai-responses-compat', baseUrl: 'https://example.invalid' },
+  };
+  cfg.activeProvider = state === 'modelless' ? 'endpoint' : '';
+  cfg.web.port = 0;
+  cfg.worlds.qq.enabled = false;
+  const memoryDir = join(tmp.dir, 'memory');
+  mkdirSync(memoryDir, { recursive: true });
+  const bot = assembleBot(makeLoaded({ config: cfg, rootDir: tmp.dir, memoryDir, dataDir: join(tmp.dir, 'data') }), { llm: new FakeLLM() });
+  bot.core.bus.setPaused(true);
+  try {
+    expect(providerAtBoot(cfg)?.spec?.model).toBeUndefined();
+    const { port } = await bot.start();
+    const response = await fetch(`http://127.0.0.1:${port}/api/providers`);
+    expect(response.status).toBe(200);
+    const hub = await response.json() as { active: string; providers: Array<{ name: string }> };
+    expect(hub.active).toBe(cfg.activeProvider);
+    expect(hub.providers.map(entry => entry.name)).toEqual(Object.keys(cfg.providers));
+  } finally {
+    await bot.stop();
+    tmp.cleanup();
+  }
+}, 15000);

@@ -138,7 +138,9 @@ export function checkbox(
  */
 export function field(doc: Document, label: string, control: HTMLElement): HTMLLabelElement {
   const el = h(doc, 'label', 'fieldrow');
-  el.append(h(doc, 'span', 'fieldlabel', label), control);
+  const caption = h(doc, 'span', 'fieldlabel', label.replace(/\s*\*$/, ''));
+  if (/\*$/.test(label)) caption.append(h(doc, 'span', 'required-mark', ' *'));
+  el.append(caption, control);
   return el;
 }
 

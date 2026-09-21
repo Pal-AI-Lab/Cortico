@@ -72,6 +72,12 @@ function readPayload(file: string): LockPayload | null {
   }
 }
 
+/** 只读检查数据目录的锁是否仍对应存活进程。 */
+export function instanceIsRunning(dataDir: string): boolean {
+  const payload = readPayload(join(dataDir, INSTANCE_LOCK_FILE));
+  return payload !== null && ownerStillRunning(payload);
+}
+
 /** 排他创建；仅 EEXIST 返回 false，其他错误抛出。 */
 function createExclusive(file: string, payload: LockPayload): boolean {
   let fd: number;

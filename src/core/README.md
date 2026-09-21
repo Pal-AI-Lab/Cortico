@@ -88,3 +88,5 @@ handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执�
 warn；`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
 读取 `console()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 error
 并停止定时器。启动器处理未捕获的进程异常并执行关机流程。
+
+`instanceIsRunning(dataDir)` 只读检查实例锁对应进程是否存活，沿用锁接管时的陈旧记录判定，不获取或更改锁。

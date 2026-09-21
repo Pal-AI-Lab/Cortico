@@ -111,3 +111,5 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 `host.save` 把配置交回浏览器暂存。`ProviderRegistry.previewRegistry` 按一份条目造注册表,实例不进
 运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
 `{ entry, secretValue }` 时走它。
+
+连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。

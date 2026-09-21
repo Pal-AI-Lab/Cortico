@@ -48,7 +48,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
   /** The model block's way of showing a spec a module panel changed. */
   let syncSpec: (() => void) | null = null;
-  const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'), dirty());
+  /** A saved connection shows the discard button only while the form differs from what is saved. */
+  let cancel: HTMLButtonElement | null = null;
+  const change = () => {
+    if (cancel) cancel.hidden = !!saved && !dirty();
+    options.changed(editing, !!form.querySelector('[aria-invalid="true"]'), dirty());
+  };
   const run = (work: () => Promise<unknown>) => { void work().catch(error => { if (!lifecycle.disposed) report.textContent = String(error); }); };
   /** Preview name for an unsaved connection; the server resolves secrets by it. */
   const identity = saved?.name ?? 'draft';
@@ -101,15 +106,17 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
     });
     const key = field(body, 'key', S.key, editing.secretValue, value => { editing.secretValue = value; }, undefined, 'password');
-    key.placeholder = saved?.secretConfigured !== 'none' && saved ? S.keySet : S.keyEmpty;
+    key.placeholder = saved?.secretConfigured !== 'none' && saved ? '••••••••' : S.keyEmpty;
     const test = ui.button(S.test, { onClick: () => run(async () => {
       test.disabled = true;
       try {
         const result = await post<{ ok: boolean; status: number | null; elapsedMs: number; model?: string; error?: string; hint?: string }>(connectionPath(identity) + '/test', draftBody(), opts);
         report.textContent = result.ok ? `${S.testOk} · HTTP ${result.status ?? '—'} · ${(result.elapsedMs / 1000).toFixed(1)}s · ${result.model ?? ''}` : `${S.testFailed}: ${result.hint ?? result.error ?? ''}`;
       } finally { test.disabled = false; }
-    }) }); body.append(test);
-    if (saved?.readiness.reason) body.append(ui.msgline(saved.readiness.reason, true));
+    }) });
+    const testRow = ui.rowbar(); testRow.classList.add('connection-test'); testRow.append(test);
+    if (saved?.readiness.reason) testRow.append(ui.msgline(saved.readiness.reason, true));
+    body.append(testRow);
   }
   function modelBlock(box: HTMLElement, section: Section, module: Module, spec: Spec) {
     const body = block(box, section);
@@ -212,7 +219,6 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       const required = ui.h('div', 'field-error'); basic.append(required);
       errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.required; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
     }
-    if (selectedModule) basic.append(ui.h('p', 'field-note', S.moduleNote(selectedModule.description, selectedModule.id)));
     const flow = ui.h('div', 'connection-flow'); form.append(flow);
     const spec = editing.entry.spec ??= { model: '', thinking: false };
     const actions = ui.h('div', 'connection-actions');
@@ -224,7 +230,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); await options.deleted();
       }) }), ui.button(S.duplicate, { onClick: () => run(() => options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} })) }));
     }
-    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(() => options.cancelled()) }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
+    cancel = ui.button(S.cancel, { onClick: () => run(() => options.cancelled()) });
+    cancel.hidden = !!saved && !dirty();
+    actions.append(ui.h('span', 'grow'), cancel, ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
     form.append(actions, ui.h('div', 'connection-shared', S.shared), ui.h('div', 'connection-shared', S.draftNote));
     if (!selectedModule) { flow.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
     const groups = (await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts)).filter(group => !group.id.endsWith('.connection'));
@@ -277,7 +285,10 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   async function save(select = true): Promise<boolean> {
     if (saving) return false;
     const valid = [...errors.values()].map(check => check()).every(Boolean); change();
-    if (!valid) { report.textContent = S.readiness.invalid; return false; }
+    if (!valid) {
+      for (const input of form.querySelectorAll('[aria-invalid="true"]')) { const fold = input.closest('details'); if (fold) fold.open = true; }
+      report.textContent = S.readiness.invalid; return false;
+    }
     saving = true;
     try {
       const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
