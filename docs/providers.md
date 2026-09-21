@@ -37,7 +37,7 @@ provider 模块不预设任何模型名;端点
 已被别处改过就返回 409,重新加载后再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;
 还被引用的端点不能删。`kind` 保存后不可更改。
 
-编辑页上半是名字与类型,下半按模块声明的顺序排段落:模块在 `console()` 的 `panels` 里把编辑页自带的
+编辑页的段落顺序由模块声明:模块在 `console()` 的 `panels` 里把编辑页自带的
 四块(`connection-endpoint` 地址与密钥、`connection-model` 模型与生成、`connection-pricing` 计价、
 `connection-protocol` 协议,默认文案由 `connectionBlocks` 给)与自己的面板排成一列,标题与说明可改;
 一块都不声明的模块得到默认顺序,自家面板排在模型与计价之间。`openai-responses-compat` 是

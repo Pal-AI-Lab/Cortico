@@ -83,11 +83,8 @@ npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 b
 `multimodal` 与 `spec`——由框架自己编辑,模块不声明它们。
 
 面板在 `console(host)` 里声明。`llm:<id>` 这一页在控制台里没有自己的入口(左栏不列 `kind: 'llm'`
-的页,`#/provider/llm:*` 会被换成 `#/providers`),模块面板只在端点编辑页露面:这一页除 `settings`
-以外的面板按声明顺序就是编辑页的段落。编辑页自带四块段落,`builtin` 取 `connection-endpoint`(地址与
-密钥)、`connection-model`(模型与生成)、`connection-pricing`、`connection-protocol` 之一的面板由编辑页
-自己画,标题与说明用声明的,默认文案取 `connectionBlocks(language)`;其余面板是模块自己的浏览器实现,
-`ctx.scope.instance` 是端点名。一块都不声明的模块得到默认顺序:地址、模型、自家面板、计价、协议。
+的页,`#/provider/llm:*` 会被换成 `#/providers`),模块面板只在端点编辑页露面,排法见
+[providers.md](providers.md) 的「控制台」一节;`ctx.scope.instance` 是端点名。
 
 端点编辑是事务化的:改动随手暂存在浏览器,保存时整条写入,面板经 `ctx.setConfig` 改的配置也只进暂存。
 `ctx.invoke` 把浏览器手上这份条目一起交给服务端,与磁盘上的一致就用真实例、`host.editing` 为假,

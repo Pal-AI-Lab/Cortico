@@ -107,7 +107,6 @@ export function compatConsole(host: ProviderConsoleHost): Partial<ConsolePageCon
   const blocks = connectionBlocks(host.language);
   return {
     config: [],
-    // The editor in workflow order: address and key, model, the reasoning replay form, pricing, protocol details.
     panels: [
       blocks.endpoint,
       blocks.model,
