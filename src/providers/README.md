@@ -28,10 +28,11 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
 
 地址、密钥变量名与图像开关不归模块:框架在 `console/config.ts` 里为每个端点声明这一组,
-扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,面板在 `instance` 插槽里
+扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,模块的面板作为端点编辑页的段落
 用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 暂存到连接草稿——内建 llamacpp 的运行时与启动
-两段走的是这条。`console()` 显式给空 `config` 表示这一页不另开配置页签,声明仍参与服务端
-校验。启停与模型操作这类动作走面板 invoke。
+两段走的是这条。段落顺序由 `console()` 的 `panels` 定:编辑页自带的四块(`console/config.ts` 的
+`connectionBlocks`)与模块自己的面板排成一列。`console()` 显式给空 `config` 表示这一页不另开配置页签,
+声明仍参与服务端校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
 `compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。
@@ -107,4 +108,6 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 重读共享配置时跟上。
 
 `ProviderConsoleHost.editing` 表示这个实例来自还没保存的表单,模块据此拒绝运行时副作用,
-`host.save` 把配置交回浏览器暂存。`ProviderRegistry.preview` 拿到的实例不进运行实例缓存。
+`host.save` 把配置交回浏览器暂存。`ProviderRegistry.previewRegistry` 按一份条目造注册表,实例不进
+运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
+`{ entry, secretValue }` 时走它。

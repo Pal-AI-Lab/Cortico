@@ -71,8 +71,8 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `memory` / `world:<id>`),`/api/storage` 原样回它。
 
 面板带 `slot` 就没有自己的页签,由同页某块面板调 `ctx.mountSlot(slot, 容器, 作用域)` 挂进去,
-同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。内建的
-连接详情将当前连接名称传给 `instance` 插槽，挂载模块的运行时与模型面板。旧 `llm-settings` 接口保留兼容，模块页面路由转到连接页。
+同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。`llm:*` 页的面板
+不走插槽:端点编辑页按声明顺序把它们挂成段落,作用域 `instance` 是端点名(见 [providers.md](providers.md))。
 
 自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/console/client.ts`(Persona 是
 `bots/<名>/console/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
