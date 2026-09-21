@@ -121,20 +121,20 @@ export class ConsolePageHost {
     this.emitNav();
   }
 
-  /** Mount module panels inside a connection editor while its adapter stages configuration edits. */
-  async mountConnection(pageId: string, root: HTMLElement, scope: Readonly<Record<string, string>>,
+  /** Mount one of a page's panels inside the connection editor; `adapt` stages the panel's configuration edits. */
+  async mountConnection(pageId: string, panelId: string, root: HTMLElement, scope: Readonly<Record<string, string>>,
     adapt: (context: ConsolePanelContext) => ConsolePanelContext): Promise<Disposable> {
     const lifecycle = new Lifecycle(this.deps.onError);
     const page = this.find(pageId);
-    for (const panel of asArray(page?.panels).filter(panel => panel.id !== 'settings')) {
-      const box = this.deps.doc.createElement('div'); root.append(box);
-      try {
-        const impl = panel.builtin ? this.builtinPanel(panel.builtin) : await this.deps.loader.resolvePanel(pageId, panel.id, page?.client);
-        if (lifecycle.disposed) break;
-        const result = await impl.mount(adapt(this.panelContext(pageId, panel.id, box, lifecycle, this.generation, scope)));
+    const panel = asArray(page?.panels).find(candidate => candidate.id === panelId);
+    try {
+      if (!panel) throw new Error(S.noSuchPanel(page?.label ?? pageId, panelId));
+      const impl = panel.builtin ? this.builtinPanel(panel.builtin) : await this.deps.loader.resolvePanel(pageId, panel.id, page?.client);
+      if (!lifecycle.disposed) {
+        const result = await impl.mount(adapt(this.panelContext(pageId, panel.id, root, lifecycle, this.generation, scope)));
         if (result) lifecycle.own(result);
-      } catch (error) { box.textContent = String(error); }
-    }
+      }
+    } catch (error) { root.textContent = String(error); }
     return lifecycle;
   }
 

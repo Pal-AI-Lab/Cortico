@@ -15,19 +15,19 @@ import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:
 import { join } from 'node:path';
 import { updateJsonObject } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
-import type { ConsoleLamp, ConsolePageContribution } from '../../web/shared/console-protocol.ts';
+import { isConnectionEditorBlock, type ConsoleLamp, type ConsolePageContribution } from '../../web/shared/console-protocol.ts';
 import type { ConsolePageSource } from '../../web/console-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
 import { endpointAvailability, validateEntry } from '../configuration.ts';
 import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
-import { GenerationError } from '../../core/generation.ts';
+import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
 import { record } from '../../protocol/open-responses/context.ts';
 import { text } from './strings.ts';
 import { PROBE_MAX_OUTPUT_TOKENS, type ProviderConsoleHost } from './types.ts';
-import { connectionGroup } from './config.ts';
+import { connectionBlocks, connectionGroup } from './config.ts';
 
 export type SecretStatus = 'env' | 'file' | 'none';
 
@@ -199,18 +199,24 @@ export class ProviderSettings {
     return readdirSync(dir).filter((file) => file !== 'config.json');
   }
 
-  private async probe(name: string, language: Language) {
+  private probe(name: string, language: Language) {
     const S = text(language);
     const entry = this.config.providers[name];
     if (!entry) throw new Error(S.unknownInstance);
     if (!entry.spec) throw new Error(S.specRequired);
+    return this.probeClient(this.registry.bind(name), entry.spec, language);
+  }
+
+  /** One diagnostic request through `client`; the receipt carries status, latency, usage and charges, or the failure and a hint. */
+  async probeClient(client: ResponseClient, spec: ModelSpec, language: Language) {
+    const S = text(language);
     const request = {
-      ...responseRequest(entry.spec, [record({ type: 'message', role: 'user', content: 'ping' })]),
-      max_output_tokens: Math.min(entry.spec.maxTokens ?? PROBE_MAX_OUTPUT_TOKENS, PROBE_MAX_OUTPUT_TOKENS),
+      ...responseRequest(spec, [record({ type: 'message', role: 'user', content: 'ping' })]),
+      max_output_tokens: Math.min(spec.maxTokens ?? PROBE_MAX_OUTPUT_TOKENS, PROBE_MAX_OUTPUT_TOKENS),
     };
     const started = Date.now();
     try {
-      const generation = await this.registry.bind(name).respond(request, { diagnostic: true, nativeSpec: entry.spec, role: 'probe' });
+      const generation = await client.respond(request, { diagnostic: true, nativeSpec: spec, role: 'probe' });
       const attempt = generation.attempts.at(-1);
       return {
         ok: true,
@@ -305,6 +311,12 @@ export class ProviderSettings {
       },
     };
     const extra = module.console?.(host) ?? {};
+    // A module that places none of the editor's blocks gets the default order, its own sections between model and pricing.
+    const declared = extra.panels ?? [];
+    const blocks = connectionBlocks(language);
+    const sections = declared.some((panel) => isConnectionEditorBlock(panel.builtin))
+      ? declared
+      : [blocks.endpoint, blocks.model, ...declared, blocks.pricing, blocks.protocol];
     return {
       ...extra,
       id: `llm:${module.id}`,
@@ -322,7 +334,7 @@ export class ProviderSettings {
           // 使用控制台内建端点面板，操作由下方 invoke 提供。
           builtin: 'llm-settings',
         },
-        ...(extra.panels ?? []),
+        ...sections,
       ],
       config: extra.config ?? entries.flatMap(
         ({ name, entry }) => module.config?.(name, entry, language) ?? [],

@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
@@ -97,4 +97,31 @@ it('rejects credentials changed in another process without overwriting them', ()
   writeFileSync(join(root, 'Alpha', '.env'), 'CORTICO_PROVIDER_API_KEY=changed-key\n');
   expect(() => hub.save('Alpha', { ...saved, expectedRevision: saved.revision, secretValue: 'stale-key' }, 'en')).toThrow('changed');
   expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('changed-key');
+});
+
+it('probes and lists models on a browser draft with its typed key, writing nothing', async () => {
+  const { hub, root, cfg } = fixture();
+  const seen: Array<{ url: string; auth: string | null }> = [];
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    seen.push({ url, auth: new Headers(init?.headers).get('authorization') });
+    if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'listed-model' }] }));
+    return new Response(JSON.stringify({ id: 'r', model: 'test-model', status: 'completed', output: [{ type: 'message', id: 'm', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'pong', annotations: [] }] }], usage: { input_tokens: 1, output_tokens: 1 } }));
+  });
+  try {
+    expect(await hub.action('draft', 'models', 'en', { entry, secretValue: 'typed-key' })).toEqual({ models: [{ id: 'listed-model' }] });
+    expect(await hub.action('draft', 'test', 'en', { entry, secretValue: 'typed-key' })).toMatchObject({ ok: true, status: 200, model: 'test-model' });
+    expect(seen.map(call => call.auth)).toEqual(['Bearer typed-key', 'Bearer typed-key']);
+    expect(existsSync(join(root, 'draft'))).toBe(false);
+    expect(cfg.providers).toEqual({});
+    await expect(hub.action('draft', 'test', 'en', { entry: { ...entry, spec: undefined } })).rejects.toThrow('Model');
+    await expect(hub.action('draft', 'test', 'en', { entry: { ...entry, kind: 'removed-module' } })).rejects.toThrow('unavailable');
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it('module list carries the editor sections of each module in its declared order', () => {
+  const { hub } = fixture();
+  const sections = Object.fromEntries(hub.moduleList('en').map(module => [module.id, module.sections.map(section => section.id)]));
+  expect(sections.llamacpp).toEqual(['endpoint', 'runtime', 'models', 'model', 'pricing', 'protocol']);
+  expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
+  expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
 });

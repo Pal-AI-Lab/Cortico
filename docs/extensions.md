@@ -83,13 +83,13 @@ npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 b
 `multimodal` 与 `spec`——由框架自己编辑,模块不声明它们。
 
 面板在 `console(host)` 里声明。`llm:<id>` 这一页在控制台里没有自己的入口(左栏不列 `kind: 'llm'`
-的页,`#/provider/llm:*` 会被换成 `#/providers`),模块面板只在端点页露面:端点页把这一页里除
-`settings` 以外的面板全挂进当前选中的那条端点下面,不看 `slot`。`ctx.scope.instance` 是端点名。
+的页,`#/provider/llm:*` 会被换成 `#/providers`),模块面板只在端点编辑页露面,排法见
+[providers.md](providers.md) 的「控制台」一节;`ctx.scope.instance` 是端点名。
 
-端点编辑是事务化的:改动先在浏览器暂存,保存时整条写入,面板经 `ctx.setConfig` 改的配置也只进暂存。
+端点编辑是事务化的:改动随手暂存在浏览器,保存时整条写入,面板经 `ctx.setConfig` 改的配置也只进暂存。
 `ctx.invoke` 把浏览器手上这份条目一起交给服务端,与磁盘上的一致就用真实例、`host.editing` 为假,
 不一致就按这份草稿临时构造一个预览实例、`host.editing` 为真,`host.save` 写回的是草稿而不是磁盘。
-托管进程的启停、下载安装、拉模型列表这类运行时动作要求端点已保存,模块在 `editing` 为真时拒绝它们。
+托管进程的启停、下载安装这类运行时动作要求端点已保存,模块在 `editing` 为真时拒绝它们。
 
 ## 写一个 bot 扩展
 

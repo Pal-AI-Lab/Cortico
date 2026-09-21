@@ -5,11 +5,13 @@
  */
 import type { ConsolePageContribution } from '../../../web/shared/console-protocol.ts';
 import type { ProviderConsoleHost } from '../../console/types.ts';
+import { connectionBlocks } from '../../console/config.ts';
 import type { RouterCatalog, RouterModel } from '../catalog.ts';
 import { LAUNCH_DEFAULTS, PINNED_RELEASE, backendChoices, defaultBackend, llamacppOptions, type LaunchOptions } from '../options.ts';
 import type { LlamaRuntime } from '../runtime.ts';
 import type { RuntimeState } from '../runtime.ts';
 import { runtimeConfig } from '../config.ts';
+import { listGguf, searchGguf } from '../huggingface.ts';
 import { getByPath, type ConfigGroup, type ConfigValues } from '../../../core/config-schema.ts';
 import { text } from '../strings.ts';
 
@@ -49,11 +51,16 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
     if (!found) throw new Error(S.instanceNameRequired);
     return found.entry;
   };
+  const blocks = connectionBlocks(host.language);
   return {
     config: [],
     panels: [
-      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, slot: 'instance' },
-      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, slot: 'instance' },
+      { ...blocks.endpoint, title: S.endpointPanel, description: S.endpointPanelDescription },
+      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription },
+      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription },
+      blocks.model,
+      blocks.pricing,
+      blocks.protocol,
     ],
     invoke: async (panel, method, args) => {
       if (panel === 'runtime') {
@@ -138,6 +145,21 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
         }
         if (method === 'reload') {
           await catalog.list(true);
+          return { ok: true };
+        }
+        if (method === 'search') {
+          if (typeof value.query !== 'string' || !value.query.trim()) throw new Error(S.queryRequired);
+          if (!Number.isInteger(value.limit) || (value.limit as number) < 1) throw new Error(S.limitRequired);
+          return { repos: await searchGguf(value.query.trim(), value.limit as number) };
+        }
+        if (method === 'files') {
+          if (typeof value.repo !== 'string' || !value.repo.trim()) throw new Error(S.repoRequired);
+          return { files: await listGguf(value.repo.trim()) };
+        }
+        if (method === 'use') {
+          if (typeof value.model !== 'string' || !value.model.trim()) throw new Error(S.modelIdRequired);
+          const entry = entryOf(name);
+          host.save(name, { ...entry, spec: { thinking: false, ...entry.spec, model: value.model.trim() } });
           return { ok: true };
         }
         if (host.editing) throw new Error(host.language === 'zh' ? '请先保存配置，再操作模型。' : 'Save configuration before model operations.');
