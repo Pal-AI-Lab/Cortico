@@ -9,9 +9,9 @@ const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
-async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', usage: Array<{ name: string; running: boolean }> = [], readiness = 'ready') {
+async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', usage: Array<{ name: string; running: boolean }> = [], readiness = 'ready', secretConfigured = 'none') {
   const calls: Array<{ path: string; body: any }> = [];
-  const detail = (name: string) => ({ name, entry: structuredClone(entry), revision: 'r1', secretConfigured: 'none', readiness: { state: 'ready' }, config: [], references: [] });
+  const detail = (name: string) => ({ name, entry: structuredClone(entry), revision: 'r1', secretConfigured, readiness: { state: 'ready' }, config: [], references: [] });
   vi.stubGlobal('fetch', async (path: string, init: any) => {
     calls.push({ path, body: init.body ? JSON.parse(init.body) : null });
     let result: unknown = {};
@@ -177,4 +177,14 @@ it('hides connection actions for unavailable endpoints and endpoints used by run
   expect((occupied.root.querySelector('.connection-connect') as HTMLElement).hidden).toBe(true);
   expect(occupied.root.querySelector('.connection-status')?.textContent).toContain('其他实例使用中：Other');
   expect((occupied.root.querySelector('.connection-status') as HTMLElement).dataset.tone).toBe('active');
+});
+
+it('saved keys show a masked placeholder without staging a replacement secret', async () => {
+  const { root, calls } = await fixture(['Alpha'], 'Alpha', [], 'ready', 'file');
+  const key = root.querySelector('[aria-label="API Key"]') as HTMLInputElement;
+  expect(key.type).toBe('password');
+  expect(key.placeholder).toBe('••••••••');
+  expect(key.value).toBe('');
+  [...root.querySelectorAll('button')].find(button => button.textContent === '保存')!.click(); await flush();
+  expect(calls.find(call => call.path.endsWith('/save'))?.body).not.toHaveProperty('secretValue');
 });

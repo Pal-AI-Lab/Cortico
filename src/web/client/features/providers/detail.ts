@@ -96,7 +96,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
     });
     const key = field(connection, 'key', S.key, editing.secretValue, value => { editing.secretValue = value; }, undefined, 'password');
-    key.placeholder = saved?.secretConfigured !== 'none' && saved ? S.keySet : S.keyEmpty;
+    key.placeholder = saved?.secretConfigured !== 'none' && saved ? '••••••••' : S.keyEmpty;
     const test = ui.button(S.test, { onClick: () => run(async () => {
       if (!saved || dirty()) { report.textContent = S.savedFirst; return; }
       test.disabled = true;
