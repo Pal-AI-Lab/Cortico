@@ -136,18 +136,13 @@ it('deleting from a card asks once on the button and carries the revision it lis
   expect(root.querySelector('[data-provider="Beta"]')).toBeNull();
 });
 
-it('a card probe reports the diagnostics it received below that card', async () => {
+it('tests the saved connection from its detail form', async () => {
   const { root, calls } = await fixture();
-  const card = root.querySelector('[data-provider="Alpha"]') as HTMLElement;
-  const probe = [...card.querySelectorAll('.rowbar button')].find(button => button.textContent?.startsWith('测试可用性')) as HTMLButtonElement;
-  probe.click(); await flush();
+  const test = [...root.querySelectorAll('button')].find(button => button.textContent === '测试连接')!;
+  test.click(); await flush();
   expect(calls.some(call => call.path === '/api/providers/Alpha/test')).toBe(true);
-  const panel = card.querySelector('.connection-probe') as HTMLElement;
-  expect(panel.classList.contains('is-open')).toBe(true);
-  expect(panel.textContent).toContain('probe-model');
-  expect(panel.textContent).toContain('成功 · 200');
-  (panel.querySelector('.btn') as HTMLButtonElement).click();
-  expect(panel.classList.contains('is-open')).toBe(false);
+  expect(root.textContent).toContain('HTTP 200');
+  expect(root.textContent).toContain('probe-model');
 });
 
 it('saved connections expose cancellation only after saving a browser draft', async () => {

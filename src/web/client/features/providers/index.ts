@@ -3,9 +3,6 @@ import { icon } from '../../ui/icons.ts';
 import { NEW_DRAFT_ID, providerDrafts } from './drafts.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { get, post } from '../../core/api.ts';
-import { LANGUAGE } from '../../core/language.ts';
-import { panel } from '../../console-pages/builtins/llm-settings/strings.ts';
-import { probeCard, type ProbeResult } from '../../console-pages/builtins/llm-settings/panel.ts';
 import { S } from './strings.ts';
 import { connectionPath, type HubState, type Connection, type Module, type Detail, type Editing } from './types.ts';
 import { mountDetail, type DetailController } from './detail.ts';
@@ -32,7 +29,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   let renderId = 0;
   interface CardNode {
     el: HTMLElement; title: HTMLElement; model: HTMLElement; url: HTMLElement; status: HTMLElement; secondary: HTMLElement;
-    kind: HTMLElement; activate: HTMLButtonElement; erase: HTMLButtonElement; probe: HTMLButtonElement; probePanel: HTMLElement; probeBody: HTMLElement;
+    kind: HTMLElement; activate: HTMLButtonElement; erase: HTMLButtonElement;
   }
   const nodes = new Map<string, CardNode>();
   const rows = new Map<string, Connection>();
@@ -60,22 +57,16 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
           try { await post(connectionPath(identity) + '/activate', {}, opts); state.active = identity; paint(); }
           finally { activate.disabled = false; }
         }) });
-        const probePanel = ui.h('div', 'connection-probe');
-        const probeBody = ui.h('div', 'connection-probe-body');
-        probePanel.append(probeBody);
-        const probe = ui.button(S.probe, { size: 'sm', onClick: () => run(() => runProbe(identity)) });
-        probe.classList.add('connection-probe-btn'); probe.append(ui.h('span', 'connection-spin'));
         const erase = eraseButton(identity);
         activate.classList.add('connection-activate');
         activate.setAttribute('aria-label', S.activate); activate.title = S.activate;
         const connect = ui.h('div', 'connection-connect'); connect.append(activate, ui.h('span', 'connection-connect-label', S.connect));
-        const actions = ui.h('div', 'rowbar'); actions.append(probe);
-        el.append(erase, title, kind, model, url, status, secondary, connect, actions, probePanel);
+        el.append(erase, title, kind, model, url, status, secondary, connect);
         el.tabIndex = 0;
         el.addEventListener('keydown', event => { if (event.target === el && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); run(() => select(identity)); } }, opts);
         el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
         if (identity === NEW_DRAFT_ID) cards.prepend(el); else cards.append(el);
-        node = { el, title, kind, model, url, status, secondary, activate, erase, probe, probePanel, probeBody }; nodes.set(identity, node);
+        node = { el, title, kind, model, url, status, secondary, activate, erase }; nodes.set(identity, node);
       }
       const active = identity === state.active;
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
@@ -101,7 +92,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       node.secondary.dataset.tone = (active || running.length) && readiness !== 'ready' ? 'error' : 'draft';
       node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID || readiness !== 'ready' || running.length > 0;
       node.activate.disabled = item.readiness.state !== 'ready';
-      node.probe.hidden = identity === NEW_DRAFT_ID;
       if (identity === NEW_DRAFT_ID) rows.delete(identity); else rows.set(identity, item as Connection);
     }
   }
@@ -133,19 +123,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     drafts.remove(identity); invalid.delete(identity);
     await refresh();
     if (selected === identity) await select(fallback(), true);
-  }
-  /** 探活结果挂在卡片下面,与模块页上的那份同一种呈现。 */
-  async function runProbe(identity: string): Promise<void> {
-    const node = nodes.get(identity);
-    if (!node || node.probe.disabled) return;
-    node.probe.disabled = true; node.probe.classList.add('is-busy');
-    try {
-      const result = await post<ProbeResult>(connectionPath(identity) + '/test', {}, opts);
-      if (ctx.signal.aborted) return;
-      const close = ui.button(S.probeClose, { size: 'sm', onClick: () => node.probePanel.classList.remove('is-open') });
-      node.probeBody.replaceChildren(probeCard(ui, LANGUAGE === 'en' ? panel.en : panel.zh, result), close);
-      node.probePanel.classList.add('is-open');
-    } finally { node.probe.disabled = false; node.probe.classList.remove('is-busy'); }
   }
   async function refresh() { state = await get<HubState>('/api/providers', opts); paint(); }
   async function select(identity: string, force = false): Promise<void> {
