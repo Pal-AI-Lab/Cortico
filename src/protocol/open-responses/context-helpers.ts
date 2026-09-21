@@ -13,7 +13,7 @@ export function withoutPastReasoning(entries: readonly ContextRecord[]): Context
 export function responseRequest(spec: ModelSpec, context: readonly ContextRecord[], tools: readonly ToolSchema[] = []): Request {
   return {
     model: spec.model, input: context.map(inputItem),
-    // 只有协议声明的成员进线;运行时传进来的 ToolSpec 还带着标签与用法,它们归控制台与工具装配。
+    // 只有协议声明的成员进线;运行时传进来的对象还带着分类标签,它归控制台与工具装配。
     tools: tools.map(({ name, description, parameters }) => ({ type: 'function' as const, name, description, parameters })),
     // effort 词表归端点(见 ModelSpec.reasoningEffort);协议枚举只覆盖 OpenAI 自己的取值。
     reasoning: spec.thinking ? { ...(spec.reasoningEffort ? { effort: spec.reasoningEffort as Schemas['ReasoningEffortEnum'] } : {}) } : { effort: 'none' },

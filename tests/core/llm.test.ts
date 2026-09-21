@@ -45,7 +45,7 @@ describe('buildResponsesBody(请求体)', () => {
     const asked = buildResponsesBody({ ...request(spec), include: ['message.output_text.logprobs'] }, { context }, { reasoningReplay: 'plaintext' });
     expect(asked.include).toEqual(['message.output_text.logprobs']);
   });
-  it('工具只带协议声明的成员,内部标签不进线', () => {
+  it('工具只带协议声明的成员,其余一律不进线', () => {
     const tool = { name: 'mc_dig', description: '挖一格', parameters: { type: 'object', properties: {} }, tags: ['world'], usage: '挖掘' };
     const body = buildResponsesBody(responseRequest({ model: 'm', thinking: false }, context, [tool as never]), { context }, {});
     expect(body.tools).toEqual([{ type: 'function', name: 'mc_dig', description: '挖一格', parameters: { type: 'object', properties: {} } }]);
