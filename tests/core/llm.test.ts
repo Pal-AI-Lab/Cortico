@@ -28,13 +28,27 @@ const resource = (overrides: Record<string, unknown> = {}) => ({
 describe('buildResponsesBody(请求体)', () => {
   it('system 上提为 instructions;无状态回放;effort 三种形态', () => {
     const on = buildResponsesBody(request({ model: 'm', thinking: true, reasoningEffort: 'max' }), { context }, {});
-    expect(on).toMatchObject({ model: 'm', instructions: 'sys', store: false, stream: false, include: ['reasoning.encrypted_content'], reasoning: { effort: 'max' } });
+    expect(on).toMatchObject({ model: 'm', instructions: 'sys', store: false, stream: false, reasoning: { effort: 'max' } });
     expect((on.input as unknown[]).length).toBe(1);
     expect('previous_response_id' in on).toBe(false);
     const off = buildResponsesBody(request({ model: 'm', thinking: false }), { context }, {});
     expect(off.reasoning).toEqual({ effort: 'none' });
     const endpointDefault = buildResponsesBody(request({ model: 'm', thinking: true }), { context }, {});
     expect('reasoning' in endpointDefault).toBe(false);
+  });
+  it('include 只在加密形态带;明文形态不带,调用方点名的照带', () => {
+    const spec: ModelSpec = { model: 'm', thinking: true };
+    const encrypted = buildResponsesBody(request(spec), { context }, {});
+    expect(encrypted.include).toEqual(['reasoning.encrypted_content']);
+    const plaintext = buildResponsesBody(request(spec), { context }, { reasoningReplay: 'plaintext' });
+    expect('include' in plaintext).toBe(false);
+    const asked = buildResponsesBody({ ...request(spec), include: ['message.output_text.logprobs'] }, { context }, { reasoningReplay: 'plaintext' });
+    expect(asked.include).toEqual(['message.output_text.logprobs']);
+  });
+  it('工具只带协议声明的成员,其余一律不进线', () => {
+    const tool = { name: 'mc_dig', description: '挖一格', parameters: { type: 'object', properties: {} }, tags: ['world'], usage: '挖掘' };
+    const body = buildResponsesBody(responseRequest({ model: 'm', thinking: false }, context, [tool as never]), { context }, {});
+    expect(body.tools).toEqual([{ type: 'function', name: 'mc_dig', description: '挖一格', parameters: { type: 'object', properties: {} } }]);
   });
   it('extraBody 最后并入;sessionId 成为 prompt_cache_key;流式按 onEvent', () => {
     const body = buildResponsesBody(request({ model: 'm', thinking: true, temperature: 0.7, maxTokens: 64 }), { context, sessionId: 'main', onEvent: () => {} }, {}, { service_tier: 'flex', temperature: 1 });
