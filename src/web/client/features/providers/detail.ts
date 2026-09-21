@@ -107,9 +107,16 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const catalog = ui.h('datalist'); catalog.id = 'connection-models-' + Math.random().toString(36).slice(2); modelInput.setAttribute('list', catalog.id); model.append(catalog);
     let listedModels: Array<{ id: string; contextWindow?: number }> = [];
     let contextInput: HTMLInputElement | null = null;
+    /** 目录里查得到窗口才写回;查不到时把这件事说给操作员——探测不到的服务商,手填是唯一来源。 */
+    const windowNote = ui.msgline();
+    const noteCatalogWindow = () => {
+      if (!listedModels.length) { windowNote.textContent = ''; return; }
+      windowNote.textContent = listedModels.find(item => item.id === spec.model)?.contextWindow ? '' : S.catalogNoWindow;
+    };
     modelInput.addEventListener('change', () => {
       const known = listedModels.find(item => item.id === modelInput.value)?.contextWindow;
       if (known && contextInput) { spec.contextWindow = known; contextInput.value = String(known); delete editing.raw.contextWindow; change(); }
+      noteCatalogWindow();
     }, opts);
     const fetch = ui.button(S.fetchModels, { onClick: () => run(async () => {
       if (!saved || dirty()) { report.textContent = S.savedFirst; return; }
@@ -117,6 +124,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(saved.name) + '/models', {}, opts);
         catalog.replaceChildren(...result.models.map(item => { const option = ui.h('option'); option.value = item.id; return option; }));
         listedModels = result.models;
+        noteCatalogWindow();
       } finally { fetch.disabled = false; }
     }) }); model.append(fetch);
     const tiers = selectedModule?.reasoningTiers ?? [];
@@ -134,6 +142,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : S.invalidNumber, 'number');
       if (name === 'contextWindow') contextInput = input;
     }
+    model.append(windowNote);
     if (selectedModule?.serviceTiers.length) {
       const select = ui.select({ value: editing.entry.serviceTier ?? '', options: [{ value: '', label: '—' }, ...selectedModule.serviceTiers.map(tier => ({ value: tier.id, label: tier.label }))], onChange: value => { editing.entry.serviceTier = value; change(); } });
       select.setAttribute('aria-label', S.tier); model.append(ui.field(S.tier, select));
