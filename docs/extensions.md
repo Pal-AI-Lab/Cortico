@@ -78,6 +78,19 @@ npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 b
 `"kind": "provider"`,关键字 `cortico-provider`,默认导出 `ProviderModule`(见
 [providers.md](providers.md))。控制台页 id 是 `llm:<id>`,面板与 World 扩展同一套契约。
 
+模块自己的旋钮走 `config(name, entry, language)`:owner 是 `provider:<id>`,路径一律在
+`providers.<端点名>.options.` 下。地址、密钥变量名、图像开关与 `spec` 由框架为每个端点声明,
+模块不重复声明它们。
+
+面板在 `console(host)` 里声明,`slot` 决定它出现在哪儿。带 `slot: 'instance'` 的面板没有自己的
+页签,挂在端点页上当前选中的那条端点下面,`ctx.scope.instance` 是端点名;不带 `slot` 的面板在
+`llm:<id>` 页自己占一个页签,`host` 给的是已保存的端点。内建的两个模块都用插槽。
+
+端点编辑是事务化的:改动先在浏览器暂存,保存时整条写入,面板经 `ctx.setConfig` 改的配置也只进暂存。
+`host.editing` 为真表示这次调用的实例是按还没保存的表单临时构造的,`host.save` 写回的是这份草稿
+而不是磁盘;托管进程的启停、下载安装、拉模型列表这类运行时动作要求端点已保存,模块在
+`editing` 为真时拒绝它们。
+
 ## 写一个 bot 扩展
 
 `"kind": "bot"`,关键字 `cortico-bot`,默认导出 `BotDefinition`(见 [personas.md](personas.md)):
