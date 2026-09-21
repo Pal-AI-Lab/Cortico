@@ -9,7 +9,7 @@ import { readJsonObject, updateJsonObject } from '../../config-file.ts';
 import { readTextFile } from '../../core/util.ts';
 import type { ProviderModule } from '../base.ts';
 import { validateEntry } from '../configuration.ts';
-import { validateProviderName } from '../name.ts';
+import { validateProviderName, defaultSecretName } from '../name.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
 import { quotePrices } from '../pricebook.ts';
@@ -175,7 +175,7 @@ export class ProviderHub {
       if (!requested.spec?.model) throw new ProviderHubError('Model is required.');
       if (input.secretValue !== undefined && (typeof input.secretValue !== 'string' || !input.secretValue || /\s/.test(input.secretValue)))
         throw new ProviderHubError('API Key must be nonempty and contain no whitespace.');
-      if (input.secretValue && !requested.secret) requested.secret = 'CORTICO_PROVIDER_API_KEY';
+      if (input.secretValue && !requested.secret) requested.secret = defaultSecretName(name);
       const entry = validateEntry(module, requested, language);
       const prefix = `providers.${name}.`;
       for (const group of this.groups(name, entry, language)) {

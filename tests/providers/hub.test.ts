@@ -30,8 +30,15 @@ it('new environments remain empty until a validated connection is saved', () => 
   expect(() => hub.save(null, { name: 'Connection', entry: { ...entry, spec: undefined } }, 'en')).toThrow('Model');
   expect(existsSync(join(root, 'Connection'))).toBe(false);
   hub.save(null, { name: 'Connection', entry, secretValue: 'test-key' }, 'en');
-  expect(readFileSync(join(root, 'Connection', '.env'), 'utf8')).toContain('CORTICO_PROVIDER_API_KEY=test-key');
+  expect(readFileSync(join(root, 'Connection', '.env'), 'utf8')).toContain('CORTICO_KEY_CONNECTION=test-key');
   expect(hub.list('en').providers[0].readiness.state).toBe('ready');
+});
+it('derives a distinct default secret variable name from each endpoint name', () => {
+  const { hub, root } = fixture();
+  hub.save(null, { name: 'Alpha', entry, secretValue: 'alpha-key' }, 'en');
+  hub.save(null, { name: 'beta-2', entry, secretValue: 'beta-key' }, 'en');
+  expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('CORTICO_KEY_ALPHA=alpha-key');
+  expect(readFileSync(join(root, 'beta-2', '.env'), 'utf8')).toContain('CORTICO_KEY_BETA_2=beta-key');
 });
 it('rejects stale revisions, directory collisions and module changes without changing saved files', () => {
   const { hub, root } = fixture();
@@ -94,7 +101,7 @@ it('switches the current connection without replacing instances already serving 
 it('rejects credentials changed in another process without overwriting them', () => {
   const { hub, root } = fixture();
   const saved = hub.save(null, { name: 'Alpha', entry, secretValue: 'first-key' }, 'en');
-  writeFileSync(join(root, 'Alpha', '.env'), 'CORTICO_PROVIDER_API_KEY=changed-key\n');
+  writeFileSync(join(root, 'Alpha', '.env'), 'CORTICO_KEY_ALPHA=changed-key\n');
   expect(() => hub.save('Alpha', { ...saved, expectedRevision: saved.revision, secretValue: 'stale-key' }, 'en')).toThrow('changed');
   expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('changed-key');
 });
