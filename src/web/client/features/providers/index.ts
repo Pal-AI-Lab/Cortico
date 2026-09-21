@@ -85,9 +85,21 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
       node.model.title = item.model ?? ''; node.url.title = item.baseUrl ?? '';
       const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
-      node.status.textContent = active ? S.active : S.readiness[readiness];
-      node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== NEW_DRAFT_ID && drafts.has(identity) ? S.readiness.draft : '';
-      node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID;
+      const users = 'usage' in item ? item.usage ?? [] : [];
+      const running = users.filter(user => user.running);
+      const tone = active || running.length ? 'active' : readiness === 'draft' ? 'draft' : readiness === 'ready' ? 'ready' : 'error';
+      const icon = { active: '●', ready: '✓', error: '!', draft: '✎' }[tone];
+      node.status.dataset.tone = tone;
+      node.status.textContent = `${icon} ${active ? S.active : running.length ? S.inUse(running.map(user => user.name).join('、')) : S.readiness[readiness]}`;
+      const notes: string[] = [];
+      if ((active || running.length) && readiness !== 'ready') notes.push('! ' + S.readiness[readiness]);
+      if (identity !== NEW_DRAFT_ID && drafts.has(identity)) notes.push('✎ ' + S.readiness.draft);
+      if (active && running.length) notes.push(S.inUse(running.map(user => user.name).join('、')));
+      const stopped = users.filter(user => !user.running);
+      if (stopped.length) notes.push(S.selectedBy(stopped.map(user => user.name).join('、')));
+      node.secondary.textContent = notes.join(' · ');
+      node.secondary.dataset.tone = (active || running.length) && readiness !== 'ready' ? 'error' : 'draft';
+      node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID || readiness !== 'ready' || running.length > 0;
       node.activate.disabled = item.readiness.state !== 'ready';
       node.probe.hidden = identity === NEW_DRAFT_ID;
       if (identity === NEW_DRAFT_ID) rows.delete(identity); else rows.set(identity, item as Connection);
@@ -183,6 +195,12 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   ctx.lifecycle.own(ctx.router.onChange(route => {
     if (route.segments[0] === 'providers' && route.segments[1]) run(() => select(route.segments[1]));
   }));
+  let refreshing = false;
+  ctx.lifecycle.interval(() => {
+    if (refreshing) return;
+    refreshing = true;
+    run(async () => { try { await refresh(); } finally { refreshing = false; } });
+  }, 5000);
   paint();
   const wanted = ctx.route.segments[1] ?? (newDraft ? NEW_DRAFT_ID : undefined);
   await select(wanted && (wanted === NEW_DRAFT_ID || state.providers.some(item => item.name === wanted)) ? wanted : state.providers.find(item => item.name === state.active)?.name ?? state.providers[0]?.name ?? '', true);

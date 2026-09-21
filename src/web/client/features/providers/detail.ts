@@ -70,6 +70,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     panelHandle?.dispose(); panelHandle = null;
     errors.clear(); form.replaceChildren();
     const basic = section(S.basic);
+    basic.parentElement!.classList.add('connection-basic');
     field(basic, 'name', S.name, editing.name, value => { editing.name = value; }, value => value === saved?.name ? null : validateProviderName(value) ? S.nameHint : null);
     basic.append(ui.msgline(S.nameHint));
     const selectedModule = modules.find(module => module.id === editing.entry.kind);

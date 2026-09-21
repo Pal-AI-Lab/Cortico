@@ -1851,3 +1851,9 @@
 
 .connection-erase { top:auto; bottom:12px; }
 .connection-name { padding-right:0; }
+.connection-detail .connection-basic { padding-bottom:4px; margin-bottom:8px; }
+.connection-hub .btn.connection-activate { font-size:17px; }
+.connection-status[data-tone="active"] { color:var(--accent); }
+.connection-status[data-tone="ready"] { color:var(--ok); }
+.connection-status[data-tone="error"], .connection-secondary[data-tone="error"] { color:var(--danger); }
+.connection-status[data-tone="draft"], .connection-secondary[data-tone="draft"] { color:var(--foreground); }

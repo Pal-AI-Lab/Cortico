@@ -9,13 +9,13 @@ const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
-async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '') {
+async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', usage: Array<{ name: string; running: boolean }> = [], readiness = 'ready') {
   const calls: Array<{ path: string; body: any }> = [];
   const detail = (name: string) => ({ name, entry: structuredClone(entry), revision: 'r1', secretConfigured: 'none', readiness: { state: 'ready' }, config: [], references: [] });
   vi.stubGlobal('fetch', async (path: string, init: any) => {
     calls.push({ path, body: init.body ? JSON.parse(init.body) : null });
     let result: unknown = {};
-    if (path === '/api/providers') result = { active, providers: names.map(name => ({ id: name, name, module: 'sample', moduleTitle: 'Sample driver', model: 'test-model', baseUrl: entry.baseUrl, active: name === active, readiness: { state: 'ready' }, revision: 'r1' })) };
+    if (path === '/api/providers') result = { active, providers: names.map(name => ({ id: name, name, module: 'sample', moduleTitle: 'Sample driver', model: 'test-model', baseUrl: entry.baseUrl, active: name === active, usage, readiness: { state: readiness }, revision: 'r1' })) };
     else if (path === '/api/provider-modules') result = [{ id: 'sample', title: 'Sample driver', description: 'A sample connection', defaultBaseUrl: entry.baseUrl, reasoningTiers: [], serviceTiers: [] }];
     else if (path === '/api/provider-modules/config') result = [];
     else if (/\/activate$/.test(path)) active = decodeURIComponent(path.split('/')[3]);
@@ -55,7 +55,7 @@ it('new drafts make no server mutation and cancel removes the card', async () =>
   expect(root.textContent).toContain('还没有模型供应商');
   (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')).toHaveLength(1);
-  expect(root.querySelector('.connection-status')?.textContent).toBe('草稿');
+  expect(root.querySelector('.connection-status')?.textContent).toBe('✎ 草稿');
   expect(calls.filter(call => call.body && call.path !== '/api/provider-modules/config')).toHaveLength(0);
   ([...root.querySelectorAll('button')].find(button => button.textContent === '取消') as HTMLButtonElement).click(); await flush();
   expect(root.querySelectorAll('.connection-card')).toHaveLength(0);
@@ -166,4 +166,15 @@ it('new connection sections start collapsed and identify required model settings
   expect(root.querySelector('details summary .required-mark')?.textContent).toContain('*');
   expect(root.querySelector('.fieldlabel .required-mark')?.textContent).toContain('*');
   expect(root.textContent).not.toContain('⚙ 配置');
+});
+
+it('hides connection actions for unavailable endpoints and endpoints used by running deployments', async () => {
+  const unavailable = await fixture(['Alpha'], '', [], 'needs-setup');
+  expect((unavailable.root.querySelector('.connection-connect') as HTMLElement).hidden).toBe(true);
+  expect((unavailable.root.querySelector('.connection-status') as HTMLElement).dataset.tone).toBe('error');
+  unavailable.ctx.lifecycle.dispose(); unavailable.root.remove();
+  const occupied = await fixture(['Alpha'], '', [{ name: 'Other', running: true }]);
+  expect((occupied.root.querySelector('.connection-connect') as HTMLElement).hidden).toBe(true);
+  expect(occupied.root.querySelector('.connection-status')?.textContent).toContain('其他实例使用中：Other');
+  expect((occupied.root.querySelector('.connection-status') as HTMLElement).dataset.tone).toBe('active');
 });
