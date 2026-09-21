@@ -1,6 +1,6 @@
 allowBuilds:
   '@parcel/watcher': false
-  canvas: set this to true or false
+  canvas: true
   esbuild: true
 
 # 所有 prismarine 依赖必须解析到同一 vec3 版本,否则同名 Vec3 类型互不兼容。
