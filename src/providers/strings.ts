@@ -31,6 +31,7 @@ const zh = {
   tiersObject: '服务档报价必须是对象',
   tierNameRequired: '服务档名不能为空',
   tierRules: '服务档报价需要规则对象',
+  timeWindowsUnsupported: '分时段价目由 provider 扩展在模块价目里声明,端点价目不接受 timeWindows',
   noModel: '未选模型',
   noSecret: (name: string) => `缺少密钥 ${name}`,
 };
@@ -65,6 +66,7 @@ const en: typeof zh = {
   tiersObject: 'Service tier pricing must be an object',
   tierNameRequired: 'Service tier name cannot be empty',
   tierRules: 'Service tier pricing needs a rules object',
+  timeWindowsUnsupported: 'Time-of-day pricing is declared by a provider extension in its module quote; endpoint pricing does not accept timeWindows',
   noModel: 'No model selected',
   noSecret: (name: string) => `Missing secret ${name}`,
 };

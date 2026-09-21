@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
 
 # Provider
 
@@ -112,6 +112,15 @@ router 自动加载。
 `data/usage.jsonl`;控制台「用量」页与 `/api/usage` 聚合。模块自带价目,端点条目的 `pricing`
 按成本基准覆盖。`pricing` 为空时仍使用模块价目;两者都没有适用价目时,调用只记用量,
 不记金额。缺少所需计量的费用项记为未知。
+
+一份价目按三个维度依次选档:时段、服务档、输入阶梯。`timeWindows` 里的每个窗口自带一张完整
+价目表(`rules`,可再带 `inputBands` 与 `serviceTiers`),`from`、`to` 是 `timezone` 这个时区的
+`HH:MM`,左闭右开,`to` 不晚于 `from` 表示跨零点。选档按请求开始时刻,命中的第一个窗口为准,
+都不命中用窗口外的那张表;窗口随价目写进快照,重算历史流水得到同一结果。窗口的时区或时刻读不出
+来时,这次调用的金额记为未知。
+
+内建 provider 不带分时段价目,端点的 `pricing` 也不接受 `timeWindows`:按时段计费由 provider
+扩展在自己的模块价目里声明。
 
 ## 添加 Provider
 

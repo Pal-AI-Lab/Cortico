@@ -86,6 +86,12 @@ describe('Provider price snapshots', () => {
     expect(priceUsage(meters, [windowedQuote(offPeak)])[0]).toMatchObject({ amount:null, knownAmount:0, missing:['serviceTier'] });
     expect(priceUsage(meters, [windowedQuote(offPeak, { ...OFF_PEAK, timezone:'Nowhere/Nozone' })], 'default')[0]).toMatchObject({ amount:null, knownAmount:0, missing:['timeWindow'] });
   });
+  it('snapshots module-declared windows and keeps them out of endpoint pricing', () => {
+    const definition: PriceDefinition = { models:[MODEL], currency:'USD', basis:'equivalent', rules: windowRules(1), source:'样本价目表(错峰窗口)', timeWindows:[OFF_PEAK] };
+    const quoted = quotePrices(entry, { model: MODEL }, { startedAt:'2026-09-19T16:30:00Z', requestedServiceTier:null }, [definition]);
+    expect(priceUsage(meters, quoted, 'default')[0].amount).toBeCloseTo(PEAK_RATE / 2);
+    expect(()=>validatePrices([definition])).toThrow();
+  });
 });
 
 describe('immutable billing aggregates', () => {
