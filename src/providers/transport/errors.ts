@@ -46,3 +46,12 @@ export function retryDelay(ms: number, signal?: AbortSignal): Promise<void> {
     signal.addEventListener('abort', onAbort, { once: true });
   });
 }
+
+/** `Retry-After` 头换算成毫秒:数字按秒,HTTP 日期按距今;缺失或不成形返回 null,过期为 0。 */
+export function parseRetryAfter(header: string | null): number | null {
+  if (!header) return null;
+  const value = header.trim();
+  if (/^\d+$/.test(value)) return Number(value) * 1000;
+  const at = Date.parse(value);
+  return Number.isNaN(at) ? null : Math.max(0, at - Date.now());
+}
