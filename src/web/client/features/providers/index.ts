@@ -80,9 +80,12 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       node.el.classList.toggle('is-active', active); node.el.classList.toggle('is-selected', identity === selected);
       node.title.textContent = identity === NEW_DRAFT_ID ? newDraft?.name || S.newName : identity;
       node.title.title = node.title.textContent;
+      // A card with a draft shows what the draft holds; the 草稿 line says it is not saved yet.
+      const draft = identity === NEW_DRAFT_ID ? null : drafts.get(identity);
+      const model = draft?.entry.spec?.model || item.model || '—'; const url = draft?.entry.baseUrl || item.baseUrl || '—';
       node.kind.textContent = item.moduleTitle; node.kind.title = item.moduleTitle;
-      node.model.textContent = item.model || '—'; node.url.textContent = item.baseUrl || '—';
-      node.model.title = item.model ?? ''; node.url.title = item.baseUrl ?? '';
+      node.model.textContent = model; node.url.textContent = url;
+      node.model.title = model; node.url.title = url;
       const readiness = invalid.has(identity) && identity !== NEW_DRAFT_ID ? 'invalid' : item.readiness.state;
       node.status.textContent = active ? S.active : S.readiness[readiness];
       node.secondary.textContent = active && readiness !== 'ready' ? S.readiness[readiness] : identity !== NEW_DRAFT_ID && drafts.has(identity) ? S.readiness.draft : '';
