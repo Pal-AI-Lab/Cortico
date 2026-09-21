@@ -242,8 +242,8 @@ export interface ExtensionPackageDetail {
   /** 解析不通过的理由,与本机装载时用的是同一套判据 */
   problems?: string[];
   warnings: string[];
-  /** 本进程的扩展契约版本 */
-  frameworkApi: number;
+  /** 本进程对这个包所属那一类的契约版本;manifest 解析不通过时缺席 */
+  frameworkApi?: number;
   /** `engines.node` */
   engines?: string;
   unpackedSize?: number;

@@ -1,17 +1,24 @@
 /**
  * 解析 package.json 的 cortico 扩展声明，不访问文件系统；装载器与 check:extension 共用。
- * kind 必须为 world、provider 或 bot；api 必须等于 EXTENSION_API_VERSION。
- * WorldDefinition、ProviderModule、BotDefinition 及其可达接口或 ConsolePanelContext
- * 发生不兼容变更时递增版本。
+ * kind 必须为 world、provider 或 bot；api 必须等于这一类的契约版本。
  * consoleClient 和 consoleStyle 是预构建产物的包内相对路径；服务端分配 URL。
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
  */
 
-/** 扩展接口发生不兼容变更时递增。 */
-export const EXTENSION_API_VERSION = 4;
-
 export type ExtensionKind = 'world' | 'provider' | 'bot';
 export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', 'bot'];
+
+/**
+ * 三类扩展各自的契约版本。一类的接口不兼容变更只递增这一类:
+ * world 看 `WorldDefinition`,provider 看 `ProviderModule`,bot 看 `BotDefinition`
+ * (连同 `BotParts`、`Persona`、`LoadedConfig`);`ConsolePanelContext` 与其余共用接口
+ * 变更时三类一起加一。同一次发布里的多处变更合计加一。
+ */
+export const EXTENSION_API_VERSIONS: Readonly<Record<ExtensionKind, number>> = {
+  world: 5,
+  provider: 5,
+  bot: 5,
+};
 
 /** npm 上按类发现用的关键字。 */
 export const EXTENSION_KEYWORDS: Readonly<Record<ExtensionKind, string>> = {
@@ -79,12 +86,15 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionMani
   }
 
   const api = m.api;
+  // kind 认不出时不比版本:每一类的契约版本各走各的,不知道是哪一类就没有可比的数。
+  const expected = kindOk ? EXTENSION_API_VERSIONS[kind as ExtensionKind] : undefined;
   if (typeof api !== 'number' || !Number.isInteger(api) || api < 1) {
-    reasons.push(`cortico.api 必须是正整数(当前框架契约 v${EXTENSION_API_VERSION}),现在是 ${JSON.stringify(api)}。`);
-  } else if (api < EXTENSION_API_VERSION) {
-    reasons.push(`扩展按契约 v${api} 编写,本框架是 v${EXTENSION_API_VERSION}:扩展需要升级。`);
-  } else if (api > EXTENSION_API_VERSION) {
-    reasons.push(`扩展要求契约 v${api},本框架只到 v${EXTENSION_API_VERSION}:框架需要升级。`);
+    const note = expected === undefined ? '' : `(本框架的 ${kind} 契约是 v${expected})`;
+    reasons.push(`cortico.api 必须是正整数${note},现在是 ${JSON.stringify(api)}。`);
+  } else if (expected !== undefined && api < expected) {
+    reasons.push(`扩展按 ${kind} 契约 v${api} 编写,本框架的 ${kind} 契约是 v${expected}:扩展需要升级。`);
+  } else if (expected !== undefined && api > expected) {
+    reasons.push(`扩展要求 ${kind} 契约 v${api},本框架的 ${kind} 契约只到 v${expected}:框架需要升级。`);
   }
 
   const client = m.consoleClient;

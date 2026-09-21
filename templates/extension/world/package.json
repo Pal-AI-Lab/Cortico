@@ -15,7 +15,7 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "world",
-    "api": 4
+    "api": 5
   },
   "files": [
     "src",
@@ -27,7 +27,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
-    "cortico": "^0.1.1",
+    "cortico": "^0.1.2",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
     "vitest": "^2.1.8"

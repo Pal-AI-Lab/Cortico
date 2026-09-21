@@ -43,7 +43,7 @@ lockfile。
   "type": "module",
   "main": "./src/index.ts",
   "keywords": ["cortico-world"],
-  "cortico": { "kind": "world", "api": 4, "consoleClient": "dist/console.js", "consoleStyle": "dist/console.css" }
+  "cortico": { "kind": "world", "api": 5, "consoleClient": "dist/console.js", "consoleStyle": "dist/console.css" }
 }
 ```
 
@@ -63,8 +63,8 @@ export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), cre
 corepack pnpm add -D cortico
 ```
 
-npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 bot。它的版本跟着框架走,
-`cortico.api` 契约版本是 **4**;按你写扩展时的版本钉住范围。仓库根的 `pnpm publish:package` 生成它。
+npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 bot。它的版本跟着框架走;
+按你写扩展时的版本钉住范围。仓库根的 `pnpm publish:package` 生成它。
 
 控制台面板可选。自定义面板的 `src/console/client.ts` 默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
 用 esbuild 打成 `dist/console.js`(+ `.css`),路径写进 manifest;浏览器侧对 `cortico/*` 只能
@@ -112,10 +112,12 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 
 ## 契约版本
 
-`cortico.api` 必须等于框架的 `EXTENSION_API_VERSION`(现在是 4)。`WorldDefinition`、
-`ProviderModule`、`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)或
-`ConsolePanelContext` 任一不兼容变更时框架将版本加一,版本不符的扩展不能加载,页面显示「需要升级」。
-扩展 API 与控制台协议分别版本化。
+三类扩展各有一个契约版本,`cortico.api` 必须等于自己这一类的那个:world **5**、provider **5**、
+bot **5**。版本不符的扩展不能加载,页面显示「需要升级」。
+
+加一的判据按类分:`WorldDefinition` 不兼容变更只加 world,`ProviderModule` 只加 provider,
+`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;`ConsolePanelContext`
+与其余共用接口变更时三类一起加。同一次发布里的多处变更合计加一。扩展 API 与控制台协议分别版本化。
 
 ## 已有扩展
 
