@@ -52,8 +52,11 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       let node = nodes.get(identity);
       if (!node) {
         const el = ui.h('article', 'connection-card'); el.dataset.provider = identity;
-        const title = ui.h('div', 'connection-name'); const kind = ui.h('div', 'connection-kind');
-        const model = ui.h('div', 'connection-model'); const url = ui.h('div', 'connection-url');
+        const title = ui.h('div', 'connection-name');
+        // Field name and value in one chip, the same shape the terminal gives a tool call's fields.
+        const facts = ui.h('div', 'connection-facts');
+        const fact = (key: string) => { const box = ui.h('span', `kv kv-${key}`); const value = ui.h('span', 'kv-v'); box.append(ui.h('span', 'kv-k', key), value); facts.append(box); return value; };
+        const kind = fact('kind'); const model = fact('model'); const url = fact('baseUrl');
         const status = ui.h('div', 'connection-status'); const secondary = ui.h('div', 'connection-secondary');
         const actions = ui.rowbar();
         const configure = ui.button(S.configure, { size: 'sm', onClick: () => run(() => select(identity)) });
@@ -68,7 +71,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
         const probe = ui.button(S.probe, { size: 'sm', onClick: () => run(() => runProbe(identity)) });
         probe.classList.add('connection-probe-btn'); probe.append(ui.h('span', 'connection-spin'));
         const erase = eraseButton(identity);
-        actions.append(configure, probe, activate); el.append(erase, title, kind, model, url, status, secondary, actions, probePanel);
+        actions.append(configure, probe, activate); el.append(erase, title, facts, status, secondary, actions, probePanel);
         el.addEventListener('click', event => { if (!(event.target as Element).closest('button')) run(() => select(identity)); }, opts);
         if (identity === NEW_DRAFT_ID) cards.prepend(el); else cards.append(el);
         node = { el, title, kind, model, url, status, secondary, activate, erase, probe, probePanel, probeBody }; nodes.set(identity, node);

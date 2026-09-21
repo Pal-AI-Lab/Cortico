@@ -1749,8 +1749,11 @@
 .connection-card{min-width:0;border:1px solid var(--line);border-radius:12px;padding:14px;background:var(--paper);cursor:pointer;transition:background .15s,border-color .15s}
 .connection-card.is-active{border-color:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 12%,transparent)}
 .connection-card.is-selected{background:color-mix(in srgb,var(--ink) 5%,var(--paper));outline:2px solid var(--ink-dim);outline-offset:1px}
-.connection-name,.connection-kind,.connection-model,.connection-url,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.connection-name{font:700 17px/1.25 var(--sans)}.connection-kind{margin-top:4px;font:600 11.5px/1.3 var(--sans);color:var(--muted-foreground)}.connection-model{margin-top:9px;font-size:13px}.connection-url{font-size:11px;color:var(--ink-dim);margin-top:3px}
+.connection-name,.connection-status,.connection-secondary{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.connection-name{font:700 17px/1.25 var(--sans)}
+.connection-facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;min-width:0}
+.connection-facts .kv{max-width:100%}.connection-facts .kv-v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv-kind{--kv-line:color-mix(in srgb,var(--ink-blue) 60%,transparent)}.kv-model{--kv-line:color-mix(in srgb,var(--accent-2) 75%,transparent)}.kv-baseUrl{--kv-line:var(--line-strong)}
 .connection-status{font-size:12px;margin-top:14px}.connection-secondary{font-size:11px;color:var(--ink-dim)}
 .connection-card .rowbar{margin-top:12px;justify-content:space-between;gap:4px}
 .connection-detail{min-width:0}.connection-detail .sheet{margin-bottom:16px}
