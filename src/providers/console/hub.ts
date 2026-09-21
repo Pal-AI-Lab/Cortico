@@ -2,7 +2,7 @@ import { coerceGroupValues, getByPath, setByPath } from '../../core/config-schem
 /** Connection configuration transactions serialize writers across deployments and roll back all touched files on failure. */
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import type { CoreConfig, LLMProviderEntry } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import { readJsonObject, updateJsonObject } from '../../config-file.ts';
@@ -14,6 +14,8 @@ import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
 import { quotePrices } from '../pricebook.ts';
 import { connectionGroup } from './config.ts';
+import { instanceIsRunning } from '../../core/instance-lock.ts';
+import { CORE_DEFAULTS } from '../../core/config.ts';
 
 export class ProviderHubError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -89,6 +91,11 @@ export class ProviderHub {
       id: name, name, module: entry.kind, moduleTitle: this.modules.find(m => m.id === entry.kind)?.title ?? entry.kind,
       model: entry.spec?.model ?? null, baseUrl: entry.baseUrl, active: name === this.config.activeProvider,
       readiness: this.readiness(name, entry, language), revision: this.revision(name),
+      usage: this.references(name).filter(file => resolve(file) !== resolve(this.file)).map(file => {
+        const config = readJsonObject(file);
+        const paths = config.paths as { data?: string } | undefined;
+        return { name: basename(dirname(file)), running: instanceIsRunning(resolve(dirname(file), paths?.data ?? CORE_DEFAULTS.paths.data)) };
+      }),
     })) };
   }
   detail(name: string, language: Language) {

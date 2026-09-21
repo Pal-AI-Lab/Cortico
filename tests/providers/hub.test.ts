@@ -6,6 +6,7 @@ import { nullLogger } from '../../src/core/util.ts';
 import { ProviderRegistry } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/console/settings.ts';
 import { ProviderHub } from '../../src/providers/console/hub.ts';
+import { acquireInstanceLock } from '../../src/core/instance-lock.ts';
 import { validateProviderName } from '../../src/providers/name.ts';
 
 const cleanups: Array<() => void> = [];
@@ -97,4 +98,18 @@ it('rejects credentials changed in another process without overwriting them', ()
   writeFileSync(join(root, 'Alpha', '.env'), 'CORTICO_PROVIDER_API_KEY=changed-key\n');
   expect(() => hub.save('Alpha', { ...saved, expectedRevision: saved.revision, secretValue: 'stale-key' }, 'en')).toThrow('changed');
   expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('changed-key');
+});
+
+it('reports other deployment selections and live ownership without claiming stopped instances are running', () => {
+  const { hub, temp } = fixture();
+  hub.save(null, { name: 'Shared', entry }, 'en');
+  const other = join(temp.dir, 'other');
+  const data = join(other, 'custom-data'); mkdirSync(data, { recursive: true });
+  writeFileSync(join(other, 'deployment.json'), '{}');
+  writeFileSync(join(other, 'config.json'), JSON.stringify({ activeProvider: 'Shared', paths: { data: 'custom-data' } }));
+  expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: false }]);
+  const lock = acquireInstanceLock(data);
+  try { expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: true }]); }
+  finally { lock.release(); }
+  expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: false }]);
 });
