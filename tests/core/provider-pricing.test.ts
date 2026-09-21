@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { priceUsage, unknownMeters, type ProviderAttempt, type TokenMeters } from '../../src/core/generation.ts';
 import { quotePrices, snapshotPrice, validatePrices, type PriceDefinition } from '../../src/providers/pricebook.ts';
 import { aggregateUsage } from '../../src/core/cost.ts';
-import type { PriceRule } from '../../src/core/generation.ts';
+import type { PriceRule, PriceSnapshot, PriceWindow } from '../../src/core/generation.ts';
 import type { UsageRecord } from '../../src/core/types.ts';
 
 const at = { startedAt: '2026-09-07T00:59:59Z', requestedServiceTier: 'priority' };
@@ -22,6 +22,13 @@ function subscriptionPrices(): PriceDefinition[] {
   ];
 }
 const quote = () => quotePrices(entry, { model: MODEL }, at, subscriptionPrices());
+
+/** 测试价目按时段分档:窗口内半价并再按服务档细分,窗口外用基础档。 */
+const windowRules = (multiplier: number): PriceRule[] => [{ meter: 'uncachedInput', perMillion: 2 * multiplier }, { meter: 'output', perMillion: 6 * multiplier }];
+const OFF_PEAK: PriceWindow = { from: '00:30', to: '08:30', timezone: 'Asia/Shanghai', rules: windowRules(.5), serviceTiers: { default: { rules: windowRules(.5) }, priority: { rules: windowRules(1) } } };
+const PEAK_RATE = (50000 * 2 + 1000 * 6) / 1e6;
+const windowedQuote = (capturedAt: string, window: PriceWindow = OFF_PEAK): PriceSnapshot =>
+  ({ id: 'quote', currency: 'USD', basis: 'equivalent', source: '样本价目表(错峰窗口)', capturedAt, rules: windowRules(1), timeWindows: [window] });
 
 function row(id: string, outcome: ProviderAttempt['outcome'], currency='USD'): UsageRecord {
   const quotes = quote().map(q => ({ ...q, currency }));
@@ -61,6 +68,29 @@ describe('Provider price snapshots', () => {
     expect(priceUsage({...unknownMeters(),details:{audio:{quantity:30,unit:'second'}}},[snapshot])[0].amount).toBe(.03);
     expect(priceUsage({...unknownMeters(),details:{audio:{quantity:30,unit:'token'}}},[snapshot])[0].amount).toBeNull();
     expect(()=>validatePrices([{models:['*'],currency:'USD',basis:'marginal',rules:[{meter:'output',perMillion:-1}],source:'x'}])).toThrow();
+  });
+  it('bills by the window holding the request start, read on the window clock', () => {
+    const rate = (capturedAt: string) => priceUsage(meters, [windowedQuote(capturedAt)], 'default')[0].amount;
+    expect(rate('2026-09-20T04:00:00Z')).toBeCloseTo(PEAK_RATE);
+    expect(rate('2026-09-19T16:30:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(rate('2026-09-20T00:30:00Z')).toBeCloseTo(PEAK_RATE);
+    const midnight: PriceWindow = { from:'22:00', to:'02:00', timezone:'UTC', rules: windowRules(.5) };
+    const across = (capturedAt: string) => priceUsage(meters, [windowedQuote(capturedAt, midnight)])[0].amount;
+    expect(across('2026-09-20T23:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(across('2026-09-20T01:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(across('2026-09-20T12:00:00Z')).toBeCloseTo(PEAK_RATE);
+  });
+  it('resolves the service tier within the matched window and leaves an unreadable window unpriced', () => {
+    const offPeak = '2026-09-19T16:30:00Z';
+    expect(priceUsage(meters, [windowedQuote(offPeak)], 'priority')[0].amount).toBeCloseTo(PEAK_RATE);
+    expect(priceUsage(meters, [windowedQuote(offPeak)])[0]).toMatchObject({ amount:null, knownAmount:0, missing:['serviceTier'] });
+    expect(priceUsage(meters, [windowedQuote(offPeak, { ...OFF_PEAK, timezone:'Nowhere/Nozone' })], 'default')[0]).toMatchObject({ amount:null, knownAmount:0, missing:['timeWindow'] });
+  });
+  it('snapshots module-declared windows and keeps them out of endpoint pricing', () => {
+    const definition: PriceDefinition = { models:[MODEL], currency:'USD', basis:'equivalent', rules: windowRules(1), source:'样本价目表(错峰窗口)', timeWindows:[OFF_PEAK] };
+    const quoted = quotePrices(entry, { model: MODEL }, { startedAt:'2026-09-19T16:30:00Z', requestedServiceTier:null }, [definition]);
+    expect(priceUsage(meters, quoted, 'default')[0].amount).toBeCloseTo(PEAK_RATE / 2);
+    expect(()=>validatePrices([definition])).toThrow();
   });
 });
 

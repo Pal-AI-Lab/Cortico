@@ -16,13 +16,16 @@ export interface TokenMeters {
 }
 export type Meter = Exclude<keyof TokenMeters, 'native' | 'details'> | `detail:${string}`;
 export interface PriceRule { meter: Meter; perMillion: number; unit?: string; }
-export interface PriceSnapshot {
+export interface PriceSchedule { rules: PriceRule[]; inputBands?: Array<{ from: number; rules: PriceRule[] }>; }
+export interface PriceTable extends PriceSchedule { serviceTiers?: Record<string, PriceSchedule>; }
+/** `from` and `to` are `HH:MM` on the clock of `timezone`, half-open; `to` at or before `from` spans midnight. */
+export interface PriceWindow extends PriceTable { from: string; to: string; timezone: string; }
+export interface PriceSnapshot extends PriceTable {
   id: string;
   currency: string;
   basis: 'marginal' | 'equivalent';
-  rules: PriceRule[];
-  inputBands?: Array<{ from: number; rules: PriceRule[] }>;
-  serviceTiers?: Record<string, { rules: PriceRule[]; inputBands?: Array<{ from: number; rules: PriceRule[] }> }>;
+  /** The first window holding `capturedAt` replaces the table above it; outside every window that table applies. */
+  timeWindows?: PriceWindow[];
   source: string;
   capturedAt: string;
 }
@@ -30,7 +33,7 @@ export interface Charge {
   quote: PriceSnapshot;
   amount: number | null;
   knownAmount: number;
-  missing: Array<Meter | 'serviceTier'>;
+  missing: Array<Meter | 'serviceTier' | 'timeWindow'>;
   lines: Array<{ meter: Meter; unit: string; quantity: number | null; perMillion: number; amount: number | null }>;
 }
 export interface ProviderAttempt {
@@ -89,13 +92,41 @@ export function standardUsage(meters: TokenMeters): Usage | null {
   return { input_tokens: input, output_tokens: output, total_tokens: total,
     input_tokens_details: { cached_tokens: cachedInput }, output_tokens_details: { reasoning_tokens: reasoning } };
 }
+/** Minutes since midnight for an `HH:MM` bound, 24:00 included; null when the text is not one. */
+function clockMinutes(value: string): number | null {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(value);
+  if (!match) return null;
+  const minutes = Number(match[1]) * 60 + Number(match[2]);
+  return Number(match[2]) > 59 || minutes > 24 * 60 ? null : minutes;
+}
+/** Whether the instant falls in the window on the window's own clock; null when the zone or a bound is unreadable. */
+function holdsTime(window: PriceWindow, at: string): boolean | null {
+  const instant = new Date(at);
+  const [from, to] = [clockMinutes(window.from), clockMinutes(window.to)];
+  if (from === null || to === null || Number.isNaN(instant.getTime())) return null;
+  let local: number;
+  try {
+    // Intl throws on a zone name it does not know.
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: window.timezone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(instant);
+    const read = (type: string): number => Number(parts.find(part => part.type === type)!.value);
+    local = read('hour') * 60 + read('minute');
+  } catch { return null; }
+  return to > from ? local >= from && local < to : local >= from || local < to;
+}
 export function priceUsage(meters: TokenMeters, quotes: readonly PriceSnapshot[], serviceTier: string | null = null): Charge[] {
   return quotes.map(quote => {
     const missing: Charge['missing'] = [];
-    let schedule: Pick<PriceSnapshot, 'rules' | 'inputBands'> = quote;
-    if (quote.serviceTiers) {
-      if (serviceTier === null || !quote.serviceTiers[serviceTier]) missing.push('serviceTier');
-      else schedule = quote.serviceTiers[serviceTier];
+    let table: PriceTable = quote;
+    for (const window of quote.timeWindows ?? []) {
+      const holds = holdsTime(window, quote.capturedAt);
+      // An unreadable window may be the one holding the request; a later table cannot stand in for it.
+      if (holds === null) { missing.push('timeWindow'); break; }
+      if (holds) { table = window; break; }
+    }
+    let schedule: PriceSchedule = table;
+    if (table.serviceTiers) {
+      if (serviceTier === null || !table.serviceTiers[serviceTier]) missing.push('serviceTier');
+      else schedule = table.serviceTiers[serviceTier];
     }
     let rules = schedule.rules;
     if (schedule.inputBands?.length) {

@@ -2,16 +2,15 @@ import { createHash } from 'node:crypto';
 import type { Request } from '../protocol/open-responses/index.ts';
 import type { LLMProviderEntry } from '../core/types.ts';
 import type { Language } from '../core/language.ts';
-import type { PriceSnapshot, PriceRule } from '../core/generation.ts';
+import type { PriceSnapshot, PriceRule, PriceTable, PriceWindow } from '../core/generation.ts';
 import { text } from './strings.ts';
 
-export interface PriceDefinition {
+export interface PriceDefinition extends PriceTable {
   models: string[];
   currency: string;
   basis: 'marginal' | 'equivalent';
-  rules: PriceRule[];
-  inputBands?: Array<{ from: number; rules: PriceRule[] }>;
-  serviceTiers?: Record<string, { rules: PriceRule[]; inputBands?: Array<{ from: number; rules: PriceRule[] }> }>;
+  /** A module declares its own time-of-day windows; `validatePrices` does not take them from an endpoint. */
+  timeWindows?: PriceWindow[];
   source: string;
 }
 export interface QuoteTime { startedAt: string; requestedServiceTier: string | null; }
@@ -60,6 +59,7 @@ export function validatePrices(value: unknown, language: Language = 'zh'): Price
     if (typeof raw.currency !== 'string' || !raw.currency.trim()) throw new Error(S.currencyRequired);
     if (raw.basis !== 'marginal' && raw.basis !== 'equivalent') throw new Error(S.basisValue);
     if (typeof raw.source !== 'string' || !raw.source.trim()) throw new Error(S.sourceRequired);
+    if (raw.timeWindows !== undefined) throw new Error(S.timeWindowsUnsupported);
     const tiers: PriceDefinition['serviceTiers'] = {};
     if (raw.serviceTiers !== undefined) {
       if (!raw.serviceTiers || typeof raw.serviceTiers !== 'object' || Array.isArray(raw.serviceTiers)) throw new Error(S.tiersObject);
