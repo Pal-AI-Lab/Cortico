@@ -7,6 +7,7 @@ import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/clie
 import type { HfFile, HfRepo } from '../huggingface.ts';
 import type { ModelsState } from './server.ts';
 import { panel } from '../strings.ts';
+import { HITS_PER_PAGE } from '../../../web/client/features/extensions/index.ts';
 
 const POLL_MS = 2_000;
 
@@ -48,7 +49,8 @@ export const modelsPanel: ConsolePanel = {
       query = wanted;
       chosen = null;
       try {
-        const result = await ctx.invoke<{ repos: HfRepo[] }>('search', [{ name, query: wanted }]);
+        // One page of results, the console's page size for search hits.
+        const result = await ctx.invoke<{ repos: HfRepo[] }>('search', [{ name, query: wanted, limit: HITS_PER_PAGE }]);
         repos = result.repos;
         searchNote = repos.length ? '' : S.noRepos;
       } catch (error) {

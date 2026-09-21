@@ -54,7 +54,6 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
   const blocks = connectionBlocks(host.language);
   return {
     config: [],
-    // The editor in workflow order: address, runtime install, server and models, then the model to generate with.
     panels: [
       { ...blocks.endpoint, title: S.endpointPanel, description: S.endpointPanelDescription },
       { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription },
@@ -150,7 +149,8 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
         }
         if (method === 'search') {
           if (typeof value.query !== 'string' || !value.query.trim()) throw new Error(S.queryRequired);
-          return { repos: await searchGguf(value.query.trim()) };
+          if (!Number.isInteger(value.limit) || (value.limit as number) < 1) throw new Error(S.limitRequired);
+          return { repos: await searchGguf(value.query.trim(), value.limit as number) };
         }
         if (method === 'files') {
           if (typeof value.repo !== 'string' || !value.repo.trim()) throw new Error(S.repoRequired);

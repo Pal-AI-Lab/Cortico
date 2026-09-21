@@ -23,14 +23,14 @@ it('search asks for gguf repositories by downloads and projects id, counts and u
       { downloads: 1 },
     ]));
   }) as typeof fetch;
-  const repos = await searchGguf('model', { fetchImpl, env: { HF_ENDPOINT: 'https://hf-mirror.com' } });
+  const repos = await searchGguf('model', 12, { fetchImpl, env: { HF_ENDPOINT: 'https://hf-mirror.com' } });
   expect(repos).toEqual([
     { id: 'org/Model-GGUF', downloads: 1200, likes: 7, updatedAt: '2026-09-01T00:00:00.000Z' },
     { id: 'other/Legacy-GGUF', downloads: 0, likes: 0, updatedAt: null },
   ]);
   const url = new URL(seen[0]);
   expect(url.origin + url.pathname).toBe('https://hf-mirror.com/api/models');
-  expect(Object.fromEntries(url.searchParams)).toMatchObject({ search: 'model', filter: 'gguf', sort: 'downloads', direction: '-1' });
+  expect(Object.fromEntries(url.searchParams)).toMatchObject({ search: 'model', filter: 'gguf', sort: 'downloads', direction: '-1', limit: '12' });
   expect(url.searchParams.getAll('expand[]')).toEqual(['downloads', 'likes', 'lastModified']);
 });
 

@@ -1,8 +1,7 @@
 /**
  * HuggingFace lookups behind the pull field: repositories tagged `gguf`, and the GGUF files of
- * one repository as `repo:tag` pull targets. The host is the one llama-server itself pulls from
- * (`MODEL_ENDPOINT`, else `HF_ENDPOINT`, else huggingface.co), so a repository found here is
- * reachable for the pull.
+ * one repository as `repo:tag` pull targets. The host is the one llama-server itself pulls from:
+ * `MODEL_ENDPOINT`, else `HF_ENDPOINT`, else huggingface.co.
  */
 
 export interface HfRepo {
@@ -29,8 +28,6 @@ export interface HfOptions {
 }
 
 const DEFAULT_ENDPOINT = 'https://huggingface.co';
-const SEARCH_LIMIT = 20;
-const TIMEOUT_MS = 15_000;
 const SHARD_RE = /-(\d{5})-of-\d{5}\.gguf$/i;
 const QUANT_RE = /^(?:i?q\d[a-z0-9_]*|tq\d[a-z0-9_]*|bf16|f16|f32|f64|mxfp4[a-z0-9_]*)$/i;
 
@@ -39,13 +36,14 @@ export function hfEndpoint(env: NodeJS.ProcessEnv = process.env): string {
 }
 
 async function getJson(url: string, fetchImpl: typeof fetch): Promise<unknown> {
-  const res = await fetchImpl(url, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const res = await fetchImpl(url, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`GET ${url} ${res.status}`);
   return res.json();
 }
 
-export async function searchGguf(query: string, options: HfOptions = {}): Promise<HfRepo[]> {
-  const params = new URLSearchParams({ search: query, filter: 'gguf', sort: 'downloads', direction: '-1', limit: String(SEARCH_LIMIT) });
+/** The `limit` most-downloaded matches; without one the listing returns up to a thousand rows. */
+export async function searchGguf(query: string, limit: number, options: HfOptions = {}): Promise<HfRepo[]> {
+  const params = new URLSearchParams({ search: query, filter: 'gguf', sort: 'downloads', direction: '-1', limit: String(limit) });
   // The plain listing omits lastModified; `expand` names every field wanted back.
   for (const field of ['downloads', 'likes', 'lastModified']) params.append('expand[]', field);
   const rows = await getJson(`${hfEndpoint(options.env)}/api/models?${params}`, options.fetchImpl ?? fetch);
