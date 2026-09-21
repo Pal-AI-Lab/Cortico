@@ -5,7 +5,7 @@
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   buildClientLaunch, mavenPath, offlineUuid, rulesAllow, soleVersionId,
 } from '../../../src/worlds/minecraft/client-launch.ts';
@@ -52,7 +52,15 @@ beforeAll(() => {
     libraries: [{ name: 'net.fabricmc:fabric-loader:0.15.0' }],
     arguments: { game: ['--fabric'] },
   };
-  for (const v of [vanilla, modded]) {
+  /** 加载器版本:自己没有主 jar,靠 ignoreList 把借来的那个挡在模块路径外,并点名一个没装上的库 */
+  const bootstrapped = {
+    id: 'bootstrap-1.20.1',
+    inheritsFrom: '1.20.1',
+    mainClass: 'org.example.bootstrap.Main',
+    libraries: [{ name: 'org.example:absent:2.0' }],
+    arguments: { jvm: ['-DignoreList=client-extra,${version_name}.jar'] },
+  };
+  for (const v of [vanilla, modded, bootstrapped]) {
     mkdirSync(join(dir, 'versions', v.id), { recursive: true });
     writeFileSync(join(dir, 'versions', v.id, `${v.id}.json`), JSON.stringify(v));
   }
@@ -149,6 +157,24 @@ describe('buildClientLaunch', () => {
     expect(cp.indexOf('fabric-loader')).toBeLessThan(cp.indexOf('core-1.0.jar')); // loader 排在前面
     expect(cp).toContain(join('versions', '1.20.1', '1.20.1.jar'));
     expect(out.args).toContain('--fabric');
+  });
+
+  it('ignoreList 指向实际加载的那个主 jar', () => {
+    const out = buildClientLaunch({ ...base, gameDir: dir, versionId: 'bootstrap-1.20.1' });
+    if ('error' in out) throw new Error(out.error);
+    const cp = out.args[out.args.indexOf('-cp') + 1];
+    const mainJar = basename(cp.split(';').at(-1)!);
+    expect(mainJar).toBe('1.20.1.jar');
+    expect(out.args.find((a) => a.startsWith('-DignoreList='))).toBe(`-DignoreList=client-extra,${mainJar}`);
+  });
+
+  it('装不全的库进 missingLibraries', () => {
+    const out = buildClientLaunch({ ...base, gameDir: dir, versionId: 'bootstrap-1.20.1' });
+    if ('error' in out) throw new Error(out.error);
+    expect(out.missingLibraries).toEqual(['org/example/absent/2.0/absent-2.0.jar']);
+    const complete = buildClientLaunch({ ...base, gameDir: dir, versionId: '1.20.1' });
+    if ('error' in complete) throw new Error(complete.error);
+    expect(complete.missingLibraries).toEqual([]);
   });
 
   it('自定义 JVM 参数落在 mainClass 之前', () => {

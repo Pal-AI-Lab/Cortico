@@ -65,6 +65,8 @@ interface ClientLaunch {
   nativeJars: string[];
   /** 实际用到的版本 id 链,child → root */
   versionChain: string[];
+  /** 版本 JSON 点名、但 libraries 目录里没有的条目,相对 libraries 目录。类路径里少了它们。 */
+  missingLibraries: string[];
 }
 
 const OS_NAMES: Partial<Record<NodeJS.Platform, string>> = {
@@ -202,6 +204,7 @@ export function buildClientLaunch(input: ClientLaunchInput): ClientLaunch | { er
   const librariesDir = join(gameDir, 'libraries');
   const classpath: string[] = [];
   const nativeJars: string[] = [];
+  const missingLibraries: string[] = [];
   const seenPaths = new Set<string>();
   for (const version of chain) {
     for (const lib of version.libraries ?? []) {
@@ -211,7 +214,10 @@ export function buildClientLaunch(input: ClientLaunchInput): ClientLaunch | { er
       const abs = join(librariesDir, rel);
       if (seenPaths.has(abs)) continue;
       seenPaths.add(abs);
-      if (!existsSync(abs)) continue;
+      if (!existsSync(abs)) {
+        missingLibraries.push(rel);
+        continue;
+      }
       if (/natives/i.test(rel)) nativeJars.push(abs);
       classpath.push(abs);
     }
@@ -222,7 +228,10 @@ export function buildClientLaunch(input: ClientLaunchInput): ClientLaunch | { er
   const separator = os === 'windows' ? ';' : ':';
   const vars: Record<string, string> = {
     auth_player_name: input.username,
-    version_name: versionId,
+    // 加载器版本靠 `-DignoreList=...,${version_name}.jar` 把主 jar 挡在模块路径外,名字对不上时它
+    // 变成自动模块,和 client-extra 导出同一个包,JVM 在建模块层时就崩。继承链上的版本没有自己的
+    // jar,借的是 jarId 那个,所以这里给的是 jarId 而非版本目录名。
+    version_name: jarId,
     game_directory: gameDir,
     assets_root: join(gameDir, 'assets'),
     game_assets: join(gameDir, 'assets'),
@@ -268,5 +277,6 @@ export function buildClientLaunch(input: ClientLaunchInput): ClientLaunch | { er
     mainClass,
     nativeJars,
     versionChain: chain.map((v, i) => v.id ?? (i === 0 ? versionId : '?')),
+    missingLibraries,
   };
 }
