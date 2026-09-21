@@ -1,7 +1,7 @@
 /**
  * 在临时部署中检查扩展构造与声明接口，不调用 start()。
  * World 使用默认配置、无密钥，检查 create、tools、envPromptVars、console、工具名冲突与配置路径；
- * provider 使用测试端点 create，bot 使用测试部署 build。
+ * provider 使用测试端点 create 并检查配置路径，bot 使用测试部署 build。
  * World 构造失败为错误；provider 仅在绑定端点时构造，测试条目不完整导致的失败记为警告。
  * 临时文件位于 scratchDir，调用方负责创建与清理。
  */
@@ -40,17 +40,18 @@ const isPlainObject = (v: unknown): v is Record<string, unknown> =>
 const message = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /**
- * 声明过的每个配置路径都要在 `defaults()` 里有对应项,且落在 prefix 指的段内。
+ * 声明过的每个配置路径都要落在 prefix 指的段内;给了 `defaults` 时还要在里面有对应项。
  * 缺默认值时控制台照样渲染旋钮、也照样写回 config.json,而读到的是代码里另一处的兜底值。
+ * provider 的旋钮写进端点条目而不是 `defaults()`,所以只核对段。
  */
-function configPathProblems(group: ConfigGroup, defaults: Record<string, unknown>, prefix: string): string[] {
+function configPathProblems(group: ConfigGroup, prefix: string, defaults?: Record<string, unknown>): string[] {
   const problems: string[] = [];
   for (const path of Object.keys(group.schema.properties ?? {})) {
     if (!path.startsWith(prefix)) {
       problems.push(`配置组「${group.id}」声明的「${path}」不在 ${prefix} 段里:写回按路径走,值会落到别人的段上。`);
       continue;
     }
-    if (getByPath(defaults, path.slice(prefix.length)) === undefined) {
+    if (defaults && getByPath(defaults, path.slice(prefix.length)) === undefined) {
       problems.push(`配置组「${group.id}」声明的「${path}」在 defaults() 里没有对应项:旋钮能改、能写回 config.json,读到的仍是代码里的兜底值。`);
     }
   }
@@ -209,7 +210,7 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
       }
       for (const group of decl.config ?? []) {
         if (group.owner !== `world:${def.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,World 的配置组 owner 应为 world:${def.id}。`);
-        failures.push(...configPathProblems(group, defaults, `worlds.${def.id}.`));
+        failures.push(...configPathProblems(group, `worlds.${def.id}.`, defaults));
       }
       const keys = new Set<string>();
       for (const doc of decl.promptDocs ?? []) {
@@ -232,6 +233,9 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
 export interface ProviderDryMountOptions extends DryMountOptions {
   hasConsoleClient?: boolean;
 }
+
+/** 假端点的名字;模块声明的配置路径按它组成 `providers.<端点名>.options.`。 */
+const PROBE_ENDPOINT = 'check';
 
 export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOptions): DryMountReport {
   const report: DryMountReport = { ok: [], warnings: [], failures: [] };
@@ -257,7 +261,7 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
     return report;
   }
 
-  const stateDir = join(opts.scratchDir, 'providers', 'check');
+  const stateDir = join(opts.scratchDir, 'providers', PROBE_ENDPOINT);
   mkdirSync(stateDir, { recursive: true });
   const resources = new Map<string, unknown>();
   const host = {
@@ -274,7 +278,7 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
     log: nullLogger(),
   };
   try {
-    const instance = mod.create('check', entry, host);
+    const instance = mod.create(PROBE_ENDPOINT, entry, host);
     if (typeof instance?.client?.respond !== 'function') {
       failures.push('create() 返回的实例没有 client.respond():Core 只经它调模型。');
     } else {
@@ -286,11 +290,13 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
 
   if (mod.config) {
     try {
-      const groups = mod.config('check', entry, language);
+      const groups = mod.config(PROBE_ENDPOINT, entry, language);
       if (!Array.isArray(groups)) failures.push('config() 没有返回数组。');
       else {
         for (const group of groups) {
           if (group.owner !== `provider:${mod.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,provider 的配置组 owner 应为 provider:${mod.id}。`);
+          // 地址、密钥变量名、图像开关与 spec 归框架的连接配置组,模块的旋钮只写这个端点的 options。
+          failures.push(...configPathProblems(group, `providers.${PROBE_ENDPOINT}.options.`));
         }
         ok.push(`config(): ${groups.length} 个配置组。`);
       }
@@ -405,7 +411,7 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
 
   for (const group of parts.console?.configGroups ?? []) {
     if (group.owner !== 'persona') warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,Persona 的配置组 owner 应为 persona。`);
-    failures.push(...configPathProblems(group, config, ''));
+    failures.push(...configPathProblems(group, '', config));
   }
   return report;
 }
