@@ -295,7 +295,8 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
       else {
         for (const group of groups) {
           if (group.owner !== `provider:${mod.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,provider 的配置组 owner 应为 provider:${mod.id}。`);
-          // 地址、密钥变量名、图像开关与 spec 归框架的连接配置组,模块的旋钮只写这个端点的 options。
+          // 写回的三道闸都只按 `providers.<端点名>.` 过滤:段外的路径改不动,段内 options 之外的
+          // 路径覆盖框架自己编辑的字段(baseUrl、secret、multimodal、spec)。两类都拦在这里。
           failures.push(...configPathProblems(group, `providers.${PROBE_ENDPOINT}.options.`));
         }
         ok.push(`config(): ${groups.length} 个配置组。`);
