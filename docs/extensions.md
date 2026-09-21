@@ -78,6 +78,19 @@ npm 上的 `cortico` 装下来就是框架的 `src/`,没有入口,启动不了 b
 `"kind": "provider"`,关键字 `cortico-provider`,默认导出 `ProviderModule`(见
 [providers.md](providers.md))。控制台页 id 是 `llm:<id>`,面板与 World 扩展同一套契约。
 
+模块自己的旋钮走 `config(name, entry, language)`:owner 是 `provider:<id>`,路径一律在
+`providers.<端点名>.options.` 下。端点条目里 `options` 之外的字段——`baseUrl`、`secret`、
+`multimodal` 与 `spec`——由框架自己编辑,模块不声明它们。
+
+面板在 `console(host)` 里声明。`llm:<id>` 这一页在控制台里没有自己的入口(左栏不列 `kind: 'llm'`
+的页,`#/provider/llm:*` 会被换成 `#/providers`),模块面板只在端点页露面:端点页把这一页里除
+`settings` 以外的面板全挂进当前选中的那条端点下面,不看 `slot`。`ctx.scope.instance` 是端点名。
+
+端点编辑是事务化的:改动先在浏览器暂存,保存时整条写入,面板经 `ctx.setConfig` 改的配置也只进暂存。
+`ctx.invoke` 把浏览器手上这份条目一起交给服务端,与磁盘上的一致就用真实例、`host.editing` 为假,
+不一致就按这份草稿临时构造一个预览实例、`host.editing` 为真,`host.save` 写回的是草稿而不是磁盘。
+托管进程的启停、下载安装、拉模型列表这类运行时动作要求端点已保存,模块在 `editing` 为真时拒绝它们。
+
 ## 写一个 bot 扩展
 
 `"kind": "bot"`,关键字 `cortico-bot`,默认导出 `BotDefinition`(见 [personas.md](personas.md)):
