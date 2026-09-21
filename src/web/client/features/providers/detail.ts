@@ -8,21 +8,26 @@ import { LANGUAGE } from '../../core/language.ts';
 import { pricingEditor } from '../../console-pages/builtins/llm-settings/pricing-panel.ts';
 import { S } from './strings.ts';
 
-export interface DetailController { dispose(): void; dirty(): boolean; leave(): Promise<boolean>; }
+export interface DetailController { dispose(): void; }
 interface Options {
   ctx: FeatureContext; root: HTMLElement; modules: Module[]; saved: Detail | null; draft: Editing | null;
-  changed(editing: Editing, invalid: boolean): void; saveDraft(editing: Editing): void; onSaved(name: string, select?: boolean): Promise<void>; cancelled(): Promise<void>;
-  discarded(): void; deleted(): Promise<void>; duplicate(editing: Editing): Promise<void>;
+  /** Every edit; `dirty` is false when the form again equals the saved connection. */
+  changed(editing: Editing, invalid: boolean, dirty: boolean): void;
+  onSaved(name: string, select?: boolean): Promise<void>; cancelled(): Promise<void>;
+  deleted(): Promise<void>; duplicate(editing: Editing): Promise<void>;
 }
+/** What a save would write; `raw` only carries field text and never reaches the server. */
+const snapshot = (editing: Editing) => JSON.stringify({ name: editing.name, entry: editing.entry, secretValue: editing.secretValue });
 export async function mountDetail(options: Options): Promise<DetailController> {
   const { ctx, root, saved, modules } = options;
   const { ui } = ctx;
   const lifecycle = new Lifecycle(ctx.onError);
   const opts = { signal: lifecycle.signal };
-  const editing: Editing = structuredClone(options.draft ?? { original: saved!.name, name: saved!.name, entry: saved!.entry, revision: saved!.revision, secretValue: '', raw: {} });
+  const persisted: Editing | null = saved ? { original: saved.name, name: saved.name, entry: saved.entry, revision: saved.revision, secretValue: '', raw: {} } : null;
+  const editing: Editing = structuredClone(options.draft ?? persisted!);
   editing.entry.spec ??= { model: '', thinking: false };
-  let baseline = JSON.stringify(editing);
-  const dirty = () => JSON.stringify(editing) !== baseline;
+  if (persisted) (persisted.entry.spec ??= { model: '', thinking: false });
+  const dirty = () => !persisted || snapshot(editing) !== snapshot(persisted);
   const report = ui.msgline();
   const form = ui.h('div');
   root.append(form, report);
@@ -31,7 +36,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   let saving = false;
   let panelHandle: { dispose(): void } | null = null;
   let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
-  const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'));
+  const change = () => options.changed(editing, !!form.querySelector('[aria-invalid="true"]'), dirty());
   const run = (work: () => Promise<unknown>) => { void work().catch(error => { if (!lifecycle.disposed) report.textContent = String(error); }); };
   function field(body: HTMLElement, key: string, label: string, value: string, set: (value: string) => void, validate?: (value: string) => string | null, type = 'text') {
     const input = ui.input({ value, type: type as 'text' }); input.setAttribute('aria-label', label);
@@ -156,14 +161,11 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         const current = await get<Detail>(connectionPath(saved.name), opts);
         if (current.references.length) { await ui.confirm({ title: S.remove, body: S.referenced + current.references.join(', ') }); return; }
         if (!(await ui.confirm({ title: S.remove, body: S.deleteConfirm, danger: true }))) return;
-        await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); baseline = JSON.stringify(editing); await options.deleted();
-      }) }), ui.button(S.duplicate, { onClick: () => run(async () => {
-        if (!(await leave())) return;
-        await options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} });
-      }) }));
+        await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); await options.deleted();
+      }) }), ui.button(S.duplicate, { onClick: () => run(() => options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} })) }));
     }
-    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(async () => { baseline = JSON.stringify(editing); await options.cancelled(); }) }), ui.button(S.draft, { onClick: () => { try { options.saveDraft(editing); baseline = JSON.stringify(editing); report.textContent = S.drafted; } catch (error) { report.textContent = String(error); } } }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
-    form.append(actions);
+    actions.append(ui.h('span', 'grow'), ui.button(S.cancel, { onClick: () => run(() => options.cancelled()) }), ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
+    form.append(actions, ui.h('div', 'connection-shared', S.draftNote));
     if (!selectedModule) { moduleBody.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
     const identity = saved?.name ?? 'draft';
     const groups = await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts);
@@ -239,24 +241,10 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     saving = true;
     try {
       const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
-      baseline = JSON.stringify(editing); await options.onSaved(result.name, select); return true;
+      await options.onSaved(result.name, select); return true;
     } catch (error) { report.textContent = String(error); return false; }
     finally { saving = false; }
   }
-  async function leave(): Promise<boolean> {
-    if (!dirty()) return true;
-    return new Promise(resolve => {
-      const dialog = ui.h('dialog', 'connection-guard');
-      const buttons = ui.rowbar();
-      const finish = (answer: boolean) => { dialog.remove(); resolve(answer); };
-      dialog.append(ui.h('h3', '', S.unsaved), buttons);
-      buttons.append(ui.button(S.stay, { onClick: () => finish(false) }), ui.button(S.discard, { onClick: () => { baseline = JSON.stringify(editing); options.discarded(); finish(true); } }), ui.button(S.save, { variant: 'primary', onClick: () => { void save(false).then(ok => finish(ok)); } }));
-      dialog.addEventListener('cancel', event => { event.preventDefault(); finish(false); }, opts);
-      lifecycle.signal.addEventListener('abort', () => finish(false), { once: true });
-      root.ownerDocument.body.append(dialog);
-      if (dialog.showModal) dialog.showModal(); else dialog.setAttribute('open', '');
-    });
-  }
   await render(); change();
-  return { dispose: () => { lifecycle.dispose(); panelHandle?.dispose(); panelHost?.unmount(); }, dirty, leave };
+  return { dispose: () => { lifecycle.dispose(); panelHandle?.dispose(); panelHost?.unmount(); } };
 }

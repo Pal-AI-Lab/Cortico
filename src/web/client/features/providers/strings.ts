@@ -1,6 +1,6 @@
 import { pick } from '../../core/language.ts';
 const zh = {
-  pageTitle: '模型供应商', navLabel: '模型供应商', navGroup: 'Core', create: '+ 新建供应商实例', newName: '新建实例',
+  pageTitle: '模型供应商', navLabel: '模型供应商', navGroup: 'Core', create: '+ 新建供应商实例', newName: '未命名实例',
   createHint: '实例 = 填一组供应商配置保存成卡片',
   empty: '还没有模型供应商', emptyHint: '添加一条模型连接后，Cortico 才能进行模型推理。',
   configure: '⚙ 配置', activate: '⇄ 设为当前', active: '当前模型', missing: '当前模型供应商不存在，配置中引用：',
@@ -17,14 +17,15 @@ const zh = {
   advancedHint: '仅在使用自定义 API 网关或兼容服务时调整。', secret: '密钥环境变量名',
   extraHeaders: '附加请求头（JSON object）', extraBody: '附加请求体（JSON object）', priceRules: '完整计价规则（JSON array）',
   shared: '共享配置：此供应商可被多个 Bot 使用。修改会改变这份共享配置；若需要不同参数，建议新建一个供应商。',
-  remove: '删除供应商', duplicate: '复制供应商', cancel: '取消', draft: '保存草稿', save: '保存', saved: '已保存', drafted: '草稿已保存到此浏览器。API Key 不保存在浏览器草稿中。',
+  remove: '删除供应商', duplicate: '复制供应商', cancel: '放弃更改', save: '保存', saved: '已保存',
+  draftNote: '改动暂存在此浏览器，保存后才写入配置。API Key 不进暂存。',
   chooseModule: '请选择供应商类型。', invalidNumber: '请输入有效范围内的数值。',
   required: '此项必填。', jsonObject: '请输入合法 JSON 对象。', jsonArray: '请输入合法 JSON 数组。',
-  unsaved: '你有未保存的更改。', stay: '留在这里', discard: '放弃更改并切换',
+  unsaved: '已暂存；保存后写入配置。',
   deleteConfirm: '删除供应商及其目录中的全部文件？', referenced: '此供应商正在被以下 Bot 使用，不能删除：', reload: '重新加载',
 };
 const en: typeof zh = {
-  pageTitle: 'Model connections', navLabel: 'Model connections', navGroup: 'Core', create: '+ New connection instance', newName: 'New instance',
+  pageTitle: 'Model connections', navLabel: 'Model connections', navGroup: 'Core', create: '+ New connection instance', newName: 'Unnamed instance',
   createHint: 'An instance is one set of provider settings saved as a card.',
   empty: 'No model connections yet', emptyHint: 'Add a model connection to enable inference.',
   configure: '⚙ Configure', activate: '⇄ Set current', active: 'Current model', missing: 'Current model connection is missing: ',
@@ -41,10 +42,11 @@ const en: typeof zh = {
   advancedHint: 'Adjust only for custom API gateways or compatible services.', secret: 'Credential environment variable',
   extraHeaders: 'Extra headers (JSON object)', extraBody: 'Extra request body (JSON object)', priceRules: 'Full pricing rules (JSON array)',
   shared: 'Shared configuration: multiple bots can use this connection. Changes update this shared configuration; create another connection if you need different settings.',
-  remove: 'Delete connection', duplicate: 'Duplicate connection', cancel: 'Cancel', draft: 'Save draft', save: 'Save', saved: 'Saved', drafted: 'Draft saved in this browser. API Keys are not stored in browser drafts.',
+  remove: 'Delete connection', duplicate: 'Duplicate connection', cancel: 'Discard changes', save: 'Save', saved: 'Saved',
+  draftNote: 'Edits are kept in this browser and written to the configuration on save. API Keys are never kept.',
   chooseModule: 'Choose a connection type.', invalidNumber: 'Enter a number within the allowed range.',
   required: 'Required.', jsonObject: 'Enter a valid JSON object.', jsonArray: 'Enter a valid JSON array.',
-  unsaved: 'You have unsaved changes.', stay: 'Stay here', discard: 'Discard and switch',
+  unsaved: 'Kept as a draft; written on save.',
   deleteConfirm: 'Delete this connection and all files in its directory?', referenced: 'This connection is used by these bots and cannot be deleted: ', reload: 'Reload',
 };
 export const S = pick({ zh, en });

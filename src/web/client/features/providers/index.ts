@@ -134,7 +134,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   async function refresh() { state = await get<HubState>('/api/providers', opts); paint(); }
   async function select(identity: string, force = false): Promise<void> {
     if (!force && identity === selected) return;
-    if (!force && controller && !(await controller.leave())) return;
     const gen = ++renderId;
     controller?.dispose(); controller = null;
     selected = identity; paint(); detailRoot.replaceChildren();
@@ -146,9 +145,13 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     if (gen !== renderId || ctx.signal.aborted) return;
     const detailView = ui.h('div'); detailRoot.replaceChildren(detailView);
     const mounted = await mountDetail({ ctx, root: detailView, modules, saved, draft: identity === NEW_DRAFT_ID ? newDraft : drafts.get(identity),
-      discarded: () => { invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = drafts.get(NEW_DRAFT_ID); paint(); },
-      saveDraft: editing => { drafts.set(editing); paint(); },
-      changed: (editing, hasErrors) => { if (hasErrors) invalid.add(identity); else invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = editing; paint(); },
+      // Edits persist as a browser draft as they happen; a form back at its saved state drops the draft.
+      changed: (editing, hasErrors, dirty) => {
+        if (hasErrors) invalid.add(identity); else invalid.delete(identity);
+        if (identity === NEW_DRAFT_ID) { newDraft = editing; drafts.set(editing); }
+        else if (dirty) drafts.set(editing); else drafts.remove(identity);
+        paint();
+      },
       onSaved: async (name, show = true) => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await refresh(); if (show) await select(name, true); },
       cancelled: async () => { drafts.remove(identity); invalid.delete(identity); if (identity === NEW_DRAFT_ID) newDraft = null; await select(identity === NEW_DRAFT_ID ? state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '' : identity, true); },
       deleted: async () => { drafts.remove(identity); invalid.delete(identity); await refresh(); await select(state.providers.find(item => item.name === state.active)?.name || state.providers[0]?.name || '', true); },
@@ -164,8 +167,8 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   }
   async function create() {
     if (newDraft) return select(NEW_DRAFT_ID);
-    if (controller && !(await controller.leave())) return;
     newDraft = { original: null, name: '', entry: { kind: '', baseUrl: '' }, secretValue: '', raw: {} };
+    drafts.set(newDraft);
     await select(NEW_DRAFT_ID, true);
   }
   const moduleName = (kind: string) => modules.find(module => module.id === kind)?.title ?? kind;
@@ -175,7 +178,6 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
   creator.append(ui.button(S.create, { variant: 'primary', onClick: () => run(create) }), ui.h('p', 'connection-create-hint', S.createHint));
   index.append(creator, cards);
   ctx.lifecycle.own({ dispose: () => { renderId++; controller?.dispose(); } });
-  ctx.lifecycle.own(ctx.router.addLeaveDecision(async () => controller ? controller.leave() : true));
   ctx.lifecycle.own(ctx.router.onChange(route => {
     if (route.segments[0] === 'providers' && route.segments[1]) run(() => select(route.segments[1]));
   }));
