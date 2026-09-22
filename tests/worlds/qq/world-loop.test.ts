@@ -121,6 +121,20 @@ describe('群消息入库', () => {
   });
 });
 
+describe('图片段按当前主模型渲染', () => {
+  it('主模型切到接收图像后，新消息的图片带地址', async () => {
+    const image = [{ type: 'image', data: { url: 'https://x/1.png' } }];
+    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
+    await waitUntil(() => host.pushed.length === 1, '收到第1条事件');
+    expect(host.pushed[0].event.text).toContain('[图片]');
+
+    host.modelFacts = { ...host.modelFacts, accepts: () => true };
+    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
+    await waitUntil(() => host.pushed.length === 2, '收到第2条事件');
+    expect(host.pushed[1].event.text).toContain('[图片 https://x/1.png]');
+  });
+});
+
 describe('未捕获的引用回复(异步取原文)', () => {
   it('reply指向的消息不在游标映射里 → 立即占位文本,随后追加qq.reply.uncaptured事件带原文', async () => {
     mock.setMockMsg(999999, {

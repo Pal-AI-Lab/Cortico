@@ -132,7 +132,9 @@ export class QQWorld implements World {
   private host?: WorldHost;
   private driver?: OneBotDriver;
   private log: Logger = nullLogger();
-  private imagePolicy: ImageRenderPolicy = () => '[图片]';
+  /** 主模型支持 image/png 或 World 配置了视觉模型时启用取图；每次渲染按当前端点判断。 */
+  private readonly imagePolicy: ImageRenderPolicy = (data) =>
+    makeImagePolicy(!!this.vision || (this.host?.modelFacts.accepts('image/png') ?? false))(data);
 
   /** 外挂视觉(注入=auxVLM生效);null=无,一切保持[图片]占位现状 */
   private readonly vision?: VisionService;
@@ -548,8 +550,6 @@ export class QQWorld implements World {
   async start(host: WorldHost): Promise<void> {
     this.host = host;
     this.log = host.log;
-    // 主模型支持 image/png 或 World 配置了视觉模型时启用取图。
-    this.imagePolicy = makeImagePolicy(!!this.vision || host.modelFacts.accepts('image/png'));
     // 外挂视觉的用量自愿上报进 core 的成本账(不报就在成本页看不到)
     this.vision?.setUsageSink((usage, model) =>
       host.reportUsage(usage, { model, label: 'QQWorld·辅助视觉' }),
