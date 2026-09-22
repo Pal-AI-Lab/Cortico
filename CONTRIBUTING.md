@@ -42,6 +42,7 @@ a reason.
 - For a bot misbehaving at runtime, attach lines from its run directory (`data/runs/<run>/`),
   not a screenshot.
 - For a feature request, say why a Persona hook, a World or an extension cannot do it today.
+- A security problem goes through [SECURITY.md](SECURITY.md), not a public issue.
 
 ## Before opening a pull request
 
@@ -66,11 +67,16 @@ pnpm typecheck:web
 ```
 
 - [AGENTS.md](AGENTS.md) is the review checklist.
-- One topic per pull request; commit messages as AGENTS.md describes.
+- A pull request may cover more than one topic; a large one is asked to be split. Commit
+  messages follow AGENTS.md.
 - A change to an on-disk layout or to the meaning of already written content (event
   vocabulary, config keys, Memory layout) ships with a migration: dry-run by default, backup
   before writing, atomic replace, existing cursors stay valid. Users are never asked to clear
   their data.
+
+## Conduct
+
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) applies to issues, pull requests and reviews.
 
 ## Licensing
 
