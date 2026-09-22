@@ -40,7 +40,7 @@ export class MockOneBot {
   private messageIdSeq = 1000;
   /** get_msg 测试桩:message_id(字符串键)→ 预置返回值,见setMockMsg */
   private msgById = new Map<string, unknown>();
-  /** get_forward_msg 测试桩:资源id → 预置返回值 */
+  /** get_forward_msg 测试桩:资源id → 预置返回值。按 v11 标准只认参数 `id`。 */
   private forwardById = new Map<string, unknown>();
 
   constructor(options: MockOneBotOptions = {}) {
@@ -148,7 +148,7 @@ export class MockOneBot {
         return;
       }
       case 'get_forward_msg': {
-        const response = this.forwardById.get(String(params.message_id ?? params.id));
+        const response = this.forwardById.get(String(params.id));
         if (response === undefined) fail(1404, '转发消息不存在');
         else ok(Array.isArray(response) ? { messages: response } : response);
         return;
@@ -168,7 +168,7 @@ export class MockOneBot {
     this.msgById.set(String(messageId), data);
   }
 
-  /** 预置 get_forward_msg(message_id) 的 messages 数组(测试模拟"展开转发"用) */
+  /** 预置 get_forward_msg(id) 的 messages 数组(测试模拟"展开转发"用) */
   setMockForward(resId: string, messages: unknown[]): void {
     this.forwardById.set(resId, messages);
   }
