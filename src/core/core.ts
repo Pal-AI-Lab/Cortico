@@ -468,8 +468,10 @@ export class Core<C extends CoreConfig = CoreConfig> {
     return {
       model: () => spec().model,
       accepts: (mime) => {
+        if (!this.loaded.config.activeProvider) return false;
         const {entry} = this.activeProviderEntry();
-        return providerModule(entry.kind).accepts?.(entry,spec(),mime) ?? (entry.multimodal === true && mime.startsWith('image/'));
+        if (!entry.spec) return false;
+        return providerModule(entry.kind).accepts?.(entry,entry.spec,mime) ?? (entry.multimodal === true && mime.startsWith('image/'));
       },
       contextWindow: () => this.contextWindowOf(spec()),
     };

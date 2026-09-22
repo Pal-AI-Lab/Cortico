@@ -551,6 +551,7 @@ export interface DeliveryGateApi {
 /** 运行时查询当前模型的名称、MIME 支持和上下文窗口；配置热改后读取新值。 */
 export interface ModelFacts {
   model(): string;
+  /** 未选端点或端点未选模型时返回 false；activeProvider 指向不存在的端点时抛错。 */
   accepts(mime: string): boolean;
   /** provider 探测值与手动配置取较小者，单位 token；两者均未知时返回 undefined。 */
   contextWindow(): number | undefined;

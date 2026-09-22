@@ -10,6 +10,7 @@ import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, toolReply, sleep } from '../c
 import { validatePairing } from "../core/fixture-truncate.ts";
 import { providerAtBoot } from '../../src/boot.ts';
 import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
+import { MockNapCat } from '../helpers/mock-napcat.ts';
 
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
@@ -284,7 +285,10 @@ it.each(['empty', 'unselected', 'modelless'] as const)('控制台在供应商 %s
   };
   cfg.activeProvider = state === 'modelless' ? 'endpoint' : '';
   cfg.web.port = 0;
-  cfg.worlds.qq.enabled = false;
+  // QQ World 渲染图片段时查询主模型是否接收图像。
+  const onebot = new MockNapCat({ port: 0, groupId: 424242, groupName: '测试群' });
+  cfg.worlds.qq.enabled = true;
+  cfg.worlds.qq.wsUrl = `ws://127.0.0.1:${await onebot.start()}`;
   const memoryDir = join(tmp.dir, 'memory');
   mkdirSync(memoryDir, { recursive: true });
   const bot = assembleBot(makeLoaded({ config: cfg, rootDir: tmp.dir, memoryDir, dataDir: join(tmp.dir, 'data') }), { llm: new FakeLLM() });
@@ -299,6 +303,7 @@ it.each(['empty', 'unselected', 'modelless'] as const)('控制台在供应商 %s
     expect(hub.providers.map(entry => entry.name)).toEqual(Object.keys(cfg.providers));
   } finally {
     await bot.stop();
+    await onebot.close();
     tmp.cleanup();
   }
 }, 15000);
