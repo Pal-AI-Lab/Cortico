@@ -80,6 +80,30 @@ describe('Provider price snapshots', () => {
     expect(across('2026-09-20T01:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
     expect(across('2026-09-20T12:00:00Z')).toBeCloseTo(PEAK_RATE);
   });
+  it('limits a window to weekdays and drops excepted local dates', () => {
+    const workdays: PriceWindow = { from:'09:00', to:'12:00', timezone:'Asia/Shanghai', weekdays:[1,2,3,4,5], exceptDates:['2026-10-01'], rules: windowRules(.5) };
+    const rate = (capturedAt: string) => priceUsage(meters, [windowedQuote(capturedAt, workdays)])[0].amount;
+    expect(rate('2026-09-23T02:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(rate('2026-09-26T02:00:00Z')).toBeCloseTo(PEAK_RATE);
+    expect(rate('2026-10-01T02:00:00Z')).toBeCloseTo(PEAK_RATE);
+    expect(rate('2026-09-23T05:00:00Z')).toBeCloseTo(PEAK_RATE);
+  });
+  it('dates a span across midnight by the day it starts on', () => {
+    const fridayNight: PriceWindow = { from:'22:00', to:'02:00', timezone:'UTC', weekdays:[5], exceptDates:['2026-10-02'], rules: windowRules(.5) };
+    const rate = (capturedAt: string) => priceUsage(meters, [windowedQuote(capturedAt, fridayNight)])[0].amount;
+    expect(rate('2026-09-25T23:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(rate('2026-09-26T01:00:00Z')).toBeCloseTo(PEAK_RATE / 2);
+    expect(rate('2026-09-25T01:00:00Z')).toBeCloseTo(PEAK_RATE);
+    expect(rate('2026-09-26T23:00:00Z')).toBeCloseTo(PEAK_RATE);
+    expect(rate('2026-10-03T01:00:00Z')).toBeCloseTo(PEAK_RATE);
+  });
+  it('leaves a window with an unreadable weekday or date unpriced', () => {
+    const unpriced = (window: PriceWindow) => priceUsage(meters, [windowedQuote('2026-09-23T02:00:00Z', window)])[0];
+    const base: PriceWindow = { from:'09:00', to:'12:00', timezone:'Asia/Shanghai', rules: windowRules(.5) };
+    for (const window of [{ ...base, weekdays:[0] }, { ...base, weekdays:[1.5] }, { ...base, exceptDates:['2026-02-30'] }, { ...base, exceptDates:['2026/10/01'] }]) {
+      expect(unpriced(window)).toMatchObject({ amount:null, knownAmount:0, missing:['timeWindow'] });
+    }
+  });
   it('resolves the service tier within the matched window and leaves an unreadable window unpriced', () => {
     const offPeak = '2026-09-19T16:30:00Z';
     expect(priceUsage(meters, [windowedQuote(offPeak)], 'priority')[0].amount).toBeCloseTo(PEAK_RATE);
