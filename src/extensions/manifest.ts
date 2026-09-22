@@ -17,7 +17,7 @@ export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', '
 export const EXTENSION_API_VERSIONS: Readonly<Record<ExtensionKind, number>> = {
   world: 5,
   provider: 5,
-  bot: 5,
+  bot: 6,
 };
 
 /** npm 上按类发现用的关键字。 */

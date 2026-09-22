@@ -911,9 +911,11 @@ export interface Persona {
   onOpening?(ctx: { reason: SessionOpeningReason }): void;
   /**
    * 一批事件已渲染并分配游标、尚未进入上下文时调用；events 按投递序包含内部和外部事件。
-   * injectInternal 在此钩子内注入的内容加入当前批，排在已有内部行之后、外部正文之前；钩子阻塞投递。
+   * 返回 Promise 时 Core 等它完成再投递，不设期限：钩子不完成，主循环不前进，钩子自己发起的
+   * 外部调用由 Persona 负责超时。完成前 Persona 的所有 injectInternal 都加入当前批，排在已有
+   * 内部行之后、外部正文之前。钩子抛错或拒绝时 Core 记录 warn，带着已注入的内容照常投递。
    */
-  onDelivery?(ctx: { events: EventEnvelope[] }): void;
+  onDelivery?(ctx: { events: EventEnvelope[] }): void | Promise<void>;
   /**
    * 一批事件处理结束时调用；Persona 可查询 sessionInfo 并决定是否请求交接。
    * Core 在超过 hardTokens 时强制交接。
