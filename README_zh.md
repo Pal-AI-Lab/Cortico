@@ -43,6 +43,12 @@ Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、�
 6. 🖥️ 提供便于操作的 WebUI 支持。
 7. 🪄 提供专用于 AI 开发的 Extension Creator 系统（[Cortina](https://github.com/Pal-AI-Lab/Cortina)），非专业开发者也可以使用 AI Agent 快速创建想要的扩展，或迁移现有的实现到 Cortico！
 
+## 用 Cortico 创造 AI VTuber
+
+使用 [cortico-world-vtuber](https://github.com/Pal-AI-Lab/cortico-world-vtuber) 立刻开始创造你的 AI VTuber：经 VTube Studio 驱动 Live2D 模型、流式 TTS 出声、强制对齐器给字幕定时、overlay 画面推进 OBS，作为一个 Cortico World 整体提供。
+
+它遵循独立的源码协议（AGPL-3.0 + CLA），因此以独立仓库发布，不在 Cortico 主干上。
+
 ## 用 Cortina 编写扩展
 
 使用 <picture><source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png"><img src="assets/cortina-banner.png" alt="Cortina" height="28"></picture> 快速完成你想要的 Cortico 扩展和适配！

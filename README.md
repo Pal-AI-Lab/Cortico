@@ -43,6 +43,12 @@ Cortico is an agent harness designed around an event stream, built for autonomou
 6. 🖥️ A WebUI that is straightforward to operate.
 7. 🪄 An Extension Creator system built for AI development ([Cortina](https://github.com/Pal-AI-Lab/Cortina)): a non-developer can use an AI agent to build the extension they want, or move an existing implementation onto Cortico!
 
+## Build an AI VTuber with Cortico
+
+Use [cortico-world-vtuber](https://github.com/Pal-AI-Lab/cortico-world-vtuber) to start creating your own AI VTuber right away: it drives a Live2D model through VTube Studio, speaks through streaming TTS, times subtitles with a forced aligner and pushes the overlay into OBS, all as one Cortico World.
+
+It is released under its own source license (AGPL-3.0 + CLA), so it lives in a separate repository instead of the Cortico main tree.
+
 ## Build Extensions with Cortina
 
 Use <picture><source media="(prefers-color-scheme: dark)" srcset="assets/cortina-banner-dark.png"><img src="assets/cortina-banner.png" alt="Cortina" height="28"></picture> to build the Cortico extension or adaptation you want, fast!
