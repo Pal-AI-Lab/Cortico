@@ -9,7 +9,7 @@ export interface QQRosterEntry {
 
 export const QQ_DEFAULTS = {
   enabled: false,
-  /** NapCat 正向 WS 地址 */
+  /** OneBot v11 协议端的正向 WS 地址 */
   wsUrl: 'ws://127.0.0.1:3001',
   groups: [] as QQRosterEntry[],
   privates: [] as QQRosterEntry[],
@@ -96,7 +96,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
 /** config.json 的 `worlds.qq` 节。 */
 export interface QQConfigSection {
   enabled: boolean;
-  /** NapCat 正向 WS 地址 */
+  /** OneBot v11 协议端的正向 WS 地址 */
   wsUrl: string;
   /** 群 roster,逐项热更新;关闭的条目仍持久化并显示,但不参与监听。 */
   groups: QQRosterEntry[];
