@@ -52,7 +52,7 @@ interface RigOptions {
   /** 对模型隐藏但仍挂载运行的 World id。 */
   hiddenWorlds?: string[];
   /** 时机钩子,直接装到假Persona上 */
-  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered'>;
+  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery'>;
   /** 记录 schedule_wake 对 timers 原语的调用。 */
   onTimerSet?: (atIso: string, payload: Record<string, unknown>) => void;
   /** fork 工具的执行函数。 */
@@ -3420,5 +3420,105 @@ describe("MainLoop 重新请求、轮次边界与统计", () => {
     await until(() => rows.some((row) => row.level === 'warn' && row.msg.includes('工具回执过长')));
     await until(() => rig.session.messages.some((m) => m.tool_call_id === 'b1'));
     expect(rig.session.messages.find((m) => m.tool_call_id === 'b1')?.content.length).toBe(9_000);
+  });
+});
+
+describe('MainLoop 异步 onDelivery', () => {
+  let rig: ReturnType<typeof makeRig>;
+  afterEach(async () => {
+    if (rig) await rig.cleanup();
+  });
+
+  /** 钩子开始等待时置位；调用 release() 后钩子继续。 */
+  function gatedHook(after: (api: { inject: (text: string) => void }) => void) {
+    const state = { started: false, release: () => {} };
+    const gate = new Promise<void>((resolve) => { state.release = resolve; });
+    const onDelivery = async (ctx: { events: EventEnvelope[] }) => {
+      if (!ctx.events.some((e) => e.origin === 'external')) return;
+      state.started = true;
+      await gate;
+      after({ inject: (text) => rig.loop.injectInternal(text, 'appraisal') });
+    };
+    return { state, onDelivery };
+  }
+
+  /** 含 text 的 user 消息紧接着的那一对合成调用里有外部正文 external。 */
+  function sameBatch(text: string, external: string): boolean {
+    const messages = rig.session.messages;
+    const at = messages.findIndex((m) => m.role === 'user' && m.content.includes(text));
+    if (at < 0) return false;
+    const frame = messages.slice(at + 1).find((m) => m.role === 'tool');
+    return frame?.content.includes(external) === true;
+  }
+
+  it('等待钩子完成后投递，完成前注入的文本进入当前批', async () => {
+    const hook = gatedHook(({ inject }) => inject('[内心] 评估结果'));
+    rig = makeRig({ hooks: { onDelivery: hook.onDelivery } });
+    rig.start();
+    await until(() => rig.session.messages.at(-1)?.role === 'assistant');
+    const callsBefore = rig.llm.calls.length;
+
+    rig.pushEvent('[10:05] 阿明: 今天好累');
+    await until(() => hook.state.started);
+    await sleep(50);
+    expect(rig.llm.calls).toHaveLength(callsBefore);
+
+    hook.state.release();
+    await until(() => rig.llm.calls.length > callsBefore);
+    expect(sameBatch('[内心] 评估结果', '今天好累')).toBe(true);
+    assertPairing(rig.session.messages);
+  });
+
+  it('等待期间别处调用 injectInternal 也进入当前批', async () => {
+    const hook = gatedHook(() => {});
+    rig = makeRig({ hooks: { onDelivery: hook.onDelivery } });
+    rig.start();
+    await until(() => rig.session.messages.at(-1)?.role === 'assistant');
+
+    rig.pushEvent('[10:05] 阿明: 在吗');
+    await until(() => hook.state.started);
+    rig.loop.injectInternal('[system] 到点提醒', 'wake.due');
+    hook.state.release();
+    await until(() => rig.session.messages.some((m) => m.role === 'tool' && m.content.includes('在吗')));
+    expect(sameBatch('[system] 到点提醒', '在吗')).toBe(true);
+  });
+
+  it('钩子拒绝时记录 warn，已注入的文本与外部正文照常投递', async () => {
+    const warns: string[] = [];
+    const hook = gatedHook(({ inject }) => {
+      inject('[内心] 评估到一半');
+      throw new Error('评估失败');
+    });
+    rig = makeRig({
+      hooks: { onDelivery: hook.onDelivery },
+      log: { ...nullLogger(), warn: (msg: string) => warns.push(msg), child: () => nullLogger() },
+    });
+    rig.start();
+    await until(() => rig.session.messages.at(-1)?.role === 'assistant');
+
+    rig.pushEvent('[10:05] 阿明: 晚安');
+    await until(() => hook.state.started);
+    hook.state.release();
+    await until(() => rig.session.messages.some((m) => m.role === 'tool' && m.content.includes('晚安')));
+    expect(warns).toContain('onDelivery钩子异常');
+    expect(sameBatch('[内心] 评估到一半', '晚安')).toBe(true);
+  });
+
+  it('等待期间停机，钩子完成后不写 session、不调模型', async () => {
+    const hook = gatedHook(({ inject }) => inject('[内心] 迟到的评估'));
+    rig = makeRig({ hooks: { onDelivery: hook.onDelivery } });
+    rig.start();
+    await until(() => rig.session.messages.at(-1)?.role === 'assistant');
+
+    rig.pushEvent('[10:05] 阿明: 还在吗');
+    await until(() => hook.state.started);
+    rig.loop.stop();
+    const sessionAfterStop = JSON.stringify(rig.session.messages);
+    const callsAfterStop = rig.llm.calls.length;
+
+    hook.state.release();
+    await sleep(50);
+    expect(JSON.stringify(rig.session.messages)).toBe(sessionAfterStop);
+    expect(rig.llm.calls).toHaveLength(callsAfterStop);
   });
 });

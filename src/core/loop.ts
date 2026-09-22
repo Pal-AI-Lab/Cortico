@@ -251,7 +251,7 @@ export class MainLoop {
   /** 当前正在处理一个事件批；手动交接必须等到该批自然结束，不能重置半轮session。 */
   private processingBatch = false;
   private handoffRequested = false;
-  /** onDelivery 同步执行期间，injectInternal 的即时项加入当前批，不经过总线。 */
+  /** onDelivery 执行期间（含其 Promise 完成前），injectInternal 的即时项加入当前批，不经过总线。 */
   private deliveryCollector: EventEnvelope[] | null = null;
   /** 已投递但前面仍有外部缺口的游标；水位只越过连续前缀。 */
   private readonly deliveredCursors = new Set<number>();
@@ -484,7 +484,7 @@ export class MainLoop {
   /**
    * 将一批事件写入主 session。即时事件在前，候选生成内容与延迟渲染内容在后。
    * 候选按 source、origin 和处理函数分组，再按来源项在批次中的顺序生成正文。
-   * 正文归档后调用 onDelivery；同步注入的内部项追加到内部行末尾、外部正文之前。
+   * 正文归档后调用并等待 onDelivery；钩子完成前注入的内部项追加到内部行末尾、外部正文之前。
    * 内部行合成一条 user 消息；外部正文按 eventDelivery 进入合成工具回执或同一条 user 消息。
    */
   private async deliverBatch(batch: WakeItem[], generation: number): Promise<boolean> {
@@ -537,11 +537,13 @@ export class MainLoop {
     }
     if (!this.active(generation)) return false;
     if (delivered.length > 0) {
-      // 仅捕获同步钩子内的即时注入；退出钩子后恢复总线投递。
+      // 捕获钩子完成前的即时注入；钩子完成后恢复总线投递。
       const injected: EventEnvelope[] = [];
       this.deliveryCollector = injected;
       try {
-        persona.onDelivery?.({ events: [...delivered] });
+        // 同步钩子不经过 await，收集范围仍只是钩子本身的执行期。
+        const pending = persona.onDelivery?.({ events: [...delivered] });
+        if (pending) await pending;
       } catch (e) {
         log.warn('onDelivery钩子异常', { err: e });
       } finally {
@@ -1663,7 +1665,7 @@ export class MainLoop {
     return this.stallAt.filter((t) => t >= from).length;
   }
 
-  /** 注入 Persona 提供的内部文本。onDelivery 同步执行期间加入当前批，其余时刻进入总线。 */
+  /** 注入 Persona 提供的内部文本。onDelivery 完成前加入当前批，其余时刻进入总线。 */
   injectInternal(text: string, kind = 'notice'): void {
     if (!this.activeNow()) return;
     const item = this.internalItem('persona', kind, text);

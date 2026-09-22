@@ -21,8 +21,8 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 | `attach(core)` | 拿到 `CoreApi`;在 `declareSessions` 之前调用 |
 | `declareSessions()` | session 声明,恰好一个 `receivesEvents` 且 `persistent`(见 [sessions.md](sessions.md)) |
 
-可选时机钩子:`onOpening({ reason })`(session 开场)、`onDelivery({ events })`(一批唤醒项投递刻,
-钩子内同步调用 `injectInternal` 的项加入本批)、`onBatchEnd()`(一批处理结束,可执行上下文容量策略)、
+可选时机钩子:`onOpening({ reason })`(session 开场)、`onDelivery({ events })`(一批唤醒项投递刻;
+可返回 Promise,Core 等它完成再投递，完成前 `injectInternal` 的项加入本批)、`onBatchEnd()`(一批处理结束,可执行上下文容量策略)、
 `onTurnEnded()`、`onIdle()`、`onStallsRecovered()`(回一句措辞或 null)、
 `onWorldLifecycle(event)`、`sessionHead()`(合成开头:置于 system 之后、持久历史之前的 item 列表,每次请求现取,不落盘)、
 `onHandoff(snapshot, { hardTokens })`(回 `{ tail, trim? }`)、`promptVarValues(ctx)`、
