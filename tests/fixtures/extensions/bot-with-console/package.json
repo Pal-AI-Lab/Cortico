@@ -7,7 +7,7 @@
   "keywords": ["cortico-bot"],
   "cortico": {
     "kind": "bot",
-    "api": 5,
+    "api": 6,
     "consoleClient": "dist/console.js"
   }
 }
