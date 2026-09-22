@@ -1,10 +1,10 @@
 import { messages as legacyMessages } from '../core/fixture-protocol.ts';
-/** 通过装配层、Core、QQ World 与 MockNapCat 验证草稿确认发送和未确认草稿失效。 */
+/** 通过装配层、Core、QQ World 与 MockOneBot 验证草稿确认发送和未确认草稿失效。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { assembleBot, type AssembledBot } from '../../bots/corti-soulmate/assemble.ts';
-import { MockNapCat } from '../helpers/mock-napcat.ts';
+import { MockOneBot } from '../helpers/mock-onebot.ts';
 import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, textReply, toolReply, sleep } from '../core/helpers.ts';
 
 const GROUP = 424242;
@@ -20,12 +20,12 @@ async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
 
 describe('QQ 草稿确认集成', () => {
   const tmp = makeTmpDir();
-  let mock: MockNapCat;
+  let mock: MockOneBot;
   let bot: AssembledBot;
   let llm: FakeLLM;
 
   beforeAll(async () => {
-    mock = new MockNapCat({
+    mock = new MockOneBot({
       port: 0,
       groupId: GROUP,
       selfId: SELF,
@@ -75,7 +75,7 @@ describe('QQ 草稿确认集成', () => {
     await mock.close();
   });
 
-  it('draft→confirm(send):通过 Core 向 MockNapCat 发送消息', async () => {
+  it('draft→confirm(send):通过 Core 向 MockOneBot 发送消息', async () => {
     // 一次唤醒内:round1 起草并触发屏障,round2 复核后确认发送
     llm.script(toolReply([{ name: 'qq_draft', args: { to: `group:${GROUP}`, text: '大家好呀' } }]));
     llm.script(toolReply([{ name: 'qq_confirm', args: { decision: 'send' } }]));

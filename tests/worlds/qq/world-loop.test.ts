@@ -1,5 +1,5 @@
 /**
- * 完整回路测试:MockNapCat(真WS服务端) ⇄ QQWorld ⇄ FakeHost。
+ * 完整回路测试:MockOneBot(真WS服务端) ⇄ QQWorld ⇄ FakeHost。
  * 覆盖:环境提示词、事件入库字段+会话标签、多群/私聊过滤、撤回/入退群/
  * 表情回应、draft→confirm 起草确认门、私聊路由、映射重建。
  */
@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { renderWorldEnvPrompt } from '../../../src/core/prefix.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 import type { EventEnvelope, ToolCallContext } from '../../../src/core/types.ts';
-import { MockNapCat } from '../../helpers/mock-napcat.ts';
+import { MockOneBot } from '../../helpers/mock-onebot.ts';
 import { QQWorld } from '../../../src/worlds/qq/world.ts';
 import { FakeHost, waitUntil } from './helpers.ts';
 
@@ -15,12 +15,12 @@ const GROUP = 424242;
 const SELF = 5000;
 const toolCtx: ToolCallContext = { role: 'main', log: nullLogger() };
 
-let mock: MockNapCat;
+let mock: MockOneBot;
 let mod: QQWorld;
 let host: FakeHost;
 
 beforeEach(async () => {
-  mock = new MockNapCat({
+  mock = new MockOneBot({
     port: 0,
     groupId: GROUP,
     selfId: SELF,

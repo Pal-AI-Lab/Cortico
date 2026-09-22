@@ -45,10 +45,10 @@ Node 侧与浏览器侧分别配置类型库:`tsconfig.json` 排掉 `src/web/cli
 | `tests/worlds/<id>/` | 各 World |
 | `tests/corti-soulmate/`、`tests/cormini/`、`tests/cortiv/` | 三个 Persona |
 | `tests/integration/` | 整机:启动即暂停、QQ 起草确认、彩排 |
-| `tests/helpers/` | `fake-host.ts`(World 的假宿主)、`mock-napcat.ts`(假 OneBot 协议端) |
+| `tests/helpers/` | `fake-host.ts`(World 的假宿主)、`mock-onebot.ts`(假 OneBot 协议端) |
 
 测试使用脚本化模型、本地 git 仓库、端口与事件库;World 宿主和平台服务使用 `FakeHost`、
-`MockNapCat` 等替身,部分 HTTP 响应由测试提供。测试不访问外部网络。
+`MockOneBot` 等替身,部分 HTTP 响应由测试提供。测试不访问外部网络。
 
 ## 目录
 

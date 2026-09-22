@@ -3,7 +3,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { OneBotDriver } from '../../../src/worlds/qq/driver.ts';
-import { MockNapCat } from '../../helpers/mock-napcat.ts';
+import { MockOneBot } from '../../helpers/mock-onebot.ts';
 import { waitUntil } from './helpers.ts';
 
 const GROUP = 424242;
@@ -27,7 +27,7 @@ function makeDriver(port: number, extra: Partial<ConstructorParameters<typeof On
 }
 
 function makeMock(port = 0, groupName = '测试群') {
-  const mock = new MockNapCat({ port, groupId: GROUP, groupName });
+  const mock = new MockOneBot({ port, groupId: GROUP, groupName });
   cleanups.push(() => mock.close());
   return mock;
 }
@@ -124,7 +124,7 @@ describe('OneBotDriver', () => {
   });
 
   it('带token时发送Authorization头(mock校验通过)', async () => {
-    const mock = new MockNapCat({ port: 0, groupId: GROUP, token: 'sekrit' });
+    const mock = new MockOneBot({ port: 0, groupId: GROUP, token: 'sekrit' });
     cleanups.push(() => mock.close());
     const port = await mock.start();
 
