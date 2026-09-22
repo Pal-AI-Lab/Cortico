@@ -10,8 +10,9 @@
  */
 import * as esbuild from 'esbuild';
 import { readdirSync, existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve, relative, sep } from 'node:path';
+import { isAbsolute, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { hashSources } from '../bin/web-assets.mjs';
 import {
   CONSOLE_PROTOCOL_VERSION,
   pageIdFor,
@@ -99,7 +100,7 @@ export async function buildWeb(root: string): Promise<ConsoleAssetManifest> {
   rmSync(outdir, { recursive: true, force: true });
   mkdirSync(outdir, { recursive: true });
 
-  const manifest: ConsoleAssetManifest = { protocolVersion: CONSOLE_PROTOCOL_VERSION, core: null, providers: {} };
+  const manifest: ConsoleAssetManifest = { protocolVersion: CONSOLE_PROTOCOL_VERSION, core: null, providers: {}, sources: {} };
 
   if (entries.length === 0) {
     writeManifest(outdir, manifest);
@@ -143,9 +144,18 @@ export async function buildWeb(root: string): Promise<ConsoleAssetManifest> {
     manifest.providers[key] = out.css ? { js: out.js, css: out.css } : { js: out.js };
   }
 
+  manifest.sources = hashSources(resolvedRoot, repoInputs(resolvedRoot, result.metafile));
   writeManifest(outdir, manifest);
   reportSizes(outdir, result.metafile);
   return manifest;
+}
+
+/** esbuild 读到的仓库内源文件，仓库相对路径；依赖包不计入。 */
+function repoInputs(root: string, metafile: esbuild.Metafile): string[] {
+  return Object.keys(metafile.inputs)
+    .map((p) => relative(root, absFromMeta(p)))
+    .filter((rel) => !rel.startsWith('..') && !isAbsolute(rel) && !rel.split(sep).includes('node_modules'))
+    .map((rel) => rel.split(sep).join('/'));
 }
 
 function writeManifest(outdir: string, manifest: ConsoleAssetManifest): void {

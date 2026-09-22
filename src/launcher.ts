@@ -198,9 +198,9 @@ async function main(): Promise<void> {
   const consoleUrl = port === null ? null : consoleUrlOf(bot.webApp?.boundAddress ?? null, port);
   if (port !== null) {
     console.log(`  控制台:    ${consoleUrl}${listensOnEveryInterface(bot.webApp?.boundAddress ?? null) ? `(监听 ${bot.webApp?.boundAddress},所有网卡)` : ''}`);
-    const assetsProblem = webAssetsProblem(fileURLToPath(new URL('../dist/web', import.meta.url)));
+    const assetsProblem = webAssetsProblem(fileURLToPath(new URL('..', import.meta.url)));
     if (assetsProblem) {
-      console.log(`  ⚠ 控制台产物不完整(${assetsProblem});停止 bot 后运行 pnpm build:web`);
+      console.log(`  ⚠ 控制台产物需要重建(${assetsProblem});停止 bot 后运行 pnpm build:web`);
     }
   }
   for (const slot of bot.assembly.slots) {

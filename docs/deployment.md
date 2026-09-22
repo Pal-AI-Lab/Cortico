@@ -76,7 +76,7 @@ pnpm start <部署名>
 或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「模型提供商」页修改密钥变量名或补填密钥，
 保存后下一次模型调用生效，不必重启。
 
-`pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失或不完整时构建，
+`pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失、不完整或落后于源码时构建，
 在一份部署都没有时建一份、在交互终端上提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
 `CORTICO_START_PAUSED` 未设置时默认为 `1`,重启也走这条路,所以重启回来时事件投递同样是暂停的,
 重启回执里写明了这一点。首次启动默认打开控制台，

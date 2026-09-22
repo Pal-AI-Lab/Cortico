@@ -86,6 +86,7 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 | `bots/*/console/client.ts` | `persona:<name>` |
 
 esbuild 输出分包 ESM 和带 hash 的文件名，写入 `asset-manifest.json`；Tailwind 输出 `styles.css`。
+清单的 `sources` 记下 esbuild 读到的每个仓库内源文件的 sha256，`bin/web-assets.mjs` 据此判断产物是否落后于源码；依赖包与 Tailwind 的输入不在其中。
 浏览器代码使用 `tsconfig.web.json` 检查：`pnpm typecheck:web`。
 
 供应商卡片区分当前连接、可连接、配置问题与草稿。其他部署的运行实例选用同一连接时显示实例名并隐藏连接操作；未运行部署的选用记录单独标注。页面每五秒刷新列表，保留详情草稿。

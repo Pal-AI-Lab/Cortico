@@ -96,6 +96,8 @@ export interface ConsoleAssetManifest {
   core: string | null;
   /** key 为 page id。 */
   providers: Record<string, ConsoleAssetEntry>;
+  /** esbuild 在仓库内读到的每个源文件的 sha256，键为仓库相对路径；启动器据此判断产物是否落后于源码。 */
+  sources?: Record<string, string>;
 }
 
 /** 静态资源 URL 的唯一合法前缀。服务端把它映射到 `dist/web/`。 */
