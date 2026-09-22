@@ -2,7 +2,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Segment } from '../../src/worlds/qq/normalize.ts';
 
-export interface MockNapCatOptions {
+export interface MockOneBotOptions {
   /** 0=随机端口(start()后读port拿实际值) */
   port?: number;
   /** 默认群号(emit*不传group_id时用) */
@@ -24,8 +24,8 @@ export interface OutboxEntry {
   message_id?: number;
 }
 
-export class MockNapCat {
-  readonly opts: Required<Omit<MockNapCatOptions, 'port' | 'token'>> & {
+export class MockOneBot {
+  readonly opts: Required<Omit<MockOneBotOptions, 'port' | 'token'>> & {
     token?: string;
   };
   /** start()之后是实际监听端口 */
@@ -40,10 +40,10 @@ export class MockNapCat {
   private messageIdSeq = 1000;
   /** get_msg 测试桩:message_id(字符串键)→ 预置返回值,见setMockMsg */
   private msgById = new Map<string, unknown>();
-  /** get_forward_msg 测试桩:资源id → 预置返回值 */
+  /** get_forward_msg 测试桩:资源id → 预置返回值。按 v11 标准只认参数 `id`。 */
   private forwardById = new Map<string, unknown>();
 
-  constructor(options: MockNapCatOptions = {}) {
+  constructor(options: MockOneBotOptions = {}) {
     this.requestedPort = options.port ?? 0;
     this.opts = {
       groupId: options.groupId ?? 10001,
@@ -148,7 +148,7 @@ export class MockNapCat {
         return;
       }
       case 'get_forward_msg': {
-        const response = this.forwardById.get(String(params.message_id ?? params.id));
+        const response = this.forwardById.get(String(params.id));
         if (response === undefined) fail(1404, '转发消息不存在');
         else ok(Array.isArray(response) ? { messages: response } : response);
         return;
@@ -168,7 +168,7 @@ export class MockNapCat {
     this.msgById.set(String(messageId), data);
   }
 
-  /** 预置 get_forward_msg(message_id) 的 messages 数组(测试模拟"展开转发"用) */
+  /** 预置 get_forward_msg(id) 的 messages 数组(测试模拟"展开转发"用) */
   setMockForward(resId: string, messages: unknown[]): void {
     this.forwardById.set(resId, messages);
   }
@@ -286,7 +286,7 @@ export class MockNapCat {
     });
   }
 
-  /** 推表情回应通知(NapCat扩展) */
+  /** 推表情回应通知(OneBot 扩展通知 group_msg_emoji_like) */
   emitEmojiLike(args: {
     message_id: number;
     user_id: number;
@@ -304,7 +304,7 @@ export class MockNapCat {
     });
   }
 
-  /** 推群戳一戳通知(NapCat: notify/poke) */
+  /** 推群戳一戳通知(notify/poke) */
   emitPoke(args: {
     user_id: number;
     target_id: number;

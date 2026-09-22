@@ -90,7 +90,7 @@ interface QQGatePanelDeps {
   setRoster(groups: QQRosterEntry[], privates: QQRosterEntry[]): string;
   /** 持久化 worlds.qq.enabled;本身不重启,重启由调用方另行触发 */
   setEnabled(enabled: boolean): void;
-  /** 持久化 NapCat 连接(wsUrl + token);token 空串=保持原值不动 */
+  /** 持久化协议端连接(wsUrl + token);token 空串=保持原值不动 */
   setConnection(wsUrl: string, token: string): void;
   /** 落重启标志并让进程退出(启动器重新拉起,回来是暂停态) */
   restart(): void;
@@ -353,7 +353,7 @@ export class QQWorld implements World {
       // 局部 id + 真标题(控制台把 title 画成面板切换页签);渲染在
       // src/worlds/qq/console/ 的自有浏览器扩展里,中央前端不认识这三个名字。
       panels: [
-        { id: 'gate', title: '接入门', description: '接入开关、连接状态与 NapCat 地址。' },
+        { id: 'gate', title: '接入门', description: '接入开关、连接状态与 OneBot 协议端地址。' },
         { id: 'roster', title: '监听名单', description: '监听哪些群、哪些私聊;改动热生效。' },
         { id: 'events', title: '事件', description: '事件库里 source=qq 的历史,按会话翻。' },
       ],
@@ -453,7 +453,7 @@ export class QQWorld implements World {
       const token = typeof args[1] === 'string' ? args[1] : '';
       if (!/^wss?:\/\/.+/i.test(wsUrl)) throw new Error('wsUrl 必须是 ws:// 或 wss:// 地址');
       gate.setConnection(wsUrl, token);
-      this.log.warn('NapCat 连接配置已改,即将重启', { wsUrl, tokenChanged: token !== '' });
+      this.log.warn('协议端连接配置已改,即将重启', { wsUrl, tokenChanged: token !== '' });
       this.scheduleGateRestart(gate);
       return { ok: true, restarting: true };
     }
@@ -1004,14 +1004,15 @@ export class QQWorld implements World {
   }
 
   /**
-   * 转发(合并转发)消息:异步用扩展动作 get_forward_msg 取具体内容,取到与否都
+   * 转发(合并转发)消息:异步用 get_forward_msg 取具体内容,取到与否都
    * 追加一条系统事件;不阻塞当前消息投递(同上,非阻塞延迟到达风格)。
+   * OneBot v11 标准的参数名是 `id`,NapCat 认 `message_id`,两个都带上。
    */
   private lookupForward(resId: string, conv: Conv, ofMessageId: number | string): void {
     const host = this.host;
     const driver = this.driver;
     if (!host || !driver) return;
-    void driver.callApi('get_forward_msg', { message_id: resId }).then(
+    void driver.callApi('get_forward_msg', { id: resId, message_id: resId }).then(
       (data) => {
         const nodes = this.forwardMessages(data).map((m) => this.renderForwardNode(m));
         const collapsed = this.forwardIdentityCollapsed(nodes);
@@ -1101,8 +1102,8 @@ export class QQWorld implements World {
   }
 
   /**
-   * 尽力从NapCat戳一戳notify的raw_info里拼出动作文案(如"戳了戳"/"拍了拍");
-   * 不同协议端/版本这个字段形状不保证,取不到就退回通用"戳了戳"(防御性解析)。
+   * 尽力从戳一戳notify的raw_info里拼出动作文案(如"戳了戳"/"拍了拍")。
+   * raw_info 不在 OneBot v11 标准里,形状随协议端而变,取不到就退回通用"戳了戳"。
    */
   private extractPokeAction(rawInfo: unknown): string {
     if (Array.isArray(rawInfo)) {

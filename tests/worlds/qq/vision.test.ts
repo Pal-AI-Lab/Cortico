@@ -12,7 +12,7 @@ import type { VLMClient, VLMMessage } from '../../../src/worlds/qq/vlm.ts';
 import type { VisionConfig } from '../../../src/worlds/qq/vision.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 import { VisionService } from '../../../src/worlds/qq/vision.ts';
-import { MockNapCat } from '../../helpers/mock-napcat.ts';
+import { MockOneBot } from '../../helpers/mock-onebot.ts';
 import { QQWorld } from '../../../src/worlds/qq/world.ts';
 import { FakeHost, waitUntil } from './helpers.ts';
 
@@ -775,7 +775,7 @@ describe('VisionService 并发上限', () => {
 describe('QQWorld 外挂视觉接线', () => {
   const GROUP = 424242;
   const SELF = 5000;
-  let mock: MockNapCat;
+  let mock: MockOneBot;
   let host: FakeHost;
   let mod: QQWorld;
   let vlm: FakeVLM;
@@ -788,7 +788,7 @@ describe('QQWorld 外挂视觉接线', () => {
     fetchImpl?: typeof fetch;
     visionCfgOverride?: Partial<VisionConfig>;
   }): Promise<void> {
-    mock = new MockNapCat({
+    mock = new MockOneBot({
       port: 0,
       groupId: GROUP,
       selfId: SELF,

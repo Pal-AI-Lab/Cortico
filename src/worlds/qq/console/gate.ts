@@ -1,5 +1,5 @@
 /**
- * 面板 `gate` —— 接入门:接入开关 + 连接状态 + NapCat 连接。
+ * 面板 `gate` —— 接入门:接入开关 + 连接状态 + OneBot 协议端连接。
  *
  * 三张卡靠同一份 `gate.state`,一次取数。改开关或改连接都会**真重启进程**,
  * 所以这里还带着重启期间的等待与回来后的自动刷新(`restartWatch`)。
@@ -20,7 +20,7 @@ export const gatePanel: ConsolePanel = {
       loading: '加载 QQ 接入状态…',
       failed: 'QQ 接入状态不可用',
       load: () => ctx.invoke<QQGateState>('state'),
-      render: (st) => [enableSheet(ctx, st), connSheet(ctx, st), napcatSheet(ctx, st)],
+      render: (st) => [enableSheet(ctx, st), connSheet(ctx, st), endpointSheet(ctx, st)],
     });
   },
 };
@@ -50,7 +50,7 @@ function enableSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
   );
   card.body.appendChild(status);
   if (st.enabled && !st.connected) {
-    card.body.appendChild(ui.msgline('NapCat 未连接。', true));
+    card.body.appendChild(ui.msgline('协议端未连接。', true));
   }
   const actions = ui.actions();
   actions.append(ui.h('span', 'grow'), btn);
@@ -87,7 +87,7 @@ async function toggleEnabled(
 
 function connSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
   const { ui } = ctx;
-  const card = ui.sheet({ title: '连接状态', en: 'NapCat ⇄ core' });
+  const card = ui.sheet({ title: '连接状态', en: 'OneBot ⇄ core' });
 
   const conn = !st.enabled
     ? '未启用'
@@ -117,15 +117,16 @@ function connSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
 }
 
 // ---------------------------------------------------------------------------
-// NapCat 连接
+// OneBot 协议端连接
 // ---------------------------------------------------------------------------
 
-function napcatSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
+function endpointSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: 'NapCat 连接',
+    title: 'OneBot 协议端',
     en: '正向 WS + token',
-    desc: 'NapCat 需保持运行并登录 QQ，通过正向 WebSocket 连接。保存连接配置后重启进程。',
+    desc: '推荐 SnowLuma,NapCat 等 OneBot v11 实现同样可用。协议端需保持运行、登录 QQ 并开启正向 WebSocket;'
+      + 'SnowLuma 的 token 在它的 config/onebot_<QQ号>.json 里。保存连接配置后重启进程。',
   });
 
   const ws = ui.input({ value: st.wsUrl || '', placeholder: 'ws://127.0.0.1:3001' });
@@ -168,7 +169,7 @@ async function saveConnection(
   msg.textContent = '';
   msg.classList.remove('bad');
   const ok = await ctx.ui.confirm({
-    title: '保存 NapCat 连接并重启?',
+    title: '保存协议端连接并重启?',
     body: '保存连接配置后重启进程。',
   });
   if (!ok) return;

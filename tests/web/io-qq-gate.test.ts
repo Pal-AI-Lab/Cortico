@@ -43,7 +43,7 @@ beforeAll(() => {
   seed('qq', 'qq.message', '[群「学习组」] c', { kind: 'group', id: 333 }, '2026-07-19T15:03:00+08:00');
   seed('terminal', 'terminal.message', '[终端] 访客', undefined, '2026-07-19T15:04:00+08:00');
   seed('qq', 'qq.message', '[私聊] d', { kind: 'private', id: 222 }, '2026-07-19T15:05:00+08:00');
-  // events 面板只用 host.store;不为它起整条 NapCat 连接,直接塞一个只有 store 的宿主
+  // events 面板只用 host.store;不为它起整条协议端连接,直接塞一个只有 store 的宿主
   (qq as any).host = { store };
 });
 
