@@ -28,7 +28,7 @@ Core 通过 `WorldHost` 向 World 提供以下能力:
 | `pushDeferred(e, { trigger })` | 投递时生成正文;`render` 返回 null、抛错或超时时不存储、不投递 |
 | `pushCandidate?(spec, { trigger })` | 先归档原始事件,在投递时选择内容并生成正文 |
 | `store`、`drainPendingEvents(filter)` | 读事件库;消费待投递事件(一次性) |
-| `modelFacts` | 当前模型接受什么(多模态等) |
+| `modelFacts` | 当前端点的模型名、接受的 MIME 与上下文窗口，每次调用按当前端点读取;未选端点或端点未选模型时 `accepts` 为 false |
 | `blob(handle)`、`reportUsage()`、`llmStalls?()` | 附件、用量上报、模型停滞查询 |
 | `cognition?` | 向 Persona 请求后台认知计算;Persona 未提供时该成员不存在 |
 | `log` | 包含 World 区域和调用关联字段的 Logger |

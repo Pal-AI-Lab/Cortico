@@ -34,6 +34,9 @@ Core 管理 session、事件流与模型调用的生命周期，包括事件投�
 `sessionDecls`;`spawnFork`、`resolveBlob` / `internBlobs`、`setWorldVisible`、`activeSpec` /
 `activeProviderEntry`、`mountWorld` / `unmountWorld`、`start` / `stop`。
 
+`WorldHost.modelFacts` 每次调用按当前端点读取。`activeProvider` 为空或端点没有模型时 `accepts`
+返回 false,`activeProvider` 指向不存在的端点时抛错。
+
 Persona 通过 `CoreApi` 访问：`injectInternal` / `injectDeferred` / `injectExternal`、
 `requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、
 `personaState` / `savePersonaState`、`toolsTagged`、`blob`、`log`。

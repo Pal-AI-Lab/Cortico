@@ -106,6 +106,19 @@ describe('Core · LLM provider 路由', () => {
     expect(facts.accepts('audio/wav')).toBe(false); // 只认 image/*
   });
 
+  it('modelFacts.accepts 在未选端点或端点未选模型时为 false,端点名不存在时抛错', () => {
+    const { core, config, tmp } = buildHarness();
+    cleanup = tmp.cleanup;
+    const facts = (core as unknown as { modelFacts(): { accepts(m: string): boolean } }).modelFacts();
+    config.activeProvider = '';
+    expect(facts.accepts('image/png')).toBe(false);
+    config.activeProvider = 'local';
+    delete config.providers.local.spec;
+    expect(facts.accepts('image/png')).toBe(false);
+    config.activeProvider = 'nope';
+    expect(() => facts.accepts('image/png')).toThrow(/没有这个 LLM provider: nope/);
+  });
+
   it("activeProvider 不存在时在调用阶段抛错", async () => {
     const { core, config, tmp } = buildHarness();
     cleanup = tmp.cleanup;
