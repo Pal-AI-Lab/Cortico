@@ -310,8 +310,8 @@ async function main() {
     if (code !== 0) return code;
   }
 
-  // 控制台产物不纳入版本控制;不完整的产物按没有算。
-  const assetsProblem = webAssetsProblem(join(REPO_ROOT, 'dist', 'web'));
+  // 控制台产物不纳入版本控制;不完整或落后于源码的产物按没有算。
+  const assetsProblem = webAssetsProblem(REPO_ROOT);
   if (assetsProblem) {
     console.log(`正在构建控制台: pnpm build:web ...(${assetsProblem})\n`);
     const code = runPnpm(pnpm, ['build:web']);

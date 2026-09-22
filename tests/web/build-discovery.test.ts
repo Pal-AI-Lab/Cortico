@@ -6,7 +6,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { discoverEntries } from '../../scripts/build-web.ts';
+import { buildWeb, discoverEntries } from '../../scripts/build-web.ts';
+import { webAssetsProblem } from '../../bin/web-assets.mjs';
 
 let root: string;
 
@@ -59,4 +60,22 @@ describe('discoverEntries', () => {
     }
   });
 
+});
+
+describe('buildWeb', () => {
+  it('清单记下入口及其导入的仓库内源文件', async () => {
+    const repo = mkdtempSync(join(tmpdir(), 'cortico-web-build-'));
+    try {
+      mkdirSync(join(repo, 'src', 'web', 'client'), { recursive: true });
+      writeFileSync(join(repo, 'src', 'web', 'client', 'main.ts'), "import { x } from './dep.ts';\nconsole.log(x);\n", 'utf8');
+      writeFileSync(join(repo, 'src', 'web', 'client', 'dep.ts'), 'export const x = 1;\n', 'utf8');
+      const manifest = await buildWeb(repo);
+      expect(Object.keys(manifest.sources ?? {})).toEqual(['src/web/client/dep.ts', 'src/web/client/main.ts']);
+      // 样式表由 Tailwind 那一步写出。
+      writeFileSync(join(repo, 'dist', 'web', 'styles.css'), 'body{}\n', 'utf8');
+      expect(webAssetsProblem(repo)).toBeNull();
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
 });

@@ -91,7 +91,7 @@ Pick a bot package, a directory name and a display name; the new deployment star
 pnpm start second
 ```
 
-The launcher scripts (`pnpm start`, `./start.sh`, and `start.bat` on Windows) automatically install missing dependencies, build web console assets if absent, list every deployment for selection on an interactive terminal (including an entry for creating a new one), and restart processes on request from the console.
+The launcher scripts (`pnpm start`, `./start.sh`, and `start.bat` on Windows) automatically install missing dependencies, build web console assets when they are missing or older than the source, list every deployment for selection on an interactive terminal (including an entry for creating a new one), and restart processes on request from the console.
 
 ## The Four Layers
 
