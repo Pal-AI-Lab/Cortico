@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability / 安全漏洞
+    url: https://github.com/Pal-AI-Lab/Cortico/security/advisories/new
+    about: Report privately, not as a public issue. / 私下报告,不要开公开 issue。
+  - name: Feedback on the PR Gate / 对 PR Gate 的意见
+    url: https://github.com/Pal-AI-Lab/Cortico/issues/13
+    about: Comment on the standing feedback issue. / 在常驻的意见收集 issue 下评论。

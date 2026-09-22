@@ -1,0 +1,21 @@
+name: Feature request / 功能建议
+description: A capability the framework does not have. / 框架目前没有的能力。
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you want to do / 想做什么
+    validations:
+      required: true
+  - type: textarea
+    id: why-not-extension
+    attributes:
+      label: Why a Persona hook, a World or an extension cannot do it today / 为什么现有的 Persona 钩子、World 或扩展做不到
+      description: See PHILOSOPHY.md for what belongs in the framework. / 哪些属于框架见 PHILOSOPHY.md。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change / 建议的改法
