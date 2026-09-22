@@ -1,4 +1,4 @@
-<!-- Owner: package.json, vitest.config.ts, tsconfig.json, tsconfig.web.json -->
+<!-- Owner: package.json, vitest.config.ts, tsconfig.json, tsconfig.web.json, .github/workflows/ -->
 
 # 开发
 
@@ -18,7 +18,7 @@ Node 22+,pnpm 11(版本由 `package.json` 的 `packageManager` 指定)。规则�
 | `pnpm logq` | 查运行日志(见 [runs.md](runs.md)) |
 | `pnpm check:extension <目录>` | 校验一个扩展包 |
 | `pnpm audit:release` | 发布审计:部署资源、明文凭证、异常大文件 |
-| `pnpm publish:package` | 生成 npm 发布包 `dist/package`;`--pack` 出 tarball,`--publish` 发布 |
+| `pnpm publish:package` | 生成 npm 发布包 `dist/package`;`--pack` 出 tarball;`--publish` 发布,只由发布 workflow 执行 |
 
 提交前必须通过 `pnpm test` 与 `pnpm run typecheck`;修改浏览器代码还需通过
 `pnpm typecheck:web` 与 `pnpm build:web`。bot 运行期间禁止构建其正在使用的控制台文件。
@@ -65,6 +65,19 @@ Node 侧与浏览器侧分别配置类型库:`tsconfig.json` 排掉 `src/web/cli
 | `scripts/` | `build-web`、`dev-console`、`logq`、`extension-check`、`release-audit`、`publish-package`、`migrate-rename`、`generate-open-responses` |
 | `templates/extension/<kind>/` | World、Provider、bot 三类扩展的可安装模板 |
 | `scratch/`、`deprecated/`、`deployments/`、`extensions/` | 都不进版本控制 |
+
+## 发布
+
+`package.json` 的版本号改动走 PR 合进 `main`,之后在 `main` 上发 release,tag 为 `v<版本号>`:
+
+```bash
+gh release create v0.1.4 --target main --notes-file notes.md
+```
+
+release 发布后 `.github/workflows/publish.yml` 在 `npm` 环境里排队,维护者在 Actions 页批准后开跑:
+tag 与 `package.json` 版本不一致即失败,然后跑类型检查和测试,最后执行
+`pnpm run publish:package --publish`。npm 端用 trusted publishing 认这个 workflow 文件和 `npm` 环境,
+仓库里不存 npm token,发布的包带 provenance。发布失败时修好后在 Actions 里重跑这个任务。
 
 ## 文档
 
