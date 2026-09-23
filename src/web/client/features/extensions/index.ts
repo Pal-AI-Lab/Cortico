@@ -26,6 +26,18 @@ export interface ExtensionView {
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
 }
 
+interface UpdateView {
+  name: string;
+  installedVersion: string;
+  latestVersion: string;
+  problems: string[];
+}
+
+interface UpdateResultView {
+  updates: UpdateView[];
+  errors: Array<{ name: string; error: string }>;
+}
+
 /** 与 `ExtensionSearchHit` 同形。 */
 export interface SearchHitView {
   name: string;
@@ -187,6 +199,10 @@ export function mountExtensions(ctx: FeatureContext): void {
   const view = root.ownerDocument?.defaultView ?? null;
   const canRestart = ctx.capabilities.restart === true;
   const supervised = ctx.capabilities.supervised === true;
+  let currentExtensions: ExtensionView[] | null = null;
+  let currentDir = '';
+  let availableUpdates = new Map<string, UpdateView>();
+  let updateErrors: UpdateResultView['errors'] = [];
 
   const intro = pageIntro(ui, S.introTitle, S.introDesc);
 
@@ -200,19 +216,26 @@ export function mountExtensions(ctx: FeatureContext): void {
   });
   const sumBar = ui.rowbar();
   const msg = ui.msgline();
-  const refreshBtn = ui.button(S.refresh, { size: 'sm', onClick: () => void load() });
+  const refreshBtn = ui.button(S.refresh, { size: 'sm', onClick: () => { void load(); void checkUpdates(); } });
   const restartBtn = ui.button(S.restartProcess, {
     size: 'sm',
     variant: 'primary',
     onClick: (ev) => void restartProcess(ev.currentTarget as HTMLButtonElement),
   });
-  installedSheet.body.append(sumBar, msg);
+  const updateMsg = ui.msgline(S.checkingUpdates);
+  installedSheet.body.append(sumBar, msg, updateMsg);
   /** 分组容器:每组一条 section 标题 + 一张 `.iogrid`。 */
   const installedGroups = ui.h('div');
 
   function setMsg(text: string, bad?: boolean): void {
     msg.textContent = text;
     msg.className = 'msgline' + (bad ? ' bad' : '');
+  }
+
+  function showUpdateStatus(): void {
+    const failures = updateErrors.map(({ name, error }) => `${name}: ${error}`);
+    updateMsg.textContent = failures.length ? S.updateCheckFailed(failures.join('; ')) : '';
+    updateMsg.className = 'msgline' + (failures.length ? ' bad' : '');
   }
 
   /**
@@ -265,6 +288,8 @@ export function mountExtensions(ctx: FeatureContext): void {
       if (ctx.signal.aborted) return;
       setMsg(out?.result?.split('\n')[0] || S.uninstalled);
       markHit(p.name, false);
+      availableUpdates.delete(p.name);
+      showUpdateStatus();
       await load();
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return;
@@ -286,7 +311,11 @@ export function mountExtensions(ctx: FeatureContext): void {
       if (ctx.signal.aborted) return false;
       result = out?.result ?? S.installed;
       setMsg(result.split('\n')[0]);
-      if ('name' in target) markHit(target.name, true);
+      if ('name' in target) {
+        markHit(target.name, true);
+        availableUpdates.delete(target.name);
+        showUpdateStatus();
+      }
       await load();
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return false;
@@ -307,6 +336,14 @@ export function mountExtensions(ctx: FeatureContext): void {
     return true;
   }
 
+  async function updateExtension(p: ExtensionView, update: UpdateView, btn: HTMLButtonElement): Promise<void> {
+    if (update.problems.length) {
+      const ok = await ui.confirm({ title: S.updateWarningTitle, body: update.problems.join('\n'), danger: true });
+      if (!ok || ctx.signal.aborted) return;
+    }
+    await install({ name: p.name, version: update.latestVersion }, btn);
+  }
+
   function extensionCard(p: ExtensionView): HTMLElement {
     const en = `${p.name}@${p.version ?? '?'}${p.worldId && p.kind ? ` · ${KIND_NOUN[p.kind]} ${p.worldId}` : ''}`;
     const card = ui.sheet({ title: p.label || p.name, en });
@@ -325,8 +362,18 @@ export function mountExtensions(ctx: FeatureContext): void {
     if (p.reason) card.body.appendChild(ui.msgline(p.reason, true));
     if (p.state === 'idle') card.body.appendChild(ui.msgline(S.noteIdle));
     if (p.console === 'missing') card.body.appendChild(ui.msgline(S.noteConsoleMissing, true));
+    const update = availableUpdates.get(p.name);
+    if (update) {
+      card.body.appendChild(ui.msgline(S.updateVersions(update.installedVersion, update.latestVersion)));
+      for (const problem of update.problems) card.body.appendChild(ui.msgline(problem, true));
+    }
     if (p.state !== 'removed') {
       const actions = ui.actions();
+      if (update) actions.appendChild(ui.button(S.updateAction, {
+        size: 'sm',
+        variant: update.problems.length ? 'danger' : 'primary',
+        onClick: (ev) => void updateExtension(p, update, ev.currentTarget as HTMLButtonElement),
+      }));
       actions.appendChild(ui.button(S.uninstall, {
         size: 'sm',
         variant: 'danger',
@@ -346,6 +393,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     sumBar.appendChild(ui.pill(S.sumLoaded(loaded), 'on'));
     if (pending > 0) sumBar.appendChild(ui.pill(S.sumPending(pending), 'off'));
     if (failed > 0) sumBar.appendChild(ui.pill(S.sumFailed(failed), 'off'));
+    if (availableUpdates.size > 0) sumBar.appendChild(ui.pill(S.updateCount(availableUpdates.size), 'on'));
     sumBar.appendChild(ui.chip(dir));
     sumBar.append(ui.h('span', 'grow'), refreshBtn);
     if (canRestart) sumBar.appendChild(restartBtn);
@@ -366,10 +414,32 @@ export function mountExtensions(ctx: FeatureContext): void {
     try {
       const data = await get<{ dir?: string; extensions?: ExtensionView[] }>('/api/extensions', { signal: ctx.signal });
       if (ctx.signal.aborted) return;
-      renderInstalled(Array.isArray(data?.extensions) ? data.extensions : [], data?.dir ?? '');
+      currentExtensions = Array.isArray(data?.extensions) ? data.extensions : [];
+      currentDir = data?.dir ?? '';
+      renderInstalled(currentExtensions, currentDir);
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted) return;
+      currentExtensions = null;
       installedGroups.replaceChildren(ui.placeholder(S.listLoadFailed(errText(err))));
+    }
+  }
+
+  async function checkUpdates(): Promise<void> {
+    updateMsg.textContent = S.checkingUpdates;
+    updateMsg.className = 'msgline';
+    try {
+      const result = await get<UpdateResultView>('/api/extensions/updates', { signal: ctx.signal });
+      if (ctx.signal.aborted) return;
+      availableUpdates = new Map((result?.updates ?? []).map((item) => [item.name, item]));
+      updateErrors = result?.errors ?? [];
+      showUpdateStatus();
+      if (currentExtensions) renderInstalled(currentExtensions, currentDir);
+    } catch (err) {
+      if (isAbort(err) || ctx.signal.aborted) return;
+      availableUpdates.clear();
+      updateErrors = [{ name: 'npm', error: errText(err) }];
+      showUpdateStatus();
+      if (currentExtensions) renderInstalled(currentExtensions, currentDir);
     }
   }
 
@@ -647,6 +717,7 @@ export function mountExtensions(ctx: FeatureContext): void {
   root.append(intro, installedSheet.el, installedGroups, searchSheet.el, manualSheet.el);
   installedGroups.appendChild(ui.placeholder(S.loading));
   void load();
+  void checkUpdates();
   // 这一类在 npm 上的包一进页就列出来:筛选与排序都在整份结果上做,没有「先搜一下」这一步
   void search();
 }

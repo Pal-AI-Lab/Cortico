@@ -223,6 +223,11 @@ export interface ExtensionSearchHit {
   kind?: 'world' | 'provider' | 'bot';
 }
 
+export interface ExtensionUpdateResult {
+  updates: Array<{ name: string; installedVersion: string; latestVersion: string; problems: string[] }>;
+  errors: Array<{ name: string; error: string }>;
+}
+
 /** 一个 npm 包的详情。操作员点开某条搜索结果时才取。 */
 export interface ExtensionPackageDetail {
   name: string;
@@ -266,6 +271,7 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
   list(): { dir: string; extensions: ExtensionInfo[] };
+  updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
   /** 单个包的详情(另取一次包文档)。 */
@@ -1706,6 +1712,12 @@ export class WebApp {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
       res.json(src.list());
+    }));
+
+    app.get('/api/extensions/updates', wrap(async (_req, res) => {
+      const src = this.deps.extensions;
+      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      res.json(await src.updates());
     }));
 
     app.get('/api/extensions/search', wrap(async (req, res) => {

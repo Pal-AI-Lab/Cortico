@@ -1071,7 +1071,7 @@ const devExtensions: ExtensionInfo[] = [
  * 筛选、排序、分页在这张表上能各自看出效果。
  */
 const devSearchHits: ExtensionSearchHit[] = [
-  ['@acme/cortico-world-discord', '0.3.1', 'Discord 频道接入', 'acme', 412, 3, 'MIT', '2026-08-30', ['chat']],
+  ['@acme/cortico-world-discord', '0.3.2', 'Discord 频道接入', 'acme', 412, 3, 'MIT', '2026-08-30', ['chat']],
   ['cortico-world-rss', '1.0.0', 'RSS 订阅轮询,按源分栏投递', 'feedworks', 38, 0, 'MIT', '2026-09-11', ['feed']],
   ['cortico-world-matrix', '0.7.2', 'Matrix 房间接入,支持端到端加密房', 'kyoka', 1240, 12, 'Apache-2.0', '2026-09-18', ['chat']],
   ['cortico-world-telegram', '2.1.0', 'Telegram bot 接入', 'acme', 8800, 41, 'MIT', '2026-09-02', ['chat']],
@@ -1230,6 +1230,11 @@ const app = new WebApp({
   // 扩展面的假数据:四种状态各一;装卸只改这张表,不跑 pnpm。
   extensions: {
     list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: devExtensions.map((p) => ({ ...p })) }),
+    updates: async () => ({
+      updates: devExtensions.some((p) => p.name === '@acme/cortico-world-discord' && p.state !== 'removed' && p.installedVersion !== '0.3.2')
+        ? [{ name: '@acme/cortico-world-discord', installedVersion: '0.3.1', latestVersion: '0.3.2', problems: [] }] : [],
+      errors: [],
+    }),
     search: async (kind) => {
       await new Promise((r) => setTimeout(r, 300));
       if ((kind ?? 'world') !== 'world') return [];
@@ -1282,7 +1287,7 @@ const app = new WebApp({
       const name = 'name' in target ? target.name : `local-${target.path.split(/[\\/]/).filter(Boolean).pop() ?? 'module'}`;
       const spec = 'name' in target ? (target.version ?? '^1.0.0') : `link:${target.path}`;
       const existing = devExtensions.find((p) => p.name === name);
-      if (existing) Object.assign(existing, { spec, state: 'pending-restart' });
+      if (existing) Object.assign(existing, { spec, installedVersion: 'name' in target ? target.version ?? existing.version : existing.version, state: 'pending-restart' });
       else devExtensions.push({ name, spec, version: '1.0.0', consoleClient: false, loaded: false, state: 'pending-restart' });
       return `已安装 ${name}@${spec}。重启进程后加载。\nProgress: resolved 12, reused 12, downloaded 0\n+ ${name} 1.0.0\nDone in 1.8s (dev,没真跑 pnpm)`;
     },
