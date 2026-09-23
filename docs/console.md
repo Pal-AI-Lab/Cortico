@@ -86,6 +86,12 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `log`、`toast`、`confirm`、`drawer`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
 
+## 框架发布
+
+控制台显示当前检出版本。检出位于与 `package.json` 版本一致的 tag 时，
+`GET /api/framework/release` 查询 GitHub 最新正式 Release；版本较新时给出版本号和发布说明链接。
+开发检出不查询发布源。检查失败可重试，检查过程不修改检出或运行进程。
+
 ## 运行控制
 
 | 端点 | 行为 |

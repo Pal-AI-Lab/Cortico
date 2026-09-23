@@ -65,4 +65,15 @@ describe('framework release notice', () => {
     await expect(checkFrameworkRelease(checkout('1.0.0', 'v1.0.0'), endpoint))
       .rejects.toThrow('GitHub Releases: HTTP 503');
   });
+
+  it('发布源接收请求后不回应时截止等待，控制台可以显示重试', async () => {
+    const server = createServer(() => {});
+    servers.push(server);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('测试端口缺失');
+    const endpoint = `http://127.0.0.1:${address.port}/latest`;
+    await expect(checkFrameworkRelease(checkout('1.0.0', 'v1.0.0'), endpoint, AbortSignal.timeout(30)))
+      .rejects.toMatchObject({ name: 'TimeoutError' });
+  });
 });

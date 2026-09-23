@@ -27,7 +27,9 @@ function isNewer(latest: string, current: string): boolean {
   return false;
 }
 
-export async function checkFrameworkRelease(root = repoRoot(), releaseUrl = RELEASE_URL): Promise<FrameworkReleaseStatus> {
+export async function checkFrameworkRelease(
+  root = repoRoot(), releaseUrl = RELEASE_URL, signal?: AbortSignal,
+): Promise<FrameworkReleaseStatus> {
   const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
   let tag = '';
   try {
@@ -39,7 +41,7 @@ export async function checkFrameworkRelease(root = repoRoot(), releaseUrl = RELE
 
   const response = await fetch(releaseUrl, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cortico' },
-    signal: AbortSignal.timeout(5000),
+    signal: signal ?? AbortSignal.timeout(15_000),
   });
   if (!response.ok) throw new Error(`GitHub Releases: HTTP ${response.status}`);
   const release = await response.json() as { tag_name?: unknown; html_url?: unknown };
