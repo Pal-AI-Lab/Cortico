@@ -930,12 +930,16 @@ export const RIDE_STEP: Readonly<Record<string, number>> = {
   pig: 0.12, strider: 0.12, boat: 0.3, chest_boat: 0.3,
 };
 export const RIDE_STEP_DEFAULT = 0.12;
+/** 贴墙滑时某一轴剩下的分量短于这个就不算一种走法(只为跳过零长度那一轴) */
+export const RIDE_MIN_SLIDE = 0.001;
+/** 坐骑实体没带宽高读数时的包围盒边长(猪的宽高) */
+export const RIDE_HULL_DEFAULT = 0.9;
 /** 驾驭这一种要手持的道具(服务端认「受控」的前提;拿掉它坐骑就不听使唤) */
 export const RIDE_CONTROL_ITEM: Readonly<Record<string, string>> = {
   pig: 'carrot_on_a_stick', strider: 'warped_fungus_on_a_stick',
 };
 
-export interface VehicleEntity { name?: string; position: Vec3; height?: number }
+export interface VehicleEntity { name?: string; position: Vec3; height?: number; width?: number }
 export interface RideClient {
   write(name: string, data: Record<string, unknown>): void;
   on(name: string, fn: (p: { x: number; y: number; z: number }) => void): void;
@@ -1322,9 +1326,81 @@ export function rideGroundY(bot: Bot, x: number, yNow: number, z: number): numbe
   return null;
 }
 
+/** 骑手脚底比坐骑 y 高出的量;骑手位置跟着坐骑写,埋头判定读的也是这个位置 */
+export const RIDER_OVER_VEHICLE = 0.6;
+/** 玩家眼高;原版窒息按眼睛那一点所在的方块判 */
+export const PLAYER_EYE = 1.62;
+/**
+ * 坐骑包围盒各面收进的量,只为让恰好贴着方块面的位置不算重叠。
+ * 原版源码验碰撞前收进 1/16,但台架上的 Paper 1.20.6 对整盒重叠 0.06 格的落点照样拽回,
+ * 所以按整盒算。
+ */
+export const VEHICLE_HULL_EPS = 1e-6;
+
+export interface RideObstacle {
+  cell: Cell;
+  name: string;
+  /** hull=坐骑身子撞上;head=坐骑过得去、骑手的头会在这一格里 */
+  kind: 'hull' | 'head';
+}
+
+function shapeBoxes(b: NonNullable<ReturnType<Bot['blockAt']>>): number[][] {
+  const shapes = (b as unknown as { shapes?: number[][] }).shapes;
+  if (Array.isArray(shapes)) return shapes;
+  return b.boundingBox === 'block' ? [[0, 0, 0, 1, 1, 1]] : [];
+}
+
+/**
+ * 坐骑落到 (x,y,z) 这一步挡不挡:身子按实体宽高的整盒碰方块碰撞箱,
+ * 骑手眼睛所在那一格是整格实心就算头挡——原版船钻得进一格高的缝,人在里面窒息掉血。
+ * 区块没加载的格按挡住报,不当空气。
+ */
+export function rideObstacle(
+  bot: Bot, x: number, y: number, z: number, hull: { width: number; height: number },
+): RideObstacle | null {
+  const hw = hull.width / 2 - VEHICLE_HULL_EPS;
+  const x0 = x - hw; const x1 = x + hw;
+  const z0 = z - hw; const z1 = z + hw;
+  const y0 = y + VEHICLE_HULL_EPS; const y1 = y + hull.height - VEHICLE_HULL_EPS;
+  for (let cy = Math.floor(y0); cy <= Math.floor(y1); cy += 1) {
+    for (let cx = Math.floor(x0); cx <= Math.floor(x1); cx += 1) {
+      for (let cz = Math.floor(z0); cz <= Math.floor(z1); cz += 1) {
+        const cell = { x: cx, y: cy, z: cz };
+        const b = blockAtCell(bot, cell);
+        if (!b) return { cell, name: '(区块没加载)', kind: 'hull' };
+        const hit = shapeBoxes(b).some(([sx0, sy0, sz0, sx1, sy1, sz1]) => cx + sx0 < x1 && cx + sx1 > x0
+          && cy + sy0 < y1 && cy + sy1 > y0 && cz + sz0 < z1 && cz + sz1 > z0);
+        if (hit) return { cell, name: b.name, kind: 'hull' };
+      }
+    }
+  }
+  const eye = { x: Math.floor(x), y: Math.floor(y + RIDER_OVER_VEHICLE + PLAYER_EYE), z: Math.floor(z) };
+  const head = blockAtCell(bot, eye);
+  if (head && head.boundingBox === 'block') return { cell: eye, name: head.name, kind: 'head' };
+  return null;
+}
+
+/** 直走、贴墙滑几种走法各自撞上的那一格,同一格只说一次 */
+export function rideObstacleText(hits: readonly RideObstacle[], zhV: string): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  for (const o of hits) {
+    const key = `${o.cell.x},${o.cell.y},${o.cell.z}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    parts.push(o.kind === 'head'
+      ? `${cellText(o.cell)} 是${zhName(o.name)},在人头的高度(${zhV}钻得过去,人头会闷在里面掉血)`
+      : `${cellText(o.cell)} 是${zhName(o.name)},挡着${zhV}的身子`);
+  }
+  return `直走和贴墙滑都过不去:${parts.join(';')}`;
+}
+
 /**
  * 玩家控制的载具由骑手客户端发送 vehicle_move 绝对坐标，服务端做碰撞和纠偏。
  * Mineflayer 无载具物理，此处每 tick 小步移动并转向；仅转头不能驱动载具。
+ *
+ * 服务端对「落点和方块重叠」的包不记日志,只回一个 vehicle_move 把坐骑拽回原处。
+ * 所以每一步先按坐骑包围盒自己查:直走被挡就试只走 x、只走 z(贴墙滑),都挡就当场停。
  */
 export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<string> {
   const vehicle = vehicleOf(bot);
@@ -1349,6 +1425,7 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
     }
   }
   const step = RIDE_STEP[vname] ?? RIDE_STEP_DEFAULT;
+  const hull = { width: vehicle.width ?? RIDE_HULL_DEFAULT, height: vehicle.height ?? RIDE_HULL_DEFAULT };
   const client = (bot as unknown as { _client: RideClient })._client;
   const pos = vehicle.position.clone();
   const start = { x: pos.x, z: pos.z };
@@ -1384,15 +1461,36 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         }
         mark = { x: pos.x, z: pos.z, at: Date.now() };
       }
-      const ux = dx / dist;
-      const uz = dz / dist;
-      const nx = pos.x + ux * Math.min(step, dist);
-      const nz = pos.z + uz * Math.min(step, dist);
-      const ny = rideGroundY(bot, nx, pos.y, nz);
-      if (ny === null) {
-        stalledWhy = '前面那一格落不了脚(悬崖/墙/区块没加载)';
+      const along = Math.min(step, dist);
+      // 直走、只走 x、只走 z:取第一个不挡的;三种都朝目标靠近
+      const tries = [
+        { mx: (dx / dist) * along, mz: (dz / dist) * along },
+        { mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },
+        { mx: 0, mz: Math.sign(dz) * Math.min(step, Math.abs(dz)) },
+      ];
+      let move: { nx: number; ny: number; nz: number; ux: number; uz: number } | null = null;
+      const blocked: RideObstacle[] = [];
+      for (const t of tries) {
+        const len = Math.hypot(t.mx, t.mz);
+        if (len < RIDE_MIN_SLIDE) continue;
+        const nx = pos.x + t.mx;
+        const nz = pos.z + t.mz;
+        const ny = rideGroundY(bot, nx, pos.y, nz);
+        if (ny === null) continue;
+        const hit = rideObstacle(bot, nx, ny, nz, hull);
+        // 原版只在「原处不重叠」时才拒重叠的落点;已经嵌着的身子往哪挪服务端都收
+        const wedged = hit?.kind === 'hull' && rideObstacle(bot, pos.x, pos.y, pos.z, hull)?.kind === 'hull';
+        if (hit && !wedged) { blocked.push(hit); continue; }
+        move = { nx, ny, nz, ux: t.mx / len, uz: t.mz / len };
         break;
       }
+      if (!move) {
+        stalledWhy = blocked.length > 0
+          ? rideObstacleText(blocked, zhV)
+          : '前面那一格落不了脚(悬崖/墙/区块没加载)';
+        break;
+      }
+      const { nx, ny, nz, ux, uz } = move;
       // notchian yaw:0=+Z,-90=+X
       const yaw = -Math.atan2(ux, uz) * (180 / Math.PI);
       client.write('look', { yaw, pitch: 0, onGround: false });
@@ -1400,7 +1498,7 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
       pos.set(nx, ny, nz);
       vehicle.position.set(nx, ny, nz);
       // 骑手位置跟着坐骑走:别的读数(距离、快照)不该停在上马那一格
-      bot.entity.position.set(nx, ny + 0.6, nz);
+      bot.entity.position.set(nx, ny + RIDER_OVER_VEHICLE, nz);
       await sleep(RIDE_TICK_MS);
     }
   } finally {
