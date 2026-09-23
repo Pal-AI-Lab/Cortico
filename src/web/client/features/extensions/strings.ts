@@ -42,6 +42,7 @@ const zh = {
 
   installing: '正在安装…',
   installed: '已安装',
+  installedVersion: (version: string) => `磁盘版本 ${version}，重启后加载`,
   installFailed: (msg: string) => `安装失败: ${msg}`,
   installedRestartTitle: '已安装,现在重启进程加载它?',
   installedRestartNote: '进程将重启。',
@@ -160,6 +161,7 @@ const en: typeof zh = {
 
   installing: 'Installing…',
   installed: 'Installed',
+  installedVersion: (version: string) => `On disk ${version}; loads after restart`,
   installFailed: (msg: string) => `Install failed: ${msg}`,
   installedRestartTitle: 'Installed. Restart the process now to load it?',
   installedRestartNote: 'The process will restart.',

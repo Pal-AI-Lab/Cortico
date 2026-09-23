@@ -172,6 +172,16 @@ describe('已安装清单', () => {
     expect(root.textContent).toContain('C:/repo/extensions');
   });
 
+  it('磁盘版本不同于运行版本时显示重启后将加载的版本', async () => {
+    stub({ list: { dir: 'd', extensions: [{
+      ...LIST.extensions[0], installedVersion: '1.2.0', state: 'pending-restart',
+    }] } });
+    const { ctx, root } = mkCtx();
+    mountExtensions(ctx);
+    await flush();
+    expect(cardOf(root, '甲扩展').textContent).toContain('磁盘版本 1.2.0，重启后加载');
+  });
+
   it('按 kind 分三组,读不出 manifest 的包归「未识别」并把原因摆出来', async () => {
     stub();
     const { ctx, root } = mkCtx();

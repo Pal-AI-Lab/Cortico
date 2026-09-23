@@ -227,6 +227,19 @@ describe('ExtensionManager', () => {
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 
+  it('list:依赖范围未变但磁盘包版本变化时待重启', async () => {
+    installFake('in-range', { body: definitionSource('in-range') });
+    const booted = await loadExtensions(root);
+    const file = join(root, 'extensions/node_modules/in-range/package.json');
+    const pkg = JSON.parse(readFileSync(file, 'utf8')) as { version: string };
+    writeFileSync(file, JSON.stringify({ ...pkg, version: '1.2.4' }));
+
+    const { mgr } = manager(booted);
+    expect(mgr.list().extensions[0]).toMatchObject({
+      spec: '^1.0.0', version: '1.2.3', installedVersion: '1.2.4', state: 'pending-restart',
+    });
+  });
+
   it('search:关键字按 kind 换,只留带那个关键字的包,标出已安装', async () => {
     installFake('a-mod');
     const { mgr, urls } = manager();

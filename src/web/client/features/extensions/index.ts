@@ -13,6 +13,7 @@ export interface ExtensionView {
   name: string;
   spec: string;
   version: string | null;
+  installedVersion?: string | null;
   description?: string;
   kind?: ExtensionKindView;
   api?: number;
@@ -318,6 +319,9 @@ export function mountExtensions(ctx: FeatureContext): void {
     if (p.console === 'served') bar.appendChild(ui.pill(S.panelLoaded, 'on'));
     card.body.appendChild(bar);
     if (p.description) card.body.appendChild(ui.msgline(p.description));
+    if (p.installedVersion && p.installedVersion !== p.version) {
+      card.body.appendChild(ui.msgline(S.installedVersion(p.installedVersion)));
+    }
     if (p.reason) card.body.appendChild(ui.msgline(p.reason, true));
     if (p.state === 'idle') card.body.appendChild(ui.msgline(S.noteIdle));
     if (p.console === 'missing') card.body.appendChild(ui.msgline(S.noteConsoleMissing, true));

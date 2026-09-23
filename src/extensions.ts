@@ -474,10 +474,12 @@ export class ExtensionManager {
     for (const r of this.booted.records) {
       const spec = onDisk.get(r.name);
       onDisk.delete(r.name);
+      const installedVersion = spec === undefined ? undefined
+        : readPackageJson(join(this.dir, 'node_modules', ...r.name.split('/'), 'package.json'))?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
-        : spec !== r.spec ? 'pending-restart'
+        : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
-      out.push({ ...r, state });
+      out.push({ ...r, ...(spec === undefined ? {} : { installedVersion }), state });
     }
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
@@ -488,6 +490,7 @@ export class ExtensionManager {
         name,
         spec,
         version: pkg?.version ?? null,
+        installedVersion: pkg?.version ?? null,
         consoleClient: manifest?.consoleClient !== undefined,
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
         ...(manifest && manifest.consoleClient === undefined ? { console: 'none' as const } : {}),
