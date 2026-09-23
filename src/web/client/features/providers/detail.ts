@@ -107,16 +107,24 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     });
     const key = field(body, 'key', S.key, editing.secretValue, value => { editing.secretValue = value; }, undefined, 'password');
     key.placeholder = saved?.secretConfigured !== 'none' && saved ? '••••••••' : S.keyEmpty;
-    const test = ui.button(S.test, { onClick: () => run(async () => {
+    // the result sits under the button that asked for it
+    const testResult = ui.msgline();
+    const test = ui.button(S.test, { onClick: () => void (async () => {
       test.disabled = true;
+      testResult.textContent = '';
       try {
         const result = await post<{ ok: boolean; status: number | null; elapsedMs: number; model?: string; error?: string; hint?: string }>(connectionPath(identity) + '/test', draftBody(), opts);
-        report.textContent = result.ok ? `${S.testOk} · HTTP ${result.status ?? '—'} · ${(result.elapsedMs / 1000).toFixed(1)}s · ${result.model ?? ''}` : `${S.testFailed}: ${result.hint ?? result.error ?? ''}`;
+        testResult.textContent = result.ok ? `${S.testOk} · HTTP ${result.status ?? '—'} · ${(result.elapsedMs / 1000).toFixed(1)}s · ${result.model ?? ''}` : `${S.testFailed}: ${result.hint ?? result.error ?? ''}`;
+        testResult.classList.toggle('bad', !result.ok);
+      } catch (error) {
+        if (lifecycle.disposed) return;
+        testResult.textContent = `${S.testFailed}: ${String(error)}`;
+        testResult.classList.add('bad');
       } finally { test.disabled = false; }
-    }) });
+    })() });
     const testRow = ui.rowbar(); testRow.classList.add('connection-test'); testRow.append(test);
     if (saved?.readiness.reason) testRow.append(ui.msgline(saved.readiness.reason, true));
-    body.append(testRow);
+    body.append(testRow, testResult);
   }
   function modelBlock(box: HTMLElement, section: Section, module: Module, spec: Spec) {
     const body = block(box, section);
