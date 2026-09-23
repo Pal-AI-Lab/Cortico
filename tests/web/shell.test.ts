@@ -532,7 +532,7 @@ describe('底部运行控制', () => {
     expect(run.getAttribute('aria-label')).toBe('暂停运行');
     click(run);
     await flush();
-    expect(seen).toEqual(['/api/status', '/api/run/pause']);
+    expect(seen).toEqual(['/api/framework/release', '/api/status', '/api/run/pause']);
     expect(run.getAttribute('aria-label')).toBe('继续运行');
   });
 
@@ -752,7 +752,7 @@ describe('bot 实例名', () => {
 });
 
 describe('连接状态', () => {
-  it('外壳自己不探活：造好之后除了 /api/status 一个请求都不发', async () => {
+  it('外壳只请求实例状态和框架发布状态', async () => {
     const seen: string[] = [];
     vi.stubGlobal('fetch', (url: unknown) => {
       seen.push(String(url));
@@ -762,7 +762,47 @@ describe('连接状态', () => {
     await flush();
     shell.setRoute(route('provider', 'world:sample'));
     await flush();
-    expect(seen).toEqual(['/api/status']);
+    expect(seen).toEqual(['/api/framework/release', '/api/status']);
+  });
+});
+
+describe('框架发布提醒', () => {
+  it('显示运行版本、新版本和发布说明链接', async () => {
+    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve({
+      ok: true, status: 200,
+      text: () => Promise.resolve(JSON.stringify(String(url) === '/api/framework/release'
+        ? { currentVersion: '1.2.3', checkout: 'release', update: {
+          version: 'v1.3.0', url: 'https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0',
+        } }
+        : {})),
+    }));
+    const { el } = await mkShell();
+    await flush();
+    const notice = el.find('rail-release')!;
+    expect(notice.textContent).toContain('Cortico 1.2.3');
+    expect(notice.textContent).toContain('新版本 v1.3.0');
+    expect(notice.children.find((part) => part.tagName === 'a')?.href)
+      .toBe('https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0');
+  });
+
+  it('检查失败显示重试，开发检出不显示升级链接', async () => {
+    let checks = 0;
+    vi.stubGlobal('fetch', (url: unknown) => {
+      if (String(url) !== '/api/framework/release') return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') });
+      checks++;
+      return Promise.resolve(checks === 1
+        ? { ok: false, status: 503, text: () => Promise.resolve('{"error":"unavailable"}') }
+        : { ok: true, status: 200, text: () => Promise.resolve('{"currentVersion":"1.4.0","checkout":"development"}') });
+    });
+    const { el } = await mkShell();
+    await flush();
+    const notice = el.find('rail-release')!;
+    expect(notice.textContent).toContain('框架更新检查失败');
+    click(notice.children.find((part) => part.tagName === 'button')!);
+    await flush();
+    expect(notice.textContent).toContain('Cortico 1.4.0');
+    expect(notice.textContent).toContain('开发检出');
+    expect(notice.children.some((part) => part.tagName === 'a')).toBe(false);
   });
 });
 

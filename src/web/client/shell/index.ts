@@ -125,6 +125,8 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   const nav = ui.h('nav', 'stack');
   nav.setAttribute('aria-label', S.navAria);
+  const releaseStatus = ui.h('div', 'rail-release');
+  releaseStatus.textContent = S.releaseChecking;
 
   const foot = ui.h('div', 'railfoot');
   const avatar = createAvatarControl({ doc, ui, signal, onError });
@@ -252,7 +254,38 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     try { router.navigate(['settings']); } catch (err) { onError(err); }
   }, { signal });
 
-  el.append(brand, nav, foot);
+  el.append(brand, nav, releaseStatus, foot);
+
+  async function loadRelease(): Promise<void> {
+    releaseStatus.textContent = S.releaseChecking;
+    try {
+      const status = await get<{
+        currentVersion: string;
+        checkout: 'release' | 'development';
+        update?: { version: string; url: string };
+      }>('/api/framework/release', { signal });
+      if (signal.aborted) return;
+      if (typeof status?.currentVersion !== 'string') return;
+      const parts: HTMLElement[] = [ui.h('span', '', S.releaseCurrent(status.currentVersion))];
+      if (status.checkout === 'development') parts.push(ui.h('span', '', S.releaseDevelopment));
+      if (status.update) {
+        parts.push(ui.h('span', '', S.releaseUpdate(status.update.version)));
+        const link = ui.h('a', '', S.releaseNotes);
+        link.href = status.update.url;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        parts.push(link);
+      }
+      releaseStatus.replaceChildren(...parts);
+    } catch (err) {
+      if (signal.aborted || (err as { name?: string } | null)?.name === 'AbortError') return;
+      const retry = ui.h('button', '', S.releaseRetry);
+      retry.type = 'button';
+      retry.addEventListener('click', () => { void loadRelease(); }, { signal });
+      releaseStatus.replaceChildren(ui.h('span', '', S.releaseFailed), retry);
+    }
+  }
+  void loadRelease();
 
   // ---- 导航 -------------------------------------------------------------
 

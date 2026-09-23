@@ -105,6 +105,9 @@
   .wordmark .accent, .brandmark .accent { stroke: var(--accent); }
 
   nav.stack { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 24px; }
+  .rail-release { display: flex; flex-wrap: wrap; gap: 4px 8px; padding: 8px 18px; font-size: 11px; color: var(--ink-dim); }
+  .rail-release a, .rail-release button { color: var(--accent); }
+  .rail-release button { border: 0; padding: 0; background: none; cursor: pointer; font-size: inherit; }
   .stacklabel { font-size: 10.5px; letter-spacing: .18em; color: var(--ink-dim); margin: 14px 8px 7px; text-transform: uppercase; }
 
   .navitem {
@@ -712,6 +715,7 @@
     body { display: block; overflow: auto; }
     #rail { width: 100%; height: auto; position: sticky; top: 0; z-index: 100; border-right: 0; border-bottom: 1px solid var(--line); }
     .brand { display: none; }
+    .rail-release { padding: 2px 12px 8px; }
     nav.stack { display: flex; gap: 5px; overflow-x: auto; padding: 8px; }
     .stacklabel { display: none; }
     .navitem { flex: none; padding: 7px 11px; margin: 0; min-height: 38px; }

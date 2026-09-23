@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
+<!-- Owner: src/web/server.ts, src/web/framework-release.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -36,6 +36,7 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 |---|---|
 | `/api/console/manifest` | 页面声明。 |
 | `/api/console/lamps` | 状态灯。 |
+| `/api/framework/release` | 当前检出版本与 GitHub 最新正式发布版本；只有检出位于同版本 tag 时查询发布源。 |
 | `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
 | `/ws/providers/<page>/panels/<panel>` | 面板流。 |
 
