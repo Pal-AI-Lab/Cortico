@@ -290,12 +290,22 @@ export async function runEscape(deps: EscapeDeps): Promise<string> {
   }
 
   const line = tpLine(deps.playerName, target);
+  const readHere = (): Vec3like & { dimension: string } => {
+    const p = deps.getBot()?.entity.position ?? bot.entity.position;
+    return { x: p.x, y: p.y, z: p.z, dimension: normalizeDimension(deps.getBot()?.game?.dimension ?? dim) };
+  };
+  const arrived = (h: Vec3like & { dimension: string }): boolean => alreadyNear(h, h.dimension, target)
+    && (!chosen?.landing || inLanding(h));
   if (!deps.sendConsole(line)) deps.chat(`/${line}`);
-  await deps.waitMove(timeoutMs);
-  const herePos = deps.getBot()?.entity.position ?? bot.entity.position;
-  const hereDim = normalizeDimension(deps.getBot()?.game?.dimension ?? dim);
-  const here = { x: herePos.x, y: herePos.y, z: herePos.z, dimension: hereDim };
-  if (alreadyNear(here, hereDim, target) && (!chosen?.landing || inLanding(here))) {
+  // 传送前刚好到的别的强制位置包(撤寻路、水里纠偏)也会触发一次;没落到目标就接着等到时限
+  const deadline = Date.now() + timeoutMs;
+  let here = readHere();
+  while (!arrived(here)) {
+    const left = deadline - Date.now();
+    if (left <= 0 || !(await deps.waitMove(left))) break;
+    here = readHere();
+  }
+  if (arrived(here)) {
     return formatEscapeReceipt('arrived', target, cleared, undefined, from, repeat, list);
   }
   return formatEscapeReceipt('rejected', target, cleared, here, from, repeat, list);
