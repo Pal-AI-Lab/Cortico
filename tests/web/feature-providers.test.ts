@@ -68,7 +68,8 @@ it('field editing is local and saved modules stay readonly', async () => {
   const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
   input.value = 'https://edited.test'; input.dispatchEvent(new Event('input')); await flush();
   expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
-  expect((root.querySelector('select[aria-label="供应商类型"]') as HTMLSelectElement).disabled).toBe(true);
+  expect(root.querySelector('select[aria-label="供应商类型"]')).toBeNull();
+  expect((root.querySelector('input[aria-label="供应商类型"]') as HTMLInputElement).readOnly).toBe(true);
   expect(([...root.querySelectorAll('details')].find(card => card.textContent?.includes('成本与计价')) as HTMLDetailsElement).open).toBe(false);
 });
 it('the editor lays its sections out in the order the module declared', async () => {
@@ -159,6 +160,7 @@ it('cards carry no probe; the saved connection is tested from its detail form', 
   expect(calls.some(call => call.path === '/api/providers/Alpha/test')).toBe(true);
   expect(root.textContent).toContain('HTTP 200');
   expect(root.textContent).toContain('probe-model');
+  expect(root.querySelector('.connection-test button + .msgline')?.textContent).toContain('HTTP 200');
 });
 
 it('the editor probes and lists models on the unsaved form, key included, without saving', async () => {
@@ -190,8 +192,12 @@ it('a saved connection offers discard only while the form differs from what is s
 it('a new connection starts with its folds closed and its required fields marked', async () => {
   const { root } = await fixture();
   (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
+  expect(root.querySelector('.connection-flow')).toBeNull();
+  expect(root.querySelector('.connection-module-hint')?.textContent).toBe('请选择供应商类型。');
   const select = root.querySelector('select[aria-label="供应商类型"]') as HTMLSelectElement;
   select.value = 'sample'; select.dispatchEvent(new Event('change')); await flush();
+  expect(root.querySelector('.connection-flow')).not.toBeNull();
+  expect(root.querySelector('.connection-module-hint')?.textContent).toBe('');
   const folds = [...root.querySelectorAll('details')];
   expect(folds.length).toBeGreaterThan(0);
   expect(folds.every(section => !section.open)).toBe(true);
