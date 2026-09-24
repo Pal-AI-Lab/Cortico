@@ -1145,7 +1145,7 @@ describe('QQWorld 外挂视觉接线', () => {
     expect(mod.tools().find((t) => t.name === 'qq_view_image')).toBeUndefined();
     mock.emitGroupMessage({
       user_id: 1001,
-      segments: [imageSeg('http://img/1.png'), { type: 'text', data: { text: 'hi' } }],
+      segments: [{ type: 'image', data: {} }, { type: 'text', data: { text: 'hi' } }],
     });
     await waitUntil(() => host.pushed.length >= 1, '消息入库');
     const msg = host.pushed[0].event;

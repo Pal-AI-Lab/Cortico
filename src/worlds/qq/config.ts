@@ -38,7 +38,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean',
         title: '开启辅助视觉',
         'x-hot': false,
-        description: '关掉后图片只留可读占位。需要重启生效(装配时才创建视觉服务),且需要配好 OPENROUTER_API_KEY。',
+        description: '关掉后仍会下载并保存图片附件,但不会生成图片描述。需要重启生效,且需要配好 OPENROUTER_API_KEY。',
       },
       'worlds.qq.vision.model': {
         type: 'string',
@@ -58,14 +58,14 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.qq.vision.dedupPrecheckMs': {
         type: 'integer',
-        title: '去重预判等待上限',
+        title: '图片内联等待上限',
         minimum: 0,
         maximum: 30_000,
         multipleOf: 100,
         'x-suffix': 'ms',
         'x-hot': true,
-        description: '消息渲染前检查图片是否重复的最长等待时间。命中时引用已有图片，下载失败时标记失败；'
-          + '新图片或超时先显示占位，识图结果另行投递。',
+        description: '消息投递前等待图片下载或去重预判的最长时间。超时后的图片在下载完成后另行投递；'
+          + '辅助视觉开启时，新图片的识图结果仍另行投递。',
       },
       'worlds.qq.vision.maxImageBytes': {
         type: 'integer',
@@ -80,14 +80,14 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
       },
       'worlds.qq.vision.timeoutMs': {
         type: 'integer',
-        title: 'VLM 请求超时',
+        title: '图片与 VLM 请求超时',
         minimum: 1000,
         maximum: 300_000,
         multipleOf: 1000,
         'x-scale': 1000,
         'x-suffix': 's',
         'x-hot': false,
-        description: '单次识别请求的超时。重启生效(客户端构造时固定)。',
+        description: '图片下载或单次识别请求的超时。重启生效(客户端构造时固定)。',
       },
     },
   },

@@ -4,6 +4,8 @@
  * 表情回应、draft→confirm 起草确认门、私聊路由、映射重建。
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { renderWorldEnvPrompt } from '../../../src/core/prefix.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 import type { EventEnvelope, ToolCallContext } from '../../../src/core/types.ts';
@@ -44,6 +46,28 @@ function tool(name: string) {
   const t = mod.tools().find((t) => t.name === name);
   if (!t) throw new Error(`tool不存在: ${name}`);
   return t;
+}
+
+async function startImageServer(bytes: Uint8Array, delayMs = 0): Promise<{ url: string; close(): Promise<void> }> {
+  const server = createServer((_req, res) => {
+    const send = () => {
+      res.writeHead(200, { 'content-type': 'image/png' });
+      res.end(bytes);
+    };
+    if (delayMs) setTimeout(send, delayMs);
+    else send();
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const { port } = server.address() as AddressInfo;
+  return {
+    url: `http://127.0.0.1:${port}/image.png`,
+    close: () => new Promise<void>((resolve, reject) => {
+      server.close((error) => error ? reject(error) : resolve());
+    }),
+  };
 }
 
 describe('环境提示词', () => {
@@ -123,15 +147,103 @@ describe('群消息入库', () => {
 
 describe('图片段按当前主模型渲染', () => {
   it('主模型切到接收图像后，新消息的图片带地址', async () => {
-    const image = [{ type: 'image', data: { url: 'https://x/1.png' } }];
-    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
-    await waitUntil(() => host.pushed.length === 1, '收到第1条事件');
-    expect(host.pushed[0].event.text).toContain('[图片]');
+    const imageServer = await startImageServer(new Uint8Array([1, 2, 3]));
+    try {
+      const image = [{ type: 'image', data: { url: imageServer.url } }];
+      mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
+      await waitUntil(() => host.pushed.length === 1, '收到第1条事件');
+      expect(host.pushed[0].event.text).toContain('[图片]');
 
-    host.modelFacts = { ...host.modelFacts, accepts: () => true };
-    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
-    await waitUntil(() => host.pushed.length === 2, '收到第2条事件');
-    expect(host.pushed[1].event.text).toContain('[图片 https://x/1.png]');
+      host.modelFacts = { ...host.modelFacts, accepts: () => true };
+      mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
+      await waitUntil(() => host.pushed.length === 2, '收到第2条事件');
+      expect(host.pushed[1].event.text).toContain(`[图片 ${imageServer.url}]`);
+    } finally {
+      await imageServer.close();
+    }
+  });
+
+  it('辅助视觉关闭时仍把入站图片字节附在消息事件上', async () => {
+    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
+    const imageServer = await startImageServer(bytes);
+    try {
+      host.modelFacts = { ...host.modelFacts, accepts: () => true };
+      mock.emitGroupMessage({
+        user_id: 1001,
+        nickname: '阿明',
+        segments: [{ type: 'image', data: { url: imageServer.url } }],
+      });
+      await waitUntil(() => host.pushed.length === 1, '图片消息入库');
+
+      const event = host.pushed[0].event;
+      expect(event.type).toBe('qq.message');
+      expect(event.text).toContain(`[图片 ${imageServer.url}]`);
+      expect(event.blobs).toHaveLength(1);
+      const saved = host.blob(event.blobs![0].handle);
+      expect(saved?.mime).toBe('image/png');
+      expect([...saved!.bytes]).toEqual([...bytes]);
+    } finally {
+      await imageServer.close();
+    }
+  });
+
+  it('辅助视觉关闭时私聊图片也随消息保存', async () => {
+    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 2]);
+    const imageServer = await startImageServer(bytes);
+    try {
+      mod.setWatched([GROUP], [1001]);
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.watch'), '监听变更入库');
+      host.modelFacts = { ...host.modelFacts, accepts: () => true };
+      const messageId = 7799;
+      mock.emitRaw({
+        post_type: 'message',
+        message_type: 'private',
+        sub_type: 'friend',
+        user_id: 1001,
+        message_id: messageId,
+        time: Math.floor(Date.now() / 1000),
+        sender: { user_id: 1001, nickname: '阿明' },
+        message: [{ type: 'image', data: { url: imageServer.url } }],
+        raw_message: '',
+      });
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.message'), '私聊图片消息入库');
+
+      const event = host.pushed.find(({ event }) => event.type === 'qq.message')!.event;
+      expect(event.meta?.message_id).toBe(messageId);
+      expect(event.meta?.conv).toEqual({ kind: 'private', id: 1001 });
+      expect(event.blobs).toHaveLength(1);
+      const saved = host.blob(event.blobs![0].handle);
+      expect(saved?.mime).toBe('image/png');
+      expect([...saved!.bytes]).toEqual([...bytes]);
+    } finally {
+      await imageServer.close();
+    }
+  });
+
+  it('图片超过内联等待上限后随qq.image事件保存', async () => {
+    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
+    const imageServer = await startImageServer(bytes, 2800);
+    try {
+      host.modelFacts = { ...host.modelFacts, accepts: () => true };
+      mock.emitGroupMessage({
+        user_id: 1001,
+        nickname: '阿明',
+        segments: [{ type: 'image', data: { url: imageServer.url } }],
+      });
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.message'), '主消息先入库', 4000);
+      const message = host.pushed.find(({ event }) => event.type === 'qq.message')!.event;
+      expect(message.blobs).toBeUndefined();
+
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.image'), '后续图片事件到达', 2000);
+      const attachment = host.pushed.find(({ event }) => event.type === 'qq.image')!.event;
+      expect(attachment.meta?.message_id).toBe(message.meta?.message_id);
+      expect(attachment.blobs).toHaveLength(1);
+      const saved = host.blob(attachment.blobs![0].handle);
+      expect(saved?.mime).toBe('image/png');
+      expect([...saved!.bytes]).toEqual([...bytes]);
+    } finally {
+      await imageServer.close();
+    }
   });
 });
 

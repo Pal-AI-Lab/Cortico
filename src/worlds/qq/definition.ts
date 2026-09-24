@@ -10,7 +10,7 @@ export const QQ: WorldDefinition<QQConfigSection> = {
   defaults: () => ({ ...QQ_DEFAULTS, groups: [], privates: [], vision: { ...VISION_DEFAULTS } }),
   create: (ctx) => {
     const { cfg } = ctx;
-    // 辅助视觉只在开关打开且有 OPENROUTER_API_KEY 时存在;否则图片以占位符进入上下文。
+    // 辅助视觉依赖开关与密钥;图片附件捕获不依赖视觉服务。
     const openrouterKey = ctx.secret(QQ_SECRETS.vision);
     const vision = cfg.vision.enabled && openrouterKey
       ? new VisionService({
@@ -35,6 +35,11 @@ export const QQ: WorldDefinition<QQConfigSection> = {
       },
       {
         vision,
+        imageCapture: {
+          timeoutMs: cfg.vision.timeoutMs,
+          maxImageBytes: cfg.vision.maxImageBytes,
+          inlineWaitMs: cfg.vision.dedupPrecheckMs,
+        },
         gate: {
           enabled: () => cfg.enabled,
           wsUrl: () => cfg.wsUrl,

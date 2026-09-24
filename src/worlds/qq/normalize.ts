@@ -82,7 +82,7 @@ export type ImageRenderPolicy = (data: Record<string, unknown>) => string;
 /**
  * 生成图片渲染策略:
  * - 取不到图 → 降级 `[图片]`
- * - 主模型支持图像或 World 配置了视觉模型 → 带 URL 标记,供后续管线取图
+ * - 主模型支持图像或 World 配置了视觉模型 → 正文保留图片 URL 标记
  * 主模型能力通过 host.modelFacts 查询； World 自带视觉不进入 core 契约。
  */
 export function makeImagePolicy(canUseImages: boolean): ImageRenderPolicy {
