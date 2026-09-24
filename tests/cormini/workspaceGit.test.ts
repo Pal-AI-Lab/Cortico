@@ -3,7 +3,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR } from '../../bots/cormini/persona/workspaceGit.ts';
+import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR, gitInstalled } from '../../bots/cormini/persona/workspaceGit.ts';
 
 let dir: string;
 let g: WorkspaceGit;
@@ -21,6 +21,37 @@ beforeEach(() => {
   g = new WorkspaceGit(dir, () => { /* 测试里不往控制台喊 */ });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+describe('gitInstalled', () => {
+  /** 记下被调用的命令;`missing` 里的命令按没装处理(抛错)。 */
+  const fakeExec = (missing: string[]) => {
+    const calls: string[] = [];
+    const exec = ((cmd: string) => {
+      calls.push(cmd);
+      if (missing.includes(cmd)) throw new Error(`${cmd}: not installed`);
+      return Buffer.alloc(0);
+    }) as unknown as Parameters<typeof gitInstalled>[1];
+    return { calls, exec };
+  };
+
+  it('macOS 没装命令行工具:只问 xcode-select,不碰会弹安装框的 git', () => {
+    const { calls, exec } = fakeExec(['xcode-select']);
+    expect(gitInstalled('darwin', exec)).toBe(false);
+    expect(calls).toEqual(['xcode-select']);
+  });
+
+  it('macOS 装了命令行工具:再确认 git 能跑', () => {
+    const { calls, exec } = fakeExec([]);
+    expect(gitInstalled('darwin', exec)).toBe(true);
+    expect(calls).toEqual(['xcode-select', 'git']);
+  });
+
+  it('其他系统直接问 git', () => {
+    const { calls, exec } = fakeExec(['git']);
+    expect(gitInstalled('win32', exec)).toBe(false);
+    expect(calls).toEqual(['git']);
+  });
+});
 
 describe.skipIf(!gitAvailable)('WorkspaceGit', () => {
   it('init:建仓+checkpoint0+.gitignore,幂等', () => {

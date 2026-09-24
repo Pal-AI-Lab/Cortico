@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ExtensionManager, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
+import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 
 let root: string;
@@ -333,5 +333,18 @@ describe('ExtensionManager', () => {
     mkdirSync(join(root, 'extensions'));
     writeFileSync(join(root, 'extensions/package.json'), '{"name":"x"}');
     expect(readInstalled(join(root, 'extensions'))).toEqual([]);
+  });
+});
+
+describe('extensionsDir', () => {
+  it('没设 CORTICO_EXTENSIONS_DIR 时在检出根下', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ext-root-'));
+    expect(extensionsDir(root, {})).toBe(join(root, 'extensions'));
+  });
+
+  it('设了就用它:程序装在只读的 .app 里时,扩展装到可写的数据目录', () => {
+    const root = mkdtempSync(join(tmpdir(), 'ext-root-'));
+    const data = mkdtempSync(join(tmpdir(), 'ext-data-'));
+    expect(extensionsDir(root, { [EXTENSIONS_DIR_ENV]: data })).toBe(data);
   });
 });
