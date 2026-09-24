@@ -8,7 +8,7 @@ type Any = any;
 
 /** 挂一次运行时面板;`state` 覆盖 state 回执里那几位。回执的配置组取真的声明与真的值。 */
 async function mountRuntimePanel(
-  entry: Any, state: Record<string, unknown> = {},
+  entry: Any, state: Record<string, unknown> = {}, failMethod = '',
 ): Promise<{
   root: Any;
   settings: Any;
@@ -28,13 +28,16 @@ async function mountRuntimePanel(
   });
   await runtimePanel.mount({
     root, ui, language: 'zh', signal: controller.signal, scope: { instance: 'primary' },
-    invoke: async () => ({
-      name: 'primary', managed: true, own: false, supported: true, backendChoices: ['cpu', 'cuda-12.4'],
-      install: { phase: 'absent' }, server: null, smartAppControl: null,
-      config: endpoint.settings.groups().filter((group: Any) => !group.id.endsWith('.connection'))
-        .map((group: Any) => ({ group, values: endpoint.settings.values(group.id) })),
-      ...state,
-    }),
+    invoke: async (method: string) => {
+      if (method === failMethod) throw new Error('runtime action failed');
+      return {
+        name: 'primary', managed: true, own: false, supported: true, backendChoices: ['cpu', 'cuda-12.4'],
+        install: { phase: 'absent' }, server: null, smartAppControl: null,
+        config: endpoint.settings.groups().filter((group: Any) => !group.id.endsWith('.connection'))
+          .map((group: Any) => ({ group, values: endpoint.settings.values(group.id) })),
+        ...state,
+      };
+    },
     setConfig: async (groupId: string, values: Any) => endpoint.settings.setConfig(groupId, values),
     interval: () => ({ dispose() {} }),
   });
@@ -79,5 +82,16 @@ it('自备运行时目录时后端那一格禁用:目录里的二进制自己决
     expect(managed.field('后端').disabled).toBe(false);
   } finally {
     managed.cleanup();
+  }
+});
+
+it('shows a failed runtime action beside its button', async () => {
+  const panel = await mountRuntimePanel({}, { managed: false }, 'enable');
+  try {
+    (panel.root.querySelector('.runtime-enable-row button') as Any).click();
+    await flush();
+    expect(panel.root.querySelector('.runtime-enable-row .msgline.bad')?.textContent).toContain('runtime action failed');
+  } finally {
+    panel.cleanup();
   }
 });

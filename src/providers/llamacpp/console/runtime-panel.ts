@@ -24,19 +24,28 @@ export const runtimePanel: ConsolePanel = {
     const S = ctx.language === 'en' ? panel.en : panel.zh;
     const name = ctx.scope.instance;
     const card = ui.sheet({ title: S.runtimeTitle });
+    const heading = ui.h('div', 'connection-step-heading');
+    const title = card.el.querySelector('h3')!;
+    const description = ui.h('span', 'sh-desc');
+    heading.append(title, description);
+    card.el.prepend(heading);
     const message = ui.msgline();
     root.append(card.el, message);
     let busy = false;
     let lastSnapshot = '';
+    let actionTarget: string | null = null;
 
     async function act(method: string, extra: Record<string, unknown> = {}): Promise<void> {
       if (busy) return;
       busy = true;
+      actionTarget = method;
       message.textContent = '';
+      message.classList.remove('bad');
       try {
         await ctx.invoke(method, [{ name, ...extra }]);
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
       } finally {
         busy = false;
       }
@@ -46,11 +55,15 @@ export const runtimePanel: ConsolePanel = {
     async function saveConfig(groupId: string, values: ConfigValues): Promise<void> {
       if (busy) return;
       busy = true;
+      actionTarget = null;
+      root.append(message);
       message.textContent = '';
+      message.classList.remove('bad');
       try {
         await ctx.setConfig(groupId, values);
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
       } finally {
         busy = false;
       }
@@ -75,17 +88,21 @@ export const runtimePanel: ConsolePanel = {
     }
 
     function renderUnmanaged(row: Row, body: HTMLElement): void {
-      body.append(ui.msgline(S.managedOff));
+      description.textContent = S.managedOff;
+      if (root.closest('.connection-section')) body.append(ui.msgline(S.managedOff));
       const bar = ui.rowbar();
+      bar.classList.add('runtime-enable-row');
       const backend = ui.select({ options: row.backendChoices });
       bar.append(ui.field(S.backend, backend), ui.button(S.enable, {
         variant: 'primary',
         onClick: () => void act('enable', { backend: backend.value }),
       }));
+      if (actionTarget === 'enable') bar.append(message);
       body.append(bar);
     }
 
     function renderManaged(row: Row, body: HTMLElement): void {
+      description.textContent = '';
       const install = row.install;
       const installPill = install.phase === 'installed' ? ui.pill(S.installed, 'on')
         : install.phase === 'downloading' ? ui.pill(S.downloading, 'plain')
@@ -115,6 +132,7 @@ export const runtimePanel: ConsolePanel = {
         installBar.append(button);
       }
       installBar.append(ui.h('span', 'grow'), ui.button(S.disable, { onClick: () => void act('disable') }));
+      if (actionTarget === 'install' || actionTarget === 'disable') installBar.append(message);
       body.append(installBar);
 
       renderConfig(row, 1, body);
@@ -142,6 +160,7 @@ export const runtimePanel: ConsolePanel = {
       const stop = ui.button(S.stop, { onClick: () => void act('stop') });
       stop.disabled = !server || server.phase === 'stopped';
       serverBar.append(start, stop);
+      if (actionTarget === 'start' || actionTarget === 'stop') serverBar.append(message);
       body.append(serverBar);
       if (install.phase !== 'installed') {
         body.append(ui.msgline(S.installRequired));
@@ -159,7 +178,10 @@ export const runtimePanel: ConsolePanel = {
       try {
         row = await ctx.invoke<Row>('state', [{ name }]);
       } catch (error) {
+        actionTarget = null;
+        root.append(message);
         message.textContent = String(error);
+        message.classList.add('bad');
         return;
       }
       if (ctx.signal.aborted) return;
