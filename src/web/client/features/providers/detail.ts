@@ -90,7 +90,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     input.addEventListener('input', () => { editing.raw[key] = input.value; check(); change(); }, opts);
   }
   function block(box: HTMLElement, section: Section, fold = false) {
-    const card = fold ? ui.foldSheet('connection-' + section.id, { title: section.title, desc: section.description }) : ui.sheet({ title: section.title, desc: section.description });
+    const card = fold ? ui.foldSheet(`connection-${identity}-${section.id}`, { title: section.title, desc: section.description, defaultOpen: section.defaultOpen ?? true }) : ui.sheet({ title: section.title, desc: section.description });
+    if (fold) card.el.classList.add('connection-section');
     const header = fold ? card.el.querySelector('summary') : card.el;
     const title = header?.querySelector('h3');
     if (header && title) {
@@ -114,7 +115,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     };
   };
   function endpointBlock(box: HTMLElement, section: Section) {
-    const body = block(box, section);
+    const body = block(box, section, true);
     field(body, 'baseUrl', S.url, editing.entry.baseUrl, value => { editing.entry.baseUrl = value; }, value => {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
     });
@@ -139,7 +140,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     body.append(testRow);
   }
   function modelBlock(box: HTMLElement, section: Section, module: Module, spec: Spec) {
-    const body = block(box, section);
+    const body = block(box, section, true);
     const modelInput = field(body, 'model', S.model, spec.model, value => { spec.model = value; }, value => value.trim() ? null : S.required);
     const catalog = ui.h('datalist'); catalog.id = 'connection-models-' + Math.random().toString(36).slice(2); modelInput.setAttribute('list', catalog.id); body.append(catalog);
     let listedModels: Array<{ id: string; contextWindow?: number }> = [];
@@ -189,7 +190,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       select.setAttribute('aria-label', S.tier); body.append(ui.field(S.tier, select));
     }
     const images = ui.h('input'); images.type = 'checkbox'; images.checked = editing.entry.multimodal === true; images.setAttribute('aria-label', S.images);
-    images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts); body.append(ui.field(S.images, images));
+    images.setAttribute('role', 'switch'); images.classList.add('connection-switch');
+    images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts);
+    const imagesField = ui.field(S.images, images); imagesField.classList.add('connection-toggle'); body.append(imagesField);
     syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); };
   }
   function pricingBlock(box: HTMLElement, section: Section) {
@@ -277,7 +280,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const groups = (await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts)).filter(group => !group.id.endsWith('.connection'));
     if (gen !== rendering || lifecycle.disposed) return;
     const ownSections = selectedModule.sections.some(section => !section.builtin);
-    const pending: Array<{ section: Section; box: HTMLElement }> = [];
+    const pending: Array<{ section: Section; host: HTMLElement }> = [];
     for (const section of selectedModule.sections) {
       const box = ui.h('div', 'connection-step'); flow.append(box);
       switch (section.builtin) {
@@ -288,15 +291,15 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           break;
         case 'connection-pricing': pricingBlock(box, section); break;
         case 'connection-protocol': protocolBlock(box, section, groups); break;
-        default: pending.push({ section, box });
+        default: pending.push({ section, host: block(box, section, true) });
       }
     }
     if (!pending.length || !ctx.consolePageHost) return;
     panelHost ??= ctx.consolePageHost({ root: ui.h('div'), route: () => ['providers', saved?.name ?? ''] });
     await panelHost.load();
     if (gen !== rendering || lifecycle.disposed) return;
-    for (const { section, box } of pending) {
-      const handle = await panelHost.mountConnection(`llm:${editing.entry.kind}`, section.id, box, { instance: identity }, context => ({
+    for (const { section, host } of pending) {
+      const handle = await panelHost.mountConnection(`llm:${editing.entry.kind}`, section.id, host, { instance: identity }, context => ({
         ...context,
         setConfig: async (_id, values) => {
           for (const [path, value] of Object.entries(values)) {
