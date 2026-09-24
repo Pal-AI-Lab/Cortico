@@ -25,21 +25,27 @@ export const reasoningPanel: ConsolePanel = {
       `${S.outcome(outcome(result.bare), outcome(result.withReasoning))}。${result.verdict ? S.applied(labels[result.verdict]) : S.undetermined}`;
 
     async function save(groupId: string, key: string, value: string): Promise<void> {
+      message.classList.remove('bad');
       try {
         await ctx.setConfig(groupId, { [key]: value });
         message.textContent = S.saved;
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
       }
     }
 
     async function detect(button: HTMLButtonElement): Promise<void> {
       const release = ui.disable(button);
       message.textContent = S.detecting;
+      message.classList.remove('bad');
       try {
-        message.textContent = describe(await ctx.invoke<DetectResult>('detect', [{ name }]));
+        const result = await ctx.invoke<DetectResult>('detect', [{ name }]);
+        message.textContent = describe(result);
+        message.classList.toggle('bad', !result.verdict);
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
       } finally {
         release.dispose();
       }
@@ -51,7 +57,9 @@ export const reasoningPanel: ConsolePanel = {
       try {
         state = await ctx.invoke<ReasoningPanelState>('state', [{ name }]);
       } catch (error) {
+        root.append(message);
         message.textContent = String(error);
+        message.classList.add('bad');
         return;
       }
       if (ctx.signal.aborted) return;
@@ -66,7 +74,7 @@ export const reasoningPanel: ConsolePanel = {
       select.setAttribute('aria-label', property.title);
       const button = ui.button(S.detect, { onClick: () => void detect(button) });
       const row = ui.rowbar();
-      row.append(select, button);
+      row.append(select, button, message);
       card.body.replaceChildren(ui.field(property.title, row));
       if (property.description) card.body.append(ui.msgline(property.description));
 
