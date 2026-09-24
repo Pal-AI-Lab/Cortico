@@ -74,21 +74,26 @@ function readDeploymentRootFromEnvFile(checkoutRoot: string): string {
 /**
  * 依次使用进程 CORTICO_HOME、当前检出根 .env、默认目录名。
  * 相对路径以主仓库根为基准，绝对路径规范化后使用。
+ * `mainRoot` 可以传函数,只在要用主仓库根时才调:绝对路径用不到它。
  */
 export function resolveDeploymentRoot(
   env: NodeJS.ProcessEnv,
   checkoutRoot: string,
-  mainRoot: string,
+  mainRoot: string | (() => string),
 ): string {
   const raw = (env[DEPLOYMENT_ROOT_ENV] ?? '').trim() || readDeploymentRootFromEnvFile(checkoutRoot);
-  if (!raw) return resolve(mainRoot, DEFAULT_DEPLOYMENT_DIRNAME);
-  return isAbsolute(raw) ? resolve(raw) : resolve(mainRoot, raw);
+  if (raw && isAbsolute(raw)) return resolve(raw);
+  const main = typeof mainRoot === 'function' ? mainRoot() : mainRoot;
+  return raw ? resolve(main, raw) : resolve(main, DEFAULT_DEPLOYMENT_DIRNAME);
 }
 
-/** 部署根:所有部署目录的父目录。进程内解析一次。 */
+/**
+ * 部署根:所有部署目录的父目录。进程内解析一次。CORTICO_HOME 是绝对路径时不调 git:
+ * 没装命令行工具的 macOS 上,/usr/bin/git 一被调用就弹出安装对话框。
+ */
 export function deploymentRoot(): string {
   if (deploymentRootCache === null) {
-    deploymentRootCache = resolveDeploymentRoot(process.env, repoRoot(), mainRepoRoot());
+    deploymentRootCache = resolveDeploymentRoot(process.env, repoRoot(), mainRepoRoot);
   }
   return deploymentRootCache;
 }
