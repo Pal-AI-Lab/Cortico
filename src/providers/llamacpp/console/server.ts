@@ -56,8 +56,8 @@ export function llamacppConsole(host: ProviderConsoleHost): Partial<ConsolePageC
     config: [],
     panels: [
       { ...blocks.endpoint, title: S.endpointPanel, description: S.endpointPanelDescription },
-      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription },
-      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription },
+      { id: 'runtime', title: S.runtimePanel, description: S.runtimePanelDescription, defaultOpen: true },
+      { id: 'models', title: S.modelsPanel, description: S.modelsPanelDescription, defaultOpen: true },
       blocks.model,
       blocks.pricing,
       blocks.protocol,

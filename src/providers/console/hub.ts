@@ -72,7 +72,7 @@ export class ProviderHub {
   private sections(kind: string, language: Language) {
     const source = this.settings.sources().find(source => source.id === `llm:${kind}`);
     return (source?.contribute(language).panels ?? []).filter(panel => panel.id !== 'settings')
-      .map(({ id, title, description, builtin }) => ({ id, title, ...(description ? { description } : {}), ...(builtin ? { builtin } : {}) }));
+      .map(({ id, title, description, builtin, defaultOpen }) => ({ id, title, ...(description ? { description } : {}), ...(builtin ? { builtin } : {}), ...(defaultOpen !== undefined ? { defaultOpen } : {}) }));
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);

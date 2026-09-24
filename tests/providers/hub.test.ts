@@ -146,4 +146,6 @@ it('module list carries the editor sections of each module in its declared order
   expect(sections.llamacpp).toEqual(['endpoint', 'runtime', 'models', 'model', 'pricing', 'protocol']);
   expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
   expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
+  expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections.map(section => section.defaultOpen)).toEqual([true, true, true, true, false, false]);
+  expect(hub.moduleList('en').find(module => module.id === 'openai-responses-compat')!.sections.map(section => section.defaultOpen)).toEqual([true, true, true, false, false]);
 });

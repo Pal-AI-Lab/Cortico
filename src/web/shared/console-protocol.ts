@@ -200,6 +200,8 @@ export interface ConsolePanelDecl {
   title: string;
   /** 一句话说明，控制台可显示在标题旁 */
   description?: string;
+  /** 供应商编辑页的折叠初始状态；省略时展开。用户后续选择由浏览器记住。 */
+  defaultOpen?: boolean;
   /** 允许经 HTTP GET 调用的方法，省略时只接受 POST；该声明只留在服务端，不进入 manifest。 */
   getMethods?: readonly string[];
   /**
