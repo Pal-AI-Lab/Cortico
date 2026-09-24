@@ -88,6 +88,20 @@ function assertTagName(name: string): string {
   return name;
 }
 
+/**
+ * 本机能不能用 git。macOS 没装命令行工具时,/usr/bin/git 只是个壳,一被调用就弹出安装对话框;
+ * 所以先用 `xcode-select -p` 问装没装(没装时它返回非零、不弹框),装了才去跑 git。
+ */
+export function gitInstalled(platform: NodeJS.Platform = process.platform, exec: typeof execFileSync = execFileSync): boolean {
+  try {
+    if (platform === 'darwin') exec('xcode-select', ['-p'], { stdio: ['ignore', 'ignore', 'ignore'] });
+    exec('git', ['--version'], { stdio: ['ignore', 'ignore', 'ignore'] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export class WorkspaceGit {
   readonly dir: string;
   private availCache: boolean | null = null;
@@ -108,12 +122,7 @@ export class WorkspaceGit {
 
   available(): boolean {
     if (this.availCache !== null) return this.availCache;
-    try {
-      execFileSync('git', ['--version'], { stdio: ['ignore', 'ignore', 'ignore'] });
-      this.availCache = true;
-    } catch {
-      this.availCache = false;
-    }
+    this.availCache = gitInstalled();
     return this.availCache;
   }
 
