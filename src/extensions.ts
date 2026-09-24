@@ -83,8 +83,12 @@ export interface ActiveBotPackage {
   id: string;
 }
 
-export function extensionsDir(repoRoot: string): string {
-  return join(repoRoot, EXTENSIONS_DIRNAME);
+/** 程序装在只读位置时(比如 macOS 的 .app),应用把它指到可写的目录。 */
+export const EXTENSIONS_DIR_ENV = 'CORTICO_EXTENSIONS_DIR';
+
+export function extensionsDir(repoRoot: string, env: NodeJS.ProcessEnv = process.env): string {
+  const raw = (env[EXTENSIONS_DIR_ENV] ?? '').trim();
+  return raw ? resolve(raw) : join(repoRoot, EXTENSIONS_DIRNAME);
 }
 
 function readPackageJson(file: string): ExtensionPackageJson | null {

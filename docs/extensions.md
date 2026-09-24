@@ -7,6 +7,9 @@ provider 仅包含参考 bot 所需的实现;其他平台或模型通信协议�
 
 ## 安装
 
+扩展目录默认是检出根下的 `extensions/`;设了环境变量 `CORTICO_EXTENSIONS_DIR` 就是它指的目录,本页说的
+`extensions/` 都换成那里,程序装在只读位置时(比如 macOS 的 `.app`)由应用这样设。
+
 安装会向 `extensions/package.json` 添加依赖,重启进程后加载。支持以下方式:
 
 - 控制台「扩展」页:一进页就列出 npm 上带 `cortico-world` / `cortico-provider` / `cortico-bot`
