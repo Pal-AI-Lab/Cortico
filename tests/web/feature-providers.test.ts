@@ -189,6 +189,26 @@ it('a saved connection offers discard only while the form differs from what is s
   expect(cancel().hidden).toBe(true);
 });
 
+it('keeps the editor in place while discard reloads its saved data', async () => {
+  const { root } = await fixture();
+  const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
+  input.value = 'https://draft.test'; input.dispatchEvent(new Event('input')); await flush();
+  const originalFetch = globalThis.fetch;
+  let release!: () => void;
+  const reload = new Promise<void>(resolve => { release = resolve; });
+  vi.stubGlobal('fetch', async (path: string, init?: RequestInit) => {
+    if (path === '/api/providers/Alpha') await reload;
+    return originalFetch(path, init);
+  });
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '放弃更改') as HTMLButtonElement).click();
+  await flush();
+  expect(root.querySelector('[aria-label="API 地址"]')).toBe(input);
+  expect(input.value).toBe('https://draft.test');
+  release(); await flush();
+  expect(root.querySelector('[aria-label="API 地址"]')).not.toBe(input);
+  expect((root.querySelector('[aria-label="API 地址"]') as HTMLInputElement).value).toBe(entry.baseUrl);
+});
+
 it('a new connection uses the declared initial section states and marks required fields', async () => {
   const { root } = await fixture();
   (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
