@@ -1762,6 +1762,13 @@
 .connection-step>.sheet{padding:11px 0 13px;border-top:0}
 .connection-step+.connection-step>.sheet{border-top:1px solid var(--border);padding-top:15px}
 .connection-step>.sheet>.sheetbody,.connection-step>.sheet>.foldbody{margin-top:9px}
+.connection-step>details.connection-section{margin:0;padding:11px 0 13px;background:transparent;border:0;border-radius:0}
+.connection-step+.connection-step>details.connection-section{border-top:1px solid var(--border);padding-top:15px}
+.connection-step>details.connection-section>summary{padding:0;align-items:baseline}
+.connection-step>details.connection-section>.foldbody{padding:0;margin-top:9px}
+.connection-step>details.connection-section>.foldbody>.sheet{padding:0;margin:0;border:0;background:transparent}
+.connection-step>details.connection-section>.foldbody>.sheet>h3,
+.connection-step>details.connection-section>.foldbody>.sheet>.connection-step-heading{display:none}
 .connection-step-heading{display:flex;align-items:baseline;flex-wrap:wrap;gap:2px 14px;min-width:0}
 .connection-step-heading>h3{flex:none;margin:0}
 .connection-step-heading>.sh-desc{flex:0 0 auto;max-width:100%;margin:0}
@@ -1775,7 +1782,16 @@
 .connection-step .placeholder{padding:5px 0;text-align:left;font:var(--text-detail)/1.55 var(--sans);color:var(--muted-foreground)}
 .connection-step .runtime-enable-row{align-items:flex-end;flex-wrap:nowrap}
 .connection-step .runtime-enable-row .fieldrow{flex:1;min-width:0;margin:0}
-.connection-step .runtime-enable-row .btn{flex:none}
+.connection-step .runtime-enable-row .btn{flex:none;min-height:40px;height:40px}
+.connection-step .connection-model-error{padding-top:10px;margin-top:8px;border-top:1px solid var(--border);color:var(--danger)}
+.connection-step .connection-toggle{display:flex;align-items:center;gap:12px}
+.connection-step .connection-toggle .fieldlabel{margin:0}
+.connection-step .connection-switch{appearance:none;position:relative;flex:none;width:40px;height:22px;margin:0;border:1px solid var(--border-strong);border-radius:999px;background:var(--surface-hover);cursor:pointer;transition:background .18s,border-color .18s}
+.connection-step .connection-switch::before{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--surface);box-shadow:0 1px 3px color-mix(in srgb,var(--ink) 22%,transparent);transition:transform .18s}
+.connection-step .connection-switch:checked{background:var(--accent);border-color:var(--accent)}
+.connection-step .connection-switch:checked::before{transform:translateX(18px)}
+.connection-step .connection-switch:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media(prefers-reduced-motion:reduce){.connection-step .connection-switch,.connection-step .connection-switch::before{transition:none}}
 .connection-step td.mono{white-space:normal;overflow-wrap:anywhere}
 .connection-step table.data .btn{white-space:nowrap}
 .connection-step>.sheet>h3::before,.connection-step>.sheet>.connection-step-heading>h3::before,.connection-step>details.sheet>summary .connection-step-heading>h3::before{content:counter(step);display:inline-grid;place-items:center;width:20px;height:20px;margin-right:9px;border-radius:50%;background:color-mix(in srgb,var(--accent) 16%,transparent);color:var(--accent);font:600 11px/1 var(--mono);vertical-align:2px}

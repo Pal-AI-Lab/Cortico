@@ -9,7 +9,7 @@ const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
 const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
-const BLOCKS = { endpoint: { id: 'endpoint', title: '连接', builtin: 'connection-endpoint' }, model: { id: 'model', title: '模型与生成', builtin: 'connection-model' }, pricing: { id: 'pricing', title: '成本与计价', builtin: 'connection-pricing' }, protocol: { id: 'protocol', title: '高级协议', builtin: 'connection-protocol' } };
+const BLOCKS = { endpoint: { id: 'endpoint', title: '连接', builtin: 'connection-endpoint', defaultOpen: true }, model: { id: 'model', title: '模型与生成', builtin: 'connection-model', defaultOpen: true }, pricing: { id: 'pricing', title: '成本与计价', builtin: 'connection-pricing', defaultOpen: false }, protocol: { id: 'protocol', title: '高级协议', builtin: 'connection-protocol', defaultOpen: false } };
 const DEFAULT_SECTIONS = [BLOCKS.endpoint, BLOCKS.model, BLOCKS.pricing, BLOCKS.protocol];
 interface FixtureOptions { sections?: typeof DEFAULT_SECTIONS; usage?: Array<{ name: string; running: boolean }>; readiness?: string; secretConfigured?: string }
 async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sections = DEFAULT_SECTIONS, usage = [], readiness = 'ready', secretConfigured = 'none' }: FixtureOptions = {}) {
@@ -189,7 +189,7 @@ it('a saved connection offers discard only while the form differs from what is s
   expect(cancel().hidden).toBe(true);
 });
 
-it('a new connection starts with its folds closed and its required fields marked', async () => {
+it('a new connection uses the declared initial section states and marks required fields', async () => {
   const { root } = await fixture();
   (root.querySelector('.connection-create > button') as HTMLButtonElement).click(); await flush();
   expect(root.querySelector('.connection-flow')).toBeNull();
@@ -198,10 +198,10 @@ it('a new connection starts with its folds closed and its required fields marked
   select.value = 'sample'; select.dispatchEvent(new Event('change')); await flush();
   expect(root.querySelector('.connection-flow')).not.toBeNull();
   expect(root.querySelector('.connection-module-hint')?.textContent).toBe('');
-  const folds = [...root.querySelectorAll('details')];
-  expect(folds.length).toBeGreaterThan(0);
-  expect(folds.every(section => !section.open)).toBe(true);
+  const folds = [...root.querySelectorAll<HTMLDetailsElement>('.connection-flow > .connection-step > details')];
+  expect(folds.map(section => section.open)).toEqual([true, true, false, false]);
   expect(root.querySelector('.fieldlabel .required-mark')?.textContent).toContain('*');
+  expect(root.querySelector('[role="switch"][aria-label="接受图片"]')).not.toBeNull();
 });
 
 it('hides the connect control for endpoints that are not ready or are used by a running deployment', async () => {
