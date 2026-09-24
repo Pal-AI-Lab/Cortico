@@ -29,10 +29,7 @@ export const PUBLISHED_DEPENDENCIES = [
   'ws',
 ] as const;
 
-/**
- * 模板之外、扩展照样会走到的框架入口。`providers/registry.ts` 按目录扫描动态 import
- * 内建 provider,静态闭包追不到;扩展的控制台面板用框架的 UI 套件渲染,测试里也会加载它。
- */
+/** 扩展的控制台面板用框架的 UI 套件渲染,测试里也会加载它;模板不碰控制台,闭包追不到。 */
 const HOST_ENTRIES = ['web/client/ui/index.ts'] as const;
 
 export interface RootPackageJson {
@@ -119,7 +116,10 @@ export function corticoEntries(dir: string): string[] {
   return [...found].sort();
 }
 
-/** 扩展会走到的框架入口:模板用到的说明符、内建 provider 模块与 {@link HOST_ENTRIES}。 */
+/**
+ * 扩展会走到的框架入口:模板用到的说明符、内建 provider 模块与 {@link HOST_ENTRIES}。
+ * 内建 provider 由 `providers/registry.ts` 按目录扫描动态 import,静态闭包追不到,这里照同一规则列出。
+ */
 export function contractEntries(repoRoot: string): string[] {
   const providersDir = join(repoRoot, 'src', 'providers');
   const providers = readdirSync(providersDir, { withFileTypes: true })
