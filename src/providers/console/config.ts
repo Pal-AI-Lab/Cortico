@@ -11,10 +11,10 @@ import { text } from './strings.ts';
 export function connectionBlocks(language: Language): Record<'endpoint' | 'model' | 'pricing' | 'protocol', ConsolePanelDecl> {
   const S = text(language);
   return {
-    endpoint: { id: 'endpoint', title: S.endpointBlock, description: S.endpointBlockDescription, builtin: 'connection-endpoint' },
-    model: { id: 'model', title: S.modelBlock, description: S.modelBlockDescription, builtin: 'connection-model' },
-    pricing: { id: 'pricing', title: S.pricingBlock, builtin: 'connection-pricing' },
-    protocol: { id: 'protocol', title: S.protocolBlock, description: S.protocolBlockDescription, builtin: 'connection-protocol' },
+    endpoint: { id: 'endpoint', title: S.endpointBlock, description: S.endpointBlockDescription, builtin: 'connection-endpoint', defaultOpen: true },
+    model: { id: 'model', title: S.modelBlock, description: S.modelBlockDescription, builtin: 'connection-model', defaultOpen: true },
+    pricing: { id: 'pricing', title: S.pricingBlock, builtin: 'connection-pricing', defaultOpen: false },
+    protocol: { id: 'protocol', title: S.protocolBlock, description: S.protocolBlockDescription, builtin: 'connection-protocol', defaultOpen: false },
   };
 }
 

@@ -110,7 +110,7 @@ export function compatConsole(host: ProviderConsoleHost): Partial<ConsolePageCon
     panels: [
       blocks.endpoint,
       blocks.model,
-      { id: 'reasoning', title: S.reasoningPanel, description: S.reasoningPanelDescription },
+      { id: 'reasoning', title: S.reasoningPanel, description: S.reasoningPanelDescription, defaultOpen: true },
       blocks.pricing,
       blocks.protocol,
     ],
