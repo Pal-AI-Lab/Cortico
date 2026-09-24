@@ -38,7 +38,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean',
         title: '开启辅助视觉',
         'x-hot': false,
-        description: '关掉后仍会下载并保存图片附件,但不会生成图片描述。需要重启生效,且需要配好 OPENROUTER_API_KEY。',
+        description: '关掉后仍会下载并保存图片附件,但不会生成图片描述；开启需配置 OPENROUTER_API_KEY 并重启。',
       },
       'worlds.qq.vision.model': {
         type: 'string',
@@ -87,7 +87,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
         'x-scale': 1000,
         'x-suffix': 's',
         'x-hot': false,
-        description: '图片下载或单次识别请求的超时。重启生效(客户端构造时固定)。',
+        description: '图片下载和辅助视觉请求均使用此超时；修改后需重启生效。',
       },
     },
   },
