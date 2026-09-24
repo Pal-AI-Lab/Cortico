@@ -11,15 +11,29 @@ import { pathToFileURL } from 'node:url';
 export const PACKAGE_NAME = 'cortico';
 
 /**
- * 发布清单声明的依赖。扩展作者只 import 契约面,但 TypeScript 会跟着相对 import 解析到
- * `src/web/` 的服务端类型,因此 express 与 ws 的类型也要装得上。版本取自仓库根清单。
+ * 发布清单声明的依赖,覆盖 {@link contractEntries} 的闭包。TypeScript 会跟着相对 import 解析到
+ * `src/web/` 的服务端类型与控制台组件,所以带类型包的依赖连同 `@types/*` 一起声明。版本取自仓库根清单。
  */
 export const PUBLISHED_DEPENDENCIES = [
   '@types/express',
+  '@types/react',
+  '@types/react-dom',
+  '@types/tar-stream',
   '@types/ws',
   'express',
+  'fflate',
+  'react',
+  'react-dom',
+  'react-textarea-autosize',
+  'tar-stream',
   'ws',
 ] as const;
+
+/**
+ * 模板之外、扩展照样会走到的框架入口。`providers/registry.ts` 按目录扫描动态 import
+ * 内建 provider,静态闭包追不到;扩展的控制台面板用框架的 UI 套件渲染,测试里也会加载它。
+ */
+const HOST_ENTRIES = ['web/client/ui/index.ts'] as const;
 
 export interface RootPackageJson {
   version: string;
@@ -105,6 +119,15 @@ export function corticoEntries(dir: string): string[] {
   return [...found].sort();
 }
 
+/** 扩展会走到的框架入口:模板用到的说明符、内建 provider 模块与 {@link HOST_ENTRIES}。 */
+export function contractEntries(repoRoot: string): string[] {
+  const providersDir = join(repoRoot, 'src', 'providers');
+  const providers = readdirSync(providersDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(join(providersDir, entry.name, 'index.ts')))
+    .map((entry) => `providers/${entry.name}/index.ts`);
+  return [...new Set([...corticoEntries(join(repoRoot, 'templates', 'extension')), ...providers, ...HOST_ENTRIES])].sort();
+}
+
 /** 包名部分:`@scope/name/sub` 取 `@scope/name`,`name/sub` 取 `name`。 */
 function packageOf(spec: string): string {
   const parts = spec.split('/');
@@ -152,8 +175,7 @@ function npm(args: string[]): number {
 async function main(): Promise<void> {
   const root = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as RootPackageJson;
   const manifest = buildManifest(root);
-  const entries = corticoEntries(join(REPO_ROOT, 'templates', 'extension'));
-  const { files, externals } = importClosure(join(REPO_ROOT, 'src'), entries);
+  const { files, externals } = importClosure(join(REPO_ROOT, 'src'), contractEntries(REPO_ROOT));
   const missing = missingDependencies(manifest, externals);
   if (missing.length > 0) {
     console.error(`发布清单缺少扩展契约用到的依赖: ${missing.join(', ')}`);
