@@ -115,7 +115,7 @@ describe('loadExtensions', () => {
 });
 
 describe('ExtensionManager', () => {
-  interface Run { args: string[]; cwd: string }
+  interface Run { args: string[]; cwd: string; workspace: string }
   function manager(booted: Partial<ExtensionSet> = {}, opts: { code?: number; hang?: boolean; packument?: unknown } = {}) {
     const runs: Run[] = [];
     let release: (() => void) | null = null;
@@ -125,7 +125,7 @@ describe('ExtensionManager', () => {
     };
     const mgr = new ExtensionManager(root, set, {
       run: (args, cwd) => {
-        runs.push({ args, cwd });
+        runs.push({ args, cwd, workspace: readFileSync(join(cwd, 'pnpm-workspace.yaml'), 'utf8') });
         const manifestFile = join(cwd, 'package.json');
         const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
         if (args[0] === 'add') {
@@ -171,6 +171,17 @@ describe('ExtensionManager', () => {
     expect(mgr.list().extensions[0]).toMatchObject({ installedVersion: '1.2.0', state: 'pending-restart' });
     expect(runs[0].cwd).not.toBe(join(root, 'extensions'));
     expect(msg).toContain('重启');
+  });
+
+  it('carries the extension build policy into the isolated installation', async () => {
+    const policy = "packages:\n  - .\nallowBuilds:\n  'onnxruntime-node@1.30.0': true\n";
+    mkdirSync(join(root, 'extensions'));
+    writeFileSync(join(root, 'extensions', 'pnpm-workspace.yaml'), policy);
+    const { mgr, runs } = manager();
+    await mgr.install({ name: 'example-world', version: '1.2.0' });
+    expect(runs[0].workspace).toBe(policy);
+    expect(runs[0].args).not.toContain('--ignore-workspace');
+    expect(readFileSync(join(root, 'extensions', 'pnpm-workspace.yaml'), 'utf8')).toBe(policy);
   });
 
   it('local Unicode directories are validated without changing source files', async () => {

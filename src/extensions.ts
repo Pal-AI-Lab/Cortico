@@ -763,11 +763,18 @@ export class ExtensionManager {
         const environmentManifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
         environmentManifest.packageManager = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).packageManager;
         writeFileSync(manifestFile, JSON.stringify(environmentManifest, null, 2));
-        const flags = ['--ignore-workspace', '--config.engine-strict=true', '--config.virtual-store-dir=' + this.store.virtualStoreDir];
+        const workspaceFile = join(stage, 'pnpm-workspace.yaml');
+        if (!existsSync(workspaceFile)) writeFileSync(workspaceFile, 'packages:\n  - .\n');
+        const flags = ['--config.engine-strict=true', '--config.virtual-store-dir=' + this.store.virtualStoreDir];
         const execute = async (args: string[]) => {
           const { code, output } = await this.run([...args, ...flags], stage);
           const tail = output.trim().split('\n').slice(-20).join('\n');
-          if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
+          if (code !== 0) {
+            const buildHint = output.includes('ERR_PNPM_IGNORED_BUILDS')
+              ? `\n请在 ${join(this.dir, 'pnpm-workspace.yaml')} 的 allowBuilds 中审核并批准报错所列依赖版本，然后重试。`
+              : '';
+            throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}${buildHint}`);
+          }
           return tail;
         };
         let output: string;

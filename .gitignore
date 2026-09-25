@@ -35,6 +35,7 @@ scratch/
 # 锚在仓库根上:不带斜杠会连 src/web/client/features/extensions/ 一起吞掉。
 /extensions/
 /.extensions-instances/
+/.cortico-extensions-*/
 
 # Corti 运维目录(数据归档+复盘),不入库
 CortiV-DataAnalysis/
