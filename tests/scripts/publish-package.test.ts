@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   PACKAGE_NAME,
   buildManifest,
+  contractEntries,
   corticoEntries,
   importClosure,
   missingDependencies,
@@ -28,7 +29,7 @@ describe('publish-package', () => {
   });
 
   it('清单声明了契约闭包触及的每个第三方包', () => {
-    const { externals } = importClosure(SRC, corticoEntries(TEMPLATES));
+    const { externals } = importClosure(SRC, contractEntries(REPO_ROOT));
     expect(externals.length).toBeGreaterThan(0);
     expect(missingDependencies(buildManifest(root), externals)).toEqual([]);
   });

@@ -227,6 +227,19 @@ describe('ExtensionManager', () => {
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 
+  it('list:依赖范围未变但磁盘包版本变化时待重启', async () => {
+    installFake('in-range', { body: definitionSource('in-range') });
+    const booted = await loadExtensions(root);
+    const file = join(root, 'extensions/node_modules/in-range/package.json');
+    const pkg = JSON.parse(readFileSync(file, 'utf8')) as { version: string };
+    writeFileSync(file, JSON.stringify({ ...pkg, version: '1.2.4' }));
+
+    const { mgr } = manager(booted);
+    expect(mgr.list().extensions[0]).toMatchObject({
+      spec: '^1.0.0', version: '1.2.3', installedVersion: '1.2.4', state: 'pending-restart',
+    });
+  });
+
   it('search:关键字按 kind 换,只留带那个关键字的包,标出已安装', async () => {
     installFake('a-mod');
     const { mgr, urls } = manager();
@@ -317,6 +330,44 @@ describe('ExtensionManager', () => {
     await expect(mgr.packageInfo('Bad Name')).rejects.toThrow('包名');
     const { mgr: empty } = manager({}, { packument: { 'dist-tags': {}, versions: {} } });
     await expect(empty.packageInfo('c')).rejects.toThrow('latest');
+  });
+
+  it('updates:只检查 npm 包,比较磁盘版本与 latest 并报告契约问题', async () => {
+    installFake('npm-mod');
+    installFake('linked-mod', { spec: 'link:../linked-mod' });
+    const { mgr, urls } = manager({}, { packument: {
+      'dist-tags': { latest: '1.3.0' },
+      versions: { '1.3.0': {
+        name: 'npm-mod', version: '1.3.0', type: 'module', main: './index.js',
+        keywords: ['cortico-world'], cortico: { kind: 'world', api: 99 },
+      } },
+    } });
+    expect(await mgr.updates()).toMatchObject({
+      updates: [{ name: 'npm-mod', installedVersion: '1.2.3', latestVersion: '1.3.0', problems: [expect.stringContaining('v99')] }],
+      errors: [],
+    });
+    expect(urls).toEqual(['https://registry.npmjs.org/npm-mod']);
+  });
+
+  it('updates:registry 失败单包报错,已是最新版不列为更新', async () => {
+    installFake('npm-mod');
+    const { mgr: failed } = manager({}, { packument: { 'dist-tags': {}, versions: {} } });
+    expect(await failed.updates()).toMatchObject({ updates: [], errors: [{ name: 'npm-mod' }] });
+    const { mgr: current } = manager({}, { packument: {
+      'dist-tags': { latest: '1.2.3' },
+      versions: { '1.2.3': { name: 'npm-mod', version: '1.2.3', type: 'module', main: './index.js', keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } } },
+    } });
+    expect(await current.updates()).toEqual({ updates: [], errors: [] });
+  });
+
+  it('updates:预发布版本按 SemVer 比较,不把较旧的 latest 当更新', async () => {
+    installFake('npm-mod');
+    const packument = (latest: string) => ({
+      'dist-tags': { latest },
+      versions: { [latest]: { name: 'npm-mod', version: latest, type: 'module', main: './index.js', keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } } },
+    });
+    expect((await manager({}, { packument: packument('1.2.3-beta.1') }).mgr.updates()).updates).toEqual([]);
+    expect((await manager({}, { packument: packument('1.2.4-beta.1') }).mgr.updates()).updates).toMatchObject([{ latestVersion: '1.2.4-beta.1' }]);
   });
 
   it('repositoryWebUrl:npm 那几种写法都收成 https,认不出的原样退回', () => {

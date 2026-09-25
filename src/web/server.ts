@@ -62,6 +62,7 @@ import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC,
 import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
+import { checkFrameworkRelease } from './framework-release.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
 import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
 import {
@@ -180,6 +181,8 @@ export interface ExtensionInfo {
   name: string;
   /** extensions/package.json 里的版本范围或 `link:` 路径 */
   spec: string;
+  /** 磁盘上已安装的版本；卸载后缺席 */
+  installedVersion?: string | null;
   version: string | null;
   description?: string;
   /** manifest 里的类别(`world` / `provider` / `bot`);解析不出 manifest 时缺席 */
@@ -218,6 +221,11 @@ export interface ExtensionSearchHit {
   installed: boolean;
   /** 按哪一类关键字搜到的(`cortico-world` → world,`cortico-provider` → provider,`cortico-bot` → bot) */
   kind?: 'world' | 'provider' | 'bot';
+}
+
+export interface ExtensionUpdateResult {
+  updates: Array<{ name: string; installedVersion: string; latestVersion: string; problems: string[] }>;
+  errors: Array<{ name: string; error: string }>;
 }
 
 /** 一个 npm 包的详情。操作员点开某条搜索结果时才取。 */
@@ -263,6 +271,7 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
   list(): { dir: string; extensions: ExtensionInfo[] };
+  updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
   /** 单个包的详情(另取一次包文档)。 */
@@ -1418,6 +1427,10 @@ export class WebApp {
       res.json({ ...this.safeStatus(), uptimeSec: Math.round(process.uptime()) });
     }));
 
+    app.get('/api/framework/release', wrap(async (_req, res) => {
+      res.json(await checkFrameworkRelease());
+    }));
+
     app.get('/api/avatar', wrap((_req, res) => {
       const dir = this.deps.botDir;
       if (!dir) { res.status(404).end(); return; }
@@ -1699,6 +1712,12 @@ export class WebApp {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
       res.json(src.list());
+    }));
+
+    app.get('/api/extensions/updates', wrap(async (_req, res) => {
+      const src = this.deps.extensions;
+      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      res.json(await src.updates());
     }));
 
     app.get('/api/extensions/search', wrap(async (req, res) => {

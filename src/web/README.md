@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
+<!-- Owner: src/web/server.ts, src/web/framework-release.ts, src/web/auth.ts, src/web/shared/console-protocol.ts, src/web/shared/client-panel.ts, src/web/client/console-pages/host.ts, src/web/client/console-pages/builtins/llm-settings/panel.ts, src/web/client/console-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -36,10 +36,14 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 |---|---|
 | `/api/console/manifest` | 页面声明。 |
 | `/api/console/lamps` | 状态灯。 |
+| `/api/extensions/updates` | 已安装 npm 扩展的可用新版本及逐包检查错误。 |
 | `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
 | `/ws/providers/<page>/panels/<panel>` | 面板流。 |
 
 ## 服务端
+
+`GET /api/framework/release` 返回 `package.json` 的版本；GitHub 最新正式 Release 更高时带上它的版本与链接，
+查询失败返回错误。
 
 `WebApp` 默认监听 `127.0.0.1`，支持由依赖配置指定监听地址。从首选端口起最多尝试五个端口；
 端口为 0 时仅申请一次系统分配。WebSocket 使用 `noServer` 分派 `/ws/debug`、`/ws/sessions` 和面板流。

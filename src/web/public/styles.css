@@ -101,6 +101,7 @@
   .brand { padding: 20px 20px 14px; border-bottom: 1px solid var(--line); }
   /* 字标是一整块笔画,颜色由 currentColor 取,所以只需要给高度。 */
   .brand .wordmark { display: block; width: auto; height: 30px; color: var(--ink); }
+  .release-hint { display: block; margin-top: 8px; font-size: 11.5px; color: var(--accent); }
   /* 两只眼睛与两个字母 o 跟主题的强调色走,横幅上它们本来就是另一个颜色。 */
   .wordmark .accent, .brandmark .accent { stroke: var(--accent); }
 

@@ -30,6 +30,7 @@ const zh = {
   renameTitle: '点击改名',
   renameSaved: '展示名已保存',
   renameFailed: (msg: string) => `展示名没保存成:${msg}`,
+  releaseUpdate: (latest: string, current: string) => `Cortico ${latest} 已发布(当前 ${current})`,
 };
 
 const en: typeof zh = {
@@ -62,6 +63,7 @@ const en: typeof zh = {
   renameTitle: 'Click to rename',
   renameSaved: 'Display name saved',
   renameFailed: (msg: string) => `Display name not saved: ${msg}`,
+  releaseUpdate: (latest: string, current: string) => `Cortico ${latest} released (running ${current})`,
 };
 
 export const S = pick({ zh, en });

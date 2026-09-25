@@ -35,7 +35,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
-| `extensions` | 扩展 | 安装、卸载与 npm 搜索（见 [extensions.md](extensions.md)） |
+| `extensions` | 扩展 | 安装、卸载、npm 搜索与更新检查（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
 
@@ -85,6 +85,11 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `ui` 提供界面组件(`sheet`、`table`、
 `log`、`toast`、`confirm`、`drawer`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
+
+## 框架更新提示
+
+打开控制台时查询 GitHub 上 Cortico 的最新正式 Release。它的版本高于 `package.json` 的版本时，
+左上角字标下出现一行提示，链接到发布说明；版本相同、更低或查询失败时不显示。只提示，不下载也不重启。
 
 ## 运行控制
 
