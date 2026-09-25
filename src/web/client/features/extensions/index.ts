@@ -1,8 +1,9 @@
 /** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。 */
 
-import { get, post } from '../../core/api.ts';
+import { get, post, pickPath } from '../../core/api.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
+import { V } from './v2-strings.ts';
 import { S } from './strings.ts';
 
 /** 扩展类别。与 `ExtensionKind` 同形;这一页只用它分组与选关键字。 */
@@ -23,6 +24,11 @@ export interface ExtensionView {
   reason?: string;
   worldId?: string;
   label?: string;
+  enabled?: boolean;
+  inUse?: boolean;
+  hidden?: boolean;
+  disableReason?: string;
+  activationError?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
 }
 
@@ -82,11 +88,8 @@ export interface PackageDetailView {
 }
 
 /** 结果的排序口径。npm 自己的相关度不在其中:同一关键字下的包它给的分全是 0。 */
-export type HitSort = 'downloads' | 'date' | 'name' | 'dependents';
-export const HIT_SORTS: readonly HitSort[] = ['downloads', 'date', 'name', 'dependents'];
-
-/** 一页放几张卡。 */
-export const HITS_PER_PAGE = 12;
+export type HitSort = 'downloads' | 'date' | 'name';
+export const HIT_SORTS: readonly HitSort[] = ['name', 'date', 'downloads'];
 
 export interface ArrangeOptions {
   filter: string;
@@ -118,7 +121,6 @@ export function arrangeHits(
       case 'downloads': return b.downloads - a.downloads || a.name.localeCompare(b.name);
       // 发布时间是 ISO 串,按串比就是按时间比;没有日期的排在最后
       case 'date': return (b.date ?? '').localeCompare(a.date ?? '') || a.name.localeCompare(b.name);
-      case 'dependents': return b.dependents - a.dependents || a.name.localeCompare(b.name);
       default: return a.name.localeCompare(b.name);
     }
   });
@@ -127,606 +129,315 @@ export function arrangeHits(
   return { matched: matched.length, pages, page, shown: matched.slice(page * opts.pageSize, (page + 1) * opts.pageSize) };
 }
 
-interface PowerReport {
-  ok?: boolean;
-  localComplete?: boolean;
-  result?: string;
-  error?: string;
-  steps?: Array<{ label: string; ok: boolean; elapsedMs: number; detail?: string }>;
+type Target = { name: string; version?: string } | { path: string };
+interface Operation { id: string; phase: string; name?: string; version?: string; kind?: ExtensionKindView; error?: string; output?: string }
+interface Life { deployment: string; bootId: string; ready: boolean }
+export function restartOutcome(before: Life, next: Life): 'waiting' | 'ready' | 'wrong-deployment' {
+  return next.deployment !== before.deployment ? 'wrong-deployment' : next.bootId !== before.bootId && next.ready ? 'ready' : 'waiting';
 }
-
-function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+interface CategoryState {
+  filter: string; sort: HitSort; hide: boolean; page: number; installedPage: number; scroll: number;
+  hits: SearchHitView[]; fetched: boolean; generation: number; messages: Record<string, { text: string; bad: boolean }>;
+  source: 'npm' | 'local'; input: string;
 }
-
-function isAbort(err: unknown): boolean {
-  return (err as { name?: unknown } | null)?.name === 'AbortError';
+export const HITS_PER_PAGE = 12;
+export function extensionColumns(width: number): number { return width >= 1000 ? 3 : width >= 660 ? 2 : 1; }
+export function parseInstallInput(raw: string): Target | null {
+  const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9][a-z0-9_.-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/.exec(raw.trim());
+  return match ? { name: match[1], ...(match[2] ? { version: match[2] } : {}) } : null;
 }
-
-/**
- * 手动安装框里的一行:含路径分隔符或以 `.` 开头的当本机目录,其余按 `name[@version]`
- * 拆(作用域包的第一个 `@` 是名字的一部分)。
- */
-export function parseInstallInput(raw: string): { name: string; version?: string } | { path: string } | null {
-  const text = raw.trim();
-  if (!text) return null;
-  if (text.startsWith('.') || text.includes('/') && !text.startsWith('@') || text.includes('\\') || /^[A-Za-z]:/.test(text)) {
-    return { path: text };
-  }
-  const at = text.indexOf('@', 1);
-  if (at < 0) return { name: text };
-  return { name: text.slice(0, at), version: text.slice(at + 1) };
-}
-
-const STATE_LABEL: Record<ExtensionView['state'], string> = {
-  loaded: S.stateLoaded,
-  failed: S.stateFailed,
-  'pending-restart': S.statePendingRestart,
-  removed: S.stateRemoved,
-  idle: S.stateIdle,
-};
-
-const KIND_LABEL: Record<ExtensionKindView, string> = {
-  world: 'World',
-  provider: 'LLM Provider',
-  bot: 'Bot',
-};
-
-/** 卡片副标题里 id 前面的那个词。 */
-const KIND_NOUN: Record<ExtensionKindView, string> = {
-  world: 'World',
-  provider: 'provider',
-  bot: 'bot',
-};
-
-/** npm 上按类发现用的关键字。与 `src/extensions/manifest.ts` 的 `EXTENSION_KEYWORDS` 对齐。 */
-const KIND_KEYWORD: Record<ExtensionKindView, string> = {
-  world: 'cortico-world',
-  provider: 'cortico-provider',
-  bot: 'cortico-bot',
-};
-
-/** 已安装清单的分组。`kind` 为 null 的一组收所有读不出 manifest 的包。 */
-const GROUPS: ReadonlyArray<{ kind: ExtensionKindView | null; title: string; desc: string }> = [
-  { kind: 'world', title: KIND_LABEL.world, desc: S.groupWorldDesc },
-  { kind: 'provider', title: KIND_LABEL.provider, desc: S.groupProviderDesc },
-  { kind: 'bot', title: KIND_LABEL.bot, desc: S.groupBotDesc },
-  { kind: null, title: S.groupUnknownTitle, desc: S.groupUnknownDesc },
-];
+const categories: ExtensionKindView[] = ['world', 'provider', 'bot'];
+const stateLabels = { loaded: V.disabled, failed: S.stateFailed, 'pending-restart': S.statePendingRestart, removed: S.stateRemoved, idle: V.template };
+const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 
 export function mountExtensions(ctx: FeatureContext): void {
-  const { ui, root } = ctx;
-  const view = root.ownerDocument?.defaultView ?? null;
-  const canRestart = ctx.capabilities.restart === true;
-  const supervised = ctx.capabilities.supervised === true;
-  let currentExtensions: ExtensionView[] | null = null;
-  let currentDir = '';
-  let availableUpdates = new Map<string, UpdateView>();
-  let updateErrors: UpdateResultView['errors'] = [];
-
-  const intro = pageIntro(ui, S.introTitle, S.introDesc);
-
-  // -------------------------------------------------------------------------
-  // 已安装
-  // -------------------------------------------------------------------------
-
-  const installedSheet = ui.sheet({
-    title: S.installedTitle,
-    en: 'extensions/',
+  const { root, ui, lifecycle, signal, router } = ctx;
+  const win = root.ownerDocument.defaultView!;
+  const storageKey = 'cortico.extensions.v2:' + win.location.origin;
+  const states = Object.fromEntries(categories.map(kind => [kind, {
+    filter: '', sort: 'name', hide: false, page: 0, installedPage: 0, scroll: 0, hits: [], fetched: false, generation: 0,
+    messages: {}, source: 'npm', input: '',
+  } satisfies CategoryState])) as unknown as Record<ExtensionKindView, CategoryState>;
+  try {
+    const saved = JSON.parse(win.sessionStorage.getItem(storageKey) ?? '{}');
+    for (const kind of categories) if (saved[kind]) Object.assign(states[kind], saved[kind], { hits: [], fetched: false, generation: 0 });
+  } catch { /* Storage can be disabled by the browser. */ }
+  let kind: ExtensionKindView = categories.includes(router.route.segments[1] as ExtensionKindView) ? router.route.segments[1] as ExtensionKindView : 'world';
+  let columns = extensionColumns(root.clientWidth);
+  let installed: ExtensionView[] = [];
+  let updates = new Map<string, UpdateView>();
+  let directory = '';
+  let loadGeneration = 0;
+  let installedFetched = false;
+  let restoringScroll = true;
+  const restoreScroll = () => {
+    if (!restoringScroll || !installedFetched || !states[kind].fetched) return;
+    root.scrollTop = states[kind].scroll;
+    restoringScroll = false;
+  };
+  const busy = new Set<string>();
+  const pendingOperations = new Map<string, { id: string; kind: ExtensionKindView; area: string }>();
+  try { for (const [identity, pending] of JSON.parse(win.sessionStorage.getItem(storageKey + ':operations') ?? '[]')) { pendingOperations.set(identity, pending); busy.add(identity); } } catch { /* Invalid saved operation state. */ }
+  const saveOperations = () => { try { win.sessionStorage.setItem(storageKey + ':operations', JSON.stringify([...pendingOperations])); } catch { /* Optional browser storage. */ } };
+  const intro = pageIntro(ui, S.introTitle, V.scope);
+  const tabs = ui.h('div', 'extension-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', S.introTitle);
+  const indicator = ui.h('span', 'extension-tab-indicator'); indicator.setAttribute('aria-hidden', 'true'); tabs.append(indicator);
+  const panel = ui.h('div', 'extension-category'); panel.setAttribute('role', 'tabpanel'); panel.id = 'extension-category';
+  const tabButtons = categories.map((value, index) => {
+    const button = ui.button(V.tabs[value], { onClick: () => router.navigate(['extensions', value]) });
+    button.id = 'extension-tab-' + value; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', panel.id);
+    button.addEventListener('keydown', event => {
+      const target = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : -1;
+      if (target >= 0) { event.preventDefault(); tabButtons.forEach((b, i) => b.tabIndex = i === target ? 0 : -1); tabButtons[target].focus(); }
+    }, { signal }); tabs.append(button); return button;
   });
-  const sumBar = ui.rowbar();
-  const msg = ui.msgline();
-  const refreshBtn = ui.button(S.refresh, { size: 'sm', onClick: () => { void load(); void checkUpdates(); } });
-  const restartBtn = ui.button(S.restartProcess, {
-    size: 'sm',
-    variant: 'primary',
-    onClick: (ev) => void restartProcess(ev.currentTarget as HTMLButtonElement),
-  });
-  const updateMsg = ui.msgline(S.checkingUpdates);
-  installedSheet.body.append(sumBar, msg, updateMsg);
-  /** 分组容器:每组一条 section 标题 + 一张 `.iogrid`。 */
-  const installedGroups = ui.h('div');
-
-  function setMsg(text: string, bad?: boolean): void {
-    msg.textContent = text;
-    msg.className = 'msgline' + (bad ? ' bad' : '');
+  root.append(intro, tabs, panel);
+  let management: HTMLElement, market: HTMLElement, installedGrid: HTMLElement, marketGrid: HTMLElement, installedPager: HTMLElement, marketPager: HTMLElement;
+  let messageNodes: Record<string, HTMLElement> = {};
+  const save = () => {
+    if (!restoringScroll) states[kind].scroll = root.scrollTop;
+    try { win.sessionStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(categories.map(k => { const { hits: _hits, fetched: _fetched, generation: _gen, ...s } = states[k]; return [k, s]; })))); } catch { /* Optional browser state. */ }
+  };
+  root.addEventListener('scroll', save, { signal, passive: true }); lifecycle.add(save);
+  for (const event of ['wheel', 'touchstart']) root.addEventListener(event, () => { restoringScroll = false; }, { signal, passive: true });
+  function message(owner: ExtensionKindView, area: string, text: string, bad = false) {
+    states[owner].messages[area] = { text, bad };
+    if (owner === kind && messageNodes[area]) { messageNodes[area].textContent = text; messageNodes[area].className = 'msgline' + (bad ? ' bad' : ''); }
+    save();
   }
-
-  function showUpdateStatus(): void {
-    const failures = updateErrors.map(({ name, error }) => `${name}: ${error}`);
-    updateMsg.textContent = failures.length ? S.updateCheckFailed(failures.join('; ')) : '';
-    updateMsg.className = 'msgline' + (failures.length ? ' bad' : '');
+  const scrollTo = (node: HTMLElement) => node.scrollIntoView({ block: 'start', behavior: 'auto' });
+  function pager(node: HTMLElement, total: number, page: number, size: number, change: (page: number) => void) {
+    node.replaceChildren(ui.h('span', 'muted', V.shown(total ? page * size + 1 : 0, Math.min(total, (page + 1) * size), total)), ui.h('span', 'grow'));
+    const pages = Math.max(1, Math.ceil(total / size)); if (pages === 1) return;
+    const prev = ui.button(S.prevPage, { onClick: () => change(page - 1) }); prev.disabled = page === 0;
+    const next = ui.button(S.nextPage, { onClick: () => change(page + 1) }); next.disabled = page === pages - 1;
+    node.append(prev, ui.h('span', '', S.pageOf(page + 1, pages)), next);
   }
-
-  /**
-   * 重启 = 落标志 + 规范关机。没有启动器循环时它就是一次关机,确认框上说清楚。
-   * `confirmed` = 调用方已经问过一遍(装完那一问),不再重复。
-   */
-  async function restartProcess(btn?: HTMLButtonElement, confirmed = false): Promise<void> {
-    if (!canRestart) return;
-    if (!confirmed) {
-      const ok = await ui.confirm({
-        title: supervised ? S.restartConfirmTitle : S.restartNoLoopTitle,
-        body: supervised ? S.restartConfirmBody : S.restartNoLoopBody,
-        danger: !supervised,
-      });
-      if (!ok || ctx.signal.aborted) return;
-    }
-    const lock = btn ? ui.disable(btn) : null;
-    const hold = ui.toast(S.finishingToast);
-    try {
-      const out = await post<PowerReport>('/api/run/restart', undefined, { signal: ctx.signal });
-      if (ctx.signal.aborted) return;
-      if (out?.error) throw new Error(out.error);
-      const lines = (out?.steps ?? []).map((s) =>
-        `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.elapsedMs / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
-      void ui.confirm({
-        title: supervised ? S.doneRestartSupervised : S.doneRestart,
-        body: [out?.result ?? S.resultDefault, '', ...lines].join('\n'),
-      });
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      // 连接在收尾途中断掉是预期之一:进程退出得比回执快。
-      ui.toast(S.noReceipt(errText(err)), 'bad');
-    } finally {
-      hold.dispose();
-      lock?.dispose();
-    }
+  function showLocal(item: ExtensionView) {
+    const box = ui.h('div');
+    box.append(ui.kv([{ k: V.packageLabel, v: item.name }, { k: S.fieldVersion, v: item.installedVersion ?? item.version ?? '—' }, { k: V.details, v: directory }, { k: S.apiPill(item.api ?? 0), v: item.console ?? 'none' }]));
+    if (item.description) box.append(ui.h('p', '', item.description));
+    if (item.reason || item.activationError) box.append(ui.msgline(item.activationError ?? item.reason, true));
+    if (item.console === 'missing') box.append(ui.msgline(S.noteConsoleMissing, true));
+    ui.drawer(item.label ?? item.name, box);
   }
-
-  async function uninstall(p: ExtensionView, btn: HTMLButtonElement): Promise<void> {
-    const ok = await ui.confirm({
-      title: S.uninstallTitle(p.label || p.name),
-      body: S.uninstallBody(p.name),
-      danger: true,
-    });
-    if (!ok || ctx.signal.aborted) return;
-    const lock = ui.disable(btn);
-    const hold = ui.toast(S.uninstalling);
-    try {
-      const out = await post<{ result?: string }>('/api/extensions/uninstall', { name: p.name }, { signal: ctx.signal });
-      if (ctx.signal.aborted) return;
-      setMsg(out?.result?.split('\n')[0] || S.uninstalled);
-      markHit(p.name, false);
-      availableUpdates.delete(p.name);
-      showUpdateStatus();
-      await load();
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      setMsg(S.uninstallFailed(errText(err)), true);
-    } finally {
-      hold.dispose();
-      lock.dispose();
-    }
-  }
-
-  /** 装完问一句要不要顺手重启;答"否"也留在清单里标「待重启」。 */
-  /** 返回值是"装上了没有":搜索结果与详细页按它更新自己的已安装标记。 */
-  async function install(target: { name: string; version?: string } | { path: string }, btn?: HTMLButtonElement): Promise<boolean> {
-    const lock = btn ? ui.disable(btn) : null;
-    const hold = ui.toast(S.installing);
-    let result = '';
-    try {
-      const out = await post<{ result?: string }>('/api/extensions/install', target, { signal: ctx.signal });
-      if (ctx.signal.aborted) return false;
-      result = out?.result ?? S.installed;
-      setMsg(result.split('\n')[0]);
-      if ('name' in target) {
-        markHit(target.name, true);
-        availableUpdates.delete(target.name);
-        showUpdateStatus();
-      }
-      await load();
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return false;
-      setMsg(S.installFailed(errText(err)), true);
-      return false;
-    } finally {
-      hold.dispose();
-      lock?.dispose();
-    }
-    if (!canRestart) return true;
-    const go = await ui.confirm({
-      title: S.installedRestartTitle,
-      body: result + '\n\n' + (supervised ? S.installedRestartNote : S.installedNoLoopNote),
-      danger: !supervised,
-    });
-    if (!go || ctx.signal.aborted) return true;
-    await restartProcess(undefined, true);
-    return true;
-  }
-
-  async function updateExtension(p: ExtensionView, update: UpdateView, btn: HTMLButtonElement): Promise<void> {
-    if (update.problems.length) {
-      const ok = await ui.confirm({ title: S.updateWarningTitle, body: update.problems.join('\n'), danger: true });
-      if (!ok || ctx.signal.aborted) return;
-    }
-    await install({ name: p.name, version: update.latestVersion }, btn);
-  }
-
-  function extensionCard(p: ExtensionView): HTMLElement {
-    const en = `${p.name}@${p.version ?? '?'}${p.worldId && p.kind ? ` · ${KIND_NOUN[p.kind]} ${p.worldId}` : ''}`;
-    const card = ui.sheet({ title: p.label || p.name, en });
-    card.el.classList.add('iocard');
-    if (p.state !== 'loaded') card.el.classList.add('iocard-inactive');
-    const bar = ui.rowbar();
-    bar.append(ui.pill(STATE_LABEL[p.state], p.state === 'loaded' ? 'on' : 'off'));
-    if (p.kind) bar.appendChild(ui.pill(KIND_LABEL[p.kind]));
-    if (p.api !== undefined) bar.appendChild(ui.chip(`v${p.api}`));
-    if (p.console === 'served') bar.appendChild(ui.pill(S.panelLoaded, 'on'));
-    card.body.appendChild(bar);
-    if (p.description) card.body.appendChild(ui.msgline(p.description));
-    if (p.installedVersion && p.installedVersion !== p.version) {
-      card.body.appendChild(ui.msgline(S.installedVersion(p.installedVersion)));
-    }
-    if (p.reason) card.body.appendChild(ui.msgline(p.reason, true));
-    if (p.state === 'idle') card.body.appendChild(ui.msgline(S.noteIdle));
-    if (p.console === 'missing') card.body.appendChild(ui.msgline(S.noteConsoleMissing, true));
-    const update = availableUpdates.get(p.name);
+  function installedCard(item: ExtensionView) {
+    const card = ui.h('article', 'extension-card' + (item.enabled ? ' is-enabled' : ''));
+    const heading = ui.h('div', 'extension-card-heading');
+    if (item.kind === 'bot') heading.append(ui.h('span', 'extension-avatar', (item.label ?? item.name).replace(/^.*bot-/, '').slice(0, 2).toUpperCase()));
+    const title = ui.button(item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
+    heading.append(title); card.append(heading, ui.h('div', 'extension-meta', `${item.name} · ${item.installedVersion ?? item.version ?? '—'}`), ui.h('p', 'extension-description', item.description ?? ''));
+    const text = item.activationError ? S.stateFailed : item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.enabled ? (item.kind === 'bot' ? V.adopted : V.enabled) : stateLabels[item.state];
+    card.append(ui.h('div', 'extension-status' + (item.activationError || item.state === 'failed' ? ' bad' : ''), text));
+    const version = ui.h('div', 'extension-secondary');
+    const update = updates.get(item.name);
     if (update) {
-      card.body.appendChild(ui.msgline(S.updateVersions(update.installedVersion, update.latestVersion)));
-      for (const problem of update.problems) card.body.appendChild(ui.msgline(problem, true));
+      version.append(ui.h('span', '', S.updateVersions(update.installedVersion, update.latestVersion)));
+      const button = ui.button(S.updateAction, { size: 'sm', onClick: () => void operate('install', { name: item.name, version: update.latestVersion }, 'management', kind) });
+      button.disabled = !!update.problems.length || busy.has(item.name); button.title = update.problems.join('\n'); version.append(button);
+    } else version.textContent = item.hidden ? V.hidden : item.installedVersion && item.version !== item.installedVersion ? V.runtimeVersion(item.version ?? '—') : '';
+    card.append(version);
+    const actions = ui.h('div', 'extension-card-actions');
+    const owner = kind;
+    if (item.state !== 'removed') {
+      if (item.kind === 'bot') actions.append(ui.button(V.create, { onClick: () => { const box = ui.h('div'); box.append(ui.h('p', '', V.createBody), ui.h('pre', '', 'pnpm start --new')); ui.drawer(item.name, box); } }));
+      else if (item.state === 'pending-restart') actions.append(ui.button(V.loadRestart, { onClick: () => void activate(item, owner, true) }));
+      else if (item.loaded) {
+        const toggle = ui.button(item.enabled ? V.unload : V.load, { onClick: () => void activate(item, owner) }); toggle.disabled = !!item.inUse || busy.has(item.name); toggle.title = item.disableReason ?? ''; actions.append(toggle);
+      } else actions.append(ui.button(V.details, { onClick: () => showLocal(item) }));
+      if (item.kind === 'world' && item.loaded && item.worldId) actions.append(ui.button(V.manage, { onClick: () => router.navigate(['provider', 'world:' + item.worldId]) }));
+      const remove = ui.button(V.remove, { variant: 'danger', onClick: async () => { if (await ui.confirm({ title: item.name, body: V.removeBody, danger: true })) void operate('delete', { name: item.name }, 'management', owner); } });
+      remove.disabled = !!item.enabled || !!item.inUse || busy.has(item.name); actions.append(remove);
     }
-    if (p.state !== 'removed') {
-      const actions = ui.actions();
-      if (update) actions.appendChild(ui.button(S.updateAction, {
-        size: 'sm',
-        variant: update.problems.length ? 'danger' : 'primary',
-        onClick: (ev) => void updateExtension(p, update, ev.currentTarget as HTMLButtonElement),
-      }));
-      actions.appendChild(ui.button(S.uninstall, {
-        size: 'sm',
-        variant: 'danger',
-        onClick: (ev) => void uninstall(p, ev.currentTarget as HTMLButtonElement),
-      }));
-      card.body.appendChild(actions);
-    }
-    return card.el;
+    card.append(actions); return card;
   }
-
-  function renderInstalled(extensions: readonly ExtensionView[], dir: string): void {
-    sumBar.replaceChildren();
-    installedGroups.replaceChildren();
-    const loaded = extensions.filter((p) => p.state === 'loaded').length;
-    const pending = extensions.filter((p) => p.state === 'pending-restart' || p.state === 'removed').length;
-    const failed = extensions.filter((p) => p.state === 'failed').length;
-    sumBar.appendChild(ui.pill(S.sumLoaded(loaded), 'on'));
-    if (pending > 0) sumBar.appendChild(ui.pill(S.sumPending(pending), 'off'));
-    if (failed > 0) sumBar.appendChild(ui.pill(S.sumFailed(failed), 'off'));
-    if (availableUpdates.size > 0) sumBar.appendChild(ui.pill(S.updateCount(availableUpdates.size), 'on'));
-    sumBar.appendChild(ui.chip(dir));
-    sumBar.append(ui.h('span', 'grow'), refreshBtn);
-    if (canRestart) sumBar.appendChild(restartBtn);
-    if (extensions.length === 0) {
-      installedGroups.appendChild(ui.placeholder(S.noExtensions));
-      return;
-    }
-    for (const g of GROUPS) {
-      const mine = extensions.filter((p) => (p.kind ?? null) === g.kind);
-      if (mine.length === 0) continue;
-      const grid = ui.h('div', 'iogrid');
-      for (const p of mine) grid.appendChild(extensionCard(p));
-      installedGroups.append(ui.section(g.title, g.desc), grid);
-    }
+  function renderInstalled() {
+    if (!installedGrid) return;
+    const mine = installed.filter(p => p.kind === kind || !p.kind && kind === 'world').sort((a, b) => a.name.localeCompare(b.name));
+    const state = states[kind], size = columns * 2; if (installedFetched) state.installedPage = Math.min(state.installedPage, Math.max(0, Math.ceil(mine.length / size) - 1));
+    installedGrid.replaceChildren(...mine.slice(state.installedPage * size, (state.installedPage + 1) * size).map(installedCard));
+    if (!mine.length) installedGrid.append(ui.placeholder(S.noExtensions));
+    pager(installedPager, mine.length, state.installedPage, size, page => { state.installedPage = page; renderInstalled(); scrollTo(management); save(); });
   }
-
-  async function load(): Promise<void> {
+  function renderMarket() {
+    const state = states[kind];
+    const hits = state.hits.map(h => ({ ...h, installed: installed.some(p => p.name === h.name && p.state !== 'removed') }));
+    const result = arrangeHits(hits, { filter: state.filter, sort: state.sort, hideInstalled: state.hide, page: state.page, pageSize: columns * 4 }); if (state.fetched) state.page = result.page;
+    marketGrid.replaceChildren(...result.shown.map(hit => {
+      const card = ui.h('article', 'extension-card extension-market-card' + (hit.installed ? ' is-installed' : ''));
+      const title = ui.button(hit.name, { onClick: () => openDetail(hit, kind) }); title.className = 'extension-card-title'; title.title = hit.name;
+      card.append(title, ui.h('div', 'extension-meta', `${hit.version}${hit.publisher ? ' · ' + hit.publisher : ''}`), ui.h('p', 'extension-description', hit.description));
+      const info = ui.rowbar(); if (hit.installed) info.append(ui.pill(S.alreadyInstalled));
+      if (hit.license) info.append(ui.h('span', 'muted', hit.license));
+      if (hit.date) info.append(ui.h('span', 'muted', hit.date.slice(0, 10)));
+      info.append(ui.h('span', 'muted', S.perMonth(ui.fmt.count(hit.downloads)))); card.append(info); return card;
+    }));
+    if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : S.noPackages : S.searching));
+    pager(marketPager, result.matched, result.page, columns * 4, page => { state.page = page; renderMarket(); scrollTo(market); save(); });
+  }
+  async function load(): Promise<boolean> {
+    if (signal.aborted) return false;
+    const generation = ++loadGeneration;
     try {
-      const data = await get<{ dir?: string; extensions?: ExtensionView[] }>('/api/extensions', { signal: ctx.signal });
-      if (ctx.signal.aborted) return;
-      currentExtensions = Array.isArray(data?.extensions) ? data.extensions : [];
-      currentDir = data?.dir ?? '';
-      renderInstalled(currentExtensions, currentDir);
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      currentExtensions = null;
-      installedGroups.replaceChildren(ui.placeholder(S.listLoadFailed(errText(err))));
-    }
+      const data = await get<{ dir: string; extensions: ExtensionView[] }>('/api/extensions', { signal });
+      if (signal.aborted || generation !== loadGeneration) return false;
+      installed = data.extensions; installedFetched = true; directory = data.dir; const dirNode = root.querySelector('.extension-directory'); if (dirNode) dirNode.textContent = directory; renderInstalled(); renderMarket(); restoreScroll(); return true;
+    } catch (error) { if (!signal.aborted) { installedFetched = true; message(kind, 'management', S.listLoadFailed(errorText(error)), true); restoreScroll(); } return false; }
   }
-
-  async function checkUpdates(): Promise<void> {
-    updateMsg.textContent = S.checkingUpdates;
-    updateMsg.className = 'msgline';
+  async function checkUpdates() {
+    if (signal.aborted) return;
+    try { const data = await get<UpdateResultView>('/api/extensions/updates', { signal }); if (signal.aborted) return; updates = new Map(data.updates.map(u => [u.name, u])); renderInstalled(); if (data.errors.length) message(kind, 'management', S.updateCheckFailed(data.errors.map(e => `${e.name}: ${e.error}`).join('; ')), true); }
+    catch (error) { if (!signal.aborted) message(kind, 'management', S.updateCheckFailed(errorText(error)), true); }
+  }
+  async function search(owner: ExtensionKindView) {
+    const state = states[owner], generation = ++state.generation;
+    message(owner, 'market', S.searching);
     try {
-      const result = await get<UpdateResultView>('/api/extensions/updates', { signal: ctx.signal });
-      if (ctx.signal.aborted) return;
-      availableUpdates = new Map((result?.updates ?? []).map((item) => [item.name, item]));
-      updateErrors = result?.errors ?? [];
-      showUpdateStatus();
-      if (currentExtensions) renderInstalled(currentExtensions, currentDir);
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      availableUpdates.clear();
-      updateErrors = [{ name: 'npm', error: errText(err) }];
-      showUpdateStatus();
-      if (currentExtensions) renderInstalled(currentExtensions, currentDir);
-    }
+      const data = await get<{ hits: SearchHitView[]; partial?: boolean }>(`/api/extensions/search?kind=${owner}`, { signal });
+      if (signal.aborted || state.generation !== generation) return;
+      state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? V.partial : ''); if (owner === kind) { renderMarket(); restoreScroll(); }
+    } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
-
-  // -------------------------------------------------------------------------
-  // 搜索 npm
-  // -------------------------------------------------------------------------
-
-  const searchSheet = ui.sheet({
-    title: S.searchTitle,
-    en: 'npm registry',
-    desc: S.searchDesc,
-  });
-  let searchKind: ExtensionKindView = 'world';
-  /** 当前这一类在 npm 上的全部包。筛选、排序、分页都在它上面做,不再往 registry 跑。 */
-  let allHits: SearchHitView[] = [];
-  let filter = '';
-  let sort: HitSort = 'downloads';
-  let hideInstalled = false;
-  let page = 0;
-
-  const searchBar = ui.rowbar();
-  const kindSeg = ui.segmented(
-    [
-      { value: 'world', label: KIND_LABEL.world },
-      { value: 'provider', label: KIND_LABEL.provider },
-      { value: 'bot', label: KIND_LABEL.bot },
-    ],
-    {
-      size: 'sm',
-      value: searchKind,
-      onSelect: (v) => {
-        searchKind = v as ExtensionKindView;
-        paintKeyword();
-        void search();
-      },
-    },
-  );
-  const filterInput = ui.input({
-    type: 'search',
-    placeholder: S.filterPlaceholder,
-    onInput: (v) => {
-      filter = v;
-      page = 0;
-      renderHits();
-    },
-  });
-  const sortSelect = ui.select({
-    value: sort,
-    options: HIT_SORTS.map((value) => ({ value, label: S.sortLabel[value] })),
-    onChange: (v) => {
-      sort = v as HitSort;
-      page = 0;
-      renderHits();
-    },
-  });
-  const hideBox = ui.checkbox(S.hideInstalled, {
-    checked: hideInstalled,
-    onChange: (on) => {
-      hideInstalled = on;
-      page = 0;
-      renderHits();
-    },
-  });
-  const searchBtn = ui.button(S.refresh, { size: 'sm', onClick: () => void search() });
-  searchBar.append(kindSeg.el, filterInput, sortSelect, hideBox.el);
-  // 关键字说明与重取键共一行:上面那行控件已经占满,刷新键挤下去会单独占一行
-  const keywordBar = ui.rowbar();
-  const keywordLine = ui.msgline();
-  function paintKeyword(): void {
-    keywordLine.textContent = S.searchKeywordNote(KIND_KEYWORD[searchKind]);
-  }
-  paintKeyword();
-  keywordBar.append(keywordLine, ui.h('span', 'grow'), searchBtn);
-  const searchMsg = ui.msgline();
-  const resultGrid = ui.h('div', 'iogrid');
-  const pager = ui.rowbar();
-  searchSheet.body.append(searchBar, keywordBar, searchMsg, resultGrid, pager);
-
-  function openLink(href: string): void {
-    view?.open(href, '_blank', 'noopener');
-  }
-
-  /** 结果卡只放搜索端点给得起的那几项；契约版本、体积、版本史等着操作员点开再取。 */
-  function hitCard(h: SearchHitView): HTMLElement {
-    const card = ui.sheet({ title: h.name, en: S.hitMeta(h.version, ui.fmt.count(h.downloads), h.publisher) });
-    card.el.classList.add('iocard', 'iocard-open');
-    if (h.installed) card.el.classList.add('is-installed');
-    card.el.tabIndex = 0;
-    card.el.setAttribute('role', 'button');
-    card.el.title = S.openDetail;
-    // 描述走中性灰(与 provider 卡一致),msgline 的绿留给状态
-    if (h.description) card.body.appendChild(ui.h('div', 'tdesc', h.description));
-    const bar = ui.rowbar();
-    if (h.installed) bar.appendChild(ui.pill(S.alreadyInstalled, 'on'));
-    if (h.license) bar.appendChild(ui.chip(h.license));
-    if (h.date) bar.appendChild(ui.chip(h.date.slice(0, 10)));
-    if (h.dependents > 0) bar.appendChild(ui.chip(S.dependents(h.dependents)));
-    card.body.appendChild(bar);
-    const open = (): void => openDetail(h);
-    card.el.addEventListener('click', open, { signal: ctx.signal });
-    card.el.addEventListener('keydown', (ev: KeyboardEvent) => {
-      if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
-    }, { signal: ctx.signal });
-    return card.el;
-  }
-
-  /** 筛选、排序、翻页一次画完,含结果计数与页脚。 */
-  function renderHits(): void {
-    const arranged = arrangeHits(allHits, { filter, hideInstalled, sort, page, pageSize: HITS_PER_PAGE });
-    page = arranged.page;
-    resultGrid.replaceChildren();
-    for (const h of arranged.shown) resultGrid.appendChild(hitCard(h));
-    if (arranged.matched === 0) {
-      resultGrid.appendChild(ui.placeholder(allHits.length === 0 ? S.noPackages : S.noHits));
-    }
-    searchMsg.className = 'msgline';
-    searchMsg.textContent = arranged.matched === allHits.length
-      ? S.hitCount(allHits.length)
-      : S.hitCountFiltered(arranged.matched, allHits.length);
-
-    pager.replaceChildren();
-    if (arranged.pages <= 1) return;
-    const prev = ui.button(S.prevPage, { size: 'sm', onClick: () => { page -= 1; renderHits(); } });
-    const next = ui.button(S.nextPage, { size: 'sm', onClick: () => { page += 1; renderHits(); } });
-    prev.disabled = arranged.page === 0;
-    next.disabled = arranged.page >= arranged.pages - 1;
-    pager.append(prev, ui.chip(S.pageOf(arranged.page + 1, arranged.pages)), next);
-  }
-
-  /** 装完、卸完之后就地更新这一份结果里的已安装标记,不必再往 registry 跑一趟。 */
-  function markHit(name: string, installed: boolean): void {
-    let touched = false;
-    for (const h of allHits) if (h.name === name && h.installed !== installed) { h.installed = installed; touched = true; }
-    if (touched) renderHits();
-  }
-
-  async function search(): Promise<void> {
-    const lock = ui.disable(searchBtn);
-    searchMsg.textContent = S.searching;
-    searchMsg.className = 'msgline';
-    // 换了类就换了关键字:上一类的命中留在屏幕上会被当成这一类的结果
-    resultGrid.replaceChildren();
-    pager.replaceChildren();
-    allHits = [];
-    page = 0;
+  async function operate(action: 'install' | 'delete', target: Target, area: string, owner: ExtensionKindView) {
+    const identity = 'name' in target ? target.name : target.path; if (busy.has(identity)) return;
+    busy.add(identity); renderInstalled(); message(owner, area, V.working);
+    const id = win.crypto.randomUUID(); pendingOperations.set(identity, { id, kind: owner, area }); saveOperations();
+    let finished = false;
+    const wait = () => new Promise<void>(resolve => lifecycle.timeout(resolve, 1000));
     try {
-      const data = await get<{ hits?: SearchHitView[] }>(
-        `/api/extensions/search?kind=${searchKind}`,
-        { signal: ctx.signal },
-      );
-      if (ctx.signal.aborted) return;
-      allHits = Array.isArray(data?.hits) ? data.hits : [];
-      renderHits();
-    } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      searchMsg.textContent = S.searchFailed(errText(err));
-      searchMsg.className = 'msgline bad';
-    } finally {
-      lock.dispose();
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // 一个包的详细页
-  // -------------------------------------------------------------------------
-
-  /** 抽屉正文。契约版本、体积、依赖、版本史只有这里有,来自 /api/extensions/package。 */
-  function detailBody(d: PackageDetailView, hit: SearchHitView): HTMLElement {
-    const box = ui.h('div');
-    const bar = ui.rowbar();
-    if (d.manifest) {
-      bar.appendChild(ui.pill(KIND_LABEL[d.manifest.kind]));
-      bar.appendChild(ui.pill(S.apiPill(d.manifest.api), d.manifest.api === d.frameworkApi ? 'on' : 'off'));
-      if (d.manifest.consoleClient) bar.appendChild(ui.pill(S.hasPanel, 'on'));
-    } else {
-      bar.appendChild(ui.pill(S.notLoadable, 'off'));
-    }
-    if (d.installed) bar.appendChild(ui.pill(d.installedSpec ? S.installedSpec(d.installedSpec) : S.alreadyInstalled, 'on'));
-    box.appendChild(bar);
-
-    if (d.description) box.appendChild(ui.h('div', 'tdesc', d.description));
-    if (d.deprecated) box.appendChild(ui.msgline(S.deprecated(d.deprecated), true));
-    for (const p of d.problems ?? []) box.appendChild(ui.msgline(p, true));
-    for (const w of d.warnings ?? []) box.appendChild(ui.msgline(w));
-
-    const rows: Array<{ k: string; v: string }> = [
-      { k: S.fieldVersion, v: `${d.version}${d.published ? ` · ${d.published.slice(0, 10)}` : ''}` },
-      { k: S.fieldReleases, v: S.releaseCount(d.versionCount, d.created ? d.created.slice(0, 10) : '') },
-    ];
-    if (d.history.length > 1) {
-      rows.push({ k: S.fieldHistory, v: d.history.map((h) => `${h.version} ${h.date.slice(0, 10)}`).join('   ') });
-    }
-    if (d.license) rows.push({ k: S.fieldLicense, v: d.license });
-    if (d.unpackedSize) rows.push({ k: S.fieldSize, v: S.sizeAndFiles(ui.fmt.bytes(d.unpackedSize), d.fileCount ?? 0) });
-    if (d.engines) rows.push({ k: S.fieldNode, v: d.engines });
-    rows.push({ k: S.fieldDeps, v: d.dependencies.length ? d.dependencies.join(', ') : S.none });
-    rows.push({ k: S.fieldDownloads, v: S.perMonth(ui.fmt.count(hit.downloads)) });
-    if (hit.dependents > 0) rows.push({ k: S.fieldDependents, v: String(hit.dependents) });
-    if (d.maintainers.length) rows.push({ k: S.fieldMaintainers, v: d.maintainers.join(', ') });
-    if (d.keywords?.length) rows.push({ k: S.fieldKeywords, v: d.keywords.join(', ') });
-    box.appendChild(ui.kv(rows));
-
-    const actions = ui.actions();
-    const links: Array<[string, string | undefined]> = [
-      ['npm', d.links.npm],
-      [S.linkRepo, d.links.repository],
-      [S.linkHome, d.links.homepage],
-      [S.linkBugs, d.links.bugs],
-    ];
-    for (const [label, href] of links) {
-      if (href) actions.appendChild(ui.button(label, { size: 'sm', onClick: () => openLink(href) }));
-    }
-    actions.appendChild(ui.h('span', 'grow'));
-    // 契约版本对不上还是可以装(操作员也许就是要先装上再升级框架),但按钮按危险样式给
-    const loadable = d.manifest !== undefined && d.manifest.api === d.frameworkApi;
-    const installBtn = ui.button(d.installed ? S.alreadyInstalled : S.install, {
-      size: 'sm',
-      variant: loadable ? 'primary' : 'danger',
-      onClick: async (ev) => {
-        const ok = await install({ name: d.name, version: d.version }, ev.currentTarget as HTMLButtonElement);
-        if (!ok) return;
-        installBtn.disabled = true;
-        installBtn.textContent = S.alreadyInstalled;
-      },
-    });
-    installBtn.disabled = d.installed;
-    actions.appendChild(installBtn);
-    box.appendChild(actions);
-    return box;
-  }
-
-  /** 点开一张卡:先开抽屉再取详情,registry 慢的时候抽屉里是"读取中"而不是空白。 */
-  function openDetail(hit: SearchHitView): void {
-    const box = ui.h('div');
-    box.appendChild(ui.placeholder(S.loadingDetail));
-    ui.drawer(hit.name, box);
-    void (async () => {
-      try {
-        const d = await get<PackageDetailView>(
-          `/api/extensions/package?name=${encodeURIComponent(hit.name)}`,
-          { signal: ctx.signal },
-        );
-        if (ctx.signal.aborted) return;
-        box.replaceChildren(detailBody(d, hit));
-      } catch (err) {
-        if (isAbort(err) || ctx.signal.aborted) return;
-        box.replaceChildren(ui.msgline(S.detailFailed(errText(err)), true));
+      let result: Operation | undefined;
+      try { result = await post<Operation>('/api/extensions/operations', { id, action, target, kind: owner }, { signal }); }
+      catch (error) {
+        if (signal.aborted) return;
+        if ((error as { status?: number }).status) { finished = true; throw error; }
+        message(owner, area, V.unknown);
+        try { result = await get<Operation>('/api/extensions/operations/' + id, { signal }); }
+        catch { throw new Error(V.unknown + '\n' + errorText(error) + '\n' + id); }
       }
-    })();
+      const deadline = Date.now() + 120_000;
+      while (!signal.aborted && ['preparing', 'validating', 'committing'].includes(result.phase) && Date.now() < deadline) { await wait(); result = await get<Operation>('/api/extensions/operations/' + id, { signal }); }
+      if (signal.aborted) return;
+      finished = ['committed', 'rolled-back', 'repair-required'].includes(result.phase);
+      if (result.phase !== 'committed') throw new Error((result.phase === 'rolled-back' ? V.rolledBack : result.phase === 'repair-required' ? V.repair : V.unknown) + '\n' + (result.error ?? ''));
+      message(owner, area, `${V.committed} ${result.name ?? ''}${result.version ? '@' + result.version : ''}${action === 'install' && result.kind !== 'bot' ? ' · ' + S.statePendingRestart : ''}`);
+      if (result.name) updates.delete(result.name);
+      if (!await load()) message(owner, area, V.syncedFailed, true);
+      else if (result.name && action === 'install') {
+        const mine = installed.filter(p => p.kind === owner).sort((a, b) => a.name.localeCompare(b.name));
+        const index = mine.findIndex(p => p.name === result.name);
+        if (index >= 0) states[owner].installedPage = Math.floor(index / (columns * 2));
+        if (owner === kind) { renderInstalled(); messageNodes[area].append(ui.button(V.inspect, { onClick: () => scrollTo(management) })); }
+      }
+    } catch (error) { if (!signal.aborted) message(owner, area, errorText(error), true); }
+    finally { if (finished) { busy.delete(identity); pendingOperations.delete(identity); saveOperations(); } else if (!signal.aborted) void recoverStored(identity, { id, kind: owner, area }); if (!signal.aborted) renderInstalled(); }
   }
-
-  // -------------------------------------------------------------------------
-  // 手动安装
-  // -------------------------------------------------------------------------
-
-  const manualSheet = ui.sheet({
-    title: S.manualTitle,
-    en: 'name@version · ./path',
-    desc: S.manualDesc,
-  });
-  const manualBar = ui.rowbar();
-  const manualInput = ui.input({ cls: 'mono', placeholder: S.manualPlaceholder });
-  const manualBtn = ui.button(S.install, {
-    size: 'sm',
-    variant: 'primary',
-    onClick: (ev) => {
-      const target = parseInstallInput(manualInput.value);
-      if (!target) { setMsg(S.manualEmpty, true); return; }
-      void install(target, ev.currentTarget as HTMLButtonElement);
-    },
-  });
-  manualBar.append(manualInput, manualBtn);
-  manualSheet.body.append(manualBar);
-
-  root.append(intro, installedSheet.el, installedGroups, searchSheet.el, manualSheet.el);
-  installedGroups.appendChild(ui.placeholder(S.loading));
-  void load();
-  void checkUpdates();
-  // 这一类在 npm 上的包一进页就列出来:筛选与排序都在整份结果上做,没有「先搜一下」这一步
-  void search();
+  async function recoverStored(identity: string, pending: { id: string; kind: ExtensionKindView; area: string }) {
+    const deadline = Date.now() + 120_000;
+    const query = async () => {
+      if (signal.aborted) return;
+      try {
+        const result = await get<Operation>('/api/extensions/operations/' + pending.id, { signal });
+        if (['committed', 'rolled-back', 'repair-required'].includes(result.phase)) {
+          pendingOperations.delete(identity); busy.delete(identity); saveOperations();
+          message(pending.kind, pending.area, result.phase === 'committed' ? V.committed + ' ' + (result.name ?? '') : (result.phase === 'rolled-back' ? V.rolledBack : V.repair) + '\n' + (result.error ?? ''), result.phase !== 'committed');
+          await load(); return;
+        }
+      } catch { /* Query an existing ID; never repeat the write automatically. */ }
+      if (Date.now() >= deadline) { message(pending.kind, pending.area, V.unknown + '\n' + pending.id, true); if (pending.kind === kind) messageNodes[pending.area]?.append(ui.button(V.retry, { onClick: () => void recoverStored(identity, pending) })); return; }
+      lifecycle.timeout(() => void query(), 1000);
+    };
+    message(pending.kind, pending.area, V.unknown); await query();
+  }
+  async function activate(item: ExtensionView, owner: ExtensionKindView, afterRestart = false) {
+    if (busy.has(item.name)) return;
+    if ((!item.enabled || await ui.confirm({ title: V.unload, body: V.unloadBody })) && !signal.aborted) {
+      if (afterRestart && !await ui.confirm({ title: V.loadRestart, body: ctx.capabilities.supervised ? S.restartConfirmBody : S.restartNoLoopBody })) return;
+      busy.add(item.name); renderInstalled();
+      try {
+        await post('/api/extensions/activation', { name: item.name, enabled: !item.enabled, afterRestart }, { signal });
+        message(owner, 'management', afterRestart ? S.statePendingRestart : V.committed);
+        if (afterRestart) await restart(true); else { await load(); await ctx.refreshNav?.(); }
+      } catch (error) { if (!signal.aborted) message(owner, 'management', errorText(error), true); }
+      finally { busy.delete(item.name); if (!signal.aborted) renderInstalled(); }
+    }
+  }
+  function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
+    const box = ui.h('div'); box.append(ui.placeholder(S.loadingDetail)); ui.drawer(hit.name, box);
+    void get<PackageDetailView>(`/api/extensions/package?name=${encodeURIComponent(hit.name)}&version=${encodeURIComponent(hit.version)}`, { signal }).then(data => {
+      if (signal.aborted) return; box.replaceChildren(ui.h('p', '', data.description ?? ''));
+      for (const text of [...data.problems ?? [], ...data.warnings]) box.append(ui.msgline(text, true));
+      box.append(ui.kv([{ k: S.fieldVersion, v: data.version }, { k: S.fieldLicense, v: data.license ?? '—' }, { k: S.fieldDeps, v: data.dependencies.join(', ') || S.none }, { k: S.fieldHistory, v: data.history.map(v => `${v.version} ${v.date.slice(0, 10)}`).join('\n') }]));
+      const actions = ui.rowbar();
+      for (const [name, href] of Object.entries(data.links)) if (href && /^https?:\/\//i.test(href)) { const a = ui.h('a', 'btn', name); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; actions.append(a); }
+      const button = ui.button(data.installed ? S.alreadyInstalled : S.install, { variant: 'primary', onClick: () => { button.disabled = true; void operate('install', { name: data.name, version: data.version }, 'market', owner); } });
+      button.disabled = data.installed || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(button); box.append(actions);
+    }).catch(error => { if (!signal.aborted) box.replaceChildren(ui.msgline(errorText(error), true)); });
+  }
+  async function restart(confirmed = false) {
+    if (!confirmed && !await ui.confirm({ title: S.restartConfirmTitle, body: ctx.capabilities.supervised ? S.restartConfirmBody : S.restartNoLoopBody })) return;
+    try {
+      const before = await get<Life>('/api/run/lifecycle', { signal });
+      save(); win.sessionStorage.setItem(storageKey + ':restart', JSON.stringify(before));
+      message(kind, 'management', ctx.capabilities.supervised ? V.reloadWait : V.restartManual);
+      try { await post('/api/run/restart', undefined, { signal }); } catch (error) {
+        if ((error as { status?: number }).status) { win.sessionStorage.removeItem(storageKey + ':restart'); throw error; }
+      }
+      watchRestart(before);
+    } catch (error) { if (!signal.aborted) message(kind, 'management', errorText(error), true); }
+  }
+  function watchRestart(before: Life) {
+    const deadline = Date.now() + 120_000;
+    const check = async () => {
+      if (signal.aborted) return;
+      try {
+        const next = await get<Life>('/api/run/lifecycle', { signal });
+        if (restartOutcome(before, next) === 'wrong-deployment') { win.sessionStorage.removeItem(storageKey + ':restart'); message(kind, 'management', V.otherBot, true); return; }
+        if (restartOutcome(before, next) === 'ready') { win.sessionStorage.removeItem(storageKey + ':restart'); save(); win.location.reload(); return; }
+      } catch { /* Wait while the listener is unavailable. */ }
+      if (Date.now() >= deadline) { message(kind, 'management', V.reloadTimeout, true); messageNodes.management.append(ui.button(V.retry, { onClick: () => watchRestart(before) })); return; }
+      lifecycle.timeout(() => void check(), 1000);
+    }; void check();
+  }
+  function render() {
+    const state = states[kind]; tabs.style.setProperty('--tab-index', String(categories.indexOf(kind)));
+    tabButtons.forEach((button, i) => { const active = categories[i] === kind; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; }); panel.setAttribute('aria-labelledby', 'extension-tab-' + kind);
+    panel.replaceChildren(); messageNodes = {};
+    const managed = ui.sheet({ title: S.installedTitle }); management = managed.el;
+    const bar = ui.rowbar(); bar.append(ui.h('span', 'muted extension-directory', directory), ui.h('span', 'grow'), ui.button(S.refresh, { onClick: () => { void load(); void checkUpdates(); } }));
+    if (ctx.capabilities.restart) bar.append(ui.button(S.restartProcess, { variant: 'primary', onClick: () => void restart() }));
+    messageNodes.management = ui.msgline(); messageNodes.management.setAttribute('role', 'status'); installedGrid = ui.h('div', 'extension-grid'); installedPager = ui.rowbar();
+    managed.body.append(bar, messageNodes.management, installedGrid, installedPager);
+    const marketSheet = ui.sheet({ title: V.market }); market = marketSheet.el; messageNodes.market = ui.msgline(); messageNodes.market.setAttribute('role', 'status');
+    const filters = ui.rowbar();
+    filters.append(ui.input({ type: 'search', value: state.filter, placeholder: S.filterPlaceholder, onInput: value => { state.filter = value; state.page = 0; renderMarket(); save(); } }), ui.select({ value: state.sort, options: HIT_SORTS.map(value => ({ value, label: S.sortLabel[value] })), onChange: value => { state.sort = value as HitSort; state.page = 0; renderMarket(); save(); } }), ui.checkbox(S.hideInstalled, { checked: state.hide, onChange: value => { state.hide = value; state.page = 0; renderMarket(); save(); } }).el, ui.button(S.refresh, { onClick: () => void search(kind) }));
+    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(messageNodes.market, ui.h('p', 'sh-desc', S.searchDesc), filters, marketGrid, marketPager);
+    const manual = ui.sheet({ title: V.manual }); messageNodes.manual = ui.msgline(); messageNodes.manual.setAttribute('role', 'status');
+    const source = ui.segmented([{ value: 'npm', label: V.npm }, { value: 'local', label: V.local }], { value: state.source, onSelect: value => { state.source = value as 'npm' | 'local'; state.input = ''; render(); save(); } });
+    const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, placeholder: state.source === 'npm' ? `@scope/cortico-${kind}-demo@1.2.3` : '', onInput: value => { state.input = value; } });
+    input.setAttribute('aria-label', state.source === 'npm' ? V.packageLabel : V.pathLabel); manualBar.append(input);
+    if (state.source === 'local') manualBar.append(ui.button(V.folder, { onClick: async () => { try { const path = await pickPath({ kind: 'directory', currentPath: input.value }, { signal }); if (path) { state.input = input.value = path; } } catch (error) { message(kind, 'manual', errorText(error), true); } } }));
+    const target = (): Target => { if (state.source === 'local' && state.input.trim()) return { path: state.input.trim() }; const value = parseInstallInput(state.input); if (!value) throw new Error(V.invalidInput); return value; };
+    const owner = kind;
+    const check = ui.button(V.check, { onClick: async () => { const lock = ui.disable(check); try { const data = await post<{ name: string; version: string; kind: string }>('/api/extensions/check', { target: target(), kind: owner }, { signal }); message(owner, 'manual', `${V.checkOk} · ${data.name}@${data.version} · ${data.kind}`); } catch (error) { message(owner, 'manual', errorText(error), true); } finally { lock.dispose(); } } });
+    const install = ui.button(S.install, { variant: 'primary', onClick: () => { try { void operate('install', target(), 'manual', owner); } catch (error) { message(owner, 'manual', errorText(error), true); } } });
+    manual.body.append(source.el, ui.h('p', 'sh-desc', state.source === 'npm' ? V.npmHelp : V.localHelp), manualBar, messageNodes.manual, check, install);
+    panel.append(managed.el, marketSheet.el, manual.el); root.style.setProperty('--extension-columns', String(columns));
+    for (const [area, value] of Object.entries(state.messages)) if (messageNodes[area]) { messageNodes[area].textContent = value.text; messageNodes[area].className = 'msgline' + (value.bad ? ' bad' : ''); }
+    renderInstalled(); renderMarket();
+  }
+  lifecycle.own(router.onChange(route => {
+    const next = route.segments[1] as ExtensionKindView; if (!categories.includes(next) || next === kind || route.segments[0] !== 'extensions') return;
+    save(); kind = next; restoringScroll = true; render(); restoreScroll(); if (!states[kind].fetched) void search(kind);
+  }));
+  if (typeof win.ResizeObserver === 'function') { const observer = new win.ResizeObserver(() => {
+    const next = extensionColumns(panel.clientWidth); if (next === columns) return;
+    for (const state of Object.values(states)) { state.installedPage = Math.floor(state.installedPage * columns / next); state.page = Math.floor(state.page * columns / next); }
+    columns = next; root.style.setProperty('--extension-columns', String(columns)); renderInstalled(); renderMarket();
+  }); observer.observe(panel); lifecycle.add(() => observer.disconnect()); }
+  render();
+  if (!categories.includes(router.route.segments[1] as ExtensionKindView)) router.replace(['extensions', kind]);
+  void load(); void checkUpdates(); void search(kind);
+  for (const [identity, pending] of pendingOperations) void recoverStored(identity, pending);
+  try { const marker = win.sessionStorage.getItem(storageKey + ':restart'); if (marker) { message(kind, 'management', V.reloadWait); watchRestart(JSON.parse(marker)); } } catch { /* Invalid recovery marker. */ }
 }
-
-export const extensionsFeature: FrameworkFeature = {
-  route: 'extensions',
-  label: S.navLabel,
-  icon: 'download',
-  navGroup: S.navGroup,
-  needsAny: ['extensions'],
-  mount: mountExtensions,
-};
+export const extensionsFeature: FrameworkFeature = { route: 'extensions', label: S.navLabel, icon: 'download', navGroup: S.navGroup, needsAny: ['extensions'], mount: mountExtensions };

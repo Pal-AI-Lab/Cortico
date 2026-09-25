@@ -49,6 +49,8 @@ export function providerModule(kind: string): ProviderModule {
   return module;
 }
 
+interface ModulePolicy { enabled: (kind: string) => boolean; leases: Map<string, number>; registries: Set<ProviderRegistry> }
+
 export class ProviderRegistry {
   private readonly instances = new Map<string, { key: string; value: ProviderInstance }>();
   private readonly resources = new Map<string, unknown>();
@@ -58,9 +60,34 @@ export class ProviderRegistry {
     private readonly modules: readonly ProviderModule[] = providerModules,
     /** Secrets read before the process environment and the endpoint `.env`; preview registries carry the typed, unsaved key here. */
     private readonly secretOverrides: Readonly<Record<string, string>> = {},
-  ) {}
+    private readonly policy: ModulePolicy = { enabled: () => true, leases: new Map(), registries: new Set() },
+  ) { this.policy.registries.add(this); }
+
+  setModulePolicy(enabled: (kind: string) => boolean): void { this.policy.enabled = enabled; }
+  isModuleEnabled(kind: string): boolean { return this.policy.enabled(kind); }
+  assertModuleEnabled(kind: string): void {
+    if (!this.isModuleEnabled(kind)) throw new Error(`供应商模块未加载到本 Bot: ${kind}`);
+  }
+  async moduleTask<T>(kind: string, run: () => Promise<T>): Promise<T> {
+    this.assertModuleEnabled(kind);
+    this.policy.leases.set(kind, this.moduleUsage(kind) + 1);
+    try { return await run(); } finally { this.policy.leases.set(kind, this.moduleUsage(kind) - 1); }
+  }
+  moduleUsage(kind: string): number { return this.policy.leases.get(kind) ?? 0; }
+  async stopModule(kind: string): Promise<void> {
+    if (this.moduleUsage(kind)) throw new Error(`供应商模块仍有绑定任务: ${kind}`);
+    for (const registry of this.policy.registries) {
+      for (const [name, instance] of registry.instances) {
+        if (registry.entries()[name]?.kind !== kind) continue;
+        await instance.value.stop?.();
+        registry.instances.delete(name);
+      }
+      for (const key of registry.resources.keys()) if (JSON.parse(key)[0] === kind) registry.resources.delete(key);
+    }
+  }
 
   private module(kind: string): ProviderModule {
+    this.assertModuleEnabled(kind);
     const module = this.modules.find((module) => module.id === kind);
     if (!module) throw new Error(`Unknown provider module: ${kind}`);
     return module;
@@ -71,7 +98,7 @@ export class ProviderRegistry {
    * are the values the console holds but has not written to the endpoint's `.env`.
    */
   previewRegistry(name: string, entry: LLMProviderEntry, secrets: Readonly<Record<string, string>> = {}): ProviderRegistry {
-    return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules, secrets);
+    return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules, secrets, this.policy);
   }
 
   preview(name: string, entry: LLMProviderEntry): ProviderInstance {
@@ -106,6 +133,13 @@ export class ProviderRegistry {
         return this.resources.get(id) as T;
       },
     });
+    const originalRespond = value.client.respond.bind(value.client);
+    value.client.respond = async (request, options) => {
+      this.assertModuleEnabled(entry.kind);
+      this.policy.leases.set(entry.kind, this.moduleUsage(entry.kind) + 1);
+      try { return await originalRespond(request, options); }
+      finally { this.policy.leases.set(entry.kind, this.moduleUsage(entry.kind) - 1); }
+    };
     this.instances.set(name, { key, value });
     return value;
   }
@@ -120,10 +154,15 @@ export class ProviderRegistry {
       createHash('sha256')
         .update(JSON.stringify([entry.kind, entry.baseUrl, instance.compatibilityKey?.() ?? null]))
         .digest('hex');
+    this.policy.leases.set(entry.kind, this.moduleUsage(entry.kind) + 1);
+    let released = false;
     const client: ResponseClient = {
+      release: () => { if (!released) { released = true; this.policy.leases.set(entry.kind, this.moduleUsage(entry.kind) - 1); } },
       bind: () => client,
-      respond: (request, options) =>
-        instance.client.respond(request, {
+      respond: (request, options) => {
+        this.assertModuleEnabled(entry.kind);
+        if (released) throw new Error("Provider binding has been released.");
+        return instance.client.respond(request, {
           ...options,
           quote: (at) => quotePrices(entry, request, at, module.prices?.(entry, request, at) ?? []),
           origin: {
@@ -132,7 +171,8 @@ export class ProviderRegistry {
             model: request.model ?? '',
             compatibilityDomain: domain(),
           },
-        }),
+        });
+      },
     };
     return client;
   }
@@ -147,5 +187,7 @@ export class ProviderRegistry {
   }
   async stopAll(): Promise<void> {
     await Promise.all([...this.instances.values()].map((instance) => instance.value.stop?.()));
+    this.instances.clear(); this.resources.clear();
+    this.policy.registries.delete(this);
   }
 }

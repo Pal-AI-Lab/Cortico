@@ -109,3 +109,6 @@ SIGINT / SIGTERM / SIGHUP（Windows 另加 SIGBREAK）和未捕获异常触发�
 
 磁盘布局改名时仓库附迁移脚本,`tsx scripts/migrate-rename.ts` 只列计划,`--apply` 才动:
 `config.json` 先备份再原子替换,事件库、session 与游标不碰。
+
+控制台扩展启用状态及一次性重启加载意图保存在部署的 `extension-state.json`。
+终端新建候选只列出声明为 Bot 且入口存在的扩展包。

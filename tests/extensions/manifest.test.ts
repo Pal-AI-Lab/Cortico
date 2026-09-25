@@ -271,7 +271,7 @@ describe("ExtensionManager 安装与加载状态", () => {
 describe('registerProviderModules', () => {
   const late: ProviderModule = {
     id: 'fixture-late', title: '后到的', reasoningTiers: [], serviceTiers: [],
-    create: () => ({ client: null as never }),
+    create: () => ({ client: { respond: async () => { throw new Error('unused fixture client'); } } }),
   };
 
   it('就地追加进同一张表:注册之前构造的 registry 也能路由到它;重复 id 抛错', () => {

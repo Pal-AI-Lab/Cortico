@@ -1,3 +1,4 @@
+import type { PackageOperation } from '../src/extensions/package-store.ts';
 import { ProviderHub } from '../src/providers/console/hub.ts';
 import { ProviderSettings } from '../src/providers/console/settings.ts';
 import { ProviderRegistry } from '../src/providers/registry.ts';
@@ -1061,6 +1062,8 @@ const devPersonaPageSources = deriveConsolePageSources(
 
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
+  { name: 'cortico-provider-example', spec: '1.0.0', version: '1.0.0', description: '示例模型接口（开发预览）', kind: 'provider', worldId: 'example', label: 'Example Provider', consoleClient: false, loaded: true, enabled: false, state: 'loaded' },
+  { name: 'cortico-bot-example', spec: '1.0.0', version: '1.0.0', description: '示例 Bot 模板（开发预览）', kind: 'bot', worldId: 'example', label: 'Example Bot', consoleClient: false, loaded: false, enabled: false, state: 'idle' },
   { name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded' },
   { name: 'cortico-world-broken', spec: '^0.1.0', version: '0.1.4', kind: 'world', consoleClient: true, loaded: false, reason: '默认导出不是 WorldDefinition(需要 id / label / defaults() / create())。', state: 'failed' },
   { name: 'cortico-world-weather', spec: 'link:../cortico-world-weather', version: '0.0.1', kind: 'world', description: '本机开发中的天气播报 (dev 假数据)', consoleClient: false, loaded: false, state: 'pending-restart' },
@@ -1103,7 +1106,9 @@ const devSearchHits: ExtensionSearchHit[] = [
   installed: false,
 }));
 
+const devOperations = new Map<string, PackageOperation>();
 const app = new WebApp({
+  ...(process.env.CORTICO_DEV_WEB_DIST ? { webDistDir: process.env.CORTICO_DEV_WEB_DIST } : {}),
   store,
   memoryDir: tmpPersona,
   dataDir: tmpData,
@@ -1229,6 +1234,32 @@ const app = new WebApp({
   },
   // 扩展面的假数据:四种状态各一;装卸只改这张表,不跑 pnpm。
   extensions: {
+    operation: id => devOperations.get(id) ?? null,
+    check: async (target, kind) => {
+      if (!('name' in target)) throw new Error('开发预览不读取本机扩展目录。');
+      return { name: target.name, version: target.version ?? '1.0.0', kind: kind ?? 'world' };
+    },
+    perform: async (id, action, target, kind) => {
+      const existing = devOperations.get(id); if (existing) return existing;
+      if (!('name' in target)) throw new Error('开发预览不修改本机扩展目录。');
+      const operation: PackageOperation = { id, action, target: JSON.stringify(target), phase: 'preparing' };
+      devOperations.set(id, operation);
+      await new Promise(resolve => setTimeout(resolve, 300));
+      const current = devExtensions.find(p => p.name === target.name);
+      if (action === 'delete') {
+        if (current?.enabled) { operation.phase = 'rolled-back'; operation.error = '扩展仍在使用中。'; return operation; }
+        if (current) devExtensions.splice(devExtensions.indexOf(current), 1);
+      } else if (target.name.includes('broken')) { operation.phase = 'rolled-back'; operation.error = '扩展契约不兼容。'; return operation; }
+      else if (current) Object.assign(current, { installedVersion: target.version ?? '1.0.0', state: 'pending-restart' });
+      else devExtensions.push({ name: target.name, spec: target.version ?? '1.0.0', version: target.version ?? '1.0.0', installedVersion: target.version ?? '1.0.0', kind: kind ?? 'world', consoleClient: false, loaded: false, enabled: false, state: kind === 'bot' ? 'idle' : 'pending-restart' });
+      Object.assign(operation, { phase: 'committed', name: target.name, version: target.version ?? '1.0.0', kind }); return operation;
+    },
+    activation: async (name, enabled, pending) => {
+      const item = devExtensions.find(p => p.name === name); if (!item || item.kind === 'bot') throw new Error('不可加载。');
+      if (pending) return;
+      if (!item.loaded) throw new Error('扩展尚未注册。');
+      item.enabled = enabled;
+    },
     list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: devExtensions.map((p) => ({ ...p })) }),
     updates: async () => ({
       updates: devExtensions.some((p) => p.name === '@acme/cortico-world-discord' && p.state !== 'removed' && p.installedVersion !== '0.3.2')
@@ -1344,5 +1375,6 @@ const app = new WebApp({
 });
 
 const actual = await app.start(port);
+app.markReady();
 console.log(`\n[dev-console] 假数据面板已启动: http://127.0.0.1:${actual}/`);
 console.log('[dev-console] Ctrl-C 退出。数据全是假的,不连真 API/core。\n');

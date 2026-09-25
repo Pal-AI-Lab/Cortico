@@ -48,3 +48,24 @@ it('keeps the cached instance while the .env content is unchanged', () => {
   expect(registry.resolve('Alpha')).toBe(first);
   expect(seenKeys).toHaveLength(1);
 });
+
+it('disabled modules reject live resolution, previews and retained client requests', async () => {
+  const { registry } = fixture();
+  const instance = registry.resolve('Alpha');
+  registry.setModulePolicy(() => false);
+  expect(() => registry.resolve('Alpha')).toThrow('未加载');
+  expect(() => registry.previewRegistry('draft', { kind: 'stub', baseUrl: 'https://model.test' }).resolve('draft')).toThrow('未加载');
+  await expect(instance.client.respond({ model: 'sample', input: [] })).rejects.toThrow('未加载');
+});
+it('bound tasks retain module usage until released, including between requests', async () => {
+  const { registry } = fixture(); const bound = registry.bind('Alpha');
+  expect(registry.moduleUsage('stub')).toBe(1);
+  await expect(registry.stopModule('stub')).rejects.toThrow('绑定任务');
+  bound.release?.(); bound.release?.(); expect(registry.moduleUsage('stub')).toBe(0);
+  await registry.stopModule('stub');
+  expect(() => bound.respond({ model: 'sample', input: [] })).toThrow('released');
+});
+it('diagnostic preview bindings participate in the same module usage policy', () => {
+  const { registry } = fixture(); const preview = registry.previewRegistry('draft', { kind: 'stub', baseUrl: 'https://model.test' });
+  const bound = preview.bind('draft'); expect(registry.moduleUsage('stub')).toBe(1); bound.release?.(); expect(registry.moduleUsage('stub')).toBe(0);
+});

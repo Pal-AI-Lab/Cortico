@@ -60,7 +60,7 @@ export class ProviderHub {
     if (typeof disk.activeProvider === 'string') this.config.activeProvider = disk.activeProvider;
   }
   moduleList(language: Language) {
-    return this.modules.map(module => ({ id: module.id, title: module.title,
+    return this.modules.filter(module => this.registry.isModuleEnabled(module.id)).map(module => ({ id: module.id, title: module.title,
       description: module.localize?.(language)?.description ?? module.description ?? module.title, defaultBaseUrl: module.defaultBaseUrl ?? '',
       reasoningTiers: module.localize?.(language)?.reasoningTiers ?? module.reasoningTiers,
       effortSuggestions: module.effortSuggestions ?? [], serviceTiers: module.localize?.(language)?.serviceTiers ?? module.serviceTiers,
@@ -76,6 +76,7 @@ export class ProviderHub {
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);
+    if (!this.registry.isModuleEnabled(entry.kind)) return { state: 'module-disabled', reason: language === 'zh' ? '供应商模块未加载到本 Bot。' : 'Provider module is disabled for this Bot.' };
     if (!module) return { state: 'module-missing', reason: language === 'zh' ? '供应商模块不可用。' : 'Provider module is unavailable.' };
     try { validateEntry(module, entry, language); }
     catch (error) { return { state: 'invalid', reason: String(error) }; }
@@ -128,6 +129,7 @@ export class ProviderHub {
   }
   async preview(name: string, entry: LLMProviderEntry, panel: string, method: string, args: unknown[], language: Language) {
     this.path(name);
+    this.registry.assertModuleEnabled(entry.kind);
     const module = this.modules.find(module => module.id === entry.kind);
     if (!module?.console) throw new ProviderHubError('Module panel unavailable.');
     this.refresh();
@@ -145,7 +147,7 @@ export class ProviderHub {
         draft = structuredClone(next);
       },
     });
-    const result = await contribution.invoke?.(panel, method, args);
+    const result = await this.registry.moduleTask(entry.kind, async () => contribution.invoke?.(panel, method, args));
     return { result, entry: draft };
   }
   private references(name: string): string[] {
@@ -292,10 +294,10 @@ export class ProviderHub {
     if (action === 'models') {
       const instance = registry.resolve(name);
       if (!instance.listModels) throw new ProviderHubError('This module does not list models.');
-      return { models: await instance.listModels() };
+      try { return { models: await registry.moduleTask(entry.kind, () => instance.listModels!()) }; } finally { await registry.stopAll(); }
     }
     if (!entry.spec) throw new ProviderHubError('Model is required.');
-    return this.settings.probeClient(registry.bind(name), entry.spec, language);
+    try { return await this.settings.probeClient(registry.bind(name), entry.spec, language); } finally { await registry.stopAll(); }
   }
 }
 

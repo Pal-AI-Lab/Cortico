@@ -35,7 +35,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
-| `extensions` | 扩展 | 安装、卸载、npm 搜索与更新检查（见 [extensions.md](extensions.md)） |
+| `extensions` | 扩展 | 分类市场、事务安装、按 Bot 加载、共享删除与更新检查（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
 

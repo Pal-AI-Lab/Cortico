@@ -82,6 +82,8 @@ export interface Generation {
   attempts: ProviderAttempt[];
 }
 export interface ResponseClient {
+  /** Releases an explicitly bound provider lease. */
+  release?(): void;
   respond(request: Request, options?: GenerateOptions): Promise<Generation>;
   /** A fork captures its provider binding once, before its first request. */
   bind?(): ResponseClient;

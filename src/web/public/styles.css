@@ -1873,3 +1873,36 @@
 .connection-status[data-tone="ready"] { color:var(--ok); }
 .connection-status[data-tone="error"], .connection-secondary[data-tone="error"] { color:var(--danger); }
 .connection-status[data-tone="draft"], .connection-secondary[data-tone="draft"] { color:var(--foreground); }
+/* Extension categories own their scrolling, pagination and action feedback. */
+.brand .wordmark { height: 36px; }
+.featureslot-extensions { scroll-padding-top: 76px; }
+.featureslot-extensions > .featureintro { position: static; margin-bottom: 16px; }
+.featureslot-extensions .featureintro .pagedesc { max-width: none; }
+.extension-tabs { position: sticky; top: 0; z-index: 21; display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px; gap: 0; background: var(--background); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; isolation: isolate; }
+.extension-tab-indicator { position: absolute; z-index: -1; inset: 6px auto 6px 6px; width: calc((100% - 12px) / 3); border-radius: 8px; background: var(--accent); transform: translateX(calc(var(--tab-index, 0) * 100%)); transition: transform 180ms ease; }
+.extension-tabs .btn { border: 0; background: transparent; min-height: 38px; white-space: normal; }
+.extension-tabs .btn[aria-selected=true] { color: var(--accent-foreground, white); }
+.extension-category > .sheet { margin: 0 0 28px; scroll-margin-top: 76px; }
+.extension-category .sheetbody > .msgline:empty { display: none; }
+.extension-grid { display: grid; grid-template-columns: repeat(var(--extension-columns, 1), minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.extension-card { min-width: 0; border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--background); }
+.extension-card.is-enabled { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--background)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 8%, transparent); }
+.extension-card.is-installed { background: color-mix(in srgb, var(--accent) 3%, var(--background)); }
+.extension-card-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.extension-card-title { font: inherit; font-size: 16px; font-weight: 600; color: var(--foreground); text-align: left; background: none; border: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; min-width: 0; max-width: 100%; }
+.extension-card-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.extension-meta { font-size: 12px; color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extension-description { margin: 0; font-size: 13px; line-height: 1.5; min-height: 3em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.extension-status { font-size: 13px; }
+.extension-secondary { min-height: 28px; display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted-foreground); }
+.extension-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
+.extension-card-actions .btn, .extension-category .rowbar .btn { min-height: 36px; }
+.extension-card-actions .btn.danger { margin-left: auto; }
+.extension-avatar { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--accent) 12%, var(--background)); color: var(--accent); font-weight: 600; }
+.extension-directory { overflow-wrap: anywhere; font-size: 12px; }
+.extension-category .rowbar > input[type=search], .extension-category .rowbar > input[type=text] { flex: 1; min-width: 180px; }
+.extension-category .msgline { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (pointer: coarse) { .extension-tabs .btn, .extension-category .btn { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .extension-tab-indicator { transition: none; } }
+
+.extension-status.bad { color: var(--danger); }

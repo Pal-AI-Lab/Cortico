@@ -243,7 +243,7 @@ export class ProviderSettings {
         error: error instanceof Error ? error.message : String(error),
         ...(hint ? { hint } : {}),
       };
-    }
+    } finally { client.release?.(); }
   }
 
   sources() {
@@ -257,6 +257,7 @@ export class ProviderSettings {
   availability(name: string, language: Language = 'zh'): ProviderAvailability {
     const entry = this.config.providers[name];
     if (!entry) return { ready: false, reason: text(language).unknownInstance };
+    if (!this.registry.isModuleEnabled(entry.kind)) return { ready: false, reason: language === 'zh' ? '供应商模块未加载到本 Bot。' : 'Provider module is disabled for this Bot.' };
     return endpointAvailability(
       this.module(entry.kind),
       name,
@@ -341,8 +342,9 @@ export class ProviderSettings {
       ),
       invoke: async (panel, method, args) => {
         if (panel !== 'settings') {
+          this.registry.assertModuleEnabled(module.id);
           if (!extra.invoke) throw new Error(S.unknownPanel);
-          return extra.invoke(panel, method, args);
+          return this.registry.moduleTask(module.id, async () => extra.invoke!(panel, method, args));
         }
         const at = {
           startedAt: new Date().toISOString(),
@@ -432,7 +434,7 @@ export class ProviderSettings {
         } else if (method === 'models') {
           const instance = this.registry.resolve(name);
           if (!instance.listModels) throw new Error(S.modelsUnsupported);
-          return { models: await instance.listModels() };
+          return { models: await this.registry.moduleTask(entry.kind, () => instance.listModels!()) };
         } else if (method === 'probe') {
           return this.probe(name, language);
         } else if (method === 'extras') {

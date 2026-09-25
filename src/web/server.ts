@@ -1,3 +1,4 @@
+import type { PackageOperation } from '../extensions/package-store.ts';
 import type { ProviderHubApi as ProviderHub } from '../providers/hub-api.ts';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import type { EnvPromptOrigin } from '../core/prefix.ts';
@@ -198,6 +199,11 @@ export interface ExtensionInfo {
   worldId?: string;
   label?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
+  enabled?: boolean;
+  inUse?: boolean;
+  hidden?: boolean;
+  activationError?: string;
+  disableReason?: string;
 }
 
 /**
@@ -274,8 +280,14 @@ export interface WebAppExtensionDeps {
   updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
+  searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
   /** 单个包的详情(另取一次包文档)。 */
-  packageInfo(name: string): Promise<ExtensionPackageDetail>;
+  packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail>;
+  readonly operationBusy?: boolean;
+  operation?(id: string): PackageOperation | null;
+  check?(target: ExtensionInstallTarget, kind?: 'world' | 'provider' | 'bot'): Promise<unknown>;
+  perform?(id: string, action: 'install' | 'delete', target: ExtensionInstallTarget, kind?: 'world' | 'provider' | 'bot'): Promise<PackageOperation>;
+  activation?(name: string, enabled: boolean, afterRestart: boolean): Promise<void>;
   /**
    * 已加载扩展的浏览器端产物。服务端据此把页 id 映到 `/assets/extensions/<包>/<版本>/<文件>`
    * 并只发这几个文件;缺席 = 没有扩展带面板。
@@ -801,6 +813,9 @@ function toConsoleStream(ws: WebSocket, log: Logger, heartbeatMs: number): Conso
 
 
 export class WebApp {
+  private readonly bootId = crypto.randomUUID();
+  private ready = false;
+  markReady(): void { this.ready = true; }
   private readonly deps: WebAppDeps;
   private readonly app: express.Express;
   private readonly listenHost: string;
@@ -1360,13 +1375,12 @@ export class WebApp {
       res.status(403).json({ error: '跨站请求被拒绝' });
     });
 
-    const wrap = (h: (req: Request, res: Response) => void) => (req: Request, res: Response) => {
-      try {
-        h(req, res);
-      } catch (err) {
+    const wrap = (h: (req: Request, res: Response) => void | Promise<void>) => (req: Request, res: Response) => {
+      const failed = (err: unknown) => {
         this.deps.log.error(`API错误 ${req.path}`, { error: String(err) });
-        if (!res.headersSent) res.status(500).json({ error: String(err) });
-      }
+        if (!res.headersSent) res.status(500).json({ error: String(err), code: 'OPERATION_FAILED', recoverable: true });
+      };
+      try { Promise.resolve(h(req, res)).catch(failed); } catch (err) { failed(err); }
     };
     // 登录、登出与状态三条路由在闸前;其余路由连同各自的 body 解析都在闸后。
     app.get('/api/auth/status', wrap((req, res) => {
@@ -1632,6 +1646,7 @@ export class WebApp {
 
     // 重启 = 落下重启标志 + 规范关机。有没有启动器循环把它拉起来、回来时投递是不是暂停的,回执里说明。
     app.post('/api/run/restart', (req: Request, res: Response) => {
+      if (this.deps.extensions?.operationBusy) { res.status(409).json({ error: '扩展事务正在进行，请等待操作完成。' }); return; }
       const supervised = this.deps.run?.supervised === true;
       const language = this.languageOf(req);
       const text = pick(language, SERVER_TEXT);
@@ -1708,6 +1723,10 @@ export class WebApp {
     }));
 
     // 扩展:磁盘上的包对照启动时的加载结果。装卸只改磁盘,加载要重启进程。
+    app.get('/api/run/lifecycle', wrap((_req, res) => {
+      res.json({ deployment: createHash('sha256').update(this.deps.dataDir).digest('hex'), bootId: this.bootId, phase: this.ready ? 'ready' : 'starting', ready: this.ready });
+    }));
+
     app.get('/api/extensions', wrap((_req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
@@ -1729,7 +1748,8 @@ export class WebApp {
         return;
       }
       try {
-        res.json({ hits: await src.search(kind) });
+        const hits = await src.search(kind);
+        res.json({ hits, partial: src.searchPartial?.(kind) ?? false });
       } catch (err) {
         res.status(502).json({ error: `npm 搜索失败: ${String(err)}` });
       }
@@ -1741,12 +1761,43 @@ export class WebApp {
       const name = strParam(req.query.name)?.trim();
       if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
       try {
-        res.json(await src.packageInfo(name));
+        res.json(await src.packageInfo(name, strParam(req.query.version)));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // 包名不合法是请求的问题,其余当成 registry 那一头的问题
         res.status(msg.includes('包名') ? 400 : 502).json({ error: msg });
       }
+    }));
+
+    app.get('/api/extensions/operations/:id', wrap((req, res) => {
+      const operation = this.deps.extensions?.operation?.(String(req.params.id));
+      if (!operation) { res.status(404).json({ error: '操作不存在。' }); return; }
+      res.json(operation);
+    }));
+    app.post('/api/extensions/check', express.json(), wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.check) { res.status(503).json({ error: '扩展检查不可用。' }); return; }
+      const { target, kind } = req.body ?? {};
+      if (!target || !['world', 'provider', 'bot'].includes(kind)) { res.status(400).json({ error: '缺少扩展目标或类型。' }); return; }
+      res.json(await src.check(target, kind));
+    }));
+    app.post('/api/extensions/operations', express.json(), wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.perform) { res.status(503).json({ error: '扩展事务不可用。' }); return; }
+      const { id, action, target, kind } = req.body ?? {};
+      if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{8,80}$/.test(id) || !['install', 'delete'].includes(action)
+        || !target || (kind !== undefined && !['world', 'provider', 'bot'].includes(kind))) {
+        res.status(400).json({ error: '无效的扩展操作。' }); return;
+      }
+      res.json(await src.perform(id, action, target, kind));
+    }));
+    app.post('/api/extensions/activation', express.json(), wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.activation) { res.status(503).json({ error: '扩展加载不可用。' }); return; }
+      const { name, enabled, afterRestart } = req.body ?? {};
+      if (typeof name !== 'string' || typeof enabled !== 'boolean') { res.status(400).json({ error: '无效的扩展加载请求。' }); return; }
+      await src.activation(name, enabled, afterRestart === true);
+      res.json({ ok: true });
     }));
 
     app.post('/api/extensions/install', express.json(), wrap(async (req, res) => {

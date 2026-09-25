@@ -1,9 +1,10 @@
+import { parseExtensionManifest } from './extensions/manifest.ts';
 /**
  * 读取部署的 deployment.json，加载其 bot 字段指定的 BotDefinition。
  * 部署根由 src/paths.ts 解析，代码包来自 bots/ 或已安装的 bot 扩展。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
@@ -14,7 +15,7 @@ import { createDeployment, ensureDeployment, listBots, loadDeployment } from './
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
 import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
-import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
+import { extensionsDir, resolveExtensionEntry, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
@@ -86,7 +87,14 @@ function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
   const tree = existsSync(treeDir)
     ? readdirSync(treeDir).filter((id) => existsSync(resolve(treeDir, id, 'index.ts')))
     : [];
-  const installed = readInstalled(extensionsDir(repoRoot())).map((p) => p.name);
+  const installed = readInstalled(extensionsDir(repoRoot())).filter(p => {
+    try {
+      const dir = resolve(extensionsDir(repoRoot()), 'node_modules', p.name);
+      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
+      const parsed = parseExtensionManifest(pkg);
+      return parsed.ok && parsed.manifest.kind === 'bot' && existsSync(resolveExtensionEntry(dir, pkg));
+    } catch { return false; }
+  }).map((p) => p.name);
   return [
     ...tree.map((id) => ({ id, source: 'tree' as const })),
     ...installed.filter((id) => !tree.includes(id)).map((id) => ({ id, source: 'extension' as const })),

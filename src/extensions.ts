@@ -8,7 +8,10 @@
  */
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { isAbsolute, join, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, resolve, sep, delimiter } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { ExtensionPackageStore, installedEnvironment, type PackageOperation } from './extensions/package-store.ts';
+import { validatePackage, type ValidatedPackage } from './extensions/validate.ts';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
 import type { BotDefinition } from './bot.ts';
@@ -99,7 +102,7 @@ function readPackageJson(file: string): ExtensionPackageJson | null {
 
 /** 读取 extensions/package.json 的直接依赖；目录不存在时返回空列表。 */
 export function readInstalled(dir: string): Array<{ name: string; spec: string }> {
-  const pkg = readPackageJson(join(dir, 'package.json'));
+  const pkg = readPackageJson(join(installedEnvironment(dir), 'package.json'));
   return Object.entries(pkg?.dependencies ?? {}).map(([name, spec]) => ({ name, spec }));
 }
 
@@ -180,6 +183,7 @@ export function locateBotPackage(repoRoot: string, ref: string, treeDir: string)
   const treeEntry = join(treeDir, 'index.ts');
   if (existsSync(treeEntry)) return { source: 'tree', pkgDir: treeDir, entry: treeEntry };
   const dir = extensionsDir(repoRoot);
+  new ExtensionPackageStore(dir).recoverInterrupted();
   if (!readInstalled(dir).some((p) => p.name === ref)) {
     throw new Error(`找不到 bot 代码包「${ref}」:仓内没有 ${treeEntry},${dir} 下也没装叫这个名字的扩展。`);
   }
@@ -225,6 +229,7 @@ export async function loadExtensions(
 ): Promise<ExtensionSet> {
   registerFrameworkResolver();
   const dir = extensionsDir(repoRoot);
+  new ExtensionPackageStore(dir).recoverInterrupted();
   const taken: Record<Exclude<ExtensionKind, 'bot'>, Set<string>> = {
     world: new Set(opts.reserved ?? []),
     provider: new Set(opts.reservedProviders ?? []),
@@ -235,7 +240,9 @@ export async function loadExtensions(
   const consoleAssets: ExtensionConsoleAsset[] = [];
   for (const { name, spec } of readInstalled(dir)) {
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
-    const pkg = readPackageJson(join(pkgDir, 'package.json'));
+    let pkg: ExtensionPackageJson | null;
+    try { pkg = readPackageJson(join(pkgDir, 'package.json')); }
+    catch (error) { records.push({ name, spec, version: null, consoleClient: false, loaded: false, reason: String(error) }); continue; }
     const record: ExtensionRecord = {
       name,
       spec,
@@ -344,11 +351,8 @@ export async function loadExtensions(
 
 /** npm 包名。与 npm 自己的校验同形;不含任何 shell 元字符。 */
 const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-/**
- * 版本或 dist-tag。`^` `~` `*` 之外的范围符号(`>=` `||`)不收:它们在 cmd.exe 里是
- * 重定向与管道,而 Windows 上 corepack 只能经 shell 起。
- */
-const VERSION_SPEC = /^[0-9a-zA-Z.^~*+-]{1,64}$/;
+/** Explicit version or dist-tag; dependency ranges are not installation targets. */
+const VERSION_SPEC = /^[0-9a-zA-Z][0-9a-zA-Z._+-]{0,63}$/;
 
 /** 比较 npm 的标准 SemVer；无法比较时不猜测是否有更新。 */
 function newerVersion(latest: string, installed: string): boolean | null {
@@ -376,18 +380,20 @@ function newerVersion(latest: string, installed: string): boolean | null {
   }
   return left.length > right.length;
 }
-/** 本地目录。排除 `%` `!` `"` 与重定向符,其余交给引号。 */
-const LOCAL_PATH = /^[A-Za-z0-9_.\-/:\\ ~]{1,512}$/;
+/** Local directory names are passed as process arguments, never shell text. */
+const LOCAL_PATH = /^[^\x00-\x1f"<>|]{1,4096}$/u;
 
 export type PackageManagerRunner = (args: string[], cwd: string) => Promise<{ code: number; output: string }>;
 
-/** Windows 通过 shell 调用 corepack 的 .cmd 文件，参数逐个加引号。 */
+/** Invoke a Node package-manager entry directly so Unicode paths never enter a shell. */
 export const runPnpm: PackageManagerRunner = (args, cwd) => new Promise((done, fail) => {
-  const viaShell = process.platform === 'win32';
-  const argv = ['pnpm', ...args].map((a) => (viaShell ? `"${a}"` : a));
-  const child = spawn('corepack', argv, {
+  const candidates = [dirname(process.execPath), ...(process.env.PATH ?? '').split(delimiter)]
+    .flatMap(base => [join(base, 'node_modules/corepack/dist/pnpm.js'), join(base, 'node_modules/pnpm/bin/pnpm.cjs')]);
+  const entry = candidates.find(file => existsSync(file));
+  if (process.platform === 'win32' && !entry) { fail(new Error('找不到可直接运行的 pnpm/corepack Node 入口。')); return; }
+  const child = spawn(entry ? process.execPath : 'corepack', entry ? [entry, ...args] : ['pnpm', ...args], {
     cwd,
-    shell: viaShell,
+    shell: false,
     windowsHide: true,
     env: { ...process.env, COREPACK_ENABLE_DOWNLOAD_PROMPT: '0' },
   });
@@ -465,6 +471,10 @@ export interface ExtensionManagerOptions {
   run?: PackageManagerRunner;
   registry?: string;
   fetchJson?: (url: string) => Promise<unknown>;
+  validate?: (dir: string) => Promise<ValidatedPackage>;
+  references?: (name: string) => Promise<string[]>;
+  decorate?: (item: ExtensionInfo) => ExtensionInfo;
+  activation?: (name: string, enabled: boolean, afterRestart: boolean) => Promise<void>;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -474,13 +484,20 @@ export class ExtensionManager {
   private readonly registry: string;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
+  private readonly store: ExtensionPackageStore;
+  private readonly validate: (dir: string) => Promise<ValidatedPackage>;
 
   constructor(
     private readonly repoRoot: string,
     private readonly booted: ExtensionSet,
     opts: ExtensionManagerOptions = {},
   ) {
-    this.dir = booted.dir;
+    this.store = new ExtensionPackageStore(booted.dir);
+    this.dir = this.store.dir;
+    this.validate = opts.validate ?? validatePackage;
+    this.references = opts.references;
+    this.decorate = opts.decorate;
+    this.activation = opts.activation;
     this.run = opts.run ?? runPnpm;
     this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
     this.fetchJson = opts.fetchJson ?? (async (url) => {
@@ -489,6 +506,11 @@ export class ExtensionManager {
       return res.json();
     });
   }
+  private readonly decorate?: (item: ExtensionInfo) => ExtensionInfo;
+  readonly activation?: (name: string, enabled: boolean, afterRestart: boolean) => Promise<void>;
+  private readonly references?: (name: string) => Promise<string[]>;
+  get operationBusy(): boolean { return this.busy || this.store.busy; }
+  operation(id: string): PackageOperation | null { return this.store.operation(id); }
 
   /** 已加载扩展的浏览器端产物。服务端据此把页 id 映到 URL 并只发这几个文件。 */
   consoleAssets(): readonly ExtensionConsoleAsset[] {
@@ -497,13 +519,15 @@ export class ExtensionManager {
 
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
   list(): { dir: string; extensions: ExtensionInfo[] } {
-    const onDisk = new Map(readInstalled(this.dir).map((p) => [p.name, p.spec]));
+    const directory = installedEnvironment(this.dir);
+    const packageAt = (name: string) => { try { return readPackageJson(join(directory, 'node_modules', ...name.split('/'), 'package.json')); } catch { return null; } };
+    const onDisk = new Map(readInstalled(directory).map((p) => [p.name, p.spec]));
     const out: ExtensionInfo[] = [];
     for (const r of this.booted.records) {
       const spec = onDisk.get(r.name);
       onDisk.delete(r.name);
       const installedVersion = spec === undefined ? undefined
-        : readPackageJson(join(this.dir, 'node_modules', ...r.name.split('/'), 'package.json'))?.version ?? null;
+        : packageAt(r.name)?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
         : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
@@ -511,7 +535,7 @@ export class ExtensionManager {
     }
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
-      const pkg = readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'));
+      const pkg = packageAt(name);
       const parsed = pkg ? parseExtensionManifest(pkg) : null;
       const manifest = parsed?.ok ? parsed.manifest : null;
       out.push({
@@ -523,11 +547,12 @@ export class ExtensionManager {
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
         ...(manifest && manifest.consoleClient === undefined ? { console: 'none' as const } : {}),
         loaded: false,
-        state: 'pending-restart',
+        state: manifest?.kind === 'bot' ? 'idle' : manifest ? 'pending-restart' : 'failed',
+        ...(!manifest ? { reason: parsed && !parsed.ok ? parsed.reasons.join('; ') : 'package.json 缺失或损坏' } : {}),
         ...(pkg?.description ? { description: pkg.description } : {}),
       });
     }
-    return { dir: this.dir, extensions: out };
+    return { dir: this.dir, extensions: out.map(item => this.decorate?.(item) ?? item) };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
@@ -560,11 +585,14 @@ export class ExtensionManager {
    * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
    * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
    */
+  private readonly partialSearch = new Map<ExtensionKind, boolean>();
+  searchPartial(kind: ExtensionKind = 'world'): boolean { return this.partialSearch.get(kind) ?? false; }
   async search(kind: ExtensionKind = 'world'): Promise<ExtensionSearchHit[]> {
     const keyword = EXTENSION_KEYWORDS[kind];
     const installed = new Set(readInstalled(this.dir).map((p) => p.name));
     const hits: ExtensionSearchHit[] = [];
     const seen = new Set<string>();
+    this.partialSearch.set(kind, false);
     for (let from = 0; from < SEARCH_MAX_HITS; from += SEARCH_PAGE_SIZE) {
       const text = encodeURIComponent(`keywords:${keyword}`);
       const url = `${this.registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
@@ -596,6 +624,7 @@ export class ExtensionManager {
         });
       }
       if (objects.length < SEARCH_PAGE_SIZE) break;
+      if (from + SEARCH_PAGE_SIZE >= SEARCH_MAX_HITS) this.partialSearch.set(kind, true);
     }
     return hits;
   }
@@ -605,10 +634,10 @@ export class ExtensionManager {
    * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
    * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
    */
-  async packageInfo(name: string): Promise<ExtensionPackageDetail> {
+  async packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail> {
     if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
     const doc = (await this.fetchJson(`${this.registry}/${name.replace('/', '%2F')}`)) as RegistryPackument;
-    const latest = doc['dist-tags']?.latest;
+    const latest = version ? doc['dist-tags']?.[version] ?? version : doc['dist-tags']?.latest;
     const v = latest ? doc.versions?.[latest] : undefined;
     if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 latest 版本`);
 
@@ -654,22 +683,99 @@ export class ExtensionManager {
     };
   }
 
+  async validateInstalled(name: string): Promise<ValidatedPackage> {
+    if (!PACKAGE_NAME.test(name) || !readInstalled(this.dir).some(p => p.name === name)) throw new Error('扩展未安装。');
+    return this.validate(join(this.dir, 'node_modules', ...name.split('/')));
+  }
+
   async install(target: ExtensionInstallTarget): Promise<string> {
-    const spec = this.installSpec(target);
-    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
-    const pkgFile = join(this.dir, 'package.json');
-    if (!existsSync(pkgFile)) {
-      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
-    }
-    const output = await this.exclusive(['add', spec, '--ignore-workspace']);
-    return `已安装 ${spec}。重启进程后加载。\n${output}`;
+    const result = await this.perform(randomUUID(), 'install', target);
+    if (result.phase !== 'committed') throw new Error(result.error);
+    return `已安装 ${result.name}@${result.version}。${result.kind === 'bot' ? '可创建新实例。' : '重启进程后可加载。'}\n${result.output ?? ''}`;
   }
 
   async uninstall(name: string): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的包名: ${name}`);
     if (!readInstalled(this.dir).some((p) => p.name === name)) throw new Error(`没有安装这个包: ${name}`);
-    const output = await this.exclusive(['remove', name, '--ignore-workspace']);
-    return `已卸载 ${name}。重启进程后生效。\n${output}`;
+    const result = await this.perform(randomUUID(), 'delete', { name });
+    if (result.phase !== 'committed') throw new Error(result.error);
+    return `已删除 ${name}。重启进程后完成清理。\n${result.output ?? ''}`;
+  }
+
+  async check(target: ExtensionInstallTarget, expectedKind?: ExtensionKind): Promise<{ name: string; version: string; kind: ExtensionKind }> {
+    this.installSpec(target);
+    if ('path' in target) {
+      const dir = resolve(this.repoRoot, target.path.trim());
+      const pkg = readPackageJson(join(dir, 'package.json'))!;
+      const parsed = parseExtensionManifest(pkg);
+      if (!parsed.ok) throw new Error(parsed.reasons.join('\n'));
+      if (!pkg.name || !PACKAGE_NAME.test(pkg.name) || !pkg.version) throw new Error('扩展缺少有效包名或版本。');
+      if (expectedKind && parsed.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${parsed.manifest.kind}，请切换到对应分类。`);
+      await this.validate(dir);
+      return { name: pkg.name, version: pkg.version, kind: parsed.manifest.kind };
+    }
+    const info = await this.packageInfo(target.name.trim(), target.version?.trim());
+    if (!info.manifest || info.problems?.length) throw new Error(info.problems?.join('\n') ?? '扩展声明不可用。');
+    if (expectedKind && info.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${info.manifest.kind}，请切换到对应分类。`);
+    return { name: info.name, version: info.version, kind: info.manifest.kind };
+  }
+
+  async perform(id: string, action: 'install' | 'delete', target: ExtensionInstallTarget, kind?: ExtensionKind): Promise<PackageOperation> {
+    this.installSpec(target);
+    const fingerprint = JSON.stringify({ target, kind });
+    const prior = this.store.operation(id);
+    if (prior) {
+      if (prior.action !== action || prior.target !== fingerprint) throw new Error('Operation ID already belongs to another request.');
+      return prior;
+    }
+    if (this.busy) throw new Error('已有一个扩展操作在进行。');
+    this.busy = true;
+    try {
+      return await this.store.transact({ id, action, target: fingerprint, phase: 'preparing' }, async (stage, progress) => {
+        let validated: Partial<ValidatedPackage> = {};
+        const manifestFile = join(stage, 'package.json');
+        const environmentManifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+        environmentManifest.packageManager = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).packageManager;
+        writeFileSync(manifestFile, JSON.stringify(environmentManifest, null, 2));
+        const flags = ['--ignore-workspace', '--config.engine-strict=true', '--config.virtual-store-dir=' + this.store.virtualStoreDir];
+        const execute = async (args: string[]) => {
+          const { code, output } = await this.run([...args, ...flags], stage);
+          const tail = output.trim().split('\n').slice(-20).join('\n');
+          if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
+          return tail;
+        };
+        let output: string;
+        if (action === 'install') {
+          const checked = await this.check(target, kind);
+          const spec = 'path' in target ? 'link:' + resolve(this.repoRoot, target.path.trim()) : `${checked.name}@${checked.version}`;
+          output = await execute(['add', spec]);
+          progress('validating');
+          validated = await this.validate(join(stage, 'node_modules', ...checked.name.split('/')));
+          if (validated.name !== checked.name || validated.version !== checked.version || validated.kind !== checked.kind) throw new Error('已安装包的身份与预检不一致。');
+          if (this.booted.records.some(record => record.name !== checked.name && record.kind === validated.kind && record.worldId === validated.moduleId)) throw new Error('扩展模块 ID 与已注册扩展冲突。');
+          for (const other of readInstalled(this.dir)) {
+            if (other.name === checked.name || this.booted.records.some(record => record.name === other.name && record.loaded)) continue;
+            const directory = join(this.dir, 'node_modules', ...other.name.split('/'));
+            const manifest = readPackageJson(join(directory, 'package.json'));
+            const parsed = manifest && parseExtensionManifest(manifest);
+            if (!parsed?.ok || parsed.manifest.kind !== validated.kind) continue;
+            const identity = await this.validate(directory);
+            if (identity.moduleId === validated.moduleId) throw new Error('扩展模块 ID 与已安装扩展冲突: ' + other.name);
+          }
+        } else {
+          if (!('name' in target) || !readInstalled(this.dir).some(p => p.name === target.name)) throw new Error('没有安装这个包。');
+          const references = await this.references?.(target.name) ?? [];
+          if (references.length) throw new Error('扩展仍被引用：\n' + references.join('\n'));
+          const pkgFile = join(stage, 'package.json');
+          const pkg = JSON.parse(readFileSync(pkgFile, 'utf8'));
+          delete pkg.dependencies[target.name];
+          writeFileSync(pkgFile, JSON.stringify(pkg, null, 2));
+          output = await execute(['install', '--no-frozen-lockfile']);
+          validated = { name: target.name };
+        }
+        return { ...validated, output };
+      });
+    } finally { this.busy = false; }
   }
 
   private installSpec(target: ExtensionInstallTarget): string {
@@ -688,16 +794,4 @@ export class ExtensionManager {
     return version ? `${name}@${version}` : name;
   }
 
-  private async exclusive(args: string[]): Promise<string> {
-    if (this.busy) throw new Error('已有一个安装 / 卸载在进行,等它结束。');
-    this.busy = true;
-    try {
-      const { code, output } = await this.run(args, this.dir);
-      const tail = output.trim().split('\n').slice(-20).join('\n');
-      if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
-      return tail;
-    } finally {
-      this.busy = false;
-    }
-  }
 }

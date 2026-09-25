@@ -4,7 +4,8 @@
 
 `ProviderModule` 实现一种模型通信协议,`ProviderInstance` 对应一个端点,
 `ProviderHost` 提供实例所需的配置、密钥、资源与日志接口。Core 通过 `ProviderRegistry.bind(name)`
-获取带报价与来源信息的客户端,Persona 通过 Core 调用模型。
+获取带报价与来源信息的客户端,Persona 通过 Core 调用模型。绑定在任务结束时调用 `release()`；
+模块禁用策略同时约束缓存解析、预览与请求。绑定和在途操作持有模块使用计数，停用需等待这些使用结束。
 
 ## 文件
 

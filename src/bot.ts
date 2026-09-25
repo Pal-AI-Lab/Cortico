@@ -1,3 +1,4 @@
+import { ExtensionActivation } from './extensions/activation.ts';
 /** 装配 Core、Persona、World 与控制台；具体 bot 的配置和行为由 BotDefinition 提供。 */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -20,7 +21,7 @@ import { pick, resolveLanguage, type Language } from './core/language.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
 import { isSupervised, requestRestart, startsPaused } from './boot.ts';
-import { ExtensionManager, type ExtensionSet } from './extensions.ts';
+import { type ExtensionSet } from './extensions.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
 import { RESERVED_FRAME_NAMES } from './core/loop.ts';
@@ -1020,6 +1021,7 @@ export function createBot<C extends CoreConfig>(
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
   const providerSettings = new ProviderSettings(cfg,core.providers,join(loaded.rootDir,'config.json'),loaded.providersDir ?? join(loaded.rootDir,'providers'));
   const providerHub = new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers'));
+  const extensionActivation = opts.extensions ? new ExtensionActivation(loaded.rootDir, loaded.repoRoot ?? loaded.rootDir, opts.extensions, cfg, assembly, core.providers, loaded.providersDir ?? join(loaded.rootDir, 'providers'), id => core.isWorldVisible(id)) : undefined;
   const allConfigGroups = (language: Language) => [...configGroups(language),...providerSettings.groups(language)];
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
@@ -1050,6 +1052,7 @@ export function createBot<C extends CoreConfig>(
       log: core.runlog.logger('shutdown'),
       language: opts.language ?? language,
     }).then((report) => {
+      extensionActivation?.dispose();
       instanceLock?.release();
       instanceLock = null;
       if (opts.exit) {
@@ -1165,7 +1168,7 @@ export function createBot<C extends CoreConfig>(
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
       },
-      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions) } : {}),
+      ...(opts.extensions ? { extensions: extensionActivation!.manager } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
@@ -1237,6 +1240,9 @@ export function createBot<C extends CoreConfig>(
       if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
       await core.start();
+      await extensionActivation?.runPending();
+      extensionActivation?.startLease();
+      app?.markReady();
       return { port };
     },
     async stop() {
@@ -1244,6 +1250,7 @@ export function createBot<C extends CoreConfig>(
       await stopCore();
       await Promise.all([...llmManagers.values()].map((m) => m.stop()));
       if (app) await app.stop();
+      extensionActivation?.dispose();
       instanceLock?.release();
       instanceLock = null;
     },

@@ -45,7 +45,7 @@ describe('Provider module discovery', () => {
       let seen: ProviderHost | null = null;
       const module: ProviderModule = {
         id: 'probe', title: 'Probe', reasoningTiers: [], serviceTiers: [],
-        create: (_name, _entry, host) => { seen = host; return { client: null as never }; },
+        create: (_name, _entry, host) => { seen = host; return { client: { respond: async () => { throw new Error('unused'); } } }; },
       };
       new ProviderRegistry(
         () => ({ cloud: { kind: 'probe', baseUrl: 'https://probe.test' } }),

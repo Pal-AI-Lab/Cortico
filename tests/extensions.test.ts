@@ -7,7 +7,7 @@
  * 扩展 import 框架的那条解析线在 tests/extensions-runtime.test.ts。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
@@ -126,12 +126,32 @@ describe('ExtensionManager', () => {
     const mgr = new ExtensionManager(root, set, {
       run: (args, cwd) => {
         runs.push({ args, cwd });
+        const manifestFile = join(cwd, 'package.json');
+        const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+        if (args[0] === 'add') {
+          const spec = args[1];
+          const local = spec.startsWith('link:') ? spec.slice(5) : null;
+          const at = spec.lastIndexOf('@');
+          const name = local ? JSON.parse(readFileSync(join(local, 'package.json'), 'utf8')).name : spec.slice(0, at);
+          manifest.dependencies[name] = local ? spec : spec.slice(at + 1);
+          writeFileSync(manifestFile, JSON.stringify(manifest));
+        }
+        for (const [name, spec] of Object.entries(manifest.dependencies) as [string, string][]) {
+          const destination = join(cwd, 'node_modules', name);
+          mkdirSync(destination, { recursive: true });
+          if (spec.startsWith('link:')) cpSync(spec.slice(5), destination, { recursive: true });
+          else {
+            writeFileSync(join(destination, 'package.json'), JSON.stringify({ name, version: spec.replace(/^[~^]/, ''), type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } }));
+            writeFileSync(join(destination, 'index.js'), definitionSource(name.replace(/[^a-z]/g, '')));
+          }
+        }
         if (opts.hang) return new Promise((r) => { release = () => r({ code: 0, output: '' }); });
         return Promise.resolve({ code: opts.code ?? 0, output: 'Progress: resolved 1\n+ pkg 1.0.0\nDone in 1s' });
       },
       fetchJson: async (url) => {
         urls.push(url);
         if (opts.packument) return opts.packument;
+        if (!url.includes('/-/v1/search')) return { 'dist-tags': { latest: '1.2.0' }, versions: { '1.2.0': { name: decodeURIComponent(url.split('/').at(-1)!), version: '1.2.0', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } } } };
         return {
           objects: [
             { package: { name: 'a-mod', version: '1.0.0', description: 'A', keywords: ['cortico-world'], license: 'MIT', links: { npm: 'https://npm/a', repository: 'git+https://github.com/me/a.git' }, publisher: { username: 'me' } }, downloads: { monthly: 12 }, dependents: '7' },
@@ -144,26 +164,25 @@ describe('ExtensionManager', () => {
     return { mgr, runs, urls, release: () => release?.() };
   }
 
-  it('install:合法包名 → pnpm add name@version --ignore-workspace,在 extensions/ 里跑;首次先造 package.json', async () => {
+  it('installs a validated exact package into the committed environment', async () => {
     const { mgr, runs } = manager();
-    const msg = await mgr.install({ name: '@acme/cortico-world-x', version: '^1.2.0' });
-    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
-    expect(JSON.parse(readFileSync(join(root, 'extensions/package.json'), 'utf8'))).toMatchObject({ private: true, dependencies: {} });
+    const msg = await mgr.install({ name: '@acme/cortico-world-x', version: '1.2.0' });
+    expect(readInstalled(join(root, 'extensions'))).toEqual([{ name: '@acme/cortico-world-x', spec: '1.2.0' }]);
+    expect(mgr.list().extensions[0]).toMatchObject({ installedVersion: '1.2.0', state: 'pending-restart' });
+    expect(runs[0].cwd).not.toBe(join(root, 'extensions'));
     expect(msg).toContain('重启');
-    expect(msg).toContain('Done in 1s');
-    await mgr.install({ name: 'plain' });
-    expect(runs[1].args).toEqual(['add', 'plain', '--ignore-workspace']);
   });
 
-  it('install:本机目录必须存在且含 package.json,按绝对路径交给 pnpm', async () => {
-    const { mgr, runs } = manager();
+  it('local Unicode directories are validated without changing source files', async () => {
+    const { mgr } = manager();
     await expect(mgr.install({ path: './nowhere' })).rejects.toThrow('目录不存在');
-    mkdirSync(join(root, 'empty'));
-    await expect(mgr.install({ path: './empty' })).rejects.toThrow('package.json');
-    mkdirSync(join(root, 'my mod'));
-    writeFileSync(join(root, 'my mod/package.json'), '{}');
-    await mgr.install({ path: './my mod' });
-    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--ignore-workspace']);
+    const local = join(root, '我的扩展 (测试)'); mkdirSync(local);
+    const contents = JSON.stringify({ name: 'local-example', version: '1.0.0', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } });
+    writeFileSync(join(local, 'package.json'), contents); writeFileSync(join(local, 'index.js'), definitionSource('local-example'));
+    await mgr.install({ path: local });
+    expect(mgr.list().extensions[0].name).toBe('local-example');
+    await mgr.uninstall('local-example');
+    expect(readFileSync(join(local, 'package.json'), 'utf8')).toBe(contents);
   });
 
   it('install:拒绝带 shell 元字符的包名、版本与路径,一次 pnpm 都不起', async () => {
@@ -187,9 +206,10 @@ describe('ExtensionManager', () => {
     const { mgr, runs, release } = manager({}, { hang: true });
     const first = mgr.install({ name: 'x' });
     await expect(mgr.install({ name: 'y' })).rejects.toThrow('在进行');
+    while (!runs.length) await new Promise(resolve => setTimeout(resolve, 1));
     release();
     await first;
-    expect(runs.map((r) => r.args[1])).toEqual(['x']);
+    expect(readInstalled(join(root, 'extensions')).map(p => p.name)).toEqual(['x']);
   });
 
   it('uninstall:没装的包拒绝;装了的 → pnpm remove', async () => {
@@ -198,7 +218,8 @@ describe('ExtensionManager', () => {
     await expect(mgr.uninstall('absent')).rejects.toThrow('没有安装');
     await expect(mgr.uninstall('bad name')).rejects.toThrow('包名');
     const msg = await mgr.uninstall('present');
-    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
+    expect(readInstalled(join(root, 'extensions'))).toEqual([]);
+    expect(mgr.list().extensions).toEqual([]);
     expect(msg).toContain('重启');
   });
 

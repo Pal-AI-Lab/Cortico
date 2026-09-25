@@ -317,10 +317,12 @@ export class Core<C extends CoreConfig = CoreConfig> {
       messagesRef: () => observedMessages,
     });
     this.forkRunning.set(decl.id, (this.forkRunning.get(decl.id) ?? 0) + 1);
+    let bound: ResponseClient | undefined;
     try {
+      bound = this.llm.bind?.() ?? this.llm;
       return await runForkLoop({
         id: decl.id,
-        llm: this.llm.bind?.() ?? this.llm,
+        llm: bound,
         spec: this.activeSpec(),
         messages: opts.messages,
         tools: opts.tools ?? decl.tools(),
@@ -337,6 +339,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         },
       });
     } finally {
+      bound?.release?.();
       this.forkRunning.set(decl.id, Math.max(0, (this.forkRunning.get(decl.id) ?? 1) - 1));
       track.close();
     }
@@ -459,7 +462,10 @@ export class Core<C extends CoreConfig = CoreConfig> {
   /** The selected instance is resolved once at the start of each request. */
   private makeProviderRouter(): ResponseClient {
     const bind = (): ResponseClient => this.providers.bind(this.activeProviderEntry().name);
-    return { bind, respond: async (request, options) => bind().respond(request, options) };
+    return { bind, respond: async (request, options) => {
+      const client = bind();
+      try { return await client.respond(request, options); } finally { client.release?.(); }
+    } };
   }
 
   /** 模型事实(按当前活跃端点实时读,不做启动期快照) */
@@ -606,6 +612,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       } catch (error) {
         const lease = this.moduleHostLeases.get(mod);
         if (lease) lease.active = false;
+        try { await withDeadline(mod.stop(), MODULE_STOP_MS); } catch (cleanup) { this.log.warn(`World 启动失败后的清理未完成: ${mod.id}`, { err: String(cleanup) }); }
         throw error;
       }
       this.log.info(`World 已启动: ${mod.id}`);
@@ -638,6 +645,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       } catch (error) {
         const lease = this.moduleHostLeases.get(mod);
         if (lease) lease.active = false;
+        try { await withDeadline(mod.stop(), MODULE_STOP_MS); } catch (cleanup) { this.log.warn(`World 启动失败后的清理未完成: ${mod.id}`, { err: String(cleanup) }); }
         throw error;
       }
       this.log.info(`World 已启动: ${mod.id}`);

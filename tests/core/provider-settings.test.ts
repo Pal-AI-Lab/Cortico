@@ -26,7 +26,7 @@ const groupModule: ProviderModule = {
       },
     },
   }],
-  create: () => ({ client: null as never }),
+  create: () => ({ client: { respond: async () => { throw new Error('unused fixture client'); } } }),
 };
 const modules = [...providerModules, groupModule];
 
@@ -220,7 +220,7 @@ describe('Provider 配置事务', () => {
       serviceTiers: [{ id: 'priority', label: '快车道' }],
       create: (_name, _entry, host) => {
         const control = host.resource!('session', () => ({ session: crypto.randomUUID() }));
-        return { client: null as never, control, compatibilityKey: () => control.session };
+        return { client: { respond: async () => { throw new Error('unused fixture client'); } }, control, compatibilityKey: () => control.session };
       },
     };
     const registry = new ProviderRegistry(() => cfg.providers, {

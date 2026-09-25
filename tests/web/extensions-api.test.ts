@@ -37,6 +37,10 @@ beforeAll(async () => {
     dataDir: dir,
     getStatus: () => ({}),
     extensions: {
+      check: async () => { throw new Error('incompatible extension'); },
+      perform: async (id, action) => ({ id, action, target: 'example', phase: 'rolled-back', error: 'invalid export' }),
+      operation: id => ({ id, action: 'install', target: 'example', phase: 'committed', name: 'example', version: '1.0.0' }),
+      activation: async () => { throw new Error('module in use'); },
       list: () => ({
         dir: '/repo/extensions',
         extensions: [{ name: 'a', spec: '^1', version: '1.0.0', consoleClient: false, loaded: true, worldId: 'a', label: 'A', state: 'loaded' }],
@@ -160,5 +164,23 @@ describe('/api/extensions', () => {
     } finally {
       await bare.stop();
     }
+  });
+});
+
+
+describe('extension operation and lifecycle endpoints', () => {
+  it('returns queryable structured transaction results', async () => {
+    const out = await post('/api/extensions/operations', { id: 'example-operation', action: 'install', target: { name: 'example' }, kind: 'world' });
+    expect(out.body).toMatchObject({ id: 'example-operation', phase: 'rolled-back', error: 'invalid export' });
+    const result = await get('/api/extensions/operations/example-operation'); expect(result.body.phase).toBe('committed');
+  });
+  it('returns asynchronous preflight and activation failures without terminating the server', async () => {
+    const failed = await post('/api/extensions/check', { target: { name: 'example' }, kind: 'world' }); expect(failed.status).toBe(500); expect(failed.body.error).toContain('incompatible');
+    const activation = await post('/api/extensions/activation', { name: 'example', enabled: false }); expect(activation.body.error).toContain('module in use');
+    expect((await get('/api/extensions')).status).toBe(200);
+  });
+  it('keeps boot identity stable while readiness changes', async () => {
+    const before = await get('/api/run/lifecycle'); app.markReady(); const after = await get('/api/run/lifecycle');
+    expect(before.body.ready).toBe(false); expect(after.body).toMatchObject({ bootId: before.body.bootId, deployment: before.body.deployment, ready: true });
   });
 });

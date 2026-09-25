@@ -533,7 +533,7 @@ export class ConsolePageHost {
         : [{ label: S.assembly, state: 'offline', hint: page.availability === 'missing' ? S.notInstalled : S.notActivated }],
     ));
     head.appendChild(title);
-    chrome.append(head, ui.h('p', 'pagedesc', page.id));
+    chrome.append(head);
     const bar = ui.rowbar();
 
     for (const badge of asArray(page.badges)) {
