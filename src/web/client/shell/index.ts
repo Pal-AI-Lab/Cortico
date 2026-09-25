@@ -118,15 +118,16 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   el.id = 'rail';
 
   // 左上角只有框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
+  // 字标下方只在有新的正式 Release 时出现一行更新提示。
   const brand = ui.h('div', 'brand');
-  brand.setAttribute('role', 'img');
-  brand.setAttribute('aria-label', FRAMEWORK_NAME);
-  brand.appendChild(wordmark(doc));
+  const mark = wordmark(doc);
+  mark.removeAttribute('aria-hidden');
+  mark.setAttribute('role', 'img');
+  mark.setAttribute('aria-label', FRAMEWORK_NAME);
+  brand.appendChild(mark);
 
   const nav = ui.h('nav', 'stack');
   nav.setAttribute('aria-label', S.navAria);
-  const releaseStatus = ui.h('div', 'rail-release');
-  releaseStatus.textContent = S.releaseChecking;
 
   const foot = ui.h('div', 'railfoot');
   const avatar = createAvatarControl({ doc, ui, signal, onError });
@@ -254,38 +255,19 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     try { router.navigate(['settings']); } catch (err) { onError(err); }
   }, { signal });
 
-  el.append(brand, nav, releaseStatus, foot);
+  el.append(brand, nav, foot);
 
-  async function loadRelease(): Promise<void> {
-    releaseStatus.textContent = S.releaseChecking;
-    try {
-      const status = await get<{
-        currentVersion: string;
-        checkout: 'release' | 'development';
-        update?: { version: string; url: string };
-      }>('/api/framework/release', { signal });
-      if (signal.aborted) return;
-      if (typeof status?.currentVersion !== 'string') return;
-      const parts: HTMLElement[] = [ui.h('span', '', S.releaseCurrent(status.currentVersion))];
-      if (status.checkout === 'development') parts.push(ui.h('span', '', S.releaseDevelopment));
-      if (status.update) {
-        parts.push(ui.h('span', '', S.releaseUpdate(status.update.version)));
-        const link = ui.h('a', '', S.releaseNotes);
-        link.href = status.update.url;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        parts.push(link);
-      }
-      releaseStatus.replaceChildren(...parts);
-    } catch (err) {
-      if (signal.aborted || (err as { name?: string } | null)?.name === 'AbortError') return;
-      const retry = ui.h('button', '', S.releaseRetry);
-      retry.type = 'button';
-      retry.addEventListener('click', () => { void loadRelease(); }, { signal });
-      releaseStatus.replaceChildren(ui.h('span', '', S.releaseFailed), retry);
-    }
-  }
-  void loadRelease();
+  // 检查失败不显示任何东西：提示只在确知有新版本时出现。
+  get<{ currentVersion: string; update?: { version: string; url: string } }>('/api/framework/release', { signal })
+    .then((status) => {
+      if (signal.aborted || !status?.update) return;
+      const hint = ui.h('a', 'release-hint', S.releaseUpdate(status.update.version, status.currentVersion));
+      hint.href = status.update.url;
+      hint.target = '_blank';
+      hint.rel = 'noopener noreferrer';
+      brand.appendChild(hint);
+    })
+    .catch(() => {});
 
   // ---- 导航 -------------------------------------------------------------
 

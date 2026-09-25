@@ -41,8 +41,8 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 
 ## 服务端
 
-`GET /api/framework/release` 返回当前检出版本。检出位于同版本 tag 时还检查 GitHub 的最新正式发布；
-开发检出不查询发布源。上游检查失败由请求返回错误，浏览器提供重试。
+`GET /api/framework/release` 返回 `package.json` 的版本；GitHub 最新正式 Release 更高时带上它的版本与链接，
+查询失败返回错误。
 
 `WebApp` 默认监听 `127.0.0.1`，支持由依赖配置指定监听地址。从首选端口起最多尝试五个端口；
 端口为 0 时仅申请一次系统分配。WebSocket 使用 `noServer` 分派 `/ws/debug`、`/ws/sessions` 和面板流。

@@ -30,13 +30,7 @@ const zh = {
   renameTitle: '点击改名',
   renameSaved: '展示名已保存',
   renameFailed: (msg: string) => `展示名没保存成:${msg}`,
-  releaseChecking: '检查框架更新…',
-  releaseCurrent: (version: string) => `Cortico ${version}`,
-  releaseDevelopment: '开发检出',
-  releaseUpdate: (version: string) => `新版本 ${version}`,
-  releaseNotes: '发布说明',
-  releaseFailed: '框架更新检查失败',
-  releaseRetry: '重试',
+  releaseUpdate: (latest: string, current: string) => `Cortico ${latest} 已发布(当前 ${current})`,
 };
 
 const en: typeof zh = {
@@ -69,13 +63,7 @@ const en: typeof zh = {
   renameTitle: 'Click to rename',
   renameSaved: 'Display name saved',
   renameFailed: (msg: string) => `Display name not saved: ${msg}`,
-  releaseChecking: 'Checking framework updates…',
-  releaseCurrent: (version: string) => `Cortico ${version}`,
-  releaseDevelopment: 'Development checkout',
-  releaseUpdate: (version: string) => `New release ${version}`,
-  releaseNotes: 'Release notes',
-  releaseFailed: 'Framework update check failed',
-  releaseRetry: 'Retry',
+  releaseUpdate: (latest: string, current: string) => `Cortico ${latest} released (running ${current})`,
 };
 
 export const S = pick({ zh, en });

@@ -1,14 +1,15 @@
-/** Cortico 的发布提醒以当前检出的版本 tag 和 GitHub Releases 为准。 */
-import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+/** 框架更新提示：`package.json` 的版本低于 GitHub 最新正式 Release 时给出新版本。 */
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { repoRoot } from '../paths.ts';
 
 const RELEASE_URL = 'https://api.github.com/repos/Pal-AI-Lab/Cortico/releases/latest';
+/** 与仓库其余出站元数据查询同一时限。 */
+const RELEASE_TIMEOUT_MS = 15_000;
 
 export interface FrameworkReleaseStatus {
   currentVersion: string;
-  checkout: 'release' | 'development';
+  /** 最新正式 Release 的版本高于 currentVersion 时才有。 */
   update?: { version: string; url: string };
 }
 
@@ -28,20 +29,12 @@ function isNewer(latest: string, current: string): boolean {
 }
 
 export async function checkFrameworkRelease(
-  root = repoRoot(), releaseUrl = RELEASE_URL, signal?: AbortSignal,
+  root = repoRoot(), releaseUrl = RELEASE_URL, signal: AbortSignal = AbortSignal.timeout(RELEASE_TIMEOUT_MS),
 ): Promise<FrameworkReleaseStatus> {
-  const { version } = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version: string };
-  let tag = '';
-  try {
-    tag = execFileSync('git', ['describe', '--tags', '--exact-match', 'HEAD'], {
-      cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-  } catch { /* 非发布检出 */ }
-  if (tag !== `v${version}` && tag !== version) return { currentVersion: version, checkout: 'development' };
-
+  const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
   const response = await fetch(releaseUrl, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cortico' },
-    signal: signal ?? AbortSignal.timeout(15_000),
+    signal,
   });
   if (!response.ok) throw new Error(`GitHub Releases: HTTP ${response.status}`);
   const release = await response.json() as { tag_name?: unknown; html_url?: unknown };
@@ -52,7 +45,8 @@ export async function checkFrameworkRelease(
   if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('GitHub Releases: 链接无效');
   return {
     currentVersion: version,
-    checkout: 'release',
-    ...(isNewer(release.tag_name, version) ? { update: { version: release.tag_name, url: url.href } } : {}),
+    ...(isNewer(release.tag_name, version)
+      ? { update: { version: release.tag_name.replace(/^v/, ''), url: url.href } }
+      : {}),
   };
 }

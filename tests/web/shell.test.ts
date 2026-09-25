@@ -724,9 +724,9 @@ describe('bot 实例名', () => {
     const { el } = await mkShell();
     await flush();
     const brand = el.find('brand')!;
-    expect(brand.getAttribute('aria-label')).toBe('Cortico');
     expect(brand.textContent).toBe('');
     expect(brand.children[0].tagName).toBe('svg');
+    expect(brand.children[0].getAttribute('aria-label')).toBe('Cortico');
   });
 
   it('拿不到 / 空串 → 留中性缺省，不报错卡', async () => {
@@ -766,43 +766,36 @@ describe('连接状态', () => {
   });
 });
 
-describe('框架发布提醒', () => {
-  it('显示运行版本、新版本和发布说明链接', async () => {
-    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve({
-      ok: true, status: 200,
-      text: () => Promise.resolve(JSON.stringify(String(url) === '/api/framework/release'
-        ? { currentVersion: '1.2.3', checkout: 'release', update: {
-          version: 'v1.3.0', url: 'https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0',
-        } }
-        : {})),
+describe('框架更新提示', () => {
+  const answer = (release: unknown) => (url: unknown) => Promise.resolve({
+    ok: true, status: 200,
+    text: () => Promise.resolve(JSON.stringify(String(url) === '/api/framework/release' ? release : {})),
+  });
+
+  it('有新版本时字标下出现带发布说明链接的提示', async () => {
+    vi.stubGlobal('fetch', answer({
+      currentVersion: '1.2.3',
+      update: { version: '1.3.0', url: 'https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0' },
     }));
     const { el } = await mkShell();
     await flush();
-    const notice = el.find('rail-release')!;
-    expect(notice.textContent).toContain('Cortico 1.2.3');
-    expect(notice.textContent).toContain('新版本 v1.3.0');
-    expect(notice.children.find((part) => part.tagName === 'a')?.href)
-      .toBe('https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0');
+    const hint = el.find('brand')!.children.find((part) => part.tagName === 'a')!;
+    expect(hint.textContent).toBe('Cortico 1.3.0 已发布(当前 1.2.3)');
+    expect(hint.href).toBe('https://github.com/Pal-AI-Lab/Cortico/releases/tag/v1.3.0');
   });
 
-  it('检查失败显示重试，开发检出不显示升级链接', async () => {
-    let checks = 0;
-    vi.stubGlobal('fetch', (url: unknown) => {
-      if (String(url) !== '/api/framework/release') return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve('{}') });
-      checks++;
-      return Promise.resolve(checks === 1
-        ? { ok: false, status: 503, text: () => Promise.resolve('{"error":"unavailable"}') }
-        : { ok: true, status: 200, text: () => Promise.resolve('{"currentVersion":"1.4.0","checkout":"development"}') });
-    });
-    const { el } = await mkShell();
+  it('没有新版本或检查失败时只有字标', async () => {
+    vi.stubGlobal('fetch', answer({ currentVersion: '1.2.3' }));
+    const current = await mkShell();
     await flush();
-    const notice = el.find('rail-release')!;
-    expect(notice.textContent).toContain('框架更新检查失败');
-    click(notice.children.find((part) => part.tagName === 'button')!);
+    expect(current.el.find('brand')!.children).toHaveLength(1);
+
+    vi.stubGlobal('fetch', (url: unknown) => Promise.resolve(String(url) === '/api/framework/release'
+      ? { ok: false, status: 503, text: () => Promise.resolve('{"error":"unavailable"}') }
+      : { ok: true, status: 200, text: () => Promise.resolve('{}') }));
+    const failed = await mkShell();
     await flush();
-    expect(notice.textContent).toContain('Cortico 1.4.0');
-    expect(notice.textContent).toContain('开发检出');
-    expect(notice.children.some((part) => part.tagName === 'a')).toBe(false);
+    expect(failed.el.find('brand')!.children).toHaveLength(1);
   });
 });
 
