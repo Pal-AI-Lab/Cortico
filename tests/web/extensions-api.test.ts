@@ -45,6 +45,7 @@ beforeAll(async () => {
         searched.push({ ...(kind ? { kind } : {}) });
         return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: 1, dependents: 0, links: {}, installed: false, ...(kind ? { kind } : {}) }];
       },
+      updates: async () => ({ updates: [{ name: 'a', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [] }),
       packageInfo: async (name) => {
         asked.push(name);
         if (name === 'bad name') throw new Error('不是合法的 npm 包名: bad name');
@@ -77,6 +78,12 @@ describe('/api/extensions', () => {
     expect(r.status).toBe(200);
     expect(r.body.dir).toBe('/repo/extensions');
     expect(r.body.extensions[0]).toMatchObject({ name: 'a', state: 'loaded' });
+  });
+
+  it('更新查询返回可用版本', async () => {
+    const r = await get('/api/extensions/updates');
+    expect(r.status).toBe(200);
+    expect(r.body.updates).toMatchObject([{ name: 'a', latestVersion: '1.1.0' }]);
   });
 
   it('搜索列出一整类,回 { hits }', async () => {
@@ -145,6 +152,7 @@ describe('/api/extensions', () => {
       expect(caps.capabilities.extensions).toBe(false);
       expect(caps.capabilities.restart).toBe(false);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions`)).status).toBe(503);
+      expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/updates`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/search`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/package?name=x`)).status).toBe(503);
       expect((await fetch(`http://127.0.0.1:${p2}/api/extensions/install`, { method: 'POST' })).status).toBe(503);

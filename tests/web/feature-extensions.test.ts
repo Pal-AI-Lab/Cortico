@@ -66,7 +66,7 @@ const DETAIL = {
 
 let calls: Array<{ url: string; method: string; body: Any }> = [];
 
-function stub(over: { list?: unknown; installStatus?: number; hits?: unknown; detail?: Any; detailStatus?: number } = {}): void {
+function stub(over: { list?: unknown; updates?: unknown; updateStatus?: number; installStatus?: number; hits?: unknown; detail?: Any; detailStatus?: number } = {}): void {
   vi.stubGlobal('fetch', (url: unknown, init: Any) => {
     const u = String(url);
     const method = String(init?.method ?? 'GET');
@@ -74,6 +74,7 @@ function stub(over: { list?: unknown; installStatus?: number; hits?: unknown; de
     let status = 200;
     let body: unknown = {};
     if (u === '/api/extensions') body = over.list ?? LIST;
+    else if (u === '/api/extensions/updates') { status = over.updateStatus ?? 200; body = status === 200 ? over.updates ?? { updates: [], errors: [] } : { error: 'npm unavailable' }; }
     else if (u.startsWith('/api/extensions/package')) {
       status = over.detailStatus ?? 200;
       body = status === 200 ? { ...DETAIL, ...(over.detail ?? {}) } : { error: 'npm 没有这个包' };
@@ -142,6 +143,43 @@ beforeEach(() => { calls = []; });
 afterEach(() => { vi.unstubAllGlobals(); document.body.replaceChildren(); });
 
 describe('已安装清单', () => {
+  it('发现新版本时显示版本并可就地更新；检查失败不显示已是最新', async () => {
+    stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [{ name: 'beta-mod', error: 'registry unavailable' }] } });
+    const { ctx, root } = mkCtx();
+    mountExtensions(ctx);
+    await flush();
+    expect(root.textContent).toContain('可更新 1 个扩展');
+    expect(root.textContent).toContain('检查失败');
+    const alpha = cardOf(root, '甲扩展');
+    expect(alpha.textContent).toContain('1.0.0 → 1.1.0');
+    button(alpha, '更新').click();
+    await flush();
+    expect(calls.find((c) => c.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '1.1.0' });
+    answer(false);
+  });
+
+  it('新版契约不兼容时先显示原因并确认；整体检查失败不显示更新', async () => {
+    stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '2.0.0', problems: ['扩展要求契约 v9'] }], errors: [] } });
+    const a = mkCtx();
+    mountExtensions(a.ctx);
+    await flush();
+    expect(cardOf(a.root, '甲扩展').textContent).toContain('扩展要求契约 v9');
+    button(cardOf(a.root, '甲扩展'), '更新').click();
+    await flush();
+    expect(calls.some((c) => c.url === '/api/extensions/install')).toBe(false);
+    answer(true);
+    await flush();
+    expect(calls.find((c) => c.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '2.0.0' });
+    answer(false);
+
+    document.body.replaceChildren();
+    stub({ updateStatus: 502 });
+    const b = mkCtx();
+    mountExtensions(b.ctx);
+    await flush();
+    expect(b.root.textContent).toContain('更新检查失败');
+    expect(b.root.textContent).not.toContain('可更新');
+  });
   it('扩展卡片显示状态和失败原因，已卸载的扩展没有卸载按钮', async () => {
     stub();
     const { ctx, root } = mkCtx();
@@ -170,6 +208,16 @@ describe('已安装清单', () => {
     expect(root.textContent).toContain('待重启 2');
     expect(root.textContent).toContain('加载失败 2');
     expect(root.textContent).toContain('C:/repo/extensions');
+  });
+
+  it('磁盘版本不同于运行版本时显示重启后将加载的版本', async () => {
+    stub({ list: { dir: 'd', extensions: [{
+      ...LIST.extensions[0], installedVersion: '1.2.0', state: 'pending-restart',
+    }] } });
+    const { ctx, root } = mkCtx();
+    mountExtensions(ctx);
+    await flush();
+    expect(cardOf(root, '甲扩展').textContent).toContain('磁盘版本 1.2.0，重启后加载');
   });
 
   it('按 kind 分三组,读不出 manifest 的包归「未识别」并把原因摆出来', async () => {

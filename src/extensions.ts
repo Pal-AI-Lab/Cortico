@@ -19,6 +19,7 @@ import type {
   ExtensionInstallTarget,
   ExtensionPackageDetail,
   ExtensionSearchHit,
+  ExtensionUpdateResult,
 } from './web/server.ts';
 import {
   EXTENSION_API_VERSIONS,
@@ -348,6 +349,33 @@ const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
  * 重定向与管道,而 Windows 上 corepack 只能经 shell 起。
  */
 const VERSION_SPEC = /^[0-9a-zA-Z.^~*+-]{1,64}$/;
+
+/** 比较 npm 的标准 SemVer；无法比较时不猜测是否有更新。 */
+function newerVersion(latest: string, installed: string): boolean | null {
+  const parse = (value: string) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(latest);
+  const b = parse(installed);
+  if (!a || !b) return null;
+  for (let i = 1; i <= 3; i++) {
+    const left = BigInt(a[i]);
+    const right = BigInt(b[i]);
+    if (left !== right) return left > right;
+  }
+  if (!a[4] && !b[4]) return false;
+  if (!a[4]) return true;
+  if (!b[4]) return false;
+  const left = a[4].split('.');
+  const right = b[4].split('.');
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    if (left[i] === right[i]) continue;
+    const xNumeric = /^(0|[1-9]\d*)$/.test(left[i]);
+    const yNumeric = /^(0|[1-9]\d*)$/.test(right[i]);
+    if (xNumeric && yNumeric) return BigInt(left[i]) > BigInt(right[i]);
+    if (xNumeric !== yNumeric) return !xNumeric;
+    return left[i] > right[i];
+  }
+  return left.length > right.length;
+}
 /** 本地目录。排除 `%` `!` `"` 与重定向符,其余交给引号。 */
 const LOCAL_PATH = /^[A-Za-z0-9_.\-/:\\ ~]{1,512}$/;
 
@@ -474,10 +502,12 @@ export class ExtensionManager {
     for (const r of this.booted.records) {
       const spec = onDisk.get(r.name);
       onDisk.delete(r.name);
+      const installedVersion = spec === undefined ? undefined
+        : readPackageJson(join(this.dir, 'node_modules', ...r.name.split('/'), 'package.json'))?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
-        : spec !== r.spec ? 'pending-restart'
+        : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
-      out.push({ ...r, state });
+      out.push({ ...r, ...(spec === undefined ? {} : { installedVersion }), state });
     }
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
@@ -488,6 +518,7 @@ export class ExtensionManager {
         name,
         spec,
         version: pkg?.version ?? null,
+        installedVersion: pkg?.version ?? null,
         consoleClient: manifest?.consoleClient !== undefined,
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
         ...(manifest && manifest.consoleClient === undefined ? { console: 'none' as const } : {}),
@@ -497,6 +528,31 @@ export class ExtensionManager {
       });
     }
     return { dir: this.dir, extensions: out };
+  }
+
+  /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
+  async updates(): Promise<ExtensionUpdateResult> {
+    const checks = readInstalled(this.dir)
+      .filter(({ spec }) => !/^(?:link|file|workspace):/.test(spec))
+      .map(async ({ name }) => {
+        try {
+          const installedVersion = readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'))?.version;
+          if (!installedVersion) throw new Error('本机包缺失');
+          const info = await this.packageInfo(name);
+          const newer = newerVersion(info.version, installedVersion);
+          if (newer === null) throw new Error(`无法比较版本 ${installedVersion} 与 ${info.version}`);
+          return newer ? { update: {
+            name, installedVersion, latestVersion: info.version, problems: info.problems ?? [],
+          } } : {};
+        } catch (err) {
+          return { error: { name, error: err instanceof Error ? err.message : String(err) } };
+        }
+      });
+    const results = await Promise.all(checks);
+    return {
+      updates: results.flatMap((result) => result.update ? [result.update] : []),
+      errors: results.flatMap((result) => result.error ? [result.error] : []),
+    };
   }
 
   /**
