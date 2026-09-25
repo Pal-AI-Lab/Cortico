@@ -179,6 +179,7 @@ export type ConsoleWorldInfo = WorldInfo | InactiveWorldInfo | UnavailableWorldI
  * `idle` = bot 包装了但这份部署没引用它。
  */
 export interface ExtensionInfo {
+  metadata?: Partial<ExtensionPackageDetail>;
   builtin?: boolean;
   location?: string;
   name: string;
@@ -239,6 +240,7 @@ export interface ExtensionUpdateResult {
 
 /** 一个 npm 包的详情。操作员点开某条搜索结果时才取。 */
 export interface ExtensionPackageDetail {
+  displayName?: string;
   name: string;
   /** dist-tag `latest` 指的版本 */
   version: string;
@@ -268,7 +270,7 @@ export interface ExtensionPackageDetail {
   dependencies: string[];
   maintainers: string[];
   publisher?: string;
-  links: { npm: string; repository?: string; homepage?: string; bugs?: string };
+  links: { npm?: string; repository?: string; homepage?: string; bugs?: string };
   installed: boolean;
   /** 已安装时 extensions/package.json 里写的那个版本范围 */
   installedSpec?: string;

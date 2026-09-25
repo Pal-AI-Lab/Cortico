@@ -37,7 +37,7 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 | `/api/console/manifest` | 页面声明。 |
 | `/api/console/lamps` | 状态灯。 |
 | `/api/extensions/updates` | 已安装 npm 扩展的可用新版本及逐包检查错误。 |
-| `/api/extensions` | 安装位置、扩展状态与本机包声明的作者。 |
+| `/api/extensions` | 安装位置、扩展状态、作者和本机包元数据。 |
 | `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
 | `/ws/providers/<page>/panels/<panel>` | 面板流。 |
 

@@ -12,6 +12,7 @@ export type ExtensionKindView = 'world' | 'provider' | 'bot';
 
 /** 与 `src/web/server.ts` 的 `ExtensionInfo` 同形。 */
 export interface ExtensionView {
+  metadata?: Partial<PackageDetailView>;
   builtin?: boolean;
   location?: string;
   name: string;
@@ -66,6 +67,7 @@ export interface SearchHitView {
 
 /** 与 `ExtensionPackageDetail` 同形。点开一张结果卡时才取。 */
 export interface PackageDetailView {
+  displayName?: string;
   name: string;
   version: string;
   description?: string;
@@ -86,7 +88,7 @@ export interface PackageDetailView {
   dependencies: string[];
   maintainers: string[];
   publisher?: string;
-  links: { npm: string; repository?: string; homepage?: string; bugs?: string };
+  links: { npm?: string; repository?: string; homepage?: string; bugs?: string };
   installed: boolean;
   installedSpec?: string;
 }
@@ -231,26 +233,41 @@ export function mountExtensions(ctx: FeatureContext): void {
     const next = ui.button(S.nextPage, { onClick: () => change(page + 1) }); next.disabled = page === pages - 1;
     node.append(prev, ui.h('span', '', S.pageOf(page + 1, pages)), next);
   }
+  const detailsCache = new Map<string, Promise<PackageDetailView>>();
+  function fetchDetail(name: string, version?: string) {
+    const key = name + '@' + (version ?? 'latest');
+    let request = detailsCache.get(key);
+    if (!request) {
+      request = get<PackageDetailView>('/api/extensions/package?name=' + encodeURIComponent(name) + (version ? '&version=' + encodeURIComponent(version) : ''), { signal });
+      detailsCache.set(key, request);
+      void request.catch(() => detailsCache.delete(key));
+    }
+    return request;
+  }
   function showLocal(item: ExtensionView) {
     const box = ui.h('div', 'extension-detail');
-    box.append(ui.kv([{ k: V.packageLabel, v: item.name }, { k: S.fieldVersion, v: item.installedVersion ?? item.version ?? '—' }, { k: V.directory, v: item.location ?? directory }, ...(item.builtin || item.api === undefined ? [] : [{ k: S.apiPill(item.api), v: item.console ?? 'none' }])]));
-    if (item.builtin) box.append(ui.h('p', 'sh-desc', V.builtinNote));
-    if (item.description) box.append(ui.h('p', '', item.description));
-    if (item.reason || item.activationError) box.append(ui.msgline(item.activationError ?? item.reason, true));
-    if (item.console === 'missing') box.append(ui.msgline(S.noteConsoleMissing, true));
-    ui.drawer(item.label ?? item.name, box);
+    ui.drawer(item.metadata?.displayName ?? item.label ?? item.name, box);
+    const hit = states[kind].hits.find(hit => hit.name === item.name);
+    const local: PackageDetailView = { name: item.name, version: item.installedVersion ?? item.version ?? '—', versionCount: 0, history: [], warnings: [], frameworkApi: item.api ?? 0, dependencies: [], maintainers: [], links: {}, installed: true, ...item.metadata, description: item.description ?? item.metadata?.description, publisher: item.author };
+    renderDetail(box, local, kind, hit, item);
+    if (!item.builtin && !/^(link:|file:)/.test(item.spec) && item.state !== 'removed') {
+      void fetchDetail(item.name).then(data => {
+        if (!signal.aborted && box.isConnected) renderDetail(box, data, kind, hit, item);
+      }).catch(error => { if (!signal.aborted && box.isConnected) box.append(ui.msgline(errorText(error), true)); });
+    }
   }
   function installedCard(item: ExtensionView) {
     const card = ui.h('article', 'extension-card' + (item.enabled ? ' is-enabled' : ''));
     const heading = ui.h('div', 'extension-card-heading');
     if (item.kind === 'bot') { const avatar = ui.h('span', 'extension-avatar'); avatar.append(brandMark(root.ownerDocument)); heading.append(avatar); }
-    const title = ui.button(item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
+    const title = ui.button(item.metadata?.displayName ?? item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
     heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'bot' ? V.adopted : S.stateLoaded, 'on'));
     card.append(heading);
     const text = item.activationError ? S.stateFailed : item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.enabled ? (item.kind === 'bot' ? V.adopted : V.enabled) : stateLabels[item.state];
     const failed = !!item.activationError || item.state === 'failed';
     const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
-    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : ''), `${symbol} ${text}`));
+    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
+    if (!item.builtin) card.append(ui.h('div', 'extension-meta', item.name));
     const author = states[kind].hits.find(hit => hit.name === item.name)?.publisher ?? item.author ?? V.unknownAuthor;
     card.append(ui.h('div', 'extension-meta', [item.builtin ? V.builtin : '', V.version(item.installedVersion ?? item.version ?? '—'), V.author(author)].filter(Boolean).join(' · ')));
     if (item.description) card.append(ui.h('p', 'extension-description', item.description));
@@ -297,9 +314,11 @@ export function mountExtensions(ctx: FeatureContext): void {
       const owner = kind; card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('aria-label', hit.name);
       card.addEventListener('click', () => openDetail(hit, owner), { signal });
       card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(hit, owner); } }, { signal });
-      const heading = ui.h('div', 'extension-card-heading'); const title = ui.h('span', 'extension-card-title', hit.name); title.title = hit.name;
+      const heading = ui.h('div', 'extension-card-heading'); const local = installed.find(item => item.name === hit.name);
+      const title = ui.h('span', 'extension-card-title', local?.metadata?.displayName ?? local?.label ?? hit.name); title.title = title.textContent ?? hit.name;
+      void fetchDetail(hit.name, hit.version).then(data => { if (!signal.aborted && data.displayName) title.textContent = title.title = data.displayName; }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
       heading.append(title); if (hit.installed) heading.append(ui.pill(S.alreadyInstalled));
-      card.append(heading, ui.h('div', 'extension-meta', `${V.version(hit.version)}${hit.publisher ? '　' + V.author(hit.publisher) : ''}`), ui.h('p', 'extension-description', hit.description));
+      card.append(heading, ui.h('div', 'extension-meta', hit.name), ui.h('div', 'extension-meta', `${V.version(hit.version)}${hit.publisher ? '　' + V.author(hit.publisher) : ''}`), ui.h('p', 'extension-description', hit.description));
       const info = ui.rowbar(); info.classList.add('extension-tags');
       if (hit.license) info.append(ui.pill(hit.license));
       if (hit.date) info.append(ui.pill(hit.date.slice(0, 10)));
@@ -390,35 +409,51 @@ export function mountExtensions(ctx: FeatureContext): void {
       finally { busy.delete(item.name); if (!signal.aborted) renderInstalled(); }
     }
   }
-  function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
-    const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail)); ui.drawer(hit.name, box);
-    void get<PackageDetailView>(`/api/extensions/package?name=${encodeURIComponent(hit.name)}&version=${encodeURIComponent(hit.version)}`, { signal }).then(data => {
-      if (signal.aborted) return; box.replaceChildren(ui.h('h4', '', V.introduction), ui.h('p', '', data.description ?? '—'));
+  function renderDetail(box: HTMLElement, data: PackageDetailView, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
+      const title = box.closest('.modalcard')?.querySelector('.modaltitle');
+      if (title) title.textContent = data.displayName ?? item?.metadata?.displayName ?? item?.label ?? data.name;
+      box.replaceChildren(ui.h('h4', '', V.introduction), ui.h('p', '', item?.builtin ? [item.description, V.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'));
+      if (item?.reason || item?.activationError) box.append(ui.msgline(item.activationError ?? item.reason, true));
+      if (item?.console === 'missing') box.append(ui.msgline(S.noteConsoleMissing, true));
       for (const text of [...data.problems ?? [], ...data.warnings]) box.append(ui.msgline(text, true));
       if (data.deprecated) box.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [
-        { k: S.fieldVersion, v: data.version }, { k: S.fieldLicense, v: data.license ?? '—' },
+        { k: V.packageName, v: data.name },
+        { k: V.authorLabel, v: item?.author ?? data.publisher ?? hit?.publisher ?? V.unknownAuthor },
+        ...(item ? [{ k: V.installedVersion, v: item.installedVersion ?? item.version ?? '—' }, { k: V.directory, v: item.location ?? directory }] : []),
+        { k: item?.builtin ? V.runtime : S.fieldVersion, v: data.version }, { k: S.fieldLicense, v: data.license ?? '—' },
         { k: V.released, v: data.published?.slice(0, 10) ?? '—' },
-        { k: S.fieldReleases, v: S.releaseCount(data.versionCount, data.created?.slice(0, 10) ?? '') },
+        { k: S.fieldReleases, v: data.versionCount ? S.releaseCount(data.versionCount, data.created?.slice(0, 10) ?? '') : '—' },
         { k: S.fieldSize, v: data.unpackedSize === undefined ? '—' : S.sizeAndFiles(ui.fmt.bytes(data.unpackedSize), data.fileCount ?? 0) },
         { k: S.fieldMaintainers, v: data.maintainers.join('、') || '—' },
         { k: S.fieldNode, v: data.engines ?? '—' }, { k: S.fieldDeps, v: data.dependencies.join('、') || S.none },
         { k: S.fieldKeywords, v: data.keywords?.join('、') || '—' },
-        { k: S.fieldDownloads, v: V.downloads(ui.fmt.count(hit.downloads)) }, { k: S.fieldDependents, v: String(hit.dependents) },
+        { k: S.fieldDownloads, v: hit ? V.downloads(ui.fmt.count(hit.downloads)) : '—' }, { k: S.fieldDependents, v: hit ? String(hit.dependents) : '—' },
       ];
       box.append(ui.h('h4', '', V.information), ui.kv(rows));
-      if (data.history.length) {
+      {
         const releases = ui.h('details', 'extension-releases');
         releases.append(ui.h('summary', '', S.fieldHistory));
         const history = ui.h('div', 'extension-history');
         for (const release of data.history) { const row = ui.h('div'); row.append(ui.h('code', '', release.version), ui.h('time', 'muted', release.date.slice(0, 10))); history.append(row); }
-        releases.append(history); box.append(releases);
+        releases.append(data.history.length ? history : ui.h('p', 'muted', V.noHistory)); box.append(releases);
       }
       const actions = ui.rowbar(); actions.classList.add('extension-detail-actions');
       for (const [name, href] of Object.entries(data.links)) if (href && /^https?:\/\//i.test(href)) { const a = ui.h('a', 'btn secondary', V.linkNames[name as keyof typeof V.linkNames]); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; actions.append(a); }
-      const button = ui.button(data.installed ? S.alreadyInstalled : S.install, { variant: 'primary', onClick: () => { button.disabled = true; void operate('install', { name: data.name, version: data.version }, 'market', owner).finally(() => { if (box.isConnected) button.disabled = installed.some(item => item.name === data.name); }); } });
-      button.disabled = data.installed || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(ui.h('span', 'grow'), button); box.append(actions);
-    }).catch(error => { if (!signal.aborted) box.replaceChildren(ui.msgline(errorText(error), true)); });
+      if (!item) {
+        const isInstalled = installed.some(item => item.name === data.name && item.state !== 'removed');
+        const button = ui.button(isInstalled ? S.alreadyInstalled : S.install, { variant: 'primary', onClick: () => { button.disabled = true; void operate('install', { name: data.name, version: data.version }, 'market', owner).finally(() => { if (box.isConnected) button.disabled = installed.some(item => item.name === data.name && item.state !== 'removed'); }); } });
+        button.disabled = isInstalled || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(ui.h('span', 'grow'), button);
+      }
+      if (actions.hasChildNodes()) box.append(actions);
+  }
+  function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
+    const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail));
+    const item = installed.find(item => item.name === hit.name && item.state !== 'removed');
+    ui.drawer(item?.metadata?.displayName ?? item?.label ?? hit.name, box);
+    void fetchDetail(hit.name, hit.version).then(data => {
+      if (!signal.aborted && box.isConnected) renderDetail(box, data, owner, hit);
+    }).catch(error => { if (!signal.aborted && box.isConnected) box.replaceChildren(ui.msgline(errorText(error), true)); });
   }
 
   async function restart(confirmed = false) {

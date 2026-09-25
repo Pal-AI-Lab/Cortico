@@ -28,6 +28,12 @@ const byName = async (opts?: Parameters<typeof loadExtensions>[1]) => {
   return { set, records: Object.fromEntries(set.records.map((r) => [r.name, r])) };
 };
 
+it('reads an optional display name without importing extension code', () => {
+  const cortico = { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: ' 示例扩展 ' };
+  expect(parseExtensionManifest({ type: 'module', cortico })).toMatchObject({ ok: true, manifest: { displayName: '示例扩展' } });
+  expect(parseExtensionManifest({ type: 'module', cortico: { ...cortico, displayName: {} } })).toMatchObject({ ok: false });
+});
+
 describe('按 kind 分派', () => {
   it('worlds 进 World 表、provider 进端点表,各自记下 kind 与契约版本', async () => {
     installFixture(root, 'world-ok');

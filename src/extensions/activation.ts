@@ -6,7 +6,7 @@ import type { CoreConfig } from '../core/types.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { WorldAssembly } from '../world.ts';
 import type { ExtensionInfo } from '../web/server.ts';
-import { ExtensionManager, type ExtensionSet } from '../extensions.ts';
+import { ExtensionManager, packageMetadata, type ExtensionSet } from '../extensions.ts';
 
 interface Intent { name: string; version: string; moduleId: string }
 interface State { providers: Record<string, boolean>; pending: Intent[]; errors: Record<string, string> }
@@ -38,8 +38,9 @@ export class ExtensionActivation {
     this.leaseFile = join(leaseDir, randomUUID() + '.json');
   }
   private builtins(): ExtensionInfo[] {
-    const version = existsSync(join(this.repo, 'package.json')) ? read(join(this.repo, 'package.json')).version ?? null : null;
-    const common = { builtin: true, spec: 'builtin', version, installedVersion: version, loaded: true, state: 'loaded' as const, consoleClient: false };
+    const pkg = existsSync(join(this.repo, 'package.json')) ? read(join(this.repo, 'package.json')) : {};
+    const version = pkg.version ?? null;
+    const common = { builtin: true, author: 'phantivia', metadata: packageMetadata(pkg), spec: 'builtin', version, installedVersion: version, loaded: true, state: 'loaded' as const, consoleClient: false };
     return [
       ...[...this.assembly.definitions, ...this.assembly.slots.filter(slot => !slot.definition)].filter(slot => !this.booted.worlds.some(world => world.id === slot.id)).map(slot => ({
         ...common, name: `builtin:world:${slot.id}`, kind: 'world' as const, worldId: slot.id, label: slot.label,

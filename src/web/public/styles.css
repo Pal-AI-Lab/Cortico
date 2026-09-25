@@ -1910,8 +1910,9 @@
 .extension-card-heading .extension-card-title { flex: 1; }
 .extension-card-heading .pill { flex: 0 0 auto; white-space: nowrap; font-size: 11px; }
 .extension-card-heading { flex-wrap: nowrap; }
-.extension-market-card { cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
-.extension-market-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 6px 18px -10px var(--shadow-strong); }
+.extension-market-card { cursor: pointer; }
+.extension-card { transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.extension-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 6px 18px -10px var(--shadow-strong); }
 .extension-market-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .extension-tags { margin-top: auto; gap: 6px; font-size: 11px; }
 .extension-tags .pill { white-space: nowrap; border-color: var(--line-strong); padding: 3px 8px; }
@@ -1936,7 +1937,7 @@
 .extension-detail-actions a.btn { border: 1px solid var(--line-strong); }
 .confirm-card .modalbody > .rowbar { margin-top: 24px; }
 .confirm-card .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
-@media (prefers-reduced-motion: reduce) { .extension-market-card { transition: none; } .extension-market-card:hover { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .extension-card { transition: none; } .extension-card:hover { transform: none; } }
 .extension-detail-actions > button:last-child { margin-left: auto; }
 
 .extension-category > .sheet > h3 { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
@@ -1947,3 +1948,8 @@
 .extension-releases summary { cursor: pointer; font-weight: 600; }
 .extension-history { font: 12.5px/1.5 var(--mono); }
 .extension-history code { font: inherit; }
+.extension-status.on { color: var(--ok); }
+.extension-status.off { color: var(--ink-dim); }
+.modalcard:has(.extension-detail) { height: min(84dvh, 920px); }
+.modalbody:has(> .extension-detail) { scrollbar-width: none; overflow-anchor: none; }
+.modalbody:has(> .extension-detail)::-webkit-scrollbar { display: none; }

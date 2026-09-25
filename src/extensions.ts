@@ -100,6 +100,18 @@ function readPackageJson(file: string): ExtensionPackageJson | null {
   return JSON.parse(readFileSync(file, 'utf8')) as ExtensionPackageJson;
 }
 
+export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPackageDetail> {
+  const parsed = parseExtensionManifest(pkg);
+  const repository = urlOf(pkg.repository), bugs = urlOf(pkg.bugs);
+  return {
+    ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
+    description: pkg.description, license: pkg.license, engines: pkg.engines?.node,
+    dependencies: Object.keys(pkg.dependencies ?? {}), keywords: pkg.keywords,
+    publisher: typeof pkg.author === 'string' ? pkg.author : pkg.author?.name,
+    links: { ...(repository ? { repository: repositoryWebUrl(repository) } : {}), ...(pkg.homepage ? { homepage: pkg.homepage } : {}), ...(bugs ? { bugs } : {}) },
+  };
+}
+
 /** 读取 extensions/package.json 的直接依赖；目录不存在时返回空列表。 */
 export function readInstalled(dir: string): Array<{ name: string; spec: string }> {
   const pkg = readPackageJson(join(installedEnvironment(dir), 'package.json'));
@@ -534,7 +546,7 @@ export class ExtensionManager {
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
         : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
-      out.push({ ...r, author: typeof pkg?.author === 'string' ? pkg.author : pkg?.author?.name, ...(spec === undefined ? {} : { installedVersion }), state });
+      out.push({ ...r, metadata: pkg ? packageMetadata(pkg) : undefined, author: typeof pkg?.author === 'string' ? pkg.author : pkg?.author?.name, ...(spec === undefined ? {} : { installedVersion }), state });
     }
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
@@ -546,6 +558,7 @@ export class ExtensionManager {
         spec,
         version: pkg?.version ?? null,
         installedVersion: pkg?.version ?? null,
+        metadata: pkg ? packageMetadata(pkg) : undefined,
         author: typeof pkg?.author === 'string' ? pkg.author : pkg?.author?.name,
         consoleClient: manifest?.consoleClient !== undefined,
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
@@ -634,7 +647,7 @@ export class ExtensionManager {
   }
 
   /**
-   * 一个包的详情。控制台在操作员点开某张卡片时才调，因此这里取整份包文档
+   * 一个包的详情。市场卡片和详情弹窗读取整份包文档
    * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
    * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
    */
@@ -658,6 +671,7 @@ export class ExtensionManager {
     return {
       name,
       version: latest,
+      ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
       ...(v.description ? { description: v.description } : {}),
       ...(v.license ? { license: v.license } : {}),
       ...(v.keywords?.length ? { keywords: v.keywords } : {}),

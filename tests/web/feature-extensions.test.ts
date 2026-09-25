@@ -316,8 +316,19 @@ describe('extension review interactions', () => {
     const detail = document.querySelector('.extension-detail')!;
     expect(detail.textContent).toContain('维护者'); expect(detail.textContent).toContain('200.0K');
     expect(detail.querySelectorAll('.extension-history > div')).toHaveLength(2);
+    expect(detail.querySelector('details')?.open).toBe(false);
+    expect(detail.querySelector('summary')?.textContent).toBe('历史版本');
     expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
     expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('下载量：42/月');
+  });
+  it('keeps installed metadata available when registry details fail', async () => {
+    stub({ detailStatus: 503, list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], metadata: { license: 'MIT', dependencies: ['example-dependency'], links: { repository: 'https://git.example/module' } } }] } });
+    const { root } = mount(); await flush(); button(root, '甲扩展').click(); await flush();
+    const detail = document.querySelector('.extension-detail')!;
+    expect([...detail.querySelectorAll('h4')].map(node => node.textContent)).toEqual(['简介', '信息']);
+    expect(detail.textContent).toContain('MIT'); expect(detail.textContent).toContain('example-dependency');
+    expect(detail.querySelector('a')?.href).toBe('https://git.example/module');
+    expect(detail.querySelector('summary')?.textContent).toBe('历史版本');
   });
 });
 
