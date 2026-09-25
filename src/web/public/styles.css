@@ -186,7 +186,7 @@
     list-style: none; cursor: pointer; user-select: none;
   }
   details.sheet.fold > summary::-webkit-details-marker { display: none; }
-  details.sheet.fold > summary::after { content: '＋'; margin-left: auto; color: var(--ink-dim); font: 13px var(--mono); }
+  details.sheet.fold > summary::after { content: '＋'; flex: none; width: 16px; margin-left: auto; text-align: center; color: var(--ink-dim); font: 13px/1 var(--mono); }
   details.sheet.fold[open] > summary::after { content: '−'; }
   details.sheet.fold > summary:hover h3 { color: var(--accent); }
   details.sheet.fold > summary h3 { margin: 0; }
