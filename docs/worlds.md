@@ -135,3 +135,5 @@ Minecraft 的 `PwsrTables` 管理目标、路标及蓝图的 realm 视图,空间
 `console/client.ts`;有环境描述就加 `ENV_PROMPT.md`。测试用 `tests/helpers/fake-host.ts` 的
 `FakeHost` 记录推送。放进仓库的在 `src/worlds/index.ts` 登记一行;放进仓库还是做成扩展,判据在
 [CONTRIBUTING.md](../CONTRIBUTING.md)。
+
+扩展管理从 WorldAssembly 的定义清单和挂载状态显示内置 World；构造失败的定义仍列出并显示原因。启用状态沿用部署合并后的配置。

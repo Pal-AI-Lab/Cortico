@@ -11,12 +11,13 @@ import type { ExtensionSet } from '../../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../../src/extensions/manifest.ts';
 let temp: ReturnType<typeof makeTmpDir>;
 beforeEach(() => temp = makeTmpDir()); afterEach(() => temp.cleanup());
-function fixture() {
+function fixture(initiallyEnabled = false) {
   const deployment = join(temp.dir, 'deployments', 'example'); mkdirSync(deployment, { recursive: true });
   const ext = join(temp.dir, 'extensions'); mkdirSync(ext);
   const cfg = makeCfg({ activeProvider: '', providers: { sample: { kind: 'extension-example', baseUrl: 'https://model.test' } } });
   const world: WorldDefinition = { id: 'sample-world', label: 'Sample', defaults: () => ({ enabled: false }), create: () => ({ id: 'sample-world', envPromptVars: () => ({}), tools: () => [], start: async () => {}, stop: async () => {} }) };
   const provider: ProviderModule = { id: 'extension-example', title: 'Example', reasoningTiers: [], serviceTiers: [], create: () => ({ client: { respond: async () => { throw new Error('unused'); } } }) };
+  (cfg as unknown as { worlds: Record<string, unknown> }).worlds = { 'sample-world': { enabled: initiallyEnabled } };
   const loaded = makeLoaded({ config: cfg, rootDir: deployment, dataDir: join(deployment, 'data'), memoryDir: join(deployment, 'memory') });
   const assembly = new WorldAssembly(loaded, [world], []); assembly.bind({ mount: async mod => { await mod.start({} as never); }, unmount: async id => { await assembly.slot(id).instance.stop(); } });
   const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: join(temp.dir, 'providers'), readBlob: () => null, keepThinking: () => true, log: nullLogger() }, [provider]);
@@ -55,4 +56,28 @@ it('failed World startup stays disabled and exposes a diagnostic result', async 
 it('shared provider configurations block package deletion without deleting configuration', () => {
   const f = fixture(); const service = f.service(); writeFileSync(join(f.deployment, 'deployment.json'), JSON.stringify({ bot: 'sample' })); writeFileSync(join(f.deployment, 'config.json'), JSON.stringify({ providers: f.cfg.providers }));
   expect(service.references('example-provider')).toContain(join(f.deployment, 'config.json'));
+});
+
+it('lists built-in modules from the current assembly and prevents package deletion', async () => {
+  const f = fixture(); f.booted.worlds = []; f.booted.providers = []; f.booted.records = [];
+  const service = f.service();
+  expect(service.manager.list().extensions.find(item => item.name === 'builtin:world:sample-world')).toMatchObject({ builtin: true, enabled: false, label: 'Sample' });
+  await service.activate('builtin:world:sample-world', true);
+  expect(service.manager.list().extensions.find(item => item.name === 'builtin:world:sample-world')?.enabled).toBe(true);
+  await expect(service.manager.perform('delete-builtin-world', 'delete', { name: 'builtin:world:sample-world' })).rejects.toThrow('不能单独');
+  await service.activate('builtin:provider:extension-example', false);
+  expect(() => f.registry.resolve('sample')).toThrow('未加载');
+  await service.activate('builtin:provider:extension-example', true);
+  expect(f.registry.resolve('sample')).toBeTruthy();
+});
+it('can stop the running World version after its installed version changes', async () => {
+  const f = fixture(); const service = f.service(); await service.activate('example-world', true);
+  writeFileSync(join(f.booted.dir, 'node_modules', 'example-world', 'package.json'), JSON.stringify({ name: 'example-world', version: '2.0.0' }));
+  expect(service.manager.list().extensions[0]).toMatchObject({ enabled: true, state: 'pending-restart' });
+  await service.activate('example-world', false); expect(f.assembly.slot('sample-world').mounted).toBe(false);
+});
+
+it('reflects deployment startup configuration rather than assuming all built-ins are active', () => {
+  const f = fixture(true); f.booted.worlds = []; f.booted.records = [];
+  expect(f.service().manager.list().extensions.find(item => item.name === 'builtin:world:sample-world')?.enabled).toBe(true);
 });

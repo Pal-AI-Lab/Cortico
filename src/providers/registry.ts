@@ -63,6 +63,8 @@ export class ProviderRegistry {
     private readonly policy: ModulePolicy = { enabled: () => true, leases: new Map(), registries: new Set() },
   ) { this.policy.registries.add(this); }
 
+  get definitions(): readonly ProviderModule[] { return this.modules; }
+
   setModulePolicy(enabled: (kind: string) => boolean): void { this.policy.enabled = enabled; }
   isModuleEnabled(kind: string): boolean { return this.policy.enabled(kind); }
   assertModuleEnabled(kind: string): void {

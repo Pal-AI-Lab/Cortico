@@ -179,6 +179,8 @@ export type ConsoleWorldInfo = WorldInfo | InactiveWorldInfo | UnavailableWorldI
  * `idle` = bot 包装了但这份部署没引用它。
  */
 export interface ExtensionInfo {
+  builtin?: boolean;
+  location?: string;
   name: string;
   /** extensions/package.json 里的版本范围或 `link:` 路径 */
   spec: string;

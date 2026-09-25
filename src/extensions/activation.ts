@@ -18,21 +18,39 @@ export class ExtensionActivation {
   private readonly leaseFile: string;
   private timer?: ReturnType<typeof setInterval>;
   private changing = new Set<string>();
+  private readonly repo: string;
   constructor(private readonly deployment: string, repo: string, private readonly booted: ExtensionSet,
     private readonly config: CoreConfig, private readonly assembly: WorldAssembly, private readonly registry: ProviderRegistry,
     private readonly providersDir: string, private readonly worldVisible: (id: string) => boolean = () => true) {
+    this.repo = repo;
     this.file = join(deployment, 'extension-state.json');
     this.state = existsSync(this.file) ? read(this.file) as State : { providers: Object.fromEntries(booted.providers.map(p => [p.id, true])), pending: [], errors: {} };
     this.save();
     const extensionKinds = new Set(booted.providers.map(p => p.id));
-    registry.setModulePolicy(kind => !extensionKinds.has(kind) || this.state.providers[kind] === true);
+    registry.setModulePolicy(kind => this.state.providers[kind] ?? !extensionKinds.has(kind));
     this.manager = new ExtensionManager(repo, booted, {
+      builtins: () => this.builtins(),
       decorate: item => this.decorate(item), references: async name => this.references(name),
       activation: (name, enabled, pending) => this.activate(name, enabled, pending),
     });
     const leaseDir = join(dirname(booted.dir), '.' + basename(booted.dir) + '-instances');
     mkdirSync(leaseDir, { recursive: true });
     this.leaseFile = join(leaseDir, randomUUID() + '.json');
+  }
+  private builtins(): ExtensionInfo[] {
+    const version = existsSync(join(this.repo, 'package.json')) ? read(join(this.repo, 'package.json')).version ?? null : null;
+    const common = { builtin: true, spec: 'builtin', version, installedVersion: version, loaded: true, state: 'loaded' as const, consoleClient: false };
+    return [
+      ...[...this.assembly.definitions, ...this.assembly.slots.filter(slot => !slot.definition)].filter(slot => !this.booted.worlds.some(world => world.id === slot.id)).map(slot => ({
+        ...common, name: `builtin:world:${slot.id}`, kind: 'world' as const, worldId: slot.id, label: slot.label,
+        location: this.repo,
+        ...(!this.assembly.slots.some(current => current.id === slot.id) ? { loaded: false, state: 'failed' as const, reason: this.assembly.missing.find(current => current.id === slot.id)?.reason('zh') } : {}),
+      })),
+      ...this.registry.definitions.filter(module => !this.booted.providers.some(provider => provider.id === module.id)).map(module => ({
+        ...common, name: `builtin:provider:${module.id}`, kind: 'provider' as const, worldId: module.id, label: module.title, description: module.description,
+        location: this.repo,
+      })),
+    ];
   }
   private save(): void { writeFileSync(this.file + '.tmp', JSON.stringify(this.state, null, 2)); renameSync(this.file + '.tmp', this.file); }
   startLease(): void {
@@ -53,11 +71,12 @@ export class ExtensionActivation {
     const item = this.manager.list().extensions.find(p => p.name === name);
     if (!item || item.state === 'removed' || item.kind === 'bot') throw new Error('此扩展不能加载到当前 Bot。');
     if (afterRestart) {
+      if (item.builtin || !enabled) throw new Error('此操作不需要重启后启用。');
       const checked = await this.manager.validateInstalled(name);
       this.state.pending = this.state.pending.filter(i => i.name !== name);
       this.state.pending.push({ name, version: checked.version, moduleId: checked.moduleId }); this.save(); return;
     }
-    if (item.state === 'pending-restart' || !item.loaded || !item.worldId) throw new Error('需要先重启进程注册扩展。');
+    if (!item.loaded || !item.worldId || (enabled && item.state === 'pending-restart')) throw new Error('需要先重启进程注册扩展。');
     if (!enabled && item.inUse) throw new Error(item.disableReason);
     this.changing.add(name);
     try {

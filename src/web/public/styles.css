@@ -1887,7 +1887,7 @@
 .extension-grid { display: grid; grid-template-columns: repeat(var(--extension-columns, 1), minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .extension-card { min-width: 0; border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--background); }
 .extension-card.is-enabled { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--background)); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 8%, transparent); }
-.extension-card.is-installed { background: color-mix(in srgb, var(--accent) 3%, var(--background)); }
+.extension-card.is-installed { background: color-mix(in srgb, var(--foreground) 7%, var(--background)); border-color: var(--line-strong); }
 .extension-card-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .extension-card-title { font: inherit; font-size: 16px; font-weight: 600; color: var(--foreground); text-align: left; background: none; border: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; min-width: 0; max-width: 100%; }
 .extension-card-title:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
@@ -1906,3 +1906,35 @@
 @media (prefers-reduced-motion: reduce) { .extension-tab-indicator { transition: none; } }
 
 .extension-status.bad { color: var(--danger); }
+
+.extension-card-heading .extension-card-title { flex: 1; }
+.extension-card-heading .pill { flex: 0 0 auto; white-space: nowrap; font-size: 11px; }
+.extension-card-heading { flex-wrap: nowrap; }
+.extension-market-card { cursor: pointer; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.extension-market-card:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 6px 18px -10px var(--shadow-strong); }
+.extension-market-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.extension-tags { margin-top: auto; gap: 6px; font-size: 11px; }
+.extension-tags .pill { white-space: nowrap; border-color: var(--line-strong); padding: 3px 8px; }
+.extension-directory { display: flex; align-items: center; border: 1px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; min-height: 36px; max-width: 100%; color: var(--ink-dim); }
+.extension-toolbar { align-items: center; gap: 10px; }
+.extension-size { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
+.extension-size select { width: auto; min-width: 90px; }
+.extension-pager { font-size: 12px; min-height: 36px; }
+.extension-builtin-note { align-self: center; margin: 0; }
+.extension-category .sheetbody > .msgline { min-height: 1.7em; margin-block: 10px; font-size: 12px; }
+.extension-category .sheetbody > .msgline:empty { display: block; }
+.extension-manual-actions { align-items: center; margin-top: 12px; gap: 10px; }
+.extension-manual-actions .msgline { flex: 1; margin: 0; min-width: 160px; font-size: 12px; }
+.extension-avatar .brandmark { width: 32px; height: 32px; }
+.extension-avatar .accent { stroke: currentColor; }
+.extension-detail .kvtable { margin: 20px 0; border-top: 2px solid var(--line-strong); border-bottom: 2px solid var(--line-strong); }
+.extension-detail .kvtable td { padding-block: 10px; }
+.extension-history { display: grid; gap: 0; margin: 12px 0 22px; border-block: 1px solid var(--line); }
+.extension-history > div { display: flex; justify-content: space-between; gap: 24px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.extension-history > div:last-child { border-bottom: 0; }
+.extension-detail-actions { gap: 10px; margin-top: 24px; }
+.extension-detail-actions a.btn { border: 1px solid var(--line-strong); }
+.confirm-card .modalbody > .rowbar { margin-top: 24px; }
+.confirm-card .btn.danger { background: var(--danger); color: white; border-color: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .extension-market-card { transition: none; } .extension-market-card:hover { transform: none; } }
+.extension-detail-actions > button:last-child { margin-left: auto; }

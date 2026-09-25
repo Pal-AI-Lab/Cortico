@@ -146,9 +146,9 @@ describe('extension categories', () => {
   it('isolates installed categories and preserves each market filter across routes', async () => {
     stub(); const { ctx, root } = mount(); await flush();
     expect(installedCards(root).textContent).toContain('甲扩展'); expect(installedCards(root).textContent).not.toContain('gamma-prov');
-    const input = root.querySelector('input[type=search]') as HTMLInputElement; input.value = 'found'; input.dispatchEvent(new Event('input')); await flush();
+    const input = root.querySelectorAll('input[type=search]')[1] as HTMLInputElement; input.value = 'found'; input.dispatchEvent(new Event('input')); await flush();
     await switchTo(ctx, 'provider'); expect(installedCards(root).textContent).toContain('gamma-prov'); expect(installedCards(root).textContent).not.toContain('甲扩展');
-    await switchTo(ctx, 'world'); expect((root.querySelector('input[type=search]') as HTMLInputElement).value).toBe('found');
+    await switchTo(ctx, 'world'); expect((root.querySelectorAll('input[type=search]')[1] as HTMLInputElement).value).toBe('found');
     expect(marketCards(root).querySelectorAll('.extension-card')).toHaveLength(1);
   });
   it('uses keyboard focus without activating a category until Enter or click', async () => {
@@ -176,7 +176,7 @@ describe('extension categories', () => {
     stub({ list: { ...LIST, extensions: [{ ...LIST.extensions[0], name: 'sample-template', kind: 'bot', enabled: true }] } });
     const { ctx, root } = mount(); await flush(); await switchTo(ctx, 'bot');
     expect(installedCards(root).textContent).toContain('当前 Bot 正在采用'); expect(button(root, '创建实例说明')).toBeTruthy();
-    expect(button(root, '彻底删除').disabled).toBe(true); button(root, '创建实例说明').click(); expect(document.body.textContent).toContain('pnpm start --new');
+    expect(button(root, '删除扩展').disabled).toBe(true); button(root, '创建实例说明').click(); expect(document.body.textContent).toContain('pnpm start --new');
   });
   it('preserves version updates and disables incompatible releases', async () => {
     stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '2.0.0', problems: ['incompatible'] }], errors: [] } });
@@ -185,14 +185,14 @@ describe('extension categories', () => {
 });
 describe('installation feedback', () => {
   async function detail(root: HTMLElement) {
-    const input = root.querySelector('input[type=search]') as HTMLInputElement; input.value = 'found'; input.dispatchEvent(new Event('input'));
-    button(marketCards(root), 'found-mod').click(); await flush(); return document.querySelector('.modal')!;
+    const input = root.querySelectorAll('input[type=search]')[1] as HTMLInputElement; input.value = 'found'; input.dispatchEvent(new Event('input'));
+    (marketCards(root).querySelector('[aria-label="found-mod"]') as HTMLElement).click(); await flush(); return document.querySelector('.modal')!;
   }
   it('installs an exact version with an operation ID and leaves feedback in the market', async () => {
     stub(); const { root } = mount(); await flush(); const box = await detail(root); button(box, '安装').click(); await flush();
     expect(calls.find(c => c.url === '/api/extensions/operations')?.body).toMatchObject({ action: 'install', target: { name: 'found-mod', version: '3.1.0' }, kind: 'world' });
-    expect(root.querySelectorAll('.extension-category > .sheet')[1].textContent).toContain('操作已完成');
-    expect(root.querySelectorAll('.extension-category > .sheet')[0].textContent).not.toContain('操作已完成');
+    expect(root.querySelectorAll('.extension-category > .sheet')[1].textContent).toContain('安装成功');
+    expect(root.querySelectorAll('.extension-category > .sheet')[0].textContent).not.toContain('安装成功');
   });
   it('shows rollback failures only in the originating section', async () => {
     stub({ installStatus: 400 }); const { root } = mount(); await flush(); button(await detail(root), '安装').click(); await flush();
@@ -283,6 +283,51 @@ describe('asynchronous ownership', () => {
     });
     const { root } = mount(); await flush(); const input = root.querySelector('input[aria-label="包名与版本"]') as HTMLInputElement;
     input.value = 'sample@1.0.0'; input.dispatchEvent(new Event('input')); button(root, '安装').click(); await flush(80);
-    expect(writes).toBe(1); expect(queries).toBe(1); expect(root.querySelectorAll('.extension-category > .sheet')[2].textContent).toContain('操作已完成');
+    expect(writes).toBe(1); expect(queries).toBe(1); expect(root.querySelectorAll('.extension-category > .sheet')[2].textContent).toContain('安装成功');
   });
+});
+
+describe('extension review interactions', () => {
+  it('keeps stopping the running version available during an update and protects built-ins', async () => {
+    stub({ list: { dir: LIST.dir, extensions: [
+      { ...LIST.extensions[0], enabled: true, installedVersion: '2.0.0', state: 'pending-restart' },
+      { ...LIST.extensions[0], name: 'builtin:world:example', builtin: true, label: 'Built-in example' },
+    ] } });
+    const { root } = mount(); await flush(); const cards = installedCards(root).querySelectorAll('.extension-card');
+    expect(button(cards[0], '停用').disabled).toBe(false);
+    expect(cards[0].querySelector('.extension-card-heading')?.textContent).toContain('已加载');
+    expect(cards[0].textContent).not.toContain('重启并启用');
+    expect(button(cards[1], '删除扩展').disabled).toBe(true);
+  });
+  it('filters installed modules independently and lets users override each page capacity', async () => {
+    stub({ list: { dir: LIST.dir, extensions: Array.from({length: 8}, (_, i) => ({ ...LIST.extensions[0], name: `module-${i}`, label: `模块 ${i}` })) } });
+    const { root } = mount(); await flush();
+    const sizes = root.querySelectorAll('.extension-size select') as NodeListOf<HTMLSelectElement>;
+    sizes[0].value = '3'; sizes[0].dispatchEvent(new Event('change')); expect(installedCards(root).children).toHaveLength(3);
+    sizes[1].value = '6'; sizes[1].dispatchEvent(new Event('change')); expect(marketCards(root).children).toHaveLength(6);
+    const filter = root.querySelector('input[type=search]') as HTMLInputElement; filter.value = 'module-7'; filter.dispatchEvent(new Event('input'));
+    expect(installedCards(root).children).toHaveLength(1); expect(installedCards(root).textContent).toContain('模块 7'); expect(marketCards(root).children).toHaveLength(6);
+    expect(root.querySelector('.extension-directory')?.textContent).toContain('安装位置：');
+  });
+  it('opens market details from the card and restores metadata and release rows', async () => {
+    stub(); const { root } = mount(); await flush();
+    const filter = root.querySelectorAll('input[type=search]')[1] as HTMLInputElement; filter.value = 'found'; filter.dispatchEvent(new Event('input'));
+    const card = marketCards(root).querySelector('article') as HTMLElement; card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush();
+    const detail = document.querySelector('.extension-detail')!;
+    expect(detail.textContent).toContain('维护者'); expect(detail.textContent).toContain('200.0K');
+    expect(detail.querySelectorAll('.extension-history > div')).toHaveLength(2);
+    expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
+    expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('下载量：42/月');
+  });
+});
+
+it('keeps the installed grid height and scroll position when the last page has one card', async () => {
+  stub({ list: { dir: LIST.dir, extensions: Array.from({length: 7}, (_, i) => ({ ...LIST.extensions[0], name: `page-${i}` })) } });
+  const { root } = mount(); await flush(); const grid = installedCards(root) as HTMLElement;
+  vi.spyOn(grid, 'getBoundingClientRect').mockReturnValue({ height: 576 } as DOMRect);
+  root.scrollTop = 200; const pager = root.querySelector('.extension-pager');
+  button(pager, '下一页 ›').click();
+  expect(grid.children).toHaveLength(1); expect(grid.style.minHeight).toBe('576px'); expect(root.scrollTop).toBe(200);
+  expect(pager.textContent).toContain('2 / 2');
+  button(pager, '‹ 上一页').click(); expect(grid.children).toHaveLength(6); expect(root.scrollTop).toBe(200);
 });

@@ -116,3 +116,5 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 `{ entry, secretValue }` 时走它。
 
 连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。
+
+内置与外部供应商共用部署的模块启用策略；内置模块也可停用，随框架提供的包不能单独删除。

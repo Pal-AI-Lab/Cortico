@@ -473,6 +473,7 @@ export interface ExtensionManagerOptions {
   fetchJson?: (url: string) => Promise<unknown>;
   validate?: (dir: string) => Promise<ValidatedPackage>;
   references?: (name: string) => Promise<string[]>;
+  builtins?: () => ExtensionInfo[];
   decorate?: (item: ExtensionInfo) => ExtensionInfo;
   activation?: (name: string, enabled: boolean, afterRestart: boolean) => Promise<void>;
 }
@@ -497,6 +498,7 @@ export class ExtensionManager {
     this.validate = opts.validate ?? validatePackage;
     this.references = opts.references;
     this.decorate = opts.decorate;
+    this.builtins = opts.builtins;
     this.activation = opts.activation;
     this.run = opts.run ?? runPnpm;
     this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
@@ -506,6 +508,7 @@ export class ExtensionManager {
       return res.json();
     });
   }
+  private readonly builtins?: () => ExtensionInfo[];
   private readonly decorate?: (item: ExtensionInfo) => ExtensionInfo;
   readonly activation?: (name: string, enabled: boolean, afterRestart: boolean) => Promise<void>;
   private readonly references?: (name: string) => Promise<string[]>;
@@ -552,7 +555,7 @@ export class ExtensionManager {
         ...(pkg?.description ? { description: pkg.description } : {}),
       });
     }
-    return { dir: this.dir, extensions: out.map(item => this.decorate?.(item) ?? item) };
+    return { dir: this.dir, extensions: [...out, ...(this.builtins?.() ?? [])].map(item => this.decorate?.(item) ?? item) };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
@@ -721,6 +724,7 @@ export class ExtensionManager {
   }
 
   async perform(id: string, action: 'install' | 'delete', target: ExtensionInstallTarget, kind?: ExtensionKind): Promise<PackageOperation> {
+    if ('name' in target && this.builtins?.().some(item => item.name === target.name)) throw new Error('内置扩展随 Cortico 提供，不能单独安装或删除。');
     this.installSpec(target);
     const fingerprint = JSON.stringify({ target, kind });
     const prior = this.store.operation(id);
