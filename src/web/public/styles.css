@@ -1778,6 +1778,7 @@
 .connection-step .sectiondesc{flex:0 0 auto;max-width:100%;margin:0;background:none}
 .connection-step .fieldrow{margin-top:9px}
 .connection-step .rowbar{margin-bottom:6px}
+.connection-step .stat .v{font-size:15px;line-height:1.4;letter-spacing:0}
 .connection-step .kvtable td:first-child{width:26%}
 .connection-step .placeholder{padding:5px 0;text-align:left;font:var(--text-detail)/1.55 var(--sans);color:var(--muted-foreground)}
 .connection-step .runtime-enable-row{align-items:flex-end;flex-wrap:nowrap}
