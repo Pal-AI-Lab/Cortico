@@ -23,6 +23,7 @@ const TYPE_LABEL: Record<string, string> = {
   'qq.emoji': '表情',
   'qq.poke': '戳一戳',
   'qq.vision': '识图',
+  'qq.image': '图片附件',
   'qq.watch': '监听',
   'qq.forward': '转发',
   'qq.reply.uncaptured': '引用',

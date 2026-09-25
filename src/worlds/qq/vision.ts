@@ -11,6 +11,7 @@ import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import type { Logger, LLMUsage } from '../../core/types.ts';
 import type { VLMClient, VLMMessage } from './vlm.ts';
+import { downloadImageBytes, MIME_EXT } from './image-download.ts';
 import { shortTime, nullLogger } from '../../core/util.ts';
 import { VISION_DEFAULT_PROMPT } from './vision-prompt.ts';
 
@@ -113,15 +114,6 @@ interface VisionServiceDeps {
   log?: Logger;
   fetchImpl?: typeof fetch;
 }
-
-const MIME_EXT: Record<string, string> = {
-  'image/png': 'png',
-  'image/jpeg': 'jpg',
-  'image/jpg': 'jpg',
-  'image/gif': 'gif',
-  'image/webp': 'webp',
-  'image/bmp': 'bmp',
-};
 
 export class VisionService {
   private readonly vlm: VLMClient;
@@ -494,36 +486,7 @@ export class VisionService {
   }
 
   private async download(url: string): Promise<{ buffer: Uint8Array; mime: string }> {
-    if (!url) throw new Error('图片地址为空');
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), this.cfg.timeoutMs);
-    try {
-      const res = await this.fetchImpl(url, { signal: ac.signal });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const ct = res.headers.get('content-type');
-      const ab = await res.arrayBuffer();
-      if (ab.byteLength > this.cfg.maxImageBytes) {
-        throw new Error(`图片过大(${ab.byteLength}字节 > 上限${this.cfg.maxImageBytes})`);
-      }
-      return { buffer: new Uint8Array(ab), mime: this.pickMime(ct, url) };
-    } catch (e) {
-      if (e instanceof Error && e.name === 'AbortError') throw new Error('下载超时');
-      throw e;
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
-  private pickMime(contentType: string | null, url: string): string {
-    if (contentType) {
-      const mime = contentType.split(';')[0].trim().toLowerCase();
-      if (mime.startsWith('image/')) return mime;
-    }
-    const ext = (url.split('?')[0].match(/\.([a-zA-Z0-9]+)$/)?.[1] ?? '').toLowerCase();
-    for (const [mime, e] of Object.entries(MIME_EXT)) {
-      if (e === ext) return mime;
-    }
-    return 'image/jpeg';
+    return downloadImageBytes(url, this.cfg, this.fetchImpl);
   }
 
   private saveImage(id: string, buffer: Uint8Array, mime: string): string {

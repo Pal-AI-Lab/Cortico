@@ -42,7 +42,8 @@ import {
   type OneBotGroupMessage,
   type Segment,
 } from './normalize.ts';
-import type { VisionService } from './vision.ts';
+import { VISION_DEFAULTS, type VisionConfig, type VisionService } from './vision.ts';
+import { downloadImageBytes } from './image-download.ts';
 import { QQ_DEFAULTS, QQ_SECRETS, QQ_CONFIG_GROUP, type QQRosterEntry } from './config.ts';
 
 export type { Conv } from './conversation.ts';
@@ -98,8 +99,14 @@ interface QQGatePanelDeps {
 
 interface QQWorldDeps {
   vision?: VisionService;
+  /** 无辅助视觉时下载入站图片用的上限;传入配置对象本身,热更新随之生效。 */
+  imageCapture?: QQImageCaptureOptions;
   gate?: QQGatePanelDeps;
 }
+
+type QQImageCaptureOptions = Pick<VisionConfig, 'timeoutMs' | 'maxImageBytes' | 'dedupPrecheckMs'>;
+
+type IncomingImageDownload = { image: { buffer: Uint8Array; mime: string } | null };
 
 /** 暂存的草稿(单槽,一进一出;不确认到本轮末即作废) */
 interface PendingDraft {
@@ -128,11 +135,12 @@ export class QQWorld implements World {
   readonly id = 'qq';
 
   private readonly cfg: QQWorldConfig;
+  private readonly imageCapture: QQImageCaptureOptions;
   private readonly timezone: string;
   private host?: WorldHost;
   private driver?: OneBotDriver;
   private log: Logger = nullLogger();
-  /** 主模型支持 image/png 或 World 配置了视觉模型时启用取图；每次渲染按当前端点判断。 */
+  /** 无辅助视觉时,主模型收图才在正文保留图片URL并下载原图。 */
   private readonly imagePolicy: ImageRenderPolicy = (data) =>
     makeImagePolicy(!!this.vision || (this.host?.modelFacts.accepts('image/png') ?? false))(data);
 
@@ -168,6 +176,7 @@ export class QQWorld implements World {
     this.cfg = cfg;
     this.timezone = cfg.timezone ?? 'Asia/Shanghai';
     this.vision = deps?.vision;
+    this.imageCapture = deps?.imageCapture ?? VISION_DEFAULTS;
     this.gate = deps?.gate;
     this.watchedGroups = new Set(cfg.groups);
     this.watchedPrivates = new Set(cfg.privates);
@@ -673,6 +682,15 @@ export class QQWorld implements World {
     const displayName = msg.sender?.card || msg.sender?.nickname || senderKey;
     this.nameByUserId.set(senderKey, displayName);
 
+    const imageDownloads = this.vision || !host.modelFacts.accepts('image/png')
+      ? []
+      : incomingImageUrls(msg).map((url, index) => ({
+          index,
+          promise: downloadImageBytes(url, this.imageCapture)
+            .then((image): IncomingImageDownload => ({ image }))
+            .catch((): IncomingImageDownload => ({ image: null })),
+        }));
+
     // 图片渲染策略(外挂视觉,群/私聊同处理)。被动开启时,每张图先做一次限时的
     // 内容去重预判(下载+算hash+查重复,不跑VLM);时限内出结果(命中或下载失败)
     // 则直接内联进消息,跳过占位与异步qq.vision事件,否则显示占位符。
@@ -768,14 +786,32 @@ export class QQWorld implements World {
 
     const when =
       typeof msg.time === 'number' ? new Date(msg.time * 1000) : new Date();
-    // 去重预判阶段已经拿到字节的图随这条消息落库(她因此有句柄可以存、可以转发);
-    // 还在下载/识别中的图随稍后的 qq.vision 事件落库。
+    // 已拿到的图随这条消息落库;无辅助视觉时,超出等待上限的图片下载完另发 qq.image,触发方式同 qq.vision。
     const blobs: BlobInput[] = [];
+    const lateImages: Array<{ index: number; promise: Promise<IncomingImageDownload> }> = [];
     if (this.vision) {
       for (let i = 0; i < collected.length; i++) {
         if (!earlyResolved[i]) continue;
         const got = await this.vision.getImageBytes(collected[i].id).catch(() => null);
         if (got) blobs.push({ bytes: got.buffer, mime: got.mime, name: collected[i].id, fallbackText: `图片 ${collected[i].id}` });
+      }
+    } else if (imageDownloads.length) {
+      const timeoutResult = Symbol('image download wait elapsed');
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<typeof timeoutResult>((resolve) => {
+        timer = setTimeout(() => resolve(timeoutResult), this.imageCapture.dedupPrecheckMs);
+      });
+      const ready = await Promise.all(imageDownloads.map(({ promise }) => Promise.race([promise, timeout])));
+      if (timer) clearTimeout(timer);
+      for (let i = 0; i < ready.length; i++) {
+        const result = ready[i];
+        if (result === timeoutResult) {
+          lateImages.push(imageDownloads[i]);
+        } else if (result.image) {
+          blobs.push(incomingImageBlob(result.image, msg.message_id, imageDownloads[i].index));
+        } else {
+          this.log.warn('QQ 图片附件下载失败', { messageId: msg.message_id });
+        }
       }
     }
     // 私聊照常合批;群里被@立即投递
@@ -798,6 +834,26 @@ export class QQWorld implements World {
       { trigger },
     );
     this.knownMessages.set(String(msg.message_id), { conv, ts: env.ts });
+
+    for (const img of lateImages) {
+      void img.promise.then(({ image }) => {
+        if (!image) {
+          this.log.warn('QQ 图片附件下载失败', { messageId: msg.message_id });
+          return;
+        }
+        return host.pushEvent(
+          {
+            type: 'qq.image',
+            ts: nowIso(this.timezone),
+            source: this.id,
+            text: `[图片附件，来自 QQ 消息 #${msg.message_id}]`,
+            senderKey,
+            meta: { message_id: msg.message_id, image_index: img.index + 1, conv },
+            blobs: [incomingImageBlob(image, msg.message_id, img.index)],
+          },
+        );
+      }).catch((e) => this.log.warn('QQ 图片附件事件投递失败', { messageId: msg.message_id, err: String(e) }));
+    }
 
     // 图片:回填所属消息号,被动识图(理解闭合后作为qq.vision事件延迟到达)。
     // 已经被上面的去重预判内联进消息本身的图,不用再走这条异步路径。
@@ -1533,6 +1589,34 @@ function extractImageUrl(data: Record<string, unknown>): string {
   if (typeof data.url === 'string' && data.url) return data.url;
   if (typeof data.file === 'string' && data.file) return data.file;
   return '';
+}
+
+function incomingImageUrls(msg: OneBotGroupMessage): string[] {
+  const urls: string[] = [];
+  for (const segment of msg.message ?? []) {
+    if (segment.type === 'image') {
+      const url = extractImageUrl(segment.data ?? {});
+      if (url) urls.push(url);
+    } else if (segment.type === 'json') {
+      const url = parseJsonCard(segment.data ?? {}).previewUrl;
+      if (url) urls.push(url);
+    }
+  }
+  return urls;
+}
+
+function incomingImageBlob(
+  image: { buffer: Uint8Array; mime: string },
+  messageId: number | string,
+  index: number,
+): BlobInput {
+  const ordinal = index + 1;
+  return {
+    bytes: image.buffer,
+    mime: image.mime,
+    name: `qq-${messageId}-${ordinal}`,
+    fallbackText: `QQ图片 ${ordinal}`,
+  };
 }
 
 /** 渲染阶段的 GIF 提示仅依据 url/file 的 .gif 后缀。 */
