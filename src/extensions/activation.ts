@@ -6,10 +6,10 @@ import type { CoreConfig } from '../core/types.ts';
 import type { ProviderRegistry } from '../providers/registry.ts';
 import type { WorldAssembly } from '../world.ts';
 import type { ExtensionInfo } from '../web/server.ts';
-import { ExtensionManager, packageMetadata, type ExtensionSet } from '../extensions.ts';
+import { ExtensionManager, loadExtensions, packageMetadata, type ExtensionSet } from '../extensions.ts';
 
 interface Intent { name: string; version: string; moduleId: string }
-interface State { providers: Record<string, boolean>; pending: Intent[]; errors: Record<string, string> }
+interface State { pending: Intent[]; errors: Record<string, string> }
 const read = (file: string): Record<string, any> => JSON.parse(readFileSync(file, 'utf8'));
 export class ExtensionActivation {
   readonly manager: ExtensionManager;
@@ -24,18 +24,53 @@ export class ExtensionActivation {
     private readonly providersDir: string, private readonly worldVisible: (id: string) => boolean = () => true) {
     this.repo = repo;
     this.file = join(deployment, 'extension-state.json');
-    this.state = existsSync(this.file) ? read(this.file) as State : { providers: Object.fromEntries(booted.providers.map(p => [p.id, true])), pending: [], errors: {} };
+    const previous = existsSync(this.file) ? read(this.file) as State : { pending: [], errors: {} };
+    this.state = { pending: previous.pending.filter(intent => !booted.providers.some(module => module.id === intent.moduleId)), errors: previous.errors };
+    for (const record of booted.records) if (record.kind === 'provider' && record.loaded) delete this.state.errors[record.name];
     this.save();
-    const extensionKinds = new Set(booted.providers.map(p => p.id));
-    registry.setModulePolicy(kind => this.state.providers[kind] ?? !extensionKinds.has(kind));
+    registry.setModulePolicy(() => true);
     this.manager = new ExtensionManager(repo, booted, {
       builtins: () => this.builtins(),
       decorate: item => this.decorate(item), references: async name => this.references(name),
       activation: (name, enabled, pending) => this.activate(name, enabled, pending),
+      onCommitted: operation => operation.name ? this.syncProvider(operation.name, operation.action) : Promise.resolve(),
+      refresh: () => this.refreshProviders(),
     });
     const leaseDir = join(dirname(booted.dir), '.' + basename(booted.dir) + '-instances');
     mkdirSync(leaseDir, { recursive: true });
     this.leaseFile = join(leaseDir, randomUUID() + '.json');
+  }
+  private async refreshProviders(): Promise<void> {
+    if (this.manager.operationBusy) return;
+    for (const item of this.manager.list().extensions) {
+      if (item.kind === 'provider' && !item.builtin && !item.loaded && item.state !== 'removed' && !item.activationError) await this.syncProvider(item.name, 'install');
+    }
+  }
+  private async syncProvider(name: string, action: 'install' | 'delete'): Promise<void> {
+    const current = this.booted.records.find(record => record.name === name);
+    if (this.manager.list().extensions.find(item => item.name === name)?.kind !== 'provider' && current?.kind !== 'provider') return;
+    if (this.changing.has(name)) return;
+    this.changing.add(name);
+    try {
+      if (action === 'delete') {
+        if (current?.worldId) await this.registry.unregisterModule(current.worldId);
+        if (current) current.loaded = false;
+        this.booted.providers.splice(0, this.booted.providers.length, ...this.booted.providers.filter(module => module.id !== current?.worldId));
+        this.booted.consoleAssets.splice(0, this.booted.consoleAssets.length, ...this.booted.consoleAssets.filter(asset => asset.packageName !== name));
+      } else if (!current?.loaded) {
+        const loaded = await loadExtensions(this.repo, { names: [name], reservedProviders: this.registry.definitions.map(module => module.id) });
+        const record = loaded.records.find(record => record.name === name);
+        if (!record?.loaded || !loaded.providers.length) throw new Error(record?.reason ?? '供应商模块未能注册。');
+        this.registry.registerModule(loaded.providers[0]);
+        const index = this.booted.records.findIndex(record => record.name === name);
+        if (index >= 0) this.booted.records[index] = record; else this.booted.records.push(record);
+        this.booted.providers.push(...loaded.providers);
+        this.booted.consoleAssets.push(...loaded.consoleAssets);
+      }
+      delete this.state.errors[name];
+    } catch (error) { this.state.errors[name] = String(error); }
+    finally { this.changing.delete(name); }
+    this.save();
   }
   private builtins(): ExtensionInfo[] {
     const pkg = existsSync(join(this.repo, 'package.json')) ? read(join(this.repo, 'package.json')) : {};
@@ -70,6 +105,7 @@ export class ExtensionActivation {
   async activate(name: string, enabled: boolean, afterRestart = false): Promise<void> {
     if (this.changing.has(name) || this.manager.operationBusy) throw new Error('扩展操作正在进行。');
     const item = this.manager.list().extensions.find(p => p.name === name);
+    if (item?.kind === 'provider') throw new Error('供应商扩展安装后自动注册，不支持手动启停。');
     if (!item || item.state === 'removed' || item.kind === 'bot') throw new Error('此扩展不能加载到当前 Bot。');
     if (afterRestart) {
       if (item.builtin || !enabled) throw new Error('此操作不需要重启后启用。');
@@ -81,16 +117,7 @@ export class ExtensionActivation {
     if (!enabled && item.inUse) throw new Error(item.disableReason);
     this.changing.add(name);
     try {
-      if (item.kind === 'world') {
-        if (enabled) await this.assembly.activate(item.worldId); else await this.assembly.deactivate(item.worldId);
-      } else {
-        const id = item.worldId;
-        // Block new bindings before awaiting resource shutdown.
-        this.state.providers[id] = false;
-        try { if (!enabled) await this.registry.stopModule(id); }
-        catch (error) { this.state.providers[id] = true; throw error; }
-        this.state.providers[id] = enabled;
-      }
+      if (enabled) await this.assembly.activate(item.worldId); else await this.assembly.deactivate(item.worldId);
       delete this.state.errors[name]; this.save();
     } catch (error) { this.state.errors[name] = String(error); this.save(); throw error; }
     finally { this.changing.delete(name); }
@@ -109,7 +136,7 @@ export class ExtensionActivation {
     const item = this.manager.list().extensions.find(p => p.name === name);
     if (!item) return [];
     const refs = new Set<string>();
-    if (item.enabled || item.inUse) refs.add(this.deployment);
+    if ((item.enabled && item.kind !== 'provider') || item.inUse) refs.add(this.deployment);
     const roots = new Set([dirname(this.deployment)]);
     const providerRoots = new Set([this.providersDir]);
     for (const file of readdirSync(dirname(this.leaseFile))) {

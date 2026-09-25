@@ -48,13 +48,14 @@ export class ConsoleAssets {
     core: null,
     providers: {},
   };
-  /** 扩展产物表。加载完就定死,`reload()` 只重读 dist。 */
-  private readonly extensionPages: Record<string, ConsoleAssetEntry>;
+  private readonly extensionAssets: readonly ExtensionConsoleAsset[];
+  private indexedAssets: readonly ExtensionConsoleAsset[] = [];
+  private extensionPages: Record<string, ConsoleAssetEntry> = Object.create(null);
 
   constructor(distDir: string, log: Logger, extensionAssets: readonly ExtensionConsoleAsset[] = []) {
     this.distDir = distDir;
     this.log = log;
-    this.extensionPages = this.indexExtensionAssets(extensionAssets);
+    this.extensionAssets = extensionAssets;
     this.reload();
   }
 
@@ -144,6 +145,10 @@ export class ConsoleAssets {
   /** 按 key 依次查询 dist 与扩展资源表，缺失时返回 undefined。 */
   forPage(pageId: string): ConsoleAssetEntry | undefined {
     const key = assetKeyForPage(pageId);
+    if (this.indexedAssets.length !== this.extensionAssets.length || this.extensionAssets.some((asset, index) => asset !== this.indexedAssets[index])) {
+      this.extensionPages = this.indexExtensionAssets(this.extensionAssets);
+      this.indexedAssets = [...this.extensionAssets];
+    }
     return this.manifest.providers[key] ?? this.extensionPages[key];
   }
 }

@@ -159,6 +159,16 @@ describe('扩展产物的 URL 分配', () => {
     expect(errors.length).toBe(2);
   });
 
+  it('reflects extension assets registered and removed after startup', () => {
+    const live: ExtensionConsoleAsset[] = [];
+    const assets = new ConsoleAssets(emptyDist, nullLogger(), live);
+    expect(assets.forPage('world:demo')).toBeUndefined();
+    live.push(asset());
+    expect(assets.forPage('world:demo')?.js).toBe(extensionAssetUrl(PKG, VERSION, 'console.js'));
+    live.splice(0);
+    expect(assets.forPage('world:demo')).toBeUndefined();
+  });
+
   /** 扩展换不掉自带面板:同一个 page id 上,dist 清单里的那条赢。 */
   it('dist 清单里有同 key 时用 dist 的,扩展产物不上 manifest', async () => {
     const webDistDir = join(dir, 'dist-collide');

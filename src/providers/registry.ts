@@ -52,18 +52,34 @@ export function providerModule(kind: string): ProviderModule {
 interface ModulePolicy { enabled: (kind: string) => boolean; leases: Map<string, number>; registries: Set<ProviderRegistry> }
 
 export class ProviderRegistry {
+  private readonly modules: ProviderModule[];
   private readonly instances = new Map<string, { key: string; value: ProviderInstance }>();
   private readonly resources = new Map<string, unknown>();
   constructor(
     private readonly entries: () => Record<string, LLMProviderEntry>,
     private readonly host: ProviderHostBase,
-    private readonly modules: readonly ProviderModule[] = providerModules,
+    modules: readonly ProviderModule[] = providerModules,
     /** Secrets read before the process environment and the endpoint `.env`; preview registries carry the typed, unsaved key here. */
     private readonly secretOverrides: Readonly<Record<string, string>> = {},
     private readonly policy: ModulePolicy = { enabled: () => true, leases: new Map(), registries: new Set() },
-  ) { this.policy.registries.add(this); }
+  ) { this.modules = modules === providerModules ? providerModules : [...modules]; this.policy.registries.add(this); }
 
   get definitions(): readonly ProviderModule[] { return this.modules; }
+
+  registerModule(module: ProviderModule): void {
+    if (this.modules.some(current => current.id === module.id)) throw new Error(`Provider module id 已被占用: ${module.id}`);
+    if (this.modules === providerModules) registerProviderModules([module]);
+    for (const registry of this.policy.registries) if (!registry.modules.some(current => current.id === module.id)) registry.modules.push(module);
+  }
+
+  async unregisterModule(kind: string): Promise<void> {
+    await this.stopModule(kind);
+    for (const registry of this.policy.registries) {
+      const index = registry.modules.findIndex(module => module.id === kind);
+      if (index >= 0) registry.modules.splice(index, 1);
+    }
+    if (this.modules === providerModules) byId.delete(kind);
+  }
 
   setModulePolicy(enabled: (kind: string) => boolean): void { this.policy.enabled = enabled; }
   isModuleEnabled(kind: string): boolean { return this.policy.enabled(kind); }

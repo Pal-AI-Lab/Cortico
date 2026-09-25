@@ -1,5 +1,6 @@
 import { pick } from '../../core/language.ts';
 const zh = {
+  providerManagement: '供应商扩展安装后自动注册，供共享环境中的 Bot 使用。',
   packageName: '包名', authorLabel: '作者', installedVersion: '已安装版本', noHistory: '暂无发布历史。',
   introduction: '简介', information: '信息', unknownAuthor: '未提供',
   directory: '安装位置', builtin: '内置扩展', builtinNote: '随 Cortico 提供，不能单独删除。',
@@ -14,7 +15,7 @@ const zh = {
   linkNames: { npm: 'npm 包页面', repository: '源代码仓库', homepage: '项目主页', bugs: '问题反馈' },
   released: '发布日期', runtime: '运行版本',
   tabs: { world: 'World 扩展', provider: '供应商扩展', bot: 'Bot 模板' },
-  scope: '扩展安装在共享环境中，可供多个 Bot 使用；加载和卸载仅作用于当前 Bot。删除扩展会移除共享安装包。',
+  scope: '扩展安装在共享环境中。World 按 Bot 加载，供应商安装后自动注册，Bot 模板用于创建实例。删除扩展会移除共享安装包。',
   enabled: '已加载到本 Bot', disabled: '已安装，未加载', adopted: '当前 Bot 正在采用', template: '已安装，可创建实例',
   load: '加载到本 Bot', unload: '停用', loadRestart: '重启并启用', manage: '管理 World', details: '详情',
   remove: '删除扩展', removeBody: '将从共享扩展环境移除此扩展包。使用它的其他 Bot 也会受到影响。此操作不会删除 Bot 的记忆、已有配置或本地扩展源码。检查范围为已知部署及此共享环境登记的运行实例。',
@@ -33,6 +34,7 @@ const zh = {
   hidden: '对 Agent 隐藏', runtimeVersion: (version: string) => `当前进程仍为 ${version}`,
 };
 const en: typeof zh = {
+  providerManagement: 'Provider extensions register automatically for Bots using the shared environment.',
   packageName: 'Package', authorLabel: 'Author', installedVersion: 'Installed version', noHistory: 'No release history available.',
   introduction: 'Description', information: 'Information', unknownAuthor: 'Not provided',
   directory: 'Installation location', builtin: 'Built in', builtinNote: 'Included with Cortico; cannot be deleted separately.',
@@ -45,7 +47,7 @@ const en: typeof zh = {
   linkNames: { npm: 'npm package', repository: 'Source repository', homepage: 'Project homepage', bugs: 'Report an issue' },
   released: 'Published', runtime: 'Running version',
   tabs: { world: 'World extensions', provider: 'Provider extensions', bot: 'Bot templates' },
-  scope: 'Packages are shared across Bots. Loading and unloading apply only to this Bot. Permanent deletion removes the shared package.',
+  scope: 'Packages are shared across Bots. Worlds load per Bot, providers register automatically, and Bot templates create instances. Deletion removes the shared package.',
   enabled: 'Loaded into this Bot', disabled: 'Installed, not loaded', adopted: 'Used by this Bot', template: 'Installed; ready to create instances',
   load: 'Load into this Bot', unload: 'Unload from this Bot', loadRestart: 'Load after restart', manage: 'Manage World', details: 'Details',
   remove: 'Delete permanently', removeBody: 'Remove this package from the shared environment. Other Bots may be affected. Memory, saved configuration and local source directories are retained. Checks cover known deployments and running instances registered with this shared environment.',

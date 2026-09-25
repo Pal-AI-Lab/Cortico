@@ -1,7 +1,7 @@
 /**
  * 扩展是 extensions/ 下的 npm 包，manifest.kind 为 world、provider 或 bot。
  * 启动时读取直接依赖并分别校验 manifest、默认导出、id 命名空间与控制台页前缀。
- * 单包失败不阻止其他包加载；安装或卸载后需重启进程，ESM 模块不会在运行时替换。
+ * 单包失败不阻止其他包加载；新增供应商可运行时注册，已导入的 ESM 代码更新需重启进程。
  * 仅导入 deployment.json 选定的 bot；其他 bot 包记为 idle，仓内同名 bot 优先。
  * 扩展包目录只读，避免修改 pnpm store 的硬链接文件；模板写入规则见 src/bot.ts。
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
@@ -237,7 +237,7 @@ export async function importBotDefinition(
  */
 export async function loadExtensions(
   repoRoot: string,
-  opts: { reserved?: Iterable<string>; reservedProviders?: Iterable<string>; activeBot?: ActiveBotPackage; log?: Logger } = {},
+  opts: { names?: readonly string[]; reserved?: Iterable<string>; reservedProviders?: Iterable<string>; activeBot?: ActiveBotPackage; log?: Logger } = {},
 ): Promise<ExtensionSet> {
   registerFrameworkResolver();
   const dir = extensionsDir(repoRoot);
@@ -251,6 +251,7 @@ export async function loadExtensions(
   const providers: ProviderModule[] = [];
   const consoleAssets: ExtensionConsoleAsset[] = [];
   for (const { name, spec } of readInstalled(dir)) {
+    if (opts.names && !opts.names.includes(name)) continue;
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
     let pkg: ExtensionPackageJson | null;
     try { pkg = readPackageJson(join(pkgDir, 'package.json')); }
@@ -480,6 +481,8 @@ function urlOf(v: { url?: string } | string | undefined): string | undefined {
 }
 
 export interface ExtensionManagerOptions {
+  refresh?: () => Promise<void>;
+  onCommitted?: (operation: PackageOperation) => Promise<void>;
   run?: PackageManagerRunner;
   registry?: string;
   fetchJson?: (url: string) => Promise<unknown>;
@@ -512,6 +515,8 @@ export class ExtensionManager {
     this.decorate = opts.decorate;
     this.builtins = opts.builtins;
     this.activation = opts.activation;
+    this.onCommitted = opts.onCommitted;
+    this.refresh = opts.refresh;
     this.run = opts.run ?? runPnpm;
     this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
     this.fetchJson = opts.fetchJson ?? (async (url) => {
@@ -521,6 +526,8 @@ export class ExtensionManager {
     });
   }
   private readonly builtins?: () => ExtensionInfo[];
+  private readonly onCommitted?: (operation: PackageOperation) => Promise<void>;
+  readonly refresh?: () => Promise<void>;
   private readonly decorate?: (item: ExtensionInfo) => ExtensionInfo;
   readonly activation?: (name: string, enabled: boolean, afterRestart: boolean) => Promise<void>;
   private readonly references?: (name: string) => Promise<string[]>;
@@ -750,7 +757,7 @@ export class ExtensionManager {
     if (this.busy) throw new Error('已有一个扩展操作在进行。');
     this.busy = true;
     try {
-      return await this.store.transact({ id, action, target: fingerprint, phase: 'preparing' }, async (stage, progress) => {
+      const result = await this.store.transact({ id, action, target: fingerprint, phase: 'preparing' }, async (stage, progress) => {
         let validated: Partial<ValidatedPackage> = {};
         const manifestFile = join(stage, 'package.json');
         const environmentManifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
@@ -794,6 +801,8 @@ export class ExtensionManager {
         }
         return { ...validated, output };
       });
+      if (result.phase === 'committed') await this.onCommitted?.(result);
+      return result;
     } finally { this.busy = false; }
   }
 

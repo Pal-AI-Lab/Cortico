@@ -279,8 +279,9 @@ export interface ExtensionPackageDetail {
 /** 装 npm 上的包(可带版本或 dist-tag),或本机一个含 package.json 的目录。 */
 export type ExtensionInstallTarget = { name: string; version?: string } | { path: string };
 
-/** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
+/** 共享扩展环境的清单、搜索、安装事务和运行时注册。 */
 export interface WebAppExtensionDeps {
+  refresh?(): Promise<void>;
   list(): { dir: string; extensions: ExtensionInfo[] };
   updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
@@ -1429,7 +1430,7 @@ export class WebApp {
       catch (error) { res.status(error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 400).json({ error: error instanceof Error ? error.message : String(error) }); }
     });
     app.get('/api/providers', providerRoute((hub, req) => hub.list(this.languageOf(req))));
-    app.get('/api/provider-modules', providerRoute((hub, req) => hub.moduleList(this.languageOf(req))));
+    app.get('/api/provider-modules', providerRoute(async (hub, req) => { await this.deps.extensions?.refresh?.(); return hub.moduleList(this.languageOf(req)); }));
     app.post('/api/provider-modules/config', express.json(), providerRoute((hub, req) => hub.groups(req.body.name || 'draft', req.body.entry, this.languageOf(req))));
     app.post('/api/provider-modules/preview', express.json(), providerRoute((hub, req) => hub.preview(req.body.name, req.body.entry, req.body.panel, req.body.method, req.body.args ?? [], this.languageOf(req))));
     app.get('/api/providers/:name', providerRoute((hub, req) => hub.detail(String(req.params.name), this.languageOf(req))));
@@ -1727,14 +1728,14 @@ export class WebApp {
       }
     }));
 
-    // 扩展:磁盘上的包对照启动时的加载结果。装卸只改磁盘,加载要重启进程。
     app.get('/api/run/lifecycle', wrap((_req, res) => {
       res.json({ deployment: createHash('sha256').update(this.deps.dataDir).digest('hex'), bootId: this.bootId, phase: this.ready ? 'ready' : 'starting', ready: this.ready });
     }));
 
-    app.get('/api/extensions', wrap((_req, res) => {
+    app.get('/api/extensions', wrap(async (_req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      await src.refresh?.();
       res.json(src.list());
     }));
 

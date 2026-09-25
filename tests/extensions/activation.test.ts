@@ -9,6 +9,7 @@ import type { ProviderModule } from '../../src/providers/base.ts';
 import { ExtensionActivation } from '../../src/extensions/activation.ts';
 import type { ExtensionSet } from '../../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../../src/extensions/manifest.ts';
+import { installFixture } from '../fixtures/extensions/install.ts';
 let temp: ReturnType<typeof makeTmpDir>;
 beforeEach(() => temp = makeTmpDir()); afterEach(() => temp.cleanup());
 function fixture(initiallyEnabled = false) {
@@ -30,17 +31,36 @@ function fixture(initiallyEnabled = false) {
   const service = () => new ExtensionActivation(deployment, temp.dir, booted, cfg, assembly, registry, join(temp.dir, 'providers'));
   return { service, registry, cfg, assembly, deployment, booted };
 }
-it('migrates existing providers once and retains disabled policy after reconstruction', async () => {
-  const f = fixture(); const first = f.service(); expect(f.registry.isModuleEnabled('extension-example')).toBe(true);
-  await first.activate('example-provider', false); expect(() => f.registry.resolve('sample')).toThrow('未加载');
-  const second = f.service(); expect(f.registry.isModuleEnabled('extension-example')).toBe(false);
-  await second.activate('example-provider', true); expect(f.registry.resolve('sample')).toBeTruthy(); expect(f.cfg.activeProvider).toBe('');
+it('migrates disabled provider policies to automatic registration while preserving World intents', async () => {
+  const f = fixture(); const file = join(f.deployment, 'extension-state.json');
+  const worldIntent = { name: 'example-world', version: '1.0.0', moduleId: 'sample-world' };
+  writeFileSync(file, JSON.stringify({ providers: { 'extension-example': false }, pending: [worldIntent, { name: 'example-provider', version: '1.0.0', moduleId: 'extension-example' }], errors: {} }));
+  const service = f.service();
+  expect(f.registry.resolve('sample')).toBeTruthy();
+  expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ pending: [worldIntent], errors: {} });
+  await expect(service.activate('example-provider', false)).rejects.toThrow('自动注册');
+  expect(f.cfg.activeProvider).toBe('');
 });
-it('blocks module unloading while the active model or a bound fork uses it', async () => {
+it('protects provider deletion while the active model or a bound fork uses it', async () => {
   const f = fixture(); const service = f.service(); f.cfg.activeProvider = 'sample';
-  await expect(service.activate('example-provider', false)).rejects.toThrow('使用'); f.cfg.activeProvider = '';
-  const binding = f.registry.bind('sample'); await expect(service.activate('example-provider', false)).rejects.toThrow('使用');
-  binding.release?.(); await service.activate('example-provider', false); expect(f.cfg.providers.sample.kind).toBe('extension-example');
+  expect(service.references('example-provider')).toContain(f.deployment); f.cfg.activeProvider = '';
+  const binding = f.registry.bind('sample'); expect(service.references('example-provider')).toContain(f.deployment);
+  binding.release?.(); expect(service.references('example-provider')).not.toContain(f.deployment);
+});
+it('registers newly installed shared providers without restarting the registry', async () => {
+  const f = fixture(); const service = f.service();
+  const preview = f.registry.previewRegistry('newEndpoint', { kind: 'fixture-provider', baseUrl: 'https://model.test' });
+  installFixture(temp.dir, 'provider-ok');
+  await service.manager.refresh?.();
+  expect(service.manager.list().extensions.find(item => item.name === 'provider-ok')).toMatchObject({ loaded: true, enabled: true });
+  f.cfg.providers.newEndpoint = { kind: 'fixture-provider', baseUrl: 'https://model.test' };
+  expect(f.registry.resolve('newEndpoint').client).toBeTruthy();
+  expect(preview.resolve('newEndpoint').client).toBeTruthy();
+  await service.manager.refresh?.();
+  expect(f.registry.definitions.filter(module => module.id === 'fixture-provider')).toHaveLength(1);
+  await f.registry.unregisterModule('fixture-provider');
+  expect(() => f.registry.resolve('newEndpoint')).toThrow();
+  expect(() => preview.resolve('newEndpoint')).toThrow();
 });
 it('waits for real World activation and persists local enabled state', async () => {
   const f = fixture(); const service = f.service(); await service.activate('example-world', true);
@@ -65,9 +85,7 @@ it('lists built-in modules from the current assembly and prevents package deleti
   await service.activate('builtin:world:sample-world', true);
   expect(service.manager.list().extensions.find(item => item.name === 'builtin:world:sample-world')?.enabled).toBe(true);
   await expect(service.manager.perform('delete-builtin-world', 'delete', { name: 'builtin:world:sample-world' })).rejects.toThrow('不能单独');
-  await service.activate('builtin:provider:extension-example', false);
-  expect(() => f.registry.resolve('sample')).toThrow('未加载');
-  await service.activate('builtin:provider:extension-example', true);
+  await expect(service.activate('builtin:provider:extension-example', false)).rejects.toThrow('自动注册');
   expect(f.registry.resolve('sample')).toBeTruthy();
 });
 it('can stop the running World version after its installed version changes', async () => {

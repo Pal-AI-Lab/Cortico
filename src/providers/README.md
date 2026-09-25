@@ -5,7 +5,7 @@
 `ProviderModule` 实现一种模型通信协议,`ProviderInstance` 对应一个端点,
 `ProviderHost` 提供实例所需的配置、密钥、资源与日志接口。Core 通过 `ProviderRegistry.bind(name)`
 获取带报价与来源信息的客户端,Persona 通过 Core 调用模型。绑定在任务结束时调用 `release()`；
-模块禁用策略同时约束缓存解析、预览与请求。绑定和在途操作持有模块使用计数，停用需等待这些使用结束。
+绑定和在途操作持有模块使用计数，移除模块需等这些使用结束。安装新增供应商后调用 `registerModule()`，实时注册表与已有预览注册表同时可见；`unregisterModule()` 关闭实例并移除注册。
 
 ## 文件
 
@@ -117,4 +117,4 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 
 连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。
 
-内置与外部供应商共用部署的模块启用策略；内置模块也可停用，随框架提供的包不能单独删除。
+内置与外部供应商安装后自动注册；随框架提供的包不能单独删除。
