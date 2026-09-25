@@ -117,11 +117,13 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const el = ui.h('div');
   el.id = 'rail';
 
-  // 左上角只有框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
+  // 左上角是框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
   const brand = ui.h('div', 'brand');
-  brand.setAttribute('role', 'img');
-  brand.setAttribute('aria-label', FRAMEWORK_NAME);
-  brand.appendChild(wordmark(doc));
+  const mark = wordmark(doc);
+  mark.removeAttribute('aria-hidden');
+  mark.setAttribute('role', 'img');
+  mark.setAttribute('aria-label', FRAMEWORK_NAME);
+  brand.appendChild(mark);
 
   const nav = ui.h('nav', 'stack');
   nav.setAttribute('aria-label', S.navAria);
@@ -253,6 +255,17 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   }, { signal });
 
   el.append(brand, nav, foot);
+
+  get<{ currentVersion: string; update?: { version: string; url: string } }>('/api/framework/release', { signal })
+    .then((status) => {
+      if (signal.aborted || !status?.update) return;
+      const hint = ui.h('a', 'release-hint', S.releaseUpdate(status.update.version, status.currentVersion));
+      hint.href = status.update.url;
+      hint.target = '_blank';
+      hint.rel = 'noopener noreferrer';
+      brand.appendChild(hint);
+    })
+    .catch(() => {});
 
   // ---- 导航 -------------------------------------------------------------
 

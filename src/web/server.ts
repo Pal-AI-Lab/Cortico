@@ -62,6 +62,7 @@ import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC,
 import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
+import { checkFrameworkRelease } from './framework-release.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
 import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
 import {
@@ -1416,6 +1417,10 @@ export class WebApp {
 
     app.get('/api/status', wrap((_req, res) => {
       res.json({ ...this.safeStatus(), uptimeSec: Math.round(process.uptime()) });
+    }));
+
+    app.get('/api/framework/release', wrap(async (_req, res) => {
+      res.json(await checkFrameworkRelease());
     }));
 
     app.get('/api/avatar', wrap((_req, res) => {

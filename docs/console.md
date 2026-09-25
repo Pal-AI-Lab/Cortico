@@ -86,6 +86,11 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `log`、`toast`、`confirm`、`drawer`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
 
+## 框架更新提示
+
+打开控制台时查询 GitHub 上 Cortico 的最新正式 Release。它的版本高于 `package.json` 的版本时，
+左上角字标下出现一行提示，链接到发布说明；版本相同、更低或查询失败时不显示。只提示，不下载也不重启。
+
 ## 运行控制
 
 | 端点 | 行为 |
