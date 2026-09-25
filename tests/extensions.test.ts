@@ -224,7 +224,7 @@ describe('ExtensionManager', () => {
   });
 
   it('list:启动时的记录对照此刻磁盘——新装的 pending-restart,卸了的 removed,换版本的 pending-restart', async () => {
-    installFake('kept', { body: definitionSource('kept') });
+    installFake('kept', { body: definitionSource('kept'), pkg: { author: { name: 'Example author' } } });
     installFake('bumped', { body: definitionSource('bumped') });
     installFake('gone-later', { body: definitionSource('gl') });
     installFake('broken', { body: 'export default 1;' });
@@ -235,7 +235,7 @@ describe('ExtensionManager', () => {
     const pkg = JSON.parse(readFileSync(pkgFile, 'utf8')) as { dependencies: Record<string, string> };
     delete pkg.dependencies['gone-later'];
     writeFileSync(pkgFile, JSON.stringify(pkg));
-    installFake('fresh', { body: definitionSource('fresh'), pkg: { description: '新来的' } });
+    installFake('fresh', { body: definitionSource('fresh'), pkg: { description: '新来的', author: 'Another author' } });
 
     const { mgr } = manager(booted);
     const { dir, extensions } = mgr.list();
@@ -244,7 +244,8 @@ describe('ExtensionManager', () => {
     expect(state).toEqual({
       kept: 'loaded', bumped: 'pending-restart', 'gone-later': 'removed', broken: 'failed', fresh: 'pending-restart',
     });
-    expect(extensions.find((p) => p.name === 'fresh')).toMatchObject({ version: '1.2.3', description: '新来的', loaded: false });
+    expect(extensions.find((p) => p.name === 'fresh')).toMatchObject({ version: '1.2.3', description: '新来的', author: 'Another author', loaded: false });
+    expect(extensions.find((p) => p.name === 'kept')?.author).toBe('Example author');
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 

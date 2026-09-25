@@ -44,6 +44,7 @@ export interface ExtensionPackageJson {
   name?: string;
   version?: string;
   description?: string;
+  author?: string | { name?: string };
   type?: string;
   main?: string;
   module?: string;

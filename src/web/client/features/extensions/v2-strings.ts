@@ -1,5 +1,6 @@
 import { pick } from '../../core/language.ts';
 const zh = {
+  introduction: '简介', information: '信息', unknownAuthor: '未提供',
   directory: '安装位置', builtin: '内置扩展', builtinNote: '随 Cortico 提供，不能单独删除。',
   idleManagement: '启用或停用扩展仅影响当前 Bot；内置扩展不能删除。',
   perPage: '每页显示', automatic: '自动', installedFilter: '筛选：名称、类型、描述',
@@ -31,6 +32,7 @@ const zh = {
   hidden: '对 Agent 隐藏', runtimeVersion: (version: string) => `当前进程仍为 ${version}`,
 };
 const en: typeof zh = {
+  introduction: 'Description', information: 'Information', unknownAuthor: 'Not provided',
   directory: 'Installation location', builtin: 'Built in', builtinNote: 'Included with Cortico; cannot be deleted separately.',
   idleManagement: 'Enable or disable extensions for this Bot. Built-in extensions cannot be deleted.',
   perPage: 'Per page', automatic: 'Auto', installedFilter: 'Filter: name, type, description',

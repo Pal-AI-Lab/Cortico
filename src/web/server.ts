@@ -186,6 +186,7 @@ export interface ExtensionInfo {
   spec: string;
   /** 磁盘上已安装的版本；卸载后缺席 */
   installedVersion?: string | null;
+  author?: string;
   version: string | null;
   description?: string;
   /** manifest 里的类别(`world` / `provider` / `bot`);解析不出 manifest 时缺席 */

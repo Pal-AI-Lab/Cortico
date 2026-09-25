@@ -18,6 +18,7 @@ export interface ExtensionView {
   spec: string;
   version: string | null;
   installedVersion?: string | null;
+  author?: string;
   description?: string;
   kind?: ExtensionKindView;
   api?: number;
@@ -172,7 +173,6 @@ export function mountExtensions(ctx: FeatureContext): void {
   let installed: ExtensionView[] = [];
   let updates = new Map<string, UpdateView>();
   let directory = '';
-  let readOnlyReason = '';
   let loadGeneration = 0;
   let installedFetched = false;
   let restoringScroll = true;
@@ -219,9 +219,9 @@ export function mountExtensions(ctx: FeatureContext): void {
       state[key] = Number(value); (area === 'installed' ? installedGrid : marketGrid).style.minHeight = ''; if (area === 'installed') { state.installedPage = 0; renderInstalled(); } else { state.page = 0; renderMarket(); } save();
     } })); return label;
   }
-  function stabilizeGrid(grid: HTMLElement, total: number, size: number, area: 'installed' | 'market') {
+  function stabilizeGrid(grid: HTMLElement, total: number, size: number) {
     const rows = Math.ceil(Math.min(total, size) / columns);
-    grid.style.gridTemplateRows = rows ? `repeat(${rows}, minmax(${area === 'installed' ? 280 : 206}px, auto))` : '';
+    grid.style.gridTemplateRows = rows ? `repeat(${rows}, minmax(206px, auto))` : '';
   }
   function pager(node: HTMLElement, total: number, page: number, size: number, change: (page: number) => void) {
     node.classList.add('extension-pager');
@@ -245,30 +245,35 @@ export function mountExtensions(ctx: FeatureContext): void {
     const heading = ui.h('div', 'extension-card-heading');
     if (item.kind === 'bot') { const avatar = ui.h('span', 'extension-avatar'); avatar.append(brandMark(root.ownerDocument)); heading.append(avatar); }
     const title = ui.button(item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
-    heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'bot' ? V.adopted : S.stateLoaded));
-    card.append(heading, ui.h('div', 'extension-meta', `${item.builtin ? V.builtin : item.name} · ${V.version(item.installedVersion ?? item.version ?? '—')}`), ui.h('p', 'extension-description', item.description ?? ''));
+    heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'bot' ? V.adopted : S.stateLoaded, 'on'));
+    card.append(heading);
     const text = item.activationError ? S.stateFailed : item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.enabled ? (item.kind === 'bot' ? V.adopted : V.enabled) : stateLabels[item.state];
-    card.append(ui.h('div', 'extension-status' + (item.activationError || item.state === 'failed' ? ' bad' : ''), text));
+    const failed = !!item.activationError || item.state === 'failed';
+    const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
+    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : ''), `${symbol} ${text}`));
+    const author = states[kind].hits.find(hit => hit.name === item.name)?.publisher ?? item.author ?? V.unknownAuthor;
+    card.append(ui.h('div', 'extension-meta', [item.builtin ? V.builtin : '', V.version(item.installedVersion ?? item.version ?? '—'), V.author(author)].filter(Boolean).join(' · ')));
+    if (item.description) card.append(ui.h('p', 'extension-description', item.description));
     const version = ui.h('div', 'extension-secondary');
     const update = updates.get(item.name);
     if (update) {
       version.append(ui.h('span', '', S.updateVersions(update.installedVersion, update.latestVersion)));
       const button = ui.button(S.updateAction, { size: 'sm', onClick: () => void operate('install', { name: item.name, version: update.latestVersion }, 'management', kind) });
-      button.disabled = !!readOnlyReason || !!update.problems.length || busy.has(item.name); button.title = update.problems.join('\n'); version.append(button);
+      button.disabled = !!update.problems.length || busy.has(item.name); button.title = update.problems.join('\n'); version.append(button);
     } else version.textContent = item.hidden ? V.hidden : item.installedVersion && item.version !== item.installedVersion ? V.runtimeVersion(item.version ?? '—') : '';
-    card.append(version);
+    if (version.hasChildNodes()) card.append(version);
     const actions = ui.h('div', 'extension-card-actions');
     const owner = kind;
     if (item.state !== 'removed') {
       if (item.kind === 'bot') actions.append(ui.button(V.create, { onClick: () => { const box = ui.h('div'); box.append(ui.h('p', '', V.createBody), ui.h('pre', '', 'pnpm start --new')); ui.drawer(item.name, box); } }));
       else if (item.state === 'pending-restart' && !item.enabled) actions.append(ui.button(V.loadRestart, { onClick: () => void activate(item, owner, true) }));
       else if (item.loaded) {
-        const toggle = ui.button(item.enabled ? V.unload : V.load, { onClick: () => void activate(item, owner) }); toggle.disabled = !!readOnlyReason || !!item.inUse || busy.has(item.name); toggle.title = item.disableReason ?? ''; actions.append(toggle);
+        const toggle = ui.button(item.enabled ? V.unload : V.load, { onClick: () => void activate(item, owner) }); toggle.disabled = !!item.inUse || busy.has(item.name); toggle.title = item.disableReason ?? ''; actions.append(toggle);
       } else actions.append(ui.button(V.details, { onClick: () => showLocal(item) }));
       if (item.kind === 'world' && item.loaded && item.worldId) actions.append(ui.button(V.manage, { onClick: () => router.navigate(['provider', 'world:' + item.worldId]) }));
       if (!item.builtin) {
       const remove = ui.button(V.remove, { variant: 'danger', onClick: async () => { if (await ui.confirm({ title: item.name, body: V.removeBody, danger: true })) void operate('delete', { name: item.name }, 'management', owner); } });
-      remove.disabled = !!readOnlyReason || !!item.enabled || !!item.inUse || busy.has(item.name); actions.append(remove);
+      remove.disabled = !!item.enabled || !!item.inUse || busy.has(item.name); actions.append(remove);
       } else { const remove = ui.button(V.remove, { variant: 'danger' }); remove.disabled = true; remove.title = V.builtinNote; actions.append(remove); }
     }
     card.append(actions); return card;
@@ -279,7 +284,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const mine = installed.filter(p => (p.kind === kind || !p.kind && kind === 'world') && (!needle || [p.label, p.name, p.description, p.worldId].some(value => value?.toLowerCase().includes(needle)))).sort((a, b) => a.name.localeCompare(b.name));
     const state = states[kind], size = pageSize('installed'); if (installedFetched) state.installedPage = Math.min(state.installedPage, Math.max(0, Math.ceil(mine.length / size) - 1));
     installedGrid.replaceChildren(...mine.slice(state.installedPage * size, (state.installedPage + 1) * size).map(installedCard));
-    stabilizeGrid(installedGrid, mine.length, size, 'installed');
+    stabilizeGrid(installedGrid, mine.length, size);
     if (!mine.length) installedGrid.append(ui.placeholder(S.noExtensions));
     pager(installedPager, mine.length, state.installedPage, size, page => { installedGrid.style.minHeight = `${installedGrid.getBoundingClientRect().height}px`; state.installedPage = page; renderInstalled(); save(); });
   }
@@ -300,7 +305,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       if (hit.date) info.append(ui.pill(hit.date.slice(0, 10)));
       info.append(ui.pill(V.downloads(ui.fmt.count(hit.downloads)))); card.append(info); return card;
     }));
-    stabilizeGrid(marketGrid, result.matched, pageSize('market'), 'market');
+    stabilizeGrid(marketGrid, result.matched, pageSize('market'));
     if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : S.noPackages : S.searching));
     pager(marketPager, result.matched, result.page, pageSize('market'), page => { marketGrid.style.minHeight = `${marketGrid.getBoundingClientRect().height}px`; state.page = page; renderMarket(); save(); });
   }
@@ -308,10 +313,8 @@ export function mountExtensions(ctx: FeatureContext): void {
     if (signal.aborted) return false;
     const generation = ++loadGeneration;
     try {
-      const data = await get<{ dir: string; extensions: ExtensionView[]; readOnlyReason?: string }>('/api/extensions', { signal });
+      const data = await get<{ dir: string; extensions: ExtensionView[] }>('/api/extensions', { signal });
       if (signal.aborted || generation !== loadGeneration) return false;
-      readOnlyReason = data.readOnlyReason ?? '';
-      if (readOnlyReason) message(kind, 'management', readOnlyReason);
       installed = data.extensions; installedFetched = true; directory = data.dir; const dirNode = root.querySelector('.extension-directory'); if (dirNode) dirNode.textContent = `${V.directory}：${directory}`; renderInstalled(); renderMarket(); restoreScroll(); return true;
     } catch (error) { if (!signal.aborted) { installedFetched = true; message(kind, 'management', S.listLoadFailed(errorText(error)), true); restoreScroll(); } return false; }
   }
@@ -326,11 +329,10 @@ export function mountExtensions(ctx: FeatureContext): void {
     try {
       const data = await get<{ hits: SearchHitView[]; partial?: boolean }>(`/api/extensions/search?kind=${owner}`, { signal });
       if (signal.aborted || state.generation !== generation) return;
-      state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? V.partial : ''); if (owner === kind) { renderMarket(); restoreScroll(); }
+      state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? V.partial : ''); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
     } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
   async function operate(action: 'install' | 'delete', target: Target, area: string, owner: ExtensionKindView) {
-    if (readOnlyReason) { message(owner, area, readOnlyReason, true); return; }
     const identity = 'name' in target ? target.name : target.path; if (busy.has(identity)) return;
     const actionLabel = action === 'delete' ? V.deletedAction : installed.some(item => item.name === identity) ? V.updatedAction : V.installedAction;
     busy.add(identity); renderInstalled(); message(owner, area, V.progress(actionLabel, identity));
@@ -376,7 +378,6 @@ export function mountExtensions(ctx: FeatureContext): void {
     message(pending.kind, pending.area, V.unknown); await query();
   }
   async function activate(item: ExtensionView, owner: ExtensionKindView, afterRestart = false) {
-    if (readOnlyReason) { message(owner, 'management', readOnlyReason, true); return; }
     if (busy.has(item.name)) return;
     if ((!item.enabled || await ui.confirm({ title: V.unload, body: V.unloadBody })) && !signal.aborted) {
       if (afterRestart && !await ui.confirm({ title: V.loadRestart, body: ctx.capabilities.supervised ? S.restartConfirmBody : S.restartNoLoopBody })) return;
@@ -392,7 +393,7 @@ export function mountExtensions(ctx: FeatureContext): void {
   function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
     const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail)); ui.drawer(hit.name, box);
     void get<PackageDetailView>(`/api/extensions/package?name=${encodeURIComponent(hit.name)}&version=${encodeURIComponent(hit.version)}`, { signal }).then(data => {
-      if (signal.aborted) return; box.replaceChildren(ui.h('p', '', data.description ?? ''));
+      if (signal.aborted) return; box.replaceChildren(ui.h('h4', '', V.introduction), ui.h('p', '', data.description ?? '—'));
       for (const text of [...data.problems ?? [], ...data.warnings]) box.append(ui.msgline(text, true));
       if (data.deprecated) box.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [
@@ -405,22 +406,22 @@ export function mountExtensions(ctx: FeatureContext): void {
         { k: S.fieldKeywords, v: data.keywords?.join('、') || '—' },
         { k: S.fieldDownloads, v: V.downloads(ui.fmt.count(hit.downloads)) }, { k: S.fieldDependents, v: String(hit.dependents) },
       ];
-      box.append(ui.kv(rows));
+      box.append(ui.h('h4', '', V.information), ui.kv(rows));
       if (data.history.length) {
-        box.append(ui.h('h4', '', S.fieldHistory));
+        const releases = ui.h('details', 'extension-releases');
+        releases.append(ui.h('summary', '', S.fieldHistory));
         const history = ui.h('div', 'extension-history');
         for (const release of data.history) { const row = ui.h('div'); row.append(ui.h('code', '', release.version), ui.h('time', 'muted', release.date.slice(0, 10))); history.append(row); }
-        box.append(history);
+        releases.append(history); box.append(releases);
       }
       const actions = ui.rowbar(); actions.classList.add('extension-detail-actions');
       for (const [name, href] of Object.entries(data.links)) if (href && /^https?:\/\//i.test(href)) { const a = ui.h('a', 'btn secondary', V.linkNames[name as keyof typeof V.linkNames]); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; actions.append(a); }
       const button = ui.button(data.installed ? S.alreadyInstalled : S.install, { variant: 'primary', onClick: () => { button.disabled = true; void operate('install', { name: data.name, version: data.version }, 'market', owner).finally(() => { if (box.isConnected) button.disabled = installed.some(item => item.name === data.name); }); } });
-      button.disabled = !!readOnlyReason || data.installed || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(ui.h('span', 'grow'), button); box.append(actions);
+      button.disabled = data.installed || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(ui.h('span', 'grow'), button); box.append(actions);
     }).catch(error => { if (!signal.aborted) box.replaceChildren(ui.msgline(errorText(error), true)); });
   }
 
   async function restart(confirmed = false) {
-    if (readOnlyReason) { message(kind, 'management', readOnlyReason, true); return; }
     if (!confirmed && !await ui.confirm({ title: S.restartConfirmTitle, body: ctx.capabilities.supervised ? S.restartConfirmBody : S.restartNoLoopBody })) return;
     try {
       const before = await get<Life>('/api/run/lifecycle', { signal });
@@ -451,17 +452,17 @@ export function mountExtensions(ctx: FeatureContext): void {
     panel.replaceChildren(); messageNodes = {};
     const managed = ui.sheet({ title: S.installedTitle }); management = managed.el;
     const bar = ui.rowbar(); bar.classList.add('extension-toolbar');
-    bar.append(ui.h('span', 'extension-directory', `${V.directory}：${directory}`));
+    managed.el.querySelector('h3')!.append(ui.h('span', 'extension-directory', `${V.directory}：${directory}`));
     const installedFilters = ui.input({ type: 'search', value: state.installedFilter, placeholder: V.installedFilter, onInput: value => { state.installedFilter = value; state.installedPage = 0; renderInstalled(); save(); } });
     installedFilters.setAttribute('aria-label', V.installedFilter); bar.append(installedFilters, sizePicker('installed'));
-    if (ctx.capabilities.restart) bar.append(ui.button(S.restartProcess, { onClick: () => void restart() }));
+    if (ctx.capabilities.restart) { const button = ui.button(S.restartProcess, { onClick: () => void restart() }); button.classList.add('extension-restart'); bar.append(button); }
     bar.append(ui.button(S.refresh, { onClick: () => { void load(); void checkUpdates(); } }));
-    messageNodes.management = ui.msgline(readOnlyReason || (kind === 'bot' ? V.createBody : V.idleManagement)); messageNodes.management.setAttribute('role', 'status'); installedGrid = ui.h('div', 'extension-grid'); installedPager = ui.rowbar();
+    messageNodes.management = ui.msgline(kind === 'bot' ? V.createBody : V.idleManagement); messageNodes.management.setAttribute('role', 'status'); installedGrid = ui.h('div', 'extension-grid'); installedPager = ui.rowbar();
     managed.body.append(bar, messageNodes.management, installedGrid, installedPager);
     const marketSheet = ui.sheet({ title: V.market }); market = marketSheet.el; messageNodes.market = ui.msgline(); messageNodes.market.setAttribute('role', 'status');
     const filters = ui.rowbar(); filters.classList.add('extension-toolbar');
     filters.append(ui.input({ type: 'search', value: state.filter, placeholder: S.filterPlaceholder, onInput: value => { state.filter = value; state.page = 0; renderMarket(); save(); } }), ui.select({ value: state.sort, options: HIT_SORTS.map(value => ({ value, label: S.sortLabel[value] })), onChange: value => { state.sort = value as HitSort; state.page = 0; renderMarket(); save(); } }), ui.checkbox(S.hideInstalled, { checked: state.hide, onChange: value => { state.hide = value; state.page = 0; renderMarket(); save(); } }).el, sizePicker('market'), ui.button(S.refresh, { onClick: () => void search(kind) }));
-    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(ui.h('p', 'sh-desc', S.searchDesc), filters, messageNodes.market, marketGrid, marketPager);
+    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(filters, messageNodes.market, marketGrid, marketPager);
     const manual = ui.sheet({ title: V.manual }); messageNodes.manual = ui.msgline(); messageNodes.manual.setAttribute('role', 'status');
     const source = ui.segmented([{ value: 'npm', label: V.npm }, { value: 'local', label: V.local }], { value: state.source, onSelect: value => { state.source = value as 'npm' | 'local'; state.input = ''; render(); save(); } });
     const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, placeholder: state.source === 'npm' ? `@scope/cortico-${kind}-demo@1.2.3` : '', onInput: value => { state.input = value; } });
@@ -472,7 +473,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const check = ui.button(V.check, { onClick: async () => { const lock = ui.disable(check); try { const data = await post<{ name: string; version: string; kind: string }>('/api/extensions/check', { target: target(), kind: owner }, { signal }); message(owner, 'manual', `${V.checkOk} · ${data.name}@${data.version} · ${data.kind}`); } catch (error) { message(owner, 'manual', errorText(error), true); } finally { lock.dispose(); } } });
     const install = ui.button(S.install, { variant: 'primary', onClick: () => { try { void operate('install', target(), 'manual', owner); } catch (error) { message(owner, 'manual', errorText(error), true); } } });
     const manualActions = ui.rowbar(); manualActions.classList.add('extension-manual-actions'); manualActions.append(check, install, messageNodes.manual);
-    manual.body.append(ui.h('p', 'sh-desc', state.source === 'npm' ? V.npmHelp : V.localHelp), source.el, manualBar, manualActions);
+    manual.body.append(ui.h('p', 'sh-desc extension-install-help', state.source === 'npm' ? V.npmHelp : V.localHelp), source.el, manualBar, manualActions);
     panel.append(managed.el, marketSheet.el, manual.el); root.style.setProperty('--extension-columns', String(columns));
     for (const [area, value] of Object.entries(state.messages)) if (messageNodes[area]) { messageNodes[area].textContent = value.text; messageNodes[area].className = 'msgline' + (value.bad ? ' bad' : ''); }
     renderInstalled(); renderMarket();
