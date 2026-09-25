@@ -266,9 +266,9 @@ export function mountExtensions(ctx: FeatureContext): void {
     const text = item.activationError ? S.stateFailed : item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.kind === 'provider' ? S.alreadyInstalled : item.enabled ? (item.kind === 'bot' ? V.adopted : V.enabled) : stateLabels[item.state];
     const failed = !!item.activationError || item.state === 'failed';
     const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
-    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
     const author = states[kind].hits.find(hit => hit.name === item.name)?.publisher ?? item.author ?? V.unknownAuthor;
     card.append(ui.h('div', 'extension-meta', [item.builtin ? V.builtin : '', V.version(item.installedVersion ?? item.version ?? '—'), V.author(author)].filter(Boolean).join(' · ')));
+    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
     if (item.description) card.append(ui.h('p', 'extension-description', item.description));
     const version = ui.h('div', 'extension-secondary');
     const update = updates.get(item.name);
