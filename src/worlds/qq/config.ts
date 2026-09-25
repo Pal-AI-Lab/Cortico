@@ -38,7 +38,7 @@ export const QQ_CONFIG_GROUP: ConfigGroup = {
         type: 'boolean',
         title: '开启辅助视觉',
         'x-hot': false,
-        description: '关掉后仍会下载并保存图片附件,但不会生成图片描述；开启需配置 OPENROUTER_API_KEY 并重启。',
+        description: '关掉后不生成图片描述；主模型接受图片时，原图仍随消息投递。开启需配置 OPENROUTER_API_KEY 并重启。',
       },
       'worlds.qq.vision.model': {
         type: 'string',

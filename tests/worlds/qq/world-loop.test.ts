@@ -11,6 +11,7 @@ import { nullLogger } from '../../../src/core/util.ts';
 import type { EventEnvelope, ToolCallContext } from '../../../src/core/types.ts';
 import { MockOneBot } from '../../helpers/mock-onebot.ts';
 import { QQWorld } from '../../../src/worlds/qq/world.ts';
+import { VISION_DEFAULTS } from '../../../src/worlds/qq/vision.ts';
 import { FakeHost, waitUntil } from './helpers.ts';
 
 const GROUP = 424242;
@@ -20,6 +21,7 @@ const toolCtx: ToolCallContext = { role: 'main', log: nullLogger() };
 let mock: MockOneBot;
 let mod: QQWorld;
 let host: FakeHost;
+let port: number;
 
 beforeEach(async () => {
   mock = new MockOneBot({
@@ -30,7 +32,7 @@ beforeEach(async () => {
     selfCard: 'botcard',
     groupName: '深夜食堂',
   });
-  const port = await mock.start();
+  port = await mock.start();
   host = new FakeHost();
   mod = new QQWorld({ wsUrl: `ws://127.0.0.1:${port}`, groups: [GROUP], privates: [], token: '' });
   await mod.start(host);
@@ -48,8 +50,13 @@ function tool(name: string) {
   return t;
 }
 
-async function startImageServer(bytes: Uint8Array, delayMs = 0): Promise<{ url: string; close(): Promise<void> }> {
+async function startImageServer(
+  bytes: Uint8Array,
+  delayMs = 0,
+): Promise<{ url: string; requests(): number; close(): Promise<void> }> {
+  let requests = 0;
   const server = createServer((_req, res) => {
+    requests++;
     const send = () => {
       res.writeHead(200, { 'content-type': 'image/png' });
       res.end(bytes);
@@ -61,9 +68,10 @@ async function startImageServer(bytes: Uint8Array, delayMs = 0): Promise<{ url: 
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
   });
-  const { port } = server.address() as AddressInfo;
+  const { port: imagePort } = server.address() as AddressInfo;
   return {
-    url: `http://127.0.0.1:${port}/image.png`,
+    url: `http://127.0.0.1:${imagePort}/image.png`,
+    requests: () => requests,
     close: () => new Promise<void>((resolve, reject) => {
       server.close((error) => error ? reject(error) : resolve());
     }),
@@ -146,50 +154,34 @@ describe('群消息入库', () => {
 });
 
 describe('图片段按当前主模型渲染', () => {
-  it('主模型切到接收图像后，新消息的图片带地址', async () => {
-    const imageServer = await startImageServer(new Uint8Array([1, 2, 3]));
+  const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
+
+  it('主模型不收图时只留占位且不下载;切到收图后正文带地址,原图随消息落库', async () => {
+    const imageServer = await startImageServer(PNG);
     try {
       const image = [{ type: 'image', data: { url: imageServer.url } }];
       mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
       await waitUntil(() => host.pushed.length === 1, '收到第1条事件');
       expect(host.pushed[0].event.text).toContain('[图片]');
+      expect(host.pushed[0].event.blobs).toBeUndefined();
+      expect(imageServer.requests()).toBe(0);
 
       host.modelFacts = { ...host.modelFacts, accepts: () => true };
       mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: image });
       await waitUntil(() => host.pushed.length === 2, '收到第2条事件');
-      expect(host.pushed[1].event.text).toContain(`[图片 ${imageServer.url}]`);
-    } finally {
-      await imageServer.close();
-    }
-  });
-
-  it('辅助视觉关闭时仍把入站图片字节附在消息事件上', async () => {
-    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0]);
-    const imageServer = await startImageServer(bytes);
-    try {
-      host.modelFacts = { ...host.modelFacts, accepts: () => true };
-      mock.emitGroupMessage({
-        user_id: 1001,
-        nickname: '阿明',
-        segments: [{ type: 'image', data: { url: imageServer.url } }],
-      });
-      await waitUntil(() => host.pushed.length === 1, '图片消息入库');
-
-      const event = host.pushed[0].event;
-      expect(event.type).toBe('qq.message');
+      const event = host.pushed[1].event;
       expect(event.text).toContain(`[图片 ${imageServer.url}]`);
       expect(event.blobs).toHaveLength(1);
       const saved = host.blob(event.blobs![0].handle);
       expect(saved?.mime).toBe('image/png');
-      expect([...saved!.bytes]).toEqual([...bytes]);
+      expect([...saved!.bytes]).toEqual([...PNG]);
     } finally {
       await imageServer.close();
     }
   });
 
-  it('辅助视觉关闭时私聊图片也随消息保存', async () => {
-    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 2]);
-    const imageServer = await startImageServer(bytes);
+  it('私聊图片同样随消息落库', async () => {
+    const imageServer = await startImageServer(PNG);
     try {
       mod.setWatched([GROUP], [1001]);
       await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.watch'), '监听变更入库');
@@ -209,20 +201,24 @@ describe('图片段按当前主模型渲染', () => {
       await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.message'), '私聊图片消息入库');
 
       const event = host.pushed.find(({ event }) => event.type === 'qq.message')!.event;
-      expect(event.meta?.message_id).toBe(messageId);
       expect(event.meta?.conv).toEqual({ kind: 'private', id: 1001 });
       expect(event.blobs).toHaveLength(1);
-      const saved = host.blob(event.blobs![0].handle);
-      expect(saved?.mime).toBe('image/png');
-      expect([...saved!.bytes]).toEqual([...bytes]);
+      expect([...host.blob(event.blobs![0].handle)!.bytes]).toEqual([...PNG]);
     } finally {
       await imageServer.close();
     }
   });
 
-  it('图片超过内联等待上限后随qq.image事件保存', async () => {
-    const bytes = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 1]);
-    const imageServer = await startImageServer(bytes, 2800);
+  it('下载超过等待上限的图片另发qq.image,不单独触发回合', async () => {
+    const waitMs = 50;
+    const imageServer = await startImageServer(PNG, waitMs * 6);
+    await mod.stop();
+    mod = new QQWorld(
+      { wsUrl: `ws://127.0.0.1:${port}`, groups: [GROUP], privates: [], token: '' },
+      { imageCapture: { ...VISION_DEFAULTS, dedupPrecheckMs: waitMs } },
+    );
+    await mod.start(host);
+    await mod.waitReady();
     try {
       host.modelFacts = { ...host.modelFacts, accepts: () => true };
       mock.emitGroupMessage({
@@ -230,17 +226,16 @@ describe('图片段按当前主模型渲染', () => {
         nickname: '阿明',
         segments: [{ type: 'image', data: { url: imageServer.url } }],
       });
-      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.message'), '主消息先入库', 4000);
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.message'), '主消息先入库');
       const message = host.pushed.find(({ event }) => event.type === 'qq.message')!.event;
       expect(message.blobs).toBeUndefined();
 
-      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.image'), '后续图片事件到达', 2000);
-      const attachment = host.pushed.find(({ event }) => event.type === 'qq.image')!.event;
-      expect(attachment.meta?.message_id).toBe(message.meta?.message_id);
-      expect(attachment.blobs).toHaveLength(1);
-      const saved = host.blob(attachment.blobs![0].handle);
-      expect(saved?.mime).toBe('image/png');
-      expect([...saved!.bytes]).toEqual([...bytes]);
+      await waitUntil(() => host.pushed.some(({ event }) => event.type === 'qq.image'), '后续图片事件到达');
+      const late = host.pushed.find(({ event }) => event.type === 'qq.image')!;
+      expect(late.opts?.trigger).toBeUndefined();
+      expect(late.event.meta?.message_id).toBe(message.meta?.message_id);
+      expect(late.event.blobs).toHaveLength(1);
+      expect([...host.blob(late.event.blobs![0].handle)!.bytes]).toEqual([...PNG]);
     } finally {
       await imageServer.close();
     }

@@ -42,8 +42,8 @@ import {
   type OneBotGroupMessage,
   type Segment,
 } from './normalize.ts';
-import { VISION_DEFAULTS, type VisionService } from './vision.ts';
-import { downloadImageBytes, type ImageDownloadOptions } from './image-download.ts';
+import { VISION_DEFAULTS, type VisionConfig, type VisionService } from './vision.ts';
+import { downloadImageBytes } from './image-download.ts';
 import { QQ_DEFAULTS, QQ_SECRETS, QQ_CONFIG_GROUP, type QQRosterEntry } from './config.ts';
 
 export type { Conv } from './conversation.ts';
@@ -99,13 +99,12 @@ interface QQGatePanelDeps {
 
 interface QQWorldDeps {
   vision?: VisionService;
+  /** 无辅助视觉时下载入站图片用的上限;传入配置对象本身,热更新随之生效。 */
   imageCapture?: QQImageCaptureOptions;
   gate?: QQGatePanelDeps;
 }
 
-interface QQImageCaptureOptions extends ImageDownloadOptions {
-  inlineWaitMs: number;
-}
+type QQImageCaptureOptions = Pick<VisionConfig, 'timeoutMs' | 'maxImageBytes' | 'dedupPrecheckMs'>;
 
 type IncomingImageDownload = { image: { buffer: Uint8Array; mime: string } | null };
 
@@ -141,7 +140,7 @@ export class QQWorld implements World {
   private host?: WorldHost;
   private driver?: OneBotDriver;
   private log: Logger = nullLogger();
-  /** 无辅助视觉时,主模型能力只决定正文是否保留图片URL。 */
+  /** 无辅助视觉时,主模型收图才在正文保留图片URL并下载原图。 */
   private readonly imagePolicy: ImageRenderPolicy = (data) =>
     makeImagePolicy(!!this.vision || (this.host?.modelFacts.accepts('image/png') ?? false))(data);
 
@@ -177,11 +176,7 @@ export class QQWorld implements World {
     this.cfg = cfg;
     this.timezone = cfg.timezone ?? 'Asia/Shanghai';
     this.vision = deps?.vision;
-    this.imageCapture = deps?.imageCapture ?? {
-      timeoutMs: VISION_DEFAULTS.timeoutMs,
-      maxImageBytes: VISION_DEFAULTS.maxImageBytes,
-      inlineWaitMs: VISION_DEFAULTS.dedupPrecheckMs,
-    };
+    this.imageCapture = deps?.imageCapture ?? VISION_DEFAULTS;
     this.gate = deps?.gate;
     this.watchedGroups = new Set(cfg.groups);
     this.watchedPrivates = new Set(cfg.privates);
@@ -687,7 +682,7 @@ export class QQWorld implements World {
     const displayName = msg.sender?.card || msg.sender?.nickname || senderKey;
     this.nameByUserId.set(senderKey, displayName);
 
-    const imageDownloads = this.vision
+    const imageDownloads = this.vision || !host.modelFacts.accepts('image/png')
       ? []
       : incomingImageUrls(msg).map((url, index) => ({
           index,
@@ -791,7 +786,7 @@ export class QQWorld implements World {
 
     const when =
       typeof msg.time === 'number' ? new Date(msg.time * 1000) : new Date();
-    // 已拿到的图随这条消息落库;无辅助视觉时,超出等待上限的图片异步投递。
+    // 已拿到的图随这条消息落库;无辅助视觉时,超出等待上限的图片下载完另发 qq.image,触发方式同 qq.vision。
     const blobs: BlobInput[] = [];
     const lateImages: Array<{ index: number; promise: Promise<IncomingImageDownload> }> = [];
     if (this.vision) {
@@ -804,7 +799,7 @@ export class QQWorld implements World {
       const timeoutResult = Symbol('image download wait elapsed');
       let timer: ReturnType<typeof setTimeout> | undefined;
       const timeout = new Promise<typeof timeoutResult>((resolve) => {
-        timer = setTimeout(() => resolve(timeoutResult), this.imageCapture.inlineWaitMs);
+        timer = setTimeout(() => resolve(timeoutResult), this.imageCapture.dedupPrecheckMs);
       });
       const ready = await Promise.all(imageDownloads.map(({ promise }) => Promise.race([promise, timeout])));
       if (timer) clearTimeout(timer);
@@ -856,7 +851,6 @@ export class QQWorld implements World {
             meta: { message_id: msg.message_id, image_index: img.index + 1, conv },
             blobs: [incomingImageBlob(image, msg.message_id, img.index)],
           },
-          { trigger: 'flush' },
         );
       }).catch((e) => this.log.warn('QQ 图片附件事件投递失败', { messageId: msg.message_id, err: String(e) }));
     }
