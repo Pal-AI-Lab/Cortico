@@ -117,8 +117,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   const el = ui.h('div');
   el.id = 'rail';
 
-  // 左上角只有框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
-  // 字标下方只在有新的正式 Release 时出现一行更新提示。
+  // 左上角是框架字标。这个 bot 叫什么写在底栏头像旁边——那才是这一台的名字。
   const brand = ui.h('div', 'brand');
   const mark = wordmark(doc);
   mark.removeAttribute('aria-hidden');
@@ -257,7 +256,6 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   el.append(brand, nav, foot);
 
-  // 检查失败不显示任何东西：提示只在确知有新版本时出现。
   get<{ currentVersion: string; update?: { version: string; url: string } }>('/api/framework/release', { signal })
     .then((status) => {
       if (signal.aborted || !status?.update) return;
