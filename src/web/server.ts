@@ -823,7 +823,7 @@ export class WebApp {
   /** 每个进程一个;控制台据此认出重启后回来的是新进程。 */
   private readonly bootId = randomUUID();
   private ready = false;
-  /** 启动流程走完(World 挂好、Core 起来)后调用;之前 `/api/run/lifecycle` 报 starting。 */
+  /** 启动流程走完(World 挂好、Core 起来)后调用;之前 `/api/run/lifecycle` 的 `ready` 为 false。 */
   markReady(): void { this.ready = true; }
   private readonly deps: WebAppDeps;
   private readonly app: express.Express;

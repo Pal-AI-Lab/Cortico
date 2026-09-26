@@ -1,7 +1,4 @@
-/**
- * 扩展管理页。按类别分页签(路由第二段),每类是已安装、扩展市场与手动安装。
- * 扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效，重启后本页等新进程就绪再刷新。
- */
+/** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。类别取路由第二段。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
 import { brandMark } from '../../ui/icons.ts';
@@ -463,7 +460,6 @@ export function mountExtensions(ctx: FeatureContext): void {
     } catch (error) { if (!signal.aborted) message(kind, 'management', errorText(error), true); }
   }
   function watchRestart(before: Life) {
-    const deadline = Date.now() + 120_000;
     const check = async () => {
       if (signal.aborted) return;
       try {
@@ -471,7 +467,6 @@ export function mountExtensions(ctx: FeatureContext): void {
         if (restartOutcome(before, next) === 'wrong-deployment') { win.sessionStorage.removeItem(storageKey + ':restart'); message(kind, 'management', S.otherBot, true); return; }
         if (restartOutcome(before, next) === 'ready') { win.sessionStorage.removeItem(storageKey + ':restart'); save(); win.location.reload(); return; }
       } catch { /* Wait while the listener is unavailable. */ }
-      if (Date.now() >= deadline) { message(kind, 'management', S.reloadTimeout, true); messageNodes.management?.append(ui.button(S.retry, { onClick: () => watchRestart(before) })); return; }
       lifecycle.timeout(() => void check(), 1000);
     }; void check();
   }

@@ -4,7 +4,7 @@ const zh = {
   navLabel: '扩展',
   navGroup: 'Core',
   introTitle: '扩展',
-  scope: '扩展安装在共享的扩展目录中。World 与供应商扩展在进程重启后加载，Bot 模板用于创建实例。删除扩展会移除共享安装包。',
+  scope: '扩展安装在共享的扩展目录中，安装与删除在进程重启后生效。删除扩展会移除共享安装包。',
   tabs: { world: 'World 扩展', provider: '供应商扩展', bot: 'Bot 模板' },
 
   installedTitle: '已安装',
@@ -24,7 +24,7 @@ const zh = {
   hidden: '对 Agent 隐藏',
   runtimeVersion: (version: string) => `当前进程仍为 ${version}`,
 
-  providerManagement: '供应商扩展在进程重启后注册，供共享环境中的 Bot 使用。',
+  providerManagement: '供应商扩展供共享环境中的 Bot 使用。',
   idleManagement: '在 World 页启用或停用 World；内置扩展不能删除。',
   createBody: '在运行 Cortico 的电脑上打开项目终端，执行 pnpm start --new，选择此 Bot 模板并创建新实例。',
 
@@ -37,9 +37,7 @@ const zh = {
   doneRestart: '已退出',
   resultDefault: '关闭步骤已执行。',
   reloadWait: '等待当前 Bot 的新进程就绪…',
-  reloadTimeout: '尚未检测到新进程就绪。可继续检测，无需重复重启。',
   otherBot: '此端口已由另一 Bot 使用，已停止恢复。',
-  retry: '继续检测',
   restartManual: '进程已退出，请在终端手动启动；此页面会等待就绪。',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
@@ -139,7 +137,7 @@ const en: typeof zh = {
   navLabel: 'Extensions',
   navGroup: 'Core',
   introTitle: 'Extensions',
-  scope: 'Extensions are installed in the shared extensions directory. World and provider extensions load after the process restarts; Bot templates create instances. Deleting an extension removes the shared package.',
+  scope: 'Extensions are installed in the shared extensions directory; installing and deleting take effect after the process restarts. Deleting an extension removes the shared package.',
   tabs: { world: 'World extensions', provider: 'Provider extensions', bot: 'Bot templates' },
 
   installedTitle: 'Installed',
@@ -159,7 +157,7 @@ const en: typeof zh = {
   hidden: 'Hidden from the Agent',
   runtimeVersion: (version: string) => `Process still uses ${version}`,
 
-  providerManagement: 'Provider extensions register after the process restarts and serve the Bots using this shared environment.',
+  providerManagement: 'Provider extensions serve the Bots using this shared environment.',
   idleManagement: 'Enable or disable Worlds on the World page. Built-in extensions cannot be deleted.',
   createBody: 'Open a terminal in the Cortico project on its host, run pnpm start --new, then select this Bot template to create a new instance.',
 
@@ -172,9 +170,7 @@ const en: typeof zh = {
   doneRestart: 'Exited',
   resultDefault: 'Shutdown steps executed.',
   reloadWait: 'Waiting for a new process of this Bot to become ready…',
-  reloadTimeout: 'The new process is not ready yet. Continue checking without requesting another restart.',
   otherBot: 'Another Bot is using this port. Recovery stopped.',
-  retry: 'Continue checking',
   restartManual: 'The process exited. Start it manually in the terminal; this page will wait for readiness.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
