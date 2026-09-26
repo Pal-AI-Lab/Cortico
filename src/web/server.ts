@@ -9,6 +9,7 @@ import type { EnvPromptOrigin } from '../core/prefix.ts';
  */
 import { createServer, type Server } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
+import { AVATAR_FILE } from '../deploy.ts';
 import type { AddressInfo } from 'node:net';
 import { createReadStream, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { open as openFile } from 'node:fs/promises';
@@ -591,7 +592,6 @@ export type WebAppDeps = ConsoleSurface;
 
 
 const FILE_MAX_BYTES = 1024 * 1024; // 1MB
-const AVATAR_FILE = 'avatar.png';
 
 /** 主题记录的正文上限:三十多个 token 两份调色板,自定义方案再多也到不了这个量级。 */
 const THEME_MAX_BYTES = '256kb';
