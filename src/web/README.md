@@ -38,6 +38,7 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 | `/api/console/lamps` | 状态灯。 |
 | `/api/extensions` | 扩展目录、各扩展状态、作者与本机包元数据;随框架提供的 World 与供应商列在最后。 |
 | `/api/extensions/updates` | 已安装 npm 扩展的可用新版本及逐包检查错误。 |
+| `/api/extensions/icon` | 已装包声明的图标文件;没有时 404。SVG 带禁脚本的 CSP。 |
 | `/api/extensions/check` | 安装前只读 manifest 的检查;`kind` 给了就要求类别一致。 |
 | `/api/run/lifecycle` | 本进程的 bootId、部署摘要与是否就绪;控制台据此认出重启后的新进程。 |
 | `/api/console/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
