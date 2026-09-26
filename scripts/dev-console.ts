@@ -1062,11 +1062,11 @@ const devPersonaPageSources = deriveConsolePageSources(
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
   {
-    name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded', mounted: true,
-    displayName: 'Discord', author: 'acme', license: 'MIT', links: { repository: 'https://github.com/acme/cortico-world-discord', bugs: 'https://github.com/acme/cortico-world-discord/issues' },
+    name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded', enabled: true, author: 'acme',
+    metadata: { displayName: 'Discord', license: 'MIT', dependencies: ['ws'], links: { repository: 'https://github.com/acme/cortico-world-discord', bugs: 'https://github.com/acme/cortico-world-discord/issues' } },
   },
-  { name: 'cortico-provider-example', spec: '^1.0.0', version: '1.0.2', description: '示例模型通信协议 (dev 假数据)', kind: 'provider', consoleClient: false, loaded: true, worldId: 'example', label: 'Example', state: 'loaded', author: 'someone', license: 'MIT' },
-  { name: 'cortico-bot-example', spec: '^0.2.0', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', kind: 'bot', consoleClient: false, loaded: false, worldId: 'example-bot', label: 'Example Bot', state: 'idle', displayName: 'Example Bot', author: 'someone' },
+  { name: 'cortico-provider-example', spec: '^1.0.0', version: '1.0.2', description: '示例模型通信协议 (dev 假数据)', kind: 'provider', consoleClient: false, loaded: true, worldId: 'example', label: 'Example', state: 'loaded', enabled: true, author: 'someone', metadata: { license: 'MIT', dependencies: [], links: {} } },
+  { name: 'cortico-bot-example', spec: '^0.2.0', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', kind: 'bot', consoleClient: false, loaded: false, worldId: 'example-bot', label: 'Example Bot', state: 'idle', enabled: false, author: 'someone', metadata: { displayName: 'Example Bot', dependencies: [], links: {} } },
   { name: 'mystery-package', spec: '^1.0.0', version: '1.0.0', consoleClient: false, loaded: false, reason: 'package.json 缺少 cortico 块(至少要 kind 与 api)。', state: 'failed' },
   { name: 'cortico-world-broken', spec: '^0.1.0', version: '0.1.4', kind: 'world', consoleClient: true, loaded: false, reason: '默认导出不是 WorldDefinition(需要 id / label / defaults() / create())。', state: 'failed' },
   { name: 'cortico-world-weather', spec: 'link:../cortico-world-weather', version: '0.0.1', kind: 'world', description: '本机开发中的天气播报 (dev 假数据)', consoleClient: false, loaded: false, state: 'pending-restart' },
@@ -1111,17 +1111,17 @@ const devSearchHits: ExtensionSearchHit[] = [
 
 /** 随框架提供的条目:两个 World 挂着、一个没挂、一个构造失败,外加两个 provider。 */
 const devBuiltins: ExtensionInfo[] = [
-  ...([['terminal', '终端', true], ['websearch', '网页搜索', true], ['qq', 'QQ', false]] as const).map(([id, label, mounted]) => ({
+  ...([['terminal', '终端', true], ['websearch', '网页搜索', true], ['qq', 'QQ', false]] as const).map(([id, label, enabled]) => ({
     name: `builtin:world:${id}`, spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'world' as const, worldId: id, label,
-    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const, mounted,
+    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true, enabled, author: 'phantivia', location: 'C:/dev/cortico',
   })),
   {
     name: 'builtin:world:minecraft', spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'world', worldId: 'minecraft', label: 'Minecraft',
-    consoleClient: false, loaded: false, state: 'failed', builtin: true, reason: '构造失败:找不到 Java 21 (dev 假数据)',
+    consoleClient: false, loaded: false, state: 'failed', builtin: true, enabled: false, author: 'phantivia', location: 'C:/dev/cortico', reason: '构造失败:找不到 Java 21 (dev 假数据)',
   },
   ...([['llamacpp', 'llama.cpp'], ['openai-responses-compat', 'OpenAI Compatible']] as const).map(([id, label]) => ({
     name: `builtin:provider:${id}`, spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'provider' as const, worldId: id, label,
-    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const,
+    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true, enabled: true, author: 'phantivia', location: 'C:/dev/cortico',
   })),
 ];
 devSearchHits.push(
@@ -1268,6 +1268,15 @@ const app = new WebApp({
         installed: devExtensions.some((p) => p.name === hit.name && p.state !== 'removed'),
       }));
     },
+    searchPartial: () => false,
+    check: async (target, kind) => {
+      await new Promise((r) => setTimeout(r, 300));
+      if ('path' in target) return { name: `local-${target.path.split(/[\\/]/).filter(Boolean).pop() ?? 'module'}`, version: '0.0.1', kind: kind ?? 'world' };
+      const hit = devSearchHits.find((h) => h.name === target.name);
+      if (!hit) throw new Error(`registry 没有给出 ${target.name} 的 ${target.version ?? 'latest'} 版本 (dev)`);
+      if (kind && hit.kind !== kind) throw new Error(`扩展实际类型为 ${hit.kind}，请切换到对应分类。(dev)`);
+      return { name: hit.name, version: target.version ?? hit.version, kind: hit.kind ?? 'world' };
+    },
     packageInfo: async (name) => {
       await new Promise((r) => setTimeout(r, 400));
       const hit = devSearchHits.find((h) => h.name === name);
@@ -1370,5 +1379,6 @@ const app = new WebApp({
 });
 
 const actual = await app.start(port);
+app.markReady();
 console.log(`\n[dev-console] 假数据面板已启动: http://127.0.0.1:${actual}/`);
 console.log('[dev-console] Ctrl-C 退出。数据全是假的,不连真 API/core。\n');
