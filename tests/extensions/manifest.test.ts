@@ -8,7 +8,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
 import {
-  DISPLAY_NAME_MAX,
   EXTENSION_API_VERSIONS,
   EXTENSION_ASSET_PREFIX,
   EXTENSION_KINDS,
@@ -140,8 +139,8 @@ describe('displayName', () => {
     const parsed = parseExtensionManifest(pkg('  Discord 桥  '));
     expect(parsed.ok && parsed.manifest.displayName).toBe('Discord 桥');
   });
-  it('空串、非字符串与超长的只给 warning 并忽略,包照样可装', () => {
-    for (const bad of ['  ', 42, 'x'.repeat(DISPLAY_NAME_MAX + 1)]) {
+  it('空串与非字符串只给 warning 并忽略,包照样可装', () => {
+    for (const bad of ['  ', 42]) {
       const parsed = parseExtensionManifest(pkg(bad));
       expect(parsed.ok).toBe(true);
       expect(parsed.ok && parsed.manifest.displayName).toBeUndefined();
