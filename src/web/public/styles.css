@@ -1898,7 +1898,7 @@
 .extension-card-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--border); }
 .extension-card-actions .btn, .extension-category .rowbar .btn { min-height: 36px; }
 .extension-card-actions .btn.danger { margin-left: auto; }
-.extension-avatar { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--foreground) 4%, var(--background)); color: var(--ink-dim); font-weight: 600; }
+.extension-avatar { width: 48px; height: 48px; flex: 0 0 48px; display: grid; place-items: center; }
 .extension-directory { overflow-wrap: anywhere; font-size: 12px; }
 .extension-category .rowbar > input[type=search], .extension-category .rowbar > input[type=text] { flex: 1; min-width: 180px; }
 .extension-category .msgline { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -1925,8 +1925,12 @@
 .extension-category .sheetbody > .msgline:empty { display: block; }
 .extension-manual-actions { align-items: center; margin-top: 12px; gap: 10px; }
 .extension-manual-actions .msgline { flex: 1; margin: 0; min-width: 160px; font-size: 12px; }
-.extension-avatar .brandmark { width: 32px; height: 32px; }
-.extension-avatar .accent { stroke: currentColor; }
+.extension-avatar-image, .extension-avatar-default { grid-area: 1 / 1; width: 100%; height: 100%; }
+.extension-avatar-image { display: block; object-fit: cover; border-radius: 12px; }
+.extension-avatar-default { position: relative; display: block; }
+.extension-avatar-default[hidden] { display: none; }
+.extension-avatar .coomark { display: block; width: 100%; height: 100%; }
+.extension-avatar-initial { position: absolute; right: -4px; bottom: -4px; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font: 700 11px/1 var(--sans); box-shadow: 0 0 0 2px var(--background); }
 .extension-detail .kvtable { margin: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .extension-detail .kvtable td { padding-block: 10px; }
 .extension-history { display: grid; gap: 0; margin: 12px 0 22px; border-block: 1px solid var(--line); }

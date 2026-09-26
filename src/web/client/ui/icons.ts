@@ -182,6 +182,33 @@ export function brandMark(doc: Document, cls = 'brandmark'): SVGSVGElement {
   return svg;
 }
 
+/**
+ * Coopanion 的应用图标 Coo:深色圆角底上白身、薄荷色眼睛,与 Coopanion `pet-core` 的
+ * `mini('neutral')` 同一套坐标与配色。它是图片,颜色不随控制台主题变。
+ */
+const COO_TILE = '#0D1117';
+const COO_INK = '#FFFFFF';
+const COO_EYE = '#2FD59B';
+const COO_FIGURE: readonly Shape[] = [
+  ['path', { d: 'M104 212L104 241', stroke: COO_INK, 'stroke-width': '30' }],
+  ['path', { d: 'M150 212L150 241', stroke: COO_INK, 'stroke-width': '30' }],
+  ['path', { d: 'M182 63.7A84 84 0 1 0 182 192.3', stroke: COO_INK, 'stroke-width': '36' }],
+  ['path', { d: 'M97 117A16 16 0 1 0 129 117A16 16 0 1 0 97 117Z', stroke: COO_EYE, 'stroke-width': '12', 'stroke-linejoin': 'round' }],
+  ['path', { d: 'M147 117A16 16 0 1 0 179 117A16 16 0 1 0 147 117Z', stroke: COO_EYE, 'stroke-width': '12', 'stroke-linejoin': 'round' }],
+];
+
+/** Coo 图标:整块圆角底连同形象,按容器大小铺满。 */
+export function cooMark(doc: Document, cls = 'coomark'): SVGSVGElement {
+  const svg = doc.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('viewBox', '-37 -24 330 330');
+  svg.setAttribute('fill', 'none');
+  svg.setAttribute('stroke-linecap', 'round');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.setAttribute('class', cls);
+  shapesInto(doc, svg, [['rect', { x: '-37', y: '-24', width: '330', height: '330', rx: '72', fill: COO_TILE }], ...COO_FIGURE]);
+  return svg;
+}
+
 export function icon(doc: Document, name: ConsoleIconName, cls = 'icon'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');

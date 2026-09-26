@@ -14,7 +14,7 @@ type Any = any;
 const { createConsoleUi } = (await import(UI)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE)) as Any;
 const { Router } = (await import(ROUTER)) as Any;
-const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns } = (await import(EXTENSIONS)) as Any;
+const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns, avatarInitial } = (await import(EXTENSIONS)) as Any;
 
 const flush = async (n = 30): Promise<void> => { for (let i = 0; i < n; i++) await Promise.resolve(); };
 
@@ -279,6 +279,40 @@ describe('installation feedback', () => {
     expect(calls.find(c => c.url === '/api/extensions/uninstall')?.body).toEqual({ name: 'beta-mod' });
     expect(calls.filter(c => c.url === '/api/extensions').length).toBe(2);
     expect(sheets(root)[0].textContent).toContain('删除成功');
+  });
+});
+
+describe('package avatars', () => {
+  it('a declared icon is shown; without one, or when it fails to load, the Coo mark carries the initial', async () => {
+    stub({ list: { dir: LIST.dir, extensions: [
+      { ...LIST.extensions[0], name: 'pictured-world', label: 'Pictured', icon: true, installedVersion: '1.2.0' },
+      { ...LIST.extensions[0], name: 'cortico-world-plain', label: undefined },
+    ] } });
+    const { root } = mount(); await flush();
+    const pictured = cardOf(root, 'Pictured');
+    const image = pictured.querySelector('.extension-avatar img') as HTMLImageElement;
+    expect(image.getAttribute('src')).toBe('/api/extensions/icon?name=pictured-world&v=1.2.0');
+    expect((pictured.querySelector('.extension-avatar-default') as HTMLElement).hidden).toBe(true);
+    image.dispatchEvent(new Event('error'));
+    expect(pictured.querySelector('.extension-avatar img')).toBeNull();
+    expect((pictured.querySelector('.extension-avatar-default') as HTMLElement).hidden).toBe(false);
+    const plain = cardOf(root, 'cortico-world-plain');
+    expect(plain.querySelector('.extension-avatar img')).toBeNull();
+    expect(plain.querySelector('.coomark')).not.toBeNull();
+    expect(plain.querySelector('.extension-avatar-initial')?.textContent).toBe('P');
+  });
+  it('market cards of packages not installed show the default avatar', async () => {
+    stub(); const { root } = mount(); await flush();
+    filterMarket(root, 'found');
+    const card = marketCards(root).querySelector('.extension-card')!;
+    expect(card.querySelector('.coomark')).not.toBeNull();
+    expect(card.querySelector('.extension-avatar-initial')?.textContent).toBe('F');
+  });
+  it('the initial drops the scope and the cortico kind prefix', () => {
+    expect(avatarInitial('@acme/cortico-provider-zeta')).toBe('Z');
+    expect(avatarInitial('cortico-bot-example')).toBe('E');
+    expect(avatarInitial('终端')).toBe('终');
+    expect(avatarInitial('')).toBe('?');
   });
 });
 
