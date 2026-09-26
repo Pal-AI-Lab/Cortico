@@ -25,6 +25,7 @@ import type {
 import {
   EXTENSION_API_VERSIONS,
   EXTENSION_KEYWORDS,
+  ICON_TYPES,
   parseExtensionManifest,
   type ExtensionConsoleAsset,
   type ExtensionKind,
@@ -164,6 +165,15 @@ export function extensionPackageFile(pkgDir: string, relative: string): string |
   const abs = resolve(pkgDir, relative);
   if (!abs.startsWith(resolve(pkgDir) + sep)) return null;
   return existsSync(abs) ? abs : null;
+}
+
+/** 包声明的图标文件:`cortico.icon` 解析得出且文件在包目录里;否则 null,控制台显示默认头像。 */
+export function extensionIconFile(pkgDir: string, pkg: ExtensionPackageJson): { file: string; type: string } | null {
+  const parsed = parseExtensionManifest(pkg);
+  const icon = parsed.ok ? parsed.manifest.icon : undefined;
+  const file = icon ? extensionPackageFile(pkgDir, icon) : null;
+  if (!icon || !file) return null;
+  return { file, type: ICON_TYPES[icon.slice(icon.lastIndexOf('.')).toLowerCase()] };
 }
 
 // bot 包:定位与 import(启动器在装载其它扩展之前做)
@@ -527,6 +537,14 @@ export class ExtensionManager {
   }
 
   /** 已加载扩展的浏览器端产物。服务端据此把页 id 映到 URL 并只发这几个文件。 */
+  /** 已装包的图标文件;没装、没声明或文件不合格时 null。 */
+  icon(name: string): { file: string; type: string } | null {
+    if (!PACKAGE_NAME.test(name) || !readInstalled(this.dir).some((p) => p.name === name)) return null;
+    const pkgDir = join(this.dir, 'node_modules', ...name.split('/'));
+    const pkg = readPackageJson(join(pkgDir, 'package.json'));
+    return pkg ? extensionIconFile(pkgDir, pkg) : null;
+  }
+
   consoleAssets(): readonly ExtensionConsoleAsset[] {
     return this.booted.consoleAssets;
   }
@@ -545,10 +563,12 @@ export class ExtensionManager {
         : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
       const author = pkg ? packageAuthor(pkg) : undefined;
+      const pkgDir = join(this.dir, 'node_modules', ...r.name.split('/'));
       out.push({
         ...r,
         ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
         ...(author ? { author } : {}),
+        ...(pkg && extensionIconFile(pkgDir, pkg) ? { icon: true } : {}),
         ...(spec === undefined ? {} : { installedVersion }),
         state,
       });
@@ -571,6 +591,7 @@ export class ExtensionManager {
         ...(pkg?.description ? { description: pkg.description } : {}),
         ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
         ...(pkg && packageAuthor(pkg) ? { author: packageAuthor(pkg) } : {}),
+        ...(pkg && extensionIconFile(join(this.dir, 'node_modules', ...name.split('/')), pkg) ? { icon: true } : {}),
       });
     }
     const all = [...out, ...(this.builtins?.(language) ?? [])];

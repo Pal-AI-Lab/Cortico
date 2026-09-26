@@ -133,6 +133,24 @@ describe('bot 包', () => {
   });
 });
 
+describe('icon', () => {
+  const pkg = (icon: unknown) => ({ name: 'x', type: 'module', cortico: { kind: 'bot', api: EXTENSION_API_VERSIONS.bot, icon } });
+  it('包内相对路径的 png / webp / svg 收下', () => {
+    for (const icon of ['icon.png', 'assets/Icon.SVG', 'a/b.webp']) {
+      const parsed = parseExtensionManifest(pkg(icon));
+      expect(parsed.ok && parsed.manifest.icon).toBe(icon);
+    }
+  });
+  it('越出包目录、绝对路径与别的格式只给 warning 并忽略,包照样可装', () => {
+    for (const bad of ['../icon.png', '/icon.png', 'icon.gif', 42]) {
+      const parsed = parseExtensionManifest(pkg(bad));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.ok && parsed.manifest.icon).toBeUndefined();
+      expect(parsed.warnings.join(' ')).toContain('cortico.icon');
+    }
+  });
+});
+
 describe('displayName', () => {
   const pkg = (displayName: unknown) => ({ name: 'x', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName } });
   it('去掉首尾空白后收下', () => {
