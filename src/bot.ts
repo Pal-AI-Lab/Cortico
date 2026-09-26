@@ -34,7 +34,6 @@ import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
-import { BUILTIN_WORLDS } from './worlds/index.ts';
 import { repoRoot } from './paths.ts';
 import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
 import type { ConfigValues } from './core/config-schema.ts';
@@ -705,7 +704,10 @@ async function deriveWorldInfo(
 /** 内建条目的作者:框架维护者。 */
 const BUILTIN_AUTHOR = 'phantivia';
 
-/** 随框架提供的 World 与 provider 在扩展页的条目;World 的状态取本进程的装配。 */
+/**
+ * 随框架提供的 World 与 provider 在扩展页的条目:装配里不来自扩展的 World 定义与预建实例,
+ * 以及不来自扩展的 provider 模块。World 的状态取本进程的装配。
+ */
 export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, language: Language): ExtensionInfo[] {
   const pkg = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as ExtensionPackageJson;
   const version = pkg.version ?? null;
@@ -714,7 +716,8 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
     author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg), location: repoRoot(),
   } as const;
   const external = new Set(set.worlds.map((world) => world.id));
-  const worlds = BUILTIN_WORLDS.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
+  const candidates = [...assembly.definitions, ...assembly.slots.filter((slot) => !slot.definition)];
+  const worlds = candidates.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
     const slot = assembly.slots.find((item) => item.id === world.id);
     const missing = assembly.missing.find((item) => item.id === world.id);
     const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: slot?.label ?? world.label };
