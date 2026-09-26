@@ -118,7 +118,7 @@ export function confirm(
     };
 
     const doc = env.doc;
-    const card = h(doc, 'div', 'modalcard');
+    const card = h(doc, 'div', 'modalcard confirm-card');
     card.setAttribute('style', 'width:min(460px,92vw)');
     const head = h(doc, 'div', 'modalhead');
     head.appendChild(h(doc, 'span', 'modaltitle', opts.title));

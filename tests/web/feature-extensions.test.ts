@@ -14,7 +14,7 @@ type Any = any;
 const { createConsoleUi } = (await import(UI)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE)) as Any;
 const { Router } = (await import(ROUTER)) as Any;
-const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature } = (await import(EXTENSIONS)) as Any;
+const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns } = (await import(EXTENSIONS)) as Any;
 
 const flush = async (n = 30): Promise<void> => { for (let i = 0; i < n; i++) await Promise.resolve(); };
 
@@ -33,7 +33,6 @@ const HITS = {
   hits: [
     { name: 'found-mod', version: '3.1.0', description: '搜到的', downloads: 42, dependents: 2, publisher: 'someone', license: 'MIT', date: '2026-09-18T00:00:00.000Z', keywords: ['cortico-world', 'chat'], links: { npm: 'https://npm.example/found', repository: 'https://git.example/found' }, installed: false, kind: 'world' },
     { name: 'alpha-mod', version: '1.0.0', description: '已经装了', downloads: 7, dependents: 0, date: '2026-01-02T00:00:00.000Z', links: {}, installed: true, kind: 'world' },
-    // 填够 13 条:一页放 12 张,第 13 条只会出现在第二页
     ...Array.from({ length: 11 }, (_, i) => ({
       name: `filler-${i}`, version: '0.1.0', description: '凑数的', downloads: 100 + i, dependents: 0,
       date: `2026-02-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, links: {}, installed: false, kind: 'world',
@@ -64,9 +63,14 @@ const DETAIL = {
   installed: false,
 };
 
+const LIFE = { deployment: 'this-deployment', bootId: 'boot-1', ready: true };
+
 let calls: Array<{ url: string; method: string; body: Any }> = [];
 
-function stub(over: { list?: unknown; updates?: unknown; updateStatus?: number; installStatus?: number; hits?: unknown; detail?: Any; detailStatus?: number } = {}): void {
+function stub(over: {
+  list?: unknown; updates?: unknown; updateStatus?: number; installStatus?: number; checkStatus?: number;
+  hits?: unknown; detail?: Any; detailStatus?: number; restart?: unknown;
+} = {}): void {
   vi.stubGlobal('fetch', (url: unknown, init: Any) => {
     const u = String(url);
     const method = String(init?.method ?? 'GET');
@@ -79,9 +83,15 @@ function stub(over: { list?: unknown; updates?: unknown; updateStatus?: number; 
       status = over.detailStatus ?? 200;
       body = status === 200 ? { ...DETAIL, ...(over.detail ?? {}) } : { error: 'npm 没有这个包' };
     } else if (u.startsWith('/api/extensions/search')) body = over.hits ?? HITS;
-    else if (u === '/api/extensions/install') { status = over.installStatus ?? 200; body = status === 200 ? { ok: true, result: '已安装 x。重启进程后加载。\n+ x 1.0.0' } : { error: '不是合法的 npm 包名: x' }; }
+    else if (u === '/api/extensions/check') {
+      const payload = JSON.parse(init.body);
+      status = over.checkStatus ?? 200;
+      body = status === 200 ? { name: payload.target.name ?? 'local-mod', version: payload.target.version ?? '1.0.0', kind: payload.kind } : { error: '扩展实际类型为 provider，请切换到对应分类。' };
+    }
+    else if (u === '/api/extensions/install') { status = over.installStatus ?? 200; body = status === 200 ? { ok: true, result: '已安装 x。重启进程后加载。\n+ x 1.0.0' } : { error: 'pnpm add 退出码 1' }; }
     else if (u === '/api/extensions/uninstall') body = { ok: true, result: '已卸载 x。' };
-    else if (u === '/api/run/restart') body = { ok: true, result: '本地关机完成,进程即将退出', steps: [{ label: '按住事件投递', ok: true, ms: 2 }] };
+    else if (u === '/api/run/lifecycle') body = LIFE;
+    else if (u === '/api/run/restart') body = over.restart ?? { ok: true, result: '本地关机完成,进程即将退出', steps: [{ label: '按住事件投递', ok: true, elapsedMs: 2 }] };
     return Promise.resolve(new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
   });
 }
@@ -96,12 +106,14 @@ function mkCtx(caps: Record<string, boolean> = { extensions: true, restart: true
     signal: lifecycle.signal,
     doc: document,
   });
+  const router = new Router({ win: window, confirmLeave: async () => true, onError: () => {} });
+  lifecycle.own(router.start());
   return {
     ctx: {
       ui, root, lifecycle, signal: lifecycle.signal,
       capabilities: caps,
       route: { segments: ['extensions'] },
-      router: new Router({ win: window, onError: () => {} }),
+      router,
       onError: () => {},
     },
     root,
@@ -127,431 +139,154 @@ function answer(yes: boolean): void {
   btn.click();
 }
 const cardOf = (root: ParentNode, title: string): HTMLElement => {
-  const hit = [...root.querySelectorAll('.iocard')].find((c) => c.querySelector('h3')?.textContent?.startsWith(title));
+  const hit = [...root.querySelectorAll('.extension-card')].find((c) => c.querySelector('.extension-card-title')?.textContent?.startsWith(title));
   if (!hit) throw new Error(`没有「${title}」的卡`);
   return hit as HTMLElement;
 };
-/** 已安装区的分组:每条 section 标题配它后面那张网格里的卡名。 */
-const groupsOf = (root: ParentNode): Array<{ title: string; cards: string[] }> =>
-  [...root.querySelectorAll('.sectionhead')].map((head) => ({
-    title: head.querySelector('h4')?.textContent ?? '',
-    cards: [...(head.nextElementSibling?.querySelectorAll('.iocard') ?? [])]
-      .map((c) => c.querySelector('h3')?.firstChild?.textContent?.trim() ?? ''),
-  }));
+const lives: Any[] = [];
+function mount(caps: Record<string, boolean> = { extensions: true, restart: true, supervised: true }) { const context = mkCtx(caps); lives.push(context.lifecycle); mountExtensions(context.ctx); return context; }
+const WIDTH = 1100;
+beforeEach(() => { calls = []; window.sessionStorage.clear(); window.history.replaceState(null, '', '#/extensions/world'); Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => WIDTH }); HTMLElement.prototype.scrollIntoView = vi.fn(); });
+afterEach(() => { lives.splice(0).forEach(life => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); });
+const installedCards = (root: HTMLElement) => root.querySelector('.extension-grid')!;
+const marketCards = (root: HTMLElement) => root.querySelectorAll('.extension-grid')[1];
+const sheets = (root: HTMLElement) => root.querySelectorAll('.extension-category > .sheet');
+const switchTo = async (ctx: Any, kind: string) => { ctx.router.replace(['extensions', kind]); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush(); };
+const filterMarket = (root: HTMLElement, value: string) => { const input = root.querySelectorAll('input[type=search]')[1] as HTMLInputElement; input.value = value; input.dispatchEvent(new Event('input')); };
 
-beforeEach(() => { calls = []; });
-afterEach(() => { vi.unstubAllGlobals(); document.body.replaceChildren(); });
-
-describe('已安装清单', () => {
-  it('发现新版本时显示版本并可就地更新；检查失败不显示已是最新', async () => {
-    stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [{ name: 'beta-mod', error: 'registry unavailable' }] } });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(root.textContent).toContain('可更新 1 个扩展');
-    expect(root.textContent).toContain('检查失败');
-    const alpha = cardOf(root, '甲扩展');
-    expect(alpha.textContent).toContain('1.0.0 → 1.1.0');
-    button(alpha, '更新').click();
-    await flush();
-    expect(calls.find((c) => c.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '1.1.0' });
-    answer(false);
+describe('extension categories', () => {
+  it('isolates installed categories and preserves each market filter across routes', async () => {
+    stub(); const { ctx, root } = mount(); await flush();
+    expect(installedCards(root).textContent).toContain('甲扩展'); expect(installedCards(root).textContent).not.toContain('gamma-prov');
+    filterMarket(root, 'found'); await flush();
+    await switchTo(ctx, 'provider'); expect(installedCards(root).textContent).toContain('gamma-prov'); expect(installedCards(root).textContent).not.toContain('甲扩展');
+    await switchTo(ctx, 'world'); expect((root.querySelectorAll('input[type=search]')[1] as HTMLInputElement).value).toBe('found');
+    expect(marketCards(root).querySelectorAll('.extension-card')).toHaveLength(1);
   });
-
-  it('新版契约不兼容时先显示原因并确认；整体检查失败不显示更新', async () => {
+  it('uses keyboard focus without activating a category until Enter or click', async () => {
+    stub(); const { root } = mount(); await flush(); const tabs = root.querySelectorAll('[role=tab]') as NodeListOf<HTMLButtonElement>;
+    tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+    expect(document.activeElement).toBe(tabs[1]); expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+    tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })); expect(document.activeElement).toBe(tabs[2]);
+  });
+  it('caps installed cards at two rows and market at four rows at every column count', async () => {
+    const many = { ...LIST, extensions: Array.from({ length: 15 }, (_, i) => ({ ...LIST.extensions[0], name: `item-${String(i).padStart(2, '0')}`, label: `Item ${i}` })) };
+    for (const width of [1100, 800, 500]) {
+      const perRow = extensionColumns(width);
+      Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => width }); stub({ list: many });
+      const { root, lifecycle } = mount(); await flush();
+      expect(installedCards(root).querySelectorAll('.extension-card')).toHaveLength(perRow * 2);
+      expect(marketCards(root).querySelectorAll('.extension-card')).toHaveLength(perRow * 4);
+      button(sheets(root)[0], '下一页 ›').click(); expect(installedCards(root).textContent).toContain(`Item ${perRow * 2}`);
+      lifecycle.dispose(); root.remove(); window.sessionStorage.clear();
+    }
+  });
+  it('retains installed records if refresh fails', async () => {
+    stub(); const { root } = mount(); await flush(); vi.stubGlobal('fetch', () => Promise.reject(new Error('offline')));
+    button(root, '↻ 刷新').click(); await flush(); expect(installedCards(root).textContent).toContain('甲扩展'); expect(root.textContent).toContain('offline');
+  });
+  it('keeps Bot templates free of load/unload actions and shows creation instructions', async () => {
+    stub({ list: { ...LIST, extensions: [{ ...LIST.extensions[0], name: 'sample-template', kind: 'bot', enabled: true }] } });
+    const { ctx, root } = mount(); await flush(); await switchTo(ctx, 'bot');
+    expect(installedCards(root).textContent).toContain('当前 Bot 正在采用'); expect(button(root, '创建实例说明')).toBeTruthy();
+    expect(button(root, '删除扩展').disabled).toBe(true); button(root, '创建实例说明').click(); expect(document.body.textContent).toContain('pnpm start --new');
+  });
+  it('disables incompatible updates and states the reason on the card', async () => {
     stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '2.0.0', problems: ['扩展要求契约 v9'] }], errors: [] } });
-    const a = mkCtx();
-    mountExtensions(a.ctx);
-    await flush();
-    expect(cardOf(a.root, '甲扩展').textContent).toContain('扩展要求契约 v9');
-    button(cardOf(a.root, '甲扩展'), '更新').click();
-    await flush();
-    expect(calls.some((c) => c.url === '/api/extensions/install')).toBe(false);
-    answer(true);
-    await flush();
-    expect(calls.find((c) => c.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '2.0.0' });
-    answer(false);
-
-    document.body.replaceChildren();
-    stub({ updateStatus: 502 });
-    const b = mkCtx();
-    mountExtensions(b.ctx);
-    await flush();
-    expect(b.root.textContent).toContain('更新检查失败');
-    expect(b.root.textContent).not.toContain('可更新');
-  });
-  it('扩展卡片显示状态和失败原因，已卸载的扩展没有卸载按钮', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(calls.map((c) => c.url)).toContain('/api/extensions');
-
+    const { root } = mount(); await flush();
     const alpha = cardOf(root, '甲扩展');
-    expect(alpha.textContent).toContain('已加载');
-    expect(alpha.textContent).toContain('World alpha');
-    expect(buttons(alpha).map((b) => b.textContent)).toContain('卸载');
-
-    const beta = cardOf(root, 'beta-mod');
-    expect(beta.textContent).toContain('加载失败');
-    expect(beta.textContent).toContain('默认导出不是 WorldDefinition');
-
-    const gamma = cardOf(root, 'gamma-prov');
-    expect(gamma.textContent).toContain('待重启');
-    expect(gamma.textContent).toContain('丙');
-
-    const delta = cardOf(root, 'delta-mod');
-    expect(delta.textContent).toContain('已卸载,待重启');
-    expect(buttons(delta).map((b) => b.textContent)).not.toContain('卸载');
-
-    expect(root.textContent).toContain('已加载 1');
-    expect(root.textContent).toContain('待重启 2');
-    expect(root.textContent).toContain('加载失败 2');
-    expect(root.textContent).toContain('C:/repo/extensions');
+    expect(alpha.textContent).toContain('1.0.0 → 2.0.0'); expect(button(alpha, '更新').disabled).toBe(true);
+    expect(alpha.querySelector('.msgline.bad')?.textContent).toContain('扩展要求契约 v9');
   });
-
-  it('磁盘版本不同于运行版本时显示重启后将加载的版本', async () => {
-    stub({ list: { dir: 'd', extensions: [{
-      ...LIST.extensions[0], installedVersion: '1.2.0', state: 'pending-restart',
-    }] } });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(cardOf(root, '甲扩展').textContent).toContain('磁盘版本 1.2.0，重启后加载');
+  it('the update check failure is reported; a compatible update checks and installs the latest version', async () => {
+    stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [{ name: 'beta-mod', error: 'registry unavailable' }] } });
+    const { root } = mount(); await flush();
+    expect(root.textContent).toContain('更新检查失败');
+    button(cardOf(root, '甲扩展'), '更新').click(); await flush();
+    expect(calls.find(c => c.url === '/api/extensions/check')?.body).toEqual({ target: { name: 'alpha-mod', version: '1.1.0' }, kind: 'world' });
+    expect(calls.find(c => c.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '1.1.0' });
+    expect(sheets(root)[0].textContent).toContain('更新成功');
   });
-
-  it('按 kind 分三组,读不出 manifest 的包归「未识别」并把原因摆出来', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(groupsOf(root)).toEqual([
-      { title: 'World', cards: ['甲扩展', 'beta-mod', 'delta-mod'] },
-      { title: 'LLM Provider', cards: ['gamma-prov'] },
-      { title: '未识别', cards: ['epsilon-mod'] },
-    ]);
-    expect(cardOf(root, 'epsilon-mod').textContent).toContain('缺少 cortico 块');
-  });
-
-  it('bot 包自成一组:被引用的那个已加载,其余 idle 并说明原因;副标题按 kind 写 bot <id>', async () => {
-    stub({ list: { dir: 'd', extensions: [
-      { name: 'zeta-bot', spec: '^1.0.0', version: '1.0.0', kind: 'bot', api: 3, consoleClient: false, console: 'none', loaded: true, worldId: 'zeta', state: 'loaded' },
-      { name: 'eta-bot', spec: '^1.0.0', version: '1.0.0', kind: 'bot', api: 3, consoleClient: false, console: 'none', loaded: false, state: 'idle' },
-    ] } });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(groupsOf(root)).toEqual([{ title: 'Bot', cards: ['zeta-bot', 'eta-bot'] }]);
-    expect(cardOf(root, 'zeta-bot').textContent).toContain('bot zeta');
-    const eta = cardOf(root, 'eta-bot');
-    expect(eta.textContent).toContain('已装,本部署未用');
-    expect(root.textContent).toContain('已加载 1');
-    expect(root.textContent).not.toContain('加载失败');
-  });
-
-  it('卡上带 kind 徽标、契约版本与浏览器端产物状态;none 不占位置', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const alpha = cardOf(root, '甲扩展');
-    expect(alpha.textContent).toContain('World');
-    expect(alpha.textContent).toContain('v3');
-    expect(alpha.textContent).toContain('自定义面板已加载');
-
-    const beta = cardOf(root, 'beta-mod');
-    expect(beta.textContent).not.toContain('自定义面板已加载');
-
-    const gamma = cardOf(root, 'gamma-prov');
-    expect(gamma.textContent).toContain('LLM Provider');
-    expect(gamma.textContent).not.toContain('自定义面板');
-    expect(gamma.textContent).not.toContain('浏览器端产物');
-  });
-
-  it('空清单一句空态;重启键跟 restart 能力位走', async () => {
-    stub({ list: { dir: 'd', extensions: [] } });
-    const a = mkCtx({ extensions: true });
-    mountExtensions(a.ctx);
-    await flush();
-    expect(a.root.textContent).toContain('还没装任何扩展');
-    expect(buttons(a.root).map((b) => b.textContent)).not.toContain('重启进程');
-    document.body.replaceChildren();
-    const b = mkCtx({ extensions: true, restart: true });
-    mountExtensions(b.ctx);
-    await flush();
-    expect(buttons(b.root).map((b) => b.textContent)).toContain('重启进程');
-  });
-
-  it('卸载先问一句;答"是"打 uninstall 端点,载荷 { name },完事重取清单', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    button(cardOf(root, '甲扩展'), '卸载').click();
-    await flush();
-    expect(calls.some((c) => c.url === '/api/extensions/uninstall')).toBe(false);
-    answer(true);
-    await flush();
-    const un = calls.find((c) => c.url === '/api/extensions/uninstall');
-    expect(un?.method).toBe('POST');
-    expect(un?.body).toEqual({ name: 'alpha-mod' });
-    expect(calls.filter((c) => c.url === '/api/extensions').length).toBe(2);
-  });
-
-  it('确认后发送重启请求并显示逐项结果', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    button(root, '重启进程').click();
-    await flush();
-    answer(true);
-    await flush();
-    expect(calls.find((c) => c.url === '/api/run/restart')?.method).toBe('POST');
-    // 回执摊在对话框里
-    expect(document.body.textContent).toContain('✓ 按住事件投递');
-  });
-
-  it('未受监督的进程提示手动重新启动', async () => {
-    stub();
-    const { ctx, root } = mkCtx({ extensions: true, restart: true, supervised: false });
-    mountExtensions(ctx);
-    await flush();
-    button(root, '重启进程').click();
-    await flush();
-    expect(document.querySelector('.modal')?.textContent).toContain('手动重新启动');
-    answer(false);
-    await flush();
-    expect(calls.some((c) => c.url === '/api/run/restart')).toBe(false);
+  it('shows failed and pending states; a package without a manifest is listed under World', async () => {
+    stub(); const { ctx, root } = mount(); await flush();
+    expect(cardOf(root, 'beta-mod').querySelector('.extension-status.bad')?.textContent).toContain('加载失败');
+    expect(cardOf(root, 'epsilon-mod').textContent).toContain('加载失败');
+    expect(buttons(cardOf(root, 'delta-mod')).map(b => b.textContent)).not.toContain('删除扩展');
+    await switchTo(ctx, 'provider');
+    expect(cardOf(root, 'gamma-prov').textContent).toContain('待重启');
+    expect(button(cardOf(root, 'gamma-prov'), '重启进程')).toBeTruthy();
   });
 });
 
-describe('发现与安装', () => {
-  /** 结果卡在搜索那张 sheet 里;已安装区的卡也带 .iocard,按可点开的那个类挑。 */
-  const hitCards = (root: ParentNode): HTMLElement[] => [...root.querySelectorAll('.iocard-open')] as HTMLElement[];
-  const hitNames = (root: ParentNode): string[] =>
-    hitCards(root).map((c) => c.querySelector('h3')?.firstChild?.textContent?.trim() ?? '');
-  const drawer = (): HTMLElement => {
-    const el = document.querySelector('.modal .modalbody');
-    if (!el) throw new Error('抽屉没开');
-    return el as HTMLElement;
-  };
-
-  it('一进页就列出这一类的全部包,不必先点搜索;请求只带 kind', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(calls.some((c) => c.url === '/api/extensions/search?kind=world')).toBe(true);
-    expect(hitNames(root)).toContain('found-mod');
+describe('installation feedback', () => {
+  async function detail(root: HTMLElement) {
+    filterMarket(root, 'found');
+    (marketCards(root).querySelector('[aria-label="found-mod"]') as HTMLElement).click(); await flush(); return document.querySelector('.modal')!;
+  }
+  it('checks the category, installs the exact version and leaves feedback in the market', async () => {
+    stub(); const { root } = mount(); await flush(); const box = await detail(root); button(box, '安装').click(); await flush();
+    expect(calls.find(c => c.url === '/api/extensions/check')?.body).toEqual({ target: { name: 'found-mod', version: '3.1.0' }, kind: 'world' });
+    expect(calls.find(c => c.url === '/api/extensions/install')?.body).toEqual({ name: 'found-mod', version: '3.1.0' });
+    expect(sheets(root)[1].textContent).toContain('安装成功');
+    expect(sheets(root)[1].textContent).toContain('重启进程后生效');
+    expect(sheets(root)[0].textContent).not.toContain('安装成功');
+    expect(calls.filter(c => c.url === '/api/extensions').length).toBe(2);
   });
-
-  it('结果卡只放基础信息:没有按钮,整张可点;详情等点开才取', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const found = hitCards(root).find((c) => c.querySelector('h3')?.textContent?.startsWith('found-mod'))!;
-    expect(found.textContent).toContain('搜到的');
-    expect(found.textContent).toContain('月下载 42');
-    expect(found.textContent).toContain('MIT');
-    expect(buttons(found)).toEqual([]);
-    expect(found.getAttribute('role')).toBe('button');
-    expect(calls.some((c) => c.url.startsWith('/api/extensions/package'))).toBe(false);
-
-    found.click();
-    await flush();
-    expect(calls.some((c) => c.url === '/api/extensions/package?name=found-mod')).toBe(true);
-    const body = drawer();
-    expect(body.textContent).toContain('契约 v4');
-    expect(body.textContent).toContain('自带控制台面板');
-    expect(body.textContent).toContain('>=22');
-    expect(body.textContent).toContain('200.0K');
-    expect(body.textContent).toContain('3.1.0');
-    expect(buttons(body).map((b) => b.textContent)).toEqual(expect.arrayContaining(['npm', '仓库', 'issues', '安装']));
+  it('a refused check stops before installing and shows the reason only in the originating section', async () => {
+    stub({ checkStatus: 400 }); const { root } = mount(); await flush(); button(await detail(root), '安装').click(); await flush();
+    expect(calls.some(c => c.url === '/api/extensions/install')).toBe(false);
+    expect(sheets(root)[1].querySelector('.msgline.bad')?.textContent).toContain('请切换到对应分类');
+    expect(sheets(root)[0].querySelector('.msgline.bad')).toBeNull();
   });
-
-  it('详细页:契约版本对不上标红并给出理由;已安装的包安装键禁掉', async () => {
-    stub({ detail: { manifest: undefined, problems: ['扩展要求契约 v9,本框架只到 v4:框架需要升级。'], installed: true, installedSpec: '^3.0.0' } });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    hitCards(root)[0].click();
-    await flush();
-    const body = drawer();
-    expect(body.textContent).toContain('不是可装载的扩展');
-    expect(body.querySelector('.msgline.bad')?.textContent).toContain('v9');
-    expect(body.textContent).toContain('已安装 ^3.0.0');
-    expect(button(body, '已安装').disabled).toBe(true);
+  it('an install failure reports the server error', async () => {
+    stub({ installStatus: 400 }); const { root } = mount(); await flush(); button(await detail(root), '安装').click(); await flush();
+    expect(sheets(root)[1].querySelector('.msgline.bad')?.textContent).toContain('pnpm add 退出码 1');
   });
-
-  it('详细页取不到:抽屉里一行红字,不影响列表', async () => {
-    stub({ detailStatus: 502 });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    hitCards(root)[0].click();
-    await flush();
-    expect(drawer().querySelector('.msgline.bad')?.textContent).toContain('npm 没有这个包');
-    expect(hitCards(root).length).toBeGreaterThan(0);
+  it('blocks incompatible detail installation and dangerous links', async () => {
+    stub({ detail: { problems: ['incompatible'], links: { npm: 'javascript:alert(1)' } } }); const { root } = mount(); await flush(); const box = await detail(root);
+    expect(button(box, '安装').disabled).toBe(true); expect(box.querySelector('a')).toBeNull();
   });
-
-  it('筛选按名字、描述、关键字匹配,计数跟着变;清空又回到全部', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const all = hitNames(root).length;
-    const filter = root.querySelector('input[type=search]') as HTMLInputElement;
-    filter.value = 'chat';
-    filter.dispatchEvent(new Event('input'));
-    await flush();
-    expect(hitNames(root)).toEqual(['found-mod']);
-    expect(root.textContent).toContain('1 / 13 个包');
-    filter.value = '已经装了';
-    filter.dispatchEvent(new Event('input'));
-    await flush();
-    expect(hitNames(root)).toEqual(['alpha-mod']);
-    filter.value = '';
-    filter.dispatchEvent(new Event('input'));
-    await flush();
-    expect(hitNames(root).length).toBe(all);
-    // 筛选是本地的:一次都没再打 registry
-    expect(calls.filter((c) => c.url.startsWith('/api/extensions/search')).length).toBe(1);
+  it('a market detail that fails to load shows the error in the drawer and leaves the list intact', async () => {
+    stub({ detailStatus: 502 }); const { root } = mount(); await flush(); await detail(root);
+    expect(document.querySelector('.modal .msgline.bad')?.textContent).toContain('npm 没有这个包');
+    expect(marketCards(root).querySelectorAll('.extension-card').length).toBeGreaterThan(0);
   });
-
-  it('排序口径换了就重排;隐藏已安装把装过的那条去掉', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const select = root.querySelector('select.field') as HTMLSelectElement;
-    expect(hitNames(root)[0]).toBe('filler-10');
-    select.value = 'date';
-    select.dispatchEvent(new Event('change'));
-    await flush();
-    expect(hitNames(root)[0]).toBe('found-mod');
-    select.value = 'name';
-    select.dispatchEvent(new Event('change'));
-    await flush();
-    expect(hitNames(root)[0]).toBe('alpha-mod');
-
-    const box = root.querySelector('label.check input[type=checkbox]') as HTMLInputElement;
-    box.click();
-    await flush();
-    expect(hitNames(root)).not.toContain('alpha-mod');
+  it('failed package documents are not requested again while filtering', async () => {
+    stub({ detailStatus: 502 }); const { root } = mount(); await flush();
+    const first = calls.filter(c => c.url.startsWith('/api/extensions/package')).length;
+    filterMarket(root, 'alpha'); filterMarket(root, 'filler'); filterMarket(root, ''); await flush();
+    expect(calls.filter(c => c.url.startsWith('/api/extensions/package')).length).toBe(first);
   });
-
-  it('一页 12 张,第 13 条在第二页;翻页键在两端各自禁掉', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(hitNames(root).length).toBe(12);
-    expect(root.textContent).toContain('1 / 2');
-    expect(button(root, '‹ 上一页').disabled).toBe(true);
-    button(root, '下一页 ›').click();
-    await flush();
-    expect(hitNames(root).length).toBe(1);
-    expect(button(root, '下一页 ›').disabled).toBe(true);
-    button(root, '‹ 上一页').click();
-    await flush();
-    expect(hitNames(root).length).toBe(12);
+  it('an empty category says there are no packages yet', async () => {
+    stub({ hits: { hits: [] } }); const { root } = mount(); await flush();
+    expect(marketCards(root).textContent).toContain('npm 上还没有这一类的包');
   });
-
-  it('kind 分段控件默认 World;切到 provider 换关键字、清掉上一类的命中、按新 kind 重取', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const seg = root.querySelector('.segwrap') as HTMLElement;
-    expect([...seg.querySelectorAll('button')].map((b) => b.textContent)).toEqual(['World', 'LLM Provider', 'Bot']);
-    expect(seg.querySelector('.seg.active')?.textContent).toBe('World');
-    expect(root.textContent).toContain('cortico-world');
-    expect(root.textContent).not.toContain('cortico-provider');
-
-    button(seg, 'LLM Provider').click();
-    await flush();
-    expect(root.textContent).toContain('cortico-provider');
-    expect(calls.filter((c) => c.url.startsWith('/api/extensions/search')).map((c) => c.url)).toEqual([
-      '/api/extensions/search?kind=world',
-      '/api/extensions/search?kind=provider',
-    ]);
+  it('manual npm input rejects paths and URLs; local source checks and installs the directory', async () => {
+    stub(); const { root } = mount(); await flush();
+    const input = root.querySelector('input[aria-label="包名与版本"]') as HTMLInputElement; input.value = 'https://example.com'; input.dispatchEvent(new Event('input')); button(root, '安装').click(); await flush();
+    expect(calls.some(c => c.url === '/api/extensions/check' || c.url === '/api/extensions/install')).toBe(false);
+    button(root, '从本机目录安装').click(); await flush();
+    const path = root.querySelector('input[aria-label="扩展项目目录"]') as HTMLInputElement; expect(root.textContent).toContain('运行 Cortico 的电脑');
+    path.value = 'C:/work/my-world'; path.dispatchEvent(new Event('input')); button(root, '安装').click(); await flush();
+    expect(calls.find(c => c.url === '/api/extensions/check')?.body).toEqual({ target: { path: 'C:/work/my-world' }, kind: 'world' });
+    expect(calls.find(c => c.url === '/api/extensions/install')?.body).toEqual({ path: 'C:/work/my-world' });
   });
-
-  it('这一类一个包都没有时说明是空的,不说"没有匹配"', async () => {
-    stub({ hits: { hits: [] } });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    expect(root.textContent).toContain('npm 上还没有这一类的包');
+  it('deleting asks first, then uninstalls by name and reloads the list', async () => {
+    stub(); const { root } = mount(); await flush();
+    button(cardOf(root, 'beta-mod'), '删除扩展').click(); await flush();
+    expect(calls.some(c => c.url === '/api/extensions/uninstall')).toBe(false);
+    answer(true); await flush();
+    expect(calls.find(c => c.url === '/api/extensions/uninstall')?.body).toEqual({ name: 'beta-mod' });
+    expect(calls.filter(c => c.url === '/api/extensions').length).toBe(2);
+    expect(sheets(root)[0].textContent).toContain('删除成功');
   });
+});
 
-  it('安装从详细页发出,载荷 { name, version };装完问要不要重启,答"否"就停在清单', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    hitCards(root)[0].click();
-    await flush();
-    button(drawer(), '安装').click();
-    await flush();
-    const inst = calls.find((c) => c.url === '/api/extensions/install');
-    expect(inst?.method).toBe('POST');
-    expect(inst?.body).toEqual({ name: 'found-mod', version: '3.1.0' });
-    expect([...document.querySelectorAll('.modal')].pop()?.textContent).toContain('现在重启进程');
-    answer(false);
-    await flush();
-    expect(calls.some((c) => c.url === '/api/run/restart')).toBe(false);
-    expect(calls.filter((c) => c.url === '/api/extensions').length).toBe(2);
-  });
-
-  it('装完答"是" → 直接打 /api/run/restart,不再问第二遍', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    hitCards(root)[0].click();
-    await flush();
-    button(drawer(), '安装').click();
-    await flush();
-    answer(true);
-    await flush();
-    expect(calls.find((c) => c.url === '/api/run/restart')?.method).toBe('POST');
-  });
-
-  it('服务端拒绝 → 一行红字,不弹重启问句', async () => {
-    stub({ installStatus: 400 });
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    hitCards(root)[0].click();
-    await flush();
-    button(drawer(), '安装').click();
-    await flush();
-    expect(root.querySelector('.msgline.bad')?.textContent).toContain('不是合法的 npm 包名');
-    expect(document.querySelectorAll('.modal').length).toBe(1);
-  });
-
-  it('手动安装:包名走 { name, version },目录走 { path };空的不发', async () => {
-    stub();
-    const { ctx, root } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
-    const input = root.querySelector('input.mono') as HTMLInputElement;
-    button(root, '安装').click();
-    await flush();
-    expect(calls.some((c) => c.url === '/api/extensions/install')).toBe(false);
-    input.value = '@acme/cortico-world-x@^1.2.0';
-    button(root, '安装').click();
-    await flush();
-    expect(calls.find((c) => c.url === '/api/extensions/install')?.body).toEqual({ name: '@acme/cortico-world-x', version: '^1.2.0' });
-    answer(false);
-    await flush();
-    input.value = '../my-module';
-    button(root, '安装').click();
-    await flush();
-    expect(calls.filter((c) => c.url === '/api/extensions/install')[1]?.body).toEqual({ path: '../my-module' });
+describe('npm input', () => {
+  it('accepts names, scoped names and exact versions or tags only', () => {
+    expect(parseInstallInput('@scope/example@1.2.3')).toEqual({ name: '@scope/example', version: '1.2.3' });
+    expect(parseInstallInput('@scope/example@next')).toEqual({ name: '@scope/example', version: 'next' });
+    for (const value of ['', './path', 'C:\\path', 'https://example.com', 'name; cmd', 'name@^1.0']) expect(parseInstallInput(value)).toBeNull();
   });
 });
 
@@ -571,7 +306,7 @@ describe('arrangeHits', () => {
     expect(arrangeHits(hits, opts({ hideInstalled: true })).matched).toBe(2);
   });
 
-  it('四种排序各自的口径;并列时按名字', () => {
+  it('三种排序各自的口径;并列时按名字', () => {
     const hits = [
       hit({ name: 'b', downloads: 5, dependents: 1, date: '2026-01-01T00:00:00.000Z' }),
       hit({ name: 'a', downloads: 5, dependents: 9, date: '2026-05-05T00:00:00.000Z' }),
@@ -579,7 +314,6 @@ describe('arrangeHits', () => {
     ];
     const names = (sort: string): string[] => arrangeHits(hits, opts({ sort, pageSize: 10 })).shown.map((h: Any) => h.name);
     expect(names('downloads')).toEqual(['c', 'a', 'b']);
-    expect(names('dependents')).toEqual(['a', 'b', 'c']);
     expect(names('name')).toEqual(['a', 'b', 'c']);
     // 没有发布时间的排在最后
     expect(names('date')).toEqual(['a', 'b', 'c']);
@@ -593,36 +327,119 @@ describe('arrangeHits', () => {
   });
 });
 
-describe('parseInstallInput', () => {
-  it('作用域包的第一个 @ 是名字;含路径分隔符或以 . 开头的当目录', () => {
-    expect(parseInstallInput('')).toBeNull();
-    expect(parseInstallInput('pkg')).toEqual({ name: 'pkg' });
-    expect(parseInstallInput('pkg@1.0.0')).toEqual({ name: 'pkg', version: '1.0.0' });
-    expect(parseInstallInput('@s/p')).toEqual({ name: '@s/p' });
-    expect(parseInstallInput('@s/p@next')).toEqual({ name: '@s/p', version: 'next' });
-    expect(parseInstallInput('./here')).toEqual({ path: './here' });
-    expect(parseInstallInput('../up')).toEqual({ path: '../up' });
-    expect(parseInstallInput('C:\\mods\\x')).toEqual({ path: 'C:\\mods\\x' });
-    expect(parseInstallInput('/abs/dir')).toEqual({ path: '/abs/dir' });
+describe('restart', () => {
+  it('waits for a new ready process of the same deployment', () => {
+    const before = { deployment: 'same', bootId: 'old', ready: true };
+    expect(restartOutcome(before, before)).toBe('waiting');
+    expect(restartOutcome(before, { ...before, bootId: 'new', ready: false })).toBe('waiting');
+    expect(restartOutcome(before, { ...before, bootId: 'new' })).toBe('ready');
+    expect(restartOutcome(before, { ...before, deployment: 'other', bootId: 'new' })).toBe('wrong-deployment');
+  });
+  it('confirms, reads the process identity, requests the restart and shows incomplete shutdown steps', async () => {
+    stub({ restart: { ok: true, result: '本地关机完成', steps: [{ label: '按住事件投递', ok: true, elapsedMs: 2 }, { label: '外部直播平台', ok: false, elapsedMs: 5000, detail: '需手动结束' }] } });
+    const { root } = mount(); await flush();
+    button(sheets(root)[0], '重启进程').click(); await flush();
+    expect(calls.some(c => c.url === '/api/run/restart')).toBe(false);
+    answer(true); await flush();
+    expect(calls.find(c => c.url === '/api/run/restart')?.method).toBe('POST');
+    expect(calls.some(c => c.url === '/api/run/lifecycle')).toBe(true);
+    expect(document.body.textContent).toContain('✗ 外部直播平台 · 需手动结束');
+    expect(sheets(root)[0].textContent).toContain('等待当前 Bot 的新进程就绪');
+  });
+  it('an unsupervised process asks for a manual start', async () => {
+    stub(); const { root } = mount({ extensions: true, restart: true, supervised: false }); await flush();
+    button(sheets(root)[0], '重启进程').click(); await flush();
+    expect(document.querySelector('.modal')?.textContent).toContain('需要手动启动');
+    answer(false); await flush();
+    expect(calls.some(c => c.url === '/api/run/restart')).toBe(false);
+  });
+  it('without the restart capability there is no restart button and pending cards offer details', async () => {
+    stub(); const { ctx, root } = mount({ extensions: true }); await flush(); await switchTo(ctx, 'provider');
+    expect(buttons(root).map(b => b.textContent)).not.toContain('重启进程');
+    expect(button(cardOf(root, 'gamma-prov'), '详情')).toBeTruthy();
+  });
+  it('a remount shows the category help, not the result of an earlier operation', async () => {
+    stub(); const first = mount(); await flush();
+    button(cardOf(first.root, 'beta-mod'), '删除扩展').click(); await flush(); answer(true); await flush();
+    expect(sheets(first.root)[0].textContent).toContain('删除成功');
+    first.lifecycle.dispose(); first.root.remove();
+    const second = mount(); await flush();
+    expect(sheets(second.root)[0].textContent).not.toContain('删除成功');
+    expect(sheets(second.root)[0].textContent).toContain('在 World 页启用或停用 World');
   });
 });
 
-describe('feature 契约', () => {
-  it('route 是 extensions,needsAny 是 extensions,进 Core 组', () => {
+describe('extension review interactions', () => {
+  it('an enabled World awaiting restart offers the restart; built-ins and enabled Worlds cannot be deleted', async () => {
+    stub({ list: { dir: LIST.dir, extensions: [
+      { ...LIST.extensions[0], enabled: true, installedVersion: '2.0.0', state: 'pending-restart' },
+      { ...LIST.extensions[0], name: 'builtin:world:example', builtin: true, label: 'Built-in example' },
+      { ...LIST.extensions[0], name: 'running-world', label: 'Running', enabled: true },
+    ] } });
+    const { root } = mount(); await flush(); const cards = installedCards(root).querySelectorAll('.extension-card');
+    expect(cards[0].querySelector('.extension-card-heading')?.textContent).toContain('已加载');
+    expect(button(cards[0], '重启进程')).toBeTruthy();
+    expect(button(cards[1], '删除扩展').disabled).toBe(true);
+    const running = cardOf(root, 'Running');
+    expect(button(running, '管理 World')).toBeTruthy();
+    expect(button(running, '删除扩展').disabled).toBe(true);
+    expect(button(running, '删除扩展').title).toContain('停用后才能删除');
+  });
+  it('filters installed modules independently and lets users override each page capacity', async () => {
+    stub({ list: { dir: LIST.dir, extensions: Array.from({length: 8}, (_, i) => ({ ...LIST.extensions[0], name: `module-${i}`, label: `模块 ${i}` })) } });
+    const { root } = mount(); await flush();
+    const sizes = root.querySelectorAll('.extension-size select') as NodeListOf<HTMLSelectElement>;
+    sizes[0].value = '3'; sizes[0].dispatchEvent(new Event('change')); expect(installedCards(root).children).toHaveLength(3);
+    sizes[1].value = '6'; sizes[1].dispatchEvent(new Event('change')); expect(marketCards(root).children).toHaveLength(6);
+    const filter = root.querySelector('input[type=search]') as HTMLInputElement; filter.value = 'module-7'; filter.dispatchEvent(new Event('input'));
+    expect(installedCards(root).children).toHaveLength(1); expect(installedCards(root).textContent).toContain('模块 7'); expect(marketCards(root).children).toHaveLength(6);
+    expect(root.querySelector('.extension-directory')?.textContent).toContain('安装位置：');
+  });
+  it('opens market details from the card and restores metadata and release rows', async () => {
+    stub(); const { root } = mount(); await flush();
+    filterMarket(root, 'found');
+    const card = marketCards(root).querySelector('article') as HTMLElement; card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush();
+    const detail = document.querySelector('.extension-detail')!;
+    expect(detail.textContent).toContain('维护者'); expect(detail.textContent).toContain('200.0K');
+    expect(detail.querySelectorAll('.extension-history > div')).toHaveLength(2);
+    expect(detail.querySelector('details')?.open).toBe(false);
+    expect(detail.querySelector('summary')?.textContent).toBe('最近版本');
+    expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
+    expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('下载量：42/月');
+  });
+  it('keeps installed metadata available when registry details fail', async () => {
+    stub({ detailStatus: 503, list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], metadata: { license: 'MIT', dependencies: ['example-dependency'], links: { repository: 'https://git.example/module' } } }] } });
+    const { root } = mount(); await flush(); button(root, '甲扩展').click(); await flush();
+    const detail = document.querySelector('.extension-detail')!;
+    expect([...detail.querySelectorAll('h4')].map(node => node.textContent)).toEqual(['简介', '信息']);
+    expect(detail.textContent).toContain('MIT'); expect(detail.textContent).toContain('example-dependency');
+    expect(detail.querySelector('a')?.href).toBe('https://git.example/module');
+  });
+});
+
+it('keeps the installed grid height and scroll position when the last page has one card', async () => {
+  stub({ list: { dir: LIST.dir, extensions: Array.from({length: 7}, (_, i) => ({ ...LIST.extensions[0], name: `page-${i}` })) } });
+  const { root } = mount(); await flush(); const grid = installedCards(root) as HTMLElement;
+  const measured = 576;
+  vi.spyOn(grid, 'getBoundingClientRect').mockReturnValue({ height: measured } as DOMRect);
+  root.scrollTop = 200; const pager = root.querySelector('.extension-pager')!;
+  button(pager, '下一页 ›').click();
+  expect(grid.children).toHaveLength(1); expect(grid.style.minHeight).toBe(`${measured}px`); expect(root.scrollTop).toBe(200);
+  expect(pager.textContent).toContain('2 / 2');
+  button(pager, '‹ 上一页').click(); expect(grid.children).toHaveLength(extensionColumns(WIDTH) * 2); expect(root.scrollTop).toBe(200);
+});
+
+describe('feature contract', () => {
+  it('route is extensions, needsAny is extensions, grouped under Core', () => {
     expect(extensionsFeature.route).toBe('extensions');
     expect(extensionsFeature.needsAny).toEqual(['extensions']);
     expect(extensionsFeature.navGroup).toBe('Core');
   });
-
-  it('卸载后不再发请求', async () => {
-    stub();
-    const { ctx, root, lifecycle } = mkCtx();
-    mountExtensions(ctx);
-    await flush();
+  it('sends no requests after dispose', async () => {
+    stub(); const { root, lifecycle } = mount(); await flush();
     lifecycle.dispose();
     const before = calls.length;
-    button(root, '↻ 刷新').click();
-    await flush();
+    button(root, '↻ 刷新').click(); await flush();
     expect(calls.length).toBe(before);
   });
 });
