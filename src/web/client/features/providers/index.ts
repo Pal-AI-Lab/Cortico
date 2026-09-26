@@ -133,11 +133,20 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     if (!force && identity === selected) return;
     const gen = ++renderId;
     controller?.dispose(); controller = null;
+    // The disposed editor stays visible until its replacement is ready and takes no input meanwhile.
+    detailRoot.toggleAttribute('inert', true);
     selected = identity; paint();
     if (!identity) {
+      detailRoot.toggleAttribute('inert', false);
       detailRoot.replaceChildren(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), ui.button(S.create, { onClick: () => run(create) }));
       return;
     }
+    try { await openDetail(identity, gen); } catch (error) {
+      if (gen === renderId) { detailRoot.replaceChildren(); detailRoot.toggleAttribute('inert', false); }
+      throw error;
+    }
+  }
+  async function openDetail(identity: string, gen: number): Promise<void> {
     const saved = identity === NEW_DRAFT_ID ? null : await get<Detail>(connectionPath(identity), opts);
     if (gen !== renderId || ctx.signal.aborted) return;
     const detailView = ui.h('div');
@@ -165,6 +174,7 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       const scroll = detailRoot.closest<HTMLElement>('.featureslot, .scroll');
       const scrollTop = scroll?.scrollTop;
       detailRoot.replaceChildren(detailView);
+      detailRoot.toggleAttribute('inert', false);
       if (scroll && scrollTop !== undefined) scroll.scrollTop = scrollTop;
       controller = mounted;
     }

@@ -189,7 +189,7 @@ it('a saved connection offers discard only while the form differs from what is s
   expect(cancel().hidden).toBe(true);
 });
 
-it('keeps the editor in place while discard reloads its saved data', async () => {
+it('keeps the editor in place and inert while discard reloads its saved data', async () => {
   const { root } = await fixture();
   const input = root.querySelector('[aria-label="API 地址"]') as HTMLInputElement;
   input.value = 'https://draft.test'; input.dispatchEvent(new Event('input')); await flush();
@@ -204,7 +204,9 @@ it('keeps the editor in place while discard reloads its saved data', async () =>
   await flush();
   expect(root.querySelector('[aria-label="API 地址"]')).toBe(input);
   expect(input.value).toBe('https://draft.test');
+  expect(root.querySelector('.connection-detail')!.hasAttribute('inert')).toBe(true);
   release(); await flush();
+  expect(root.querySelector('.connection-detail')!.hasAttribute('inert')).toBe(false);
   expect(root.querySelector('[aria-label="API 地址"]')).not.toBe(input);
   expect((root.querySelector('[aria-label="API 地址"]') as HTMLInputElement).value).toBe(entry.baseUrl);
 });
