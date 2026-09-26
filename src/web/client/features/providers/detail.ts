@@ -90,7 +90,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     input.addEventListener('input', () => { editing.raw[key] = input.value; check(); change(); }, opts);
   }
   function block(box: HTMLElement, section: Section, fold = false) {
-    const card = fold ? ui.foldSheet(`connection-${identity}-${section.id}`, { title: section.title, desc: section.description, defaultOpen: section.defaultOpen ?? true }) : ui.sheet({ title: section.title, desc: section.description });
+    const card = fold ? ui.foldSheet('connection-' + section.id, { title: section.title, desc: section.description, defaultOpen: section.defaultOpen ?? true }) : ui.sheet({ title: section.title, desc: section.description });
     if (fold) card.el.classList.add('connection-section');
     const header = fold ? card.el.querySelector('summary') : card.el;
     const title = header?.querySelector('h3');
