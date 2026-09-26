@@ -1,7 +1,7 @@
 /** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。类别取路由第二段。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
-import { brandMark } from '../../ui/icons.ts';
+import { cooMark } from '../../ui/icons.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { S } from './strings.ts';
@@ -30,6 +30,7 @@ export interface ExtensionView {
   label?: string;
   enabled?: boolean;
   hidden?: boolean;
+  icon?: boolean;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
 }
 
@@ -153,6 +154,14 @@ export function parseInstallInput(raw: string): Target | null {
   const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9][a-z0-9_.-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/.exec(raw.trim());
   return match ? { name: match[1], ...(match[2] ? { version: match[2] } : {}) } : null;
 }
+/** 默认头像角标上的字:去掉作用域与 `cortico-<kind>-` 前缀后的第一个字,拉丁字母大写。 */
+export function avatarInitial(title: string): string {
+  const bare = title.replace(/^@[^/]+\//, '').replace(/^cortico-(?:world|provider|bot)-/, '').trim();
+  return (Array.from(bare)[0] ?? '?').toUpperCase();
+}
+/** 已装包图标的地址;版本号放进查询串,换版本后浏览器重新取。 */
+export const iconUrl = (name: string, version: string | null | undefined): string =>
+  '/api/extensions/icon?name=' + encodeURIComponent(name) + (version ? '&v=' + encodeURIComponent(version) : '');
 const categories: ExtensionKindView[] = ['world', 'provider', 'bot'];
 const stateLabels = { loaded: S.disabled, failed: S.stateFailed, 'pending-restart': S.statePendingRestart, removed: S.stateRemoved, idle: S.template };
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
@@ -261,10 +270,23 @@ export function mountExtensions(ctx: FeatureContext): void {
       }).catch(error => { if (!signal.aborted && box.isConnected) box.append(ui.msgline(errorText(error), true)); });
     }
   }
+  /** 包声明了图标就显示图标;没有或取不到时是 Coo 图标加首字母角标。 */
+  function packageAvatar(title: string, src?: string) {
+    const avatar = ui.h('span', 'extension-avatar');
+    const fallback = ui.h('span', 'extension-avatar-default');
+    fallback.append(cooMark(root.ownerDocument), ui.h('span', 'extension-avatar-initial', avatarInitial(title)));
+    avatar.append(fallback);
+    if (src) {
+      const image = ui.h('img', 'extension-avatar-image'); image.alt = ''; image.src = src; fallback.hidden = true;
+      image.addEventListener('error', () => { image.remove(); fallback.hidden = false; }, { signal });
+      avatar.prepend(image);
+    }
+    return avatar;
+  }
   function installedCard(item: ExtensionView) {
     const card = ui.h('article', 'extension-card' + (item.enabled ? ' is-enabled' : ''));
     const heading = ui.h('div', 'extension-card-heading');
-    if (item.kind === 'bot') { const avatar = ui.h('span', 'extension-avatar'); avatar.append(brandMark(root.ownerDocument)); heading.append(avatar); }
+    heading.append(packageAvatar(item.metadata?.displayName ?? item.label ?? item.name, item.icon ? iconUrl(item.name, item.installedVersion ?? item.version) : undefined));
     const title = ui.button(item.metadata?.displayName ?? item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
     heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'provider' ? S.alreadyInstalled : item.kind === 'bot' ? S.adopted : S.stateLoaded, 'on'));
     card.append(heading);
@@ -322,6 +344,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(hit, owner); } }, { signal });
       const heading = ui.h('div', 'extension-card-heading'); const local = installed.find(item => item.name === hit.name);
       const title = ui.h('span', 'extension-card-title', local?.metadata?.displayName ?? local?.label ?? hit.name); title.title = title.textContent ?? hit.name;
+      heading.append(packageAvatar(title.textContent ?? hit.name, local?.icon ? iconUrl(local.name, local.installedVersion ?? local.version) : undefined));
       void fetchDetail(hit.name, hit.version).then(data => { if (!signal.aborted && data.displayName) title.textContent = title.title = data.displayName; }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
       heading.append(title); if (hit.installed) heading.append(ui.pill(S.alreadyInstalled));
       const metadata = ui.h('div', 'extension-card-info');

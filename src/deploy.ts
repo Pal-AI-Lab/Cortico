@@ -3,7 +3,7 @@
  * 部署文件中的 providers 字段不参与合并。Core、Persona 与 World 的默认值由各自所有者提供。
  * 运行时共享合并后的配置对象，控制台和调参工具原位更新。
  */
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import type { CoreConfig, LLMProviderEntry } from './core/types.ts';
 import { deepMerge, type LoadedConfig } from './core/config.ts';
@@ -33,6 +33,9 @@ export const DEFAULT_DEPLOYMENT = { name: 'mybot', bot: 'cormini' } as const;
  */
 export const ONBOARDING_FLAG_FILE = '.onboarding';
 
+/** 部署根下的 bot 头像,PNG;控制台的 `/api/avatar` 读写它。 */
+export const AVATAR_FILE = 'avatar.png';
+
 /** 部署根下另有用途的目录名，不能拿来当部署名。 */
 const RESERVED_DEPLOYMENT_NAMES: readonly string[] = ['providers', 'runtimes', 'models'];
 
@@ -51,7 +54,7 @@ export function deploymentNameProblem(name: string, taken: readonly string[]): s
  * 只有 `displayName` 的 `config.json`。端点与其余设置在控制台里配。
  */
 export function createDeployment(
-  options: { name: string; bot: string; displayName?: string; root?: string },
+  options: { name: string; bot: string; displayName?: string; root?: string; avatarFrom?: string },
 ): string {
   const root = options.root ?? deploymentRoot();
   const problem = deploymentNameProblem(options.name, listBots(root));
@@ -61,6 +64,7 @@ export function createDeployment(
   writeJson(resolve(dir, 'deployment.json'), { bot: options.bot });
   if (options.displayName) writeJson(resolve(dir, 'config.json'), { displayName: options.displayName });
   writeFileSync(resolve(dir, ONBOARDING_FLAG_FILE), '', 'utf8');
+  if (options.avatarFrom) copyFileSync(options.avatarFrom, resolve(dir, AVATAR_FILE));
   return options.name;
 }
 

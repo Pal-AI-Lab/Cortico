@@ -30,9 +30,14 @@ export const EXTENSION_KEYWORDS: Readonly<Record<ExtensionKind, string>> = {
 /** 框架导入前缀 cortico/ 对应 src/ 下的路径，由 runtime.ts 的模块钩子解析。 */
 export const FRAMEWORK_SPECIFIER = 'cortico';
 
+/** `cortico.icon` 接受的图片格式,按扩展名给出响应的 Content-Type。 */
+export const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
+
 export interface ExtensionManifest {
   /** 控制台卡片与详情的标题;缺席时用包名。读它不需要导入包代码。 */
   displayName?: string;
+  /** 包内相对路径,`.png` / `.webp` / `.svg`;控制台卡片的头像。bot 包的 png 图标还是新建部署的初始头像。 */
+  icon?: string;
   kind: ExtensionKind;
   api: number;
   /** 包内相对路径,`.js` / `.mjs`。 */
@@ -88,6 +93,10 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionMani
   const m = block as Record<string, unknown>;
   const displayName = typeof m.displayName === 'string' ? m.displayName.trim() : '';
   if (m.displayName !== undefined && !displayName) warnings.push('cortico.displayName 必须是非空字符串,已忽略。');
+  const icon = isSafeRelativeFile(m.icon) && Object.keys(ICON_TYPES).some((ext) => (m.icon as string).toLowerCase().endsWith(ext)) ? m.icon : undefined;
+  if (m.icon !== undefined && icon === undefined) {
+    warnings.push(`cortico.icon 必须是包内相对路径,指向 ${Object.keys(ICON_TYPES).join(' / ')},现在是 ${JSON.stringify(m.icon)};已忽略。`);
+  }
 
   const kind = m.kind;
   const kindOk = typeof kind === 'string' && (EXTENSION_KINDS as readonly string[]).includes(kind);
@@ -139,6 +148,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionMani
     warnings,
     manifest: {
       ...(displayName ? { displayName } : {}),
+      ...(icon ? { icon } : {}),
       kind: kind as ExtensionKind,
       api: api as number,
       ...(typeof client === 'string' ? { consoleClient: client } : {}),

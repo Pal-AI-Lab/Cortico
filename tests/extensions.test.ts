@@ -330,6 +330,20 @@ describe('ExtensionManager', () => {
     await expect(mgr.packageInfo('tagged', '9.9.9')).rejects.toThrow('9.9.9');
   });
 
+  it('icon:声明了且文件在包里才给;list 标出有图标的包', async () => {
+    const cortico = (icon: string) => ({ cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, icon } });
+    installFake('pictured', { body: definitionSource('pictured'), pkg: cortico('assets/icon.svg') });
+    installFake('missing-file', { body: definitionSource('missing-file'), pkg: cortico('icon.png') });
+    const modules = join(root, 'extensions', 'node_modules');
+    mkdirSync(join(modules, 'pictured', 'assets'));
+    writeFileSync(join(modules, 'pictured', 'assets', 'icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+    const { mgr } = manager();
+    expect(mgr.icon('pictured')).toEqual({ file: join(modules, 'pictured', 'assets', 'icon.svg'), type: 'image/svg+xml' });
+    expect(mgr.icon('missing-file')).toBeNull();
+    expect(mgr.icon('not-installed')).toBeNull();
+    expect(Object.fromEntries(mgr.list().extensions.map((p) => [p.name, p.icon ?? false]))).toEqual({ pictured: true, 'missing-file': false });
+  });
+
   it('check:只读 manifest;类别不符、声明不合格与目录缺失各自拒绝,一次 pnpm 都不起', async () => {
     const { mgr, runs } = manager();
     expect(await mgr.check({ name: 'remote-world', version: '1.2.0' }, 'world')).toEqual({ name: 'remote-world', version: '1.2.0', kind: 'world' });

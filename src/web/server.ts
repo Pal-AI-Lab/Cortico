@@ -9,6 +9,7 @@ import type { EnvPromptOrigin } from '../core/prefix.ts';
  */
 import { createServer, type Server } from 'node:http';
 import { createHash, randomUUID } from 'node:crypto';
+import { AVATAR_FILE } from '../deploy.ts';
 import type { AddressInfo } from 'node:net';
 import { createReadStream, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { open as openFile } from 'node:fs/promises';
@@ -210,6 +211,8 @@ export interface ExtensionInfo {
   enabled?: boolean;
   /** World:已挂载但对 agent 隐藏 */
   hidden?: boolean;
+  /** 包声明了合格的图标,`GET /api/extensions/icon?name=<包名>` 提供它 */
+  icon?: boolean;
 }
 
 /**
@@ -293,6 +296,8 @@ export interface WebAppExtensionDeps {
   searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
   /** 单个包的详情(另取一次包文档);`version` 是版本号或 dist-tag,缺省 latest。 */
   packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail>;
+  /** 已装包声明的图标文件;没有时 null。 */
+  icon?(name: string): { file: string; type: string } | null;
   /** 安装前只读 manifest 的检查;给了 `kind` 就要求类别一致。 */
   check?(target: ExtensionInstallTarget, kind?: 'world' | 'provider' | 'bot'): Promise<{ name: string; version: string; kind: string }>;
   /**
@@ -587,7 +592,6 @@ export type WebAppDeps = ConsoleSurface;
 
 
 const FILE_MAX_BYTES = 1024 * 1024; // 1MB
-const AVATAR_FILE = 'avatar.png';
 
 /** 主题记录的正文上限:三十多个 token 两份调色板,自定义方案再多也到不了这个量级。 */
 const THEME_MAX_BYTES = '256kb';
@@ -1777,6 +1781,20 @@ export class WebApp {
         // 包名不合法是请求的问题,其余当成 registry 那一头的问题
         res.status(msg.includes('包名') ? 400 : 502).json({ error: msg });
       }
+    }));
+
+    // 图标只经 <img> 显示;SVG 另加 CSP,单独打开时也不执行脚本、不取外部资源。
+    app.get('/api/extensions/icon', wrap((req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.icon) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      const name = strParam(req.query.name)?.trim();
+      if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
+      const icon = src.icon(name);
+      if (!icon) { res.status(404).end(); return; }
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      if (icon.type === 'image/svg+xml') res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      res.type(icon.type).sendFile(icon.file, { cacheControl: false });
     }));
 
     app.post('/api/extensions/check', express.json(), wrap(async (req, res) => {

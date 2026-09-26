@@ -1,6 +1,6 @@
 /** 扩展管理接口覆盖 World、provider 与 bot 包。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type ExtensionInstallTarget } from '../../src/web/server.ts';
@@ -29,6 +29,8 @@ const post = async (path: string, body?: unknown): Promise<{ status: number; bod
   return { status: r.status, body: (await r.json()) as any };
 };
 
+const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0]);
+
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'webtest-extensions-'));
   app = new WebApp({
@@ -47,6 +49,11 @@ beforeAll(async () => {
       },
       updates: async () => ({ updates: [{ name: 'a', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [] }),
       searchPartial: (kind) => kind === 'bot',
+      icon: (name) => {
+        if (name === 'png-icon') { const file = join(dir, 'icon.png'); writeFileSync(file, PNG); return { file, type: 'image/png' }; }
+        if (name === 'svg-icon') { const file = join(dir, 'icon.svg'); writeFileSync(file, '<svg xmlns="http://www.w3.org/2000/svg"/>'); return { file, type: 'image/svg+xml' }; }
+        return null;
+      },
       check: async (target, kind) => {
         if ('name' in target && target.name === 'wrong-kind') throw new Error('扩展实际类型为 provider，请切换到对应分类。');
         return { name: 'name' in target ? target.name : 'local', version: '1.0.0', kind: kind ?? 'world' };
@@ -194,5 +201,25 @@ describe('安装前检查、搜索是否不全与进程生命周期', () => {
     const after = await get('/api/run/lifecycle');
     expect(before.body.ready).toBe(false);
     expect(after.body).toMatchObject({ bootId: before.body.bootId, deployment: before.body.deployment, ready: true });
+  });
+});
+
+describe('/api/extensions/icon', () => {
+  const raw = (path: string) => fetch(`http://127.0.0.1:${port}${path}`);
+  it('按包名给出图标文件,类型取扩展名;不许浏览器猜类型', async () => {
+    const png = await raw('/api/extensions/icon?name=png-icon&v=1.0.0');
+    expect(png.status).toBe(200);
+    expect(png.headers.get('content-type')).toContain('image/png');
+    expect(png.headers.get('x-content-type-options')).toBe('nosniff');
+    expect(Buffer.from(await png.arrayBuffer())).toEqual(PNG);
+  });
+  it('SVG 带禁脚本、禁外部资源的 CSP', async () => {
+    const svg = await raw('/api/extensions/icon?name=svg-icon');
+    expect(svg.headers.get('content-type')).toContain('image/svg+xml');
+    expect(svg.headers.get('content-security-policy')).toContain("default-src 'none'");
+  });
+  it('没有图标 404,缺包名 400', async () => {
+    expect((await raw('/api/extensions/icon?name=plain')).status).toBe(404);
+    expect((await raw('/api/extensions/icon')).status).toBe(400);
   });
 });
