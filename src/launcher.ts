@@ -14,7 +14,7 @@ import { createDeployment, ensureDeployment, listBots, loadDeployment } from './
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
 import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
-import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
+import { extensionIconFile, extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
 import { parseExtensionManifest } from './extensions/manifest.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
@@ -101,6 +101,14 @@ function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
   ];
 }
 
+/** 装好的 bot 扩展包声明的 PNG 图标,新建部署时复制成初始头像;仓内包与其他格式没有。 */
+function packageAvatar(bot: string): string | null {
+  if (botPackages().find((p) => p.id === bot)?.source !== 'extension') return null;
+  const dir = resolve(extensionsDir(repoRoot()), 'node_modules', bot);
+  const icon = extensionIconFile(dir, JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')));
+  return icon?.type === 'image/png' ? icon.file : null;
+}
+
 /** 命令行上 `--名=值` 的值;没给这个开关时为 null。 */
 function flagValue(name: string): string | null {
   const prefix = `--${name}=`;
@@ -119,8 +127,9 @@ async function main(): Promise<void> {
     const bot = flagValue('bot');
     if (!bot) throw new Error('--create-deployment 需要同时给 --bot=<代码包>');
     const displayName = flagValue('display-name');
+    const avatarFrom = packageAvatar(bot);
     process.stdout.write(
-      createDeployment({ name: created, bot, ...(displayName ? { displayName } : {}) }) + '\n',
+      createDeployment({ name: created, bot, ...(displayName ? { displayName } : {}), ...(avatarFrom ? { avatarFrom } : {}) }) + '\n',
     );
     return;
   }
