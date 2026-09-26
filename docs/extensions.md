@@ -12,15 +12,11 @@ provider 仅包含参考 bot 所需的实现;其他平台或模型通信协议�
 
 安装会向 `extensions/package.json` 添加依赖,重启进程后加载。支持以下方式:
 
-- 控制台「扩展」页按 World、供应商、Bot 模板分三个页签,路由是 `extensions/<kind>`。每个页签有已安装、
-  扩展市场与手动安装三块。扩展市场列出 npm 上带 `cortico-world` / `cortico-provider` / `cortico-bot`
-  关键字的包,可按名字、描述、关键字筛选,按名字 / 发布时间 / 下载量排序;卡片标题取包的
-  `cortico.displayName`,点开是详情(契约版本、体积、依赖、最近版本),安装键在详情里。
-  已安装与市场各自的筛选、每页张数和滚动位置按页签记在浏览器会话里。
-- 「手动安装」填 npm 包名(可带 `@` 精确版本或 dist-tag),或选运行 Cortico 的电脑上的目录:
-  目录以 link 方式装入,改源码后重启生效。
+- 控制台「扩展」页(路由 `extensions/<kind>`):从 npm 上带 `cortico-world` / `cortico-provider` /
+  `cortico-bot` 关键字的包里装,或手动填 npm 包名(可带 `@` 精确版本或 dist-tag)、选本机目录。
+  本机目录以 link 方式装入,改源码后重启生效。
 - 控制台安装前先调 `POST /api/extensions/check`:只读 manifest(本机目录读 package.json,npm 包读包文档),
-  类别与当前页签不符、声明不合格时拒绝,不导入包代码。
+  类别与所选类别不符、声明不合格时拒绝,不导入包代码。
 - 命令行,在仓库根下:
 
 ```bash
@@ -30,18 +26,16 @@ cd extensions && corepack pnpm add --ignore-workspace <包名或目录>
 `--ignore-workspace` 不能省:少了它 pnpm 会把 `extensions/` 当成仓库工作区的一员写进根
 lockfile。
 
-已安装里也列出随框架提供的 World 与供应商,标「内置扩展」,不能删除。卡片状态:World 看本进程是否挂载,
-挂载了但对 agent 隐藏的另行标出;供应商看是否已注册;bot 包看是不是这份部署在用的那个。
-还有 `加载失败` 及原因、`待重启`。本进程正在使用的 World 与 bot 包不能删除,World 先在 World 页停用。
-重启进程键重启后,页面轮询 `GET /api/run/lifecycle`,等同一部署换了 bootId 且就绪再刷新;
-关机步骤有没完成的,回执显示在对话框里。
+`/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:
+World 已挂载,供应商已注册,bot 包是这份部署在用的那个。本进程正在使用的 World 与 bot 包不能删除,
+World 先在 World 页停用。
 `extensions/` 整个目录不进版本控制,是部署状态。
 
 ## 更新
 
 扩展更新检查在页面打开及清单刷新时执行。发现新版时显示磁盘版本与 `latest` 版本；
 更新会向 `extensions/` 执行 `pnpm add`，重启进程后加载新版，不需要先卸载。
-契约不兼容的新版在卡片上写出原因,更新键不可用。
+契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。
 磁盘版本与本进程加载版本不同，即使依赖范围没变，扩展仍标为「待重启」。
 
@@ -66,8 +60,8 @@ lockfile。
 }
 ```
 
-`displayName` 可选,是控制台卡片与详情的标题,读它不需要导入包代码;空串、非字符串或超过 64 个字符时
-给出 warning 并忽略,包照常加载。
+`displayName` 可选,是控制台里的扩展名称,读它不需要导入包代码;空串或非字符串时给出 warning 并忽略,
+包照常加载。
 
 入口默认导出一个 `WorldDefinition`(契约见 [worlds.md](worlds.md)):
 
