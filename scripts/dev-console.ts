@@ -1061,7 +1061,13 @@ const devPersonaPageSources = deriveConsolePageSources(
 
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
-  { name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded' },
+  {
+    name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', consoleClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded', mounted: true,
+    displayName: 'Discord', author: 'acme', license: 'MIT', links: { repository: 'https://github.com/acme/cortico-world-discord', bugs: 'https://github.com/acme/cortico-world-discord/issues' },
+  },
+  { name: 'cortico-provider-example', spec: '^1.0.0', version: '1.0.2', description: '示例模型通信协议 (dev 假数据)', kind: 'provider', consoleClient: false, loaded: true, worldId: 'example', label: 'Example', state: 'loaded', author: 'someone', license: 'MIT' },
+  { name: 'cortico-bot-example', spec: '^0.2.0', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', kind: 'bot', consoleClient: false, loaded: false, worldId: 'example-bot', label: 'Example Bot', state: 'idle', displayName: 'Example Bot', author: 'someone' },
+  { name: 'mystery-package', spec: '^1.0.0', version: '1.0.0', consoleClient: false, loaded: false, reason: 'package.json 缺少 cortico 块(至少要 kind 与 api)。', state: 'failed' },
   { name: 'cortico-world-broken', spec: '^0.1.0', version: '0.1.4', kind: 'world', consoleClient: true, loaded: false, reason: '默认导出不是 WorldDefinition(需要 id / label / defaults() / create())。', state: 'failed' },
   { name: 'cortico-world-weather', spec: 'link:../cortico-world-weather', version: '0.0.1', kind: 'world', description: '本机开发中的天气播报 (dev 假数据)', consoleClient: false, loaded: false, state: 'pending-restart' },
 ];
@@ -1102,6 +1108,26 @@ const devSearchHits: ExtensionSearchHit[] = [
   },
   installed: false,
 }));
+
+/** 随框架提供的条目:两个 World 挂着、一个没挂、一个构造失败,外加两个 provider。 */
+const devBuiltins: ExtensionInfo[] = [
+  ...([['terminal', '终端', true], ['websearch', '网页搜索', true], ['qq', 'QQ', false]] as const).map(([id, label, mounted]) => ({
+    name: `builtin:world:${id}`, spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'world' as const, worldId: id, label,
+    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const, mounted,
+  })),
+  {
+    name: 'builtin:world:minecraft', spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'world', worldId: 'minecraft', label: 'Minecraft',
+    consoleClient: false, loaded: false, state: 'failed', builtin: true, reason: '构造失败:找不到 Java 21 (dev 假数据)',
+  },
+  ...([['llamacpp', 'llama.cpp'], ['openai-responses-compat', 'OpenAI Compatible']] as const).map(([id, label]) => ({
+    name: `builtin:provider:${id}`, spec: 'builtin', version: '0.1.4', installedVersion: '0.1.4', kind: 'provider' as const, worldId: id, label,
+    consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const,
+  })),
+];
+devSearchHits.push(
+  { name: 'cortico-provider-example', version: '1.0.3', description: '示例模型通信协议 (dev 假数据)', publisher: 'someone', downloads: 88, dependents: 0, license: 'MIT', date: '2026-09-10T09:00:00.000Z', keywords: ['cortico-provider'], kind: 'provider', links: { npm: 'https://www.npmjs.com/package/cortico-provider-example' }, installed: false },
+  { name: 'cortico-bot-example', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', publisher: 'someone', downloads: 20, dependents: 0, license: 'MIT', date: '2026-09-12T09:00:00.000Z', keywords: ['cortico-bot'], kind: 'bot', links: { npm: 'https://www.npmjs.com/package/cortico-bot-example' }, installed: false },
+);
 
 const app = new WebApp({
   store,
@@ -1229,7 +1255,7 @@ const app = new WebApp({
   },
   // 扩展面的假数据:四种状态各一;装卸只改这张表,不跑 pnpm。
   extensions: {
-    list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: devExtensions.map((p) => ({ ...p })) }),
+    list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: [...devExtensions.map((p) => ({ ...p })), ...devBuiltins] }),
     updates: async () => ({
       updates: devExtensions.some((p) => p.name === '@acme/cortico-world-discord' && p.state !== 'removed' && p.installedVersion !== '0.3.2')
         ? [{ name: '@acme/cortico-world-discord', installedVersion: '0.3.1', latestVersion: '0.3.2', problems: [] }] : [],
@@ -1237,8 +1263,7 @@ const app = new WebApp({
     }),
     search: async (kind) => {
       await new Promise((r) => setTimeout(r, 300));
-      if ((kind ?? 'world') !== 'world') return [];
-      return devSearchHits.map((hit) => ({
+      return devSearchHits.filter((hit) => hit.kind === (kind ?? 'world')).map((hit) => ({
         ...hit,
         installed: devExtensions.some((p) => p.name === hit.name && p.state !== 'removed'),
       }));
@@ -1253,6 +1278,7 @@ const app = new WebApp({
       return {
         name,
         version: hit.version,
+        ...(name === '@acme/cortico-world-discord' ? { displayName: 'Discord' } : {}),
         description: hit.description,
         license: hit.license,
         keywords: hit.keywords,
@@ -1268,8 +1294,8 @@ const app = new WebApp({
         ...(broken
           ? { problems: [`扩展要求 world 契约 v9,本框架的 world 契约只到 v${EXTENSION_API_VERSIONS.world}:框架需要升级。`] }
           : {
-              manifest: { kind: 'world' as const, api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
-              frameworkApi: EXTENSION_API_VERSIONS.world,
+              manifest: { kind: hit.kind ?? 'world', api: EXTENSION_API_VERSIONS[hit.kind ?? 'world'], consoleClient: 'dist/console.js' },
+              frameworkApi: EXTENSION_API_VERSIONS[hit.kind ?? 'world'],
             }),
         warnings: [],
         engines: '>=22',
