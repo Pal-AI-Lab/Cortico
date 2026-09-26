@@ -33,12 +33,15 @@ import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
+import { BUILTIN_WORLDS } from './worlds/index.ts';
+import { repoRoot } from './paths.ts';
 import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
 import type { ConfigValues } from './core/config-schema.ts';
 import {
   PromptRevisionConflict,
   WebApp,
   type ConsoleWorldInfo,
+  type ExtensionInfo,
   type WorldInfo,
   type PromptDocument,
   type OwnedStoragePart,
@@ -701,6 +704,30 @@ async function deriveWorldInfo(
 /**
  * 存储清单在装配期固定；stat/clear 按 key 访问当前实例，以支持定义实例重建。
  */
+/** 随框架提供的 World 与 provider 在扩展页的条目;World 的状态取本进程的装配。 */
+export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, language: Language): ExtensionInfo[] {
+  const version = (JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { version?: string }).version ?? null;
+  const common = { spec: 'builtin', version, installedVersion: version, consoleClient: false, builtin: true } as const;
+  const external = new Set(set.worlds.map((world) => world.id));
+  const worlds = BUILTIN_WORLDS.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
+    const slot = assembly.slots.find((item) => item.id === world.id);
+    const missing = assembly.missing.find((item) => item.id === world.id);
+    const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: slot?.label ?? world.label };
+    if (slot) return [{ ...base, loaded: true, state: 'loaded', mounted: slot.mounted }];
+    if (missing) return [{ ...base, loaded: false, state: 'failed', reason: missing.reason(language) }];
+    return [];
+  });
+  const externalProviders = new Set(set.providers.map((module) => module.id));
+  const providers = providerModules.filter((module) => !externalProviders.has(module.id)).map((module): ExtensionInfo => {
+    const description = module.localize?.(language).description ?? module.description;
+    return {
+      ...common, name: `builtin:provider:${module.id}`, kind: 'provider', worldId: module.id, label: module.title,
+      ...(description ? { description } : {}), loaded: true, state: 'loaded',
+    };
+  });
+  return [...worlds, ...providers];
+}
+
 function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedStoragePart[] {
   return assembly.slots.flatMap((slot) =>
     (slot.instance.console?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
@@ -1165,7 +1192,10 @@ export function createBot<C extends CoreConfig>(
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
       },
-      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions) } : {}),
+      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
+        builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
+        worldMounted: (id) => assembly.slots.some((slot) => slot.id === id && slot.mounted),
+      }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
