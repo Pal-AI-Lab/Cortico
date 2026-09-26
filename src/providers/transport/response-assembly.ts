@@ -12,6 +12,24 @@ export interface ResponseAssembly {
 }
 
 /**
+ * Some Responses-compatible endpoints omit the item-level status on completed function calls.
+ * Keep the Core's incomplete-call guard strict while restoring the output shape at the provider
+ * boundary; explicit incomplete values and incomplete responses remain unchanged.
+ */
+export function normalizeCompletedFunctionCalls(response: Response): Response {
+  if (response.status !== 'completed') return response;
+  let changed = false;
+  const output = response.output.map((item) => {
+    if (item.type !== 'function_call') return item;
+    const status = (item as unknown as { status?: string | null }).status;
+    if (status !== undefined && status !== null) return item;
+    changed = true;
+    return { ...item, status: 'completed' as const };
+  });
+  return changed ? { ...response, output } : response;
+}
+
+/**
  * Validate native Responses Items before notifying observers.
  * Normalize response.reasoning_text.* to the schema name response.reasoning.* before validation.
  */
@@ -35,7 +53,7 @@ export class NativeResponseAssembly implements ResponseAssembly {
     emit(event);
     if (event.type === 'error') throw new ResponseProtocolError(`Native response error: ${JSON.stringify(event)}`);
   }
-  finish(): Response { return this.accumulator.finish(); }
+  finish(): Response { return normalizeCompletedFunctionCalls(this.accumulator.finish()); }
   snapshot(): Response | null { return this.accumulator.snapshot(); }
   serviceTier(): string | null { return this.tier; }
   meters(): TokenMeters { return structuredClone(this.usage); }

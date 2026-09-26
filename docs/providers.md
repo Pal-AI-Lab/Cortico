@@ -62,7 +62,9 @@ provider 模块不预设任何模型名;端点
 
 ## 内建 openai-responses-compat
 
-`POST <baseUrl>/responses`,每次请求重放完整上下文。历史推理按 `options.reasoningReplay` 回传:
+`POST <baseUrl>/responses`,每次请求重放完整上下文。已完成响应中缺省的 function call item
+`status` 会在 provider 边界补成 `completed`;明确的 `incomplete` 不会被放宽。历史推理按
+`options.reasoningReplay` 回传:
 `encrypted`(默认)只回 `encrypted_content`,且只回来源实例、模块、兼容域与模型均匹配的项,受
 `keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传,最后一条 user 消息之后的
 那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理。签名块要靠
