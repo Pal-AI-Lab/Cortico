@@ -8,7 +8,8 @@ import { nullLogger } from '../../src/core/util.ts';
 import { ChatResponseAssembly, NativeResponseAssembly } from '../../src/providers/transport/response-assembly.ts';
 import { EventDecoder } from '../../src/providers/transport/response-http.ts';
 import { GenerationError, priceUsage, unknownMeters } from '../../src/core/generation.ts';
-import type { StreamEvent } from '../../src/protocol/open-responses/index.ts';
+import { ResponsesProvider } from '../../src/providers/openai-responses-compat/native.ts';
+import type { FunctionCall, StreamEvent } from '../../src/protocol/open-responses/index.ts';
 
 const sse = (values: unknown[]): Response => new Response(values.map(value => `data: ${JSON.stringify(value)}\n\n`).join('') + 'data: [DONE]\n\n');
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
@@ -66,6 +67,35 @@ describe('Provider standard Responses boundary', () => {
     assembly.feed({ type: 'response.completed', sequence_number: 1, response }, () => {});
     expect(assembly.finish().usage).toBeNull();
     expect(assembly.meters()).toMatchObject({ input: 50, output: 3, total: 53, cachedInput: null, reasoning: null, native: { input_tokens: 50, output_tokens: 3 } });
+  });
+
+  it('treats a missing function-call status as completed only for a completed native response', () => {
+    const assembly = new NativeResponseAssembly();
+    const initial = { id: 'missing-status', model: 'test', status: 'in_progress', output: [] };
+    const call = { type: 'function_call', id: 'fc1', call_id: 'call1', name: 'inspect', arguments: '{}' } as unknown as FunctionCall;
+    assembly.feed({ type: 'response.created', sequence_number: 0, response: initial }, () => {});
+    assembly.feed({ type: 'response.output_item.added', sequence_number: 1, output_index: 0, item: call }, () => {});
+    assembly.feed({ type: 'response.output_item.done', sequence_number: 2, output_index: 0, item: call }, () => {});
+    assembly.feed({ type: 'response.completed', sequence_number: 3, response: { ...initial, status: 'completed', output: [call] } }, () => {});
+    expect(assembly.finish().output[0]).toMatchObject({ type: 'function_call', status: 'completed' });
+
+    const incompleteAssembly = new NativeResponseAssembly();
+    const incomplete = { ...call, status: 'incomplete' };
+    incompleteAssembly.feed({ type: 'response.created', sequence_number: 0, response: initial }, () => {});
+    incompleteAssembly.feed({ type: 'response.output_item.added', sequence_number: 1, output_index: 0, item: incomplete }, () => {});
+    incompleteAssembly.feed({ type: 'response.output_item.done', sequence_number: 2, output_index: 0, item: incomplete }, () => {});
+    incompleteAssembly.feed({ type: 'response.incomplete', sequence_number: 3, response: { ...initial, status: 'incomplete', output: [incomplete] } }, () => {});
+    expect(incompleteAssembly.finish().output[0]).toMatchObject({ type: 'function_call', status: 'incomplete' });
+  });
+
+  it('normalizes omitted function-call status in a unary Responses-compatible response', async () => {
+    vi.stubGlobal('fetch', async () => new Response(JSON.stringify({
+      id: 'unary-missing-status', model: 'test', status: 'completed', output: [
+        { type: 'function_call', id: 'fc1', call_id: 'call1', name: 'inspect', arguments: '{}' },
+      ], usage: null,
+    })));
+    const result = await new ResponsesProvider({ baseUrl: 'https://fixture.test' }).respond({ model: 'test', input: [] });
+    expect(result.response.output[0]).toMatchObject({ type: 'function_call', status: 'completed' });
   });
 
   it('keeps a response whose usage block is malformed, leaving those meters unknown', () => {

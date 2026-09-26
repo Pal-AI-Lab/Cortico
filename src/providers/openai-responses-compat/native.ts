@@ -5,7 +5,7 @@ import { OpenAIHttpClient } from '../transport/chat.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { createResponse, type Request } from '../../protocol/open-responses/index.ts';
 import { standardUsage, type GenerateOptions } from '../../core/generation.ts';
-import { NativeResponseAssembly, type ResponseAssembly, type parseChatResponse } from '../transport/response-assembly.ts';
+import { NativeResponseAssembly, normalizeCompletedFunctionCalls, type ResponseAssembly, type parseChatResponse } from '../transport/response-assembly.ts';
 import { responseMeters } from '../transport/response-meters.ts';
 import { responsesInput, type ReasoningReplay, type ResponsesInputOptions } from '../transport/responses-input.ts';
 
@@ -95,7 +95,7 @@ export class ResponsesProvider extends OpenAIHttpClient {
       || !['completed', 'incomplete', 'failed'].includes(String(data.status))) throw new ResponseProtocolError('Invalid native Responses resource');
     const meters = responseMeters(data.usage as Record<string, unknown> | null);
     return {
-      response: { ...createResponse(data.id, request), ...data, usage: standardUsage(meters) },
+      response: normalizeCompletedFunctionCalls({ ...createResponse(data.id, request), ...data, usage: standardUsage(meters) }),
       meters,
       serviceTier: typeof data.service_tier === 'string' ? data.service_tier : null,
     };
