@@ -133,6 +133,22 @@ describe('bot 包', () => {
   });
 });
 
+describe('displayName', () => {
+  const pkg = (displayName: unknown) => ({ name: 'x', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName } });
+  it('去掉首尾空白后收下', () => {
+    const parsed = parseExtensionManifest(pkg('  Discord 桥  '));
+    expect(parsed.ok && parsed.manifest.displayName).toBe('Discord 桥');
+  });
+  it('空串与非字符串只给 warning 并忽略,包照样可装', () => {
+    for (const bad of ['  ', 42]) {
+      const parsed = parseExtensionManifest(pkg(bad));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.ok && parsed.manifest.displayName).toBeUndefined();
+      expect(parsed.warnings.join('\n')).toContain('displayName');
+    }
+  });
+});
+
 describe('契约版本', () => {
   it('扩展要的比框架新 → 说框架要升级', async () => {
     installFixture(root, 'api-too-new');

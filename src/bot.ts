@@ -20,7 +20,8 @@ import { pick, resolveLanguage, type Language } from './core/language.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
 import { isSupervised, requestRestart, startsPaused } from './boot.ts';
-import { ExtensionManager, type ExtensionSet } from './extensions.ts';
+import { ExtensionManager, packageMetadata, type ExtensionSet } from './extensions.ts';
+import type { ExtensionPackageJson } from './extensions/manifest.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
 import { RESERVED_FRAME_NAMES } from './core/loop.ts';
@@ -33,12 +34,14 @@ import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
+import { repoRoot } from './paths.ts';
 import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
 import type { ConfigValues } from './core/config-schema.ts';
 import {
   PromptRevisionConflict,
   WebApp,
   type ConsoleWorldInfo,
+  type ExtensionInfo,
   type WorldInfo,
   type PromptDocument,
   type OwnedStoragePart,
@@ -698,9 +701,63 @@ async function deriveWorldInfo(
   }));
 }
 
+/** 内建条目的作者:框架维护者。 */
+const BUILTIN_AUTHOR = 'phantivia';
+
+/**
+ * 随框架提供的 World 与 provider 在扩展页的条目:装配里不来自扩展的 World 定义与预建实例,
+ * 以及不来自扩展的 provider 模块。World 的状态取本进程的装配。
+ */
+export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, language: Language): ExtensionInfo[] {
+  const pkg = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as ExtensionPackageJson;
+  const version = pkg.version ?? null;
+  const common = {
+    spec: 'builtin', version, installedVersion: version, consoleClient: false, builtin: true,
+    author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg), location: repoRoot(),
+  } as const;
+  const external = new Set(set.worlds.map((world) => world.id));
+  const candidates = [...assembly.definitions, ...assembly.slots.filter((slot) => !slot.definition)];
+  const worlds = candidates.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
+    const slot = assembly.slots.find((item) => item.id === world.id);
+    const missing = assembly.missing.find((item) => item.id === world.id);
+    const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: slot?.label ?? world.label };
+    if (slot) return [{ ...base, loaded: true, state: 'loaded' }];
+    if (missing) return [{ ...base, loaded: false, state: 'failed', reason: missing.reason(language) }];
+    return [];
+  });
+  const externalProviders = new Set(set.providers.map((module) => module.id));
+  const providers = providerModules.filter((module) => !externalProviders.has(module.id)).map((module): ExtensionInfo => {
+    const description = module.localize?.(language).description ?? module.description;
+    return {
+      ...common, name: `builtin:provider:${module.id}`, kind: 'provider', worldId: module.id, label: module.title,
+      ...(description ? { description } : {}), loaded: true, state: 'loaded',
+    };
+  });
+  return [...worlds, ...providers];
+}
+
+/**
+ * 扩展条目在本进程的运行状态:World 看挂载与对 agent 是否可见,provider 与 bot 看启动时是否加载。
+ * 已卸载的条目不算生效。
+ */
+export function extensionRuntimeState(
+  assembly: WorldAssembly,
+  isWorldVisible: (id: string) => boolean,
+): (item: ExtensionInfo) => ExtensionInfo {
+  return (item) => {
+    if (item.state === 'removed') return { ...item, enabled: false };
+    if (item.kind === 'world' && item.worldId) {
+      const mounted = assembly.slots.some((slot) => slot.id === item.worldId && slot.mounted);
+      return { ...item, enabled: mounted, ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}) };
+    }
+    return { ...item, enabled: item.loaded && item.state === 'loaded' };
+  };
+}
+
 /**
  * 存储清单在装配期固定；stat/clear 按 key 访问当前实例，以支持定义实例重建。
  */
+
 function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedStoragePart[] {
   return assembly.slots.flatMap((slot) =>
     (slot.instance.console?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
@@ -1165,7 +1222,10 @@ export function createBot<C extends CoreConfig>(
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
       },
-      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions) } : {}),
+      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
+        builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
+        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id)),
+      }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
@@ -1237,6 +1297,7 @@ export function createBot<C extends CoreConfig>(
       if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
       await core.start();
+      app?.markReady();
       return { port };
     },
     async stop() {

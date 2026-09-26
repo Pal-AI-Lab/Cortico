@@ -21,7 +21,7 @@ function fixture() {
   const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: root, readBlob: () => null, keepThinking: () => true, log: nullLogger() });
   const settings = new ProviderSettings(cfg, registry, file, root);
   const hub = new ProviderHub(cfg, registry, settings, file, root);
-  return { hub, cfg, root, file, temp, registry };
+  return { hub, cfg, root, file, temp, registry, settings };
 }
 const entry = { kind: 'openai-responses-compat', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
 
@@ -141,9 +141,13 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
 });
 
 it('module list carries the editor sections of each module in its declared order', () => {
-  const { hub } = fixture();
+  const { hub, settings } = fixture();
   const sections = Object.fromEntries(hub.moduleList('en').map(module => [module.id, module.sections.map(section => section.id)]));
   expect(sections.llamacpp).toEqual(['endpoint', 'runtime', 'models', 'model', 'pricing', 'protocol']);
   expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
   expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
+  for (const module of hub.moduleList('en')) {
+    const declared = settings.sources().find(source => source.id === `llm:${module.id}`)!.contribute('en').panels!.filter(panel => panel.id !== 'settings');
+    expect(module.sections.map(section => section.defaultOpen)).toEqual(declared.map(panel => panel.defaultOpen));
+  }
 });

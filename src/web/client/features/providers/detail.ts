@@ -40,7 +40,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   const dirty = () => !persisted || snapshot(editing) !== snapshot(persisted);
   const report = ui.msgline();
   const form = ui.h('div');
-  root.append(form, report);
+  root.append(form);
   const errors = new Map<string, () => boolean>();
   let rendering = 0;
   let saving = false;
@@ -54,7 +54,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     if (cancel) cancel.hidden = !!saved && !dirty();
     options.changed(editing, !!form.querySelector('[aria-invalid="true"]'), dirty());
   };
-  const run = (work: () => Promise<unknown>) => { void work().catch(error => { if (!lifecycle.disposed) report.textContent = String(error); }); };
+  const run = (work: () => Promise<unknown>, source?: HTMLElement) => {
+    if (source) source.after(report);
+    report.textContent = '';
+    report.classList.remove('bad');
+    void work().catch(error => { if (!lifecycle.disposed) { report.textContent = String(error); report.classList.add('bad'); } });
+  };
   /** Preview name for an unsaved connection; the server resolves secrets by it. */
   const identity = saved?.name ?? 'draft';
   /** The probe and the model list run on what the form holds, key included, before anything is saved. */
@@ -85,7 +90,16 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     input.addEventListener('input', () => { editing.raw[key] = input.value; check(); change(); }, opts);
   }
   function block(box: HTMLElement, section: Section, fold = false) {
-    const card = fold ? ui.foldSheet('connection-' + section.id, { title: section.title, desc: section.description }) : ui.sheet({ title: section.title, desc: section.description });
+    const card = fold ? ui.foldSheet('connection-' + section.id, { title: section.title, desc: section.description, defaultOpen: section.defaultOpen ?? true }) : ui.sheet({ title: section.title, desc: section.description });
+    if (fold) card.el.classList.add('connection-section');
+    const header = fold ? card.el.querySelector('summary') : card.el;
+    const title = header?.querySelector('h3');
+    if (header && title) {
+      const heading = ui.h('div', 'connection-step-heading');
+      heading.append(title);
+      if (card.desc) heading.append(card.desc);
+      header.prepend(heading);
+    }
     box.append(card.el); return card.body;
   }
   /** Reads a dotted path under the entry; writes create the objects on the way. */
@@ -101,13 +115,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     };
   };
   function endpointBlock(box: HTMLElement, section: Section) {
-    const body = block(box, section);
+    const body = block(box, section, true);
     field(body, 'baseUrl', S.url, editing.entry.baseUrl, value => { editing.entry.baseUrl = value; }, value => {
       try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password ? null : S.required; } catch { return S.required; }
     });
     const key = field(body, 'key', S.key, editing.secretValue, value => { editing.secretValue = value; }, undefined, 'password');
     key.placeholder = saved?.secretConfigured !== 'none' && saved ? '••••••••' : S.keyEmpty;
-    // the result sits under the button that asked for it
     const testResult = ui.msgline();
     const test = ui.button(S.test, { onClick: () => void (async () => {
       test.disabled = true;
@@ -122,12 +135,12 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         testResult.classList.add('bad');
       } finally { test.disabled = false; }
     })() });
-    const testRow = ui.rowbar(); testRow.classList.add('connection-test'); testRow.append(test);
+    const testRow = ui.rowbar(); testRow.classList.add('connection-test'); testRow.append(test, testResult);
     if (saved?.readiness.reason) testRow.append(ui.msgline(saved.readiness.reason, true));
-    body.append(testRow, testResult);
+    body.append(testRow);
   }
   function modelBlock(box: HTMLElement, section: Section, module: Module, spec: Spec) {
-    const body = block(box, section);
+    const body = block(box, section, true);
     const modelInput = field(body, 'model', S.model, spec.model, value => { spec.model = value; }, value => value.trim() ? null : S.required);
     const catalog = ui.h('datalist'); catalog.id = 'connection-models-' + Math.random().toString(36).slice(2); modelInput.setAttribute('list', catalog.id); body.append(catalog);
     let listedModels: Array<{ id: string; contextWindow?: number }> = [];
@@ -142,14 +155,20 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       if (known && contextInput) { spec.contextWindow = known; contextInput.value = String(known); delete editing.raw.contextWindow; change(); }
       noteCatalogWindow();
     }, opts);
-    const fetch = ui.button(S.fetchModels, { onClick: () => run(async () => {
+    const fetchResult = ui.msgline();
+    const fetch = ui.button(S.fetchModels, { onClick: () => void (async () => {
       fetch.disabled = true;
+      fetchResult.textContent = '';
+      fetchResult.classList.remove('bad');
       try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(identity) + '/models', draftBody(), opts);
         catalog.replaceChildren(...result.models.map(item => { const option = ui.h('option'); option.value = item.id; return option; }));
         listedModels = result.models;
         noteCatalogWindow();
+      } catch (error) {
+        if (!lifecycle.disposed) { fetchResult.textContent = String(error); fetchResult.classList.add('bad'); }
       } finally { fetch.disabled = false; }
-    }) }); body.append(fetch);
+    })() });
+    const fetchRow = ui.rowbar(); fetchRow.classList.add('connection-test'); fetchRow.append(fetch, fetchResult); body.append(fetchRow);
     const tiers = module.reasoningTiers;
     if (tiers.length) {
       const select = ui.select({ value: tiers.find(tier => tier.thinking === spec.thinking && tier.effort === spec.reasoningEffort)?.id ?? '', options: tiers.map(tier => ({ value: tier.id, label: tier.label })), onChange: value => {
@@ -171,7 +190,9 @@ export async function mountDetail(options: Options): Promise<DetailController> {
       select.setAttribute('aria-label', S.tier); body.append(ui.field(S.tier, select));
     }
     const images = ui.h('input'); images.type = 'checkbox'; images.checked = editing.entry.multimodal === true; images.setAttribute('aria-label', S.images);
-    images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts); body.append(ui.field(S.images, images));
+    images.setAttribute('role', 'switch'); images.classList.add('connection-switch');
+    images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts);
+    const imagesField = ui.field(S.images, images); imagesField.classList.add('connection-toggle'); body.append(imagesField);
     syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); };
   }
   function pricingBlock(box: HTMLElement, section: Section) {
@@ -220,7 +241,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     basic.append(ui.msgline(S.nameHint));
     const selectedModule = modules.find(module => module.id === editing.entry.kind);
     if (saved) {
-      const module = ui.select({ value: editing.entry.kind, options: [{ value: editing.entry.kind, label: selectedModule?.title ?? editing.entry.kind }], disabled: true });
+      const module = ui.input({ value: selectedModule?.title ?? editing.entry.kind });
+      module.readOnly = true;
       module.setAttribute('aria-label', S.module); module.classList.add('connection-module-readonly');
       basic.append(ui.field(S.module, module), ui.msgline(S.fixedModule));
     }
@@ -231,30 +253,34 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           editing.entry = { kind, baseUrl: module?.defaultBaseUrl ?? '', spec: { model: '', thinking: module?.reasoningTiers[0]?.thinking ?? true, ...(module?.reasoningTiers[0]?.effort ? { reasoningEffort: module.reasoningTiers[0].effort } : {}) } };
           editing.raw = {}; change(); run(render);
         } });
-      select.setAttribute('aria-label', S.module); basic.append(ui.field(S.module + ' *', select));
-      const required = ui.h('div', 'field-error'); basic.append(required);
-      errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.required; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
+      select.setAttribute('aria-label', S.module);
+      const moduleField = ui.field(S.module + ' *', select);
+      const required = ui.h('span', 'connection-module-hint', editing.entry.kind ? '' : S.chooseModule);
+      moduleField.querySelector('.fieldlabel')?.append(required);
+      basic.append(moduleField);
+      errors.set('module', () => { required.textContent = editing.entry.kind ? '' : S.chooseModule; select.setAttribute('aria-invalid', String(!editing.entry.kind)); return !!editing.entry.kind; });
     }
-    const flow = ui.h('div', 'connection-flow'); form.append(flow);
     const spec = editing.entry.spec ??= { model: '', thinking: false };
     const actions = ui.h('div', 'connection-actions');
     if (saved) {
-      actions.append(ui.button(S.remove, { variant: 'danger', onClick: () => run(async () => {
+      actions.append(ui.button(S.remove, { variant: 'danger', onClick: ev => run(async () => {
         const current = await get<Detail>(connectionPath(saved.name), opts);
         if (current.references.length) { await ui.confirm({ title: S.remove, body: S.referenced + current.references.join(', ') }); return; }
         if (!(await ui.confirm({ title: S.remove, body: S.deleteConfirm, danger: true }))) return;
         await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); await options.deleted();
-      }) }), ui.button(S.duplicate, { onClick: () => run(() => options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} })) }));
+      }, ev.currentTarget as HTMLElement) }), ui.button(S.duplicate, { onClick: ev => run(() => options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} }), ev.currentTarget as HTMLElement) }));
     }
     cancel = ui.button(S.cancel, { onClick: () => run(() => options.cancelled()) });
     cancel.hidden = !!saved && !dirty();
-    actions.append(ui.h('span', 'grow'), cancel, ui.button(S.save, { variant: 'primary', onClick: () => run(() => save()) }));
+    actions.append(ui.h('span', 'grow'), cancel, ui.button(S.save, { variant: 'primary', onClick: ev => run(() => save(), ev.currentTarget as HTMLElement) }), report);
     form.append(actions, ui.h('div', 'connection-shared', S.shared), ui.h('div', 'connection-shared', S.draftNote));
-    if (!selectedModule) { flow.append(ui.msgline(saved ? S.readiness['module-missing'] : S.chooseModule)); return; }
+    if (!selectedModule) return;
+    const flow = ui.h('div', 'connection-flow');
+    identityCard.el.after(flow);
     const groups = (await post<ConfigGroup[]>('/api/provider-modules/config', { name: identity, entry: editing.entry }, opts)).filter(group => !group.id.endsWith('.connection'));
     if (gen !== rendering || lifecycle.disposed) return;
     const ownSections = selectedModule.sections.some(section => !section.builtin);
-    const pending: Array<{ section: Section; box: HTMLElement }> = [];
+    const pending: Array<{ section: Section; host: HTMLElement }> = [];
     for (const section of selectedModule.sections) {
       const box = ui.h('div', 'connection-step'); flow.append(box);
       switch (section.builtin) {
@@ -265,15 +291,15 @@ export async function mountDetail(options: Options): Promise<DetailController> {
           break;
         case 'connection-pricing': pricingBlock(box, section); break;
         case 'connection-protocol': protocolBlock(box, section, groups); break;
-        default: pending.push({ section, box });
+        default: pending.push({ section, host: block(box, section, true) });
       }
     }
     if (!pending.length || !ctx.consolePageHost) return;
     panelHost ??= ctx.consolePageHost({ root: ui.h('div'), route: () => ['providers', saved?.name ?? ''] });
     await panelHost.load();
     if (gen !== rendering || lifecycle.disposed) return;
-    for (const { section, box } of pending) {
-      const handle = await panelHost.mountConnection(`llm:${editing.entry.kind}`, section.id, box, { instance: identity }, context => ({
+    for (const { section, host } of pending) {
+      const handle = await panelHost.mountConnection(`llm:${editing.entry.kind}`, section.id, host, { instance: identity }, context => ({
         ...context,
         setConfig: async (_id, values) => {
           for (const [path, value] of Object.entries(values)) {
@@ -303,13 +329,13 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const valid = [...errors.values()].map(check => check()).every(Boolean); change();
     if (!valid) {
       for (const input of form.querySelectorAll('[aria-invalid="true"]')) { const fold = input.closest('details'); if (fold) fold.open = true; }
-      report.textContent = S.readiness.invalid; return false;
+      report.textContent = S.readiness.invalid; report.classList.add('bad'); return false;
     }
     saving = true;
     try {
       const result = await post<Detail>(saved ? connectionPath(saved.name) + '/save' : '/api/providers', { name: editing.name, entry: editing.entry, expectedRevision: editing.revision, copyFrom: editing.copyFrom, ...(editing.secretValue ? { secretValue: editing.secretValue } : {}) }, opts);
       await options.onSaved(result.name, select); return true;
-    } catch (error) { report.textContent = String(error); return false; }
+    } catch (error) { report.textContent = String(error); report.classList.add('bad'); return false; }
     finally { saving = false; }
   }
   await render(); change();

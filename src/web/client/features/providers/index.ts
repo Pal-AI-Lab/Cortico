@@ -133,14 +133,23 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
     if (!force && identity === selected) return;
     const gen = ++renderId;
     controller?.dispose(); controller = null;
-    selected = identity; paint(); detailRoot.replaceChildren();
+    // The disposed editor stays visible until its replacement is ready and takes no input meanwhile.
+    detailRoot.toggleAttribute('inert', true);
+    selected = identity; paint();
     if (!identity) {
-      detailRoot.append(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), ui.button(S.create, { onClick: () => run(create) }));
+      detailRoot.toggleAttribute('inert', false);
+      detailRoot.replaceChildren(ui.h('h3', '', S.empty), ui.msgline(S.emptyHint), ui.button(S.create, { onClick: () => run(create) }));
       return;
     }
+    try { await openDetail(identity, gen); } catch (error) {
+      if (gen === renderId) { detailRoot.replaceChildren(); detailRoot.toggleAttribute('inert', false); }
+      throw error;
+    }
+  }
+  async function openDetail(identity: string, gen: number): Promise<void> {
     const saved = identity === NEW_DRAFT_ID ? null : await get<Detail>(connectionPath(identity), opts);
     if (gen !== renderId || ctx.signal.aborted) return;
-    const detailView = ui.h('div'); detailRoot.replaceChildren(detailView);
+    const detailView = ui.h('div');
     const mounted = await mountDetail({ ctx, root: detailView, modules, saved, draft: identity === NEW_DRAFT_ID ? newDraft : drafts.get(identity),
       // Edits persist as a browser draft as they happen; a form back at its saved state drops the draft.
       changed: (editing, hasErrors, dirty) => {
@@ -160,7 +169,15 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
         editing.name = candidate; newDraft = editing; await select(NEW_DRAFT_ID, true);
       },
     });
-    if (gen !== renderId || ctx.signal.aborted) mounted.dispose(); else controller = mounted;
+    if (gen !== renderId || ctx.signal.aborted) mounted.dispose();
+    else {
+      const scroll = detailRoot.closest<HTMLElement>('.featureslot, .scroll');
+      const scrollTop = scroll?.scrollTop;
+      detailRoot.replaceChildren(detailView);
+      detailRoot.toggleAttribute('inert', false);
+      if (scroll && scrollTop !== undefined) scroll.scrollTop = scrollTop;
+      controller = mounted;
+    }
   }
   async function create() {
     if (newDraft) return select(NEW_DRAFT_ID);

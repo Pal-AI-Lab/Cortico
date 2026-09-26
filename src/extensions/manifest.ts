@@ -31,6 +31,8 @@ export const EXTENSION_KEYWORDS: Readonly<Record<ExtensionKind, string>> = {
 export const FRAMEWORK_SPECIFIER = 'cortico';
 
 export interface ExtensionManifest {
+  /** 控制台卡片与详情的标题;缺席时用包名。读它不需要导入包代码。 */
+  displayName?: string;
   kind: ExtensionKind;
   api: number;
   /** 包内相对路径,`.js` / `.mjs`。 */
@@ -44,6 +46,12 @@ export interface ExtensionPackageJson {
   name?: string;
   version?: string;
   description?: string;
+  author?: string | { name?: string };
+  license?: string;
+  homepage?: string;
+  repository?: string | { url?: string };
+  bugs?: string | { url?: string };
+  engines?: Record<string, string>;
   type?: string;
   main?: string;
   module?: string;
@@ -78,6 +86,8 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionMani
     return { ok: false, reasons, warnings };
   }
   const m = block as Record<string, unknown>;
+  const displayName = typeof m.displayName === 'string' ? m.displayName.trim() : '';
+  if (m.displayName !== undefined && !displayName) warnings.push('cortico.displayName 必须是非空字符串,已忽略。');
 
   const kind = m.kind;
   const kindOk = typeof kind === 'string' && (EXTENSION_KINDS as readonly string[]).includes(kind);
@@ -128,6 +138,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionMani
     ok: true,
     warnings,
     manifest: {
+      ...(displayName ? { displayName } : {}),
       kind: kind as ExtensionKind,
       api: api as number,
       ...(typeof client === 'string' ? { consoleClient: client } : {}),

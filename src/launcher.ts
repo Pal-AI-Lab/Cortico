@@ -3,7 +3,7 @@
  * 部署根由 src/paths.ts 解析，代码包来自 bots/ 或已安装的 bot 扩展。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
@@ -14,7 +14,8 @@ import { createDeployment, ensureDeployment, listBots, loadDeployment } from './
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
 import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
-import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, type ActiveBotPackage } from './extensions.ts';
+import { extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
+import { parseExtensionManifest } from './extensions/manifest.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
@@ -80,13 +81,20 @@ async function botDefaults(bot: string): Promise<BotDefaults> {
   return { displayName: defaults.displayName, scheme: defaults.web.theme };
 }
 
-/** 可以拿来建部署的代码包:仓内 `bots/<名>/`,加上装好的 bot 类扩展。 */
+/** 可以拿来建部署的代码包:仓内 `bots/<名>/`,加上装好的、声明为 bot 且入口文件在的扩展。 */
 function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
   const treeDir = resolve(mainRepoRoot(), 'bots');
   const tree = existsSync(treeDir)
     ? readdirSync(treeDir).filter((id) => existsSync(resolve(treeDir, id, 'index.ts')))
     : [];
-  const installed = readInstalled(extensionsDir(repoRoot())).map((p) => p.name);
+  const installed = readInstalled(extensionsDir(repoRoot())).filter((p) => {
+    try {
+      const dir = resolve(extensionsDir(repoRoot()), 'node_modules', p.name);
+      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
+      const parsed = parseExtensionManifest(pkg);
+      return parsed.ok && parsed.manifest.kind === 'bot' && existsSync(resolveExtensionEntry(dir, pkg));
+    } catch { return false; }
+  }).map((p) => p.name);
   return [
     ...tree.map((id) => ({ id, source: 'tree' as const })),
     ...installed.filter((id) => !tree.includes(id)).map((id) => ({ id, source: 'extension' as const })),

@@ -8,7 +8,7 @@ import type { EnvPromptOrigin } from '../core/prefix.ts';
  * 依赖通过本文件的窄接口注入，WebApp 不导入 core。
  */
 import { createServer, type Server } from 'node:http';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { createReadStream, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { open as openFile } from 'node:fs/promises';
@@ -198,6 +198,18 @@ export interface ExtensionInfo {
   worldId?: string;
   label?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
+  /** 本机 package.json 里的详情字段(显示名、许可证、链接、依赖…),与 npm 包文档同形 */
+  metadata?: Partial<ExtensionPackageDetail>;
+  /** package.json 的 author,只取名字 */
+  author?: string;
+  /** 随框架提供,不能卸载;`name` 形如 `builtin:<kind>:<id>`,不是 npm 包名 */
+  builtin?: boolean;
+  /** 代码所在目录;内建条目是框架检出,已装包缺席(在扩展目录下) */
+  location?: string;
+  /** 在本进程生效:World 已挂载、provider 已注册、bot 是这份部署在用的那个 */
+  enabled?: boolean;
+  /** World:已挂载但对 agent 隐藏 */
+  hidden?: boolean;
 }
 
 /**
@@ -231,8 +243,10 @@ export interface ExtensionUpdateResult {
 /** 一个 npm 包的详情。操作员点开某条搜索结果时才取。 */
 export interface ExtensionPackageDetail {
   name: string;
-  /** dist-tag `latest` 指的版本 */
+  /** dist-tag `latest` 指的版本,或请求里指定的版本 / dist-tag */
   version: string;
+  /** 这个版本 manifest 的 `cortico.displayName` */
+  displayName?: string;
   description?: string;
   license?: string;
   keywords?: string[];
@@ -259,7 +273,8 @@ export interface ExtensionPackageDetail {
   dependencies: string[];
   maintainers: string[];
   publisher?: string;
-  links: { npm: string; repository?: string; homepage?: string; bugs?: string };
+  /** npm 页面只在包文档里有;本机 package.json 给出的详情没有它 */
+  links: { npm?: string; repository?: string; homepage?: string; bugs?: string };
   installed: boolean;
   /** 已安装时 extensions/package.json 里写的那个版本范围 */
   installedSpec?: string;
@@ -270,12 +285,16 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
-  list(): { dir: string; extensions: ExtensionInfo[] };
+  list(language: Language): { dir: string; extensions: ExtensionInfo[] };
   updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
-  /** 单个包的详情(另取一次包文档)。 */
-  packageInfo(name: string): Promise<ExtensionPackageDetail>;
+  /** 最近一次这一类的搜索翻到了上限,结果可能不全。 */
+  searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
+  /** 单个包的详情(另取一次包文档);`version` 是版本号或 dist-tag,缺省 latest。 */
+  packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail>;
+  /** 安装前只读 manifest 的检查;给了 `kind` 就要求类别一致。 */
+  check?(target: ExtensionInstallTarget, kind?: 'world' | 'provider' | 'bot'): Promise<{ name: string; version: string; kind: string }>;
   /**
    * 已加载扩展的浏览器端产物。服务端据此把页 id 映到 `/assets/extensions/<包>/<版本>/<文件>`
    * 并只发这几个文件;缺席 = 没有扩展带面板。
@@ -801,6 +820,11 @@ function toConsoleStream(ws: WebSocket, log: Logger, heartbeatMs: number): Conso
 
 
 export class WebApp {
+  /** 每个进程一个;控制台据此认出重启后回来的是新进程。 */
+  private readonly bootId = randomUUID();
+  private ready = false;
+  /** 启动流程走完(World 挂好、Core 起来)后调用;之前 `/api/run/lifecycle` 的 `ready` 为 false。 */
+  markReady(): void { this.ready = true; }
   private readonly deps: WebAppDeps;
   private readonly app: express.Express;
   private readonly listenHost: string;
@@ -1707,11 +1731,16 @@ export class WebApp {
       }
     }));
 
+    // deployment 是数据目录的摘要:同一端口换成了别的部署时,等重启的页面不会把它当成自己。
+    app.get('/api/run/lifecycle', wrap((_req, res) => {
+      res.json({ deployment: createHash('sha256').update(this.deps.dataDir).digest('hex'), bootId: this.bootId, ready: this.ready });
+    }));
+
     // 扩展:磁盘上的包对照启动时的加载结果。装卸只改磁盘,加载要重启进程。
-    app.get('/api/extensions', wrap((_req, res) => {
+    app.get('/api/extensions', wrap((req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
-      res.json(src.list());
+      res.json(src.list(this.languageOf(req)));
     }));
 
     app.get('/api/extensions/updates', wrap(async (_req, res) => {
@@ -1729,7 +1758,8 @@ export class WebApp {
         return;
       }
       try {
-        res.json({ hits: await src.search(kind) });
+        const hits = await src.search(kind);
+        res.json({ hits, partial: src.searchPartial?.(kind) ?? false });
       } catch (err) {
         res.status(502).json({ error: `npm 搜索失败: ${String(err)}` });
       }
@@ -1741,11 +1771,30 @@ export class WebApp {
       const name = strParam(req.query.name)?.trim();
       if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
       try {
-        res.json(await src.packageInfo(name));
+        res.json(await src.packageInfo(name, strParam(req.query.version)?.trim() || undefined));
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         // 包名不合法是请求的问题,其余当成 registry 那一头的问题
         res.status(msg.includes('包名') ? 400 : 502).json({ error: msg });
+      }
+    }));
+
+    app.post('/api/extensions/check', express.json(), wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.check) { res.status(503).json({ error: '扩展检查不可用' }); return; }
+      const body = (req.body ?? {}) as { target?: { name?: unknown; version?: unknown; path?: unknown }; kind?: unknown };
+      const target: ExtensionInstallTarget | null = typeof body.target?.path === 'string' && body.target.path.trim()
+        ? { path: body.target.path }
+        : typeof body.target?.name === 'string' && body.target.name.trim()
+          ? { name: body.target.name, ...(typeof body.target.version === 'string' && body.target.version.trim() ? { version: body.target.version } : {}) }
+          : null;
+      const kind = body.kind;
+      if (!target) { res.status(400).json({ error: '缺少包名或路径' }); return; }
+      if (kind !== undefined && kind !== 'world' && kind !== 'provider' && kind !== 'bot') { res.status(400).json({ error: `kind 只能是 world、provider 或 bot,现在是 ${String(kind)}` }); return; }
+      try {
+        res.json(await src.check(target, kind));
+      } catch (err) {
+        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
       }
     }));
 

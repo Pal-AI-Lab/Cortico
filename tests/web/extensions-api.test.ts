@@ -46,8 +46,13 @@ beforeAll(async () => {
         return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: 1, dependents: 0, links: {}, installed: false, ...(kind ? { kind } : {}) }];
       },
       updates: async () => ({ updates: [{ name: 'a', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [] }),
-      packageInfo: async (name) => {
-        asked.push(name);
+      searchPartial: (kind) => kind === 'bot',
+      check: async (target, kind) => {
+        if ('name' in target && target.name === 'wrong-kind') throw new Error('扩展实际类型为 provider，请切换到对应分类。');
+        return { name: 'name' in target ? target.name : 'local', version: '1.0.0', kind: kind ?? 'world' };
+      },
+      packageInfo: async (name, version) => {
+        asked.push(version ? `${name}@${version}` : name);
         if (name === 'bad name') throw new Error('不是合法的 npm 包名: bad name');
         if (name === 'gone') throw new Error('registry 没有给出 gone 的 latest 版本');
         return {
@@ -160,5 +165,34 @@ describe('/api/extensions', () => {
     } finally {
       await bare.stop();
     }
+  });
+});
+
+describe('安装前检查、搜索是否不全与进程生命周期', () => {
+  it('搜索回复带 partial;包详情可指定版本', async () => {
+    expect((await get('/api/extensions/search?kind=bot')).body.partial).toBe(true);
+    expect((await get('/api/extensions/search?kind=world')).body.partial).toBe(false);
+    asked.length = 0;
+    await get('/api/extensions/package?name=tagged&version=next');
+    expect(asked).toEqual(['tagged@next']);
+  });
+
+  it('check:目标与类别透传;依赖拒绝是 400 带原话;缺目标与类别不认各自 400', async () => {
+    const ok = await post('/api/extensions/check', { target: { name: 'example', version: '1.0.0' }, kind: 'bot' });
+    expect(ok.body).toEqual({ name: 'example', version: '1.0.0', kind: 'bot' });
+    const refused = await post('/api/extensions/check', { target: { name: 'wrong-kind' }, kind: 'world' });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toContain('provider');
+    expect((await post('/api/extensions/check', { kind: 'world' })).status).toBe(400);
+    expect((await post('/api/extensions/check', { target: { path: 1 } })).status).toBe(400);
+    expect((await post('/api/extensions/check', { target: { name: 'example' }, kind: 'persona' })).status).toBe(400);
+  });
+
+  it('lifecycle:bootId 与 deployment 在进程内不变,markReady 之后 ready', async () => {
+    const before = await get('/api/run/lifecycle');
+    app.markReady();
+    const after = await get('/api/run/lifecycle');
+    expect(before.body.ready).toBe(false);
+    expect(after.body).toMatchObject({ bootId: before.body.bootId, deployment: before.body.deployment, ready: true });
   });
 });

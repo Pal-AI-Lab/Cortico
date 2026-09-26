@@ -32,13 +32,17 @@ export const modelsPanel: ConsolePanel = {
     let searchNote = '';
     let chosen: { repo: string; files: HfFile[] } | null = null;
     let lastSnapshot = '';
+    let actionTarget: string | null = null;
 
-    async function act(method: string, extra: Record<string, unknown> = {}): Promise<void> {
+    async function act(method: string, extra: Record<string, unknown> = {}, target = method): Promise<void> {
+      actionTarget = target;
       message.textContent = '';
+      message.classList.remove('bad');
       try {
         await ctx.invoke(method, [{ name, ...extra }]);
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
       }
       await load(true);
     }
@@ -61,10 +65,15 @@ export const modelsPanel: ConsolePanel = {
     }
 
     async function showFiles(repo: string): Promise<void> {
+      actionTarget = 'files:' + repo;
+      message.textContent = '';
+      message.classList.remove('bad');
       try {
         chosen = { repo, files: (await ctx.invoke<{ files: HfFile[] }>('files', [{ name, repo }])).files };
       } catch (error) {
         message.textContent = String(error);
+        message.classList.add('bad');
+        await load(true);
         return;
       }
       await load(true);
@@ -79,19 +88,21 @@ export const modelsPanel: ConsolePanel = {
       });
       input.setAttribute('aria-label', S.search);
       bar.append(input, ui.button(S.search, { onClick: () => void search(input.value) }));
+      if (searchNote) bar.append(ui.msgline(searchNote, repos?.length === 0 && searchNote !== S.noRepos));
       body.append(ui.field(S.search, bar));
       if (repos === null) return;
-      if (searchNote) body.append(ui.msgline(searchNote, repos.length === 0 && searchNote !== S.noRepos));
       if (repos.length) {
         const table = ui.table({ head: [S.repo, S.downloads, S.likes, S.updated, ''] });
         for (const repo of repos) {
           const open = ui.button(S.showFiles, { size: 'sm', onClick: () => void showFiles(repo.id) });
+          const actions = ui.rowbar(); actions.append(open);
+          if (actionTarget === 'files:' + repo.id) actions.append(message);
           table.addRow([
             { text: repo.id, cls: 'mono' },
             ui.fmt.count(repo.downloads),
             ui.fmt.count(repo.likes),
             repo.updatedAt ? repo.updatedAt.slice(0, 10) : '',
-            open,
+            actions,
           ]);
         }
         body.append(table.el);
@@ -101,13 +112,15 @@ export const modelsPanel: ConsolePanel = {
       const files = ui.table({ head: [S.file, S.size, S.tag, ''] });
       if (chosen.files.length === 0) files.clear(S.noFiles);
       for (const file of chosen.files) {
-        const pull = ui.button(S.pull, { size: 'sm', variant: 'primary', onClick: () => void act('pull', { model: file.pull }) });
+        const pull = ui.button(S.pull, { size: 'sm', variant: 'primary', onClick: () => void act('pull', { model: file.pull }, 'file-pull:' + file.pull) });
         pull.title = file.pull;
+        const actions = ui.rowbar(); actions.append(pull);
+        if (actionTarget === 'file-pull:' + file.pull) actions.append(message);
         files.addRow([
           { text: file.name, cls: 'mono' },
           file.bytes === null ? '' : bytes(file.bytes),
           { text: file.tag ?? '', cls: 'mono' },
-          pull,
+          actions,
         ]);
       }
       body.append(files.el);
@@ -119,7 +132,9 @@ export const modelsPanel: ConsolePanel = {
         { k: S.localDir, v: state.localModelsDir },
       ]));
       if (!state.reachable) {
-        body.append(ui.placeholder(S.serverDown));
+        const unavailable = ui.msgline(S.serverDown, true);
+        unavailable.classList.add('connection-model-error');
+        body.append(unavailable);
         return;
       }
       const bar = ui.rowbar();
@@ -134,13 +149,14 @@ export const modelsPanel: ConsolePanel = {
         const model = value.trim();
         if (!model) return;
         draft = '';
-        await act('pull', { model });
+        await act('pull', { model }, 'pull-main');
       };
       bar.append(
         pull,
         ui.button(S.pull, { variant: 'primary', onClick: () => void submit(pull.value) }),
         ui.button(S.reload, { onClick: () => void act('reload') }),
       );
+      if (actionTarget === 'pull-main' || actionTarget === 'reload') bar.append(message);
       body.append(ui.field(S.pull, bar));
       const table = ui.table({ head: [S.modelId, S.modelStatus, S.modality, S.path, S.actions] });
       if (state.models.length === 0) table.clear(S.noModels);
@@ -158,16 +174,17 @@ export const modelsPanel: ConsolePanel = {
         }
         const actions = ui.rowbar();
         if (model.status === 'downloading')
-          actions.append(ui.button(S.cancel, { size: 'sm', onClick: () => void act('cancel', { model: model.id }) }));
+          actions.append(ui.button(S.cancel, { size: 'sm', onClick: () => void act('cancel', { model: model.id }, 'cancel:' + model.id) }));
         else if (model.status === 'loaded' || model.status === 'sleeping')
-          actions.append(ui.button(S.unload, { size: 'sm', onClick: () => void act('unload', { model: model.id }) }));
+          actions.append(ui.button(S.unload, { size: 'sm', onClick: () => void act('unload', { model: model.id }, 'unload:' + model.id) }));
         else if (model.status === 'unloaded' || model.status === 'failed')
-          actions.append(ui.button(S.load, { size: 'sm', onClick: () => void act('load', { model: model.id }) }));
+          actions.append(ui.button(S.load, { size: 'sm', onClick: () => void act('load', { model: model.id }, 'load:' + model.id) }));
         if (model.status !== 'downloading') {
-          const use = ui.button(S.use, { size: 'sm', onClick: () => void act('use', { model: model.id }) });
+          const use = ui.button(S.use, { size: 'sm', onClick: () => void act('use', { model: model.id }, 'use:' + model.id) });
           use.title = S.useTitle;
           actions.append(use);
         }
+        if (['cancel', 'unload', 'load', 'use'].some(method => actionTarget === method + ':' + model.id)) actions.append(message);
         table.addRow([
           { text: model.id, cls: 'mono' },
           status,
@@ -185,7 +202,10 @@ export const modelsPanel: ConsolePanel = {
       try {
         state = await ctx.invoke<ModelsState>('state', [{ name }]);
       } catch (error) {
+        actionTarget = null;
+        root.append(message);
         message.textContent = String(error);
+        message.classList.add('bad');
         return;
       }
       if (ctx.signal.aborted) return;

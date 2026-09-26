@@ -201,13 +201,15 @@ export class WorldAssembly {
   /** 挂载表。与 core 共用同一个数组,激活/停用就地增删。 */
   readonly mounted: World[] = [];
   readonly slots: WorldSlot[] = [];
+  /** 装配拿到的全部定义,构造失败的也在内。 */
+  get definitions(): readonly WorldDefinition<WorldSection>[] { return this.worlds; }
   readonly missing: MissingWorld[] = [];
   private host: WorldMountHost | null = null;
   private readonly cfgPath: string;
 
   constructor(
     private readonly loaded: LoadedConfig<CoreConfig>,
-    worlds: readonly WorldDefinition<WorldSection>[],
+    private readonly worlds: readonly WorldDefinition<WorldSection>[],
     declares: readonly WorldDeclaration[],
   ) {
     this.cfgPath = join(loaded.rootDir, 'config.json');

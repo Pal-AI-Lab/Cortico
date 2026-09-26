@@ -132,6 +132,10 @@ describe('ExtensionManager', () => {
       fetchJson: async (url) => {
         urls.push(url);
         if (opts.packument) return opts.packument;
+        if (!url.includes('/-/v1/search')) {
+          const name = decodeURIComponent(url.split('/').at(-1)!);
+          return { 'dist-tags': { latest: '1.2.0' }, versions: { '1.2.0': { name, version: '1.2.0', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } } } };
+        }
         return {
           objects: [
             { package: { name: 'a-mod', version: '1.0.0', description: 'A', keywords: ['cortico-world'], license: 'MIT', links: { npm: 'https://npm/a', repository: 'git+https://github.com/me/a.git' }, publisher: { username: 'me' } }, downloads: { monthly: 12 }, dependents: '7' },
@@ -227,6 +231,36 @@ describe('ExtensionManager', () => {
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 
+  it('list:本机 package.json 的显示名、作者、许可证与链接随条目给出,启动后新装的包也有', async () => {
+    const meta = {
+      author: { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
+      repository: { url: 'git+https://example.test/org/repo.git' }, bugs: 'https://example.test/issues',
+      cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: '示例 World' },
+    };
+    installFake('described', { body: definitionSource('described'), pkg: meta });
+    const booted = await loadExtensions(root);
+    installFake('fresh', { body: definitionSource('fresh'), pkg: meta });
+    const listed = new ExtensionManager(root, booted).list().extensions;
+    for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)).toMatchObject({
+      author: 'Example author',
+      metadata: {
+        displayName: '示例 World', license: 'MIT', publisher: 'Example author',
+        links: { repository: 'https://example.test/org/repo', homepage: 'https://example.test/home', bugs: 'https://example.test/issues' },
+      },
+    });
+  });
+
+  it('list:随框架提供的条目排在已装包之后;decorate 作用在每一条上', async () => {
+    installFake('mounted-world', { body: definitionSource('mounted-world') });
+    installFake('parked-world', { body: definitionSource('parked-world') });
+    const booted = await loadExtensions(root);
+    const builtin = { name: 'builtin:world:example', spec: 'builtin', version: '1.0.0', consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const };
+    const mgr = new ExtensionManager(root, booted, { builtins: () => [builtin], decorate: (item) => ({ ...item, enabled: item.worldId === 'mounted-world' }) });
+    const extensions = mgr.list().extensions;
+    expect(extensions.at(-1)).toEqual({ ...builtin, enabled: false });
+    expect(Object.fromEntries(extensions.filter((p) => !p.builtin).map((p) => [p.name, p.enabled]))).toEqual({ 'mounted-world': true, 'parked-world': false });
+  });
+
   it('list:依赖范围未变但磁盘包版本变化时待重启', async () => {
     installFake('in-range', { body: definitionSource('in-range') });
     const booted = await loadExtensions(root);
@@ -278,7 +312,35 @@ describe('ExtensionManager', () => {
       expect(urls.map((u) => u.match(/from=\d+/)?.[0])).toEqual(['from=0', 'from=250', 'from=500', 'from=750']);
       // 每页是同一批名字:去重之后只剩一页
       expect(hits).toHaveLength(250);
+      expect(mgr.searchPartial()).toBe(true);
     });
+  });
+
+  it('search:最后一页没取满就不算结果不全', async () => {
+    const { mgr } = manager();
+    await mgr.search();
+    expect(mgr.searchPartial()).toBe(false);
+  });
+
+  it('packageInfo:指定 dist-tag 或版本号时读那一版', async () => {
+    const version = (v: string) => ({ name: 'tagged', version: v, type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: `Tagged ${v}` } });
+    const { mgr } = manager({}, { packument: { 'dist-tags': { latest: '1.0.0', next: '2.0.0-rc.1' }, versions: { '1.0.0': version('1.0.0'), '2.0.0-rc.1': version('2.0.0-rc.1') } } });
+    expect(await mgr.packageInfo('tagged', 'next')).toMatchObject({ version: '2.0.0-rc.1', displayName: 'Tagged 2.0.0-rc.1' });
+    expect((await mgr.packageInfo('tagged', '1.0.0')).version).toBe('1.0.0');
+    await expect(mgr.packageInfo('tagged', '9.9.9')).rejects.toThrow('9.9.9');
+  });
+
+  it('check:只读 manifest;类别不符、声明不合格与目录缺失各自拒绝,一次 pnpm 都不起', async () => {
+    const { mgr, runs } = manager();
+    expect(await mgr.check({ name: 'remote-world', version: '1.2.0' }, 'world')).toEqual({ name: 'remote-world', version: '1.2.0', kind: 'world' });
+    await expect(mgr.check({ name: 'remote-world' }, 'provider')).rejects.toThrow('world');
+    const local = join(root, 'local-world'); mkdirSync(local);
+    writeFileSync(join(local, 'package.json'), JSON.stringify({ name: 'local-world', version: '0.1.0', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } }));
+    expect(await mgr.check({ path: local })).toEqual({ name: 'local-world', version: '0.1.0', kind: 'world' });
+    writeFileSync(join(local, 'package.json'), JSON.stringify({ name: 'local-world', version: '0.1.0' }));
+    await expect(mgr.check({ path: local })).rejects.toThrow('cortico');
+    await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('目录不存在');
+    expect(runs).toEqual([]);
   });
 
   it('packageInfo:latest 版本的 cortico 块按本机同一套判据解析,已安装的带上版本范围', async () => {
