@@ -198,6 +198,16 @@ export interface ExtensionInfo {
   worldId?: string;
   label?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
+  /** manifest 的 `cortico.displayName` */
+  displayName?: string;
+  /** package.json 的 author,只取名字 */
+  author?: string;
+  license?: string;
+  links?: { repository?: string; homepage?: string; bugs?: string };
+  /** 随框架提供,不能卸载;`name` 形如 `builtin:<kind>:<id>`,不是 npm 包名 */
+  builtin?: true;
+  /** World:此刻挂载在本进程。其他类别缺席 */
+  mounted?: boolean;
 }
 
 /**
@@ -233,6 +243,8 @@ export interface ExtensionPackageDetail {
   name: string;
   /** dist-tag `latest` 指的版本 */
   version: string;
+  /** latest 版本 manifest 的 `cortico.displayName` */
+  displayName?: string;
   description?: string;
   license?: string;
   keywords?: string[];
@@ -270,7 +282,7 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
-  list(): { dir: string; extensions: ExtensionInfo[] };
+  list(language: Language): { dir: string; extensions: ExtensionInfo[] };
   updates(): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
@@ -1708,10 +1720,10 @@ export class WebApp {
     }));
 
     // 扩展:磁盘上的包对照启动时的加载结果。装卸只改磁盘,加载要重启进程。
-    app.get('/api/extensions', wrap((_req, res) => {
+    app.get('/api/extensions', wrap((req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
-      res.json(src.list());
+      res.json(src.list(this.languageOf(req)));
     }));
 
     app.get('/api/extensions/updates', wrap(async (_req, res) => {

@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
+import type { Language } from './core/language.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -461,10 +462,33 @@ function urlOf(v: { url?: string } | string | undefined): string | undefined {
   return raw && raw.trim() ? raw.trim() : undefined;
 }
 
+/** 本机 package.json 里控制台显示的字段;不联网就能给出。 */
+function localMetadata(pkg: ExtensionPackageJson): Pick<ExtensionInfo, 'displayName' | 'author' | 'license' | 'links'> {
+  const parsed = parseExtensionManifest(pkg);
+  const author = typeof pkg.author === 'string' ? pkg.author : pkg.author?.name;
+  const repository = urlOf(pkg.repository);
+  const bugs = urlOf(pkg.bugs);
+  const links = {
+    ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
+    ...(pkg.homepage ? { homepage: pkg.homepage } : {}),
+    ...(bugs ? { bugs } : {}),
+  };
+  return {
+    ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
+    ...(author ? { author } : {}),
+    ...(pkg.license ? { license: pkg.license } : {}),
+    ...(Object.keys(links).length ? { links } : {}),
+  };
+}
+
 export interface ExtensionManagerOptions {
   run?: PackageManagerRunner;
   registry?: string;
   fetchJson?: (url: string) => Promise<unknown>;
+  /** 随框架提供的 World 与 provider,与已装的包列在一起;不能卸载。 */
+  builtins?: (language: Language) => ExtensionInfo[];
+  /** 这个 World id 此刻是否挂载在本进程;没有 World 装配时缺席。 */
+  worldMounted?: (id: string) => boolean;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -474,6 +498,8 @@ export class ExtensionManager {
   private readonly registry: string;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
+  private readonly builtins?: (language: Language) => ExtensionInfo[];
+  private readonly worldMounted?: (id: string) => boolean;
 
   constructor(
     private readonly repoRoot: string,
@@ -482,6 +508,8 @@ export class ExtensionManager {
   ) {
     this.dir = booted.dir;
     this.run = opts.run ?? runPnpm;
+    this.builtins = opts.builtins;
+    this.worldMounted = opts.worldMounted;
     this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
     this.fetchJson = opts.fetchJson ?? (async (url) => {
       const res = await fetch(url);
@@ -496,22 +524,30 @@ export class ExtensionManager {
   }
 
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
-  list(): { dir: string; extensions: ExtensionInfo[] } {
+  list(language: Language = 'zh'): { dir: string; extensions: ExtensionInfo[] } {
     const onDisk = new Map(readInstalled(this.dir).map((p) => [p.name, p.spec]));
+    const packageAt = (name: string) => readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'));
     const out: ExtensionInfo[] = [];
     for (const r of this.booted.records) {
       const spec = onDisk.get(r.name);
       onDisk.delete(r.name);
-      const installedVersion = spec === undefined ? undefined
-        : readPackageJson(join(this.dir, 'node_modules', ...r.name.split('/'), 'package.json'))?.version ?? null;
+      const pkg = spec === undefined ? null : packageAt(r.name);
+      const installedVersion = spec === undefined ? undefined : pkg?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
         : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
-      out.push({ ...r, ...(spec === undefined ? {} : { installedVersion }), state });
+      const mounted = r.kind === 'world' && r.loaded && r.worldId && this.worldMounted ? this.worldMounted(r.worldId) : undefined;
+      out.push({
+        ...r,
+        ...(pkg ? localMetadata(pkg) : {}),
+        ...(spec === undefined ? {} : { installedVersion }),
+        ...(mounted === undefined ? {} : { mounted }),
+        state,
+      });
     }
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
-      const pkg = readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'));
+      const pkg = packageAt(name);
       const parsed = pkg ? parseExtensionManifest(pkg) : null;
       const manifest = parsed?.ok ? parsed.manifest : null;
       out.push({
@@ -525,9 +561,10 @@ export class ExtensionManager {
         loaded: false,
         state: 'pending-restart',
         ...(pkg?.description ? { description: pkg.description } : {}),
+        ...(pkg ? localMetadata(pkg) : {}),
       });
     }
-    return { dir: this.dir, extensions: out };
+    return { dir: this.dir, extensions: [...out, ...(this.builtins?.(language) ?? [])] };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
@@ -625,6 +662,7 @@ export class ExtensionManager {
     return {
       name,
       version: latest,
+      ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
       ...(v.description ? { description: v.description } : {}),
       ...(v.license ? { license: v.license } : {}),
       ...(v.keywords?.length ? { keywords: v.keywords } : {}),

@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
 import {
+  DISPLAY_NAME_MAX,
   EXTENSION_API_VERSIONS,
   EXTENSION_ASSET_PREFIX,
   EXTENSION_KINDS,
@@ -130,6 +131,22 @@ describe('bot 包', () => {
     expect(mgr.list().extensions.map((e) => e.state)).toEqual(['idle']);
     await mgr.search('bot');
     expect(decodeURIComponent(urls[0])).toContain('keywords:cortico-bot');
+  });
+});
+
+describe('displayName', () => {
+  const pkg = (displayName: unknown) => ({ name: 'x', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName } });
+  it('去掉首尾空白后收下', () => {
+    const parsed = parseExtensionManifest(pkg('  Discord 桥  '));
+    expect(parsed.ok && parsed.manifest.displayName).toBe('Discord 桥');
+  });
+  it('空串、非字符串与超长的只给 warning 并忽略,包照样可装', () => {
+    for (const bad of ['  ', 42, 'x'.repeat(DISPLAY_NAME_MAX + 1)]) {
+      const parsed = parseExtensionManifest(pkg(bad));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.ok && parsed.manifest.displayName).toBeUndefined();
+      expect(parsed.warnings.join('\n')).toContain('displayName');
+    }
   });
 });
 

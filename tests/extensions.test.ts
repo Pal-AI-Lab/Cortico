@@ -227,6 +227,33 @@ describe('ExtensionManager', () => {
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 
+  it('list:本机 package.json 的显示名、作者、许可证与链接随条目给出,启动后新装的包也有', async () => {
+    const meta = {
+      author: { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
+      repository: { url: 'git+https://example.test/org/repo.git' }, bugs: 'https://example.test/issues',
+      cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: '示例 World' },
+    };
+    installFake('described', { body: definitionSource('described'), pkg: meta });
+    const booted = await loadExtensions(root);
+    installFake('fresh', { body: definitionSource('fresh'), pkg: meta });
+    const listed = new ExtensionManager(root, booted).list().extensions;
+    for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)).toMatchObject({
+      displayName: '示例 World', author: 'Example author', license: 'MIT',
+      links: { repository: 'https://example.test/org/repo', homepage: 'https://example.test/home', bugs: 'https://example.test/issues' },
+    });
+  });
+
+  it('list:随框架提供的条目排在已装包之后;已加载的扩展 World 带本进程的挂载状态', async () => {
+    installFake('mounted-world', { body: definitionSource('mounted-world') });
+    installFake('parked-world', { body: definitionSource('parked-world') });
+    const booted = await loadExtensions(root);
+    const builtin = { name: 'builtin:world:example', spec: 'builtin', version: '1.0.0', consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const };
+    const mgr = new ExtensionManager(root, booted, { builtins: () => [builtin], worldMounted: (id) => id === 'mounted-world' });
+    const extensions = mgr.list().extensions;
+    expect(extensions.at(-1)).toEqual(builtin);
+    expect(Object.fromEntries(extensions.filter((p) => !p.builtin).map((p) => [p.name, p.mounted]))).toEqual({ 'mounted-world': true, 'parked-world': false });
+  });
+
   it('list:依赖范围未变但磁盘包版本变化时待重启', async () => {
     installFake('in-range', { body: definitionSource('in-range') });
     const booted = await loadExtensions(root);
