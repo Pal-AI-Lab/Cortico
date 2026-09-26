@@ -20,7 +20,8 @@ import { pick, resolveLanguage, type Language } from './core/language.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
 import { isSupervised, requestRestart, startsPaused } from './boot.ts';
-import { ExtensionManager, type ExtensionSet } from './extensions.ts';
+import { ExtensionManager, packageMetadata, type ExtensionSet } from './extensions.ts';
+import type { ExtensionPackageJson } from './extensions/manifest.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
 import { RESERVED_FRAME_NAMES } from './core/loop.ts';
@@ -701,19 +702,23 @@ async function deriveWorldInfo(
   }));
 }
 
-/**
- * 存储清单在装配期固定；stat/clear 按 key 访问当前实例，以支持定义实例重建。
- */
+/** 内建条目的作者:框架维护者。 */
+const BUILTIN_AUTHOR = 'phantivia';
+
 /** 随框架提供的 World 与 provider 在扩展页的条目;World 的状态取本进程的装配。 */
 export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, language: Language): ExtensionInfo[] {
-  const version = (JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { version?: string }).version ?? null;
-  const common = { spec: 'builtin', version, installedVersion: version, consoleClient: false, builtin: true } as const;
+  const pkg = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as ExtensionPackageJson;
+  const version = pkg.version ?? null;
+  const common = {
+    spec: 'builtin', version, installedVersion: version, consoleClient: false, builtin: true,
+    author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg), location: repoRoot(),
+  } as const;
   const external = new Set(set.worlds.map((world) => world.id));
   const worlds = BUILTIN_WORLDS.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
     const slot = assembly.slots.find((item) => item.id === world.id);
     const missing = assembly.missing.find((item) => item.id === world.id);
     const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: slot?.label ?? world.label };
-    if (slot) return [{ ...base, loaded: true, state: 'loaded', mounted: slot.mounted }];
+    if (slot) return [{ ...base, loaded: true, state: 'loaded' }];
     if (missing) return [{ ...base, loaded: false, state: 'failed', reason: missing.reason(language) }];
     return [];
   });
@@ -727,6 +732,28 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
   });
   return [...worlds, ...providers];
 }
+
+/**
+ * 扩展条目在本进程的运行状态:World 看挂载与对 agent 是否可见,provider 与 bot 看启动时是否加载。
+ * 已卸载的条目不算生效。
+ */
+export function extensionRuntimeState(
+  assembly: WorldAssembly,
+  isWorldVisible: (id: string) => boolean,
+): (item: ExtensionInfo) => ExtensionInfo {
+  return (item) => {
+    if (item.state === 'removed') return { ...item, enabled: false };
+    if (item.kind === 'world' && item.worldId) {
+      const mounted = assembly.slots.some((slot) => slot.id === item.worldId && slot.mounted);
+      return { ...item, enabled: mounted, ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}) };
+    }
+    return { ...item, enabled: item.loaded && item.state === 'loaded' };
+  };
+}
+
+/**
+ * 存储清单在装配期固定；stat/clear 按 key 访问当前实例，以支持定义实例重建。
+ */
 
 function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedStoragePart[] {
   return assembly.slots.flatMap((slot) =>
@@ -1194,7 +1221,7 @@ export function createBot<C extends CoreConfig>(
       },
       ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
         builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
-        worldMounted: (id) => assembly.slots.some((slot) => slot.id === id && slot.mounted),
+        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id)),
       }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
@@ -1267,6 +1294,7 @@ export function createBot<C extends CoreConfig>(
       if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
       await core.start();
+      app?.markReady();
       return { port };
     },
     async stop() {
