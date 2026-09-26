@@ -462,22 +462,30 @@ function urlOf(v: { url?: string } | string | undefined): string | undefined {
   return raw && raw.trim() ? raw.trim() : undefined;
 }
 
-/** 本机 package.json 里控制台显示的字段;不联网就能给出。 */
-function localMetadata(pkg: ExtensionPackageJson): Pick<ExtensionInfo, 'displayName' | 'author' | 'license' | 'links'> {
+/** package.json 的 author,只取名字。 */
+export function packageAuthor(pkg: ExtensionPackageJson): string | undefined {
+  return (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name) || undefined;
+}
+
+/** 本机 package.json 里详情页显示的字段,与 npm 包文档同形;不联网就能给出。 */
+export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPackageDetail> {
   const parsed = parseExtensionManifest(pkg);
-  const author = typeof pkg.author === 'string' ? pkg.author : pkg.author?.name;
   const repository = urlOf(pkg.repository);
   const bugs = urlOf(pkg.bugs);
-  const links = {
-    ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
-    ...(pkg.homepage ? { homepage: pkg.homepage } : {}),
-    ...(bugs ? { bugs } : {}),
-  };
+  const author = packageAuthor(pkg);
   return {
     ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
-    ...(author ? { author } : {}),
+    ...(pkg.description ? { description: pkg.description } : {}),
     ...(pkg.license ? { license: pkg.license } : {}),
-    ...(Object.keys(links).length ? { links } : {}),
+    ...(pkg.engines?.node ? { engines: pkg.engines.node } : {}),
+    dependencies: Object.keys(pkg.dependencies ?? {}),
+    ...(pkg.keywords?.length ? { keywords: pkg.keywords } : {}),
+    ...(author ? { publisher: author } : {}),
+    links: {
+      ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
+      ...(pkg.homepage ? { homepage: pkg.homepage } : {}),
+      ...(bugs ? { bugs } : {}),
+    },
   };
 }
 
@@ -487,8 +495,8 @@ export interface ExtensionManagerOptions {
   fetchJson?: (url: string) => Promise<unknown>;
   /** 随框架提供的 World 与 provider,与已装的包列在一起;不能卸载。 */
   builtins?: (language: Language) => ExtensionInfo[];
-  /** 这个 World id 此刻是否挂载在本进程;没有 World 装配时缺席。 */
-  worldMounted?: (id: string) => boolean;
+  /** 补上本进程的运行状态(`enabled`、`hidden`);已装包与内建条目都经过它。 */
+  decorate?: (item: ExtensionInfo) => ExtensionInfo;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -499,7 +507,7 @@ export class ExtensionManager {
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
   private readonly builtins?: (language: Language) => ExtensionInfo[];
-  private readonly worldMounted?: (id: string) => boolean;
+  private readonly decorate?: (item: ExtensionInfo) => ExtensionInfo;
 
   constructor(
     private readonly repoRoot: string,
@@ -509,7 +517,7 @@ export class ExtensionManager {
     this.dir = booted.dir;
     this.run = opts.run ?? runPnpm;
     this.builtins = opts.builtins;
-    this.worldMounted = opts.worldMounted;
+    this.decorate = opts.decorate;
     this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
     this.fetchJson = opts.fetchJson ?? (async (url) => {
       const res = await fetch(url);
@@ -536,12 +544,12 @@ export class ExtensionManager {
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
         : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
-      const mounted = r.kind === 'world' && r.loaded && r.worldId && this.worldMounted ? this.worldMounted(r.worldId) : undefined;
+      const author = pkg ? packageAuthor(pkg) : undefined;
       out.push({
         ...r,
-        ...(pkg ? localMetadata(pkg) : {}),
+        ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
+        ...(author ? { author } : {}),
         ...(spec === undefined ? {} : { installedVersion }),
-        ...(mounted === undefined ? {} : { mounted }),
         state,
       });
     }
@@ -561,10 +569,12 @@ export class ExtensionManager {
         loaded: false,
         state: 'pending-restart',
         ...(pkg?.description ? { description: pkg.description } : {}),
-        ...(pkg ? localMetadata(pkg) : {}),
+        ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
+        ...(pkg && packageAuthor(pkg) ? { author: packageAuthor(pkg) } : {}),
       });
     }
-    return { dir: this.dir, extensions: [...out, ...(this.builtins?.(language) ?? [])] };
+    const all = [...out, ...(this.builtins?.(language) ?? [])];
+    return { dir: this.dir, extensions: this.decorate ? all.map(this.decorate) : all };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
@@ -597,7 +607,12 @@ export class ExtensionManager {
    * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
    * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
    */
+  private readonly partialSearch = new Map<ExtensionKind, boolean>();
+  /** 最近一次这一类的搜索翻到了上限:后面可能还有包没列出来。 */
+  searchPartial(kind: ExtensionKind = 'world'): boolean { return this.partialSearch.get(kind) ?? false; }
+
   async search(kind: ExtensionKind = 'world'): Promise<ExtensionSearchHit[]> {
+    this.partialSearch.set(kind, false);
     const keyword = EXTENSION_KEYWORDS[kind];
     const installed = new Set(readInstalled(this.dir).map((p) => p.name));
     const hits: ExtensionSearchHit[] = [];
@@ -633,6 +648,7 @@ export class ExtensionManager {
         });
       }
       if (objects.length < SEARCH_PAGE_SIZE) break;
+      if (from + SEARCH_PAGE_SIZE >= SEARCH_MAX_HITS) this.partialSearch.set(kind, true);
     }
     return hits;
   }
@@ -642,12 +658,12 @@ export class ExtensionManager {
    * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
    * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
    */
-  async packageInfo(name: string): Promise<ExtensionPackageDetail> {
+  async packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail> {
     if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
     const doc = (await this.fetchJson(`${this.registry}/${name.replace('/', '%2F')}`)) as RegistryPackument;
-    const latest = doc['dist-tags']?.latest;
+    const latest = version ? doc['dist-tags']?.[version] ?? version : doc['dist-tags']?.latest;
     const v = latest ? doc.versions?.[latest] : undefined;
-    if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 latest 版本`);
+    if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
 
     const parsed = parseExtensionManifest(v);
     const times = Object.entries(doc.time ?? {}).filter(([k]) => k !== 'created' && k !== 'modified');
@@ -690,6 +706,27 @@ export class ExtensionManager {
       installed: spec !== undefined,
       ...(spec !== undefined ? { installedSpec: spec } : {}),
     };
+  }
+
+  /**
+   * 装之前看一眼声明:本机目录读 package.json,npm 包读包文档。只解析 manifest,不导入包代码;
+   * `expectedKind` 给了就要求类别一致。
+   */
+  async check(target: ExtensionInstallTarget, expectedKind?: ExtensionKind): Promise<{ name: string; version: string; kind: ExtensionKind }> {
+    const spec = this.installSpec(target);
+    if ('path' in target) {
+      const pkg = readPackageJson(join(spec, 'package.json'));
+      const parsed = pkg ? parseExtensionManifest(pkg) : null;
+      if (!pkg || !parsed) throw new Error(`目录里没有 package.json: ${spec}`);
+      if (!parsed.ok) throw new Error(parsed.reasons.join('\n'));
+      if (!pkg.name || !PACKAGE_NAME.test(pkg.name) || !pkg.version) throw new Error('扩展缺少有效包名或版本。');
+      if (expectedKind && parsed.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${parsed.manifest.kind}，请切换到对应分类。`);
+      return { name: pkg.name, version: pkg.version, kind: parsed.manifest.kind };
+    }
+    const info = await this.packageInfo(target.name.trim(), target.version?.trim() || undefined);
+    if (!info.manifest || info.problems?.length) throw new Error(info.problems?.join('\n') ?? '扩展声明不可用。');
+    if (expectedKind && info.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${info.manifest.kind}，请切换到对应分类。`);
+    return { name: info.name, version: info.version, kind: info.manifest.kind };
   }
 
   async install(target: ExtensionInstallTarget): Promise<string> {
