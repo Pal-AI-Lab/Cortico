@@ -517,9 +517,9 @@ describe('扩展失败隔离', () => {
     // 那一格：错误卡，写着面板名与原因
     expect(stage.slotText()).toContain('第一格');
     expect(stage.slotText()).toContain('扩展在 mount 里炸了');
-    // 页头照常：provider 的名字、id 都还在
+    // 页头保留可读名称，不显示内部标识
     expect(stage.chrome()?.textContent).toContain('A World');
-    expect(stage.chrome()?.textContent).toContain('world:a');
+    expect(stage.chrome()?.textContent).not.toContain('world:a');
     // 框架拿到了诊断，不是静默吞掉
     expect(stage.errors).toHaveLength(1);
     // 结构没塌：页头 + 面板槽两个容器都在
