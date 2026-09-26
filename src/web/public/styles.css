@@ -1875,6 +1875,7 @@
 .connection-status[data-tone="error"], .connection-secondary[data-tone="error"] { color:var(--danger); }
 .connection-status[data-tone="draft"], .connection-secondary[data-tone="draft"] { color:var(--foreground); }
 /* Extension categories own their scrolling, pagination and action feedback. */
+.brand .wordmark { height: 36px; }
 .featureslot-extensions { scroll-padding-top: 76px; }
 .featureslot-extensions > .featureintro { position: static; margin-bottom: 16px; }
 .featureslot-extensions .featureintro .pagedesc { max-width: none; }

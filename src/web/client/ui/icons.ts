@@ -145,7 +145,7 @@ function shapesInto(doc: Document, parent: SVGElement, shapes: readonly Shape[])
 
 export function wordmark(doc: Document, cls = 'wordmark'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
-  svg.setAttribute('viewBox', '28 32 594 156');
+  svg.setAttribute('viewBox', '28 32 614 156');
   svg.setAttribute('fill', 'none');
   svg.setAttribute('stroke', 'currentColor');
   svg.setAttribute('stroke-linecap', 'round');
@@ -157,6 +157,7 @@ export function wordmark(doc: Document, cls = 'wordmark'): SVGSVGElement {
   shapesInto(doc, mark, WORDMARK_MARK);
   const text = doc.createElementNS(SVG_NS, 'g');
   text.setAttribute('stroke-width', '16');
+  text.setAttribute('transform', 'translate(20 0)');
   shapesInto(doc, text, WORDMARK_TEXT);
   const dot = doc.createElementNS(SVG_NS, 'circle');
   for (const [key, value] of Object.entries({ cx: '459', cy: '58', r: '9', fill: 'currentColor', stroke: 'none' })) {
@@ -164,7 +165,7 @@ export function wordmark(doc: Document, cls = 'wordmark'): SVGSVGElement {
   }
   svg.appendChild(mark);
   svg.appendChild(text);
-  svg.appendChild(dot);
+  text.appendChild(dot);
   return svg;
 }
 
