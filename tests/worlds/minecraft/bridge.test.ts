@@ -15,6 +15,7 @@ import { Bridge } from '../../../src/worlds/minecraft/bridge.ts';
 import { installPathfinderPerf, type SiteZone } from '../../../src/worlds/minecraft/pathfinder-perf.ts';
 import { MinecraftLog } from '../../../src/worlds/minecraft/log.ts';
 import { nullLogger } from '../../../src/core/util.ts';
+import { mapStateOf } from '../../../src/worlds/minecraft/map-view.ts';
 
 // 禁垫区判在补丁装上的 getNeighbors 里;bridge 真跑时由 connect() 装
 installPathfinderPerf();
@@ -974,5 +975,111 @@ describe('bridge 死亡重生通知', () => {
     await bridge.stop();
     bot.emit('spawn');
     expect(events).toEqual(['spawn']);
+  });
+});
+
+describe('Bridge 地图包', () => {
+  let spy: { mockRestore(): void };
+  let bot: EventEmitter & Record<string, unknown>;
+  beforeEach(() => {
+    spy = vi.spyOn(mineflayer, 'createBot').mockImplementation(() => {
+      bot = new EventEmitter() as EventEmitter & Record<string, unknown>;
+      bot._client = new EventEmitter();
+      bot.loadPlugin = () => {};
+      bot.quit = () => {};
+      return bot as never;
+    });
+  });
+  afterEach(() => spy.mockRestore());
+
+  it('登录后 spawn 之前推来的整张地图画面也收下', async () => {
+    const bridge = new Bridge({
+      host: '127.0.0.1', port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
+      log: nullLogger(), onSpawn: () => {}, onDisconnect: () => {},
+    });
+    bridge.start();
+    // 服务端给包里每张地图推一次整张画面,这一刻还没有 spawn
+    (bot._client as EventEmitter).emit('map', {
+      itemDamage: 5, scale: 0, locked: false, icons: [],
+      columns: 128, rows: 128, x: 0, y: 0, data: new Uint8Array(128 * 128).fill(4 * 7 + 1),
+    });
+    expect(mapStateOf(bot as never, 5)?.painted).toBe(true);
+    await bridge.stop();
+  });
+});
+
+describe('bridge 水路代价', () => {
+  /** 石头地面到 y=63;x∈[-half, half]、z∈[2, 10] 挖成两格深的水池,池边一圈是干地 */
+  function poolWorld(half: number) {
+    const world = makeWorld();
+    for (let x = -half; x <= half; x++) {
+      for (let z = 2; z <= 10; z++) {
+        for (let y = 62; y <= 63; y++) world.setBlockStateId(new Vec3(x, y, z), WATER);
+      }
+    }
+    return world;
+  }
+
+  /** 包里没有垫脚块:过不去就只剩游和绕 */
+  function bagless(world: unknown) {
+    const bot = makeBot(world);
+    const items = [{ type: registry.itemsByName.wooden_pickaxe.id as number, count: 1, name: 'wooden_pickaxe', nbt: null, metadata: 0 }];
+    bot.inventory = { items: () => items };
+    return bot;
+  }
+
+  /** 从 (0,64,0) 到 (0,64,12) 算一条路,返回路上泡在水里的路点数 */
+  function wetSteps(bot: Record<string, unknown>, movements: Movements): { status: string; wet: number; len: number } {
+    (movements as unknown as { clearCollisionIndex(): void }).clearCollisionIndex();
+    (movements as unknown as { updateCollisionIndex(): void }).updateCollisionIndex();
+    const remaining = (movements as unknown as { countScaffoldingItems(): number }).countScaffoldingItems();
+    const start = new (Move as never as new (...a: unknown[]) => unknown)(0, 64, 0, remaining, 0);
+    const astar = new (AStar as never as new (...a: unknown[]) => {
+      compute(): { status: string; path: Array<{ x: number; y: number; z: number }> };
+    })(start, movements, new goals.GoalNear(0, 64, 12, 0), 5_000, 60, -1);
+    let res = astar.compute();
+    while (res.status === 'partial') res = astar.compute();
+    const blockAt = bot.blockAt as (p: unknown) => { name: string } | null;
+    const wet = res.path.filter((p) => blockAt(new Vec3(p.x, p.y, p.z))?.name === 'water'
+      || blockAt(new Vec3(p.x, p.y - 1, p.z))?.name === 'water').length;
+    return { status: res.status, wet, len: res.path.length };
+  }
+
+  /** 返回整条路上相邻两点之间最大的一次下降 */
+  function maxDrop(bot: Record<string, unknown>, movements: Movements, from: [number, number, number], to: [number, number, number]) {
+    (movements as unknown as { clearCollisionIndex(): void }).clearCollisionIndex();
+    (movements as unknown as { updateCollisionIndex(): void }).updateCollisionIndex();
+    const start = new (Move as never as new (...a: unknown[]) => unknown)(...from, 0, 0);
+    const astar = new (AStar as never as new (...a: unknown[]) => {
+      compute(): { status: string; path: Array<{ x: number; y: number; z: number }> };
+    })(start, movements, new goals.GoalNear(...to, 0), 5_000, 60, -1);
+    let res = astar.compute();
+    while (res.status === 'partial') res = astar.compute();
+    let drop = 0; let y = from[1];
+    for (const p of res.path) { drop = Math.max(drop, y - p.y); y = p.y; }
+    return { status: res.status, drop, len: res.path.length };
+  }
+
+  it('包里没垫脚块、池子 13 格宽:绕着岸走,不从水里游过去', () => {
+    const bot = bagless(poolWorld(6));
+    const m = new Movements(bot as never);
+    tune(makeBridge(['cobblestone'], []), bot, m);
+    const r = wetSteps(bot, m);
+    expect(r.status).toBe('success');
+    expect(r.wet).toBe(0);
+  });
+
+  it('往水里跳也受落差上限:从 6 格高的台子下水边,走台阶不直接跳', () => {
+    const world = makeWorld();
+    // z ≤ -1 是高台(实心到 y=69);x=12 那一列是往下的台阶;z∈[0,8] x∈[-8,8] 是水池
+    for (let x = -8; x < 16; x++) for (let z = -8; z <= -1; z++) for (let y = 64; y <= 69; y++) world.setBlockStateId(new Vec3(x, y, z), STONE);
+    for (let k = 0; k < 6; k++) for (let y = 64; y <= 68 - k; y++) world.setBlockStateId(new Vec3(12, y, k), STONE);
+    for (let x = -8; x <= 8; x++) for (let z = 0; z <= 8; z++) for (let y = 62; y <= 63; y++) world.setBlockStateId(new Vec3(x, y, z), WATER);
+    const bot = bagless(world);
+    const m = new Movements(bot as never);
+    tune(makeBridge(['cobblestone'], []), bot, m);
+    const r = maxDrop(bot, m, [0, 70, -2], [0, 64, 12]);
+    expect(r.status).toBe('success');
+    expect(r.drop).toBeLessThanOrEqual(m.maxDropDown);
   });
 });
