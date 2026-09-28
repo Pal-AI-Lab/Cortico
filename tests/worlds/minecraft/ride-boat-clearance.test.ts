@@ -1,7 +1,5 @@
 /**
  * 驾船每一步先按船身包围盒和骑手眼睛那一格自查。
- * 0923 直播:船贴着自己搭的圆石垫子开,船身蹭到垫子边,服务端不记日志地一次次把船拽回
- * (20 秒纠了 330 次);人头钻进垫子底下闷着掉血。几何照那一场的读数摆。
  */
 import { Vec3 as V } from 'vec3';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,7 +15,7 @@ afterEach(() => {
 });
 
 const BOAT = { width: 1.375, height: 0.5625 };
-/** 船浮在 62 号水格上时的 y(那一场的实测) */
+/** 船浮在 62 号水格上时的 y */
 const FLOAT_Y = 62.52;
 
 type Solid = Map<string, string>;
@@ -35,7 +33,7 @@ function world(solid: Solid) {
   };
 }
 
-/** 那一场探查读到的垫子:水面上一格两块、上两格一片 */
+/** 圆石垫子:水面上一格两块、上两格一片 */
 function padOf(): Solid {
   const s: Solid = new Map();
   for (const [x, z] of [[-411, 155], [-410, 155]]) s.set(key(x, 63, z), 'cobblestone');
@@ -70,7 +68,7 @@ async function drive(bot: unknown, to: { x: number; y: number; z: number }): Pro
 }
 
 describe('rideObstacle', () => {
-  it('那一场卡住的位置:往西头进垫子,往北船身蹭垫子边', () => {
+  it('贴着垫子的位置:往西头进垫子,往北船身蹭垫子边', () => {
     const { bot } = rideBot(padOf(), new V(-411.09, FLOAT_Y, 156.69));
     expect(rideObstacle(bot as never, -411.39, FLOAT_Y, 156.69, BOAT))
       .toEqual({ cell: { x: -412, y: 64, z: 156 }, name: 'cobblestone', kind: 'head' });
@@ -87,7 +85,7 @@ describe('rideObstacle', () => {
 });
 
 describe('rideDrive 驾船自查', () => {
-  it('那一场的起点和目标:当场停下,两格都报出来,一个包都不白发', async () => {
+  it('从贴着垫子的位置往西开:当场停下,两格都报出来,一个包都不白发', async () => {
     const { bot, writes } = rideBot(padOf(), new V(-411.09, FLOAT_Y, 156.69));
     const out = await drive(bot, { x: -440, y: 63, z: 150 });
     expect(out).toBeInstanceOf(SkillBlocked);
@@ -98,7 +96,7 @@ describe('rideDrive 驾船自查', () => {
     expect(writes).toHaveLength(0);
   });
 
-  it('从东边开过来(那一场放船的地方):绕过垫子开到,船身和人头一次都没进实心格', async () => {
+  it('从垫子东边开过来:绕过垫子开到,船身和人头一次都没进实心格', async () => {
     const pad = padOf();
     const { bot, writes } = rideBot(pad, new V(-403.5, FLOAT_Y, 158.5));
     const out = await drive(bot, { x: -440, y: 63, z: 150 });
@@ -114,7 +112,6 @@ describe('rideDrive 驾船自查', () => {
     for (let x = -2; x <= 30; x += 1) wall.set(key(x, 63, 3), 'stone');
     const { bot } = rideBot(wall, new V(0.5, FLOAT_Y, 1.5));
     const out = await drive(bot, { x: 20, y: 63, z: 9 });
-    // 墙挡着过不去 z=3:直走被挡就只走 x,最后停在墙边,报的是墙
     expect(out).toBeInstanceOf(SkillBlocked);
     expect((out as SkillBlocked).message).toContain('是石头,挡着船的身子');
     expect(bot.vehicle).toBeNull();

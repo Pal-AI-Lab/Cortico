@@ -1400,7 +1400,6 @@ export function rideObstacleText(hits: readonly RideObstacle[], zhV: string): st
  * Mineflayer 无载具物理，此处每 tick 小步移动并转向；仅转头不能驱动载具。
  *
  * 服务端对「落点和方块重叠」的包不记日志,只回一个 vehicle_move 把坐骑拽回原处。
- * 所以每一步先按坐骑包围盒自己查:直走被挡就试只走 x、只走 z(贴墙滑),都挡就当场停。
  */
 export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<string> {
   const vehicle = vehicleOf(bot);
@@ -1462,7 +1461,6 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
         mark = { x: pos.x, z: pos.z, at: Date.now() };
       }
       const along = Math.min(step, dist);
-      // 直走、只走 x、只走 z:取第一个不挡的;三种都朝目标靠近
       const tries = [
         { mx: (dx / dist) * along, mz: (dz / dist) * along },
         { mx: Math.sign(dx) * Math.min(step, Math.abs(dx)), mz: 0 },

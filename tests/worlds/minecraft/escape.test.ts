@@ -350,7 +350,6 @@ describe('runEscape', () => {
   });
 
   it('传送前先来了一个别的强制位置包:接着等,传送落地后报到达', async () => {
-    // 0923 直播:mc_stop 撤寻路时服务端回了一个原地纠偏包,旧实现据此就读位置,报了「没能传送」
     const anchor = spawnAt({ x: -150, y: 70, z: 100 }, 'overworld', 'mark', '叹息之墙');
     const position = { x: -410.8, y: 63.1, z: 156.7 };
     let calls = 0;
