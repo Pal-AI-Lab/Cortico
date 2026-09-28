@@ -32,6 +32,19 @@ export type EngineRequest =
   | { kind: 'render-deferred'; type: string }
   | { kind: 'shutdown' };
 
+/**
+ * 工具回执过 IPC 的形状:IPC 走 JSON,图片字节在子进程转成 base64,主进程还原成 BlobInput。
+ * 已有句柄的附件原样过。
+ */
+export interface IpcToolOutcome {
+  text: string;
+  failed?: true;
+  blobs?: Array<
+    | { b64: string; mime: string; name?: string; fallbackText: string }
+    | { handle: string; fallbackText: string }
+  >;
+}
+
 /** 主 → 子:单向投递 */
 export type EngineCast =
   /** x-hot 配置快照(整段替换值,不换对象身份) */

@@ -174,3 +174,35 @@ export function readLevelDat(path: string): LevelDatInfo | null {
     return null;
   }
 }
+
+/** 存档 data/map_<id>.dat 里地图自己记的中心与维度;网络包里不带这两项 */
+export interface MapDatInfo {
+  xCenter: number;
+  zCenter: number;
+  /** 0–4:一像素 = 2^scale 格 */
+  scale: number | null;
+  /** minecraft:overworld / minecraft:the_nether / minecraft:the_end */
+  dimension: string | null;
+}
+
+export function readMapDat(path: string): MapDatInfo | null {
+  if (!existsSync(path)) return null;
+  try {
+    const buf = readFileSync(path);
+    const raw = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b ? gunzipSync(buf) : buf;
+    const c = new Cursor(raw);
+    if (c.u8() !== TAG_COMPOUND) return null;
+    c.str();
+    const data = obj(readCompound(c).data);
+    const x = num(data?.xCenter);
+    const z = num(data?.zCenter);
+    if (x === null || z === null) return null;
+    const dim = data?.dimension;
+    return {
+      xCenter: x, zCenter: z, scale: num(data?.scale),
+      dimension: typeof dim === 'string' ? dim : num(dim) !== null ? ['minecraft:the_nether', 'minecraft:overworld', 'minecraft:the_end'][num(dim)! + 1] ?? null : null,
+    };
+  } catch {
+    return null;
+  }
+}

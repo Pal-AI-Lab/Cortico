@@ -8,6 +8,7 @@ import type {
   EngineInit,
   EngineRequest,
   HostRequest,
+  IpcToolOutcome,
   MainToChild,
   StorageStat,
 } from './engine-ipc.ts';
@@ -18,6 +19,7 @@ import type {
   Logger,
   StoragePart,
   DeferredRendered,
+  ToolOutcome,
 } from '../../core/types.ts';
 
 function send(msg: ChildToMain): void {
@@ -67,6 +69,18 @@ const textRender = (render: () => DeferredRendered | null | Promise<DeferredRend
     return out === null || typeof out === 'string' ? out : out.text;
   };
 const deferredRenders = new Map<string, () => Promise<string | null>>();
+
+/** IPC 走 JSON:回执里的图片字节转成 base64,主进程 proxy 还原(见 ipcToolOutcome) */
+function toolOutcomeOverIpc(out: string | ToolOutcome): string | IpcToolOutcome {
+  if (typeof out === 'string') return out;
+  if (!out.blobs) return { text: out.text, ...(out.failed ? { failed: out.failed } : {}) };
+  return {
+    ...out,
+    blobs: out.blobs.map((b) => ('bytes' in b
+      ? { b64: Buffer.from(b.bytes).toString('base64'), mime: b.mime, fallbackText: b.fallbackText, ...(b.name ? { name: b.name } : {}) }
+      : b)),
+  };
+}
 
 let cognitionOn = false;
 
@@ -196,12 +210,13 @@ async function handleRequest(req: EngineRequest): Promise<unknown> {
   if (req.kind === 'tool') {
     const tool = mod.tools().find((t) => t.name === req.name);
     if (!tool) throw new Error(`未知工具「${req.name}」`);
-    return withAnchors({ sess: req.role, ...(req.callId ? { call: req.callId } : {}), ...(req.round !== null ? { round: req.round } : {}) }, () => tool.handler(req.args, {
+    const out = await withAnchors({ sess: req.role, ...(req.callId ? { call: req.callId } : {}), ...(req.round !== null ? { round: req.round } : {}) }, () => tool.handler(req.args, {
       role: req.role,
       log,
       ...(req.callId ? { callId: req.callId } : {}),
       ...(req.round !== null ? { round: req.round } : {}),
     }));
+    return toolOutcomeOverIpc(out);
   }
   if (req.kind === 'storage-clear') {
     const part = (mod.console().storage ?? []).find((p) => p.key === req.key);

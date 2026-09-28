@@ -11,8 +11,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
   ConfigGroup, World, WorldHost, WorldConsoleDecl, WorldPanelDecl,
-  EventTag, StoragePart, ToolCallContext, ToolDef, TriggerMode,
+  EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode,
 } from '../../core/types.ts';
+import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
+import { readMapDat } from './level-dat.ts';
+import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
 import { nowIso } from '../../core/util.ts';
 import { Bridge } from './bridge.ts';
@@ -2031,6 +2034,15 @@ const CHECK_DOC = [
 ].join('\n');
 
 /** 进程内 World 与引擎代理共用工具 schema 和 description；handler 各自接入。 */
+/** 地图图标的中文名;表外的照英文 id 报 */
+const MAP_ICON_ZH: Record<string, string> = {
+  player: '玩家', player_off_map: '玩家(在图外)', player_off_limits: '玩家(远在图外)', frame: '物品展示框',
+  red_marker: '红色标记', blue_marker: '蓝色标记', target_x: '目标 X', target_point: '目标点', red_x: '红叉(宝藏)',
+  mansion: '林地府邸', monument: '海底神殿', village_desert: '沙漠村庄', village_plains: '平原村庄',
+  village_savanna: '热带草原村庄', village_snowy: '雪原村庄', village_taiga: '针叶林村庄',
+  jungle_temple: '丛林神庙', swamp_hut: '女巫小屋',
+};
+
 export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   {
     name: 'mc_do',
@@ -2289,6 +2301,22 @@ export const MINECRAFT_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
         },
       },
       required: ['checks'],
+    },
+  },
+  {
+    name: 'mc_view_map',
+    tags: ['read'],
+    description:
+      'Look at a filled map you are carrying: returns the map picture (top = north/-z, right = east/+x) '
+      + 'plus its id, scale, how much of it is explored, its world centre when readable, and every icon on it '
+      + '(you, other players, banners, markers) with world coordinates. Read-only and instant. '
+      + 'Without id it shows the map in your main hand, then off hand, then the first one in your bag.',
+    parameters: {
+      type: 'object',
+      properties: {
+        id: { type: 'integer', description: '地图编号(回执里的 #N);不写 = 手上那张,手上没有就包里第一张' },
+      },
+      required: [],
     },
   },
   /* 同轮且读数指纹相同的重复查询返回短回执。 */
@@ -3766,6 +3794,7 @@ export class MinecraftWorld implements World {
       mc_blueprint: async (args) => this.toolLog('mc_blueprint', args, this.setBlueprint(args)),
       mc_check: async (args) => this.toolLog('mc_check', args, this.runCheck(args)),
       mc_bag: async (_args, ctx) => this.readOnce('mc_bag', ctx, () => this.bagReadout()),
+      mc_view_map: async (args) => this.viewMap(args),
       mc_queue: async (_args, ctx) => this.readOnce('mc_queue', ctx, () => this.queueReadout()),
       mc_blocked: async (_args, ctx) => this.readOnce('mc_blocked', ctx, () => this.blockedReadout()),
       mc_stop: async () => {
@@ -3800,6 +3829,54 @@ export class MinecraftWorld implements World {
     return this.readGate.answered(name, round, stamp)
       ? this.toolLog(name, {}, text)
       : this.toolLog(name, {}, REPEATED_QUERY_RECEIPT);
+  }
+
+  /**
+   * mc_view_map:地图画面 + 文字读数。画面来自服务端推给包里地图的像素包(map-view.ts),
+   * 中心坐标只有本机服务端的存档里有;读不到就只报图上坐标,不猜世界坐标。
+   */
+  private viewMap(args: Record<string, unknown>): string | ToolOutcome {
+    const bot = this.bridge?.bot;
+    if (!bot) return this.toolLog('mc_view_map', args, '[mc_view_map] 还没连上服务器,看不了地图');
+    const carried = [bot.heldItem, bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')], ...bot.inventory.items()]
+      .filter((it): it is NonNullable<typeof it> => it?.name === 'filled_map');
+    const ids = [...new Set(carried.map((it) => readMapId(it as never)).filter((n): n is number => n !== null))];
+    if (ids.length === 0) {
+      return this.toolLog('mc_view_map', args, '手上和包里都没有开过的地图(filled_map);空地图 map 要先拿在手上用一下才会开图');
+    }
+    const id = typeof args.id === 'number' ? args.id : ids[0];
+    if (!ids.includes(id)) {
+      return this.toolLog('mc_view_map', args, `身上没有编号 #${id} 的地图;身上有:${ids.map((n) => `#${n}`).join('、')}`);
+    }
+    const m = mapStateOf(bot, id);
+    if (!m || !m.painted) {
+      return this.toolLog('mc_view_map', args, `地图 #${id} 的画面还没收到;服务端每刻给包里的地图推画面,过一两秒再看`);
+    }
+    const identity = worldIdentityOf(this.cfg.local.serverDir, `${this.cfg.host}:${this.cfg.port}`);
+    const dat = identity.local ? readMapDat(join(this.cfg.local.serverDir, identity.key, 'data', `map_${id}.dat`)) : null;
+    const per = 2 ** m.scale;
+    const world = (px: number, pz: number): string => (dat
+      ? `,世界约 (${Math.round(dat.xCenter + (px - MAP_SIZE / 2) * per)}, ${Math.round(dat.zCenter + (pz - MAP_SIZE / 2) * per)})`
+      : '');
+    const lines = [
+      `地图 #${id}:比例 1:${per}(一像素 ${per}×${per} 格,整张 ${MAP_SIZE * per}×${MAP_SIZE * per} 格)`
+        + `${m.locked ? ',已锁定' : ''},已探索 ${Math.round(exploredShare(m) * 100)}%。图上方是北(-z),右边是东(+x)。`,
+      dat
+        ? `中心 (${dat.xCenter}, ${dat.zCenter})${dat.dimension ? `,${zhDimension(dat.dimension)}` : ''}`
+        : '中心坐标读不到(不是本机服务端,或存档里还没写这张图),下面只有图上坐标',
+      ...(m.icons.length === 0 ? ['图上没有图标'] : m.icons.map((i) =>
+        `${MAP_ICON_ZH[i.type] ?? i.type}${i.label ? `「${i.label}」` : ''}:图上 (${Math.round(i.px)}, ${Math.round(i.pz)})`
+        + `${world(i.px, i.pz)},朝向方位角 ${(180 + i.direction * 22.5) % 360}°`)),
+    ];
+    const text = lines.join('\n');
+    this.toolLog('mc_view_map', args, text);
+    return {
+      text,
+      blobs: [{
+        bytes: renderMapPng(m), mime: 'image/png', name: `map_${id}.png`,
+        fallbackText: '[地图画面:这一轮看不了图,只有上面的文字读数]',
+      }],
+    };
   }
 
   /** mc_bag:背包现读。与快照走同一份渲染口径(见 readouts.renderBagReadout) */

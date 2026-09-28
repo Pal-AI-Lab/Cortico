@@ -11,6 +11,7 @@ import type {
   WorldConsoleDecl,
   StoragePart,
   ToolDef,
+  ToolOutcome,
 } from '../../core/types.ts';
 import { COGNITION_ABSENT, MINECRAFT_PANEL_DECLS, MINECRAFT_STORAGE_DECLS, MINECRAFT_TOOL_DECLS, type MinecraftWorldOptions } from './world.ts';
 import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP } from './config.ts';
@@ -20,6 +21,7 @@ import type {
   EngineNote,
   EngineRequest,
   HostRequest,
+  IpcToolOutcome,
   StorageStat,
 } from './engine-ipc.ts';
 import { roundTokenOf } from './round.ts';
@@ -47,6 +49,17 @@ interface PendingRpc {
   resolve: (value: unknown) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+/** 子进程发来的工具回执:base64 图片还原成字节(见 engine-child 的 toolOutcomeOverIpc) */
+function ipcToolOutcome(out: string | IpcToolOutcome): string | ToolOutcome {
+  if (typeof out === 'string' || !out.blobs) return out as string | ToolOutcome;
+  return {
+    ...out,
+    blobs: out.blobs.map((b) => ('b64' in b
+      ? { bytes: Buffer.from(b.b64, 'base64'), mime: b.mime, fallbackText: b.fallbackText, ...(b.name ? { name: b.name } : {}) }
+      : b)),
+  };
 }
 
 export class MinecraftWorldProxy implements World {
@@ -90,14 +103,14 @@ export class MinecraftWorldProxy implements World {
       ...decl,
       handler: async (args, ctx) => {
         try {
-          return (await this.rpc(
+          return ipcToolOutcome((await this.rpc(
             {
               kind: 'tool', name: decl.name, args, role: ctx.role,
               callId: ctx.callId ?? null,
               round: roundTokenOf(ctx),
             },
             RPC_TIMEOUT_MS,
-          )) as string;
+          )) as string | IpcToolOutcome);
         } catch (err) {
           return `[${decl.name} 失败] 引擎进程不可用:${err instanceof Error ? err.message : String(err)}`;
         }

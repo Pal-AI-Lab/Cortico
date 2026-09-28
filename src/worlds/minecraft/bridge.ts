@@ -20,6 +20,7 @@ import type { ShowTempo } from './show.ts';
 import { pocketScan, standCellsAround } from './terrain.ts';
 import { trackWindowProps } from './containers.ts';
 import { installTreadWater } from './travel.ts';
+import { trackMaps } from './map-view.ts';
 
 interface BridgeOptions {
   host: string;
@@ -405,6 +406,7 @@ export class Bridge {
     suppressSprintNearWater(bot, movements);
     installTreadWater(bot);
     trackWindowProps(bot);
+    trackMaps(bot);
     this.installDigBackoff(bot);
     this.installPathDiag(bot);
     this.startViewer(bot, gen);

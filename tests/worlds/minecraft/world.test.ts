@@ -284,7 +284,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
     expect(Object.keys(byName).sort())
       .toEqual([
         'mc_bag', 'mc_blocked', 'mc_blueprint', 'mc_check', 'mc_do', 'mc_escape',
-        'mc_goal', 'mc_map', 'mc_policy', 'mc_queue', 'mc_scout', 'mc_stop',
+        'mc_goal', 'mc_map', 'mc_policy', 'mc_queue', 'mc_scout', 'mc_stop', 'mc_view_map',
       ]);
     // 三个只读原语与 mc_check 同一档:纯读、不进队列、不该进只读 fork 的禁区;
     // 回执是此刻读数,另打 snapshot(交接笔记同名只留最后一次)
@@ -294,6 +294,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
     }
     // 对账只读世界:不进队列也不该进只读 fork 的禁区
     expect(byName.mc_check.tags).toEqual(['read']);
+    expect(byName.mc_view_map.tags).toEqual(['read']);
     expect(byName.mc_check.barrierAfter).toBeUndefined();
     expect(byName.mc_scout.tags).toContain('read');
     expect(byName.mc_scout.barrierAfter).toBeUndefined();

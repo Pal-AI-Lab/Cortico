@@ -75,6 +75,7 @@ goal-plan.ts     PWSR 目标计划的协调与判定
 check.ts         mc_check 的断言器:受理 → 对世界求值 → 只报差异的回执(纯函数)
 chests.ts / works.ts / explored.ts / deaths.ts  容器、成果、探索覆盖、死亡的持久账
 placed-ledger.ts 挂在 bot 实例上的小账:这一场放过、锄过、没放上的那些格
+map-view.ts      地图像素包按编号缓存,渲成 PNG(mc_view_map)
 search-observation.ts / round.ts / show.ts / readouts.ts / log.ts
                  find 的短期观察、同轮重复查询、容器演出节拍、三份读数、日志转发
 
@@ -197,6 +198,7 @@ World 将所选文件保存在部署的 `data/minecraft-skin-{bot,player}.png`�
 | `mc_do(steps, queue?)` | 提交任务。立即返回带时刻与任务号（#N）的受理回执；后台依次执行，结果以同一任务号的 `minecraft.task` 事件返回。`queue` 三态见「队列」 |
 | `mc_scout(steps, queue?)` | `tags:['read']`。与 `mc_do` 共用队列和回执，执行 probe，以及按 dryRun 入队的 goto / build / excavate / tunnel。后续操作仍可入队 |
 | `mc_check(checks)` | `tags:['read']`。提交至多 16 条断言（单格 `at/is`、区域 `count/all/air/sealed`、背包 `inv`、蓝图 `blueprint`、路标 `mark`），对照世界后只报差异。同步返回、不进队列、不移动，只读已加载区块；未加载单独报告。`sealed` 按流入通路判断，水和岩浆算通路 |
+| `mc_view_map(id?)` | `tags:['read']`。看身上一张已开图的地图：回执带 512×512 的 PNG 画面（上北右东）与文字读数：编号、比例、已探索比例、图标位置。本机服务端能读到存档 `data/map_<id>.dat` 时再给中心坐标和图标的世界坐标。画面来自服务端推给包里地图的像素包，`map-view.ts` 按编号缓存。图片跨进程时在引擎子进程转成 base64，proxy 还原 |
 | `mc_policy(六格，全可选)` | `tags:['write']`。设置垫脚/照明名单、照明场合、赶路取向、保留工具、主动交战条件。不进队列、不占任务号，同步回执；空调用只回读。见「策略面」 |
 | `mc_stop()` | 停止当前任务并清空待办队列。单步受阻不自动清队 |
 | `mc_escape()` | 仅用于移动或任务无法推进时的作弊脱困，不能用于旅行或濒死自救；使用前须先对外说明。立即清队并用 `/tp` 前往选定安全锚，物品保留。候选为床/重生锚、世界出生点及 `mc_map` 的「家」「床」路标；同维度无候选时回退为个人重生点优先。同维度候选优先，明确不可站立的落点降级后按水平距离选点，回执列出候选、距离、所选落点及是否位于标记的危险区 |
