@@ -18,6 +18,7 @@ import {
 import { isGravityBlock, isSpawnAnchorBlock } from './policy.ts';
 import type { ShowTempo } from './show.ts';
 import { pocketScan, standCellsAround } from './terrain.ts';
+import { trackWindowProps } from './containers.ts';
 
 interface BridgeOptions {
   host: string;
@@ -401,6 +402,7 @@ export class Bridge {
     bot.pathfinder.setMovements(movements);
     bot.pathfinder.tickTimeout = 60;
     suppressSprintNearWater(bot, movements);
+    trackWindowProps(bot);
     this.installDigBackoff(bot);
     this.installPathDiag(bot);
     this.startViewer(bot, gen);

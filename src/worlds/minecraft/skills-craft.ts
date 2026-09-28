@@ -10,6 +10,7 @@ import { zhName } from './names.ts';
 import { gridText, zhErrorText } from './receipt.ts';
 import {
   CRAFT_SETTLE_MS, awaitCraftGain, invCount, invCountById, invGains, invItemNamed, invSnapshot,
+  invVariantGains, invVariantSnapshot,
   namedLike, noSuchItem,
 } from './inventory.ts';
 import { CRAFTING_STATION, ensureStation } from './placement.ts';
@@ -149,6 +150,7 @@ export async function skillCraft(
 
   // 产量一律按库存净增算:服务端给了什么就报什么,不照配方表复述。
   const before = invSnapshot(bot);
+  const variantsBefore = invVariantSnapshot(bot);
   const targetBefore = targetId === null ? 0 : invCountById(bot, targetId);
   /** 当场没读到入包的是第几次:槽位回灌会迟到,这是现场事实,不是判据(见下) */
   const lateRounds: number[] = [];
@@ -177,7 +179,9 @@ export async function skillCraft(
     }
   }
 
-  const gains = invGains(before, bot);
+  // 名字没净增时看同名换新(放大地图的产物还是地图);有名字净增就不另报
+  const named = invGains(before, bot);
+  const gains = named.length > 0 || targetId !== null ? named : invVariantGains(variantsBefore, bot);
   const targetGain = targetId === null ? 0 : invCountById(bot, targetId) - targetBefore;
   ctx.diag?.write({
     lane: 'craft', event: 'verify', taskId: ctx.taskId,
@@ -306,10 +310,23 @@ export async function emptyHand(bot: Bot): Promise<string> {
   return `主手腾空了(原来拿的是${zhName(held.name)})`;
 }
 
-/** item 缺省时腾空主手；air 别名由 parseEquip 归一化。 */
+/** 副手腾空:副手物品挪回背包,背包满时同主手一样落在脚下 */
+async function emptyOffHand(bot: Bot): Promise<string> {
+  const held = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')];
+  if (!held) return '副手本来就是空的';
+  const before = invCount(bot, (n) => n === held.name);
+  await bot.unequip('off-hand');
+  const left = invCount(bot, (n) => n === held.name);
+  if (left < before + held.count) {
+    return `副手腾空了;包是满的,${zhName(held.name)}×${before + held.count - left}被扔在了脚下`;
+  }
+  return `副手腾空了(原来挂的是${zhName(held.name)})`;
+}
+
+/** item 缺省时腾空 hand 指的那只手(默认主手)；air 别名由 parseEquip 归一化。 */
 export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'equip' }>): Promise<string> {
   const want = call.item;
-  if (!want) return emptyHand(bot);
+  if (!want) return call.hand === 'off' ? emptyOffHand(bot) : emptyHand(bot);
   // 精确名优先;退而求其次才用后缀(iron→iron_pickaxe),`includes` 会让
   // equip "iron" 命中哪一件全看物品栏顺序,那不是她说的意思
   const items = bot.inventory.items();
@@ -322,7 +339,7 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
       `包里没有${zhName(want)}` + (near.length > 0 ? `;名字带这几个字的有:${near.join('、')}` : ''),
     );
   }
-  const dest = equipDestOf(item.name, bot.registry);
+  const dest = call.hand === 'off' ? 'off-hand' : call.hand === 'main' ? 'hand' : equipDestOf(item.name, bot.registry);
   await bot.equip(item, dest);
   // 点名拿的时候回执念全标签:「拿起了弓」答不了「拿的是无限那把吗」
   const what = call.pick ? pickLabel(pickTargetOf(item, bot.registry as never)) : zhName(item.name);

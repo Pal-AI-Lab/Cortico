@@ -435,7 +435,8 @@ export function deriveExpect(bot: Bot, call: SkillCall): Expectation | null {
       const found = invItemNamed(bot, call.item);
       // 落在装备槽的(盔甲/鞘翅/盾)不在手上,holding 判不了;包里没有的也不推,
       // 让「包里没有X」自己说话
-      if (!found || equipDestOf(found.name, bot.registry) !== 'hand') return null;
+      const dest = call.hand === 'off' ? 'off-hand' : call.hand === 'main' ? 'hand' : equipDestOf(found?.name ?? '', bot.registry);
+      if (!found || dest !== 'hand') return null;
       return { holding: { item: found.name } };
     }
     default: return null;

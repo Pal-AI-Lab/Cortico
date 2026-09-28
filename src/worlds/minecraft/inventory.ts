@@ -6,7 +6,7 @@
 import type { Bot } from 'mineflayer';
 import { itemMatchesPick, pickLabel, pickMissText, pickTargetOf } from './item-pick.ts';
 import { matchItemName } from './chests.ts';
-import { type ItemLike } from './item-facts.ts';
+import { readMapId, type ItemLike } from './item-facts.ts';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { zhName } from './names.ts';
 
@@ -250,6 +250,37 @@ export function invGainsSplit(
     (matchItemName(item, name) ? wanted : alongside).push(`${zhName(name)}×${d}`);
   }
   return { wanted, alongside };
+}
+
+function variantKey(it: ItemLike): string {
+  const data = it.componentMap ? [...it.componentMap.entries()] : it.nbt ?? null;
+  return `${it.name}|${JSON.stringify(data, (_k, v) => (typeof v === 'bigint' ? v.toString() : v))}`;
+}
+
+/** 按「名字 + 物品数据」分的库存,同名不同数据(放大后的地图)各算一份 */
+export function invVariantSnapshot(bot: Bot): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const it of bot.inventory.items()) {
+    const key = variantKey(it as ItemLike);
+    m.set(key, (m.get(key) ?? 0) + it.count);
+  }
+  return m;
+}
+
+/**
+ * 名字总数没多、但换成了新数据的那几件(地图放大:纸×8 + 地图 → 新编号的地图)。
+ * invGains 按名字算净增,这类配方在它眼里一样都没多。
+ */
+export function invVariantGains(before: Map<string, number>, bot: Bot): string[] {
+  const out: string[] = [];
+  for (const [key, n] of invVariantSnapshot(bot)) {
+    const d = n - (before.get(key) ?? 0);
+    if (d <= 0) continue;
+    const it = bot.inventory.items().find((i) => variantKey(i as ItemLike) === key)!;
+    const mapId = readMapId(it as ItemLike);
+    out.push(`${zhName(it.name)}×${d}(换成了新的一份${mapId !== null ? `,地图编号 #${mapId}` : ''})`);
+  }
+  return out;
 }
 
 /** 与 invGains 反向:这一步从包里少掉了什么(手上用出去的、装到别处去的) */

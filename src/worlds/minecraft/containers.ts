@@ -12,7 +12,7 @@ import { gotoGoal, reachCell } from './travel.ts';
 import { blockAtCell, cellText, dimensionOf } from './cell-facts.ts';
 import { zhName } from './names.ts';
 import { moveExactSlot, playerInvIn, type InvPred } from './inventory.ts';
-import { readDurability, readEnchants, type EnchantRegistry } from './item-facts.ts';
+import { readDurability, readEnchants, readPotionName, type EnchantRegistry } from './item-facts.ts';
 import {
   CONTAINER_FIND, ChestBook, FURNACE_KINDS, chestBlockName, hasItem, hasRoom, type ChestRecord,
 } from './chests.ts';
@@ -149,10 +149,16 @@ export function containerStacks(win: {
   const merged = new Map<string, ItemStack>();
   for (const it of raw) {
     const ench = readEnchants(it as never, registry as never);
-    const key = ench.length > 0 ? `${it.name}|${ench.map((e) => `${e.name}${e.level}`).join(',')}` : it.name;
+    const potion = readPotionName(it as never);
+    const key = `${it.name}|${ench.map((e) => `${e.name}${e.level}`).join(',')}|${potion ?? ''}`;
     const cur = merged.get(key);
     if (cur) cur.count += it.count;
-    else merged.set(key, { name: it.name, count: it.count, ...(ench.length > 0 ? { enchantments: ench } : {}) });
+    else {
+      merged.set(key, {
+        name: it.name, count: it.count,
+        ...(ench.length > 0 ? { enchantments: ench } : {}), ...(potion ? { potion } : {}),
+      });
+    }
   }
   return {
     items: [...merged.values()],
@@ -198,6 +204,64 @@ export function slotStack(win: unknown, i: number): ItemStack | null {
 }
 
 /**
+ * 窗口属性(craft_progress_bar)按窗口号记最后一次的值。原版在开窗后紧跟着推送,
+ * 技能拿到窗口时往往已经推完,临时挂监听会漏,所以一条连接挂一次常驻的。
+ * 同号窗口重开(open_window)时清掉旧值。
+ */
+const windowProps = new WeakMap<object, Map<number, Map<number, number>>>();
+
+export function trackWindowProps(bot: Bot): void {
+  const byWindow = new Map<number, Map<number, number>>();
+  windowProps.set(bot, byWindow);
+  const client = (bot as unknown as { _client: { on(n: string, f: (p: Record<string, number>) => void): void } })._client;
+  client.on('open_window', (p) => { byWindow.delete(p.windowId); });
+  client.on('craft_progress_bar', (p) => {
+    let props = byWindow.get(p.windowId);
+    if (!props) byWindow.set(p.windowId, props = new Map());
+    props.set(p.property, p.value);
+  });
+}
+
+/** 这扇窗口某条属性最后收到的值;没收到过返回 null */
+export function windowProp(bot: Bot, win: { id?: number }, property: number): number | null {
+  if (win.id === undefined) return null;
+  return windowProps.get(bot)?.get(win.id)?.get(property) ?? null;
+}
+
+/** 酿造台窗口属性:0 = 剩余酿造刻(400 起倒数,0 = 没在酿),1 = 剩余燃料轮数(0–20) */
+export const BREW_PROP_TIME = 0;
+export const BREW_PROP_FUEL = 1;
+/** 酿造台的窗口槽位(原版固定):0-2 三个瓶位,3 材料位,4 燃料位 */
+export const BREW_BOTTLE_SLOTS = [0, 1, 2] as const;
+export const BREW_INPUT_SLOT = 3;
+export const BREW_FUEL_SLOT = 4;
+
+/** 一件药水念成「药水(水瓶)×1」;不是药水就只有名字和数量 */
+export function potionText(stack: { name: string; count: number } | null): string {
+  if (!stack) return '空';
+  const potion = readPotionName(stack as never);
+  return `${zhName(stack.name)}${potion === null ? '' : `(${potion})`}×${stack.count}`;
+}
+
+/** 酿造台现在的样子:三个瓶位、材料、燃料轮数、在不在酿;右键看台与 brew 回执共用 */
+export function brewStandText(
+  bot: Bot, win: { id?: number; slots: Array<{ name: string; count: number } | null> },
+): string {
+  const bottles = BREW_BOTTLE_SLOTS.map((s) => win.slots[s] ?? null).filter((s) => s !== null);
+  const fuelLeft = windowProp(bot, win, BREW_PROP_FUEL);
+  const brewTicks = windowProp(bot, win, BREW_PROP_TIME);
+  const fuelSlot = win.slots[BREW_FUEL_SLOT];
+  const fuel = `燃料${fuelLeft === null ? '读数没收到' : `还能烧 ${fuelLeft}/20 轮`}`
+    + (fuelSlot ? `(燃料位另有${zhName(fuelSlot.name)}×${fuelSlot.count})` : '(燃料位空)');
+  const brewing = brewTicks === null
+    ? '酿造进度读数没收到'
+    : brewTicks > 0 ? `正在酿,还剩约 ${Math.ceil(brewTicks / 20)} 秒` : '没在酿';
+  const input = win.slots[BREW_INPUT_SLOT] ?? null;
+  return `瓶位${bottles.length > 0 ? bottles.map((s) => potionText(s)).join('、') : '空'},`
+    + `材料位${input ? potionText(input) : '空'},${fuel},${brewing}`;
+}
+
+/**
  * 右键开出来的窗口在关窗前记进容器账本,回执带上看见了什么。
  * 箱子族整窗记;炉子族记三槽位,有炉火和进度读数才估到期。不是容器就什么都不做。
  */
@@ -220,6 +284,7 @@ export function rememberWindow(
     const slot = (s: ItemStack | null): string => (s ? `${zhName(s.name)}×${s.count}` : '空');
     return `。炉里:输入${slot(state.input)},燃料${slot(state.fuel)},输出${slot(state.output)}`;
   }
+  if (blockName === 'brewing_stand') return `。台里:${brewStandText(bot, win as never)}`;
   return '';
 }
 
@@ -318,6 +383,8 @@ export async function openNearbyContainer(
 }
 
 export interface GenericWindow {
+  id?: number;
+  type?: string;
   slots: Array<{ name: string; count: number; slot: number } | null>;
   items(): Array<{ name: string; count: number; slot: number }>;
   close(): void;

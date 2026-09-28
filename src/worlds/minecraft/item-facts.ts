@@ -117,10 +117,52 @@ function enchantName(id: unknown, registry?: EnchantRegistry | null): string | n
   return registry?.enchantments?.[id]?.name ?? null;
 }
 
+/** 已开图地图的编号(map_id 组件或旧版 NBT 的 map);空地图和别的物品返回 null */
+export function readMapId(item: ItemLike): number | null {
+  const comp = componentData(item, 'map_id');
+  if (typeof comp === 'number') return comp;
+  const raw = nbtValue(item.nbt, 'map');
+  return typeof raw === 'number' ? raw : null;
+}
+
 /**
- * 读取药水内容的注册表序号；缺失时返回 null。
- * 当前 minecraft-data 不含药水注册表，此处不翻译序号。
+ * 原版 1.20.6 药水注册表,下标即序号(服务端 --reports 的 registries.json 核对过)。
+ * minecraft-data 不带这张表。long_/strong_ 念成基础名加「延长」「II」。
  */
+const POTION_KINDS = [
+  'water', 'mundane', 'thick', 'awkward', 'night_vision', 'long_night_vision', 'invisibility',
+  'long_invisibility', 'leaping', 'long_leaping', 'strong_leaping', 'fire_resistance',
+  'long_fire_resistance', 'swiftness', 'long_swiftness', 'strong_swiftness', 'slowness',
+  'long_slowness', 'strong_slowness', 'turtle_master', 'long_turtle_master', 'strong_turtle_master',
+  'water_breathing', 'long_water_breathing', 'healing', 'strong_healing', 'harming', 'strong_harming',
+  'poison', 'long_poison', 'strong_poison', 'regeneration', 'long_regeneration', 'strong_regeneration',
+  'strength', 'long_strength', 'strong_strength', 'weakness', 'long_weakness', 'luck', 'slow_falling',
+  'long_slow_falling', 'wind_charged', 'weaving', 'oozing', 'infested',
+] as const;
+
+const POTION_ZH: Record<string, string> = {
+  water: '水瓶', mundane: '平凡的药水', thick: '浓稠的药水', awkward: '粗制的药水',
+  night_vision: '夜视', invisibility: '隐身', leaping: '跳跃', fire_resistance: '抗火',
+  swiftness: '迅捷', slowness: '缓慢', turtle_master: '神龟', water_breathing: '水肺',
+  healing: '治疗', harming: '伤害', poison: '剧毒', regeneration: '再生', strength: '力量',
+  weakness: '虚弱', luck: '幸运', slow_falling: '缓降', wind_charged: '蓄风', weaving: '盘丝',
+  oozing: '渗浆', infested: '寄生',
+};
+
+/** 药水内容的中文名:「水瓶」「粗制的药水」「抗火·延长」「力量II」;不是药水或读不到返回 null */
+export function readPotionName(item: ItemLike): string | null {
+  const id = readPotionId(item);
+  if (id === null) return null;
+  const kind = POTION_KINDS[id];
+  if (!kind) return `内容 #${id}`;
+  const base = kind.replace(/^(long|strong)_/, '');
+  const zh = POTION_ZH[base] ?? base;
+  if (kind.startsWith('long_')) return `${zh}·延长`;
+  if (kind.startsWith('strong_')) return `${zh}II`;
+  return zh;
+}
+
+/** 读取药水内容的注册表序号；缺失时返回 null。名字见 readPotionName。 */
 export function readPotionId(item: ItemLike): number | null {
   const data = componentData(item, 'potion_contents') as { potionId?: unknown } | undefined;
   return typeof data?.potionId === 'number' ? data.potionId : null;

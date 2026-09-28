@@ -116,7 +116,7 @@ export type SkillCall = StepBounds & (
   | { skill: 'enchant'; at: Anchor; item: string; index?: number }
   | { skill: 'eat'; item: string }
   | { skill: 'attack'; target: string; mode?: AttackMode }
-  | { skill: 'equip'; item?: string; pick?: string }
+  | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; pick?: string }
   | { skill: 'stow'; item: string; count: number; pick?: string }
@@ -698,17 +698,21 @@ const EMPTY_HAND_NAMES = ['air', 'minecraft:air'];
 function parseEquip(c: Record<string, unknown>, at: string): ParseResult {
   const item = str(c.item);
   const pick = str(c.pick);
+  if (c.hand !== undefined && c.hand !== 'main' && c.hand !== 'off') {
+    return { error: `${at} equip 的 hand 只认 main/off` };
+  }
+  const hand: { hand?: 'main' | 'off' } = c.hand === 'main' || c.hand === 'off' ? { hand: c.hand } : {};
   if (!item) {
     if (pick) return { error: `${at} equip 的 pick 是从同 id 的几件里挑一件,要和 item 一起给` };
-    return { step: { skill: 'equip' } };
+    return { step: { skill: 'equip', ...hand } };
   }
   if (EMPTY_HAND_NAMES.includes(item)) {
     return {
-      step: { skill: 'equip' },
+      step: { skill: 'equip', ...hand },
       notes: [{ field: 'item', given: c.item, kind: 'rewritten', as: '空手' }],
     };
   }
-  return { step: { skill: 'equip', item, ...(pick ? { pick } : {}) } };
+  return { step: { skill: 'equip', item, ...(pick ? { pick } : {}), ...hand } };
 }
 
 /** 原版铁砧改名框的字符上限(ServerboundRenameItem 超长直接丢) */
@@ -1298,8 +1302,8 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'brew',
     doc: `{"skill":"brew","at":[x,y,z],"input":"nether_wart","bottle":"potion","count":3,"fuel":"blaze_powder"}
                                                  下料点火就走,酿一轮约 20 秒,好了有事件提醒;取货用 take 的 at 指着酿造台。
-                                                 **水瓶与所有药水的物品 id 都是 potion**,名字上分不出来;回执带的「内容 #N」
-                                                 是原版药水注册表序号,同一种药水这个数不变,拿它对账。
+                                                 **水瓶与所有药水的物品 id 都是 potion**;包里和回执在括号里写装的是什么(水瓶、粗制的药水、抗火·延长)。
+                                                 回执报台里燃料还能烧几轮、在不在酿;下完料没开酿会直接受阻。
                                                  燃料只吃烈焰粉(一份烧 20 轮),煤不行。
                                                  材料链三段跳不过:水瓶 →(地狱疣)→ 粗制药水 →(效果材料)→ 基础药水
                                                  →(红石延时 / 萤石粉加强 / 火药变喷溅 / 龙息变滞留)。
@@ -1307,7 +1311,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  玻璃瓶装水:{"skill":"use","item":"glass_bottle","at":水源那一格}`,
     fields: [
       { key: 'input', kind: 'string', required: true, hint: '这一轮加的材料英文 id' },
-      { key: 'bottle', kind: 'string', required: true, hint: '瓶子英文 id(potion / glass_bottle)' },
+      { key: 'bottle', kind: 'string', required: true, hint: '瓶子英文 id(水瓶和药水都是 potion;空玻璃瓶放进去酿不出东西)' },
       { key: 'count', kind: 'int', lo: 1, hi: 3, def: 3, doc: '放几瓶(三个瓶位)' },
       { key: 'fuel', kind: 'string', required: true, hint: '燃料英文 id(原版只吃 blaze_powder)' },
       { key: 'at', kind: 'anchor', error: `brew 的 at 要 [x,y,z](${RELATIVE_HINT})`, doc: '指定用哪一座酿造台' },
@@ -1394,11 +1398,13 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'equip',
     doc: `{"skill":"equip","item":"stone_sword"}           手持物品;盔甲、鞘翅、盾牌会自动穿进对应装备槽。
-                                                 不写 item = 把主手腾空(骑马、上鞍这类要空手的动作用它)`,
+{"skill":"equip","item":"filled_map","hand":"off"}  hand 指定哪只手:off = 副手,main = 主手;写了就不按物品自动分槽。
+                                                 不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)`,
     parse: parseEquip,
     fields: [
-      { key: 'item', kind: 'string', hint: '物品英文 id', doc: '不写 = 把主手腾空' },
+      { key: 'item', kind: 'string', hint: '物品英文 id', doc: '不写 = 把手腾空' },
       { key: 'pick', kind: 'string' },
+      { key: 'hand', kind: 'enum', values: ['main', 'off'], error: 'equip 的 hand 只认 main/off', doc: '不写 = 按物品分槽' },
     ],
   },
   {

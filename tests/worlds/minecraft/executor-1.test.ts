@@ -1052,7 +1052,7 @@ describe('toss / pickup 过滤 / 箱子', () => {
 });
 
 describe('brew · 与 smelt 同构的下料点火就走', () => {
-  it('三个瓶位下料,燃料补一份,回执报一轮 20 秒与取货写法', async () => {
+  it('三个瓶位下料,燃料补一份,回执报燃料轮数、在酿与取货写法', async () => {
     const { bot, stand, slots } = brewBot();
     const { exec, reports } = makeExecutorOn(bot);
     exec.submit([{ skill: 'brew', at: stand, input: 'nether_wart', bottle: 'potion', count: 3, fuel: 'blaze_powder' }]);
@@ -1060,12 +1060,21 @@ describe('brew · 与 smelt 同构的下料点火就走', () => {
     const t = reports[0].text;
     expect(reports[0].kind).toBe('done');
     expect(t).toContain('材料位下界疣');
-    expect(t).toContain('一份烧 20 轮');
-    expect(t).toContain('一轮约 20 秒');
+    expect(t).toContain('燃料位补了烈焰粉');
+    expect(t).toContain('燃料还能烧 20/20 轮');
+    expect(t).toContain('正在酿');
     expect(t).toContain(`{"skill":"take","at":[${stand[0]},${stand[1]},${stand[2]}],"all":true}`);
     expect(slots[3]?.name).toBe('nether_wart');
-    expect(slots[4]?.name).toBe('blaze_powder');
     expect(slots.slice(0, 3).filter(Boolean)).toHaveLength(3);
+  });
+
+  it('台里没燃料、包里也没有烈焰粉:受阻说清,不报「燃料槽本来就有」', async () => {
+    const { bot, stand } = brewBot({ inv: { potion: 3, nether_wart: 1 } });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'brew', at: stand, input: 'nether_wart', bottle: 'potion', count: 3, fuel: 'blaze_powder' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('燃料 0/20 轮、燃料位空,包里也没有烈焰粉');
   });
 
   it('包里没有那样材料:当场受阻,不白跑一趟', async () => {

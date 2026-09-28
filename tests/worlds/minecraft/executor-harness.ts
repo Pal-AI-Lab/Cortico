@@ -6,6 +6,8 @@ import {
   Executor, Reflexes, type SkillCall, type TaskReport,
 } from '../../../src/worlds/minecraft/executor.ts';
 import { ChestBook } from '../../../src/worlds/minecraft/chests.ts';
+import { trackWindowProps } from '../../../src/worlds/minecraft/containers.ts';
+import { EventEmitter } from 'node:events';
 import { WorksBook } from '../../../src/worlds/minecraft/works.ts';
 import type { Logger } from '../../../src/core/types.ts';
 
@@ -600,8 +602,12 @@ export function enchantBot(opts: {
   return { bot, inv, table, levelNow: () => level };
 }
 
-/** 酿造台台架:五个槽(3 瓶位 + 材料 + 燃料),moveSlotItem 从包里搬进去 */
-export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number, number, number] } = {}) {
+/**
+ * 酿造台台架:五个槽(3 瓶位 + 材料 + 燃料),moveSlotItem 从包里搬进去。
+ * 窗口属性照原版推:燃料位进烈焰粉就烧成 20 轮,瓶位和材料位齐了且有燃料就开酿(400 刻)。
+ * openContainer 照 mineflayer 的白名单拒收酿造台,只有 openBlock 开得出来。
+ */
+export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number, number, number]; fuelLeft?: number } = {}) {
   const inv = new Map(Object.entries(opts.inv ?? { potion: 3, nether_wart: 4, blaze_powder: 2 }));
   const stand = opts.standAt ?? [2, 64, 0];
   const slots: Array<{ name: string; count: number; slot: number } | null> = [null, null, null, null, null];
@@ -609,9 +615,22 @@ export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number,
     .filter(([, n]) => n > 0)
     .map(([name, count], i) => ({ type: 200 + i, metadata: 0, name, count, slot: 9 + i }));
   const win = {
+    id: 7,
+    type: 'minecraft:brewing_stand',
     slots,
     items: () => stacks(),
     close: () => {},
+  };
+  const client = new EventEmitter();
+  let fuel = opts.fuelLeft ?? 0;
+  const prop = (property: number, value: number) => client.emit('craft_progress_bar', { windowId: win.id, property, value });
+  const tick = () => {
+    if (fuel === 0 && slots[4]?.name === 'blaze_powder') {
+      fuel = 20;
+      slots[4] = slots[4].count > 1 ? { ...slots[4], count: slots[4].count - 1 } : null;
+    }
+    prop(1, fuel);
+    prop(0, fuel > 0 && slots[3] && slots.slice(0, 3).some(Boolean) ? 400 : 0);
   };
   const bot = {
     entity: { id: 1, position: new V(0.5, 64, 0.5) },
@@ -624,13 +643,20 @@ export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number,
     blockAt: (p: V) => (p.x === stand[0] && p.y === stand[1] && p.z === stand[2]
       ? { name: 'brewing_stand', position: p, boundingBox: 'block' }
       : { name: 'air', position: p, boundingBox: 'empty' }),
-    openContainer: async () => win,
+    _client: client,
+    openContainer: async () => { throw new Error('containerToOpen is neither a block nor an entity'); },
+    openBlock: async () => {
+      client.emit('open_window', { windowId: win.id });
+      tick();
+      return win;
+    },
     moveSlotItem: async (from: number, to: number) => {
       const src = stacks().find((s) => s.slot === from);
       if (!src) return;
       const take = to <= 2 ? 1 : src.count;
       inv.set(src.name, (inv.get(src.name) ?? 0) - take);
       slots[to] = { name: src.name, count: take, slot: to };
+      tick();
     },
     putAway: async (slot: number) => {
       const s = slots[slot];
@@ -641,6 +667,7 @@ export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number,
     closeWindow: () => {},
     pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
   };
+  trackWindowProps(bot as never);
   return { bot, inv, slots, stand };
 }
 

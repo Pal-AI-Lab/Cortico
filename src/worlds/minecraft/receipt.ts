@@ -11,7 +11,7 @@ import { DIRECTION_ZH, narrateInventory, type Direction, type ItemStack } from '
 import { SkillBlocked } from './skill-context.ts';
 import { NEAR_DEFAULT, type Expectation, type SkillCall } from './skills.ts';
 import { FACE_ZH, SHAPE_ZH } from './cell-facts.ts';
-import { DRINKABLES, readEnchants } from './item-facts.ts';
+import { DRINKABLES, readEnchants, readPotionName } from './item-facts.ts';
 import { equipDestOf } from './tools.ts';
 import { type Anchor, type BoxFill, type ShapeName } from './geometry.ts';
 import { LIQUIDS, type RegionReading } from './cell-facts.ts';
@@ -143,8 +143,9 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
       return `砂轮:磨${zhName(c.item)}${c.with ? `+${zhName(c.with)}` : ''}`;
     case 'attack': return `攻击${zhEntity(c.target)}${c.mode && c.mode !== 'auto' ? `(${c.mode})` : ''}`;
     case 'equip': {
-      if (!c.item) return '把主手腾空';
-      return equipDestOf(c.item) === 'hand' ? `拿出${zhName(c.item)}` : `穿上${zhName(c.item)}`;
+      if (!c.item) return c.hand === 'off' ? '把副手腾空' : '把主手腾空';
+      if (c.hand === 'off') return `把${zhName(c.item)}挂上副手`;
+      return c.hand === 'main' || equipDestOf(c.item) === 'hand' ? `拿出${zhName(c.item)}` : `穿上${zhName(c.item)}`;
     }
     case 'pickup': return c.item ? `捡起附近的${zhName(c.item)}` : '捡起附近的掉落物';
     case 'toss':
@@ -270,7 +271,11 @@ export function blockedOnItems(why: string): boolean {
 export function bagNow(bot: Bot): string {
   const items: ItemStack[] = bot.inventory.items().map((it) => {
     const ench = readEnchants(it as never, bot.registry as never);
-    return { name: it.name, count: it.count, ...(ench.length > 0 ? { enchantments: ench } : {}) };
+    const potion = readPotionName(it as never);
+    return {
+      name: it.name, count: it.count,
+      ...(ench.length > 0 ? { enchantments: ench } : {}), ...(potion ? { potion } : {}),
+    };
   });
   return `\n[背包] ${items.length > 0 ? narrateInventory(items) : '空的'}`;
 }
@@ -302,7 +307,7 @@ export function contentsText(items: ItemStack[]): string {
   return items
     .slice()
     .sort((a, b) => b.count - a.count)
-    .map((i) => `${zhName(i.name)}×${i.count}`)
+    .map((i) => `${zhName(i.name)}${i.potion ? `(${i.potion})` : ''}×${i.count}`)
     .join('、');
 }
 
