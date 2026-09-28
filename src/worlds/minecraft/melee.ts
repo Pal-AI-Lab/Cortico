@@ -226,6 +226,12 @@ export const HOSTILE = new Set([
   'piglin_brute', 'hoglin', 'zoglin', 'endermite', 'illusioner', 'guardian',
 ]);
 
+/**
+ * 找目标半径放宽的几种。末地主岛十根黑曜石柱围成半径约 42 的圈,柱高到 100 多格:
+ * 站在岛上任一处,对面柱顶的水晶水平 84 格、高差 60 格上下,直线约 110 格;龙绕柱飞同一个范围。
+ */
+const FAR_TARGETS: Record<string, number> = { end_crystal: 128, ender_dragon: 128 };
+
 export async function skillAttack(
   bot: Bot,
   target: string,
@@ -235,9 +241,10 @@ export async function skillAttack(
   if (!isKnownTarget(bot, target)) {
     throw new SkillBlocked(`不认识「${target}」这种东西,认不出要打谁`);
   }
-  const entity = findEntity(bot, target, 32);
+  const radius = FAR_TARGETS[target] ?? 32;
+  const entity = findEntity(bot, target, radius);
   // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
-  if (!entity) throw new SkillNoop(`附近 32 格内没有${zhEntity(target)}`);
+  if (!entity) throw new SkillNoop(`附近 ${radius} 格内没有${zhEntity(target)}`);
   const ranged = ctx.attack.ranged;
   const forcedRanged = mode === 'ranged' || mode === 'kite';
   if (forcedRanged) {

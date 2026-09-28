@@ -41,11 +41,18 @@ import { itemMatchesPick } from './item-pick.ts';
 
 const { goals } = pathfinderPkg;
 
-/** 投掷类:朝 at 看一眼然后甩出去,不是往那一格放东西 */
+/**
+ * 投掷类:朝 at 看一眼然后甩出去,不是往那一格放东西。
+ * 末影之眼不在这里:它右键框架是放进去,右键别处才是扔,见 useOnce 的 ENDER_EYE 分支。
+ */
 export const THROWN = new Set([
   'splash_potion', 'lingering_potion', 'ender_pearl', 'snowball', 'egg',
-  'experience_bottle', 'eye_of_ender', 'trident',
+  'experience_bottle', 'trident',
 ]);
+
+/** 末影之眼:物品 id 是 ender_eye,扔出去飞的那个实体叫 eye_of_ender,两边名字不同 */
+export const ENDER_EYE_ITEM = 'ender_eye';
+export const ENDER_EYE_ENTITY = 'eye_of_ender';
 
 export function isThrown(name: string): boolean {
   return THROWN.has(name) || name.startsWith('splash_') || name.startsWith('lingering_');
@@ -317,6 +324,9 @@ export function useProbeAt(
     if (target === 'tnt') return probeCell(bot, cell, (n) => AIR_NAMES.has(n), 'TNT 点着飞出去,那一格空出来');
     if (LIT_BY_FIRE.test(target)) return probeProp(bot, cell, 'lit', (_was, now) => now === 'true', 'lit 变 true');
     return probeCell(bot, out, (n) => FIRE_BLOCKS.has(n), `${cellText(out)} 烧起来`, `${cellText(out)} `);
+  }
+  if (item === 'ender_eye' && target === 'end_portal_frame') {
+    return probeProp(bot, cell, 'eye', (_was, now) => now === 'true', 'eye 变 true(眼放进框里)');
   }
   if (item === 'bone_meal') {
     // 满龄的作物再撒骨粉原版什么都不发生、骨粉也不消耗,所以 age 没往上走就是没催动
@@ -675,6 +685,10 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
 
   if (call.at) {
     const cell = resolveAt(bot, call.at);
+    // 末影之眼只有点末地传送门框架是放进去;at 指别的格照样扔,它自己朝要塞飞,不往 at 去
+    if (held === ENDER_EYE_ITEM && blockAtCell(bot, cell)?.name !== 'end_portal_frame') {
+      return throwEnderEye(bot, ctx);
+    }
     // 投掷物的 at 是落点方向,不是要改的那一格
     if (held && isThrown(held)) {
       const before = invCount(bot, (n) => n === held);
@@ -768,6 +782,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     const beforeInv = invSnapshot(bot);
     await bot.activateBlock(target, call.face ? faceVector(call.face) : undefined);
     await sleep(USE_SETTLE_MS);
+    const frameNote = target.name === 'end_portal_frame' ? endFrameNote(bot, cell) : '';
     // 容器窗口关闭前，将实际读到的内容写入容器账本。
     let seen = '';
     if (bot.currentWindow) {
@@ -785,13 +800,13 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
       // 右键箱子是开一下看看、按钮按下去自己弹回来:原版里这些本来就没有"成没成"
       const after = blockAtCell(bot, cell);
       const changed = after && after.stateId !== target.stateId ? `,那一格现在是${zhName(after.name)}` : '';
-      return `${head}${changed}。${note || '包里一样没动'}${seen}`;
+      return `${head}${changed}。${note || '包里一样没动'}${seen}${frameNote}`;
     }
     const v = await settleProbe(probe);
     // 失败路径与成功路径报同一份背包增减:存量事实往往就是病因所在
     if (!v.met) {
       throw new SkillBlocked(
-        `${head},${v.actual}${note ? `。${note}` : ''}`,
+        `${head},${v.actual}${note ? `。${note}` : ''}${frameNote}`,
         [`要看到的是:${probe.want}`],
         'server',
       );
@@ -803,11 +818,11 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
       ? noteTilled(bot, cell)
       : '';
     noteWork(bot, ctx, held, cell, target.name);
-    return `${head},${v.actual}${slept}${note ? `。${note}` : ''}${seen}${retilled}`;
+    return `${head},${v.actual}${slept}${note ? `。${note}` : ''}${seen}${retilled}${frameNote}`;
   }
 
   if (!held) throw new SkillBlocked('空手又没给 at/target');
-  if (held === 'eye_of_ender') return throwEnderEye(bot, ctx);
+  if (held === ENDER_EYE_ITEM) return throwEnderEye(bot, ctx);
   // 手上是吃的/喝的就走真进食通道:通用兜底按一下 1.2 秒就松手,喝完一桶奶要 1.61 秒,
   // 从那条路走的奶永远喝不下去(只会回一句「这样东西没有登记的使用效果」)
   if ((bot.registry?.foodsByName as Record<string, unknown> | undefined)?.[held] || DRINKABLES[held]) {
@@ -841,31 +856,51 @@ export async function aimThenUse(bot: Bot, point: Vec3): Promise<void> {
   await bot.activateItem();
 }
 
-/** 原版末影之眼飞 40–80 刻(2–4 秒)就消失,盯 6 秒足够,盯不到就说盯不到 */
+/** 原版末影之眼飞 80 刻(4 秒)后落下或碎掉,盯 6 秒足够,盯不到就说盯不到 */
 export const ENDER_EYE_WATCH_MS = 6_000;
+/** 刚扔出的眼在身边这么近的距离内生成;更远的是别处早先扔的,不认 */
+const ENDER_EYE_SPAWN_RADIUS = 3;
+
+/**
+ * 罗盘方位角:正北(-z)0°、正东(+x)90°,顺时针。三角定位要的是这个角,八方位差 22.5° 太粗。
+ */
+export function compassDegrees(dx: number, dz: number): number {
+  const deg = Math.atan2(dx, -dz) * (180 / Math.PI);
+  return Math.round(((deg % 360) + 360) % 360);
+}
 
 export async function throwEnderEye(bot: Bot, ctx: SkillContext): Promise<string> {
   const from = { x: bot.entity.position.x, y: bot.entity.position.y, z: bot.entity.position.z };
-  const before = invCount(bot, (n) => n === 'eye_of_ender');
+  const before = invCount(bot, (n) => n === ENDER_EYE_ITEM);
+  const known = new Set(Object.values(bot.entities).filter((e) => e?.name === ENDER_EYE_ENTITY).map((e) => e.id));
   await bot.activateItem();
   const deadline = Date.now() + ENDER_EYE_WATCH_MS;
+  let eyeId: number | null = null;
+  let first: { x: number; y: number; z: number } | null = null;
   let last: { x: number; y: number; z: number } | null = null;
-  let seen = false;
   while (Date.now() < deadline) {
     checkAbort(ctx);
-    const eye = Object.values(bot.entities)
-      .find((e) => e?.name === 'eye_of_ender' && e.position);
+    const eye: (typeof bot.entities)[number] | undefined = eyeId !== null
+      ? bot.entities[eyeId]
+      : Object.values(bot.entities).find((e) => e?.name === ENDER_EYE_ENTITY && e.position && !known.has(e.id)
+        && Math.hypot(e.position.x - from.x, e.position.z - from.z) <= ENDER_EYE_SPAWN_RADIUS);
     if (eye?.position) {
-      seen = true;
+      eyeId = eye.id;
       last = { x: eye.position.x, y: eye.position.y, z: eye.position.z };
-    } else if (seen) break;
-    await sleep(150);
+      first ??= last;
+    } else if (eyeId !== null) break;
+    await sleep(100);
   }
-  const after = invCount(bot, (n) => n === 'eye_of_ender');
-  if (!last) return `扔出去了,但一路没看见那颗末影之眼(包里 ${before} → ${after} 个)`;
+  const after = invCount(bot, (n) => n === ENDER_EYE_ITEM);
+  const origin = `从 (${Math.round(from.x)}, ${Math.round(from.y)}, ${Math.round(from.z)}) 扔出`;
+  if (!last || !first) return `${origin},但一路没看见那颗末影之眼(包里 ${before} → ${after} 个)`;
   const dist = Math.round(Math.hypot(last.x - from.x, last.z - from.z));
   const dir = bearing(last.x - from.x, last.z - from.z);
   const dy = Math.round(last.y - from.y);
+  // 原版:离要塞 12 格以内时眼直接飞到要塞正上方悬停,水平位移就会很短
+  const heading = dist >= 1
+    ? `,方位角 ${compassDegrees(last.x - from.x, last.z - from.z)}°(正北 0°、正东 90°,顺时针)`
+    : '';
   const drop = Object.values(bot.entities).some(
     (e) => e?.name === 'item' && e.position
       && Math.hypot(e.position.x - last!.x, e.position.y - last!.y, e.position.z - last!.z) <= 4,
@@ -873,10 +908,37 @@ export async function throwEnderEye(bot: Bot, ctx: SkillContext): Promise<string
   const fell = drop
     ? '落地了,地上有掉落物'
     : '没看见它落地(20% 概率会碎,也可能落在视野外)';
-  return `末影之眼朝${dir ? DIRECTION_ZH[dir] : '正上下'}飞了 ${dist} 格`
+  return `${origin},末影之眼朝${dir ? DIRECTION_ZH[dir] : '正上下'}飞了 ${dist} 格${heading}`
     + `${dy === 0 ? '' : `,${dy > 0 ? '升' : '降'}了 ${Math.abs(dy)} 格`}`
-    + `,最后看见它在 (${Math.round(last.x)}, ${Math.round(last.y)}, ${Math.round(last.z)});${fell}。`
+    + `,最后看见它在 (${last.x.toFixed(1)}, ${last.y.toFixed(1)}, ${last.z.toFixed(1)});${fell}。`
     + `包里 ${before} → ${after} 个`;
+}
+
+/** 框架那一圈在方块中心周围多大范围里找:原版一圈 12 个框围着 3×3 门,5×5 外框,半径 3 够 */
+const END_FRAME_SCAN = 4;
+
+/**
+ * 右键末地传送门框架之后,把这一圈的现状念出来:几个框、几个放了眼、门开没开。
+ * 原版框架的 eye 属性就是「放了眼没有」,门方块和框在同一层。
+ */
+export function endFrameNote(bot: Bot, cell: Cell, name = 'end_portal_frame'): string {
+  if (name !== 'end_portal_frame') return '';
+  let frames = 0;
+  let eyes = 0;
+  let portal = 0;
+  for (let dx = -END_FRAME_SCAN; dx <= END_FRAME_SCAN; dx++) {
+    for (let dz = -END_FRAME_SCAN; dz <= END_FRAME_SCAN; dz++) {
+      const b = blockAtCell(bot, { x: cell.x + dx, y: cell.y, z: cell.z + dz });
+      if (b?.name === 'end_portal_frame') {
+        frames++;
+        if (blockProp(b, 'eye') === 'true') eyes++;
+      } else if (b?.name === 'end_portal') {
+        portal++;
+      }
+    }
+  }
+  return `。周围 ${END_FRAME_SCAN * 2 + 1}×${END_FRAME_SCAN * 2 + 1} 内框架 ${frames} 个,放了眼的 ${eyes} 个`
+    + (portal > 0 ? `;框中间已经有末地传送门方块 ${portal} 格,门开了` : ';还没有传送门方块');
 }
 
 /**

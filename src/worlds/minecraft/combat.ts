@@ -112,11 +112,44 @@ const STUCK_COOLDOWN_MS = 10_000;
 /** 远程怪:该举盾、该贴脸 */
 const RANGED = new Set(['skeleton', 'stray', 'bogged', 'pillager', 'witch', 'blaze', 'ghast', 'illusioner', 'breeze']);
 
-/** E7:不交战,只跑 */
+/** E7:反射不主动交战;挨打时除 REPORT_ONLY 外一律撤 */
 const NO_FIGHT = new Set(['warden', 'wither', 'ender_dragon']);
+/**
+ * 挨打只报不撤的 NO_FIGHT。末影龙只在末地出现,去末地就是去打它;自动撤退在
+ * 主岛上等于朝虚空跑。打不打、怎么打由任务决定(attack 步里挨打本来就由任务吸收)。
+ */
+const REPORT_ONLY = new Set(['ender_dragon']);
+/** 挨打只报不撤时两次播报的最短间隔,龙一次俯冲会连着打好几下 */
+const REPORT_ONLY_EVERY_MS = 10_000;
+
+/**
+ * 撤退每一拍踩出去之前看前方那一格往下多深有落脚。超过这个深度按悬崖处理:
+ * 原版摔落伤害 = 落差 - 3,3 格以内不掉血;末地岛边往下是虚空,整柱都空。
+ */
+const RETREAT_MAX_DROP = 3;
 
 /** 主动进场高于脱战血线的余量，单位为生命点；普通受击入场不加此余量。 */
 const ENGAGE_MARGIN = 3;
+
+/**
+ * 朝 (dx,dz) 迈一步踩得住吗:前方 1.2 格那一柱,从脚那层往下 RETREAT_MAX_DROP 格内有实心(或脚那层
+ * 本身是台阶/墙,由 autoJump 跳),且落脚面不是岩浆。区块没加载不拦,那是读不到,不是悬崖。
+ */
+export function footingAhead(bot: Bot, dx: number, dz: number): boolean {
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-6) return true;
+  const p = bot.entity.position;
+  const x = Math.floor(p.x + (dx / len) * 1.2);
+  const z = Math.floor(p.z + (dz / len) * 1.2);
+  const y = Math.floor(p.y);
+  for (let d = 0; d <= RETREAT_MAX_DROP + 1; d++) {
+    const b = bot.blockAt(new Vec3(x, y - d, z));
+    if (!b) return true;
+    if (b.name === 'lava') return false;
+    if (b.boundingBox === 'block') return true;
+  }
+  return false;
+}
 
 export interface CombatTuning {
   enabled: boolean;
@@ -261,6 +294,10 @@ export class CombatSession {
   private retreatEscalated = false;
   /** 空手低血挡下的那次转身还手,一场撤退只记一次(判据每 250ms 都会再成立一遍) */
   private retreatBarehandNoted = false;
+  /** 这一场撤退有没有记过「前面没落脚」;一场只记一次 */
+  private retreatEdgeNoted = false;
+  /** REPORT_ONLY 上次播报的时刻 */
+  private reportOnlyAt = 0;
   /** 撤退失败转身还手中:E2 血线对本场静默(血线的前提是"跑得掉",这里已经证伪) */
   private desperate = false;
 
@@ -395,6 +432,14 @@ export class CombatSession {
     // 头在水里不接手:水下近战是另一回事,交回 surface/防溺水那条线
     const bot = this.opts.getBot();
     if (bot && headInWater(bot)) return false;
+    if (REPORT_ONLY.has(name)) {
+      const now = Date.now();
+      if (now - this.reportOnlyAt >= REPORT_ONLY_EVERY_MS) {
+        this.reportOnlyAt = now;
+        this.opts.emit(`${zhEntity(name)}打中了我(生命 ${this.hp()}/20);它不在自动撤退之列,手上的任务照常`, true, true);
+      }
+      return false;
+    }
     // E7:打不过的,不进场,直接跑
     if (NO_FIGHT.has(name)) {
       this.bot = this.opts.getBot();
@@ -1273,6 +1318,7 @@ export class CombatSession {
     };
     this.retreatEscalated = false;
     this.retreatBarehandNoted = false;
+    this.retreatEdgeNoted = false;
     // 在水里"拉开 N 格"是永远追不上的目标(溺尸游得比人快),赢法只有出水:目标改成最近的岸
     this.retreatBank = bodyInWater(bot) ? findBankCell(bot, this.retreatFrom, 16) : null;
     if (this.retreatBank) {
@@ -1366,8 +1412,25 @@ export class CombatSession {
       return;
     }
     const to = this.retreatBank;
-    const dx = to ? to.x + 0.5 - p.x : p.x - from.x;
-    const dz = to ? to.z + 0.5 - p.z : p.z - from.z;
+    let dx = to ? to.x + 0.5 - p.x : p.x - from.x;
+    let dz = to ? to.z + 0.5 - p.z : p.z - from.z;
+    // 背对怪群那个方向前面是悬崖、岩浆或虚空时,换成左右两侧里踩得住的那边;都踩不住就原地不动
+    if (!to && !footingAhead(bot, dx, dz)) {
+      const side = ([[-dz, dx], [dz, -dx]] as const).find(([sx, sz]) => footingAhead(bot, sx, sz));
+      if (!this.retreatEdgeNoted) {
+        this.retreatEdgeNoted = true;
+        this.opts.diag?.write({
+          lane: 'combat', event: 'retreat-edge',
+          msg: `撤退方向前面没有 ${RETREAT_MAX_DROP} 格内的落脚:${side ? '改走侧面' : '两侧也没有,原地不动'}`,
+          data: { at: { x: p.x, y: p.y, z: p.z }, dx, dz },
+        });
+      }
+      if (!side) {
+        for (const k of ['forward', 'back', 'left', 'right', 'sprint'] as const) bot.setControlState(k, false);
+        return;
+      }
+      [dx, dz] = side;
+    }
     void bot.lookAt(new Vec3(p.x + dx * 4, p.y + EYE, p.z + dz * 4), true).catch(() => undefined);
     this.pressToward(bot, dx, dz, true);
     this.autoJump(bot, dx, dz);

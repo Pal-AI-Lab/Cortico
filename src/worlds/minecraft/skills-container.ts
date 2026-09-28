@@ -1291,6 +1291,11 @@ export async function takeFromBrewingStand(
  * 显式穿门只认当前维度里实际读到的下界传送门方块。寻路负责到门边，最后踏进
  * 门里的动作由这一步自己完成；维度未改变前绝不把“到了门口”当成完成。
  */
+/** transit 认的三种门方块 */
+export const PORTAL_BLOCKS = new Set(['nether_portal', 'end_portal', 'end_gateway']);
+/** 折跃门两端相距上千格;人被挪走超过这个距离就算穿过去了 */
+const GATEWAY_JUMP_BLOCKS = 64;
+
 export async function skillTransit(
   bot: Bot,
   call: Extract<SkillCall, { skill: 'transit' }>,
@@ -1299,36 +1304,48 @@ export async function skillTransit(
   const portal = resolveAt(bot, call.at);
   const block = blockAtCell(bot, portal);
   if (!block) throw new SkillBlocked(`${cellText(portal)} 所在区块没加载`);
-  if (block.name !== 'nether_portal') {
-    throw new SkillBlocked(`${cellText(portal)} 是${zhName(block.name)},不是下界传送门方块`);
+  const kind = block.name;
+  if (!PORTAL_BLOCKS.has(kind)) {
+    throw new SkillBlocked(`${cellText(portal)} 是${zhName(kind)},不是传送门方块(下界传送门、末地传送门、末地折跃门)`);
   }
 
   const fromDimension = normalizeDimension(dimensionOf(bot));
-  await gotoGoal(bot, new goals.GoalNear(portal.x, portal.y, portal.z, 1), ctx);
+  const fromPos = bot.entity.position.clone();
+  // 折跃门在末地内部传送,维度不变,只看人被挪走了多远
+  const crossed = (): boolean => (kind === 'end_gateway'
+    ? bot.entity.position.distanceTo(fromPos) > GATEWAY_JUMP_BLOCKS
+    : normalizeDimension(dimensionOf(bot)) !== fromDimension);
+  await gotoGoal(bot, new goals.GoalNear(portal.x, portal.y, portal.z, kind === 'nether_portal' ? 1 : 2), ctx);
   checkAbort(ctx);
   const reread = blockAtCell(bot, portal);
-  if (reread?.name !== 'nether_portal') {
-    throw new SkillBlocked(`走到门边时 ${cellText(portal)} 已经不是下界传送门了`);
+  if (reread?.name !== kind) {
+    throw new SkillBlocked(`走到门边时 ${cellText(portal)} 已经不是${zhName(kind)}了`);
   }
 
   dropGoal(bot, 'task', '到门边了,自己走进去', ctx.diag);
-  await bot.lookAt(new Vec3(portal.x + 0.5, portal.y + 0.8, portal.z + 0.5), true);
+  // 末地传送门是地面上一层,朝门中心低头走进去就掉进去;另两种是竖着的,平视
+  const aimY = kind === 'end_portal' ? portal.y + 0.2 : portal.y + 0.8;
+  await bot.lookAt(new Vec3(portal.x + 0.5, aimY, portal.z + 0.5), true);
   const deadline = Date.now() + 20_000;
   try {
-    while (normalizeDimension(dimensionOf(bot)) === fromDimension) {
+    while (!crossed()) {
       checkAbort(ctx);
       if (Date.now() >= deadline) {
-        throw new SkillBlocked(`已经走进 ${cellText(portal)} 的门里等了 20 秒,维度仍是${zhDimension(fromDimension)}`);
+        throw new SkillBlocked(`已经走进 ${cellText(portal)} 的${zhName(kind)}里等了 20 秒,`
+          + (kind === 'end_gateway' ? '人还在原地附近' : `维度仍是${zhDimension(fromDimension)}`));
       }
       const feet = feetOf(bot);
-      const bodyInPortal = blockAtCell(bot, feet)?.name === 'nether_portal'
-        || blockAtCell(bot, { x: feet.x, y: feet.y + 1, z: feet.z })?.name === 'nether_portal';
+      const bodyInPortal = blockAtCell(bot, feet)?.name === kind
+        || blockAtCell(bot, { x: feet.x, y: feet.y + 1, z: feet.z })?.name === kind;
       bot.setControlState('forward', !bodyInPortal);
+      // 折跃门悬在基岩中间,平地走不进去,贴上去时跳一下
+      bot.setControlState('jump', kind === 'end_gateway' && !bodyInPortal);
       await sleep(100);
     }
   } finally {
     bot.setControlState('forward', false);
     bot.setControlState('sprint', false);
+    bot.setControlState('jump', false);
   }
 
   const changedAt = Date.now();

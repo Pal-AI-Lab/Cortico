@@ -969,13 +969,14 @@ const SKILLS: readonly SkillSpec[] = [
   },
   {
     name: 'transit',
-    doc: `{"skill":"transit","at":[-228,73,58]}          穿过这一格的下界传送门。只认当前维度里已加载的 nether_portal;
-                                                 会先走到门边,再明确踏进门里,等维度和落点都切换后才算完成`,
+    doc: `{"skill":"transit","at":[-228,73,58]}          穿过这一格的传送门:nether_portal、end_portal(框中间地面那层)、
+                                                 end_gateway(末地外岛的折跃门)。会先走到门边,再明确踏进门里,
+                                                 等维度(折跃门是落点)切换后才算完成。普通寻路永远绕开这三种门`,
     fields: [
       {
         key: 'at', kind: 'anchor', required: true,
-        error: `transit 要 at:[x,y,z](下界传送门方块;${RELATIVE_HINT}),或一个当前维度的 mc_map 路标名`,
-        doc: '当前维度里的一格 nether_portal;给字符串 = 当前维度的 mc_map 路标名',
+        error: `transit 要 at:[x,y,z](传送门方块;${RELATIVE_HINT}),或一个当前维度的 mc_map 路标名`,
+        doc: '当前维度里的一格传送门方块;给字符串 = 当前维度的 mc_map 路标名',
       },
     ],
   },
@@ -1204,6 +1205,8 @@ const SKILLS: readonly SkillSpec[] = [
                                                  再带 "index":1,"times":2 = 按菜单 1 号成交 2 次
 {"skill":"use","item":"potion"}                  只给 item:对自己/面前用,喝药水、拉弓蓄力。
                                                  投掷类(喷溅药水、末影珍珠、雪球、鸡蛋)再给 at = 朝那一格扔
+{"skill":"use","item":"ender_eye"}               扔末影之眼:回执报扔出点、飞了多远、方位角(正北 0°、正东 90°)、落没落地。
+                                                 at 指末地传送门框架 = 把眼放进框,回执报这一圈几个框放了眼、门开没开
 {"skill":"use","at":[-147,72,101],"text":"欢迎来我家\\n可缇"}
                                                  **往告示牌上写字**:先 build 把牌子放上,再用这条写。
                                                  \\n 分行,最多 4 行、每行 45 字符;写完读回牌子上的字进回执。
@@ -1385,7 +1388,8 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'attack',
     doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断近战或弓(8 格切弓、5.5 格切回近战);
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
-                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战`,
+                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战。
+                                                 end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文 id 或玩家名' },
       {

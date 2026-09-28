@@ -83,7 +83,7 @@ describe('显式维度穿越', () => {
     await waitUntil(() => reports.length === 1, 3000);
 
     expect(reports[0].kind).toBe('blocked');
-    expect(reports[0].text).toContain('不是下界传送门方块');
+    expect(reports[0].text).toContain('不是传送门方块');
     expect(reports[0].text).toContain('没有完成可信的维度穿越');
     expect(bot.said).not.toContain('不该在主世界执行');
   });
