@@ -259,6 +259,47 @@ describe('equip:盔甲穿身上,不是全塞主手', () => {
     expect(reports[0].text).toContain('手里拿起了石剑');
   });
 
+  /** 副手槽在 mineflayer 的窗口里是 45;offHand 非空时就挂在那一格 */
+  function offHandBot(opts: { bag: Array<{ name: string; type: number; count: number }>; offHand?: { name: string; type: number; count: number } }) {
+    const equips: Array<[string, string]> = [];
+    const slots: Array<unknown> = [];
+    if (opts.offHand) slots[45] = opts.offHand;
+    const bot = {
+      equips,
+      entity: { id: 9, position: new V(0.5, 64, 0.5) },
+      entities: {},
+      health: 20,
+      players: {},
+      heldItem: null as { name: string } | null,
+      inventory: { items: () => opts.bag, slots },
+      getEquipmentDestSlot: (dest: string) => (dest === 'off-hand' ? 45 : 36),
+      equip: async (it: { name: string }, dest: string) => {
+        equips.push([it.name, dest]);
+        if (dest === 'hand') bot.heldItem = it;
+      },
+      pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
+    };
+    return bot;
+  }
+
+  it('hand:"off" 把本来归主手的东西挂到副手', async () => {
+    const bot = offHandBot({ bag: [{ name: 'filled_map', type: 5, count: 1 }] });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', item: 'filled_map', hand: 'off' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(bot.equips).toEqual([['filled_map', 'off-hand']]);
+  });
+
+  it('点名的东西已经挂在副手、包里没有:照实说,不报包里没有', async () => {
+    const bot = offHandBot({ bag: [], offHand: { name: 'filled_map', type: 5, count: 1 } });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', item: 'filled_map', hand: 'off' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('本来就挂在副手');
+    expect(bot.equips).toEqual([]);
+  });
+
   it('item 写简称 leggings 也判得对槽位', async () => {
     const bot = wardrobeBot();
     const { exec, reports } = makeExecutorOn(bot);
@@ -417,6 +458,45 @@ describe('合成:回执报实际入包,不报配方的预期产物', () => {
       [{ id: 14 }, { id: 14 }, { id: 14 }],
       [null, { id: 12 }, null],
     ]);
+  });
+
+  it('放大地图:产物同名只是换了编号,判完成并报新编号', async () => {
+    const PAPER = 21; const MAP = 22;
+    const mapItem = (id: number) => ({
+      type: MAP, count: 1, name: 'filled_map', componentMap: new Map([['map_id', { type: 'map_id', data: id }]]),
+    });
+    let items: Array<Record<string, unknown>> = [{ type: PAPER, count: 8, name: 'paper' }, mapItem(3)];
+    const table = { name: 'crafting_table', position: new V(2, 64, 0) };
+    const bot = {
+      entity: { id: 9, position: new V(0.5, 64, 0.5) },
+      entities: {},
+      health: 20,
+      players: {},
+      registry: {
+        items: { [PAPER]: { name: 'paper' }, [MAP]: { name: 'filled_map' } },
+        itemsByName: { paper: { id: PAPER, name: 'paper' }, filled_map: { id: MAP, name: 'filled_map' } },
+        blocksByName: { crafting_table: { id: 30, name: 'crafting_table' } },
+      },
+      inventory: { items: () => items },
+      recipesAll: () => [],
+      findBlocks: () => [table.position],
+      blockAt: () => table,
+      // 服务端的放大配方:纸全用掉,地图换成新编号的一张
+      craft: async () => { items = [mapItem(9)]; },
+      equip: async () => {},
+      lookAt: async () => {},
+      setControlState: () => {},
+      pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
+    };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{
+      skill: 'craft',
+      grid: [['paper', 'paper', 'paper'], ['paper', 'filled_map', 'paper'], ['paper', 'paper', 'paper']],
+      count: 1,
+    }]);
+    await waitUntil(() => reports.length === 1, 5000);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('地图编号 #9');
   });
 
   it('一次一调,不把 times 交给 bot.craft 一次做完', async () => {

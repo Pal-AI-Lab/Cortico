@@ -3,7 +3,7 @@ import {
   bearing, bodyInWater, classifyEntity, cropAgeAt, dayNightTransition, droppedStackOf, facingDegrees,
   facingOf, findBankCell, isNight, isBackground, isRaining, narrateWorld, narrateWorldSegments,
   pitchPhrase, pocketScan, scanMatureCrops, snapshotFingerprint, snapshotFromBot, standCellsAround,
-  timePhrase, villagerNote, worldDelta,
+  timePhrase, villagerNote, wetNote, worldDelta,
   type BlockReader, type ItemStack, type WorldSnapshot,
 } from '../../../src/worlds/minecraft/terrain.ts';
 
@@ -1446,5 +1446,31 @@ describe('bodyInWater / findBankCell:水陆判据与登岸点', () => {
 
   it('周围全是水:返回 null,不硬造目标', () => {
     expect(findBankCell(waterBot(null), null, 8)).toBeNull();
+  });
+});
+
+describe('wetNote', () => {
+  /** x < 4 是两格深的水(底 y=60),x ≥ 4 是岸(实心到 y=62) */
+  function poolBot() {
+    const blockAt = (p: { x: number; y: number; z: number }) => {
+      const x = Math.floor(p.x);
+      const y = Math.floor(p.y);
+      const bankTop = x >= 4 ? 62 : 60;
+      const name = y <= bankTop ? 'stone' : y <= 62 ? 'water' : 'air';
+      return { name, boundingBox: name === 'stone' ? 'block' : 'empty' };
+    };
+    const at = (x: number, y: number, z: number) => ({
+      x, y, z,
+      offset: (dx: number, dy: number, dz: number) => at(x + dx, y + dy, z + dz),
+      floored: () => at(Math.floor(x), Math.floor(y), Math.floor(z)),
+    });
+    // 浮在水面上时物理引擎的 isInWater 会逐刻翻,这里取读成 false 的那一刻
+    return { entity: { position: at(0.5, 62.3, 0.5), isInWater: false }, vehicle: null, blockAt };
+  }
+
+  it('isInWater 读成 false 但脚下那格是水:照样补水深与最近的岸', () => {
+    const note = wetNote(poolBot());
+    expect(note).toContain('脚下水深 2 格');
+    expect(note).toContain('最近能站的干地 (4, 63,');
   });
 });
