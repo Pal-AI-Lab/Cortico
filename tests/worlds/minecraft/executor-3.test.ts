@@ -73,6 +73,60 @@ describe('显式维度穿越', () => {
     expect(bot.said).toContain('穿越后继续');
   });
 
+  it('transit 末地传送门:框架挡着平走进不去,跳进去之后维度换成末地才完成', async () => {
+    const bot = combatBot({});
+    const game = { dimension: 'overworld' };
+    Object.assign(bot, { game });
+    bot.blockAt = ((p: V) => (
+      Math.floor(p.x) === 10 && Math.floor(p.y) === 64 && Math.floor(p.z) === 0
+        ? { name: 'end_portal' }
+        : { name: 'air' }
+    )) as typeof bot.blockAt;
+    bot.pathfinder.goto = async () => { bot.entity.position = new V(8.5, 64, 0.5); };
+    let crossing = false;
+    bot.setControlState = ((key: string, value: boolean) => {
+      bot.controls.push([key, value]);
+      // 只有跳起来才越得过 13/16 格高的框架
+      if (key !== 'jump' || !value || crossing) return;
+      crossing = true;
+      bot.entity.position = new V(10.5, 64, 0.5);
+      setTimeout(() => {
+        game.dimension = 'the_end';
+        bot.entity.position = new V(100.5, 49, 0.5);
+      }, 20);
+    }) as typeof bot.setControlState;
+
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
+    await waitUntil(() => reports.length === 1, 3000);
+    expect(reports[0].kind).toBe('done');
+    expect(bot.controls).toContainEqual(['jump', true]);
+  });
+
+  it('transit 折跃门:维度不变,按人被挪走的距离判穿过去', async () => {
+    const bot = combatBot({});
+    Object.assign(bot, { game: { dimension: 'the_end' } });
+    bot.blockAt = ((p: V) => (
+      Math.floor(p.x) === 10 && Math.floor(p.y) === 64 && Math.floor(p.z) === 0
+        ? { name: 'end_gateway' }
+        : { name: 'air' }
+    )) as typeof bot.blockAt;
+    bot.pathfinder.goto = async () => { bot.entity.position = new V(8.5, 64, 0.5); };
+    let crossing = false;
+    bot.setControlState = ((key: string, value: boolean) => {
+      bot.controls.push([key, value]);
+      if (key !== 'jump' || !value || crossing) return;
+      crossing = true;
+      bot.entity.position = new V(10.5, 64, 0.5);
+      setTimeout(() => { bot.entity.position = new V(1010.5, 70, 0.5); }, 20);
+    }) as typeof bot.setControlState;
+
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
+    await waitUntil(() => reports.length === 1, 3000);
+    expect(reports[0].kind).toBe('done');
+  });
+
   it('transit 没成功时阻断全部尾巴，即使后一步没有物品因果依赖', async () => {
     const bot = combatBot({});
     Object.assign(bot, { game: { dimension: 'overworld' } });
@@ -2799,6 +2853,48 @@ describe('fish:走到水边钓一竿,收获按物品栏差分照实报', () => {
     await waitUntil(() => reports.length === 1);
     expect(reports[0].kind).toBe('blocked');
     expect(reports[0].text).toContain('不是水');
+  });
+
+  it('离水面远:先走到岸上的干格站,不停在离水面 3 格的水里', async () => {
+    // x ≤ 5 是岸(实心到 y=63),x ≥ 6 是水(水面 y=63,底 y=60);人在 22 格外,原地抛不到
+    const cell = (x: number, y: number) => {
+      if (y >= 64) return 'air';
+      if (x <= 5) return 'stone';
+      return y >= 61 ? 'water' : 'stone';
+    };
+    const goals: Array<{ kind: string; x?: number; y?: number; z?: number }> = [];
+    const inv = [{ name: 'fishing_rod', count: 1, type: 30 }];
+    const bot = {
+      entity: { id: 9, position: new V(-12.5, 64, 0.5), onGround: true },
+      entities: {},
+      inventory: { items: () => inv },
+      registry: { blocksByName: { water: { id: 1, name: 'water' } }, itemsByName: {} },
+      findBlocks: () => [new V(9, 63, 0)],
+      canSeeBlock: () => true,
+      blockAt: (p: V) => {
+        const name = cell(Math.floor(p.x), Math.floor(p.y));
+        return { name, position: p.floored(), boundingBox: name === 'stone' ? 'block' : 'empty', diggable: true };
+      },
+      equip: async () => {},
+      lookAt: async () => {},
+      look: async () => {},
+      activateItem: () => {},
+      fish: () => new Promise<void>((resolve) => { setTimeout(resolve, 50); }),
+      pathfinder: {
+        stop() {}, setGoal() {},
+        goto: async (g: { constructor: { name: string }; x?: number; y?: number; z?: number }) => {
+          goals.push({ kind: g.constructor.name, x: g.x, y: g.y, z: g.z });
+          if (g.x !== undefined && g.y !== undefined && g.z !== undefined) bot.entity.position = new V(g.x + 0.5, g.y, g.z + 0.5);
+        },
+      },
+    };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'fish', at: [9, 63, 0] }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(goals[0].kind).toBe('GoalBlock');
+    const g = goals[0] as { x: number; y: number; z: number };
+    expect(cell(g.x, g.y - 1)).toBe('stone');
+    expect(cell(g.x, g.y)).toBe('air');
   });
 
   it('咬钩收线:收获按差分照实报', async () => {

@@ -2666,6 +2666,25 @@ describe('use:(item × 目标方块) 效果表', () => {
     expect(r.text).toContain('框架 2 个,放了眼的 2 个');
   });
 
+  it('走过去再右键:路上主手被换成垫脚块,到了先把点名的东西拿回手上', async () => {
+    const bag: Bag = [{ name: 'ender_eye', count: 1 }];
+    const frame = { name: 'end_portal_frame', props: { eye: 'false', facing: 'north' } };
+    let heldAtUse: string | null = null;
+    const bot = effectBot({
+      cells: { ...FLOOR, '8,63,0': 'stone', '8,64,0': frame },
+      bag,
+      onUse: (b) => { heldAtUse = b.heldItem?.name ?? null; frame.props.eye = 'true'; b.bag[0].count = 0; },
+    });
+    // 寻路器路上搭桥会把主手换成垫脚块;走到框架旁边
+    bot.pathfinder.goto = async () => {
+      await bot.equip({ name: 'cobblestone', count: 1 });
+      bot.entity.position = new V(6.5, 64, 0.5);
+    };
+    const r = await runUse(bot, { skill: 'use', item: 'ender_eye', at: [8, 64, 0] });
+    expect(heldAtUse).toBe('ender_eye');
+    expect(r.text).toContain('eye false → true');
+  });
+
   it('末影之眼一路没看见:如实说没看见,不编方向', async () => {
     const bag: Bag = [{ name: 'ender_eye', count: 1 }];
     const bot = effectBot({ cells: FLOOR, bag, onUse: (b) => { b.bag[0].count = 0; } });
