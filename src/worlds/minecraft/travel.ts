@@ -10,7 +10,7 @@ import { nowIso } from '../../core/util.ts';
 import {
   Aborted, SkillBlocked, checkAbort, sleep, type RouteProbe, type SkillContext, type TargetDiag,
 } from './skill-context.ts';
-import { DIRECTION_ZH, bearing } from './terrain.ts';
+import { DIRECTION_ZH, WATER_BLOCKS, bearing, bodyInWater, headInWater } from './terrain.ts';
 import { cellText, dimensionOf, feetOf } from './cell-facts.ts';
 import { MinecraftLog } from './log.ts';
 import { zhName } from './names.ts';
@@ -20,6 +20,65 @@ import { probabilisticDropsOf } from './inventory.ts';
 import { PLACE_REACH } from './cell-facts.ts';
 
 export const { goals } = pathfinderPkg;
+
+/**
+ * 踩水:人泡在水里、脚下没托住(或头已经没进水里)、寻路器没在走时按住跳。
+ * 原版不按跳就往下沉;寻路器到站 fullStop 会松开跳,人就在目的地慢慢沉到底。
+ * 以下情况不踩:坐着船;正在挖方块(水下挖东西要待在原地);这一步的目标在水下(holdTreadWater)。
+ *
+ * 寻路器走水路时上游一律按跳,往下的路点永远下不去;下一个路点比脚低时这里把跳松开。
+ * 这个监听要装在寻路器之后,同一个物理刻里后跑的那一个说了算。
+ */
+const treadHolds = new WeakMap<object, Map<symbol, Cell>>();
+
+/**
+ * 这一步点名了一格:那一格泡在水下(它头顶那格是水)时不踩水,人才待得住。
+ * 泡没泡着在踩水那一刻现读,[x,z] 写法本来就是要站到水面上,不登记。返回的函数撤掉登记。
+ */
+export function holdTreadWater(bot: Bot, cell: Cell): () => void {
+  let holds = treadHolds.get(bot);
+  if (!holds) treadHolds.set(bot, holds = new Map());
+  const key = Symbol('tread-hold');
+  holds.set(key, cell);
+  return () => { holds!.delete(key); };
+}
+
+function targetSubmerged(bot: Bot): boolean {
+  for (const c of treadHolds.get(bot)?.values() ?? []) {
+    const above = bot.blockAt(new Vec3(c.x, c.y + 1, c.z));
+    if (above && WATER_BLOCKS.has(above.name)) return true;
+  }
+  return false;
+}
+
+export function installTreadWater(bot: Bot): void {
+  let path: Array<{ y: number }> = [];
+  let treading = false;
+  bot.on('path_update', (r: { path: Array<{ y: number }> }) => { path = r.path; });
+  bot.on('goal_reached', () => { path = []; });
+  bot.on('path_reset', () => { path = []; });
+  bot.on('physicsTick', () => {
+    if (!bot.entity) return;
+    const wet = bodyInWater(bot);
+    if (wet && bot.pathfinder?.isMoving()) {
+      treading = false;
+      const next = path[0];
+      if (next && next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
+      return;
+    }
+    const below = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
+    const afloat = wet && (headInWater(bot) || below?.boundingBox !== 'block');
+    const riding = (bot as unknown as { vehicle: unknown }).vehicle != null;
+    const want = afloat && !riding && !bot.targetDigBlock && !targetSubmerged(bot);
+    if (want) {
+      bot.setControlState('jump', true);
+      treading = true;
+    } else if (treading) {
+      bot.setControlState('jump', false);
+      treading = false;
+    }
+  });
+}
 
 /** 单次寻路上限；超时按不可达处理。 */
 export const GOTO_DEADLINE_MS = 120_000;

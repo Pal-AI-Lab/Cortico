@@ -38,7 +38,7 @@ import { roman, zhDimension, zhEnchant, zhEntity, zhName } from './names.ts';
 import {
   CROP_MAX_AGE, DIRECTIONS, DIRECTION_ZH, bearing, biomeAt, canSeeBlockAt, canSeeEntity,
   bodyInWater, cropAgeAt, droppedStackOf, findEscapeCell, hazardTouch, hazardsWithin, headInWater,
-  isDark, isNight, narrateInventory, nearestHazard, pocketScan, sampleLight, villagerNote, WATER_BLOCKS,
+  isDark, isNight, narrateInventory, nearestHazard, pocketScan, sampleLight, villagerNote, WATER_BLOCKS, wetNote,
   type Direction, type HazardCell, type ItemStack,
 } from './terrain.ts';
 import {
@@ -130,7 +130,7 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, levelTravelGoal, matchBlockIds, readStamp, releaseBody,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, levelTravelGoal, matchBlockIds, readStamp, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, type DistanceMetric, withRouteScene,
 } from './travel.ts';
 import {
@@ -440,6 +440,18 @@ export function deriveExpect(bot: Bot, call: SkillCall): Expectation | null {
       return { holding: { item: found.name } };
     }
     default: return null;
+  }
+}
+
+/** 这一步点名的那一格(三个数的 at / 第一个锚点);交给踩水判断,见 holdTreadWater */
+function stepTargetCell(bot: Bot, call: SkillCall): Cell | null {
+  const c = call as { at?: unknown; anchors?: unknown[] };
+  const anchor = [c.at, c.anchors?.[0]].find((a) => Array.isArray(a) && a.length === 3) as Anchor | undefined;
+  if (!anchor) return null;
+  try {
+    return resolveAt(bot, anchor);
+  } catch {
+    return null; // 锚点解不开由技能自己受阻说清,这里只是不登记
   }
 }
 
@@ -2908,7 +2920,9 @@ export class Executor {
       let gapNote: string | null = null;
       ctx.partial = (gap) => { gapNote = gap; };
       try {
-        const skillResult = await runSkill(bot, run, ctx);
+        const tread = stepTargetCell(bot, call);
+        const releaseTread = tread ? holdTreadWater(bot, tread) : null;
+        const skillResult = await runSkill(bot, run, ctx).finally(() => releaseTread?.());
         if (ctx.aborted()) return;
         const afterDimension = normalizeDimension(dimensionOf(bot));
         if (call.skill === 'transit') {
@@ -2929,7 +2943,8 @@ export class Executor {
         }
         const result = skillResult
           + placedNote(bot, placedMark, call.skill, intended)
-          + toolAndReserve();
+          + toolAndReserve()
+          + wetNote(bot);
         // 期望在场时它才是裁决:技能报成也可能被期望落空推翻。她没声明就由执行器推
         const expect = call.expect ?? deriveExpect(bot, call);
         const verdict = expect ? evaluateExpect(bot, expect, gainBase) : null;
@@ -3879,6 +3894,10 @@ export class Reflexes {
    */
   private onEnvironmentHurt(bot: Bot, now: number): void {
     if (this.opts.antiLava()) void this.antiLava(bot);
+    if (headInWater(bot)) {
+      this.hurtUnderwaterAt = now;
+      if (this.opts.antiDrown()) void this.antiDrown(bot);
+    }
     // hurting=true:实心方块闷头那一路(圆石/石头)只在掉血时起手,口径在这条挂钩上
     void this.antiSuffocate(bot, true);
     if (now - this.lastEnvHurtAt < Reflexes.ENV_HURT_LOG_MS) return;
@@ -4099,6 +4118,8 @@ export class Reflexes {
   private lastDrownReportAt = 0;
   private lastDrownEscapeAt = 0;
   private submergedAt = 0;
+  /** 头在水下时挨了环境伤害的时刻;HURT_UNDERWATER_WINDOW_MS 内算数 */
+  private hurtUnderwaterAt = 0;
   /** 危机中头出水的起点;氧气读数不可信时靠它判「已经在换气」 */
   private surfacedAt = 0;
   private lastSubmergedDiagAt = 0;
@@ -4114,7 +4135,8 @@ export class Reflexes {
     const rawOxygen = bot.oxygenLevel ?? null;
     if (rawOxygen !== this.oxygenSeen) {
       this.oxygenSeen = rawOxygen;
-      this.oxygenTrusted = true;
+      // 原版氧气读数 0–20;超出的是没换算的原始刻数(实测 303),同一时刻人已经在溺水掉血,不信它
+      this.oxygenTrusted = rawOxygen === null || rawOxygen <= 20;
     }
     const oxygen = Math.max(0, Math.min(20, rawOxygen ?? 20));
     // 头部出水后按落脚或换气条件清除溺水状态；环境租约由剩余危机与落脚稳定性决定。
@@ -4168,12 +4190,16 @@ export class Reflexes {
       });
     }
     if (!this.drowning) {
+      // 头在水下时掉血、周围又没有敌人:氧气已经见底,读数和计时都不必再等
+      const hurtUnderwater = now - this.hurtUnderwaterAt < HURT_UNDERWATER_WINDOW_MS;
       // 入水后的前 2 秒忽略氧气读数,等待实体元数据更新。
-      if (submergedMs < 2_000) return;
+      if (submergedMs < 2_000 && !hurtUnderwater) return;
       // 氧气读数是主判据;读数不可信或一直不跌时按水下时长兜底(20 口气原版 15 秒耗尽)
       const lowOxygen = this.oxygenTrusted && oxygen <= 6;
-      if (!lowOxygen && submergedMs < SUBMERGED_TRIGGER_MS) return;
-      const why = lowOxygen
+      if (!lowOxygen && !hurtUnderwater && submergedMs < SUBMERGED_TRIGGER_MS) return;
+      const why = hurtUnderwater
+        ? `头在水下、周围没有敌人却在掉血(生命 ${Math.ceil(bot.health ?? 0)}/20,已沉 ${Math.round(submergedMs / 1000)}s)`
+        : lowOxygen
         ? `快溺水了(氧气 ${oxygen}/20,已沉 ${Math.round(submergedMs / 1000)}s)`
         : `头在水下已 ${Math.round(submergedMs / 1000)} 秒${this.oxygenTrusted ? `,氧气读数 ${oxygen}/20` : ',氧气读数复活后没刷新'}`;
       this.opts.diag?.write({
@@ -4331,6 +4357,11 @@ function landSearchUp(bot: Bot): number {
 const BREATH_SEARCH_R = 6;
 /** 水下计时兜底:头在水下连续这么久就按溺水处理,不看氧气读数 */
 const SUBMERGED_TRIGGER_MS = 10_000;
+/**
+ * 头在水下挨环境伤害之后这么久内都算「正在淹」。原版溺水伤害每秒一下,
+ * 2 秒盖住两次心跳之间的空档,再长就会把早先一次无关的伤害算进来。
+ */
+const HURT_UNDERWATER_WINDOW_MS = 2_000;
 /** 氧气读数不可信时,头出水连续这么久算已换到气 */
 const SURFACED_CLEAR_MS = 3_000;
 const SUBMERGED_DIAG_MS = 2_000;

@@ -10,7 +10,7 @@ import {
   type Anchor, type BlockFace, type BoxFill, type Cell, type ShapeName,
 } from './geometry.ts';
 import { SkillBlocked } from './skill-context.ts';
-import { cropAgeAt } from './terrain.ts';
+import { WATER_BLOCKS, cropAgeAt } from './terrain.ts';
 
 /** 竖井遇到这些方块时停止下挖。 */
 export const LIQUIDS = new Set(['water', 'lava', 'bubble_column']);
@@ -71,7 +71,10 @@ export function blockAtCell(bot: Bot, c: Cell): ReturnType<Bot['blockAt']> {
 
 export const cellKeyOf = (c: Cell): string => `${c.x},${c.y},${c.z}`;
 
-/** goto [x,z] 的落脚格:从世界顶往下第一块实心的上一格。区块未加载照实受阻,不猜 */
+/**
+ * goto [x,z] 的落脚格:从世界顶往下第一块实心的上一格。区块未加载照实受阻,不猜。
+ * 往下先碰到水就受阻:那一柱的「地表」是海底,站上去等于沉到水下,报水面高度和水深。
+ */
 export function surfaceFeetAt(bot: Bot, at: Anchor): Cell {
   const c = resolveAt(bot, at);
   const game = bot.game as { minY?: number; height?: number } | undefined;
@@ -85,6 +88,14 @@ export function surfaceFeetAt(bot: Bot, at: Anchor): Cell {
       );
     }
     if (b.boundingBox === 'block') return { x: c.x, y: y + 1, z: c.z };
+    if (WATER_BLOCKS.has(b.name)) {
+      let floor = y - 1;
+      while (floor >= minY && bot.blockAt(new Vec3(c.x, floor, c.z))?.boundingBox !== 'block') floor--;
+      throw new SkillBlocked(
+        `(${c.x}, ${c.z}) 是水面:水面那格 y=${y},水深 ${y - floor} 格;要站到水上就写 [x,y,z] 给 y,`
+        + `不然挑岸上的一格`,
+      );
+    }
   }
   throw new SkillBlocked(`(${c.x}, ${c.z}) 整柱都没有实心方块,落不了脚`);
 }

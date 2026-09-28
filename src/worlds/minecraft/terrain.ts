@@ -1153,6 +1153,25 @@ export function findBankCell(
   return null;
 }
 
+/**
+ * 一步做完人还泡在水里时补在回执末尾的一句:脚下水多深、最近能站的干地在哪。
+ * 不在水里、或者坐着船,返回空串。
+ */
+export function wetNote(bot: any): string {
+  // isInWater 由物理引擎每刻写在实体上;先看它,不在水里就不读方块
+  if (bot.vehicle || !bot.entity?.isInWater || !bodyInWater(bot)) return '';
+  const base = bot.entity.position.floored();
+  let depth = 0;
+  while (depth < 32) {
+    const b = bot.blockAt(new Vec3(base.x, base.y - depth, base.z));
+    if (!b || !WATER_BLOCKS.has(b.name)) break;
+    depth++;
+  }
+  const bank = findBankCell(bot, null, 16);
+  return `。人现在泡在水里(脚下水深 ${depth} 格,`
+    + (bank ? `最近能站的干地 (${bank.x}, ${bank.y}, ${bank.z}))` : '16 格内没有能站的岸)');
+}
+
 /** 碰上就烧人的方块:碰撞箱压上去即掉血(combat 的 standable 与这里共用一份口径) */
 export const BURNING_BLOCKS = new Set(['lava', 'fire', 'soul_fire']);
 /** 只有站在上面才烧的:单独查脚下那一格 */
