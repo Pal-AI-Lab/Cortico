@@ -3850,7 +3850,7 @@ export class MinecraftWorld implements World {
     }
     const m = mapStateOf(bot, id);
     if (!m || !m.painted) {
-      return this.toolLog('mc_view_map', args, `地图 #${id} 的画面还没收到;服务端每刻给包里的地图推画面,过一两秒再看`);
+      return this.toolLog('mc_view_map', args, `地图 #${id} 的整张画面还没收到:服务端只在登录后推一次整张,之后只推变了的部分;刚拿到手的图等一两秒再看`);
     }
     const identity = worldIdentityOf(this.cfg.local.serverDir, `${this.cfg.host}:${this.cfg.port}`);
     const dat = identity.local ? readMapDat(join(this.cfg.local.serverDir, identity.key, 'data', `map_${id}.dat`)) : null;
