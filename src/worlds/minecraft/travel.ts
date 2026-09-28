@@ -22,9 +22,10 @@ import { PLACE_REACH } from './cell-facts.ts';
 export const { goals } = pathfinderPkg;
 
 /**
- * 踩水:人泡在水里、脚下没托住(或头已经没进水里)、寻路器手上没有路点时按住跳。
- * 原版不按跳就往下沉;寻路器到站 fullStop 会松开跳,人就在目的地慢慢沉到底。
- * 以下情况不踩:坐着船;正在挖方块(水下挖东西要待在原地);这一步的目标在水下(holdTreadWater)。
+ * 踩水:人泡在水里、脚下没托住(或头已经没进水里)时按住跳,除非寻路器正照着路点走。
+ * 原版不按跳就往下沉。寻路器松开所有键的三种时候人都会沉:到站 fullStop、还在算路、
+ * 停下来挖或放这个路点要动的方块(水下挖头顶的方块,一沉就够不着了)。
+ * 以下情况不踩:坐着船;在挖脚下的方块;这一步的目标在水下(holdTreadWater)。
  *
  * 寻路器走水路时上游一律按跳,往下的路点永远下不去;下一个路点比脚低时这里把跳松开。
  * 这个监听要装在寻路器之后,同一个物理刻里后跑的那一个说了算。
@@ -52,25 +53,28 @@ function targetSubmerged(bot: Bot): boolean {
 }
 
 export function installTreadWater(bot: Bot): void {
-  let path: Array<{ y: number }> = [];
+  let path: Array<{ y: number; toBreak?: unknown[]; toPlace?: unknown[] }> = [];
   let treading = false;
-  bot.on('path_update', (r: { path: Array<{ y: number }> }) => { path = r.path; });
+  bot.on('path_update', (r: { path: typeof path }) => { path = r.path; });
   bot.on('goal_reached', () => { path = []; });
   bot.on('path_reset', () => { path = []; });
   bot.on('physicsTick', () => {
     if (!bot.entity) return;
     const wet = bodyInWater(bot);
-    // 寻路器在算路(有目标、还没有路点)时不按任何键,人照样往下沉;只有手上有路点才让它接管
-    if (wet && bot.pathfinder?.isMoving() && path.length > 0) {
+    const next = path[0];
+    const walking = bot.pathfinder?.isMoving() && next !== undefined
+      && !(next.toBreak?.length || next.toPlace?.length);
+    if (wet && walking) {
       treading = false;
-      const next = path[0];
-      if (next && next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
+      if (next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
       return;
     }
     const below = bot.blockAt(bot.entity.position.offset(0, -0.5, 0));
     const afloat = wet && (headInWater(bot) || below?.boundingBox !== 'block');
     const riding = (bot as unknown as { vehicle: unknown }).vehicle != null;
-    const want = afloat && !riding && !bot.targetDigBlock && !targetSubmerged(bot);
+    const dig = bot.targetDigBlock;
+    const digBelow = dig != null && dig.position.y < Math.floor(bot.entity.position.y);
+    const want = afloat && !riding && !digBelow && !targetSubmerged(bot);
     if (want) {
       bot.setControlState('jump', true);
       treading = true;
