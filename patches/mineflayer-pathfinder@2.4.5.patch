@@ -1,8 +1,40 @@
 diff --git a/index.js b/index.js
-index b38bd30c0c1babb4d7d3d396067ed828d9dc9f6a..c5f8fc626cab942b7cc3ba2c2853f1b96b9cda97 100644
+index b38bd30c0c1babb4d7d3d396067ed828d9dc9f6a..c90820ea8e1339dd22e616f1992a582b8aff0281 100644
 --- a/index.js
 +++ b/index.js
-@@ -518,6 +518,14 @@ function inject (bot) {
+@@ -142,6 +142,10 @@ function inject (bot) {
+   bot.pathfinder.setGoal = (goal, dynamic = false) => {
+     stateGoal = goal
+     dynamicGoal = dynamic
++    // The return point belongs to the path of the previous goal. While it is
++    // set, monitorMovement walks toward it and skips planning, so a point the
++    // bot can no longer reach would stall every later goal.
++    returningPos = null
+     bot.emit('goal_updated', goal, dynamic)
+     resetPath('goal_updated')
+   }
+@@ -378,7 +382,11 @@ function inject (bot) {
+     // minDistanceSq = Min distance sqrt to the target pos were the bot is centered enough to place blocks around him
+     const minDistanceSq = 0.2 * 0.2
+     const targetPos = pos.clone().offset(0.5, 0, 0.5)
+-    if (bot.entity.position.distanceSquared(targetPos) > minDistanceSq) {
++    // Horizontal distance only: a bot floating in water bobs above the node
++    // and never comes within 0.2 of its feet height.
++    const dx = bot.entity.position.x - targetPos.x
++    const dz = bot.entity.position.z - targetPos.z
++    if (dx * dx + dz * dz > minDistanceSq) {
+       bot.lookAt(targetPos)
+       bot.setControlState('forward', true)
+       return false
+@@ -390,6 +398,7 @@ function inject (bot) {
+   function stop () {
+     stopPathing = false
+     stateGoal = null
++    returningPos = null
+     path = []
+     bot.emit('path_stop')
+     fullStop()
+@@ -518,6 +527,14 @@ function inject (bot) {
          fullStop()
        }
  
@@ -17,7 +49,7 @@ index b38bd30c0c1babb4d7d3d396067ed828d9dc9f6a..c5f8fc626cab942b7cc3ba2c2853f1b9
        // Open gates or doors
        if (placingBlock?.useOne) {
          if (!lockUseBlock.tryAcquire()) return
-@@ -567,6 +575,12 @@ function inject (bot) {
+@@ -567,6 +584,12 @@ function inject (bot) {
                  placing = false
                  lastNodeTime = performance.now()
                })
