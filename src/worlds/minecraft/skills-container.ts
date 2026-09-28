@@ -1293,7 +1293,11 @@ export async function takeFromBrewingStand(
  */
 /** transit 认的三种门方块 */
 export const PORTAL_BLOCKS = new Set(['nether_portal', 'end_portal', 'end_gateway']);
-/** 折跃门两端相距上千格;人被挪走超过这个距离就算穿过去了 */
+/**
+ * 折跃门:人离门方块超过这么远就算已经被传走。两端相距约千格(外岛那头生成在离主岛门约 1024 格处);
+ * 穿门前人先走到门边(GoalNear 半径 2),再一路朝门方块走,离它不会比走到门边那一刻更远。
+ * 按离门方块算:从远处走过来时,出发点离门本来就可能超过这个数。
+ */
 const GATEWAY_JUMP_BLOCKS = 64;
 
 export async function skillTransit(
@@ -1310,10 +1314,10 @@ export async function skillTransit(
   }
 
   const fromDimension = normalizeDimension(dimensionOf(bot));
-  const fromPos = bot.entity.position.clone();
-  // 折跃门在末地内部传送,维度不变,只看人被挪走了多远
+  const portalCenter = new Vec3(portal.x + 0.5, portal.y + 0.5, portal.z + 0.5);
+  // 折跃门在末地内部传送,维度不变,只看人离门方块多远
   const crossed = (): boolean => (kind === 'end_gateway'
-    ? bot.entity.position.distanceTo(fromPos) > GATEWAY_JUMP_BLOCKS
+    ? bot.entity.position.distanceTo(portalCenter) > GATEWAY_JUMP_BLOCKS
     : normalizeDimension(dimensionOf(bot)) !== fromDimension);
   await gotoGoal(bot, new goals.GoalNear(portal.x, portal.y, portal.z, kind === 'nether_portal' ? 1 : 2), ctx);
   checkAbort(ctx);

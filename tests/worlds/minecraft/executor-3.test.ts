@@ -127,6 +127,23 @@ describe('显式维度穿越', () => {
     expect(reports[0].kind).toBe('done');
   });
 
+  it('transit 折跃门:从百格外走到门边不算穿过去,一直没被传走就受阻', async () => {
+    const bot = combatBot({});
+    Object.assign(bot, { game: { dimension: 'the_end' } });
+    bot.entity.position = new V(-90.5, 64, 0.5);
+    bot.blockAt = ((p: V) => (
+      Math.floor(p.x) === 10 && Math.floor(p.y) === 64 && Math.floor(p.z) === 0
+        ? { name: 'end_gateway' }
+        : { name: 'air' }
+    )) as typeof bot.blockAt;
+    bot.pathfinder.goto = async () => { bot.entity.position = new V(8.5, 64, 0.5); };
+
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
+    await waitUntil(() => reports.length === 1, 30_000);
+    expect(reports[0].kind).toBe('blocked');
+  });
+
   it('transit 没成功时阻断全部尾巴，即使后一步没有物品因果依赖', async () => {
     const bot = combatBot({});
     Object.assign(bot, { game: { dimension: 'overworld' } });

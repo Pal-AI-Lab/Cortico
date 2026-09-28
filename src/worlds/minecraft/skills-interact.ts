@@ -916,7 +916,7 @@ export async function throwEnderEye(bot: Bot, ctx: SkillContext): Promise<string
     + `包里 ${before} → ${after} 个`;
 }
 
-/** 框架那一圈在方块中心周围多大范围里找:原版一圈 12 个框围着 3×3 门,5×5 外框,半径 3 够 */
+/** 框架那一圈在被点的框架周围多大范围里找:原版 12 个框围成 5×5 去掉四角的一圈,中间 3×3 是门;对边的框离被点的那一格 4 格 */
 const END_FRAME_SCAN = 4;
 
 /**
