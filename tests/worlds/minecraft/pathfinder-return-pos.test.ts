@@ -4,8 +4,7 @@
  * 带 `returnPos` 的放置只有一种:`getMoveJumpUp` 往上跳一格、落脚格和它下面都空着时,
  * 先垫下面那格(这一块带回位点),再垫落脚格。第一块放成之后
  * `monitorMovement` 每刻先朝回位点走,没回到(水平 0.2 格内)就 return,不算路、不垫块。
- * 回位点既不随换目标清掉,又按三维距离判到达,人泡在水里上下浮就永远回不去,
- * 此后所有目标都停摆。
+ * 换目标或停下时回位点作废;判到达只比水平距离,人在回位格上方浮着也算回到位。
  *
  * `returningPos` 在 `inject` 闭包里,只能改包:patches/mineflayer-pathfinder@2.4.5.patch。
  * 台架装真 `inject`,只换 `getPathTo`。
