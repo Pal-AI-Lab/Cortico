@@ -1158,8 +1158,9 @@ export function findBankCell(
  * 不在水里、或者坐着船,返回空串。
  */
 export function wetNote(bot: any): string {
-  // isInWater 由物理引擎每刻写在实体上;先看它,不在水里就不读方块
-  if (bot.vehicle || !bot.entity?.isInWater || !bodyInWater(bot)) return '';
+  // 物理引擎的 isInWater 在水面上逐刻翻,不能拿它判;直接读脚和头那两格
+  const cell = (dy: number) => bot.blockAt?.(bot.entity.position.offset(0, dy, 0));
+  if (bot.vehicle || ![cell(0), cell(1)].some((b) => b != null && WATER_BLOCKS.has(b.name))) return '';
   const base = bot.entity.position.floored();
   let depth = 0;
   while (depth < 32) {
