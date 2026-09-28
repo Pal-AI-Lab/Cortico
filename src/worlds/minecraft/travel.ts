@@ -22,7 +22,7 @@ import { PLACE_REACH } from './cell-facts.ts';
 export const { goals } = pathfinderPkg;
 
 /**
- * 踩水:人泡在水里、脚下没托住(或头已经没进水里)、寻路器没在走时按住跳。
+ * 踩水:人泡在水里、脚下没托住(或头已经没进水里)、寻路器手上没有路点时按住跳。
  * 原版不按跳就往下沉;寻路器到站 fullStop 会松开跳,人就在目的地慢慢沉到底。
  * 以下情况不踩:坐着船;正在挖方块(水下挖东西要待在原地);这一步的目标在水下(holdTreadWater)。
  *
@@ -60,7 +60,8 @@ export function installTreadWater(bot: Bot): void {
   bot.on('physicsTick', () => {
     if (!bot.entity) return;
     const wet = bodyInWater(bot);
-    if (wet && bot.pathfinder?.isMoving()) {
+    // 寻路器在算路(有目标、还没有路点)时不按任何键,人照样往下沉;只有手上有路点才让它接管
+    if (wet && bot.pathfinder?.isMoving() && path.length > 0) {
       treading = false;
       const next = path[0];
       if (next && next.y < Math.floor(bot.entity.position.y)) bot.setControlState('jump', false);
