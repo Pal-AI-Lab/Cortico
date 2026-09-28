@@ -698,6 +698,8 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     }
     await reachCell(bot, cell, ctx);
     checkAbort(ctx);
+    // 路上寻路器垫方块会把主手换成垫脚块;点名的东西不在手上就再拿一次,不然右键的是圆石
+    if (call.item && held && bot.heldItem?.name !== held) held = await equipNamed(bot, call.item);
     const target = blockAtCell(bot, cell);
     if (!target) throw new SkillBlocked(`${cellText(cell)} 所在区块没加载`);
     // 船由 BoatItem 的 use 沿玩家视线生成，不能通过 use_item_on 放置。

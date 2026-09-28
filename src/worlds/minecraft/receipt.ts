@@ -69,7 +69,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
       const dimension = c.dimension ? `[${zhDimension(c.dimension)}] ` : '';
       return c.dryRun ? `探路到 ${dimension}${where}` : `去${dimension}${where}`;
     }
-    case 'transit': return `穿过 ${anchorsText([c.at])} 的下界传送门`;
+    case 'transit': return `穿过 ${anchorsText([c.at])} 的传送门`;
     case 'goto_player': return `去 ${c.name} 身边`;
     case 'follow': return `跟着 ${c.name}`;
     case 'find': return c.direction

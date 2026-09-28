@@ -1327,19 +1327,23 @@ export async function skillTransit(
   const aimY = kind === 'end_portal' ? portal.y + 0.2 : portal.y + 0.8;
   await bot.lookAt(new Vec3(portal.x + 0.5, aimY, portal.z + 0.5), true);
   const deadline = Date.now() + 20_000;
+  let touched = false;
   try {
     while (!crossed()) {
       checkAbort(ctx);
-      if (Date.now() >= deadline) {
-        throw new SkillBlocked(`已经走进 ${cellText(portal)} 的${zhName(kind)}里等了 20 秒,`
-          + (kind === 'end_gateway' ? '人还在原地附近' : `维度仍是${zhDimension(fromDimension)}`));
-      }
       const feet = feetOf(bot);
       const bodyInPortal = blockAtCell(bot, feet)?.name === kind
         || blockAtCell(bot, { x: feet.x, y: feet.y + 1, z: feet.z })?.name === kind;
+      touched ||= bodyInPortal;
+      if (Date.now() >= deadline) {
+        const stuck = `维度仍是${zhDimension(fromDimension)}`;
+        throw new SkillBlocked(touched
+          ? `人进了 ${cellText(portal)} 的${zhName(kind)},等了 20 秒${kind === 'end_gateway' ? '人还在原地附近' : stuck}`
+          : `朝 ${cellText(portal)} 的${zhName(kind)}走了 20 秒,身子一直没碰到门方块,停在 ${cellText(feet)};${stuck}`);
+      }
       bot.setControlState('forward', !bodyInPortal);
-      // 折跃门悬在基岩中间,平地走不进去,贴上去时跳一下
-      bot.setControlState('jump', kind === 'end_gateway' && !bodyInPortal);
+      // 末地传送门四周的框架高 13/16 格、折跃门悬在基岩中间,平地都走不进去;没进门就一路跳
+      bot.setControlState('jump', kind !== 'nether_portal' && !bodyInPortal);
       await sleep(100);
     }
   } finally {
