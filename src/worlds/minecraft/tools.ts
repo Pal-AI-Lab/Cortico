@@ -4,7 +4,8 @@
  * 挑与装备在这里,挖与放在技能族里;回执里的那一句由 toolTraceNote 出。
  */
 import type { Bot } from 'mineflayer';
-import { type InvItem } from './inventory.ts';
+import { namedLike, type InvItem } from './inventory.ts';
+import { itemMatchesPick } from './item-pick.ts';
 import { readDurability } from './item-facts.ts';
 import { SkillBlocked, type ReserveHit, type SkillContext, type ToolTrace } from './skill-context.ts';
 import { matchItemName } from './chests.ts';
@@ -307,6 +308,20 @@ export function harvestFact(
 }
 
 /** 拿在手上才有用的那几类:镐斧锹锄剑,以及打火石、水桶这些一次性道具不算 */
+/**
+ * equip 点名的那件已经在它要去的那个槽里(副手、盔甲槽)。这几个槽不在包里,
+ * 按包里找就会报「包里没有」;主手那件本来就在快捷栏里,不归这里。
+ */
+export function equippedAlready(
+  bot: Bot, item: string, hand?: 'main' | 'off', pick?: string,
+): { name: string; where: string } | null {
+  const dest = hand === 'off' ? 'off-hand' : hand === 'main' ? 'hand' : equipDestOf(item, bot.registry);
+  if (dest === 'hand') return null;
+  const slot = bot.inventory?.slots?.[bot.getEquipmentDestSlot(dest)];
+  if (!slot || !namedLike(item, slot.name) || !itemMatchesPick(pick, slot, bot.registry as never)) return null;
+  return { name: slot.name, where: dest === 'off-hand' ? '挂在副手' : '穿在身上' };
+}
+
 export const HANDHELD_SUFFIXES = ['_pickaxe', '_axe', '_shovel', '_hoe', '_sword'];
 
 /**

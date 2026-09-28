@@ -14,7 +14,7 @@ import {
   namedLike, noSuchItem,
 } from './inventory.ts';
 import { CRAFTING_STATION, ensureStation } from './placement.ts';
-import { HANDHELD_SUFFIXES, equipDestOf } from './tools.ts';
+import { HANDHELD_SUFFIXES, equipDestOf, equippedAlready } from './tools.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { noteAte } from './placed-ledger.ts';
 import { edibleInBag, notFoodText } from './precheck.ts';
@@ -331,6 +331,8 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
   // equip "iron" 命中哪一件全看物品栏顺序,那不是她说的意思
   const items = bot.inventory.items();
   const item = invItemNamed(bot, want, call.pick);
+  const worn = item ? null : equippedAlready(bot, want, call.hand, call.pick);
+  if (worn) return `${zhName(worn.name)}本来就${worn.where}`;
   if (!item) {
     const same = items.filter((i) => namedLike(want, i.name));
     if (call.pick && same.length > 0) throw noSuchItem(bot, want, call.pick, same);

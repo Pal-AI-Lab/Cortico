@@ -11,6 +11,7 @@ import type { Bot } from 'mineflayer';
 import type { SkillCall } from './skills.ts';
 import type { Cell } from './geometry.ts';
 import { matchItemName } from './chests.ts';
+import { equippedAlready } from './tools.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -593,7 +594,8 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps): Pre
       case 'build': return precheckBuild(bot, call as never, deps);
       case 'tunnel': return precheckTunnel(bot, call as never, deps.resolve) ?? precheckDeepKit(bot, call, deps);
       case 'excavate': return precheckDeepKit(bot, call, deps);
-      case 'equip': return precheckItemStep(bot, call, '拿');
+      case 'equip':
+        return call.item && equippedAlready(bot, call.item, call.hand, call.pick) ? null : precheckItemStep(bot, call, '拿');
       case 'toss': return precheckItemStep(bot, call, '扔');
       case 'stow': return precheckItemStep(bot, call, '存');
       case 'anvil': return precheckItemStep(bot, call, '用');
