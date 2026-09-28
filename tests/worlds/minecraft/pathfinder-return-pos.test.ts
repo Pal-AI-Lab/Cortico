@@ -1,7 +1,8 @@
 /**
- * 过桥垫块之后的回位点(`returningPos`)只属于垫它的那条路。
+ * 爬坎垫块之后的回位点(`returningPos`)只属于垫它的那条路。
  *
- * 上游在 `getMoveForward` 给「前方地面缺一格」生成带 `returnPos` 的放置;放成之后
+ * 带 `returnPos` 的放置只有一种:`getMoveJumpUp` 往上跳一格、落脚格和它下面都空着时,
+ * 先垫下面那格(这一块带回位点),再垫落脚格。第一块放成之后
  * `monitorMovement` 每刻先朝回位点走,没回到(水平 0.2 格内)就 return,不算路、不垫块。
  * 回位点既不随换目标清掉,又按三维距离判到达,人泡在水里上下浮就永远回不去,
  * 此后所有目标都停摆。
@@ -55,18 +56,21 @@ const goal = {
   isEnd: (): boolean => false,
 };
 
-/** 回位点所在的格;要垫的缺口在它东边一格的脚下 */
+/** 回位点所在的格;要爬上去的那一列在它东边一格,上下两格都空着 */
 const NODE = { x: 10, y: 64, z: 10 };
 
-/** 一步过桥:和 getMoveForward 地面缺格那一支给出的形状一样 */
-function bridgeStep(): unknown {
+/** 一步爬坎:和 getMoveJumpUp 落脚格与它下面都空着那一支给出的形状一样 */
+function climbStep(): unknown {
   return {
-    x: NODE.x + 1, y: NODE.y, z: NODE.z, dx: 1, dy: 0, dz: 0, jump: false,
+    x: NODE.x + 1, y: NODE.y + 1, z: NODE.z, dx: 1, dy: 1, dz: 0, jump: false,
     toBreak: [] as unknown[],
-    toPlace: [{
-      x: NODE.x, y: NODE.y - 1, z: NODE.z, dx: 1, dy: 0, dz: 0,
-      returnPos: new Vec3(NODE.x, NODE.y, NODE.z),
-    }],
+    toPlace: [
+      {
+        x: NODE.x, y: NODE.y - 1, z: NODE.z, dx: 1, dy: 0, dz: 0,
+        returnPos: new Vec3(NODE.x, NODE.y, NODE.z),
+      },
+      { x: NODE.x + 1, y: NODE.y - 1, z: NODE.z, dx: 0, dy: 1, dz: 0 },
+    ],
   };
 }
 
@@ -145,10 +149,10 @@ function rig(): Rig {
   let first = true;
   pf.getPathTo = () => {
     plans += 1;
-    // 第一次给过桥那一步,之后给空路:只数算没算,不让它走
+    // 第一次给爬坎那一步,之后给空路:只数算没算,不让它走
     if (!first) return { status: 'noPath', path: [] };
     first = false;
-    handed.push(bridgeStep());
+    handed.push(climbStep());
     return { status: 'success', path: handed };
   };
   pf.setGoal(goal);
@@ -167,7 +171,7 @@ function rig(): Rig {
   };
 }
 
-/** 走到垫块成功、回位点已经立起来 */
+/** 走到第一块垫成、回位点已经立起来 */
 async function bridged(): Promise<Rig> {
   const r = rig();
   await r.tick();
@@ -176,7 +180,7 @@ async function bridged(): Promise<Rig> {
   return r;
 }
 
-describe('过桥垫块后的回位点', () => {
+describe('爬坎垫块后的回位点', () => {
   it('人被挪走回不去,换了目标之后照常算路,不再朝旧回位点走', async () => {
     const r = await bridged();
     // 离回位点几百格(被传送走了):按住前进也到不了
