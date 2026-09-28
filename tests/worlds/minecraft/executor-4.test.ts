@@ -931,6 +931,31 @@ describe('Reflexes 防溺水', () => {
     expect(bot.jumps).toContain(true);
   });
 
+  it('头在水下掉血、周围没敌人:氧气读数还满也立刻起反射,不等水下计时', () => {
+    const bot = drownBot('water', 20);
+    const handlers: Record<string, (...a: unknown[]) => void> = {};
+    (bot as { on: unknown }).on = (ev: string, fn: (...a: unknown[]) => void) => { handlers[ev] = fn; };
+    const { reflexes, reports } = makeReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(300);
+    handlers.entityHurt({ id: bot.entity.id });
+    vi.advanceTimersByTime(300);
+    reflexes.stop();
+    expect(reports).toHaveLength(1);
+    expect(reports[0].text).toContain('周围没有敌人却在掉血');
+    expect(bot.jumps).toContain(true);
+  });
+
+  it('氧气读数超过 20(没换算的原始刻数)不当真:回执不照它报满氧', () => {
+    const bot = drownBot('water', 303);
+    const { reflexes, reports } = makeReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(11_000);
+    reflexes.stop();
+    expect(reports).toHaveLength(1);
+    expect(reports[0].text).not.toContain('氧气读数 20/20');
+  });
+
   it('刚下水的头两秒不看氧气:旧读数要等元数据跟上', () => {
     const bot = drownBot('water', 3);
     const { reflexes, reports } = makeReflexes(bot);
