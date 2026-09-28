@@ -414,8 +414,18 @@ export class Bridge {
   private applyTuning(bot: mineflayer.Bot, movements: Movements): void {
     const log = this.opts.log;
 
-    /** 寻路单次落差限制为一格。 */
+    /** 寻路单次落差上限 2 格(原版 3 格内摔落不掉血)。 */
     movements.maxDropDown = 2;
+
+    /**
+     * 水路代价:游一步记 1 + 3,往水里跳也受 maxDropDown 约束(上游默认不限高)。
+     * 0927 在存档 33 西海台周边拿四场直播真实下过的 107 对起终点只算不走:
+     * 成功路线上泡水的路点 139 → 99,原本只算出半截的一条算通了,没有新增算不出的路;
+     * 代价是多垫 44 块方块,大半在两处过水。液体代价取 5 与 3 的结果逐条相同。
+     */
+    // 上游类型声明漏了 liquidCost,运行时字段在 Movements 上
+    (movements as unknown as { liquidCost: number }).liquidCost = 3;
+    movements.infiniteLiquidDropdownDistance = false;
 
     /** 上游 lava 的 diggable=true；额外加入 blocksCantBreak 禁止寻路挖掘。 */
     const lava = (bot.registry.blocksByName as Record<string, { id: number } | undefined>).lava;

@@ -878,6 +878,26 @@ export async function settleBobber(bot: Bot, ctx: SkillContext): Promise<{ name:
  * 所以仰角自己按弹道搜(见 planFishingCasts),抛完先看浮标真停在哪一格,
  * 不是水就立刻收竿换下一个仰角重抛。
  */
+/** 岸上候选站位最多试几个;每个都要走一趟,试多了一竿还没抛就过去半分钟 */
+const FISH_STAND_TRIES = 3;
+/** 岸上站位离水面格的水平距离上限:抛竿轨迹 planFishingCasts 在 4 格内都解得出 */
+const FISH_STAND_R = 4;
+
+/** 离那格水面 FISH_STAND_R 格内、能站人又不泡水的格,按离人远近排 */
+function dryFishingStands(bot: Bot, water: Cell): Cell[] {
+  const out: Cell[] = [];
+  for (let dx = -FISH_STAND_R; dx <= FISH_STAND_R; dx++) {
+    for (let dz = -FISH_STAND_R; dz <= FISH_STAND_R; dz++) {
+      for (let dy = 0; dy <= 2; dy++) {
+        const c = { x: water.x + dx, y: water.y + dy, z: water.z + dz };
+        if (standableCell(bot, c)) out.push(c);
+      }
+    }
+  }
+  const me = bot.entity.position;
+  return out.sort((p, q) => Math.hypot(p.x - me.x, p.y - me.y, p.z - me.z) - Math.hypot(q.x - me.x, q.y - me.y, q.z - me.z));
+}
+
 export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fish' }>, ctx: SkillContext): Promise<string> {
   checkAbort(ctx);
   let water: Cell;
@@ -906,12 +926,26 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
   if (plans.length === 0) {
     const me = bot.entity.position;
     if (Math.hypot(me.x - water.x, me.y - water.y, me.z - water.z) > 3.5) {
-      try {
-        await gotoGoal(bot, new goals.GoalNear(water.x, water.y, water.z, 3), ctx);
-      } catch (err) {
-        throw withRouteScene(bot, ctx, err, water);
+      // 先挑岸上的干格站:GoalNear 只管离水面 3 格,落点常常就是水里,人一停就往下沉
+      for (const stand of dryFishingStands(bot, water).slice(0, FISH_STAND_TRIES)) {
+        checkAbort(ctx);
+        try {
+          await gotoGoal(bot, new goals.GoalBlock(stand.x, stand.y, stand.z), ctx);
+        } catch (err) {
+          if (err instanceof Aborted) throw err;
+          continue;
+        }
+        plans = planFishingCasts(bot, water);
+        if (plans.length > 0) break;
       }
-      plans = planFishingCasts(bot, water);
+      if (plans.length === 0) {
+        try {
+          await gotoGoal(bot, new goals.GoalNear(water.x, water.y, water.z, 3), ctx);
+        } catch (err) {
+          throw withRouteScene(bot, ctx, err, water);
+        }
+        plans = planFishingCasts(bot, water);
+      }
     }
   }
   if (plans.length === 0) {
