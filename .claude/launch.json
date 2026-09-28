@@ -42,6 +42,23 @@
       ],
       "port": 7899,
       "url": "http://127.0.0.1:7899"
+    },
+    {
+      "name": "dungeon-town",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/13079/AppData/Local/Temp/claude/C--Users-13079-Desktop-BOT/fb3d73a5-c42a-4c21-8b38-88432482b85a/scratchpad/serve-town.mjs"
+      ],
+      "port": 8797,
+      "url": "http://localhost:8797"
+    },
+    {
+      "name": "whale-example",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "C:/Users/13079/Desktop/CortiCompanion/packages/cortico-world-desktop-pet/examples/whale/serve.mjs"
+      ],
+      "port": 4318
     }
   ]
 }
