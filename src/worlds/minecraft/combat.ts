@@ -119,8 +119,6 @@ const NO_FIGHT = new Set(['warden', 'wither', 'ender_dragon']);
  * 主岛上等于朝虚空跑。打不打、怎么打由任务决定(attack 步里挨打本来就由任务吸收)。
  */
 const REPORT_ONLY = new Set(['ender_dragon']);
-/** 挨打只报不撤时两次播报的最短间隔,龙一次俯冲会连着打好几下 */
-const REPORT_ONLY_EVERY_MS = 10_000;
 
 /**
  * 撤退每一拍踩出去之前看前方那一格往下多深有落脚。超过这个深度按悬崖处理:
@@ -296,8 +294,6 @@ export class CombatSession {
   private retreatBarehandNoted = false;
   /** 这一场撤退有没有记过「前面没落脚」;一场只记一次 */
   private retreatEdgeNoted = false;
-  /** REPORT_ONLY 上次播报的时刻 */
-  private reportOnlyAt = 0;
   /** 撤退失败转身还手中:E2 血线对本场静默(血线的前提是"跑得掉",这里已经证伪) */
   private desperate = false;
 
@@ -433,11 +429,8 @@ export class CombatSession {
     const bot = this.opts.getBot();
     if (bot && headInWater(bot)) return false;
     if (REPORT_ONLY.has(name)) {
-      const now = Date.now();
-      if (now - this.reportOnlyAt >= REPORT_ONLY_EVERY_MS) {
-        this.reportOnlyAt = now;
-        this.opts.emit(`${zhEntity(name)}打中了我(生命 ${this.hp()}/20);它不在自动撤退之列,手上的任务照常`, true, true);
-      }
+      // 不急报:一次俯冲连着打几下,由投递批次合并
+      this.opts.emit(`${zhEntity(name)}打中了我(生命 ${this.hp()}/20);它不在自动撤退之列,手上的任务照常`, false, true);
       return false;
     }
     // E7:打不过的,不进场,直接跑
