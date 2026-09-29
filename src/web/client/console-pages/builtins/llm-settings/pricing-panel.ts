@@ -113,7 +113,6 @@ export function pricingEditor(
     value: draft?.raw ?? JSON.stringify(simple ? writeSimple(simple) : saved, null, 2),
     onChange: commitDraft,
   });
-  // 生效报价只有一种币种时拿它作默认,否则留空
   const quoteCurrencies = new Set(quotes.flatMap((row) => row.quotes.map((quote) => quote.currency)));
   const currency = ui.input({
     value: simple?.currency ?? (quoteCurrencies.size === 1 ? [...quoteCurrencies][0] : ''),
@@ -134,7 +133,6 @@ export function pricingEditor(
     input.setAttribute('aria-label', label);
     return input;
   });
-  /** 填了单价却没填币种时不写入报价,在三格下方说明。 */
   function currencyMissing(): boolean {
     const missing = !currency.value.trim() && rates.some((input) => input.value.trim() !== '');
     currencyNote.textContent = missing ? S.currencyRequired : '';
