@@ -194,6 +194,9 @@ describe('llamacpp router 目录', () => {
       expect(listings()[0].path).toBe('/models');
       await catalog.list(true);
       expect(listings()[1].path).toBe('/models?reload=1');
+      const listed = await catalog.listModels();
+      expect(listed.find((model) => model.id === 'big')!.inputImages).toBe(true);
+      expect(listed.find((model) => model.id === 'plain')).toEqual({ id: 'plain' });
     } finally {
       catalog.stop();
       await fake.close();

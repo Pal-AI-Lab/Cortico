@@ -42,10 +42,23 @@ export type ProviderHostBase = Omit<ProviderHost, 'stateDir' | 'secret' | 'curre
   stateRoot: string;
 };
 
+/** One model the endpoint advertises. Optional fields are present only when the upstream states them. */
+export interface ListedModel {
+  id: string;
+  /** Label for the endpoint editor's model picker; the id stands in when absent. */
+  displayName?: string;
+  /** Context window in tokens. */
+  contextWindow?: number;
+  /** Largest completion the upstream accepts for this model, in tokens. */
+  maxOutputTokens?: number;
+  /** Whether the model takes image input; picking the model sets the endpoint's `multimodal` to this. */
+  inputImages?: boolean;
+}
+
 export interface ProviderInstance {
   client: BaseProvider;
-  /** Model ids the endpoint advertises (`GET /models`), with the context window when the catalog states one. */
-  listModels?(): Promise<Array<{ id: string; contextWindow?: number }>>;
+  /** Models the endpoint advertises (`GET /models`). */
+  listModels?(): Promise<ListedModel[]>;
   /** Module-owned control object; interpreted by that module's console contribution. */
   control?: unknown;
   compatibilityKey?(): unknown;

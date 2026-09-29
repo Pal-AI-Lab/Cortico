@@ -1,5 +1,6 @@
 /** Native Responses over any OpenAI-compatible endpoint: bearer key, stateless replay, no vendor branching. */
 import type { Logger } from '../../core/types.ts';
+import type { ListedModel } from '../base.ts';
 import { nullLogger } from '../../core/util.ts';
 import { OpenAIHttpClient } from '../transport/chat.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
@@ -102,12 +103,10 @@ export class ResponsesProvider extends OpenAIHttpClient {
   }
 }
 
-export interface CatalogModel {
-  id: string;
-  contextWindow?: number;
-}
-
-/** `GET /models`: ids always; OpenRouter also states `context_length` per model. */
+/**
+ * `GET /models`: ids always. OpenRouter-style catalogs also state per model `name`,
+ * `context_length`, `top_provider.max_completion_tokens` and `architecture.input_modalities`.
+ */
 export class ModelCatalog {
   private known = new Map<string, number | undefined>();
   constructor(
@@ -115,18 +114,27 @@ export class ModelCatalog {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
-  async list(): Promise<CatalogModel[]> {
+  async list(): Promise<ListedModel[]> {
     const { baseUrl, headers } = this.endpoint();
     const res = await this.fetchImpl(`${baseUrl.replace(/\/+$/, '')}/models`, { headers, signal: AbortSignal.timeout(15_000) });
     if (!res.ok) throw new Error(`GET /models ${res.status}: ${(await res.text()).slice(0, 300)}`);
-    const json = (await res.json()) as { data?: Array<{ id?: unknown; context_length?: unknown }> };
+    const json = (await res.json()) as {
+      data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown; top_provider?: { max_completion_tokens?: unknown } | null; architecture?: { input_modalities?: unknown } | null }>;
+    };
     if (!Array.isArray(json.data)) throw new Error('GET /models returned no data array');
-    const models: CatalogModel[] = [];
+    const models: ListedModel[] = [];
     for (const row of json.data) {
       if (typeof row.id !== 'string') continue;
+      const model: ListedModel = { id: row.id };
+      if (typeof row.name === 'string' && row.name.trim()) model.displayName = row.name;
       const window = typeof row.context_length === 'number' && Number.isInteger(row.context_length) && row.context_length > 0 ? row.context_length : undefined;
+      if (window) model.contextWindow = window;
+      const maxOutput = row.top_provider?.max_completion_tokens;
+      if (typeof maxOutput === 'number' && Number.isInteger(maxOutput) && maxOutput > 0) model.maxOutputTokens = maxOutput;
+      const modalities = row.architecture?.input_modalities;
+      if (Array.isArray(modalities)) model.inputImages = modalities.includes('image');
       this.known.set(row.id, window);
-      models.push(window ? { id: row.id, contextWindow: window } : { id: row.id });
+      models.push(model);
     }
     return models.sort((a, b) => a.id.localeCompare(b.id));
   }

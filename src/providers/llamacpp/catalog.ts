@@ -4,7 +4,7 @@
  * and `/models/load` / `/models/unload` move one in and out of memory (unload also cancels a
  * download). A single-model server answers the listing without statuses.
  */
-import type { CatalogModel } from '../openai-responses-compat/native.ts';
+import type { ListedModel } from '../base.ts';
 import { EventDecoder } from '../transport/response-http.ts';
 
 export type RouterModelStatus = 'loaded' | 'loading' | 'unloaded' | 'downloading' | 'sleeping' | 'failed' | 'unknown';
@@ -160,12 +160,15 @@ export class RouterCatalog {
     return this.post('/models/unload', { model });
   }
 
-  /** The `ProviderInstance.listModels` view: ids, plus the window when already probed. */
-  async listModels(): Promise<CatalogModel[]> {
+  /** The `ProviderInstance.listModels` view: ids, the window when already probed, image input when the listing states modalities. */
+  async listModels(): Promise<ListedModel[]> {
     const models = await this.list();
     return models.map((model) => {
+      const listed: ListedModel = { id: model.id };
       const window = this.windows.get(model.id)?.value;
-      return window ? { id: model.id, contextWindow: window } : { id: model.id };
+      if (window) listed.contextWindow = window;
+      if (model.inputModalities) listed.inputImages = model.inputModalities.includes('image');
+      return listed;
     });
   }
 

@@ -46,6 +46,20 @@ describe('ModelCatalog', () => {
     const denied = new ModelCatalog(() => ({ baseUrl: 'https://router.test/api/v1', headers: {} }), (async () => new Response('nope', { status: 401 })) as unknown as typeof fetch);
     await expect(denied.list()).rejects.toThrow('GET /models 401');
   });
+
+  it('name、top_provider.max_completion_tokens、architecture.input_modalities 成为显示名、最大输出与图像输入;类型不对的不报', async () => {
+    const rows = [
+      { id: 'alpha-mini', name: 'Alpha Mini', top_provider: { max_completion_tokens: 8192 }, architecture: { input_modalities: ['text', 'image'] } },
+      { id: 'beta-text', architecture: { input_modalities: ['text'] }, top_provider: null },
+      { id: 'gamma-odd', name: 42, top_provider: { max_completion_tokens: '8192' }, architecture: { input_modalities: 'image' } },
+    ];
+    const catalog = new ModelCatalog(() => ({ baseUrl: 'https://router.test/v1', headers: {} }), (async () => new Response(JSON.stringify({ data: rows }), { status: 200 })) as unknown as typeof fetch);
+    expect(await catalog.list()).toEqual([
+      { id: 'alpha-mini', displayName: 'Alpha Mini', maxOutputTokens: 8192, inputImages: true },
+      { id: 'beta-text', inputImages: false },
+      { id: 'gamma-odd' },
+    ]);
+  });
 });
 
 describe('Core · 生效窗口', () => {
