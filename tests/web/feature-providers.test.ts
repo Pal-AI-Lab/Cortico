@@ -11,8 +11,8 @@ const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve()
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
 const BLOCKS = { endpoint: { id: 'endpoint', title: '连接', builtin: 'connection-endpoint', defaultOpen: true }, model: { id: 'model', title: '模型与生成', builtin: 'connection-model', defaultOpen: true }, pricing: { id: 'pricing', title: '成本与计价', builtin: 'connection-pricing', defaultOpen: false }, protocol: { id: 'protocol', title: '高级协议', builtin: 'connection-protocol', defaultOpen: false } };
 const DEFAULT_SECTIONS = [BLOCKS.endpoint, BLOCKS.model, BLOCKS.pricing, BLOCKS.protocol];
-interface FixtureOptions { sections?: typeof DEFAULT_SECTIONS; usage?: Array<{ name: string; running: boolean }>; readiness?: string; secretConfigured?: string }
-async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sections = DEFAULT_SECTIONS, usage = [], readiness = 'ready', secretConfigured = 'none' }: FixtureOptions = {}) {
+interface FixtureOptions { sections?: typeof DEFAULT_SECTIONS; models?: unknown[]; usage?: Array<{ name: string; running: boolean }>; readiness?: string; secretConfigured?: string }
+async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sections = DEFAULT_SECTIONS, models = [], usage = [], readiness = 'ready', secretConfigured = 'none' }: FixtureOptions = {}) {
   const calls: Array<{ path: string; body: any }> = [];
   const detail = (name: string) => ({ name, entry: structuredClone(entry), revision: 'r1', secretConfigured, readiness: { state: 'ready' }, config: [], references: [] });
   vi.stubGlobal('fetch', async (path: string, init: any) => {
@@ -23,6 +23,7 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sec
     else if (path === '/api/provider-modules/config') result = [];
     else if (/\/activate$/.test(path)) active = decodeURIComponent(path.split('/')[3]);
     else if (/\/delete$/.test(path)) names = names.filter(name => name !== decodeURIComponent(path.split('/')[3]));
+    else if (/\/models$/.test(path)) result = { models };
     else if (/\/test$/.test(path)) result = { ok: true, status: 200, elapsedMs: 1234, model: 'probe-model', usage: { input: 10, cachedInput: 0, output: 5, reasoning: 0 }, encryptedReasoning: false, charges: [] };
     else if (/^\/api\/providers\/[^/]+$/.test(path)) result = detail(decodeURIComponent(path.split('/')[3]));
     return new Response(JSON.stringify(result), { status: 200, headers: { 'Content-Type': 'application/json' } });
@@ -175,6 +176,32 @@ it('the editor probes and lists models on the unsaved form, key included, withou
   ([...root.querySelectorAll('button')].find(button => button.textContent === '获取模型列表') as HTMLButtonElement).click(); await flush();
   expect(calls.find(call => call.path === '/api/providers/Alpha/models')!.body).toMatchObject({ entry: { baseUrl: 'https://edited.test' } });
   expect(calls.some(call => call.path.endsWith('/save'))).toBe(false);
+});
+
+it('a fetched list shows its count; picking a model fills the model, context window and image switch, leaving max output to the operator', async () => {
+  const models = [{ id: 'alpha-mini', displayName: 'Alpha Mini', contextWindow: 32000, maxOutputTokens: 8000, inputImages: true }, { id: 'beta-text', inputImages: false }];
+  const { root } = await fixture(['Alpha'], 'Alpha', { models });
+  const picker = root.querySelector('select[aria-label="模型列表"]') as HTMLSelectElement;
+  expect(picker.hidden).toBe(true);
+  ([...root.querySelectorAll('button')].find(button => button.textContent === '获取模型列表') as HTMLButtonElement).click(); await flush();
+  expect(root.querySelector('.connection-test button + select + .msgline')?.textContent).toBe('取到 2 个模型。');
+  expect(picker.hidden).toBe(false);
+  expect([...picker.options].map(option => option.textContent)).toEqual(['—', 'Alpha Mini', 'beta-text']);
+  expect(picker.value).toBe('');
+  const model = root.querySelector('[aria-label="模型"]') as HTMLInputElement;
+  const images = root.querySelector('[aria-label="接受图片"]') as HTMLInputElement;
+  picker.value = 'alpha-mini'; picker.dispatchEvent(new Event('change')); await flush();
+  expect(model.value).toBe('alpha-mini');
+  expect((root.querySelector('[aria-label="上下文上限"]') as HTMLInputElement).value).toBe('32000');
+  expect(images.checked).toBe(true);
+  expect((root.querySelector('[aria-label="最大输出 token"]') as HTMLInputElement).value).toBe('');
+  expect(root.textContent).toContain('8000');
+  expect(root.querySelector('[data-provider="Alpha"] .connection-secondary')?.textContent).toBe('✎ 草稿');
+  picker.value = 'beta-text'; picker.dispatchEvent(new Event('change')); await flush();
+  expect(images.checked).toBe(false);
+  expect(root.textContent).not.toContain('8000');
+  model.value = 'unlisted-model'; model.dispatchEvent(new Event('input')); model.dispatchEvent(new Event('change')); await flush();
+  expect(picker.value).toBe('');
 });
 
 it('a saved connection offers discard only while the form differs from what is saved', async () => {

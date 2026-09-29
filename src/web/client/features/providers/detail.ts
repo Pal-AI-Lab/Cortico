@@ -3,7 +3,7 @@ import { get, post } from '../../core/api.ts';
 import { Lifecycle } from '../../core/lifecycle.ts';
 import { configField, type ConfigGroup } from '../config/view.ts';
 import { validateProviderName } from '../../../../providers/name.ts';
-import { connectionPath, type Detail, type Editing, type Module } from './types.ts';
+import { connectionPath, type Detail, type Editing, type ListedModel, type Module } from './types.ts';
 import { LANGUAGE } from '../../core/language.ts';
 import { pricingEditor } from '../../console-pages/builtins/llm-settings/pricing-panel.ts';
 import type { Disposable } from '../../../shared/client-panel.ts';
@@ -142,33 +142,47 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   function modelBlock(box: HTMLElement, section: Section, module: Module, spec: Spec) {
     const body = block(box, section, true);
     const modelInput = field(body, 'model', S.model, spec.model, value => { spec.model = value; }, value => value.trim() ? null : S.required);
-    const catalog = ui.h('datalist'); catalog.id = 'connection-models-' + Math.random().toString(36).slice(2); modelInput.setAttribute('list', catalog.id); body.append(catalog);
-    let listedModels: Array<{ id: string; contextWindow?: number }> = [];
+    let listedModels: ListedModel[] = [];
     let contextInput: HTMLInputElement | null = null;
     const windowNote = ui.msgline();
-    const noteCatalogWindow = () => {
-      if (!listedModels.length) { windowNote.textContent = ''; return; }
-      windowNote.textContent = listedModels.find(item => item.id === spec.model)?.contextWindow ? '' : S.catalogNoWindow;
+    const outputNote = ui.msgline();
+    /** 选中一项等同在模型格里填入它的 id;模型格里的 id 不在列表中时停在空项。 */
+    const picker = ui.select({ onChange: value => {
+      if (!value) return;
+      modelInput.value = value;
+      modelInput.dispatchEvent(new Event('input'));
+      modelInput.dispatchEvent(new Event('change'));
+    } });
+    picker.setAttribute('aria-label', S.modelList); picker.hidden = true;
+    const noteCatalog = () => {
+      const listed = listedModels.find(item => item.id === spec.model);
+      picker.value = listed?.id ?? '';
+      windowNote.textContent = listedModels.length && !listed?.contextWindow ? S.catalogNoWindow : '';
+      outputNote.textContent = listed?.maxOutputTokens ? S.catalogMaxOutput(listed.maxOutputTokens) : '';
     };
     modelInput.addEventListener('change', () => {
-      const known = listedModels.find(item => item.id === modelInput.value)?.contextWindow;
-      if (known && contextInput) { spec.contextWindow = known; contextInput.value = String(known); delete editing.raw.contextWindow; change(); }
-      noteCatalogWindow();
+      const listed = listedModels.find(item => item.id === modelInput.value);
+      if (listed?.contextWindow && contextInput) { spec.contextWindow = listed.contextWindow; contextInput.value = String(listed.contextWindow); delete editing.raw.contextWindow; }
+      if (listed?.inputImages !== undefined) { editing.entry.multimodal = listed.inputImages; images.checked = listed.inputImages; }
+      change();
+      noteCatalog();
     }, opts);
     const fetchResult = ui.msgline();
     const fetch = ui.button(S.fetchModels, { onClick: () => void (async () => {
       fetch.disabled = true;
       fetchResult.textContent = '';
       fetchResult.classList.remove('bad');
-      try { const result = await post<{ models: Array<{ id: string; contextWindow?: number }> }>(connectionPath(identity) + '/models', draftBody(), opts);
-        catalog.replaceChildren(...result.models.map(item => { const option = ui.h('option'); option.value = item.id; return option; }));
+      try { const result = await post<{ models: ListedModel[] }>(connectionPath(identity) + '/models', draftBody(), opts);
         listedModels = result.models;
-        noteCatalogWindow();
+        picker.replaceChildren(...[{ id: '', displayName: '—' }, ...listedModels].map(item => { const option = ui.h('option', null, item.displayName ?? item.id); option.value = item.id; return option; }));
+        picker.hidden = !listedModels.length;
+        fetchResult.textContent = S.modelsFetched(listedModels.length);
+        noteCatalog();
       } catch (error) {
         if (!lifecycle.disposed) { fetchResult.textContent = String(error); fetchResult.classList.add('bad'); }
       } finally { fetch.disabled = false; }
     })() });
-    const fetchRow = ui.rowbar(); fetchRow.classList.add('connection-test'); fetchRow.append(fetch, fetchResult); body.append(fetchRow);
+    const fetchRow = ui.rowbar(); fetchRow.classList.add('connection-test'); fetchRow.append(fetch, picker, fetchResult); body.append(fetchRow);
     const tiers = module.reasoningTiers;
     if (tiers.length) {
       const select = ui.select({ value: tiers.find(tier => tier.thinking === spec.thinking && tier.effort === spec.reasoningEffort)?.id ?? '', options: tiers.map(tier => ({ value: tier.id, label: tier.label })), onChange: value => {
@@ -183,6 +197,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         editing.raw[name] = value; if (!value) delete spec[name]; else spec[name] = Number(value);
       }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : S.invalidNumber, 'number');
       if (name === 'contextWindow') contextInput = input;
+      if (name === 'maxTokens') body.append(outputNote);
     }
     body.append(windowNote);
     if (module.serviceTiers.length) {
@@ -193,7 +208,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     images.setAttribute('role', 'switch'); images.classList.add('connection-switch');
     images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts);
     const imagesField = ui.field(S.images, images); imagesField.classList.add('connection-toggle'); body.append(imagesField);
-    syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); };
+    syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); noteCatalog(); };
   }
   function pricingBlock(box: HTMLElement, section: Section) {
     const body = block(box, section, true);

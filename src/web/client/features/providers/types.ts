@@ -1,4 +1,5 @@
 import type { ProviderHubApi } from '../../../../providers/hub-api.ts';
+export type { ListedModel } from '../../../../providers/base.ts';
 export type HubState = ReturnType<ProviderHubApi['list']>;
 export type Connection = HubState['providers'][number];
 export type Detail = ReturnType<ProviderHubApi['detail']>;

@@ -46,6 +46,9 @@ provider 模块不预设任何模型名;端点
 记住,所有端点共用。`connectionBlocks` 里计价与协议默认收起。
 面板的 `setConfig` 同样只进暂存;运行时启停、安装与拉取模型要求端点已保存。「测试连接」与
 「获取模型列表」按编辑页当前内容(含刚输入的 API Key)发请求,不写盘,不参与可用性判断。
+取到的模型(`ProviderInstance.listModels()` 的返回项)进入模型选单,标签取 `displayName`,缺省用 id;
+选一项等同手填它的 id:该项的 `contextWindow` 填进上下文上限,`inputImages` 设定图像开关,
+`maxOutputTokens` 只显示,不改最大输出。列表外的 id 照样可以手填。
 
 控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 只填密钥值未填变量名时,默认名按端点名派生:`CORTICO_KEY_<端点名>`,`-` 折成 `_`。
