@@ -146,7 +146,6 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     let contextInput: HTMLInputElement | null = null;
     const windowNote = ui.msgline();
     const outputNote = ui.msgline();
-    /** 选中一项等同在模型格里填入它的 id;模型格里的 id 不在列表中时停在空项。 */
     const picker = ui.select({ onChange: value => {
       if (!value) return;
       modelInput.value = value;
