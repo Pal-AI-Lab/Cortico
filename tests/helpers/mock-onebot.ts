@@ -24,6 +24,9 @@ export interface OutboxEntry {
   message_id?: number;
 }
 
+/** 预置动作的回应:成功带 data,失败带 retcode;null=不回应 */
+type ActionReply = { data: unknown } | { retcode: number; message: string } | null;
+
 export class MockOneBot {
   readonly opts: Required<Omit<MockOneBotOptions, 'port' | 'token'>> & {
     token?: string;
@@ -33,6 +36,10 @@ export class MockOneBot {
 
   /** send_group_msg调用记录(测试断言用) */
   readonly outbox: OutboxEntry[] = [];
+  /** 收到的全部动作调用,按到达顺序 */
+  readonly received: Array<{ action: string; params: Record<string, unknown> }> = [];
+  /** 预置的动作回应,见 setActionHandler */
+  private handlers = new Map<string, (params: Record<string, unknown>) => ActionReply | Promise<ActionReply>>();
 
   private server?: WebSocketServer;
   private clients = new Set<WebSocket>();
@@ -115,6 +122,17 @@ export class MockOneBot {
     const fail = (retcode: number, message: string) =>
       this.send(ws, { status: 'failed', retcode, data: null, message, echo });
 
+    this.received.push({ action: String(action), params });
+    const handler = this.handlers.get(String(action));
+    if (handler) {
+      void Promise.resolve(handler(params)).then((reply) => {
+        if (!reply) return;
+        if ('data' in reply) ok(reply.data);
+        else fail(reply.retcode, reply.message);
+      });
+      return;
+    }
+
     switch (action) {
       case 'get_login_info':
         ok({ user_id: this.opts.selfId, nickname: this.opts.selfNickname });
@@ -161,6 +179,14 @@ export class MockOneBot {
 
   private send(ws: WebSocket, obj: unknown): void {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+  }
+
+  /** 预置某个动作的回应(扩展动作用);可返回 Promise 延后回应 */
+  setActionHandler(
+    action: string,
+    handler: (params: Record<string, unknown>) => ActionReply | Promise<ActionReply>,
+  ): void {
+    this.handlers.set(action, handler);
   }
 
   /** 预置 get_msg(message_id) 的返回值(测试模拟"取回原文"用) */

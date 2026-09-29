@@ -1,4 +1,4 @@
-<!-- Owner: src/worlds/qq/definition.ts, src/worlds/qq/driver.ts -->
+<!-- Owner: src/worlds/qq/definition.ts, src/worlds/qq/driver.ts, src/worlds/qq/world.ts -->
 
 # worlds/qq
 
@@ -31,5 +31,23 @@ OneBot v11 标准动作:`get_login_info`、`get_group_info`、`get_group_member_
 |---|---|
 | 通知 `group_msg_emoji_like` | 不产生表情回应事件 |
 | `notify/poke` 的 `raw_info` | 动作文案退回「戳了戳」 |
+
+## 语音转写
+
+监听会话里收到的语音,正文占位为 `[语音,正在转写中...]`,World 随后用原 `message_id` 调协议端的
+转写扩展动作,不阻塞后续消息。结果另发一条 `qq.transcript` 事件,行首是原消息号,带原会话、
+发言人和 `[QQ语音转写]` 标记,照常合批唤醒。
+
+| 协议端 | 动作 |
+|---|---|
+| SnowLuma、NapCat | `fetch_ptt_text({ message_id })` → `{ text }` |
+| LLOneBot | `voice_msg_to_text({ message_id })` → `{ text }` |
+
+先试 `fetch_ptt_text`,协议端回 retcode 1404(动作不存在)才换 `voice_msg_to_text`;探明可用的
+动作在本次连接内沿用,重连后重新探明。两个都回 1404 时发一条不可用说明,此后本次连接里的语音
+占位为 `[语音,协议端不提供转写]`,不再请求。
+
+超时、撤回、识别失败或转写为空不换动作名,各发一条 `[系统] #<message_id> 的语音没能转写:<原因>`。
+调用时限 40s:协议端等转写结果最长 30s,再加一次普通动作调用的时限 10s。
 
 语音以 `base64://` 的 `record` 段发出,转成 QQ 语音格式由协议端负责。

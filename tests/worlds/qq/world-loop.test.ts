@@ -1,9 +1,9 @@
 /**
  * 完整回路测试:MockOneBot(真WS服务端) ⇄ QQWorld ⇄ FakeHost。
  * 覆盖:环境提示词、事件入库字段+会话标签、多群/私聊过滤、撤回/入退群/
- * 表情回应、draft→confirm 起草确认门、私聊路由、映射重建。
+ * 表情回应、语音转写、draft→confirm 起草确认门、私聊路由、映射重建。
  */
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { renderWorldEnvPrompt } from '../../../src/core/prefix.ts';
@@ -468,6 +468,101 @@ describe('转发消息展开', () => {
     const followUp = host.pushed[1].event;
     expect(followUp.type).toBe('qq.forward');
     expect(followUp.text).toContain('没能展开');
+  });
+});
+
+describe('语音转写', () => {
+  const voice = [{ type: 'record', data: { file: 'voice.amr' } }];
+  const transcripts = () => host.pushed.filter(({ event }) => event.type === 'qq.transcript');
+  const pttCalls = () =>
+    mock.received.filter((c) => c.action === 'fetch_ptt_text' || c.action === 'voice_msg_to_text');
+
+  it('群与私聊的转写结果另发 qq.transcript,关联原消息号、发言人与会话;转写期间其他消息照常入库', async () => {
+    const held: Array<() => void> = [];
+    mock.setActionHandler('fetch_ptt_text', (params) =>
+      new Promise((resolve) => held.push(() => resolve({ data: { text: `转写${params.message_id}` } }))),
+    );
+    mod.setWatched([GROUP], [1001]);
+    const groupMid = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => held.length === 1, '群语音已请求转写');
+    mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', text: '听到没' });
+    await waitUntil(() => host.pushed.some(({ event }) => event.text.endsWith('听到没')), '转写未回时文字消息入库');
+    const groupMsg = host.pushed.find(({ event }) => event.meta?.message_id === groupMid)!.event;
+    expect(groupMsg.text).toContain('[语音,正在转写中...]');
+    expect(transcripts()).toHaveLength(0);
+
+    const privateMid = 7801;
+    mock.emitRaw({
+      post_type: 'message',
+      message_type: 'private',
+      sub_type: 'friend',
+      user_id: 1001,
+      message_id: privateMid,
+      time: Math.floor(Date.now() / 1000),
+      sender: { user_id: 1001, nickname: '老王' },
+      message: voice,
+      raw_message: '',
+    });
+    await waitUntil(() => held.length === 2, '私聊语音已请求转写');
+    for (const release of held) release();
+    await waitUntil(() => transcripts().length === 2, '两条转写到达');
+
+    const byMid = (mid: number) => transcripts().find(({ event }) => event.meta?.message_id === mid)!.event;
+    const g = byMid(groupMid);
+    expect(g.text).toMatch(new RegExp(`^#${groupMid} \\[群「深夜食堂」 \\d{2}:\\d{2}\\] 阿强\\(2002\\): \\[QQ语音转写\\] 转写${groupMid}$`));
+    expect(g.senderKey).toBe('2002');
+    expect(g.meta?.conv).toEqual({ kind: 'group', id: GROUP });
+    const p = byMid(privateMid);
+    expect(p.text).toMatch(new RegExp(`^#${privateMid} \\[私聊 \\d{2}:\\d{2}\\] 老王\\(1001\\): \\[QQ语音转写\\] 转写${privateMid}$`));
+    expect(p.meta?.conv).toEqual({ kind: 'private', id: 1001 });
+    expect(pttCalls().map((c) => c.params.message_id)).toEqual([groupMid, privateMid]);
+  });
+
+  it('fetch_ptt_text 不存在(1404)时改用 voice_msg_to_text,本连接之后直接用它', async () => {
+    mock.setActionHandler('voice_msg_to_text', () => ({ data: { text: '今晚吃什么' } }));
+    mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => transcripts().length === 1, '第一条转写到达');
+    mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => transcripts().length === 2, '第二条转写到达');
+
+    expect(transcripts()[0].event.text).toContain('[QQ语音转写] 今晚吃什么');
+    expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text', 'voice_msg_to_text', 'voice_msg_to_text']);
+  });
+
+  it('协议端回了失败(撤回、识别失败)不换动作名,发一条没转写成的说明', async () => {
+    mock.setActionHandler('fetch_ptt_text', () => ({ retcode: 200, message: '消息不存在或已被撤回' }));
+    const mid = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => transcripts().length === 1, '失败说明到达');
+
+    expect(transcripts()[0].event.text).toBe(`[系统] #${mid} 的语音没能转写:fetch_ptt_text: retcode=200 消息不存在或已被撤回`);
+    expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text']);
+  });
+
+  it('调用超时不换动作名', async () => {
+    mock.setActionHandler('fetch_ptt_text', () => null);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const mid = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+      while (pttCalls().length === 0) await new Promise((r) => setImmediate(r));
+      await vi.runOnlyPendingTimersAsync();
+      while (transcripts().length === 0) await new Promise((r) => setImmediate(r));
+
+      expect(transcripts()[0].event.text).toMatch(new RegExp(`^\\[系统\\] #${mid} 的语音没能转写:fetch_ptt_text: 调用超时`));
+      expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text']);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('两个动作都不存在:说明一次,之后的语音不再请求并在占位里标明', async () => {
+    const first = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => transcripts().length === 1, '不支持说明到达');
+    expect(transcripts()[0].event.text).toContain(`#${first} 的语音没能转写:协议端不提供转写动作`);
+
+    const second = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+    await waitUntil(() => host.pushed.some(({ event }) => event.meta?.message_id === second), '第二条语音入库');
+    expect(host.pushed.find(({ event }) => event.meta?.message_id === second)!.event.text).toContain('[语音,协议端不提供转写]');
+    expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text', 'voice_msg_to_text']);
   });
 });
 

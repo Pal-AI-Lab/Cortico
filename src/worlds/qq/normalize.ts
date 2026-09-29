@@ -123,6 +123,8 @@ export interface RenderContext {
   renderImage?: ImageRenderPolicy;
   /** json卡片渲染策略(封面图接入外挂视觉用);缺省=只显示prompt文本,无封面图占位 */
   renderJsonCard?: JsonCardRenderPolicy;
+  /** 语音段的占位文本(标明转写状态);缺省 `[语音]` */
+  recordText?: string;
 }
 
 interface RenderedIncoming {
@@ -256,9 +258,9 @@ export function renderIncoming(
         parts.push({ text: renderImage(data), isToken: true });
         break;
       }
-      // 语音条的音频不随消息到达,取回它要另一次动作调用;这里只说这是一条语音。
+      // 语音条的音频不随消息到达;转写文本由 World 另发事件。
       case 'record': {
-        parts.push({ text: '[语音]', isToken: true });
+        parts.push({ text: ctx.recordText ?? '[语音]', isToken: true });
         break;
       }
       case 'face': {

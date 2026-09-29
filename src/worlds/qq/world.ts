@@ -29,7 +29,13 @@ import {
   sameConversation,
   type Conv,
 } from './conversation.ts';
-import { OneBotDriver, type OneBotEvent } from './driver.ts';
+import {
+  DEFAULT_API_TIMEOUT_MS,
+  OneBotDriver,
+  RETCODE_UNSUPPORTED_ACTION,
+  type ExtensionResult,
+  type OneBotEvent,
+} from './driver.ts';
 import { createHistoryTools } from './history-tools.ts';
 import {
   buildOutgoing,
@@ -51,6 +57,20 @@ const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url
 
 /** QQ在查不到账号资料时返回的昵称占位,等于「没有名字」。 */
 const PLACEHOLDER_NICKNAME = 'QQ用户';
+
+/**
+ * 语音转文字的扩展动作,按尝试顺序。SnowLuma、NapCat 提供前者,LLOneBot 提供后者;
+ * 两者参数都是 `{ message_id }`,返回 `{ text }`。
+ */
+const PTT_TEXT_ACTIONS = ['fetch_ptt_text', 'voice_msg_to_text'] as const;
+type PttTextAction = (typeof PTT_TEXT_ACTIONS)[number];
+
+/**
+ * 协议端等 QQ 推回转写结果的最长时间:LLOneBot 等 30s;NapCat 取消息、转写、再取消息
+ * 三段各等 baseTimeout(缺省 10s);SnowLuma 等 20s。调用时限在此之上再加一次普通调用
+ * 的时限,协议端自己的超时失败先于本端超时送达。
+ */
+const PTT_TEXT_PROTOCOL_WAIT_MS = 30_000;
 
 
 
@@ -161,6 +181,9 @@ export class QQWorld implements World {
 
   /** 单槽草稿(起草-确认门) */
   private pendingDraft: PendingDraft | null = null;
+
+  /** 当前连接上可用的转写动作:undefined=未探明,null=都不存在。每次(重)连后重新探明。 */
+  private pttTextAction: PttTextAction | null | undefined;
 
 
   /** 最近一次成功组装的动态账号/会话事实(断线期间沿用；不缓存可编辑固定文本) */
@@ -577,6 +600,7 @@ export class QQWorld implements World {
     this.driver = driver;
     driver.onEvent((ev) => this.handleEvent(ev));
     driver.onReady(() => {
+      this.pttTextAction = undefined;
       this.envPromptVars(); // 为副作用调用:趁 identity 在,把群名快照存进缓存
       this.log.info('身份就绪', { context: this.cachedDynamicContext });
     });
@@ -773,6 +797,9 @@ export class QQWorld implements World {
         ? idn?.groups.get(conv.id)?.card || idn?.nickname || '你'
         : idn?.nickname || '你';
 
+    const transcribe =
+      (msg.message ?? []).some((seg) => seg.type === 'record') && this.pttTextAction !== null;
+
     const { text, mentionedSelf } = renderIncoming(msg, {
       selfId,
       selfName,
@@ -782,6 +809,7 @@ export class QQWorld implements World {
       nameOf: (qq) => this.nameByUserId.get(qq),
       renderImage,
       renderJsonCard,
+      recordText: transcribe ? '[语音,正在转写中...]' : '[语音,协议端不提供转写]',
     });
 
     const when =
@@ -834,6 +862,8 @@ export class QQWorld implements World {
       { trigger },
     );
     this.knownMessages.set(String(msg.message_id), { conv, ts: env.ts });
+
+    if (transcribe) this.transcribeVoice(msg, conv, displayName, when);
 
     for (const img of lateImages) {
       void img.promise.then(({ image }) => {
@@ -890,6 +920,59 @@ export class QQWorld implements World {
       const resId = String(forwardSeg.data?.id ?? '');
       if (resId) this.lookupForward(resId, conv, msg.message_id);
     }
+  }
+
+  /**
+   * 向协议端请求 QQ 自带的语音转文字,结果另发一条 qq.transcript,不阻塞当前投递。
+   * 转写成功照常合批唤醒;没转写成也发一条说明,因为占位已写了「正在转写中」。
+   * 只有动作不存在(1404)才换下一个动作名,超时、撤回、识别失败都按这条没转写成处理。
+   */
+  private transcribeVoice(msg: OneBotGroupMessage, conv: Conv, displayName: string, when: Date): void {
+    const host = this.host!;
+    const driver = this.driver!;
+    const mid = msg.message_id;
+    const timeoutMs = PTT_TEXT_PROTOCOL_WAIT_MS + (this.cfg.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS);
+    void (async () => {
+      let rep!: ExtensionResult;
+      for (const action of this.pttTextAction ? [this.pttTextAction] : PTT_TEXT_ACTIONS) {
+        rep = await driver.callExtension(action, { message_id: mid }, timeoutMs);
+        if (!rep.ok && rep.retcode === RETCODE_UNSUPPORTED_ACTION) continue;
+        if (rep.ok || rep.retcode !== undefined) this.pttTextAction = action;
+        break;
+      }
+      const raw = rep.ok ? (rep.data as { text?: unknown } | null)?.text : undefined;
+      const text = typeof raw === 'string' ? raw.trim() : '';
+      if (text) {
+        await host.pushEvent(
+          {
+            type: 'qq.transcript',
+            ts: nowIso(this.timezone),
+            source: this.id,
+            text: `#${mid} [${this.convLabel(conv)} ${shortTime(this.timezone, when)}] ${displayName}(${msg.user_id}): [QQ语音转写] ${text}`,
+            senderKey: String(msg.user_id),
+            meta: { message_id: mid, user_id: msg.user_id, sender_name: displayName, conv },
+          },
+          { trigger: 'debounce' },
+        );
+        return;
+      }
+      let reason: string;
+      if (rep.ok) {
+        reason = '转写结果为空';
+      } else if (rep.retcode === RETCODE_UNSUPPORTED_ACTION) {
+        this.pttTextAction = null;
+        reason = `协议端不提供转写动作(${PTT_TEXT_ACTIONS.join('、')} 都不存在)`;
+      } else {
+        reason = rep.error;
+      }
+      await host.pushEvent({
+        type: 'qq.transcript',
+        ts: nowIso(this.timezone),
+        source: this.id,
+        text: `[系统] #${mid} 的语音没能转写:${reason}`,
+        meta: { conv, message_id: mid },
+      });
+    })().catch((e) => host.log.warn('事件投递失败', { err: String(e) }));
   }
 
   /**
