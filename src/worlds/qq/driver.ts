@@ -35,7 +35,7 @@ interface OneBotDriverOptions {
   reconnectBaseMs?: number;
   /** 重连退避封顶,默认30000ms */
   reconnectMaxMs?: number;
-  /** API调用默认超时,默认10000ms */
+  /** API调用默认超时,缺省 DEFAULT_API_TIMEOUT_MS */
   apiTimeoutMs?: number;
 }
 
@@ -46,10 +46,23 @@ interface PendingCall {
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** 扩展动作的结果:不抛错,调用方按ok分支降级 */
-type ExtensionResult =
+/** 扩展动作的结果:不抛错,调用方按ok分支降级。协议端回了失败响应才带 retcode;超时、断线没有。 */
+export type ExtensionResult =
   | { ok: true; data: unknown }
-  | { ok: false; error: string };
+  | { ok: false; error: string; retcode?: number };
+
+/** OneBot v11 规定的「API 不存在」返回码 */
+export const RETCODE_UNSUPPORTED_ACTION = 1404;
+
+/** API调用默认超时 */
+export const DEFAULT_API_TIMEOUT_MS = 10000;
+
+/** 协议端对一次调用回了失败响应 */
+class OneBotApiError extends Error {
+  constructor(message: string, readonly retcode: number) {
+    super(message);
+  }
+}
 
 export class OneBotDriver {
   private readonly opts: OneBotDriverOptions;
@@ -155,7 +168,7 @@ export class OneBotDriver {
     params: Record<string, unknown> = {},
     timeoutMs?: number,
   ): Promise<unknown> {
-    const timeout = timeoutMs ?? this.opts.apiTimeoutMs ?? 10000;
+    const timeout = timeoutMs ?? this.opts.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS;
     return new Promise((resolve, reject) => {
       if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
         reject(new Error(`${action}: WS未连接`));
@@ -193,7 +206,9 @@ export class OneBotDriver {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.log.warn(`扩展动作失败: ${action}`, { error: message });
-      return { ok: false, error: message };
+      return err instanceof OneBotApiError
+        ? { ok: false, error: message, retcode: err.retcode }
+        : { ok: false, error: message };
     }
   }
 
@@ -343,8 +358,9 @@ export class OneBotDriver {
         call.resolve(msg.data);
       } else {
         call.reject(
-          new Error(
+          new OneBotApiError(
             `${call.action}: retcode=${retcode}${msg.message ? ` ${String(msg.message)}` : ''}`,
+            retcode,
           ),
         );
       }
