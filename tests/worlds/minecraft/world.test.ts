@@ -584,14 +584,13 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
 
   it('默认 enabled=false:World 不自报被需要;观察者客户端也默认不开', () => {
     expect(MINECRAFT_DEFAULTS.enabled).toBe(false);
-    expect(MINECRAFT_DEFAULTS.local.serverEnabled).toBe(false);
+    expect(MINECRAFT_DEFAULTS.local.startWithWorld).toBe(false);
     expect(MINECRAFT_DEFAULTS.client.enabled).toBe(false);
   });
 });
 
-describe('MinecraftWorld 受管服务器开关', () => {
-  const serverState = (enabled: boolean, phase: MinecraftServerState['phase'] = 'stopped'): MinecraftServerState => ({
-    enabled,
+describe('MinecraftWorld 受管服务器启停', () => {
+  const serverState = (phase: MinecraftServerState['phase'] = 'stopped'): MinecraftServerState => ({
     phase,
     address: '127.0.0.1:1',
     detail: null,
@@ -601,25 +600,25 @@ describe('MinecraftWorld 受管服务器开关', () => {
     configured: true,
   });
 
-  it('关态长期不连接；开后启动并连接，再关会断线并保存式停服', async () => {
+  it('startWithWorld 关时 World 启动不连接；面板启动才起服并连接，面板停止断线并存档停服', async () => {
     vi.useFakeTimers();
     const runtimeCfg = cfg({
       port: 1,
       local: {
         ...MINECRAFT_DEFAULTS.local,
         serverDir: 'C:\\managed',
-        serverEnabled: false,
+        startWithWorld: false,
         cheats: false,
       },
     });
     const bridgeStart = vi.spyOn(Bridge.prototype, 'start').mockImplementation(() => undefined);
     const bridgeStop = vi.spyOn(Bridge.prototype, 'stop').mockResolvedValue(undefined);
     const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start')
-      .mockImplementation(async () => serverState(runtimeCfg.local.serverEnabled, 'starting'));
+      .mockImplementation(async () => serverState('starting'));
     const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop')
-      .mockImplementation(async () => serverState(runtimeCfg.local.serverEnabled));
+      .mockImplementation(async () => serverState());
     vi.spyOn(MinecraftServerManager.prototype, 'state')
-      .mockImplementation(async () => serverState(runtimeCfg.local.serverEnabled));
+      .mockImplementation(async () => serverState());
     const m = new MinecraftWorld({ cfg: runtimeCfg });
     try {
       await m.start(new FakeHost() as never);
@@ -632,15 +631,14 @@ describe('MinecraftWorld 受管服务器开关', () => {
       await vi.advanceTimersByTimeAsync(600_000);
       expect(bridgeStart).not.toHaveBeenCalled();
       expect(serverStart).not.toHaveBeenCalled();
-      expect((await m.serverConsole().start()).detail).toContain('开关已关闭');
+      expect((await m.serverConsole().state()).wanted).toBe(false);
 
-      runtimeCfg.local.serverEnabled = true;
-      await vi.advanceTimersByTimeAsync(1_000);
+      expect((await m.serverConsole().start()).wanted).toBe(true);
       expect(serverStart).toHaveBeenCalledTimes(1);
       expect(bridgeStart).toHaveBeenCalledTimes(1);
-      const stopsBeforeRejectedConsoleStop = serverStop.mock.calls.length;
-      expect((await m.serverConsole().stop()).detail).toContain('开关仍开启');
-      expect(serverStop).toHaveBeenCalledTimes(stopsBeforeRejectedConsoleStop);
+      // 心跳只在目标变化时动手,不会再起一次
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(serverStart).toHaveBeenCalledTimes(1);
 
       // 运行期间把配置路径清空也不得孤儿化已受管的进程。
       const executor = (m as unknown as { executor: { onConnectionLost(reason?: string): void } }).executor;
@@ -649,13 +647,12 @@ describe('MinecraftWorld 受管服务器开关', () => {
       const combatLost = vi.spyOn(combat, 'onConnectionLost');
       (m as unknown as { mcServer: { activeServerDir: string | null } }).mcServer.activeServerDir = 'C:\\managed';
       runtimeCfg.local.serverDir = '';
-      runtimeCfg.local.serverEnabled = false;
-      await vi.advanceTimersByTimeAsync(1_000);
+      expect((await m.serverConsole().stop()).wanted).toBe(false);
       expect(bridgeStop).toHaveBeenCalledTimes(2);
-      expect(serverStop).toHaveBeenCalledTimes(stopsBeforeRejectedConsoleStop + 1);
-      expect(executorLost).toHaveBeenCalledWith('受管服务器开关关闭');
+      expect(serverStop).toHaveBeenCalledTimes(2);
+      expect(executorLost).toHaveBeenCalledWith('受管服务器已停止');
       expect(combatLost).toHaveBeenCalledOnce();
-      expect(m.console().badges?.[0]).toMatchObject({ value: '受管服务已关闭', tone: 'off' });
+      expect(m.console().badges?.[0]).toMatchObject({ value: '未启动', tone: 'off' });
     } finally {
       await m.stop();
       vi.restoreAllMocks();
@@ -670,7 +667,7 @@ describe('MinecraftWorld 受管服务器开关', () => {
       local: {
         ...MINECRAFT_DEFAULTS.local,
         serverDir: 'C:\\managed',
-        serverEnabled: false,
+        startWithWorld: false,
         cheats: false,
       },
     });
@@ -678,9 +675,9 @@ describe('MinecraftWorld 受管服务器开关', () => {
     const bridgeStop = vi.spyOn(Bridge.prototype, 'stop')
       .mockRejectedValueOnce(new Error('quit failed'))
       .mockResolvedValue(undefined);
-    vi.spyOn(MinecraftServerManager.prototype, 'start').mockResolvedValue(serverState(false));
-    const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState(false));
-    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState(false));
+    vi.spyOn(MinecraftServerManager.prototype, 'start').mockResolvedValue(serverState());
+    const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState());
+    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState());
     const m = new MinecraftWorld({ cfg: runtimeCfg });
     try {
       await m.start(new FakeHost() as never);
@@ -698,23 +695,23 @@ describe('MinecraftWorld 受管服务器开关', () => {
     }
   });
 
-  it('模块重启按持久化的开启值恢复受管服务器与连接', async () => {
+  it('startWithWorld 开时 World 启动即起服并连接', async () => {
     vi.useFakeTimers();
     const runtimeCfg = cfg({
       port: 1,
       local: {
         ...MINECRAFT_DEFAULTS.local,
         serverDir: 'C:\\managed',
-        serverEnabled: true,
+        startWithWorld: true,
         cheats: false,
       },
     });
     const bridgeStart = vi.spyOn(Bridge.prototype, 'start').mockImplementation(() => undefined);
     vi.spyOn(Bridge.prototype, 'stop').mockResolvedValue(undefined);
     const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start')
-      .mockResolvedValue(serverState(true, 'starting'));
-    vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState(true));
-    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState(true));
+      .mockResolvedValue(serverState('starting'));
+    vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState());
+    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState());
     const m = new MinecraftWorld({ cfg: runtimeCfg });
     try {
       await m.start(new FakeHost() as never);
@@ -735,7 +732,7 @@ describe('MinecraftWorld 受管服务器开关', () => {
       local: {
         ...MINECRAFT_DEFAULTS.local,
         serverDir: 'C:\\managed',
-        serverEnabled: true,
+        startWithWorld: true,
         cheats: false,
       },
     });
@@ -746,8 +743,8 @@ describe('MinecraftWorld 受管服务器开关', () => {
       new Promise<MinecraftServerState>((resolve) => { pending.resolve = resolve; })
     ));
     const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop')
-      .mockResolvedValue(serverState(true));
-    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState(true));
+      .mockResolvedValue(serverState());
+    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState());
     const m = new MinecraftWorld({ cfg: runtimeCfg });
     try {
       await m.start(new FakeHost() as never);
@@ -760,32 +757,33 @@ describe('MinecraftWorld 受管服务器开关', () => {
       expect(bridgeStop).toHaveBeenCalledOnce();
       expect(bridgeStart).not.toHaveBeenCalled();
 
-      pending.resolve?.(serverState(true, 'starting'));
+      pending.resolve?.(serverState('starting'));
       await stopping;
       // 在途启动探针没把收摊挡住:服务器照样停下了,而且 bridge 没被重新拉起来
       expect(serverStop).toHaveBeenCalledOnce();
       expect(bridgeStart).not.toHaveBeenCalled();
     } finally {
-      pending.resolve?.(serverState(true));
+      pending.resolve?.(serverState());
       vi.restoreAllMocks();
       vi.useRealTimers();
     }
   });
 
-  it('未配置本地服务时不受本地开关约束，仍按远程连接启动', async () => {
+  it('未配置本地服务器时按远程连接启动', async () => {
     vi.useFakeTimers();
     const bridgeStart = vi.spyOn(Bridge.prototype, 'start').mockImplementation(() => undefined);
     vi.spyOn(Bridge.prototype, 'stop').mockResolvedValue(undefined);
-    const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start').mockResolvedValue(serverState(true));
-    const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState(true));
-    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState(true));
+    const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start').mockResolvedValue(serverState());
+    const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop').mockResolvedValue(serverState());
+    vi.spyOn(MinecraftServerManager.prototype, 'state').mockResolvedValue(serverState());
     const m = new MinecraftWorld({ cfg: cfg({
-      local: { ...MINECRAFT_DEFAULTS.local, serverDir: '', serverEnabled: false },
+      local: { ...MINECRAFT_DEFAULTS.local, serverDir: '', startWithWorld: false },
     }) });
     try {
       await m.start(new FakeHost() as never);
       await vi.advanceTimersByTimeAsync(0);
       expect(bridgeStart).toHaveBeenCalledTimes(1);
+      expect((await m.serverConsole().state()).wanted).toBe(true);
       expect(serverStart).not.toHaveBeenCalled();
       expect(serverStop).not.toHaveBeenCalled();
     } finally {
@@ -2075,7 +2073,7 @@ describe('权限与作弊面板(服务器停着)', () => {
     cfg: cfg({
       port: 1,
       username: 'CortiV',
-      local: { ...MINECRAFT_DEFAULTS.local, serverDir: dir, serverEnabled: true },
+      local: { ...MINECRAFT_DEFAULTS.local, serverDir: dir },
       client: { ...MINECRAFT_DEFAULTS.client, username: 'CortiCam' },
       player: { ...MINECRAFT_DEFAULTS.player, username: 'Phant' },
     }),
@@ -2147,7 +2145,6 @@ describe('权限与作弊面板(服务器停着)', () => {
         local: {
           ...MINECRAFT_DEFAULTS.local,
           serverDir: off,
-          serverEnabled: true,
           cheats: false,
         },
       }),

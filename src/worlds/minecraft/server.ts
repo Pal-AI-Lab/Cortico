@@ -13,7 +13,6 @@ import { readLevelDat } from './level-dat.ts';
 export type MinecraftServerPhase = 'stopped' | 'starting' | 'running' | 'error';
 
 export interface MinecraftServerState {
-  enabled: boolean;
   phase: MinecraftServerPhase;
   address: string;
   detail: string | null;
@@ -27,7 +26,6 @@ export interface MinecraftServerState {
 }
 
 interface MinecraftServerOptions {
-  enabled?: () => boolean;
   /** 含 server.jar 的目录(启动前读取配置;'' = 未配置) */
   serverDir: () => string;
   /** java 路径;'' = 自动(serverDir 邻近 jdk → PATH 上的 java) */
@@ -247,14 +245,12 @@ export class MinecraftServerManager {
 
   async state(): Promise<MinecraftServerState> {
     const serverDir = this.directory();
-    const enabled = this.opts.enabled?.() ?? true;
     return {
-      enabled,
       phase: this.phase,
       address: this.address,
-      detail: enabled ? this.detail : '受管服务器开关已关闭',
+      detail: this.detail,
       pid: this.proc?.pid ?? null,
-      reachable: enabled ? await this.probe() : false,
+      reachable: await this.probe(),
       serverDir,
       configured: serverDir !== '' && existsSync(join(serverDir, 'server.jar')),
     };
@@ -292,7 +288,6 @@ export class MinecraftServerManager {
   }
 
   async start(): Promise<MinecraftServerState> {
-    if (!(this.opts.enabled?.() ?? true)) return this.state();
     if (this.startingGeneration !== null || this.phase === 'starting' || this.phase === 'running') {
       return this.state();
     }
@@ -307,11 +302,11 @@ export class MinecraftServerManager {
 
   private async spawnServer(generation: number): Promise<MinecraftServerState> {
     if (await this.probe()) {
-      if (generation !== this.lifecycleGeneration || !(this.opts.enabled?.() ?? true)) return this.state();
+      if (generation !== this.lifecycleGeneration) return this.state();
       this.detail = '端口已可连接，未启动托管进程';
       return this.state();
     }
-    if (generation !== this.lifecycleGeneration || !(this.opts.enabled?.() ?? true)) return this.state();
+    if (generation !== this.lifecycleGeneration) return this.state();
     const launch = this.resolveLaunch();
     if ('error' in launch) {
       this.setPhase('error', launch.error);

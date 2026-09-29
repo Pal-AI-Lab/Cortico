@@ -16,10 +16,10 @@ export const MINECRAFT_DEFAULTS = {
   version: '1.20.6',
   /** prismarine-viewer 网页端口(OBS 浏览器源 + 画面源之一);0=不开 */
   viewerPort: 7792,
-  /** 控制台一键启停的本地服务器(空 = 未配置,按钮会提示去配置) */
+  /** 挂载面板启停的本地服务器(空 = 未配置,按钮会提示去配置) */
   local: {
-    /** 受管本地服务器与 bot 连接的持久化总开关。 */
-    serverEnabled: false,
+    /** World 启动时拉起本地服务器并连接;运行中由挂载面板启停。 */
+    startWithWorld: false,
     /** 含 server.jar 的目录 */
     serverDir: '',
     /** java 路径;空 = 自动(serverDir 邻近 jdk → PATH) */
@@ -165,7 +165,7 @@ export interface MinecraftConfigSection {
   version: string;
   viewerPort: number;
   local: {
-    serverEnabled: boolean;
+    startWithWorld: boolean;
     serverDir: string;
     javaPath: string;
     jvmArgs: string;
@@ -218,7 +218,7 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
   schema: {
     type: 'object',
     title: 'Minecraft · 连接',
-    description: '连接项要重启 World 才生效；受管服务器开关热改，路径在下次启动时采用。',
+    description: '连接项要重启 World 才生效；服务器路径在下次启动服务器时采用。',
     properties: {
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
       'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': false },
@@ -236,9 +236,9 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
         description: '含 server.jar 的目录;运行中修改会在停止并重新启动后采用。',
         'x-path': { kind: 'directory', recommendedDir: '../Cortico-Resources/minecraft/server' },
       },
-      'worlds.minecraft.local.serverEnabled': {
-        type: 'boolean', title: '受管本地服务器', 'x-hot': true,
-        description: '开=启动本地服务器并连接;关=断开 bot、取消重连并保存后关服。未配置本地服务器时不影响远程连接。',
+      'worlds.minecraft.local.startWithWorld': {
+        type: 'boolean', title: '随 World 启动服务器', 'x-hot': false,
+        description: '开=World 启动时拉起本地服务器并连接。未配置服务器目录时不起作用。',
       },
       'worlds.minecraft.local.javaPath': {
         type: 'string', title: '服务器 java 路径', 'x-hot': true,

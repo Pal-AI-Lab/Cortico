@@ -166,7 +166,10 @@ export const mountPanel: ConsolePanel = {
         return;
       }
       renderMount(srv, st, (s) =>
-        [s.pid ? `pid ${s.pid}` : null, s.address, s.detail].filter(Boolean).join(' · '));
+        [s.pid ? `pid ${s.pid}` : null, s.address, s.wanted ? null : 'bot 未连接', s.detail]
+          .filter(Boolean).join(' · '));
+      // 端口可连而 bot 不以它为目标时(外部起的服务器),启动只让 bot 连上去
+      if (st && !st.wanted && st.phase !== 'starting') srv.start.disabled = false;
     };
 
     /** 客户端没有可探的端口,判据是"窗口出来了没"。 */
@@ -399,7 +402,7 @@ async function mountAll(
     };
 
     const srv = await ctx.invoke<MinecraftServerState>('server.state');
-    jobs.push(bring('server', '服务器', srv.reachable));
+    jobs.push(bring('server', '服务器', srv.reachable && srv.wanted));
     const cli = await ctx.invoke<MinecraftClientState>('client.state').catch(() => null);
     if (cli && cli.enabled && cli.configured) {
       jobs.push(bring('client', '客户端', cli.windowReady));

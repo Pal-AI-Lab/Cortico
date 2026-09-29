@@ -71,41 +71,10 @@ describe('MinecraftServerManager:就绪判据与存档退出', () => {
     });
   }
 
-  it('关闭态拒绝启动进程，开启后才恢复托管启动', async () => {
-    const port = await deadPort();
-    const dir = mkdtempSync(join(tmpdir(), 'mcsrv-switch-'));
-    const marker = join(dir, 'spawned.txt');
-    let enabled = false;
-    try {
-      const script = fixture(
-        `require('node:fs').writeFileSync(${JSON.stringify(posix(marker))},'yes');` +
-        `console.log('Done (0.100s)! For help, type "help"');`,
-      );
-      mgr = makeMgr(script, port, { enabled: () => enabled });
-      const probe = vi.spyOn(mgr as unknown as { probe(): Promise<boolean> }, 'probe');
-
-      const disabled = await mgr.start();
-      expect(disabled).toMatchObject({ enabled: false, phase: 'stopped' });
-      expect(disabled.detail).toContain('开关已关闭');
-      expect(existsSync(marker)).toBe(false);
-      expect(probe).not.toHaveBeenCalled();
-
-      enabled = true;
-      const starting = await mgr.start();
-      expect(starting.enabled).toBe(true);
-      await waitFor(() => existsSync(marker));
-    } finally {
-      await mgr?.stop();
-      mgr = null;
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
   it('启动健康探针在途时 stop，迟到的成功结果不能复活相位或存档定时器', async () => {
     vi.useFakeTimers();
-    let enabled = true;
     const pending: { resolve: ((reachable: boolean) => void) | null } = { resolve: null };
-    mgr = makeMgr('', 1, { enabled: () => enabled, healthIntervalMs: 30 });
+    mgr = makeMgr('', 1, { healthIntervalMs: 30 });
     const internals = mgr as unknown as {
       phase: 'stopped' | 'starting' | 'running' | 'error';
       proc: object | null;
@@ -115,14 +84,13 @@ describe('MinecraftServerManager:就绪判据与存档退出', () => {
     };
     internals.phase = 'starting';
     internals.proc = {};
-    vi.spyOn(internals, 'probe').mockImplementation(() => new Promise<boolean>((resolve) => {
+    vi.spyOn(internals, 'probe').mockImplementationOnce(() => new Promise<boolean>((resolve) => {
       pending.resolve = resolve;
-    }));
+    })).mockResolvedValue(false);
     internals.beginHealthPolling();
     await vi.advanceTimersByTimeAsync(30);
     expect(pending.resolve).not.toBeNull();
 
-    enabled = false;
     await mgr.stop();
     pending.resolve?.(true);
     await Promise.resolve();
@@ -132,28 +100,27 @@ describe('MinecraftServerManager:就绪判据与存档退出', () => {
     vi.useRealTimers();
   });
 
-  it('初始端口探针在途时关闭开关，迟到结果不能在 stop 之后启动进程', async () => {
+  it('初始端口探针在途时 stop，迟到结果不能在 stop 之后启动进程', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'mcsrv-cancel-start-'));
     const marker = join(dir, 'spawned.txt');
-    let enabled = true;
     const pending: { resolve: ((reachable: boolean) => void) | null } = { resolve: null };
     try {
       const script = fixture(`require('node:fs').writeFileSync(${JSON.stringify(posix(marker))},'yes');`);
-      mgr = makeMgr(script, 1, { enabled: () => enabled });
+      mgr = makeMgr(script, 1);
       vi.spyOn(mgr as unknown as { probe(): Promise<boolean> }, 'probe')
-        .mockImplementation(() => new Promise<boolean>((resolve) => {
+        .mockImplementationOnce(() => new Promise<boolean>((resolve) => {
           pending.resolve = resolve;
-        }));
+        }))
+        .mockResolvedValue(false);
 
       const starting = mgr.start();
       await Promise.resolve();
       expect(pending.resolve).not.toBeNull();
-      enabled = false;
       await mgr.stop();
       pending.resolve?.(false);
       const cancelled = await starting;
 
-      expect(cancelled).toMatchObject({ enabled: false, phase: 'stopped', pid: null });
+      expect(cancelled).toMatchObject({ phase: 'stopped', pid: null });
       expect(existsSync(marker)).toBe(false);
     } finally {
       await mgr?.stop();

@@ -159,7 +159,7 @@ export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载
 挂载接口分别管理服务器、观察者和玩家客户端，方法名使用对应前缀，例如
 `server.state`、`client.start` 与 `player.teleport`。
 
-- **游戏服务器**：`worlds.minecraft.local.serverDir` 指定含 `server.jar` 的目录，`local.javaPath` 指定 Java。停止时通过 stdin 发送 `stop` 保存存档，15 秒后仍未退出则强制终止。
+- **游戏服务器**：`worlds.minecraft.local.serverDir` 指定含 `server.jar` 的目录，`local.javaPath` 指定 Java。启动与停止同时决定 bot 是否连接这台服务器：启动后起服并连接，停止后断开 bot、取消重连并关服。`local.startWithWorld=true` 时 World 启动即起服；默认关。`serverDir` 为空时按远程服务器处理，World 启动即连接。停止时通过 stdin 发送 `stop` 保存存档，15 秒后仍未退出则强制终止。
 - **观察者客户端**：窗口出现表示客户端进程已就绪，进服和附身另按玩家列表确认。`client.enabled=false` 时仍可手动启停；World 启动及一键挂载不自动启动它。
 - **玩家客户端**：与观察者使用独立进程和账号，共用 `GameClient` 实现；附身与传送由 World 编排。默认继承观察者的游戏目录和版本，`worlds.minecraft.player.*` 可覆盖。仅在共用游戏目录时，将 `chatVisibility` 设为 FULL，以允许打开聊天框和命令行；不应用观察者的其他启动设置。
 - 服务器健康探测独立于托管进程，已运行的外部服务器显示为外部实例。World 停止时终止其托管进程。

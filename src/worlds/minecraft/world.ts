@@ -2414,7 +2414,9 @@ export class MinecraftWorld implements World {
   private readonly activeEffects = new Set<string>();
   private hookedBots = new WeakSet<object>();
   private readonly mcServer: MinecraftServerManager;
-  /** 受管服务器开关串行化；热改反转时，后一个状态总在前一个收尾之后落地。 */
+  /** 受管服务器要不要开着:挂载面板的启停按钮设置,World 启动时取 local.startWithWorld。 */
+  private serverWanted = false;
+  /** 受管服务器启停串行化；连续反转时，后一个状态总在前一个收尾之后落地。 */
   private serverLifecycleQueue: Promise<void> = Promise.resolve();
   private serverLifecycleTarget: string | null = null;
   private serverLifecycleActive = false;
@@ -2559,7 +2561,6 @@ export class MinecraftWorld implements World {
       hint: 'mc_blueprint',
     });
     this.mcServer = new MinecraftServerManager({
-      enabled: () => !this.managedLocalServer() || this.cfg.local.serverEnabled,
       serverDir: () => this.cfg.local.serverDir,
       javaPath: () => this.cfg.local.javaPath,
       jvmArgs: () => this.cfg.local.jvmArgs,
@@ -2671,28 +2672,24 @@ export class MinecraftWorld implements World {
       : '已铺好,下次启动客户端生效';
   }
 
-  serverConsole(): { state(): Promise<MinecraftServerState>; start(): Promise<MinecraftServerState>; stop(): Promise<MinecraftServerState> } {
+  serverConsole(): Record<'state' | 'start' | 'stop', () => Promise<MinecraftServerState & { wanted: boolean }>> {
+    const withTarget = async (state: MinecraftServerState) =>
+      ({ ...state, wanted: !this.managedLocalServer() || this.serverWanted });
     return {
-      state: () => this.mcServer.state(),
+      state: async () => withTarget(await this.mcServer.state()),
       start: async () => {
-        if (this.managedLocalServer() && !this.cfg.local.serverEnabled) {
-          const state = await this.mcServer.state();
-          return { ...state, detail: '受管服务器开关已关闭；先在 Minecraft 连接配置中开启它。' };
-        }
+        this.serverWanted = true;
         // 名单必须先于服务端启动写入；服务端只在启动时读取 ops.json。
         this.ensureCheatOps();
-        if (!this.serverLifecycleActive) return this.mcServer.start();
+        if (!this.serverLifecycleActive) return withTarget(await this.mcServer.start());
         await this.syncManagedServerLifecycle(true);
-        return this.mcServer.state();
+        return withTarget(await this.mcServer.state());
       },
       stop: async () => {
-        if (this.managedLocalServer() && this.cfg.local.serverEnabled) {
-          const state = await this.mcServer.state();
-          return { ...state, detail: '受管服务器开关仍开启；关闭该开关会断开 bot 并保存后关服。' };
-        }
-        if (!this.serverLifecycleActive) return this.mcServer.stop();
+        this.serverWanted = false;
+        if (!this.serverLifecycleActive) return withTarget(await this.mcServer.stop());
         await this.syncManagedServerLifecycle(true);
-        return this.mcServer.state();
+        return withTarget(await this.mcServer.state());
       },
     };
   }
@@ -2702,10 +2699,10 @@ export class MinecraftWorld implements World {
     return this.mcServer.directory().trim() !== '';
   }
 
-  /** 配置开关是受管服务器与 Bridge 的共同目标；远程连接不经过这一开关。 */
+  /** serverWanted 是受管服务器与 Bridge 的共同目标；远程连接不经过它。 */
   private syncManagedServerLifecycle(force = false): Promise<void> {
     const managed = this.managedLocalServer();
-    const enabled = !managed || this.cfg.local.serverEnabled;
+    const enabled = !managed || this.serverWanted;
     const target = `${managed ? 'managed' : 'external'}:${enabled}`;
     if (force || target !== this.serverLifecycleTarget) {
       this.serverLifecycleTarget = target;
@@ -2715,12 +2712,12 @@ export class MinecraftWorld implements World {
           this.bridge?.start();
           return;
         }
-        if (!this.cfg.local.serverEnabled) {
+        if (!this.serverWanted) {
           // Bridge.stop 主动清掉 bot 后会抑制旧 bot 的 end 回调；关服边界必须在这里
           // 显式终结身体租约和旧连接上的任务，重开后不能被 frozen/busyWith 卡住。
           this.detachItemBreak();
           this.detachRanged();
-          this.executor?.onConnectionLost('受管服务器开关关闭');
+          this.executor?.onConnectionLost('受管服务器已停止');
           this.combat?.onConnectionLost();
           const stopped = await Promise.allSettled([
             this.bridge?.stop() ?? Promise.resolve(),
@@ -2734,7 +2731,7 @@ export class MinecraftWorld implements World {
         }
         this.ensureCheatOps();
         const state = await this.mcServer.start();
-        if (!this.serverLifecycleActive || !this.cfg.local.serverEnabled) return;
+        if (!this.serverLifecycleActive || !this.serverWanted) return;
         this.bridge?.start();
         if (state.phase === 'running' || state.reachable) {
           this.bridge?.reconnectNow('受管服务器已就绪');
@@ -2742,7 +2739,7 @@ export class MinecraftWorld implements World {
       }).catch((error: unknown) => {
         // 外部边界失败后留出下一次心跳重试，不把未落地的目标当成已完成。
         this.serverLifecycleTarget = null;
-        this.fallbackLog.error(`受管服务器开关应用失败: ${error instanceof Error ? error.message : String(error)}`);
+        this.fallbackLog.error(`受管服务器启停失败: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
     return this.serverLifecycleQueue;
@@ -3011,13 +3008,13 @@ export class MinecraftWorld implements World {
 
   console(): WorldConsoleDecl {
     const connected = this.bridge?.connected ?? false;
-    const managedServerOff = this.managedLocalServer() && !this.cfg.local.serverEnabled;
+    const managedServerOff = this.managedLocalServer() && !this.serverWanted;
     const task = this.executor?.current;
     // 给人看的画面从哪来:观察者客户端窗口出来了就是它,否则 viewer 网页,都没有就没有
     const origin = this.client.windowHint() ? 'client' : this.bridge?.viewerUrl ? 'viewer' : null;
     const badges: WorldConsoleDecl['badges'] = [
       managedServerOff
-        ? { label: '服务器', value: '受管服务已关闭', tone: 'off' }
+        ? { label: '服务器', value: '未启动', tone: 'off' }
         : connected
           ? { label: '服务器', value: `${this.cfg.host}:${this.cfg.port}`, tone: 'on' }
           : { label: '服务器', value: '未连接', tone: 'off' },
@@ -3036,7 +3033,7 @@ export class MinecraftWorld implements World {
         {
           label: '服务器',
           ...(managedServerOff
-            ? { state: 'offline' as const, hint: '受管服务器已关闭' }
+            ? { state: 'offline' as const, hint: '未启动' }
             : !this.bridge
               ? { state: 'offline' as const, hint: '未启动' }
               : connected
@@ -3700,6 +3697,7 @@ export class MinecraftWorld implements World {
 
     this.serverLifecycleActive = true;
     this.serverLifecycleTarget = null;
+    this.serverWanted = this.cfg.local.startWithWorld;
     void this.syncManagedServerLifecycle(true);
     this.reflexes.start();
     this.combat.start();
@@ -5133,7 +5131,7 @@ export class MinecraftWorld implements World {
     if (phase === 'starting') {
       this.emit('minecraft.event', '[Minecraft] 服务器启动中,世界加载要一阵。', false);
     } else if (phase === 'running') {
-      if (this.managedLocalServer() && !this.cfg.local.serverEnabled) return;
+      if (this.managedLocalServer() && !this.serverWanted) return;
       if (this.bridge?.active) this.bridge.reconnectNow('服务器就绪');
       else this.bridge?.start();
       this.emit('minecraft.event', '[Minecraft] 服务器就绪,世界上线了。', false);

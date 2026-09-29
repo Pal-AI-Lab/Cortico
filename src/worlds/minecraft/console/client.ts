@@ -51,6 +51,8 @@ export interface MinecraftServerState extends MinecraftLaneCommon {
   reachable: boolean;
   serverDir: string;
   configured: boolean;
+  /** bot 是否以这台服务器为连接目标:启动按钮置真,停止按钮置假;远程服务器恒为真 */
+  wanted: boolean;
 }
 
 /** `mount.client.*`。客户端没有可探的端口,判据是"窗口出来了没"。 */
