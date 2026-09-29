@@ -842,8 +842,10 @@ export class QQWorld implements World {
         }
       }
     }
-    // 私聊照常合批;群里被@立即投递
-    const trigger = conv.kind === 'group' && mentionedSelf ? 'flush' as const : 'debounce' as const;
+    // 私聊照常合批;群里被@立即投递;等转写的语音不单独唤醒,由转写那一条带上
+    const trigger = transcribe
+      ? 'piggyback' as const
+      : conv.kind === 'group' && mentionedSelf ? 'flush' as const : 'debounce' as const;
     const env = await host.pushEvent(
       {
         type: 'qq.message',
@@ -924,7 +926,7 @@ export class QQWorld implements World {
 
   /**
    * 向协议端请求 QQ 自带的语音转文字,结果另发一条 qq.transcript,不阻塞当前投递。
-   * 转写成功照常合批唤醒;没转写成也发一条说明,因为占位已写了「正在转写中」。
+   * 语音那条不单独唤醒,转写结果照常合批唤醒;没转写成也发一条说明并唤醒,因为占位已写了「正在转写中」。
    * 只有动作不存在(1404)才换下一个动作名,超时、撤回、识别失败都按这条没转写成处理。
    */
   private transcribeVoice(msg: OneBotGroupMessage, conv: Conv, displayName: string, when: Date): void {

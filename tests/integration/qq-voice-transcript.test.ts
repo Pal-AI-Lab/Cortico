@@ -7,6 +7,7 @@ import { MockOneBot } from '../helpers/mock-onebot.ts';
 import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, sleep } from '../core/helpers.ts';
 
 const GROUP = 424242;
+const MAX_BATCH_AGE_MS = 400;
 
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
   const start = Date.now();
@@ -41,7 +42,7 @@ describe('QQ 语音转写集成', () => {
     };
     cfg.worlds.terminal.enabled = false;
     cfg.batching.quietGapMs = 40;
-    cfg.batching.maxBatchAgeMs = 400;
+    cfg.batching.maxBatchAgeMs = MAX_BATCH_AGE_MS;
     cfg.tick.dayIntervalMinutes = [999, 999];
     cfg.tick.nightIntervalMinutes = null;
     cfg.web.port = 0;
@@ -62,19 +63,22 @@ describe('QQ 语音转写集成', () => {
     await mock.close();
   });
 
-  it('语音先带占位唤醒一次,转写结果到达后再唤醒一次', async () => {
+  it('语音占位不单独唤醒;转写结果到达时唤醒一次,占位与转写同轮可见', async () => {
     let release!: () => void;
     mock.setActionHandler('fetch_ptt_text', () =>
       new Promise((resolve) => { release = () => resolve({ data: { text: '今晚吃什么' } }); }),
     );
-    const seen = (needle: string) => llm.calls.some((c) => JSON.stringify(c.messages).includes(needle));
-
     const callsBefore = llm.calls.length;
     mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: [{ type: 'record', data: { file: 'voice.amr' } }] });
-    await waitFor(() => llm.calls.length > callsBefore && seen('[语音,正在转写中...]'));
-    expect(seen('[QQ语音转写]')).toBe(false);
+    await waitFor(() => mock.received.some((call) => call.action === 'fetch_ptt_text'));
+    // 超过合批的最长等待,占位这条仍没有唤醒
+    await sleep(MAX_BATCH_AGE_MS * 2);
+    expect(llm.calls.length).toBe(callsBefore);
 
     release();
-    await waitFor(() => seen('[QQ语音转写] 今晚吃什么'));
+    await waitFor(() => llm.calls.length > callsBefore);
+    const turn = JSON.stringify(llm.calls[callsBefore].messages);
+    expect(turn).toContain('[语音,正在转写中...]');
+    expect(turn).toContain('[QQ语音转写] 今晚吃什么');
   });
 });
