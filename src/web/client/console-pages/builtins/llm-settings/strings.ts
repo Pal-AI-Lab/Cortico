@@ -94,6 +94,7 @@ const zh = {
   rateUncached: '未缓存输入 / 百万 token',
   rateOutput: '输出 / 百万 token',
   currencyField: '币种',
+  currencyRequired: '填写币种后才保存这份报价。',
   costFormNote: '基础费率统一适用于全部模型；阶梯或多模型规则请在下方完整规则中配置。',
   costFormOverridden: '当前报价不是三格表能表达的形状，以下方完整规则为准；改动三格表会覆盖它。',
   editFull: '高级定价规则 (JSON)',
@@ -199,6 +200,7 @@ const en: typeof zh = {
   rateUncached: 'Uncached input / M tokens',
   rateOutput: 'Output / M tokens',
   currencyField: 'Currency',
+  currencyRequired: 'Enter a currency to save this quote.',
   costFormNote:
     'Base rates apply to all models; input bands and service tiers go in the full rules below.',
   costFormOverridden:

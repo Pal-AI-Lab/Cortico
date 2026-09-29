@@ -225,11 +225,11 @@ describe('模块段落', () => {
 
 describe('成本三格表', () => {
   const rateOf = (root: Any, label: string) => byLabel(root, label).value;
-  it('没有报价时三格留空并说明未设;填一格才落成一条 * 边际规则', async () => {
+  it('没有报价时三格与币种留空并说明未设;填了单价和币种才落成一条 * 边际规则', async () => {
     const server = fakeSettings([instance({}, { pricing: [] })]);
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
-    expect(byLabel(view.root, '币种').value).toBe('USD');
+    expect(byLabel(view.root, '币种').value).toBe('');
     expect(
       ['缓存命中 / 百万 token', '未缓存输入 / 百万 token', '输出 / 百万 token'].map((l) =>
         rateOf(view.root, l),
@@ -241,6 +241,11 @@ describe('成本三格表', () => {
     expect(view.root.querySelector('details').open).toBe(false);
     change(byLabel(view.root, '输出 / 百万 token'), '15');
     await flush();
+    expect(server.bodies('save').filter((body: Any) => body.pricing?.length)).toEqual([]);
+    expect(view.root.textContent).toContain('填写币种后才保存这份报价');
+    change(byLabel(view.root, '币种'), 'USD');
+    await flush();
+    expect(view.root.textContent).not.toContain('填写币种后才保存这份报价');
     expect(view.root.querySelector('.pricing-note').hidden).toBe(true);
     expect(server.last('save').pricing).toEqual([
       {
@@ -255,6 +260,22 @@ describe('成本三格表', () => {
         ],
       },
     ]);
+  });
+  it('模块报价只有一种币种时拿它作默认;扩展计量显示时去掉 detail: 前缀', async () => {
+    const server = fakeSettings([instance({
+      quotes: [{
+        model: 'alpha-large',
+        quotes: [{
+          currency: 'CNY', basis: 'marginal', source: 'module',
+          rules: [{ meter: 'output', perMillion: 8 }, { meter: 'detail:cacheCreationInput', perMillion: 1 }],
+        }],
+      }],
+    }, { pricing: [] })]);
+    const view = await mountPanel(server.invoke);
+    cleanup = view.cleanup;
+    expect(byLabel(view.root, '币种').value).toBe('CNY');
+    expect(view.root.textContent).toContain('cacheCreationInput 1/百万');
+    expect(view.root.textContent).not.toContain('detail:cacheCreationInput 1/百万');
   });
   it('三格全清回到未设', async () => {
     const server = fakeSettings([
@@ -317,7 +338,8 @@ describe('成本三格表', () => {
       },
       { models: ['alpha-mini'], currency: 'USD', basis: 'marginal', source: 'sheet', rules: [] },
     ];
-    const server = fakeSettings([instance({}, { pricing })]);
+    const quotes = [{ model: 'alpha-large', quotes: [{ ...pricing[0], source: 'sheet' }] }];
+    const server = fakeSettings([instance({ quotes }, { pricing })]);
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
     expect(rateOf(view.root, '输出 / 百万 token')).toBe('');

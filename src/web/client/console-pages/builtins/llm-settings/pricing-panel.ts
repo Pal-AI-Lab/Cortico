@@ -90,7 +90,7 @@ export function pricingEditor(
         ui.msgline(
           quote.rules.length
             ? quote.rules
-                .map((rule) => S.perMillion(labels[rule.meter] ?? rule.meter, rule.perMillion))
+                .map((rule) => S.perMillion(labels[rule.meter] ?? rule.meter.replace(/^detail:/, ''), rule.perMillion))
                 .join(' · ')
             : S.free,
         ),
@@ -113,8 +113,14 @@ export function pricingEditor(
     value: draft?.raw ?? JSON.stringify(simple ? writeSimple(simple) : saved, null, 2),
     onChange: commitDraft,
   });
-  const currency = ui.input({ value: simple?.currency ?? 'USD', onChange: writeThrough });
+  // 生效报价只有一种币种时拿它作默认,否则留空
+  const quoteCurrencies = new Set(quotes.flatMap((row) => row.quotes.map((quote) => quote.currency)));
+  const currency = ui.input({
+    value: simple?.currency ?? (quoteCurrencies.size === 1 ? [...quoteCurrencies][0] : ''),
+    onChange: writeThrough,
+  });
   currency.setAttribute('aria-label', S.currencyField);
+  const currencyNote = ui.msgline();
   const problem = ui.msgline();
   const rateLabels = [S.rateCached, S.rateUncached, S.rateOutput];
   const rates = rateLabels.map((label, i) => {
@@ -128,14 +134,22 @@ export function pricingEditor(
     input.setAttribute('aria-label', label);
     return input;
   });
+  /** 填了单价却没填币种时不写入报价,在三格下方说明。 */
+  function currencyMissing(): boolean {
+    const missing = !currency.value.trim() && rates.some((input) => input.value.trim() !== '');
+    currencyNote.textContent = missing ? S.currencyRequired : '';
+    currencyNote.classList.toggle('bad', missing);
+    return missing;
+  }
   /** 三格全空 = 没有报价;填了任何一格,空格按 0 计。 */
   function writeThrough() {
+    if (currencyMissing()) return;
     const blank = rates.every((input) => input.value.trim() === '');
     raw.value = blank
       ? '[]'
       : JSON.stringify(
           writeSimple({
-            currency: currency.value.trim() || 'USD',
+            currency: currency.value.trim(),
             rates: rates.map((input) => Number(input.value) || 0) as [number, number, number],
           }),
           null,
@@ -166,6 +180,7 @@ export function pricingEditor(
   card.body.append(
     ui.field(S.currencyField, currency),
     ...rates.map((input, i) => ui.field(rateLabels[i], input)),
+    currencyNote,
     ui.msgline(simple || unset ? S.costFormNote : S.costFormOverridden),
   );
   const advanced = ui.h('details', 'pricing-rules');
@@ -178,5 +193,5 @@ export function pricingEditor(
   );
   card.body.append(advanced, preview);
   if (draft?.raw !== undefined) commitDraft();
-  return { el: card.el, body: card.body, validate: commitDraft };
+  return { el: card.el, body: card.body, validate: () => !currencyMissing() && commitDraft() };
 }
