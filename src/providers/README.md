@@ -35,7 +35,8 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 声明仍参与服务端校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
-`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。
+`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。`listModels()` 返回 `ListedModel[]`:
+`id` 必有,`displayName`、`contextWindow`、`maxOutputTokens`、`inputImages` 只在上游给出时才有。
 
 `ProviderHost` 给实例:`stateDir`(`<部署根>/providers/<端点名>/`,归实例独占)、`repoRoot`、
 `resource()`、`currentEntry()`、`secret(name)`(进程环境优先,否则现读 `stateDir/.env`)、
