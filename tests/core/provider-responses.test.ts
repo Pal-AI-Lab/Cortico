@@ -79,13 +79,13 @@ describe('Provider standard Responses boundary', () => {
     assembly.feed({ type: 'response.completed', sequence_number: 3, response: { ...initial, status: 'completed', output: [call] } }, () => {});
     expect(assembly.finish().output[0]).toMatchObject({ type: 'function_call', status: 'completed' });
 
-    const incompleteAssembly = new NativeResponseAssembly();
-    const incomplete = { ...call, status: 'incomplete' };
-    incompleteAssembly.feed({ type: 'response.created', sequence_number: 0, response: initial }, () => {});
-    incompleteAssembly.feed({ type: 'response.output_item.added', sequence_number: 1, output_index: 0, item: incomplete }, () => {});
-    incompleteAssembly.feed({ type: 'response.output_item.done', sequence_number: 2, output_index: 0, item: incomplete }, () => {});
-    incompleteAssembly.feed({ type: 'response.incomplete', sequence_number: 3, response: { ...initial, status: 'incomplete', output: [incomplete] } }, () => {});
-    expect(incompleteAssembly.finish().output[0]).toMatchObject({ type: 'function_call', status: 'incomplete' });
+    // 截断的响应里没带 status 的调用可能只写了半截参数,保持缺省,Core 不执行它
+    const truncated = new NativeResponseAssembly();
+    truncated.feed({ type: 'response.created', sequence_number: 0, response: initial }, () => {});
+    truncated.feed({ type: 'response.output_item.added', sequence_number: 1, output_index: 0, item: call }, () => {});
+    truncated.feed({ type: 'response.output_item.done', sequence_number: 2, output_index: 0, item: call }, () => {});
+    truncated.feed({ type: 'response.incomplete', sequence_number: 3, response: { ...initial, status: 'incomplete', output: [call] } }, () => {});
+    expect(truncated.finish().output[0]).not.toHaveProperty('status');
   });
 
   it('normalizes omitted function-call status in a unary Responses-compatible response', async () => {

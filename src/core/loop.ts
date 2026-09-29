@@ -1150,6 +1150,7 @@ export class MainLoop {
       for (const call of calls) {
         if (!this.active(generation)) return;
         if (call.status !== 'completed') {
+          log.warn('工具调用未完成,不执行', { name: call.name, callId: call.call_id, status: String(call.status) });
           results.push(functionResult(call.call_id, NOT_EXECUTED_INCOMPLETE));
           barrierHit = true;
           continue;

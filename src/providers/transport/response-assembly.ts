@@ -12,9 +12,9 @@ export interface ResponseAssembly {
 }
 
 /**
- * Some Responses-compatible endpoints omit the item-level status on completed function calls.
- * Keep the Core's incomplete-call guard strict while restoring the output shape at the provider
- * boundary; explicit incomplete values and incomplete responses remain unchanged.
+ * In a completed response, function calls without a status become `completed`; items that carry a
+ * status and responses that are not completed pass through unchanged. Some Responses-compatible
+ * endpoints omit the item status, and Core executes only calls whose status is `completed`.
  */
 export function normalizeCompletedFunctionCalls(response: Response): Response {
   if (response.status !== 'completed') return response;
