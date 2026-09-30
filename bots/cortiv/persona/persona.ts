@@ -227,6 +227,29 @@ export interface CortiVOptions extends CorminiOptions {
    * 关掉,下一次请求时 World host 上的句柄就不存在了。不给 = 恒开。
    */
   cognitionEnabled?: () => boolean;
+  /** 端点策略文件的绝对路径，每次交接后的首个请求现读；null 表示不启用。 */
+  providerPolicyFile?: () => string | null;
+}
+
+/**
+ * 端点策略文件的形状。`afterHandoff`：每次交接后主 session 的前 `calls` 次模型请求用
+ * `provider` 端点，之后回到 activeProvider。
+ */
+export interface ProviderPolicy {
+  afterHandoff?: { provider: string; calls: number };
+}
+
+/** 读取并校验端点策略文件；形状不对时抛错，由 Core 记 warn 并用活跃端点。 */
+export function readProviderPolicy(file: string): ProviderPolicy {
+  const raw: unknown = JSON.parse(readFileSync(file, 'utf8'));
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) throw new Error(`${file} 不是 JSON 对象`);
+  const rule = (raw as Record<string, unknown>).afterHandoff;
+  if (rule === undefined) return {};
+  const { provider, calls } = (rule ?? {}) as Record<string, unknown>;
+  if (typeof provider !== 'string' || !provider || !Number.isInteger(calls) || (calls as number) < 1) {
+    throw new Error(`${file} 的 afterHandoff 须为 { provider: 非空端点名, calls: 正整数 }`);
+  }
+  return { afterHandoff: { provider, calls: calls as number } };
 }
 
 export class CortiV extends Cormini {
@@ -253,10 +276,26 @@ export class CortiV extends Cormini {
   private commitChain: Promise<void> = Promise.resolve();
   /** 认知外包全局开关(现读);不给 = 恒开 */
   private readonly cognitionEnabled: () => boolean;
+  private readonly providerPolicyFile: () => string | null;
+  /** 本次交接后已发出的主 session 请求数；null 表示不在策略窗口内。 */
+  private requestsSinceHandoff: number | null = null;
 
   constructor(opts: CortiVOptions) {
     super(opts);
     this.cognitionEnabled = opts.cognitionEnabled ?? ((): boolean => true);
+    this.providerPolicyFile = opts.providerPolicyFile ?? ((): null => null);
+  }
+
+  /** 交接后的前 afterHandoff.calls 次请求返回策略端点；窗口用完或策略文件读取失败后回到活跃端点。 */
+  mainEndpoint(): string | null {
+    const sent = this.requestsSinceHandoff;
+    this.requestsSinceHandoff = null;
+    const file = this.providerPolicyFile();
+    if (sent === null || file === null) return null;
+    const rule = readProviderPolicy(file).afterHandoff;
+    if (!rule || sent >= rule.calls) return null;
+    this.requestsSinceHandoff = sent + 1;
+    return rule.provider;
   }
 
   /**
@@ -887,6 +926,7 @@ export class CortiV extends Cormini {
     this.recalledSummary.clear();
     this.persistRecalled();
     this.enrollNudged.clear();
+    this.requestsSinceHandoff = 0;
     if (snapshot.some((m) => !hasRole(m, 'system'))) this.scheduleDream(snapshot);
     return super.onHandoff(snapshot, ctx);
   }

@@ -52,7 +52,31 @@ export const CORTIV_COGNITION_CONFIG_GROUP: ConfigGroup = {
   },
 };
 
+/** 端点策略文件。 */
+export const CORTIV_PROVIDER_POLICY_CONFIG_GROUP: ConfigGroup = {
+  id: 'cortiv-provider-policy',
+  owner: 'persona',
+  schema: {
+    type: 'object',
+    title: '端点策略',
+    description: '',
+    properties: {
+      providerPolicyFile: {
+        type: 'string',
+        title: '端点策略文件',
+        'x-hot': true,
+        description:
+          '相对部署目录的 JSON 文件路径，留空不启用。格式 {"afterHandoff":{"provider":"端点名","calls":5}}：'
+          + '每次交接后主 session 的前 calls 次模型请求用该端点，之后回到当前活跃端点。'
+          + '文件在每次交接后的首个请求时读取；文件或端点不可用时这次交接后都用活跃端点，并记 warn。',
+      },
+    },
+  },
+};
+
 export interface CortiVConfig extends CoreConfig {
+  /** 相对部署目录的端点策略文件；空串表示不启用。 */
+  providerPolicyFile: string;
   /** 阶段长度三项归Persona,摘思维链与首轮对话两项归 core;同住 context 段。 */
   context: CoreConfig['context'] & ContextStagePolicy;
   rounds: { soft: number; hard: number };
@@ -95,6 +119,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
     firstTurnDir: resolve(loaded.rootDir, 'prompts'),
     // 现读:控制台上关掉,下一次 World 来请托时句柄就已经不在了(不用重启)。
     cognitionEnabled: () => cfg.cognition.enabled,
+    providerPolicyFile: () => (cfg.providerPolicyFile ? resolve(loaded.rootDir, cfg.providerPolicyFile) : null),
     tickDelayMs: () =>
       cfg.tick.intervalMinutes === null ? null : cfg.tick.intervalMinutes * 60_000,
   });
@@ -108,7 +133,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
       persona.stopRhythm();
     },
     console: {
-      configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
+      configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP, CORTIV_PROVIDER_POLICY_CONFIG_GROUP],
       // 阶段预算与软预警线(终端页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },
@@ -137,6 +162,7 @@ const definition: BotDefinition<CortiVConfig> = {
     // 默认开:蓝图设计就走这条,关掉它 Minecraft 那边的 design 只能如实拒收。
     cognition: { enabled: true },
     rounds: { soft: 6, hard: 12 },
+    providerPolicyFile: '',
     // World 段不在这里:实现的默认值由启动器补。人格身份与演出选择
     // (`minecraft.username`、`vtuber.delayedSources`、要不要开视觉)在
     // bots/cortiv/worlds/<id>/config.json,本机事实(凭证、程序路径、设备、开没开)
