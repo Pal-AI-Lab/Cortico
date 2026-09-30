@@ -19,6 +19,16 @@ class Fixture extends OpenAIHttpClient {
 }
 const ok = () => new Response(JSON.stringify({ id: 'r1', model: 'test', choices: [{ index: 0, message: { content: 'ready' }, finish_reason: 'stop' }], usage: { prompt_tokens: 3, completion_tokens: 2 } }));
 
+describe('request body', () => {
+  it('a lone surrogate in the context goes out as U+FFFD; whole pairs are kept', async () => {
+    let sent = '';
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => { sent = String(init.body); return ok(); });
+    await new Fixture().respond({ model: 'test', input: [{ type: 'message', role: 'user', content: 'cut \ud83c here 🎤' }] });
+    expect(JSON.parse(sent).messages[0].content).toBe('cut � here 🎤');
+    expect(sent).not.toMatch(/\\ud83c/i);
+  });
+});
+
 describe('retry policy', () => {
   it('waits out the Retry-After interval before retrying a 429', async () => {
     vi.useFakeTimers();

@@ -18,6 +18,18 @@ export interface ResponseTransport {
   log: Logger;
 }
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * Serializes a request body with every lone surrogate replaced by U+FFFD. JSON.stringify writes a
+ * lone surrogate as a \uXXXX escape that upstream parsers reject, and the record carrying it stays
+ * in the context, so every later request would fail the same way.
+ */
+export function requestJson(body: unknown): string {
+  return JSON.stringify(body, (_key, value: unknown) =>
+    typeof value === 'string' ? value.replace(LONE_SURROGATE, '�') : value);
+}
+
 /** SSE framing is independent of packet and line boundaries. */
 export class EventDecoder {
   private buffer = '';
@@ -121,7 +133,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.startedAt = new Date().toISOString();
       quotes = structuredClone(options.quote?.({ startedAt: attempt.startedAt, requestedServiceTier: attempt.requestedServiceTier ?? null }) ?? []);
       sent = true;
-      const response = await fetch(transport.url, { method: 'POST', body: JSON.stringify(transport.body), headers, signal });
+      const response = await fetch(transport.url, { method: 'POST', body: requestJson(transport.body), headers, signal });
       attempt.status = response.status;
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
