@@ -65,6 +65,18 @@ describe('buildResponsesBody(请求体)', () => {
     const off = buildResponsesBody({ model: 'm' }, { context: attached }, { media: { ...media, enabled: () => false } });
     expect((off.input as Array<{ content: unknown[] }>)[0].content).toEqual([{ type: 'input_text', text: '看图' }]);
   });
+  it('只有图片附件升格:音频留在正文那行,图片照发', () => {
+    const blobs = [{ handle: 'blob:a', mime: 'audio/mpeg' }, { handle: 'blob:i', mime: 'image/png' }] as never;
+    const media = { read: () => Buffer.from('x'), enabled: () => true };
+    const out = record({ type: 'function_call_output', call_id: 'c1', output: '[blob blob:a audio/mpeg] 录音' } as never, { blobs });
+    const body = buildResponsesBody({ model: 'm' }, { context: [out] }, { media });
+    expect((body.input as Array<{ output: unknown }>)[0].output).toEqual([
+      { type: 'input_text', text: '[blob blob:a audio/mpeg] 录音' },
+      { type: 'input_image', image_url: `data:image/png;base64,${Buffer.from('x').toString('base64')}` },
+    ]);
+    const audioOnly = record({ type: 'function_call_output', call_id: 'c2', output: '录音' } as never, { blobs: [{ handle: 'blob:a', mime: 'audio/mpeg' }] as never });
+    expect((buildResponsesBody({ model: 'm' }, { context: [audioOnly] }, { media }).input as Array<{ output: unknown }>)[0].output).toBe('录音');
+  });
 });
 
 describe('ResponsesProvider(HTTP 边界)', () => {

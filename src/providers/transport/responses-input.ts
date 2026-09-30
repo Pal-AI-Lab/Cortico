@@ -3,7 +3,7 @@ import type { Request } from '../../protocol/open-responses/index.ts';
 import { inputItem, itemText, type ContextRecord } from '../../protocol/open-responses/context.ts';
 import type { GenerateOptions } from '../../core/generation.ts';
 import { requestContext } from './native-input.ts';
-import type { CompatMediaOptions } from './history.ts';
+import { imageBlobs, type CompatMediaOptions } from './history.ts';
 
 type Item = Record<string, unknown>;
 
@@ -80,11 +80,12 @@ export function responsesInput(
         content: [{ type: 'reasoning_text', text: opts.syntheticReasoningText ?? SYNTHETIC_REASONING_TEXT }],
       });
     const wire = inputItem(entry) as Item;
-    if (opts.media?.enabled() && entry.context.blobs?.length && (item.type === 'message' || item.type === 'function_call_output')) {
+    const images = imageBlobs(entry.context.blobs);
+    if (opts.media?.enabled() && images.length && (item.type === 'message' || item.type === 'function_call_output')) {
       const field = item.type === 'message' ? 'content' : 'output';
       const content = wire[field];
       const parts = typeof content === 'string' ? [{ type: 'input_text', text: content }] : [...(content as Item[])];
-      for (const ref of entry.context.blobs) {
+      for (const ref of images) {
         const bytes = opts.media.read(ref.handle);
         if (bytes) parts.push({ type: 'input_image', image_url: `data:${ref.mime};base64,${bytes.toString('base64')}` });
       }

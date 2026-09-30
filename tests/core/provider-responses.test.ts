@@ -60,6 +60,16 @@ describe('Provider standard Responses boundary', () => {
     await expect(client.respond({ model: 'test', input: [{ type: 'message', role: 'user', content: [{ type: 'input_file', file_url: 'https://fixture.test/file' }] }] })).rejects.toThrow('inline file_data');
   });
 
+  it('chat history attaches only image blobs; other blobs stay as their text line', () => {
+    const media = { enabled: () => true, read: () => Buffer.from('x') };
+    const [audio, mixed] = renderMessagesWithMedia([
+      { role: 'tool', content: '[blob log:a audio/mpeg] clip', tool_call_id: 'c1', blobs: [{ handle: 'log:a', mime: 'audio/mpeg' }] },
+      { role: 'user', content: 'look', blobs: [{ handle: 'log:a', mime: 'audio/mpeg' }, { handle: 'log:i', mime: 'image/png' }] },
+    ] as any, media);
+    expect(audio.content).toBe('[blob log:a audio/mpeg] clip');
+    expect(mixed.content).toEqual([{ type: 'text', text: 'look' }, { type: 'image_url', image_url: { url: `data:image/png;base64,${Buffer.from('x').toString('base64')}` } }]);
+  });
+
   it('normalizes partial native usage without representing missing meters as zero', () => {
     const assembly = new NativeResponseAssembly();
     const response = { id: 'partial-usage', model: 'test', output: [], status: 'completed', usage: { input_tokens: 50, output_tokens: 3 } };
