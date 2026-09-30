@@ -443,4 +443,29 @@ describe('块区间随编辑跟随', () => {
     expect(byKey.get('b')).toBeUndefined();
     ed.dispose();
   });
+
+  it('模板带 CRLF/CR 换行:载入不算改动,之后的输入落在对的块里', async () => {
+    const parent = document.createElement('div');
+    document.body.appendChild(parent);
+    const changed: Any[] = [];
+    const ed = createPrefixEditor({ parent, onChange: (c: Any) => changed.push(...c) });
+    ed.setBlocks([
+      { title: 'A', tone: 'persona', sourceKey: 'a', text: 'a1\na2' },
+      { title: 'B', tone: 'world', sourceKey: 'b', text: 'b1\r\nb2\rb3' },
+      { title: 'T', tone: 'derived', text: 't1\r\nt2' },
+      { title: 'C', tone: 'persona', sourceKey: 'c', text: 'c1' },
+    ]);
+    expect(changed).toEqual([]);
+
+    ed.view.dispatch({ changes: { from: 2, insert: '甲\n乙' } });
+    const end = ed.view.state.doc.length;
+    ed.view.dispatch({ changes: { from: end, insert: '!' } });
+
+    const byKey = new Map(changed.map((c) => [c.sourceKey, c.text]));
+    expect(byKey.get('a')).toBe('a1甲\n乙\na2');
+    expect(byKey.get('b')).toBeUndefined();
+    expect(byKey.get('c')).toBe('c1!');
+    expect(ed.view.state.doc.toString()).toBe('a1甲\n乙\na2\nb1\nb2\nb3\nt1\nt2\nc1!');
+    ed.dispose();
+  });
 });

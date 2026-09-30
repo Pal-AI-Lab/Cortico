@@ -243,6 +243,8 @@ export function createPrefixEditor(opts: PrefixEditorOptions): PrefixEditor {
   return {
     view,
     setBlocks(blocks) {
+      // 文档把 CRLF/CR 折成 LF;块区间与改动基线都按折后的文本算,否则区间比文档长
+      blocks = blocks.map((b) => ({ ...b, text: view.state.toText(b.text).toString() }));
       const { doc, ranges } = joinBlocks(blocks);
       last = new Map(blocks.filter((b) => b.sourceKey).map((b) => [b.sourceKey!, b.text]));
       view.dispatch({
