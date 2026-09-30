@@ -1006,6 +1006,12 @@ export interface Persona {
    * 计入 hardTokens。内容只应随 Persona 自己的输入变化;每次不同就每次打穿前缀缓存。
    */
   sessionHead?(): Item[];
+  /**
+   * 主 session 每次模型请求前调用一次；返回 providers 里的端点名则这次请求用该端点，null 用
+   * activeProvider。端点不存在、未选模型或钩子抛错时 Core 记 warn 并用 activeProvider。
+   * 上下文窗口与 token 估算始终按 activeProvider。
+   */
+  mainEndpoint?(): string | null;
   /** Memory 实例。Core 不读它的内容;bot 没给 memoryName 时控制台以它的类名作 Memory 页标题。 */
   memory?: object;
   /** Memory 目录的绝对路径。 */
