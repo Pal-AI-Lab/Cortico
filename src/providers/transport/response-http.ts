@@ -21,13 +21,12 @@ export interface ResponseTransport {
 const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
 
 /**
- * Serializes a request body with every lone surrogate replaced by U+FFFD. JSON.stringify writes a
- * lone surrogate as a \uXXXX escape that upstream parsers reject, and the record carrying it stays
- * in the context, so every later request would fail the same way.
+ * Serializes a request body with every lone surrogate replaced by U+FFFD; upstream parsers reject
+ * the \uXXXX escape JSON.stringify writes for one.
  */
 export function requestJson(body: unknown): string {
   return JSON.stringify(body, (_key, value: unknown) =>
-    typeof value === 'string' ? value.replace(LONE_SURROGATE, '�') : value);
+    typeof value === 'string' ? value.replace(LONE_SURROGATE, '\uFFFD') : value);
 }
 
 /** SSE framing is independent of packet and line boundaries. */
