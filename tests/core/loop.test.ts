@@ -2788,7 +2788,7 @@ describe("MainLoop 连续失败与恢复通知", () => {
     // 第 5 次响,第 6 次不再响
     expect(alarms).toHaveLength(1);
     expect(alarms[0].msg).toContain('连续失败 5 次');
-    expect(alarms[0].data).toMatchObject({ threshold: 5 });
+    expect(alarms[0].data).toMatchObject({ threshold: 5, err: { message: 'upstream down' } });
     expect(rows.some((row) => row.msg.includes('[解除]'))).toBe(false);
 
     rig.llm.script(textReply('回来了'));

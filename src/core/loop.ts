@@ -1085,7 +1085,6 @@ export class MainLoop {
           this.finishTurn();
           return;
         }
-        this.noteStalled();
         consecutiveFailures++;
         const detail = {
           err: e,
@@ -1094,6 +1093,7 @@ export class MainLoop {
           ...(e instanceof GenerationError ? { status: e.status } : {}),
           attempt: consecutiveFailures,
         };
+        this.noteStalled(detail);
         // 按 ResubmitPolicy 重试，沿用已保存的部分输出与工具回执。
         const retryable = e instanceof GenerationError && (e.status === 0 || e.status === 429 || e.status >= 500);
         if (retryable && consecutiveFailures <= resubmit.maxConsecutive && resubmits < resubmit.maxPerBatch && round < caps.hard) {
@@ -1520,8 +1520,8 @@ export class MainLoop {
     if (error instanceof GenerationError) this.mainTrack?.recordAttempts(error.attempts, undefined, { prefixHash });
   }
 
-  /** 记录失败时刻与连续失败起点，并持久化。 */
-  private noteStalled(): void {
+  /** 记录失败时刻与连续失败起点，并持久化。告警带上触发它的那次失败。 */
+  private noteStalled(last: { err: unknown; status?: number; body?: string }): void {
     const now = Date.now();
     if (this.stallSince === 0) this.stallSince = now;
     this.stallAt.push(now);
@@ -1538,6 +1538,7 @@ export class MainLoop {
             count,
             since: new Date(this.stallSince).toISOString(),
             threshold: STALL_ALERT_THRESHOLD,
+            ...last,
           },
         );
       }
