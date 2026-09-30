@@ -466,6 +466,13 @@ describe('renderHandoffNote', () => {
     expect(note.entries).toBe(2);
   });
 
+  it('折叠切口落在 emoji 中间时退回到整字,不留半个代理对', () => {
+    const text = 'a'.repeat(40) + '🎤'.repeat(200);
+    for (let budget = 1; budget < estimateTokens(text); budget++) {
+      expect(foldToBudget(text, budget)).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    }
+  });
+
   it('短内容在预算内不折叠', () => {
     expect(foldToBudget('短', 1024)).toBe('短');
   });

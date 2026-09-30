@@ -72,11 +72,13 @@ export function handoffNoteStamp(now: Date): string {
   return now.toISOString().replace(/\.\d{3}Z$/, 'Z').replace(/:/g, '-');
 }
 
-/** 超过预算的文本只留开头,尾部换成一行痕迹。 */
+/** 超过预算的文本只留开头,尾部换成一行痕迹。切口不落在代理对中间。 */
 export function foldToBudget(text: string, budgetTokens: number): string {
   const total = estimateTokens(text);
   if (total <= budgetTokens) return text;
-  const keepChars = Math.max(0, Math.floor(text.length * budgetTokens / total));
+  let keepChars = Math.max(0, Math.floor(text.length * budgetTokens / total));
+  const tail = text.charCodeAt(keepChars - 1);
+  if (tail >= 0xd800 && tail <= 0xdbff) keepChars--;
   return `${text.slice(0, keepChars)}\n…[后面约 ${total - budgetTokens} token 已折叠]`;
 }
 
