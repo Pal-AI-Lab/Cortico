@@ -856,6 +856,20 @@ describe('用量页挂载', () => {
     expect(root.textContent).not.toContain('2026-07-01');
   });
 
+  it('刷新失败时保留上一次结果，整块标为过期并写明失败原因', async () => {
+    stubFetch({ '/api/usage': sample() });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    stubFetch({}, '/api/usage');
+    root.findButton('刷新')!.dispatchEvent({ type: 'click' });
+    await flush();
+    expect(root.findAll('stat').length).toBe(8);
+    expect(root.find('u-stale')).not.toBeNull();
+    expect(root.find('msgline')!.textContent).toContain('炸了');
+  });
+
   it('勾上拆分维度 → 重画但不重取（数据没变，变的是画法）', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });

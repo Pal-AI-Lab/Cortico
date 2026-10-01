@@ -697,6 +697,46 @@ describe('运行日志', () => {
     expect(lastLogUrl()).toContain('run=r-a');
   });
 
+  it('runlog 帧:看当前 run 时重查,在途期间到达的合并成一次;看历史 run 时不响应', async () => {
+    let release: (() => void) | null = null;
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const u = String(url);
+      fetched.push(u);
+      const body = JSON.stringify(reply(u));
+      const respond = (): Response => new Response(body, { status: 200 });
+      // 第一次跟随推送的重查挂住,模拟在途
+      if (u.startsWith('/api/log?') && fetched.filter((x) => x.startsWith('/api/log?')).length === 2) {
+        return new Promise((resolve) => { release = () => resolve(respond()); });
+      }
+      return Promise.resolve(respond());
+    });
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/runlog');
+    core.createCoreFeature({ env }).mount(ctx);
+    await flush();
+    sockets[0].up();
+    const logs = (): number => fetched.filter((u) => u.startsWith('/api/log?')).length;
+    expect(logs()).toBe(1);
+
+    sockets[0].emit({ t: 'runlog' });
+    sockets[0].emit({ t: 'runlog' });
+    sockets[0].emit({ t: 'runlog' });
+    await flush();
+    expect(logs()).toBe(2);
+    release!();
+    await flush();
+    expect(logs()).toBe(3);
+
+    const [runSel] = root.findAllTag('select');
+    runSel.value = 'r-a';
+    runSel.dispatchEvent({ type: 'change' });
+    await flush();
+    const before = logs();
+    sockets[0].emit({ t: 'runlog' });
+    await flush();
+    expect(logs()).toBe(before);
+  });
+
   it('区域 / 正则 / 轮次输入去抖 300ms,回车立即查', async () => {
     stubFetch(reply);
     const { env } = fakeEnv();
