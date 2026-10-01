@@ -59,6 +59,16 @@ export function collectVisible(bot: Bot, p: { x: number; y: number; z: number })
   return Math.hypot(me.x - (p.x + 0.5), me.y - (p.y + 0.5), me.z - (p.z + 0.5)) <= 4.5;
 }
 
+/**
+ * maxDistance 内看得见的目标方块,由近到远;find 与 collect 共用这一个判据。
+ * 范围内的候选全取再过视线:findBlocks 按距离截断且不看遮挡,只取最近几个时,
+ * 矿脉密集处近旁埋着的会把远一点露在洞壁上的挤出候选。
+ */
+export function visibleBlocks(bot: Bot, ids: number[], maxDistance: number): Vec3[] {
+  return bot.findBlocks({ matching: ids, maxDistance, count: Infinity })
+    .filter((q) => collectVisible(bot, q));
+}
+
 export async function skillCollect(
   bot: Bot,
   block: string,
@@ -93,10 +103,8 @@ export async function skillCollect(
   };
   for (let i = 0; i < count; i++) {
     checkAbort(ctx);
-    // 只挖看得见的。扫到多少与看得见多少分开记:前者不进回执(那是穿墙情报),
-    // 后者才是她的感知面。
-    const scanned = bot.findBlocks({ matching: ids, maxDistance: 48, count: mature ? 64 : 16 });
-    const found = scanned.filter((q) => collectVisible(bot, q));
+    // 只挖看得见的;看不见的处数与坐标不进回执(那是穿墙情报)
+    const found = visibleBlocks(bot, ids, 48);
     let pos: (typeof found)[number] | undefined = found[0];
     // 只收成熟项时按 age 达上限筛选，未成熟格保留。
     let immature = 0;
@@ -126,9 +134,12 @@ export async function skillCollect(
         if (lastTunnelKey) scene.push(`已经挖到 (${lastTunnelKey}) 跟前,那儿也没有`);
         // 「扫得到但一处都看不见」与「压根没有」是两件事,措辞分开;但都不报
         // 看不见那些的坐标与处数——那正是要收掉的穿墙情报。
+        const buriedNote = buried
+          ? `。这一步写了 buried,它只管看得见但走不过去的目标;一处都看不见,它没用上,不会自己去挖埋着的`
+          : '';
         throw new SkillBlocked(
           `附近看不见${mature ? '熟着的' : ''}${zhName(block)}` +
-          `${sourceHint ? `。${sourceHint}` : ''}。${findEmptyHint(bot, ctx, block, false)}`,
+          `${sourceHint ? `。${sourceHint}` : ''}${buriedNote}。${findEmptyHint(bot, ctx, block, false)}`,
           scene,
         );
       }
@@ -402,8 +413,7 @@ export async function skillFind(
       }
       return best;
     }
-    const found = bot.findBlocks({ matching: ids, maxDistance: 48, count: 16 });
-    const p = found.find((q) => canSeeBlockAt(bot, q));
+    const p = visibleBlocks(bot, ids, 48)[0];
     // 回执使用扫描到的实际方块名:target 可能来自不可靠的视觉识别
     return p ? { x: p.x, y: p.y, z: p.z, what: zhName(bot.blockAt(p)?.name ?? target), entity: false } : null;
   };
@@ -426,8 +436,7 @@ export async function skillFind(
         });
       }
     } else {
-      for (const q of bot.findBlocks({ matching: ids, maxDistance: radius, count: 64 })) {
-        if (!canSeeBlockAt(bot, q)) continue;
+      for (const q of visibleBlocks(bot, ids, radius)) {
         out.push({ x: q.x, y: q.y, z: q.z, what: zhName(bot.blockAt(q)?.name ?? target), entity: false });
       }
     }

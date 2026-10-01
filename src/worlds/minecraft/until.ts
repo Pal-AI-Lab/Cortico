@@ -57,7 +57,8 @@ export interface UntilHit { x: number; y: number; z: number; what: string }
  */
 export function untilHit(bot: Bot, ids: readonly number[], radius: number, visible: boolean): UntilHit | null {
   if (ids.length === 0) return null;
-  const found = bot.findBlocks({ matching: [...ids], maxDistance: radius, count: 16 });
+  // 过视线闸时候选要全取:按距离截断会让近旁埋着的挤掉远一点露着的
+  const found = bot.findBlocks({ matching: [...ids], maxDistance: radius, count: visible ? Infinity : 1 });
   const p = found.find((q) => !visible || canSeeBlockAt(bot, q));
   if (!p) return null;
   return { x: p.x, y: p.y, z: p.z, what: zhName(bot.blockAt(p)?.name ?? 'unknown') };
