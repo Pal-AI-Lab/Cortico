@@ -4717,6 +4717,18 @@ describe('toss 的落点', () => {
     expect(bot.looked).toHaveLength(1);
     expect(reports[0].text).toContain('朝东抬头抛出去');
   });
+
+  it('两格高的通道:抬头抛会撞顶,改沿通道平着扔出去,不退回脚边', async () => {
+    // 脚下 y=64 与齐眼 y=65 沿 +X 是空的,y=66 是通道顶
+    const bot = tossBot((x, y, z) => !(x >= 0 && z === 0 && (y === 64 || y === 65)));
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'toss', item: 'cobblestone', count: 4 }]);
+    await waitUntil(() => reports.length === 1);
+    expect(bot.looked).toHaveLength(1);
+    expect(bot.looked[0].pitch).toBe(0);
+    expect(reports[0].text).toContain('朝东平着扔出去');
+    expect(reports[0].text).not.toContain('就在脚边扔的');
+  });
 });
 
 

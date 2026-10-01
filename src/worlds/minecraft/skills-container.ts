@@ -95,7 +95,12 @@ export async function skillPickup(bot: Bot, ctx: SkillContext, item?: string): P
   throw new SkillNoop(item ? `附近没有${zhName(item)}掉落物,包里也没多出什么` : '附近没有掉落物,包里也没多出什么');
 }
 
-/** 抛远的落点找多远(格);近端要出得了自己的拾取半径(原版 ~1 格),远端别丢到看不见的地方 */
+/**
+ * 抛远的落点找多远(格)。原版丢出的物品初速 0.3 格/刻沿视线、另加 0.1 向上,空中每刻
+ * 重力 0.04、阻力 0.98,落地摩擦 0.6:平扔停在约 3.3 格外,抬头 40° 约 3.7 格外,所以
+ * 一路要空出 4 格。拾取判定是玩家碰撞箱水平外扩 1 格,离身体中心约 1.4 格,停在 4 格外
+ * 站着不动捡不回来。远端只用来在几个方向里挑更开阔的那个。
+ */
 export const TOSS_RANGE = { min: 4, max: 8 } as const;
 /** 抛远的仰角(弧度)。mineflayer 的 pitch 是**负值朝上**,抬头 30–45° 取中间偏上的 40° */
 export const TOSS_PITCH = -(40 * Math.PI) / 180;
@@ -107,33 +112,41 @@ export const TOSS_AIM_MAX = 8;
 
 /**
  * toss 按当前 yaw/pitch 给物品初速度，须预先转向。
- * 纯读已加载格，在 min..max 范围检查落点及头格均为空气；选最长畅通方向，同距取首。
- * 无合格方向返回 null，调用方就地丢弃；不寻路或修改方块。
+ * 纯读已加载格。先找抬头抛的方向:齐眼与头上一层从 1 格起连续为空;抬头抛的物品
+ * 升到脚下约 2.4 格高,两格高的通道顶会挡住。没有就找平扔的方向:脚下与齐眼两层为空,
+ * 平扔最高到脚下约 1.8 格,两格高的通道够用。连续畅通满 min 格才算合格,选最长的,
+ * 同距取首。都没有返回 null,调用方就地丢弃;不寻路或修改方块。
  */
-export function planTossThrow(bot: Bot): { yaw: number; distance: number } | null {
+export function planTossThrow(bot: Bot): { yaw: number; pitch: number; distance: number } | null {
   // 读不了方块、或转不了头(台架的裸 bot)= 没有合格方向可挑,退回就地扔
   if (typeof bot.blockAt !== 'function' || typeof bot.look !== 'function') return null;
   const me = bot.entity.position;
-  const eyeY = Math.floor(me.y + 1);
-  let best: { yaw: number; distance: number } | null = null;
-  for (let deg = 0; deg < 360; deg += TOSS_YAW_STEP) {
-    const rad = (deg * Math.PI) / 180;
-    // mineflayer 的 yaw:0 = -Z(北),向 -X 增大。这两行与 skillFish 的算法同一套
-    const dx = -Math.sin(rad);
-    const dz = -Math.cos(rad);
-    let reach = 0;
-    for (let d = TOSS_RANGE.min; d <= TOSS_RANGE.max; d++) {
-      const cell = { x: Math.floor(me.x + dx * d), y: eyeY, z: Math.floor(me.z + dz * d) };
-      const at = blockAtCell(bot, cell);
-      const above = blockAtCell(bot, { ...cell, y: cell.y + 1 });
-      const clear = (b: ReturnType<Bot['blockAt']>): boolean =>
-        b !== null && b.boundingBox === 'empty' && !LIQUIDS.has(b.name);
-      if (!clear(at) || !clear(above)) break;
-      reach = d;
+  const feetY = Math.floor(me.y);
+  const clear = (b: ReturnType<Bot['blockAt']>): boolean =>
+    b !== null && b.boundingBox === 'empty' && !LIQUIDS.has(b.name);
+  const throws: Array<{ pitch: number; layers: readonly number[] }> = [
+    { pitch: TOSS_PITCH, layers: [1, 2] },
+    { pitch: 0, layers: [0, 1] },
+  ];
+  for (const { pitch, layers } of throws) {
+    let best: { yaw: number; pitch: number; distance: number } | null = null;
+    for (let deg = 0; deg < 360; deg += TOSS_YAW_STEP) {
+      const rad = (deg * Math.PI) / 180;
+      // mineflayer 的 yaw:0 = -Z(北),向 -X 增大。这两行与 skillFish 的算法同一套
+      const dx = -Math.sin(rad);
+      const dz = -Math.cos(rad);
+      let reach = 0;
+      for (let d = 1; d <= TOSS_RANGE.max; d++) {
+        const x = Math.floor(me.x + dx * d);
+        const z = Math.floor(me.z + dz * d);
+        if (!layers.every((dy) => clear(blockAtCell(bot, { x, y: feetY + dy, z })))) break;
+        reach = d;
+      }
+      if (reach >= TOSS_RANGE.min && (!best || reach > best.distance)) best = { yaw: rad, pitch, distance: reach };
     }
-    if (reach > 0 && (!best || reach > best.distance)) best = { yaw: rad, distance: reach };
+    if (best) return best;
   }
-  return best;
+  return null;
 }
 
 /** yaw 弧度 → 八向汉字。只用来在回执里说清「往哪边扔的」 */
@@ -181,12 +194,16 @@ export async function skillToss(
     const throwTo = planTossThrow(bot);
     if (throwTo) {
       checkAbort(ctx);
-      await bot.look(throwTo.yaw, TOSS_PITCH, true);
+      await bot.look(throwTo.yaw, throwTo.pitch, true);
     }
+    const stand = cellText(feetOf(bot));
     where = throwTo
-      ? `,朝${yawCompass(throwTo.yaw)}抬头抛出去,那个方向 ${throwTo.distance} 格内是空的`
-      : ',周围 4–8 格没找到又空又开阔的方向,就在脚边扔的';
+      ? `,站在 ${stand} 朝${yawCompass(throwTo.yaw)}${throwTo.pitch < 0 ? '抬头抛出去' : '平着扔出去'},`
+        + `那个方向 ${throwTo.distance} 格内是空的,东西停在那边约 3–4 格外`
+      : `,周围没有连续 ${TOSS_RANGE.min} 格空着的方向,就在脚边扔的(站在 ${stand});`
+        + '扔出的东西 2 秒后就能被捡,人还站在这儿会马上收回包里';
   }
+  where += '。扔在地上的东西留 5 分钟(所在区块加载着才计时),这期间走到离它约 1 格内,服务端会自动收回包里';
   const picked: PickTarget[] = [];
   for (const it of bot.inventory.items().filter((i) => pred(i.name, i))) {
     if (left <= 0) break;
