@@ -1050,6 +1050,83 @@ describe('toss / pickup 过滤 / 箱子', () => {
     expect(book.get('overworld', { x: 2, y: 64, z: 0 })?.items).toEqual([{ name: 'cobblestone', count: 64 }]);
   });
 
+  it('take:附近只有运输矿车时开它的箱子取,回执点名是运输矿车', async () => {
+    const bag = new Map<string, number>();
+    const cart = new Map<string, number>([['enchanted_book', 1], ['rail', 9]]);
+    const ids: Record<string, number> = { enchanted_book: 13, rail: 14 };
+    const stacks = (m: Map<string, number>) => [...m].filter(([, n]) => n > 0)
+      .map(([name, count]) => ({ type: ids[name], metadata: 0, name, count, slot: 0 }));
+    const opened: unknown[] = [];
+    const cartEntity = { id: 7, name: 'chest_minecart', position: new V(3.5, 64, 0.5), isValid: true };
+    const bot = {
+      entity: { id: 1, position: new V(0.5, 64, 0.5) },
+      entities: { 7: cartEntity },
+      game: { dimension: 'overworld' },
+      registry: { blocksByName: { chest: { id: 54, name: 'chest' } }, itemsByName: {} },
+      inventory: { items: () => stacks(bag) },
+      findBlocks: () => [],
+      blockAt: (p: V) => ({ name: 'air', position: p, boundingBox: 'empty' }),
+      openContainer: async (target: unknown) => {
+        opened.push(target);
+        return {
+          items: () => stacks(bag),
+          containerItems: () => stacks(cart),
+          inventoryStart: 27,
+          firstEmptyInventorySlot: () => 27,
+          withdraw: async (type: number, _m: number | null, n: number) => {
+            const name = Object.keys(ids).find((k) => ids[k] === type)!;
+            const k = Math.min(n, cart.get(name) ?? 0);
+            cart.set(name, (cart.get(name) ?? 0) - k);
+            bag.set(name, (bag.get(name) ?? 0) + k);
+          },
+          close: () => {},
+        };
+      },
+      pathfinder: {
+        stop() {}, setGoal() {},
+        goto: async (g: FakeGoal) => { bot.entity.position = new V(g.x!, g.y!, g.z!); },
+      },
+    };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'take', item: 'enchanted_book', count: 1 }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(opened).toEqual([cartEntity]);
+    expect(bag.get('enchanted_book')).toBe(1);
+    expect(reports[0].text).toContain('(3, 64, 0) 的运输矿车 取出附魔书×1');
+  });
+
+  it('use 右键运输矿车开出箱子窗口:回执念出里面有什么并关窗', async () => {
+    const cartEntity = { id: 7, name: 'chest_minecart', position: new V(2.5, 64, 0.5), isValid: true, height: 0.7 };
+    const closed: unknown[] = [];
+    const win = {
+      id: 3, type: 'minecraft:generic_9x3', inventoryStart: 27,
+      containerItems: () => [{ name: 'enchanted_book', count: 1 }, { name: 'rail', count: 9 }],
+    };
+    const bot = {
+      entity: { id: 1, position: new V(0.5, 64, 0.5) },
+      entities: { 7: cartEntity },
+      game: { dimension: 'overworld' },
+      health: 20,
+      players: {},
+      heldItem: null,
+      registry: { blocksByName: {}, itemsByName: {}, entitiesByName: { chest_minecart: {} } },
+      inventory: { items: () => [] },
+      currentWindow: null as typeof win | null,
+      closeWindow: (w: unknown) => { closed.push(w); bot.currentWindow = null; },
+      lookAt: async () => {},
+      useOn: async () => { bot.currentWindow = win; },
+      blockAt: (p: V) => ({ name: 'air', position: p, boundingBox: 'empty' }),
+      pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
+    };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'use', target: 'chest_minecart' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].text).toContain('开出了它的箱子窗口,里面:');
+    expect(reports[0].text).toContain('附魔书×1');
+    expect(closed).toEqual([win]);
+  });
+
   it('stow:首选箱子放不下就换下一口,大箱子另一半不重开,回执逐口报数和剩下的', async () => {
     let inv = 64;
     // (2,64,0)+(2,64,1) 是一口朝东的大箱子,两半开出同一扇窗;(5,64,0) 是单箱

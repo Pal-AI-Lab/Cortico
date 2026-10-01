@@ -1269,11 +1269,27 @@ export function probeWhereText(
       return `${zhName(name)}×${at.length}${at.length > PROBE_WHERE_SHOWN ? `,最近的 ${shown}` : `:${shown}`}`;
     })
     .sort();
+  // 实体(运输矿车等)不在区块方块数据里,只能对客户端收到的实体表
+  const entityKinds = bot.registry.entitiesByName as Record<string, unknown>;
+  const entityNames = want.unknown.filter((n) => entityKinds[n] !== undefined);
+  const unknown = want.unknown.filter((n) => entityKinds[n] === undefined);
+  const inShape = new Set(pre.map((e) => `${e.c.x},${e.c.y},${e.c.z}`));
+  const entityLines = entityNames.map((n) => {
+    const at = Object.values(bot.entities)
+      .filter((e) => e?.name === n && e.position)
+      .map((e) => e!.position.floored())
+      .filter((p) => inShape.has(`${p.x},${p.y},${p.z}`));
+    return at.length > 0
+      ? `${zhEntity(n)}(实体)×${at.length}:${at.slice(0, PROBE_WHERE_SHOWN).map(cellText).join('、')}`
+      : `${zhEntity(n)}是实体,不在区块方块数据里;客户端收到的实体里这片范围没有它(服务端只发来离自己一定距离内的实体)`;
+  });
   const head = `探查${SHAPE_ZH[call.shape]}(共 ${pre.length} 格)里点名的那几样`;
-  const body = lines.length > 0 ? `: ${lines.join(';')}` : ':一样都没有';
-  const miss = names.size === 0 ? '(点名的这几样一个都认不出来)' : '';
+  const body = lines.length > 0 ? `: ${lines.join(';')}` : entityNames.length > 0 ? ':方块一样都没有' : ':一样都没有';
+  const miss = names.size === 0 && entityNames.length === 0 ? '(点名的这几样一个都认不出来)' : '';
+  const ents = entityLines.length > 0 ? `;${entityLines.join(';')}` : '';
+  const unknownNote = unknown.length > 0 ? `(where 里的 ${unknown.join('、')} 认不出来,这几样没算进去)` : '';
   const tail = unloaded > 0 ? `。${unloaded} 格区块没加载,那几格没读到` : '';
-  return `${head}${miss}${body}${untilUnknownNote(want.unknown)}${tail}。这一档直接读区块,不受遮挡与视线限制`;
+  return `${head}${miss}${body}${ents}${unknownNote}${tail}。这一档直接读区块,不受遮挡与视线限制`;
 }
 
 /**

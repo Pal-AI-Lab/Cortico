@@ -12,7 +12,7 @@ import {
   AIR_NAMES, LIQUIDS, blockAtCell, blockProp, cellText, dimensionOf, feetOf, resolveAt,
 } from './cell-facts.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
-import { SIGN_RE, signLinesText, zhThing } from './receipt.ts';
+import { SIGN_RE, contentsText, signLinesText, zhThing } from './receipt.ts';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import {
   FEED_ITEMS, TAME_ITEMS, dyeColorOf, isKnownTarget, readHorseTamed, readSaddled, readSheepColor,
@@ -32,7 +32,7 @@ import { consumeHeldFood, equipNamed } from './skills-craft.ts';
 import { matchItemName } from './chests.ts';
 import {
   ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, findStationCell, openStationWindow,
-  putIntoStation, rememberWindow, stationItemFacts, type StationWindow,
+  containerStacks, putIntoStation, rememberWindow, stationItemFacts, type StationWindow,
 } from './containers.ts';
 import { isSpawnAnchorBlock } from './policy.ts';
 import { DRINKABLES } from './item-facts.ts';
@@ -663,8 +663,15 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     await bot.useOn(entity);
     await sleep(USE_SETTLE_MS);
     const head = `${label}右键了${zhEntity(call.target)}`;
+    // 运输矿车、漏斗矿车右键开出的是箱子类窗口:读一遍内容再关,东西要用 take 取
+    const win = bot.currentWindow;
+    const boxNote = win && /^minecraft:(generic_9x\d|hopper)$/.test(String(win.type))
+      ? `。开出了它的箱子窗口,里面:${contentsText(containerStacks(win as never, bot.registry as never).items)};`
+        + '窗口已关,要取东西用 take'
+      : '';
+    if (boxNote) bot.closeWindow(win!);
     const note = useInvNote(beforeInv, bot);
-    const facts = useNoteOn(bot, held, call.target, entity) + leaveVehicle(bot, call.target);
+    const facts = useNoteOn(bot, held, call.target, entity) + leaveVehicle(bot, call.target) + boxNote;
     if (!probe) {
       noteOffTable(ctx, held, call.target);
       return `${head}。${note || '包里一样没动'}${facts}`;

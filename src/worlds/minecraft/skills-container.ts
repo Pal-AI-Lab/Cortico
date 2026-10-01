@@ -715,14 +715,49 @@ export async function takeFromChestAt(
   return `${head}。${inside}`;
 }
 
+type BotEntity = NonNullable<Bot['entities'][string]>;
+
+/**
+ * 附近的运输矿车(带箱子的矿车实体),由近到远。它是实体,findContainers 按方块找不到;
+ * 右键开出来的是一扇 27 格的箱子窗口。只在客户端收到过的实体里找。
+ */
+export function findChestMinecarts(
+  bot: Bot, range: number,
+): Array<{ x: number; y: number; z: number; name: string; d: number; entity: BotEntity }> {
+  const me = bot.entity.position;
+  const out: Array<{ x: number; y: number; z: number; name: string; d: number; entity: BotEntity }> = [];
+  for (const e of Object.values(bot.entities)) {
+    if (e?.name !== 'chest_minecart' || !e.position) continue;
+    const d = e.position.distanceTo(me);
+    if (d > range) continue;
+    const p = e.position.floored();
+    out.push({ x: p.x, y: p.y, z: p.z, name: e.name, d, entity: e });
+  }
+  return out.sort((a, b) => a.d - b.d);
+}
+
+/** 走到运输矿车跟前开它的箱子窗口 */
+async function openChestMinecart(
+  bot: Bot, cart: BotEntity, ctx: SkillContext,
+): Promise<Awaited<ReturnType<Bot['openContainer']>>> {
+  await gotoGoal(bot, new goals.GoalNear(cart.position.x, cart.position.y, cart.position.z, 2), ctx);
+  checkAbort(ctx);
+  if (!cart.isValid) throw new SkillBlocked('运输矿车不见了(被打碎或移出了视野)');
+  return openWindowGuarded(bot, ctx, () => bot.openContainer(cart as never));
+}
+
 export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'take' }>, ctx: SkillContext): Promise<string> {
   if (call.at) return skillTakeAt(bot, call, ctx);
   const item = call.item!; // parse 保证:没有 at 就一定有 item
   const count = call.count ?? 1;
   const pred = itemPredOf(bot, item, call.pick);
   const found = findContainers(bot, 32);
-  if (found.length === 0) throw noContainerNearby(bot, ctx);
-  const ordered = orderForTake(found, ctx, bot, item);
+  const carts = findChestMinecarts(bot, 32);
+  if (found.length === 0 && carts.length === 0) throw noContainerNearby(bot, ctx);
+  // 运输矿车会动,不进容器账本,排在箱子后面
+  const ordered: Array<(typeof found)[number] & { entity?: BotEntity }> = [
+    ...orderForTake(found, ctx, bot, item), ...carts,
+  ];
   const notes: string[] = [];
   let got = 0;
   let unconfirmed = 0;
@@ -733,14 +768,16 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
   for (const target of ordered.slice(0, 3)) {
     if (got >= count) break;
     checkAbort(ctx);
-    const at = `(${target.x}, ${target.y}, ${target.z})`;
+    const at = `(${target.x}, ${target.y}, ${target.z})${target.entity ? ' 的运输矿车' : ''}`;
     let chest;
     try {
       await show.openGap();
-      chest = await openNearbyContainer(bot, target, ctx);
+      chest = target.entity
+        ? await openChestMinecart(bot, target.entity, ctx)
+        : await openNearbyContainer(bot, target, ctx);
     } catch (err) {
       if (err instanceof Aborted) throw err;
-      notes.push(`${at} 打不开`);
+      notes.push(`${at} 打不开:${err instanceof SkillBlocked ? err.message : zhErrorText((err as Error).message)}`);
       continue;
     }
     // 开窗期间 bot.inventory 冻在开窗前那本账,正好是 close() 之后要对的账底
@@ -788,7 +825,7 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
           await show.beat('click');
         }
       }
-      snap = rememberChest(ctx, bot, target, chest);
+      snap = target.entity ? containerStacks(chest, bot.registry as never) : rememberChest(ctx, bot, target, chest);
       await show.beat('close');
     } finally {
       chest.close();
@@ -810,7 +847,7 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
       lane: 'skill', event: took === 0 ? 'take-none' : 'take-done', taskId: ctx.taskId,
       msg: `${at}:窗口里点出${zhName(item)} ${took} 个,关窗后包里多了 ${conf?.moved ?? 0} 个`,
       data: {
-        at: target, item, took, confirmed: conf?.moved ?? 0,
+        at: { x: target.x, y: target.y, z: target.z }, item, took, confirmed: conf?.moved ?? 0,
         status: conf?.status ?? 'none', failure,
       },
     });

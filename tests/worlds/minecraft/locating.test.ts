@@ -21,7 +21,11 @@ const NON_SOLID = new Set(['air', 'water', 'lava', 'torch']);
 function worldBot(
   cells: Record<string, string>,
   at: { x: number; y: number; z: number },
-  opts: { blind?: ReadonlySet<string>; stock?: Array<{ name: string; count: number; type: number }> } = {},
+  opts: {
+    blind?: ReadonlySet<string>;
+    stock?: Array<{ name: string; count: number; type: number }>;
+    entities?: Record<string, { name: string; position: V }>;
+  } = {},
 ) {
   const world = new Map(Object.entries(cells));
   const names = new Set(['air', 'stone', 'nether_bricks', 'spawner', 'salmon', ...world.values()]);
@@ -34,13 +38,16 @@ function worldBot(
     // `canSeeBlock` 说不见时 canSeeBlockAt 会补一次射线;这一份台架里射线一律不中
     world: { raycast: () => null },
     entity: { id: 9, position: new V(at.x, at.y, at.z), onGround: true, eyeHeight: 1.62 },
-    entities: {},
+    entities: opts.entities ?? {},
     players: {},
     health: 20,
     food: 20,
     game: { minY: -64, height: 384, dimension: 'minecraft:the_nether' },
     inventory: { items: () => bag },
-    registry: { blocksByName, itemsByName: { salmon: {}, cooked_salmon: {} }, items: {}, foodsByName: { salmon: {} } },
+    registry: {
+      blocksByName, itemsByName: { salmon: {}, cooked_salmon: {} }, items: {}, foodsByName: { salmon: {} },
+      entitiesByName: { chest_minecart: {} },
+    },
     equip: async () => {},
     lookAt: async () => {},
     blockAt: (p: V) => {
@@ -119,6 +126,19 @@ describe('probe 的 where 档:封在结构里的东西', () => {
     exec.submit([{ skill: 'probe', shape: 'box', anchors: [[0, 60, 0], [20, 72, 20]] }]);
     await waitUntil(() => reports.length === 1, 15_000);
     expect(reports[0].text).toContain('一单上限 2048');
+  });
+
+  it('where 点名运输矿车:按实体表报坐标,不说成认不出来', async () => {
+    const bot = worldBot({ '0,63,0': 'stone' }, { x: 0.5, y: 64, z: 0.5 }, {
+      entities: { 7: { name: 'chest_minecart', position: new V(4.5, 64, 4.5) } },
+    });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{
+      skill: 'probe', shape: 'box', anchors: [[0, 60, 0], [8, 68, 8]], where: ['spawner', 'chest_minecart'],
+    }]);
+    await waitUntil(() => reports.length === 1, 15_000);
+    expect(reports[0].text).toContain('运输矿车(实体)×1:(4, 64, 4)');
+    expect(reports[0].text).not.toContain('认不出来');
   });
 
   it('数量多时只列最近几处,总数照实报', async () => {
