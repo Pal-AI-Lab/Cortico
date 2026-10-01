@@ -34,6 +34,7 @@ import {
 import { HOSTILE, bestWeapon, dropOwnedGoal, meleeCooldownMs, releaseBody, setOwnedGoal } from './executor.ts';
 import type { FightMode } from './policy.ts';
 import { zhEntity, zhName } from './names.ts';
+import { zhErrorText } from './receipt.ts';
 import { BURNING_BLOCKS, SCORCHING_FLOOR, bodyInWater, findBankCell, headInWater } from './terrain.ts';
 import { piglinIsHostile } from './piglin.ts';
 import {
@@ -128,6 +129,11 @@ const RETREAT_MAX_DROP = 3;
 
 /** 主动进场高于脱战血线的余量，单位为生命点；普通受击入场不加此余量。 */
 const ENGAGE_MARGIN = 3;
+
+/** 主手此刻的读数,空着念「空手」 */
+function heldText(bot: Bot): string {
+  return bot.heldItem ? zhName(bot.heldItem.name) : '空手';
+}
 
 /**
  * 朝 (dx,dz) 迈一步踩得住吗:前方 1.2 格那一柱,从脚那层往下 RETREAT_MAX_DROP 格内有实心(或脚那层
@@ -551,9 +557,7 @@ export class CombatSession {
     this.ctxPrevD.fill(0);
     this.opts.suspendTasks(`战斗:${hurt ? '被' : ''}${zhEntity(firstName)}${hurt ? '打了' : '贴到跟前'}`);
     this.hook(bot);
-    const weapon = bestWeapon(bot);
-    if (weapon) void bot.equip(weapon, 'hand').catch(() => undefined);
-    const held = weapon ? `,手里是${zhName(weapon.name)}` : ',手边没趁手的家伙';
+    const held = this.armMelee(bot);
     this.opts.emit(
       hurt
         ? `有只${zhEntity(firstName)}打过来了,我抄家伙还手!(生命 ${this.hp()}/20${held})`
@@ -853,7 +857,7 @@ export class CombatSession {
     this.opts.emit(
       `还在打:${foes.length} 只在附近(最近的是${zhEntity(nearest.name)}),` +
         `刀 ${this.swings} 次命中 ${this.meleeLanded()} 次,箭 ${this.arrows} 支命中 ${this.rangedLanded} 次,` +
-        `生命 ${this.hp()}/20。`,
+        `手里是${heldText(bot)},生命 ${this.hp()}/20。`,
       false, false,
     );
   }
@@ -876,8 +880,32 @@ export class CombatSession {
     }
     this.opts.ranged?.abort();
     this.rangedPendingOwner = null;
+    this.armMelee(bot);
+  }
+
+  /**
+   * 把近战最好的那件拿到主手,返回接敌播报里那半句。已经在手上就不动;
+   * 要换时播报只说正在换,换手的结果出来后没拿到手就另发一条,写明原因和手里实际是什么。
+   */
+  private armMelee(bot: Bot): string {
     const weapon = bestWeapon(bot);
-    if (weapon) void bot.equip(weapon, 'hand').catch(() => undefined);
+    if (!weapon) return ',手边没趁手的家伙';
+    if (bot.heldItem?.name === weapon.name) return `,手里是${zhName(weapon.name)}`;
+    const was = heldText(bot);
+    const miss = (why: string): void => {
+      const now = heldText(bot);
+      this.opts.emit(`${zhName(weapon.name)}没换到手上(${why}),手里是${now}。`, true, false);
+      this.opts.diag?.write({
+        lane: 'combat', event: 'arm-miss',
+        msg: `近战换${weapon.name}没成:${why},主手是${now}`,
+        data: { weapon: weapon.name, held: bot.heldItem?.name ?? null, why },
+      });
+    };
+    void bot.equip(weapon, 'hand').then(
+      () => { if (bot.heldItem?.name !== weapon.name) miss('换手做完了,主手读数却不是它'); },
+      (err: Error) => miss(zhErrorText(err.message)),
+    );
+    return `,正把${zhName(weapon.name)}换到手上(原来手里是${was})`;
   }
 
   private driveRanged(bot: Bot, target: Foe, foes: Foe[], now: number): void {
@@ -1462,10 +1490,9 @@ export class CombatSession {
     this.rangedOwner = {};
     this.rangedPendingOwner = null;
     this.nextRangedAt = now;
-    const weapon = bestWeapon(bot);
-    if (weapon) void bot.equip(weapon, 'hand').catch(() => undefined);
+    const held = this.armMelee(bot);
     const pressure = glued.reach <= 3.2 ? '还咬着我' : '还在远处压着我';
-    this.opts.emit(`跑不掉,${zhEntity(glued.name)}${pressure}——回头打!(生命 ${this.hp()}/20)`, true, true);
+    this.opts.emit(`跑不掉,${zhEntity(glued.name)}${pressure}——回头打!(生命 ${this.hp()}/20${held})`, true, true);
     this.opts.diag?.write({
       lane: 'combat', event: 'cornered',
       msg: `撤退失败(${cause}):挨了 ${this.retreatHits} 下,${glued.name}在 ${Math.round(glued.flat * 10) / 10} 格:转身还手,生命 ${this.hp()}/20`,

@@ -160,6 +160,20 @@ describe('standable 认岩浆', () => {
 });
 
 describe('战斗会话:进入(夺手不夺嘴)', () => {
+  it('换武器没成:接敌播报不说手里是它,换手结果出来后照实补一条', async () => {
+    const { bot } = combatRigBot([foe(7, 'zombie', 2.5)]);
+    const b = bot as unknown as Record<string, unknown>;
+    b.heldItem = null;
+    b.inventory = { items: () => [{ name: 'diamond_sword', type: 1, count: 1 }], slots: [] };
+    b.equip = async () => { throw new Error('Server rejected transaction for clicking on slot 36'); };
+    const { session, events } = rig(bot);
+    expect(session.onHurtBy(7, 'zombie')).toBe(true);
+    expect(events[0].text).not.toContain('手里是钻石剑');
+    await new Promise((r) => setImmediate(r));
+    expect(events.some((e) => e.text.includes('钻石剑没换到手上') && e.text.includes('手里是空手'))).toBe(true);
+    session.stop();
+  });
+
   it('被打就接手:挂起任务、发第一人称接敌事件,文本不出现「战斗模式/脚本/接管」', () => {
     const { bot } = combatRigBot([foe(7, 'zombie', 2.5)]);
     const { session, events, calls } = rig(bot);
