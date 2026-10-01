@@ -872,11 +872,12 @@ export class WebApp {
         // status顺带推一份(不定时轮询,append即代表状态变化)
         this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       });
-      // reset 顺带带上合成开头现值:前缀重载/交接都走 reset,标注块跟着刷新
+      // reset 顺带带上合成开头与工具表现值:前缀重载/交接都走 reset,两者与新前缀同一代
       dbg.onSessionReset((messages) => this.debugBroadcast({
         t: 'session.reset',
         messages,
         head: dbg.sessionHead?.() ?? [],
+        toolSchemas: dbg.toolSchemas(),
       }));
       dbg.onEvent((envelope) => this.debugBroadcast({ t: 'event', envelope }));
       dbg.onRunlog((entry) => this.debugBroadcast({ t: 'runlog', entry }));
@@ -1645,6 +1646,7 @@ export class WebApp {
       if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
       run.pause();
       this.deps.log.warn('运行已暂停(人工操作)');
+      this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       res.json({ ok: true, paused: true, result: pick(this.languageOf(req), SERVER_TEXT).paused });
     }));
 
@@ -1653,6 +1655,7 @@ export class WebApp {
       if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
       run.resume();
       this.deps.log.warn('运行已继续(人工操作)');
+      this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       res.json({ ok: true, paused: false, result: pick(this.languageOf(req), SERVER_TEXT).resumed });
     }));
 

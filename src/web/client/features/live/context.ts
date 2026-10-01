@@ -87,10 +87,14 @@ export interface ContextBreakdown {
   total: number;
   /** total 里上游数过的部分;0 = 整份估算 */
   countedTokens: number;
-  /** 圈的分母:Persona的阶段预算,没报时模型物理上限;两者都没有则 null */
+  /** 圈的分母:Persona 阶段预算与模型输入上限中已知的较小者;都未知则 null */
   maxTokens: number | null;
-  /** 软预警线比例;Persona没报则 null(不画黄线) */
-  softRatio: number | null;
+  /** Persona 的阶段预算;没报则 null */
+  budgetTokens: number | null;
+  /** 模型一次请求的输入上限,越过即由 core 强制交接;窗口未知则 null */
+  hardTokens: number | null;
+  /** 软预警线(阶段预算 × 软阈值比例);Persona 没报则 null */
+  softTokens: number | null;
   keepOn: boolean;
   /** 摘除历史思维链省掉的量(只用于脚注) */
   strippedThinking: number;
@@ -114,8 +118,11 @@ export function computeCtx(input: ContextInput): ContextBreakdown | null {
   const msgs = input.messages;
   if (!msgs.length) return null;
   const cx = contextOf(input.status);
-  const maxTokens = cx.maxTokens ?? cx.hardTokens ?? null;
-  const softRatio = cx.softRatio ?? null;
+  const budgetTokens = typeof cx.maxTokens === 'number' ? cx.maxTokens : null;
+  const hardTokens = typeof cx.hardTokens === 'number' ? cx.hardTokens : null;
+  const known = [budgetTokens, hardTokens].filter((n): n is number => n !== null);
+  const maxTokens = known.length ? Math.min(...known) : null;
+  const softTokens = budgetTokens !== null && typeof cx.softRatio === 'number' ? Math.round(budgetTokens * cx.softRatio) : null;
   const keepOn = cx.keepPastThinking !== false;
   const tok: Record<string, number> = {};
   for (const c of CTX_CATS) tok[c.key] = 0;
@@ -172,7 +179,9 @@ export function computeCtx(input: ContextInput): ContextBreakdown | null {
     total,
     countedTokens: cx.countedTokens ?? 0,
     maxTokens,
-    softRatio,
+    budgetTokens,
+    hardTokens,
+    softTokens,
     keepOn,
     strippedThinking,
     toolCount: input.toolSchemas.length,
@@ -265,15 +274,11 @@ export function buildCtxPanel(ui: ConsoleUi, d: ContextBreakdown | null): HTMLEl
       ]),
     );
   }
-  if (d.maxTokens !== null) {
-    foot.appendChild(
-      footLine(
-        ui,
-        d.softRatio === null
-          ? [S.footHardPre, { b: ui.fmt.count(d.maxTokens) }, S.footHardPost]
-          : [S.footSoftPre, { b: ui.fmt.count(Math.round(d.maxTokens * d.softRatio)) }, S.footSoftPost(ui.fmt.count(d.maxTokens))],
-      ),
-    );
+  if (d.budgetTokens !== null && d.softTokens !== null) {
+    foot.appendChild(footLine(ui, [S.footSoftPre, { b: ui.fmt.count(d.softTokens) }, S.footSoftPost(ui.fmt.count(d.budgetTokens))]));
+  }
+  if (d.hardTokens !== null) {
+    foot.appendChild(footLine(ui, [S.footHardPre, { b: ui.fmt.count(d.hardTokens) }, S.footHardPost]));
   }
   box.appendChild(foot);
   return box;

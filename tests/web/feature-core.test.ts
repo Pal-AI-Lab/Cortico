@@ -548,7 +548,7 @@ describe('运行态', () => {
     sockets[0].emit({
       t: 'status',
       status: {
-        eventCount: 7,
+        latestEventCursor: 7,
         terminalOnline: 2,
         loop: { estTokens: 12345, messageCount: 9, paused: true },
       },

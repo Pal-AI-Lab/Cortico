@@ -1262,7 +1262,7 @@ export function createBot<C extends CoreConfig>(
         modelConnection: providerHub.current(language),
         startedAt,
         loop: core.loop.getStatus(),
-        eventCount: core.store.latestCursor(),
+        latestEventCursor: core.store.latestCursor(),
         onboardingPending: existsSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)),
         ...(contribution.status?.() ?? {}),
       }),

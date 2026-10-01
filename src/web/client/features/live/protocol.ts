@@ -42,7 +42,7 @@ export interface UsageSnapshot {
  * 部分与摘除思维链开关;Persona在顶层 `context` 报自己的阶段预算与软预警线。
  */
 export interface ContextBudget {
-  /** Persona的阶段预算(圈的分母);没报时分母退到 hardTokens */
+  /** Persona 的阶段预算;圈的分母取它与 hardTokens 中较小的一个 */
   maxTokens?: number;
   softRatio?: number;
   keepPastThinking?: boolean;
@@ -79,7 +79,8 @@ export interface StatusSnapshot {
    * 文本按 tone 画出来——这是人格概念上状态条的**唯一**出口。
    */
   chips?: StatusChip[] | null;
-  eventCount?: number | null;
+  /** 事件库最新一条的游标。游标跨 run 递增,不是条数。 */
+  latestEventCursor?: number | null;
   /** 部署目录里还挂着开场引导的标记。 */
   onboardingPending?: boolean;
   terminalOnline?: number | null;

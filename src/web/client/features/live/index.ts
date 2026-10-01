@@ -269,7 +269,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     const ratio = known ? d.total / d.maxTokens! : 0;
     // 分母未知(Persona没报预算、Provider 也没报窗口)时圈里只写计数,不编百分比
     ctxPct.textContent = d ? (known ? ui.fmt.percent(ratio) : ui.fmt.count(d.total)) : '—';
-    ctxOpen.className = `ctxdonut${ratio >= 1 ? ' danger' : d && d.softRatio !== null && ratio >= d.softRatio ? ' warn' : ''}`;
+    ctxOpen.className = `ctxdonut${ratio >= 1 ? ' danger' : d && d.softTokens !== null && d.total >= d.softTokens ? ' warn' : ''}`;
     ctxOpen.title = d
       ? S.ctxTitle(ui.fmt.count(d.total), known ? ui.fmt.count(d.maxTokens!) : null)
       : S.ctxWaiting;
@@ -331,6 +331,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       case 'session.reset':
         state.messages = arr<ContextRecord>(f.messages);
         if (f.head !== undefined) state.head = arr<ContextRecord>(f.head);
+        if (f.toolSchemas !== undefined) state.toolSchemas = arr<ToolSchemaDoc>(f.toolSchemas);
         if (fork.isMain()) {
           timeline.rebuild(state.messages, { note: S.sessionResetNote, head: state.head });
         }
@@ -405,7 +406,19 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     clearTimer: env.clearTimer,
     onError: (err) => ctx.onError(err),
     handlers: {
-      message: () => {},
+      // 时间线由调试通道画;这条流上只读终端 World 对本连接所发帧的拒收与附带说明。
+      message: (raw) => {
+        let frame: unknown;
+        try {
+          frame = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        const { type, kind, text } = (frame ?? {}) as { type?: unknown; kind?: unknown; text?: unknown };
+        if (type !== 'sys' || typeof text !== 'string') return;
+        if (kind === 'rejected') ui.toast(text, 'bad');
+        else if (kind === 'warning') ui.toast(text);
+      },
       close: (willRetry) => {
         if (willRetry) chatStream?.send(hello);
       },

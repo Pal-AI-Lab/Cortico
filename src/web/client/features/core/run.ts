@@ -42,7 +42,7 @@ export function createRunView(deps: RunViewDeps): RunView {
         { k: S.statCache, v: cache },
         { k: S.statRounds, v: loop.roundsLastBatch ?? '—' },
         { k: S.statBatches, v: loop.batchesHandled ?? '—' },
-        { k: S.statEvents, v: st.eventCount ?? '—', unit: S.unitEvents },
+        { k: S.statEvents, v: st.latestEventCursor ?? '—' },
         { k: S.statOnline, v: st.terminalOnline ?? '—', unit: S.unitPeople },
         {
           k: S.statRun,

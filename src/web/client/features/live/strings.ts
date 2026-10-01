@@ -108,7 +108,7 @@ const zh = {
   footStrippedPre: '历史思维链已丢弃约 ',
   footStrippedPost: " tok，不发送。",
   footHardPre: '越过 ',
-  footHardPost: '（模型物理上限）由 core 强制交接。',
+  footHardPost: '（模型输入上限：上下文窗口减去输出预留）由 core 强制交接。',
   footSoftPre: 'Persona 软阈值：',
   footSoftPost: (max: string) => `；阶段预算 ${max}。`,
 
@@ -235,7 +235,7 @@ const en: typeof zh = {
   footStrippedPre: 'About ',
   footStrippedPost: " tok of past reasoning is excluded from requests.",
   footHardPre: 'Beyond ',
-  footHardPost: ' (the model\'s hard limit) the core forces a handoff.',
+  footHardPost: ' (the model input limit: context window minus reserved output) the core forces a handoff.',
   footSoftPre: 'Persona soft threshold: ',
   footSoftPost: (max: string) => `; stage budget ${max}.`,
 
