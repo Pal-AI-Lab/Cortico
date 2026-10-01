@@ -239,7 +239,6 @@ const FAR_TARGETS: Record<string, number> = { end_crystal: 128, ender_dragon: 12
  * 爆炸包只发给 64 格内的玩家。爆心就是水晶坐标,0.5 格只容浮点误差。
  */
 const CRYSTAL_BLAST_MATCH = 0.5;
-const CRYSTAL_BLAST_REACH = 64;
 /** 移除包与爆炸包在服务端同一刻先后发出;移除先到时再等两刻收爆炸包 */
 const CRYSTAL_BLAST_WAIT_MS = 100;
 
@@ -261,12 +260,7 @@ export async function skillAttack(
   const radius = FAR_TARGETS[target] ?? 32;
   const entity = findEntity(bot, target, radius);
   // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
-  if (!entity) {
-    throw new SkillNoop(
-      `附近 ${radius} 格内没有${zhEntity(target)}` +
-        (FAR_TARGETS[target] ? ';服务端只下发一定距离内的实体(Paper 默认 64 格),更远的看不到' : ''),
-    );
-  }
+  if (!entity) throw new SkillNoop(`附近 ${radius} 格内没有${zhEntity(target)}`);
   const ranged = ctx.attack.ranged;
   const forcedRanged = mode === 'ranged' || mode === 'kite';
   if (forcedRanged) {
@@ -459,7 +453,7 @@ export async function skillAttack(
   if (crystal && !entity.isValid) {
     const away = Math.round(entity.position.distanceTo(bot.entity.position));
     throw new SkillBlocked(
-      `${zhEntity(target)}不见了,没收到它原位的爆炸(爆炸只通知 ${CRYSTAL_BLAST_REACH} 格内的玩家,消失时相距 ${away} 格);` +
+      `${zhEntity(target)}不见了,没收到它原位的爆炸(消失时相距 ${away} 格);` +
         attackStats(stats),
     );
   }
