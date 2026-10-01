@@ -1,6 +1,7 @@
 /** Aggregate observed consumption and immutable Provider charges. */
 import type { UsageRecord } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
+import { nowIso } from './util.ts';
 
 /** 已解析的具体时间粒度(桶宽) */
 export type UsageBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
@@ -60,7 +61,9 @@ export interface UsageAggregate {
   bucket: UsageBucketUnit;
   from: string | null;
   to: string | null;
-  /** 时间序列(按 bucket 升序) */
+  /** 日期范围与桶键所在的时区;调用方未给时为 null。 */
+  timezone: string | null;
+  /** 时间序列(按 bucket 升序)。有记录时首末桶之间连续,没有调用的桶各字段为 0。 */
   series: UsageSeriesPoint[];
   /** 全量合计 */
   totals: UsageGroupStat;
@@ -144,6 +147,30 @@ function bucketKeyOf(ts: string, unit: UsageBucketUnit): string {
   }
 }
 
+/**
+ * 桶键的下一个桶键。桶键是时区内的墙钟时间,按 UTC 日历做加法;夏令时跳过或重复的
+ * 那一小时同样出现一次。
+ */
+function nextBucketKey(key: string, unit: UsageBucketUnit): string {
+  const [y = 1970, mo = 1, d = 1] = key.slice(0, 10).split('-').map(Number);
+  const h = unit === 'minute' || unit === 'hour' ? Number(key.slice(11, 13)) : 0;
+  const mi = unit === 'minute' ? Number(key.slice(14, 16)) : 0;
+  const dt = new Date(Date.UTC(y, mo - 1, unit === 'month' ? 1 : d, h, mi));
+  if (unit === 'minute') dt.setUTCMinutes(dt.getUTCMinutes() + 1);
+  else if (unit === 'hour') dt.setUTCHours(dt.getUTCHours() + 1);
+  else if (unit === 'day') dt.setUTCDate(dt.getUTCDate() + 1);
+  else if (unit === 'week') dt.setUTCDate(dt.getUTCDate() + 7);
+  else dt.setUTCMonth(dt.getUTCMonth() + 1);
+  return bucketKeyOf(dt.toISOString(), unit);
+}
+
+/** YYYY-MM-DD 往前数 n 天。 */
+function daysBefore(day: string, n: number): string {
+  const dt = new Date(`${day}T00:00:00Z`);
+  dt.setUTCDate(dt.getUTCDate() - n);
+  return dt.toISOString().slice(0, 10);
+}
+
 /** from/to(YYYY-MM-DD,含端)之间的整天跨度(含首尾);任一为空→NaN */
 function daySpan(from?: string | null, to?: string | null): number {
   if (!from || !to) return NaN;
@@ -166,15 +193,29 @@ export function resolveBucket(from?: string | null, to?: string | null): UsageBu
   return 'month';
 }
 
+export interface UsageAggregateOptions {
+  from?: string | null;
+  to?: string | null;
+  /** 含今天在内的最近 N 天;给了就覆盖 from/to。今天按 timezone 取。 */
+  days?: number;
+  bucket: UsageBucketOption;
+  currency?: string;
+  basis?: 'marginal' | 'equivalent';
+  /** 记录 ts 所用的时区。给了才按它解析 days,并且不为当前时刻之后补空桶。 */
+  timezone?: string;
+  now?: Date;
+}
+
 /**
  * 按包含端点的日期范围筛选，按时间、角色和模型聚合用量。
  * 费用从记录内的 charges 按币种和计价基础选择，再按 meter 归入四类成本。
  */
-export function aggregateUsage(
-  records: UsageRecord[],
-  opts: { from?: string | null; to?: string | null; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' },
-): UsageAggregate {
-  const { from = null, to = null } = opts;
+export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
+  const nowKeySource = opts.timezone ? nowIso(opts.timezone, opts.now) : null;
+  const today = nowKeySource?.slice(0, 10) ?? null;
+  const byDays = opts.days !== undefined && opts.days >= 1 && today !== null;
+  const from = byDays ? daysBefore(today, opts.days! - 1) : (opts.from ?? null);
+  const to = byDays ? today : (opts.to ?? null);
   const unit: UsageBucketUnit = opts.bucket === 'auto' ? resolveBucket(from, to) : opts.bucket;
   const series = new Map<string, { total: UsageAccum; roles: Map<string, UsageAccum>; models: Map<string, UsageAccum>; roleModels: Map<string, Map<string, UsageAccum>> }>();
   const roles = new Map<string, UsageAccum>();
@@ -219,6 +260,21 @@ export function aggregateUsage(
     add(totals, r, cost);
   }
 
+  const keys = [...series.keys()].sort();
+  if (keys.length) {
+    // 补齐范围内没有调用的桶:从 from(缺省首条记录)到 to(缺省末条记录),不越过当前时刻。
+    let end = to ? bucketKeyOf(`${to}T23:59`, unit) : keys[keys.length - 1]!;
+    if (nowKeySource) {
+      const nowKey = bucketKeyOf(nowKeySource, unit);
+      if (nowKey < end) end = nowKey;
+    }
+    if (keys[keys.length - 1]! > end) end = keys[keys.length - 1]!;
+    let key = from ? bucketKeyOf(`${from}T00:00`, unit) : keys[0]!;
+    if (keys[0]! < key) key = keys[0]!;
+    for (; key <= end; key = nextBucketKey(key, unit)) {
+      if (!series.has(key)) series.set(key, { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map() });
+    }
+  }
   const seriesOut: UsageSeriesPoint[] = [...series.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([b, acc]) => ({ bucket: b, ...acc.total, byRole: mapToObj(acc.roles), byModel: mapToObj(acc.models), byRoleModel: nestedMapToObj(acc.roleModels) }));
@@ -230,6 +286,7 @@ export function aggregateUsage(
     bucket: unit,
     from,
     to,
+    timezone: opts.timezone ?? null,
     series: seriesOut,
     totals: statOf('total', totals),
     byRole: groupOut(roles, roleLabels),

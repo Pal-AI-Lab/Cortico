@@ -1151,7 +1151,7 @@ export function createBot<C extends CoreConfig>(
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: consoleStorage,
-      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), opts), status: () => core.usageLog.status() },
+      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone }), status: () => core.usageLog.status() },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
         set: (groupId: string, values: ConfigValues, language) => {
