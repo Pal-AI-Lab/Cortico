@@ -391,6 +391,9 @@ function sample(): Any {
       { key: 'm-big', ...accum({ calls: 5, cost: 3.5 }), cacheHitRate: 0.8 },
       { key: 'm-small', ...accum({ calls: 1, cost: 0.5 }), cacheHitRate: 0.1 },
     ],
+    byInstance: [
+      { key: 'conn-a', ...accum({ calls: 6, cost: 4 }), cacheHitRate: 0.8 },
+    ],
   };
 }
 
@@ -750,7 +753,7 @@ describe('feature 声明', () => {
 // ---------------------------------------------------------------------------
 
 describe('用量页挂载', () => {
-  it('取数一次，画出概览卡、构成条、两张图与两张分组表', async () => {
+  it('取数一次，画出概览卡、构成条、两张图与三张分组表', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -780,10 +783,11 @@ describe('用量页挂载', () => {
     expect(svgs[0].findAllTag('clipPath').length).toBe(2);
     expect(svgs[0].findAllTag('clipPath')[0].findTag('rect')!.getAttribute('rx')).not.toBe(null);
 
-    // 分组表：首列印 label（有就用），没有就印 id
+    // 分组表：首列印 label 并跟上 id，没有 label 就只印 id
     const rows = root.findAllTag('tbody').flatMap((b: Any) => b.children);
     const firstCells = rows.map((r: Any) => r.children[0].textContent);
-    expect(firstCells).toContain('甲');
+    expect(firstCells).toContain('甲 alpha');
+    expect(firstCells).toContain('conn-a');
     expect(firstCells).toContain('beta');
     expect(firstCells).toContain('m-big');
     expect(root.textContent).not.toContain('无数据');
@@ -828,7 +832,7 @@ describe('用量页挂载', () => {
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
-    const box = root.findAll('check').find((c: Any) => c.textContent.includes('角色'))!.findTag('input')!;
+    const box = root.findAll('check').find((c: Any) => c.textContent.includes('调用用途'))!.findTag('input')!;
     box.checked = true;
     expect(() => box.dispatchEvent({ type: 'change' })).not.toThrow();
     expect(root.findAllTag('svg')[0].findAll('barg').length).toBe(2);
@@ -882,7 +886,7 @@ describe('用量页挂载', () => {
 
     // 「角色」那颗勾选框（主图控件里的第二颗 check）
     const checks = root.findAll('check');
-    const roleCheck = checks.find((c: Any) => c.textContent.includes('角色'))!;
+    const roleCheck = checks.find((c: Any) => c.textContent.includes('调用用途'))!;
     const box = roleCheck.findTag('input')!;
     box.checked = true;
     box.dispatchEvent({ type: 'change' });

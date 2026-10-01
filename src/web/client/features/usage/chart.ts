@@ -468,7 +468,8 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
   const tipHtmlFor = (i: number, curId: string | null): string =>
     uTipHtml(d, series[i]!, order, colorOf, { metric, stacked, cur, unit, curId });
   // 监听挂在这棵刚造出来的 svg 上：整棵树下次重画时被丢弃，监听随之消失。
-  svg.addEventListener('mousemove', (ev) => {
+  // 点按与悬停同一处理:触屏没有悬停,点一下柱子即显示明细,点空白处收起。
+  const point = (ev: Event): void => {
     const t = ev.target as Element | null;
     const cl = t?.classList;
     if (stacked && cl?.contains('bseg')) {
@@ -485,7 +486,9 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     } else {
       tip.hide();
     }
-  });
+  };
+  svg.addEventListener('mousemove', point);
+  svg.addEventListener('click', point);
   svg.addEventListener('mouseleave', () => tip.hide());
   box.appendChild(svg);
 }
