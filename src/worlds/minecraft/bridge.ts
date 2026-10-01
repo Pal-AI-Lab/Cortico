@@ -435,6 +435,8 @@ export class Bridge {
 
     // 维度切换只由 transit 发起；普通寻路把传送面与门框当作空间边界。
     const portalBlocks = bot.registry.blocksByName as Record<string, { id: number } | undefined>;
+    /** 传送门方块的 id;寻路器不在这些格子里、也不在它们头顶垫脚(末地传送门头顶垫一块就把门盖住) */
+    const portalIds = new Set<number>();
     for (const name of [
       'nether_portal', 'end_portal', 'end_gateway',
       'obsidian', 'crying_obsidian', 'end_portal_frame',
@@ -443,6 +445,7 @@ export class Bridge {
       if (!portal) continue;
       if (name === 'nether_portal' || name === 'end_portal' || name === 'end_gateway') {
         movements.blocksToAvoid.add(portal.id);
+        portalIds.add(portal.id);
       }
       movements.blocksCantBreak.add(portal.id);
     }
@@ -503,7 +506,10 @@ export class Bridge {
       }
     }
     setSiteZones(movements, this.opts.blueprintZones ?? null);
-    setNoPlaceCells(movements, this.opts.workCell ?? null);
+    // 判据对落点和落点下面那一格各问一次(见 setNoPlaceCells)
+    const workCell = this.opts.workCell;
+    setNoPlaceCells(movements, (x, y, z) => portalIds.has(bot.blockAt(new Vec3(x, y, z), false)?.type ?? -1)
+      || (workCell?.(x, y, z) ?? false));
     setDigBackoff(movements, (x, y, z) => this.digBackedOff(x, y, z));
     const costs = this.opts.movementCosts?.();
     if (costs) {

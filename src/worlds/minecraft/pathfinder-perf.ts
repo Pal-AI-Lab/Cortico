@@ -214,7 +214,7 @@ export function setSiteZones(
 }
 
 /**
- * 注册按成果坐标禁止头顶垫脚的判据，null 撤销。
+ * 注册禁垫格判据(成果登记格、传送门方块),落点本身或落点下面那格命中都不生成放置；null 撤销。
  * 此稀疏点集与 setSiteZones 的工地体积约束独立。
  */
 export function setNoPlaceCells(

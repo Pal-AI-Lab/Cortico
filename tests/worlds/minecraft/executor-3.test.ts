@@ -103,6 +103,26 @@ describe('显式维度穿越', () => {
     expect(bot.controls).toContainEqual(['jump', true]);
   });
 
+  it('transit 3×3 末地传送门:站在门框上挨着边上那格门就算到了门边,不必站到中心格两格内', async () => {
+    const bot = combatBot({});
+    Object.assign(bot, { game: { dimension: 'overworld' } });
+    // 门方块 (9..11, 64, -1..1),给的是中心格 (10,64,0)
+    bot.blockAt = ((p: V) => (
+      Math.floor(p.y) === 64 && Math.abs(Math.floor(p.x) - 10) <= 1 && Math.abs(Math.floor(p.z)) <= 1
+        ? { name: 'end_portal' }
+        : { name: 'air' }
+    )) as typeof bot.blockAt;
+    let goal: { isEnd(n: { x: number; y: number; z: number }): boolean } | null = null;
+    bot.pathfinder.goto = async (g: FakeGoal) => { goal = g as unknown as typeof goal; throw new Error('no path'); };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
+    await waitUntil(() => reports.length === 1, 3000);
+
+    // 门框顶上 (8,65,0) 离中心格 √5 格;能算到达,寻路器就不用在门头顶垫块凑近
+    expect(goal!.isEnd({ x: 8, y: 65, z: 0 })).toBe(true);
+    expect(goal!.isEnd({ x: 6, y: 65, z: 0 })).toBe(false);
+  });
+
   it('transit 折跃门:维度不变,按人被挪走的距离判穿过去', async () => {
     const bot = combatBot({});
     Object.assign(bot, { game: { dimension: 'the_end' } });
@@ -213,7 +233,11 @@ describe('显式维度穿越', () => {
   it('transit 步途中维度变化是它本来要做的事,不撤单', async () => {
     const bot = combatBot({ goto: () => new Promise<void>(() => {}) });
     Object.assign(bot, { game: { dimension: 'overworld' } });
-    bot.blockAt = (() => ({ name: 'end_portal' })) as typeof bot.blockAt;
+    bot.blockAt = ((p: V) => (
+      Math.floor(p.x) === 10 && Math.floor(p.y) === 64 && Math.floor(p.z) === 0
+        ? { name: 'end_portal' }
+        : { name: 'air' }
+    )) as typeof bot.blockAt;
     const { exec, reports } = makeExecutorOn(bot);
     exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
     await sleep(10);

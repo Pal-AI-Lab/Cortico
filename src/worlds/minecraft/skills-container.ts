@@ -14,7 +14,7 @@ import {
 import { isSpawnAnchorBlock } from './policy.ts';
 import { roman, zhDimension, zhEnchant, zhName } from './names.ts';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
-import { AIR_NAMES, LIQUIDS, blockAtCell, cellText, dimensionOf, feetOf, resolveAt } from './cell-facts.ts';
+import { AIR_NAMES, LIQUIDS, blockAtCell, cellKeyOf, cellText, dimensionOf, feetOf, resolveAt } from './cell-facts.ts';
 import { droppedStackOf, type ItemStack } from './terrain.ts';
 import { CONTAINER_FIND, FURNACE_KINDS, matchItemName, matchMaterialName } from './chests.ts';
 import { dropGoal, gotoGoal } from './travel.ts';
@@ -1425,6 +1425,23 @@ export const PORTAL_BLOCKS = new Set(['nether_portal', 'end_portal', 'end_gatewa
  */
 const GATEWAY_JUMP_BLOCKS = 64;
 
+/** 和 start 六邻接连成一片的同种门方块(含 start);一片的大小由原版门框决定 */
+function portalCells(bot: Bot, start: Cell, kind: string): Cell[] {
+  const out: Cell[] = [start];
+  const seen = new Set([cellKeyOf(start)]);
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i];
+    for (const [dx, dy, dz] of [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]]) {
+      const n = { x: c.x + dx, y: c.y + dy, z: c.z + dz };
+      const key = cellKeyOf(n);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      if (blockAtCell(bot, n)?.name === kind) out.push(n);
+    }
+  }
+  return out;
+}
+
 export async function skillTransit(
   bot: Bot,
   call: Extract<SkillCall, { skill: 'transit' }>,
@@ -1444,7 +1461,11 @@ export async function skillTransit(
   const crossed = (): boolean => (kind === 'end_gateway'
     ? bot.entity.position.distanceTo(portalCenter) > GATEWAY_JUMP_BLOCKS
     : normalizeDimension(dimensionOf(bot)) !== fromDimension);
-  await gotoGoal(bot, new goals.GoalNear(portal.x, portal.y, portal.z, kind === 'nether_portal' ? 1 : 2), ctx);
+  // 走到这片门里任意一格门方块的边上。只围着给定那一格算半径时,3×3 末地传送门的中心格
+  // 从门框上够不着,寻路器只能在门方块头顶垫块站上去,把门盖住
+  const cells = portalCells(bot, portal, kind);
+  const radius = kind === 'nether_portal' ? 1 : 2;
+  await gotoGoal(bot, new goals.GoalCompositeAny(cells.map((c) => new goals.GoalNear(c.x, c.y, c.z, radius))), ctx);
   checkAbort(ctx);
   const reread = blockAtCell(bot, portal);
   if (reread?.name !== kind) {
@@ -1452,9 +1473,18 @@ export async function skillTransit(
   }
 
   dropGoal(bot, 'task', '到门边了,自己走进去', ctx.diag);
-  // 末地传送门是地面上一层,朝门中心低头走进去就掉进去;另两种是竖着的,平视
-  const aimY = kind === 'end_portal' ? portal.y + 0.2 : portal.y + 0.8;
-  await bot.lookAt(new Vec3(portal.x + 0.5, aimY, portal.z + 0.5), true);
+  // 末地传送门是地面上一层,朝门方块低头走进去就掉进去;另两种是竖着的,平视
+  const aimDy = kind === 'end_portal' ? 0.2 : 0.8;
+  const nearestCell = (): Cell => {
+    const p = bot.entity.position;
+    let best = cells[0];
+    let bestD = Infinity;
+    for (const c of cells) {
+      const d = Math.hypot(c.x + 0.5 - p.x, c.y + aimDy - p.y, c.z + 0.5 - p.z);
+      if (d < bestD) { best = c; bestD = d; }
+    }
+    return best;
+  };
   const deadline = Date.now() + 20_000;
   let touched = false;
   try {
@@ -1465,10 +1495,23 @@ export async function skillTransit(
         || blockAtCell(bot, { x: feet.x, y: feet.y + 1, z: feet.z })?.name === kind;
       touched ||= bodyInPortal;
       if (Date.now() >= deadline) {
-        const stuck = `维度仍是${zhDimension(fromDimension)}`;
+        const lids = kind === 'end_portal'
+          ? cells.map((c) => blockAtCell(bot, { x: c.x, y: c.y + 1, z: c.z }))
+            .filter((b): b is NonNullable<typeof b> => b?.boundingBox === 'block')
+          : [];
+        const covered = lids.length > 0
+          ? `;这片门 ${cells.length} 格里有 ${lids.length} 格头顶压着方块(`
+            + `${lids.map((b) => `${cellText(b.position)} ${zhName(b.name)}`).join('、')}),盖住的门格掉不进去`
+          : '';
+        const stuck = `维度仍是${zhDimension(fromDimension)}${covered}`;
         throw new SkillBlocked(touched
           ? `人进了 ${cellText(portal)} 的${zhName(kind)},等了 20 秒${kind === 'end_gateway' ? '人还在原地附近' : stuck}`
           : `朝 ${cellText(portal)} 的${zhName(kind)}走了 20 秒,身子一直没碰到门方块,停在 ${cellText(feet)};${stuck}`);
+      }
+      // 每一拍重新对准最近的门方块:跳着走会被框架和台阶带偏,只在出发时瞄一次会越走越远
+      if (!bodyInPortal) {
+        const c = nearestCell();
+        await bot.lookAt(new Vec3(c.x + 0.5, c.y + aimDy, c.z + 0.5), true);
       }
       bot.setControlState('forward', !bodyInPortal);
       // 末地传送门四周的框架高 13/16 格、折跃门悬在基岩中间,平地都走不进去;没进门就一路跳

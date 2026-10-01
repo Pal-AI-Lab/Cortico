@@ -322,6 +322,46 @@ describe('bridge 传送门边界', () => {
     }
   });
 
+  it('朝末地传送门中心找路时不在门方块头顶垫脚', () => {
+    // y=63 一层:(2..4, -1..1) 是 3×3 门方块,外圈门框,其余石头
+    const world = makeWorld();
+    const portal = registry.blocksByName.end_portal.defaultState as number;
+    const frame = registry.blocksByName.end_portal_frame.defaultState as number;
+    const isPortal = (x: number, z: number): boolean => x >= 2 && x <= 4 && z >= -1 && z <= 1;
+    for (let x = 1; x <= 5; x++) {
+      for (let z = -2; z <= 2; z++) {
+        const corner = (x === 1 || x === 5) && (z === -2 || z === 2);
+        world.setBlockStateId(new Vec3(x, 63, z), isPortal(x, z) ? portal : corner ? STONE : frame);
+      }
+    }
+    const placedOverPortal = (movements: Movements): string[] => {
+      (movements as unknown as { clearCollisionIndex(): void }).clearCollisionIndex();
+      (movements as unknown as { updateCollisionIndex(): void }).updateCollisionIndex();
+      const remaining = (movements as unknown as { countScaffoldingItems(): number }).countScaffoldingItems();
+      const start = new (Move as never as new (...a: unknown[]) => unknown)(-2, 64, 0, remaining, 0);
+      const astar = new (AStar as never as new (...a: unknown[]) => {
+        compute(): { status: string; path: Array<{ toPlace?: Array<{ x: number; y: number; z: number; dx: number; dy: number; dz: number }> }> };
+      })(start, movements, new goals.GoalNear(3, 63, 0, 2), 5_000, 60, -1);
+      let res = astar.compute();
+      while (res.status === 'partial') res = astar.compute();
+      return res.path.flatMap((mv) => (mv.toPlace ?? [])
+        .map((p) => ({ x: p.x + p.dx, y: p.y + p.dy, z: p.z + p.dz }))
+        .filter((c) => c.y === 64 && isPortal(c.x, c.z))
+        .map((c) => `${c.x},${c.y},${c.z}`));
+    };
+
+    // 只避开门方块时,最便宜的路就是在门头顶垫一条桥站上去
+    const bare = new Movements(makeBot(world) as never);
+    bare.scafoldingBlocks = [COBBLE_ITEM];
+    bare.blocksToAvoid.add(registry.blocksByName.end_portal.id as number);
+    expect(placedOverPortal(bare)).not.toEqual([]);
+
+    const bot = makeBot(world);
+    const m = new Movements(bot as never);
+    tune(makeBridge(['cobblestone'], []), bot, m);
+    expect(placedOverPortal(m)).toEqual([]);
+  });
+
   it('黑曜石进入 A* 的不可挖名单后 safeToBreak 直接拒绝', () => {
     const bot = makeBot(makeWorld());
     const m = new Movements(bot as never);
