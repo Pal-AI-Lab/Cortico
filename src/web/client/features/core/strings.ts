@@ -21,6 +21,7 @@ const zh = {
   // events.ts
   eventsDesc: '事件记录，agent 可查询。',
   allSources: '全部来源',
+  sourceTitle: '按来源过滤。候选项取自已加载的事件，也可以直接输入。',
   showArchive: '显示原始归档',
   showArchiveTitle: '包括仅归档、未直接投递到上下文的事件',
   loadEarlier: '← 加载更早',
@@ -38,11 +39,10 @@ const zh = {
   statCache: '缓存命中',
   statRounds: '本批轮数',
   statBatches: '累计批次',
-  statEvents: '事件库',
+  statEvents: '最新事件游标',
   statOnline: '终端在线',
   statRun: '运行',
   unitMsgs: '条',
-  unitEvents: '条',
   unitPeople: '人',
   runPaused: '暂停',
   runBlocked: '闹钟阻断',
@@ -65,7 +65,7 @@ const zh = {
 
   // sessions.ts
   sessionsTitle: '会话统计',
-  sessionsDesc: '本次运行中各 session 的 token 用量与缓存命中。跨重启统计见「用量与成本」。',
+  sessionsDesc: '本次进程内各 session 的 token 用量与缓存命中，重启后从零计数；已结束的临时 session 只保留最近 8 个。跨重启的统计见「用量与成本」。',
   sesHeadStatus: '状态',
   sesHeadCalls: '调用',
   sesHeadInput: '输入 tok',
@@ -98,6 +98,7 @@ const en: typeof zh = {
   // events.ts
   eventsDesc: 'Event records, queryable by the agent.',
   allSources: 'All sources',
+  sourceTitle: 'Filter by source. Suggestions come from loaded events; any source can be typed.',
   showArchive: 'Show raw archive',
   showArchiveTitle: 'Include archived events that are not delivered directly to the context',
   loadEarlier: '← Load earlier',
@@ -115,11 +116,10 @@ const en: typeof zh = {
   statCache: 'Cache hit',
   statRounds: 'Rounds this batch',
   statBatches: 'Total batches',
-  statEvents: 'Event store',
+  statEvents: 'Latest event cursor',
   statOnline: 'Terminal online',
   statRun: 'Run',
   unitMsgs: 'msgs',
-  unitEvents: 'events',
   unitPeople: 'users',
   runPaused: 'paused',
   runBlocked: 'schedule blocked',
@@ -142,7 +142,7 @@ const en: typeof zh = {
 
   // sessions.ts
   sessionsTitle: 'Session stats',
-  sessionsDesc: 'Token usage and cache hits for each session in this run. For history across restarts, see "Usage & cost".',
+  sessionsDesc: 'Token usage and cache hits for each session in this process. Counts restart from zero on restart, and only the 8 most recent ended temporary sessions are kept. For history across restarts, see "Usage & cost".',
   sesHeadStatus: 'Status',
   sesHeadCalls: 'Calls',
   sesHeadInput: 'Input tok',

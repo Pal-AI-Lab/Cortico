@@ -79,7 +79,7 @@ describe('/api/usage', () => {
   it('聚合 IO 自报 token，未提交报价时显示未报价', async () => {
     const d = await getJ('/api/usage?bucket=hour&from=2026-07-19&to=2026-07-19');
     expect(d.totals.calls).toBe(2);
-    expect(d.series.length).toBe(2); // 09 / 10 两个小时桶
+    expect(d.series.filter((s: { calls: number }) => s.calls > 0).length).toBe(2); // 09 / 10 两个小时桶
     expect(d.totals.cost).toBe(0);
     expect(d.totals.unpricedCalls).toBe(2);
     expect(d.byModel[0].key).toBe('deepseek-v4-flash');

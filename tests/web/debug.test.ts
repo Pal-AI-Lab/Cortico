@@ -65,6 +65,7 @@ let dataDir: string;
 let session: SessionLog;
 let store: JsonlEventStore;
 let runlog: Runlog;
+let paused = false;
 
 const sysMsg: ChatMessage = { role: 'system', content: '测试用系统前缀。' };
 const asstMsg: ChatMessage = {
@@ -93,7 +94,6 @@ beforeAll(async () => {
     onSessionReset: (cb) => session.onReset(cb),
     onEvent: (cb) => store.onAppend(cb),
     onRunlog: (cb) => runlog.onWrite(cb),
-    recentLog: (limit) => runlog.recent(limit),
     runId: () => 'r-20260101-000000-0001',
     toolSchemas: () => schemas,
   };
@@ -101,7 +101,8 @@ beforeAll(async () => {
     store,
     memoryDir,
     dataDir,
-    getStatus: () => ({ loop: { estTokens: 42, messageCount: session.messages.length }, terminalOnline: 0 }),
+    getStatus: () => ({ loop: { estTokens: 42, messageCount: session.messages.length, paused }, terminalOnline: 0 }),
+    run: { pause: () => { paused = true; }, resume: () => { paused = false; }, isPaused: () => paused },
     debug,
     log: nullLogger(),
   });
@@ -115,18 +116,11 @@ afterAll(async () => {
 });
 
 describe('/ws/debug hello快照', () => {
-  it('连接即收到hello:session全量+toolSchemas+events+runlog+status', async () => {
+  it('连接即收到hello:session全量+toolSchemas+status', async () => {
     const { ws, q } = await openDebug(port);
     const hello = await q.nextOfType('hello');
     expect(hello.session).toEqual(session.records);
     expect(hello.toolSchemas).toEqual(schemas);
-    const events = hello.events as Array<{ cursor: number; source: string }>;
-    expect(events).toHaveLength(2);
-    expect(events[0].cursor).toBe(1);
-    expect(events[1].source).toBe('qq');
-    const rl = hello.runlog as Array<{ level: string; msg: string }>;
-    expect(rl.length).toBeGreaterThanOrEqual(2);
-    expect(rl[rl.length - 1].level).toBe('error');
     expect((hello.status as { loop: { estTokens: number } }).loop.estTokens).toBe(42);
     ws.close();
   });
@@ -177,6 +171,17 @@ describe('/ws/debug 实时推送', () => {
     session.reset(newMsgs);
     const f = await q.nextOfType('session.reset');
     expect(f.messages).toEqual(session.records);
+    expect(f.toolSchemas).toEqual(schemas);
+    ws.close();
+  });
+
+  it('暂停与继续不经 session 追加也立即推 status', async () => {
+    const { ws, q } = await openDebug(port);
+    await q.nextOfType('hello');
+    await fetch(`http://127.0.0.1:${port}/api/run/pause`, { method: 'POST' });
+    expect(((await q.nextOfType('status')).status as { loop: { paused: boolean } }).loop.paused).toBe(true);
+    await fetch(`http://127.0.0.1:${port}/api/run/resume`, { method: 'POST' });
+    expect(((await q.nextOfType('status')).status as { loop: { paused: boolean } }).loop.paused).toBe(false);
     ws.close();
   });
 });

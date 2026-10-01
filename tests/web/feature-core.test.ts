@@ -548,7 +548,7 @@ describe('运行态', () => {
     sockets[0].emit({
       t: 'status',
       status: {
-        eventCount: 7,
+        latestEventCursor: 7,
         terminalOnline: 2,
         loop: { estTokens: 12345, messageCount: 9, paused: true },
       },
@@ -563,7 +563,7 @@ describe('运行态', () => {
 });
 
 describe('事件流', () => {
-  it('铺出事件行,来源下拉由数据自己长出来', async () => {
+  it('铺出事件行,来源候选由数据自己长出来', async () => {
     stubFetch((url) =>
       url.startsWith('/api/events')
         ? {
@@ -582,8 +582,8 @@ describe('事件流', () => {
     const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
     expect(body.children.length).toBe(2);
     expect(body.textContent).toContain('10:00:00');
-    const sel = root.findTag('select') as FakeEl;
-    expect(sel.children.map((o) => o.textContent)).toEqual(['全部来源', 'a', 'b']);
+    const list = root.findTag('datalist') as FakeEl;
+    expect(list.children.map((o) => o.value)).toEqual(['a', 'b']);
   });
 
   it('有调试通道就不自己轮询;event 帧到了才追一次', async () => {
@@ -598,6 +598,25 @@ describe('事件流', () => {
     sockets[0].emit({ t: 'event' });
     await flush();
     expect(fetched.some((u) => u.startsWith('/api/events?from='))).toBe(true);
+  });
+
+  it('追新按页接着取到服务端说没有更多,游标推进到每页末条而不是库尾', async () => {
+    const row = (cursor: number): unknown => ({ cursor, ts: '2026-08-12T10:00:00.000Z', source: 'a', type: 'msg', text: String(cursor) });
+    stubFetch((url) => {
+      if (url.startsWith('/api/events?from=1001')) return { latest: 1150, events: [1001, 1002].map(row), hasMore: true };
+      if (url.startsWith('/api/events?from=1003')) return { latest: 1150, events: [1003].map(row), hasMore: false };
+      if (url.startsWith('/api/events')) return { latest: 1000, events: [1000].map(row) };
+      return defaultReply(url);
+    });
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/events');
+    core.createCoreFeature({ env }).mount(ctx);
+    await flush();
+    sockets[0].up();
+    sockets[0].emit({ t: 'event' });
+    await flush();
+    const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
+    expect(body.children.map((r) => r.children[0].textContent)).toEqual(['#1000', '#1001', '#1002', '#1003']);
   });
 
   it('没有调试通道才退回轮询,离开子页即停', async () => {
@@ -676,6 +695,46 @@ describe('运行日志', () => {
     runSel.dispatchEvent({ type: 'change' });
     await flush();
     expect(lastLogUrl()).toContain('run=r-a');
+  });
+
+  it('runlog 帧:看当前 run 时重查,在途期间到达的合并成一次;看历史 run 时不响应', async () => {
+    let release: (() => void) | null = null;
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const u = String(url);
+      fetched.push(u);
+      const body = JSON.stringify(reply(u));
+      const respond = (): Response => new Response(body, { status: 200 });
+      // 第一次跟随推送的重查挂住,模拟在途
+      if (u.startsWith('/api/log?') && fetched.filter((x) => x.startsWith('/api/log?')).length === 2) {
+        return new Promise((resolve) => { release = () => resolve(respond()); });
+      }
+      return Promise.resolve(respond());
+    });
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/runlog');
+    core.createCoreFeature({ env }).mount(ctx);
+    await flush();
+    sockets[0].up();
+    const logs = (): number => fetched.filter((u) => u.startsWith('/api/log?')).length;
+    expect(logs()).toBe(1);
+
+    sockets[0].emit({ t: 'runlog' });
+    sockets[0].emit({ t: 'runlog' });
+    sockets[0].emit({ t: 'runlog' });
+    await flush();
+    expect(logs()).toBe(2);
+    release!();
+    await flush();
+    expect(logs()).toBe(3);
+
+    const [runSel] = root.findAllTag('select');
+    runSel.value = 'r-a';
+    runSel.dispatchEvent({ type: 'change' });
+    await flush();
+    const before = logs();
+    sockets[0].emit({ t: 'runlog' });
+    await flush();
+    expect(logs()).toBe(before);
   });
 
   it('区域 / 正则 / 轮次输入去抖 300ms,回车立即查', async () => {

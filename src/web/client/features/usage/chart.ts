@@ -287,6 +287,7 @@ export function uTipHtml(
     consoleFormat.percent(cacheRateOf(p)),
     consoleFormat.count(p.reasoningTokens || 0),
   )}</div>`;
+  if (o.metric === 'cost' && (p.unpricedCalls || 0) > 0) s += `<div class="tt-extra">${S.tipUnpriced(p.unpricedCalls || 0)}</div>`;
   return s;
 }
 
@@ -352,17 +353,21 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     return;
   }
 
-  const dimsList = activeDims(opts.dims, opts.allowType !== false);
-  const stacked = dimsList.length > 0;
+  let dimsList = activeDims(opts.dims, opts.allowType !== false);
   let composites = buildComposites(d, dimsList);
   const tot: Record<string, number> = {};
   for (const c of composites) tot[compId(c)] = 0;
   for (const p of series) for (const c of composites) tot[compId(c)] += compVal(p, c, metric);
-  if (stacked) {
+  if (dimsList.length) {
     // 丢掉整段全 0 的组合，减少图例/色块噪声
     composites = composites.filter((c) => (tot[compId(c)] || 0) > 0);
-    if (!composites.length) composites = [[]];
+    // 该指标在范围内处处为 0(有调用但都未计价时成本即如此):没有可拆的段，画合计柱。
+    if (!composites.length) {
+      dimsList = [];
+      composites = [[]];
+    }
   }
+  const stacked = dimsList.length > 0;
   const colorOf = compositeColors(d, composites, dimsList, color);
   const order = (stacked && opts.sort)
     ? composites.slice().sort((a, b) => (tot[compId(b)] || 0) - (tot[compId(a)] || 0))

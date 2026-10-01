@@ -1141,7 +1141,7 @@ const app = new WebApp({
     loop: { estTokens: 90200, messageCount: session.length, roundsLastBatch: 3, batchesHandled: 37, paused, truncating: false, softNoticeSent: false, lastUsage: { promptTokens: 358000, cacheHitTokens: 322000, cacheMissTokens: 36000, completionTokens: 420, reasoningTokens: 180 } },
     chips: devDreaming ? [{ label: '梦中', tone: 'accent' }] : [],
     terminalOnline: terminal.onlineCount(),
-    eventCount: store.latestCursor(),
+    latestEventCursor: store.latestCursor(),
     onboardingPending,
     memo: { residentCap: cfg.memo.residentCap, activeCap: cfg.memo.activeCap },
     context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio, keepPastThinking: cfg.context.keepPastThinking },
@@ -1150,7 +1150,7 @@ const app = new WebApp({
   }),
   sessions: { list: () => sessionsList, messages: (id) => (id === 'main' ? session : sessionsList.some((s) => s.id === id) ? session.slice(0, 4) : null), onChange: () => {} },
   storage: () => storage,
-  usage: { aggregate: (opts) => aggregateUsage(usageRecords, opts) },
+  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ }) },
 
   config: {
     groups: () => [...devConfigGroups,...devProviders.groups()].map((group) => ({ group, values: group.owner.startsWith('provider:') ? devProviders.values(group.id) : readGroupValues(devCfg, group) })),

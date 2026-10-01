@@ -1,6 +1,8 @@
 /**
- * 事件库翻查界面，按 from/to 游标区间分页：追新使用 latest+1，翻旧使用 earliest−1。边界与来源集合属于本次挂载。
- * 来源选项由数据生成，新来源出现时保留当前选择；调试通道可用时由 event 帧触发追新，不可用时回落轮询。
+ * 事件库翻查界面，按 from/to 游标区间分页：追新从已显示的最后一条之后按页往后取，直到服务端说没有更多；
+ * 翻旧使用 earliest−1。调试通道可用时由 event 帧触发追新，不可用时回落轮询。
+ * 换来源或归档开关即开新一代查询，上一代在途的回应不再写表；同一代里追新串行，期间到达的触发合并成下一轮。
+ * 来源框可输入任意来源；候选项取自已加载的事件，不代表事件库里的全部来源。
  */
 
 import type { ConsoleUi, ConsoleTable, Disposable } from '../../../shared/client-panel.ts';
@@ -21,6 +23,8 @@ export interface EventRow {
 interface EventPage {
   latest: number;
   events: EventRow[];
+  /** 只在带 from 不带 to 的追新查询里出现:区间里还有排在本页之后的记录。 */
+  hasMore?: boolean;
 }
 
 const PAGE = 100;
@@ -54,35 +58,48 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
   let source = '';
   let archive = false;
   let earliest: number | null = null;
+  /** 已经消费到的游标:之前的记录要么显示了,要么被当前过滤条件排除。 */
   let latest = 0;
   let inited = false;
+  /** 查询代号。init 自增;回应到达时代号已变就丢弃。 */
+  let generation = 0;
+  let polling = false;
+  let pollAgain = false;
   let poller: Disposable | null = null;
 
   const bar = ui.rowbar();
   const desc = ui.h('span', 'pagedesc grow', S.eventsDesc);
-  const sel = ui.select({
-    options: [{ value: '', label: S.allSources }],
-    onChange: (v) => {
-      source = v;
-      inited = false;
-      earliest = null;
-      latest = 0;
-      void view.init();
-    },
+  // `<datalist>` 靠全局 id 绑定,每次挂载各用一个。
+  const listId = `ev-sources-${Math.random().toString(36).slice(2, 8)}`;
+  const sourceList = ui.h('datalist');
+  sourceList.id = listId;
+  const pickSource = (v: string): void => {
+    const next = v.trim();
+    if (next === source) return;
+    source = next;
+    void view.init();
+  };
+  const sourceIn = ui.input({
+    type: 'search',
+    cls: 'mono',
+    placeholder: S.allSources,
+    // 清除按钮只派发 input,清空即回到全部来源。
+    onInput: (v) => { if (v === '') pickSource(''); },
+    onChange: pickSource,
+    onCommit: pickSource,
   });
+  sourceIn.setAttribute('list', listId);
+  sourceIn.title = S.sourceTitle;
   // 默认过滤 archiveOnly 记录；启用归档选项后同时显示未直接投递的记录。
   const archiveToggle = ui.checkbox(S.showArchive, {
     title: S.showArchiveTitle,
     onChange: (on) => {
       archive = on;
-      inited = false;
-      earliest = null;
-      latest = 0;
       void view.init();
     },
   });
   const more = ui.button(S.loadEarlier, { size: 'sm', onClick: () => void loadEarlier() });
-  bar.append(desc, sel, archiveToggle.el, more);
+  bar.append(desc, sourceIn, sourceList, archiveToggle.el, more);
 
   const table: ConsoleTable = ui.table({
     head: ['#', S.evHeadTime, S.evHeadSource, S.evHeadType, S.evHeadText],
@@ -100,14 +117,13 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
     { text: e.text, cls: 'txt' },
   ];
 
-  /** 新来源就补一项;当前选择不动(它可能正指着一个刚被重画掉的 option)。 */
   const noteSources = (events: readonly EventRow[]): void => {
     for (const e of events) {
       if (!e.source || sources.has(e.source)) continue;
       sources.add(e.source);
-      const op = ui.h('option', null, e.source);
+      const op = ui.h('option');
       op.value = e.source;
-      sel.appendChild(op);
+      sourceList.appendChild(op);
     }
   };
 
@@ -122,19 +138,20 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
     table.el.scrollTop = table.el.scrollHeight;
   };
 
-  const failed = (err: unknown): boolean => {
-    if ((err as { name?: string } | null)?.name === 'AbortError') return true;
+  const failed = (err: unknown): void => {
+    if ((err as { name?: string } | null)?.name === 'AbortError') return;
     deps.onNet(false);
     deps.onError(err);
-    return false;
   };
 
   async function loadEarlier(): Promise<void> {
     if (earliest === null || earliest <= 1) return;
+    const mine = generation;
     try {
       const d = await get<EventPage>(query(`to=${earliest - 1}&limit=${PAGE}`), {
         signal: deps.signal,
       });
+      if (mine !== generation) return;
       const events = d?.events ?? [];
       if (!events.length) return;
       const before = table.el.scrollHeight;
@@ -155,14 +172,21 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
   const view: EventsView = {
     el,
     async init() {
+      const mine = ++generation;
+      inited = false;
+      polling = false;
+      pollAgain = false;
+      earliest = null;
+      latest = 0;
       try {
         const d = await get<EventPage>(query(`limit=${PAGE}`), { signal: deps.signal });
+        if (mine !== generation) return;
         const events = d?.events ?? [];
-        inited = true;
         table.clear(events.length ? undefined : S.noEvents);
         for (const e of events) table.addRow(rowCells(e));
         earliest = events.length ? events[0].cursor : null;
         latest = Math.max(d?.latest ?? 0, events.length ? events[events.length - 1].cursor : 0);
+        inited = true;
         noteSources(events);
         deps.onNet(true);
         toEnd();
@@ -172,19 +196,35 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
     },
     async poll() {
       if (!inited) return;
+      if (polling) {
+        pollAgain = true;
+        return;
+      }
+      polling = true;
+      const mine = generation;
       try {
-        const d = await get<EventPage>(query(`from=${latest + 1}`), { signal: deps.signal });
-        const events = d?.events ?? [];
-        if (events.length) {
-          const wasStuck = stuck();
-          for (const e of events) table.addRow(rowCells(e));
-          if (earliest === null) earliest = events[0].cursor;
-          noteSources(events);
-          if (wasStuck) toEnd();
+        let more = true;
+        while (more && mine === generation) {
+          pollAgain = false;
+          const d = await get<EventPage>(query(`from=${latest + 1}&limit=${PAGE}`), { signal: deps.signal });
+          if (mine !== generation) return;
+          const events = d?.events ?? [];
+          if (events.length) {
+            const wasStuck = stuck();
+            if (earliest === null) table.clear();
+            for (const e of events) table.addRow(rowCells(e));
+            if (earliest === null) earliest = events[0].cursor;
+            noteSources(events);
+            if (wasStuck) toEnd();
+          }
+          // 还有下一页时只推进到本页末条;否则区间内剩下的都被过滤条件排除,推进到库尾。
+          latest = d?.hasMore && events.length ? events[events.length - 1].cursor : Math.max(d?.latest ?? 0, latest);
+          more = (d?.hasMore === true && events.length > 0) || pollAgain;
         }
-        latest = Math.max(d?.latest ?? 0, latest);
       } catch (err) {
         failed(err);
+      } finally {
+        if (mine === generation) polling = false;
       }
     },
     setPolling(on) {

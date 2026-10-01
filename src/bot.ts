@@ -1151,7 +1151,7 @@ export function createBot<C extends CoreConfig>(
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: consoleStorage,
-      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), opts), status: () => core.usageLog.status() },
+      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone }), status: () => core.usageLog.status() },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
         set: (groupId: string, values: ConfigValues, language) => {
@@ -1233,7 +1233,6 @@ export function createBot<C extends CoreConfig>(
         onSessionReset: (cb) => core.session.onReset(cb),
         onEvent: (cb) => core.store.onAppend(cb),
         onRunlog: (cb) => core.runlog.onWrite(cb),
-        recentLog: (limit) => core.runlog.recent(limit),
         runId: () => core.run.id,
         toolSchemas: () => core.loop.getToolSchemas(),
       },
@@ -1263,7 +1262,7 @@ export function createBot<C extends CoreConfig>(
         modelConnection: providerHub.current(language),
         startedAt,
         loop: core.loop.getStatus(),
-        eventCount: core.store.latestCursor(),
+        latestEventCursor: core.store.latestCursor(),
         onboardingPending: existsSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)),
         ...(contribution.status?.() ?? {}),
       }),

@@ -10,6 +10,9 @@ function charged(row: UsageRecord): UsageRecord {
   return { ...row, version: 2, charges: priceUsage({ ...unknownMeters(), input: row.promptTokens, output: row.completionTokens, cachedInput: row.cacheHitTokens, uncachedInput: row.cacheMissTokens }, [quote]) };
 }
 
+/** 有调用的桶;补齐的空桶 calls 为 0。 */
+const active = (a: ReturnType<typeof aggregateUsage>) => a.series.filter((s) => s.calls > 0);
+
 it('缓存命中率按已知输入分布计算，无输入返回 null', () => {
   expect(cacheHitRate({ cacheHitTokens: 90, cacheMissTokens: 10 })).toBe(.9);
   expect(cacheHitRate({ cacheHitTokens: 0, cacheMissTokens: 0 })).toBeNull();
@@ -38,8 +41,9 @@ describe('分时段聚合 aggregateUsage', () => {
 
   it('按小时桶:同一天不同小时分开', () => {
     const a = aggregateUsage(recs, { from: '2026-07-18', to: '2026-07-18', bucket: 'hour' });
-    expect(a.series.map((s) => s.bucket)).toEqual(['2026-07-18T09']);  // 两条都在 09 点
-    expect(a.series[0].calls).toBe(2);
+    expect(a.series).toHaveLength(24);
+    expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-18T09']);  // 两条都在 09 点
+    expect(active(a)[0].calls).toBe(2);
   });
 
   it('按角色/模型分组,cost 降序', () => {
@@ -50,6 +54,17 @@ describe('分时段聚合 aggregateUsage', () => {
     // main 成本 4 > dream 3 → main 在前
     expect(a.byRole[0].key).toBe('main');
     expect(a.byModel.find((g) => g.key === 'pro')?.cost).toBeCloseTo(3, 6);
+  });
+
+  it('补齐范围内没有调用的桶,不越过部署时区的当前时刻;days 按部署时区取今天', () => {
+    // 16:30Z 在东八区已是 07-20 00:30,在 UTC 仍是 07-19。
+    const now = new Date('2026-07-19T16:30:00Z');
+    const a = aggregateUsage(recs, { days: 2, bucket: 'hour', timezone: 'Asia/Shanghai', now });
+    expect([a.from, a.to, a.timezone]).toEqual(['2026-07-19', '2026-07-20', 'Asia/Shanghai']);
+    expect(a.series[0].bucket).toBe('2026-07-19T00');
+    expect(a.series.at(-1)!.bucket).toBe('2026-07-20T00');
+    expect(a.series).toHaveLength(25);
+    expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-19T14']);
   });
 
   it('空输入→空序列、总计为0', () => {
@@ -89,18 +104,19 @@ describe("aggregateUsage:时间粒度、分组与成本分项", () => {
   it("按分钟聚合，结果包含 byRole、byModel 与成本分项", () => {
     const a = aggregateUsage(recs, { from: '2026-07-20', to: '2026-07-20', bucket: 'minute' });
     expect(a.bucket).toBe('minute');
-    expect(a.series.map((s) => s.bucket)).toEqual(['2026-07-20T14:03', '2026-07-20T14:59']);
-    const p0 = a.series[0];
+    expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-20T14:03', '2026-07-20T14:59']);
+    const p0 = active(a)[0];
     expect(p0.byRole.main.cost).toBeCloseTo(3, 6);
     expect(p0.costCacheMiss).toBeCloseTo(1, 6);
     expect(p0.costOutput).toBeCloseTo(2, 6);
     expect(p0.costCacheHit + p0.costCacheMiss + p0.costOutput).toBeCloseTo(p0.cost, 6);
-    expect(a.series[1].byModel.pro.costOutput).toBeCloseTo(6, 6);
+    expect(active(a)[1].byModel.pro.costOutput).toBeCloseTo(6, 6);
   });
 
   it('week 桶:按 ISO 周一归并(2026-07-20 是周一,07-14 归到 07-13)', () => {
     const a = aggregateUsage(recs, { from: '2026-07-01', to: '2026-07-31', bucket: 'week' });
-    expect(a.series.map((s) => s.bucket)).toEqual(['2026-07-13', '2026-07-20']);
+    expect(a.series.map((s) => s.bucket)).toEqual(['2026-06-29', '2026-07-06', '2026-07-13', '2026-07-20', '2026-07-27']);
+    expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-13', '2026-07-20']);
   });
 
   it('month 桶:按 YYYY-MM 归并', () => {
@@ -112,8 +128,8 @@ describe("aggregateUsage:时间粒度、分组与成本分项", () => {
   it('auto:单日范围解析成 hour,并把解析后的粒度回填到 bucket', () => {
     const a = aggregateUsage(recs, { from: '2026-07-20', to: '2026-07-20', bucket: 'auto' });
     expect(a.bucket).toBe('hour');
-    expect(a.series.map((s) => s.bucket)).toEqual(['2026-07-20T14']);
-    expect(a.series[0].calls).toBe(2);
+    expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-20T14']);
+    expect(active(a)[0].calls).toBe(2);
   });
 
   it("顶层分组成本等于记录中的费用之和", () => {

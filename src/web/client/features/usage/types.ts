@@ -59,6 +59,9 @@ export interface UsageAggregate {
   bucket?: UsageBucketUnit;
   from?: string | null;
   to?: string | null;
+  /** from/to 与桶键所在的部署时区。 */
+  timezone?: string | null;
+  /** 首末桶之间连续,没有调用的桶也在。 */
   series?: UsagePoint[];
   /** `usage` 未挂载时为 null。 */
   totals?: UsageGroupStat | null;

@@ -265,7 +265,7 @@ describe('终端消息附图', () => {
     ]);
     expect(JSON.stringify(echo)).not.toContain(PNG.toString('base64'));
     // 发送者本人另收一句系统提示
-    expect(sock.frames().some((f) => f.type === 'sys' && String(f.text).includes('不接收图像'))).toBe(true);
+    expect(sock.frames().some((f) => f.type === 'sys' && f.kind === 'warning' && String(f.text).includes('不接收图像'))).toBe(true);
     await mod.stop();
   });
 
@@ -297,6 +297,7 @@ describe('终端消息附图', () => {
       '图片未发送: 不支持的图片格式: image/svg+xml',
       '图片未发送: 一条消息最多 8 张图',
     ]);
+    expect(refusals.every((f) => f.kind === 'rejected')).toBe(true);
     await mod.stop();
   });
 
@@ -338,6 +339,23 @@ describe('协议解析', () => {
     // 只剩 message 一条;presence 不投递,空白消息与重复 hello 也不产事件
     expect(normEvents(host.pushed)).toHaveLength(1);
 
+    await mod.stop();
+  });
+
+  it('没被接收的帧标 kind:rejected,开场白与问候不标', async () => {
+    const host = new FakeHost();
+    const mod = new TerminalWorld({ timezone: 'Asia/Shanghai' });
+    await mod.start(host);
+    const sock = new FakeStream();
+    mod.stream('chat', sock);
+    for (const line of SCRIPT) sock.feed(line);
+    const sys = sock.frames().filter((f) => f.type === 'sys');
+    const rejected = sys.filter((f) => f.kind === 'rejected').map((f) => String(f.text));
+    expect(rejected).toHaveLength(5);
+    for (const part of ['JSON', '格式不对', '请先发送 hello', '名字不能为空', '未知消息类型']) {
+      expect(rejected.some((t) => t.includes(part))).toBe(true);
+    }
+    expect(sys.filter((f) => f.kind === undefined).map((f) => String(f.text)).some((t) => t.includes('阿明'))).toBe(true);
     await mod.stop();
   });
 });

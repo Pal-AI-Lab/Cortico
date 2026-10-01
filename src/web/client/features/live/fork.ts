@@ -61,10 +61,15 @@ export function createForkView(deps: ForkDeps): ForkView {
     poll = null;
   };
 
-  /** 目标 session 已结束就不必再轮。 */
+  /** 目标 session 已结束就停轮询;停之前再取一次,收下上一次轮询之后、结束之前的输出。 */
   const maybeStop = (): void => {
+    if (!poll) return;
     const st = deps.sessions().find((x) => x.id === id);
-    if (st && st.endedAt != null) stopPolling();
+    if (!st || st.endedAt == null) return;
+    stopPolling();
+    // 清掉修订号让这一次必定重画,横幅随之改成已结束。
+    lastRevision = '';
+    void refresh(false);
   };
 
   const banner = (count: number, estTokens: number): HTMLElement => {
@@ -143,7 +148,8 @@ export function createForkView(deps: ForkDeps): ForkView {
         return;
       }
       void refresh(true);
-      poll = deps.lifecycle.interval(() => void refresh(false), FORK_POLL_MS);
+      const st = deps.sessions().find((x) => x.id === next);
+      if (!st || st.endedAt == null) poll = deps.lifecycle.interval(() => void refresh(false), FORK_POLL_MS);
     },
     isMain() {
       return id === MAIN_ID;

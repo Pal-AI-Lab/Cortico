@@ -101,8 +101,6 @@ export interface WebAppDebugDeps {
   onSessionReset(cb: (messages: ContextRecord[]) => void): void;
   onEvent(cb: (e: EventEnvelope) => void): void;
   onRunlog(cb: (entry: LogRecord) => void): void;
-  /** 当前 run 最近落盘的运行日志(hello 快照用) */
-  recentLog?(limit: number): LogRecord[];
   /** 当前 run id;/api/log 缺省读它的 log.jsonl */
   runId?(): string;
   /** 主循环当前工具表schema(run()前为空数组) */
@@ -457,7 +455,8 @@ export interface WebAppCheckpointDeps {
 /** 分时段/范围的用量聚合(用量·成本页数据源) */
 export interface WebAppUsageDeps {
   status?(): { pending: number; error: string | null };
-  aggregate(opts: { from?: string; to?: string; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' }): UsageAggregate;
+  /** `days` 与补空桶的截止时刻按部署时区解释,由实现方给定时区。 */
+  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' }): UsageAggregate;
 }
 
 
@@ -873,11 +872,12 @@ export class WebApp {
         // status顺带推一份(不定时轮询,append即代表状态变化)
         this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       });
-      // reset 顺带带上合成开头现值:前缀重载/交接都走 reset,标注块跟着刷新
+      // reset 顺带带上合成开头与工具表现值:前缀重载/交接都走 reset,两者与新前缀同一代
       dbg.onSessionReset((messages) => this.debugBroadcast({
         t: 'session.reset',
         messages,
         head: dbg.sessionHead?.() ?? [],
+        toolSchemas: dbg.toolSchemas(),
       }));
       dbg.onEvent((envelope) => this.debugBroadcast({ t: 'event', envelope }));
       dbg.onRunlog((entry) => this.debugBroadcast({ t: 'runlog', entry }));
@@ -1207,8 +1207,6 @@ export class WebApp {
         session: dbg.sessionMessages(),
         head: dbg.sessionHead?.() ?? [],
         toolSchemas: dbg.toolSchemas(),
-        events: dropArchiveOnly(this.deps.store.range({ limit: 400 })).slice(-200),
-        runlog: dbg.recentLog?.(200) ?? [],
         status: this.safeStatus(),
         sessions: this.safeSessionList(),
       }));
@@ -1516,6 +1514,14 @@ export class WebApp {
       const source = strParam(req.query.source);
       if (source) q.source = source;
       const withArchive = strParam(req.query.archive) === '1';
+      // 只给 from 是追新:从区间头部取最早的 limit 条,hasMore 表示后面还有没返回的记录。
+      if (from !== undefined && to === undefined) {
+        const latest = this.deps.store.latestCursor();
+        const all = this.deps.store.range({ ...q, toCursor: latest });
+        const visible = withArchive ? all : dropArchiveOnly(all);
+        res.json({ latest, events: visible.slice(0, limit), hasMore: visible.length > limit });
+        return;
+      }
       if (withArchive) {
         q.limit = limit;
         res.json({ latest: this.deps.store.latestCursor(), events: this.deps.store.range(q) });
@@ -1640,6 +1646,7 @@ export class WebApp {
       if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
       run.pause();
       this.deps.log.warn('运行已暂停(人工操作)');
+      this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       res.json({ ok: true, paused: true, result: pick(this.languageOf(req), SERVER_TEXT).paused });
     }));
 
@@ -1648,6 +1655,7 @@ export class WebApp {
       if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
       run.resume();
       this.deps.log.warn('运行已继续(人工操作)');
+      this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       res.json({ ok: true, paused: false, result: pick(this.languageOf(req), SERVER_TEXT).resumed });
     }));
 
@@ -2038,6 +2046,8 @@ export class WebApp {
       if (from) opts.from = from;
       const to = strParam(req.query.to);
       if (to) opts.to = to;
+      const days = intParam(req.query.days);
+      if (days !== undefined && days >= 1) opts.days = days;
       res.json({ ...src.aggregate(opts), ledger: src.status?.() });
     }));
 

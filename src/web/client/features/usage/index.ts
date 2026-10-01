@@ -11,7 +11,7 @@ import { getThemeStudio } from '../../theme/studio.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { bucketLabel, renderChart } from './chart.ts';
 import { U_TYPES, themeColorResolver } from './labels.ts';
-import { localDate, usageQuery, usageRange } from './range.ts';
+import { usageQuery } from './range.ts';
 import { createUsageState } from './state.ts';
 import { S } from './strings.ts';
 import { createUsageTip } from './tooltip.ts';
@@ -45,6 +45,13 @@ const METRICS: ReadonlyArray<{ value: UsageMetric; label: string }> = [
   { value: 'tokens', label: 'token' },
 ];
 
+/** 已知金额。全部未计价为「未知」;部分未计价时金额是下限,后缀标出。 */
+function costText(amount: number, a: Partial<UsageAccum>, cur: string): string {
+  const unpriced = a.unpricedCalls || 0;
+  if (unpriced > 0 && !(a.pricedCalls || 0) && !amount) return S.unknown;
+  return consoleFormat.money(amount, cur) + (unpriced > 0 ? S.partialMark : '');
+}
+
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -76,8 +83,9 @@ export function mountUsage(ctx: FeatureContext): void {
       state.days = Number(v);
       customRange.classList.toggle('hidden', state.days !== 0);
       if (state.days === 0) {
-        if (!state.from) state.from = localDate(6);
-        if (!state.to) state.to = localDate(0);
+        // 自定义档从上一次结果的范围起步;那是按部署时区算出的日期。
+        if (!state.from) state.from = state.data?.from ?? '';
+        if (!state.to) state.to = state.data?.to ?? '';
         fromInput.value = state.from;
         toInput.value = state.to;
       }
@@ -155,7 +163,8 @@ export function mountUsage(ctx: FeatureContext): void {
   const mainLegend = ui.h('div', 'chart-legend');
   const mainBox = ui.h('div');
   mainBox.id = 'usagechart';
-  mainSheet.body.append(mainCtrls, mainLegend, mainBox);
+  const mainNote = ui.h('p', 'muted');
+  mainSheet.body.append(mainCtrls, mainLegend, mainBox, mainNote);
 
   // ---- 调用图 ---------------------------------------------------------------
   const callSheet = ui.sheet({ title: S.callTitle, en: 'requests' });
@@ -187,12 +196,17 @@ export function mountUsage(ctx: FeatureContext): void {
   const tables = ui.h('div', 'usagetables');
   tables.append(roleSheet.el, modelSheet.el);
 
-  root.append(intro, controls, cards, compSheet.el, mainSheet.el, callSheet.el, tables);
+  const staleNote = ui.msgline('', true);
+  const results = ui.h('div');
+  results.append(cards, compSheet.el, mainSheet.el, callSheet.el, tables);
+  root.append(intro, controls, staleNote, results);
 
   // ---- 渲染 -----------------------------------------------------------------
 
   function renderMain(): void {
     if (!state.data) return;
+    const unpriced = state.data.totals?.unpricedCalls || 0;
+    mainNote.textContent = state.metric === 'cost' && unpriced > 0 ? S.compUnpriced(unpriced) : '';
     renderChart(
       { doc, ui, box: mainBox, legend: mainLegend, tip, color },
       state.data,
@@ -219,26 +233,27 @@ export function mountUsage(ctx: FeatureContext): void {
       cards.replaceChildren(ui.placeholder(S.noCalls));
       return;
     }
-    const totTok = (t.promptTokens || 0) + (t.completionTokens || 0);
+    // 均价与平均 token 同取成功调用。
     const successful = d.successful ?? t;
-    const avgCost = successful.calls ? (successful.cost || 0) / successful.calls : 0;
-    const avgTok = calls ? totTok / calls : 0;
+    const okCalls = successful.calls || 0;
+    const avgCost = okCalls ? (successful.cost || 0) / okCalls : 0;
+    const avgTok = okCalls ? ((successful.promptTokens || 0) + (successful.completionTokens || 0)) / okCalls : 0;
     const rShare = (t.completionTokens || 0) > 0
       ? (t.reasoningTokens || 0) / (t.completionTokens || 1)
       : null;
     let peak: (typeof series)[number] | null = null;
-    for (const p of series) if (!peak || (p.cost || 0) > (peak.cost || 0)) peak = p;
+    for (const p of series) if ((p.cost || 0) > 0 && (!peak || (p.cost || 0) > (peak.cost || 0))) peak = p;
 
     cards.replaceChildren();
     const items: Parameters<typeof ui.stat>[0][] = [
-      { k: S.cardKnownCost, v: (t.pricedCalls || 0) === 0 && !t.cost && (t.unpricedCalls || 0) > 0 ? S.unknown : consoleFormat.money(t.cost, cur), accent: true },
+      { k: S.cardKnownCost, v: costText(t.cost || 0, t, cur), accent: true },
       { k: S.cardCalls, v: calls.toLocaleString() },
-      { k: S.cardAvgCost, v: consoleFormat.money(avgCost, cur), unit: S.approxTok(consoleFormat.count(Math.round(avgTok))) },
+      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(consoleFormat.count(Math.round(avgTok))) : '' },
       { k: S.cardInput, v: consoleFormat.count(t.promptTokens || 0), unit: S.hitRate(consoleFormat.percent(t.cacheHitRate)) },
       { k: S.cardOutput, v: consoleFormat.count(t.completionTokens || 0), unit: S.reasoningShare(consoleFormat.percent(rShare)) },
       { k: S.cardCacheRate, v: consoleFormat.percent(t.cacheHitRate) },
       { k: S.cardCoverage, v: `${t.pricedCalls || 0} / ${calls}`, unit: S.unpriced(t.unpricedCalls || 0) },
-      { k: S.cardPeak, v: peak ? consoleFormat.money(peak.cost, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
+      { k: S.cardPeak, v: peak ? costText(peak.cost || 0, peak, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
     ];
     // 失败消耗是总消耗的子集。
     const f: Partial<UsageAccum> = d.failed || {};
@@ -256,8 +271,9 @@ export function mountUsage(ctx: FeatureContext): void {
     const cur = d.currency || 'USD';
     const t: Partial<UsageGroupStat> = d.totals || {};
     const total = t.cost || 0;
+    const unpriced = t.unpricedCalls || 0;
     if (!(total > 0)) {
-      compBox.appendChild(ui.placeholder(S.noCostData));
+      compBox.appendChild(ui.placeholder(unpriced > 0 ? S.compUnpriced(unpriced) : S.noCostData));
       return;
     }
     const parts = [
@@ -288,6 +304,7 @@ export function mountUsage(ctx: FeatureContext): void {
       leg.appendChild(it);
     }
     compBox.append(bar, leg);
+    if (unpriced > 0) compBox.appendChild(ui.h('p', 'muted', S.compUnpriced(unpriced)));
   }
 
   /**
@@ -309,8 +326,8 @@ export function mountUsage(ctx: FeatureContext): void {
         { text: consoleFormat.count(g.promptTokens), cls: 'mono' },
         { text: consoleFormat.count(g.completionTokens), cls: 'mono' },
         { text: consoleFormat.percent(g.cacheHitRate), cls: 'mono' },
-        { text: consoleFormat.money(g.cost, cur), cls: 'mono' },
-        { text: consoleFormat.money(avg, cur), cls: 'mono' },
+        { text: costText(g.cost || 0, g, cur), cls: 'mono' },
+        { text: costText(avg, g, cur), cls: 'mono' },
       ]);
     }
   }
@@ -320,7 +337,7 @@ export function mountUsage(ctx: FeatureContext): void {
     bkHint.textContent = state.bucket === 'auto'
       ? S.autoBucket(BUCKETS.find((b) => b.value === unit)?.label ?? unit)
       : '';
-    rangeHint.textContent = S.rangeHint(d.from || '—', d.to || '—', (d.series || []).length);
+    rangeHint.textContent = S.rangeHint(d.from || '—', d.to || '—', (d.series || []).length, d.timezone ?? null);
   }
 
   function renderAll(d: UsageAggregate): void {
@@ -346,19 +363,32 @@ export function mountUsage(ctx: FeatureContext): void {
 
   // ---- 取数 -----------------------------------------------------------------
 
+  /** 每次取数自增;只有最新一次的结果或失败能落到页面上。 */
+  let generation = 0;
+  let loadedAt = '';
+
   async function load(): Promise<void> {
-    const range = usageRange(state.days, { from: state.from, to: state.to });
+    const mine = ++generation;
     try {
       const d = await get<UsageAggregate>(
-        `/api/usage?${usageQuery(state.bucket, range)}&basis=${basis}&currency=${encodeURIComponent(currency)}`,
+        `/api/usage?${usageQuery(state.bucket, state.days, { from: state.from, to: state.to })}&basis=${basis}&currency=${encodeURIComponent(currency)}`,
         { signal: ctx.signal },
       );
-      if (ctx.signal.aborted) return;
+      if (ctx.signal.aborted || mine !== generation) return;
       state.data = d;
+      loadedAt = ui.fmt.clock(new Date().toISOString());
+      staleNote.textContent = '';
+      results.classList.remove('u-stale');
       renderAll(d);
     } catch (err) {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      cards.replaceChildren(ui.placeholder(S.loadFailed(errText(err))));
+      if (isAbort(err) || ctx.signal.aborted || mine !== generation) return;
+      if (!state.data) {
+        cards.replaceChildren(ui.placeholder(S.loadFailed(errText(err))));
+        return;
+      }
+      // 保留上一次的结果,整块标为过期,并写明取回时刻。
+      staleNote.textContent = S.stale(errText(err), loadedAt);
+      results.classList.add('u-stale');
     }
   }
 
