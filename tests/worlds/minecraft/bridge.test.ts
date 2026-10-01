@@ -270,6 +270,24 @@ describe('bridge 重生锚不可破坏', () => {
 /**
  * 功能方块不能被寻路器作为普通障碍挖穿。
  */
+describe('bridge 成果登记格不许赶路挖穿', () => {
+  it('登记过的那一格 safeToBreak 说不,旁边同种方块照挖', () => {
+    const bot = makeBot(makeWorld());
+    const m = new Movements(bot as never);
+    const bridge = new Bridge({
+      host: 'localhost', port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
+      log: nullLogger(), scaffoldBlocks: () => ['cobblestone'],
+      workCell: (x, y, z) => x === 3 && y === 63 && z === 3,
+      onSpawn: () => {}, onDisconnect: () => {},
+    });
+    tune(bridge, bot, m);
+    const canBreak = (x: number): boolean => (m as unknown as { safeToBreak(b: unknown): boolean })
+      .safeToBreak({ type: registry.blocksByName.stone.id as number, position: new Vec3(x, 63, 3) });
+    expect(canBreak(3)).toBe(false);
+    expect(canBreak(4)).toBe(true);
+  });
+});
+
 describe('bridge 功能方块不许赶路挖穿', () => {
   const FUNCTIONAL = [
     'chest', 'trapped_chest', 'barrel', 'ender_chest',

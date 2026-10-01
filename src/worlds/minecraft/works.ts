@@ -1,6 +1,6 @@
 /**
  * 按维度与坐标持久化已完成成果，跨任务保留。
- * 寻路禁止在登记格头顶垫脚；显式挖掘与放置仍执行，并在回执中报告涉及的成果数量。
+ * 寻路禁止在登记格头顶垫脚、也不挖登记格；显式挖掘与放置仍执行，并在回执中报告涉及的成果数量。
  */
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';

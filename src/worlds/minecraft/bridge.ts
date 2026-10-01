@@ -44,7 +44,7 @@ interface BridgeOptions {
   blueprintZones?: () => readonly SiteZone[];
   /**
    * 成果登记里的一格(维度已由调用方合上)。寻路器不往登记格自己、也不往它头顶
-   * 垫脚搭路;走与挖不受限。每次候选移动生成时现问。
+   * 垫脚搭路,也不把它排进挖掘计划;走不受限。每次候选移动生成时现问。
    */
   workCell?: (x: number, y: number, z: number) => boolean;
   /** 容器 GUI 演出节拍;摄像机没开/演出关着时回 null(craft 用,每次 bot.craft 现取) */
@@ -512,7 +512,8 @@ export class Bridge {
     const workCell = this.opts.workCell;
     setNoPlaceCells(movements, (x, y, z) => portalIds.has(bot.blockAt(new Vec3(x, y, z), false)?.type ?? -1)
       || (workCell?.(x, y, z) ?? false));
-    setDigBackoff(movements, (x, y, z) => this.digBackedOff(x, y, z));
+    // 成果登记格同挖不动的格一样排出寻路的挖掘计划;显式挖掘不经这里
+    setDigBackoff(movements, (x, y, z) => this.digBackedOff(x, y, z) || (workCell?.(x, y, z) ?? false));
     const costs = this.opts.movementCosts?.();
     if (costs) {
       movements.placeCost = costs.placeCost;
