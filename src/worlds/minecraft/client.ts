@@ -159,6 +159,8 @@ export class GameClient {
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private titleTimer: ReturnType<typeof setTimeout> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 排着的自动重启到点时刻;没排时为 null。 */
+  private restartDueAt: number | null = null;
   /** 相邻异常退出计数及上次时刻。 */
   private crashCount = 0;
   private lastCrashAt = 0;
@@ -207,6 +209,11 @@ export class GameClient {
 
   async start(): Promise<ClientState> {
     if (this.phase === 'starting' || this.phase === 'running') return this.state();
+    // 退避计时器到点时先清掉自己再调 start;这里还挂着就是别的入口抢在它前面拉起
+    if (this.restartDueAt !== null) {
+      const left = Math.max(0, Math.round((this.restartDueAt - Date.now()) / 1000));
+      this.opts.log.info(`${this.opts.label}在自动重启到点前(还剩 ${left} 秒)被直接启动,排着的那次自动重启取消`);
+    }
     const gameDir = this.opts.gameDir();
     const launch = this.resolveLaunch(gameDir);
     if ('error' in launch) {
@@ -398,8 +405,10 @@ export class GameClient {
     const delayMs = (this.opts.restartBackoffMs ?? 30_000) * 2 ** (this.crashCount - 1);
     this.opts.onCrash?.({ detail, attempt: this.crashCount, max, delayMs });
     this.opts.log.info(`${this.opts.label}将在 ${Math.round(delayMs / 1000)} 秒后自动重启(第 ${this.crashCount}/${max} 次)`);
+    this.restartDueAt = now + delayMs;
     this.restartTimer = setTimeout(() => {
       this.restartTimer = null;
+      this.restartDueAt = null;
       if (this.phase === 'stopped') return;
       void this.start();
     }, delayMs);
@@ -413,6 +422,7 @@ export class GameClient {
     this.titleTimer = null;
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = null;
+    this.restartDueAt = null;
   }
 
   private fail(detail: string): void {

@@ -2991,7 +2991,10 @@ export class MinecraftWorld implements World {
   } {
     return {
       state: () => this.client.state(),
-      start: () => this.client.start(),
+      start: () => {
+        this.host?.log.info('观察者客户端由控制台面板启动');
+        return this.client.start();
+      },
       stop: () => this.client.stop(),
     };
   }
