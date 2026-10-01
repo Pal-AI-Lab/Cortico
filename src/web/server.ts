@@ -101,8 +101,6 @@ export interface WebAppDebugDeps {
   onSessionReset(cb: (messages: ContextRecord[]) => void): void;
   onEvent(cb: (e: EventEnvelope) => void): void;
   onRunlog(cb: (entry: LogRecord) => void): void;
-  /** 当前 run 最近落盘的运行日志(hello 快照用) */
-  recentLog?(limit: number): LogRecord[];
   /** 当前 run id;/api/log 缺省读它的 log.jsonl */
   runId?(): string;
   /** 主循环当前工具表schema(run()前为空数组) */
@@ -1208,8 +1206,6 @@ export class WebApp {
         session: dbg.sessionMessages(),
         head: dbg.sessionHead?.() ?? [],
         toolSchemas: dbg.toolSchemas(),
-        events: dropArchiveOnly(this.deps.store.range({ limit: 400 })).slice(-200),
-        runlog: dbg.recentLog?.(200) ?? [],
         status: this.safeStatus(),
         sessions: this.safeSessionList(),
       }));
@@ -1517,6 +1513,14 @@ export class WebApp {
       const source = strParam(req.query.source);
       if (source) q.source = source;
       const withArchive = strParam(req.query.archive) === '1';
+      // 只给 from 是追新:从区间头部取最早的 limit 条,hasMore 表示后面还有没返回的记录。
+      if (from !== undefined && to === undefined) {
+        const latest = this.deps.store.latestCursor();
+        const all = this.deps.store.range({ ...q, toCursor: latest });
+        const visible = withArchive ? all : dropArchiveOnly(all);
+        res.json({ latest, events: visible.slice(0, limit), hasMore: visible.length > limit });
+        return;
+      }
       if (withArchive) {
         q.limit = limit;
         res.json({ latest: this.deps.store.latestCursor(), events: this.deps.store.range(q) });

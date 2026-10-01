@@ -93,7 +93,6 @@ beforeAll(async () => {
     onSessionReset: (cb) => session.onReset(cb),
     onEvent: (cb) => store.onAppend(cb),
     onRunlog: (cb) => runlog.onWrite(cb),
-    recentLog: (limit) => runlog.recent(limit),
     runId: () => 'r-20260101-000000-0001',
     toolSchemas: () => schemas,
   };
@@ -115,18 +114,11 @@ afterAll(async () => {
 });
 
 describe('/ws/debug hello快照', () => {
-  it('连接即收到hello:session全量+toolSchemas+events+runlog+status', async () => {
+  it('连接即收到hello:session全量+toolSchemas+status', async () => {
     const { ws, q } = await openDebug(port);
     const hello = await q.nextOfType('hello');
     expect(hello.session).toEqual(session.records);
     expect(hello.toolSchemas).toEqual(schemas);
-    const events = hello.events as Array<{ cursor: number; source: string }>;
-    expect(events).toHaveLength(2);
-    expect(events[0].cursor).toBe(1);
-    expect(events[1].source).toBe('qq');
-    const rl = hello.runlog as Array<{ level: string; msg: string }>;
-    expect(rl.length).toBeGreaterThanOrEqual(2);
-    expect(rl[rl.length - 1].level).toBe('error');
     expect((hello.status as { loop: { estTokens: number } }).loop.estTokens).toBe(42);
     ws.close();
   });

@@ -563,7 +563,7 @@ describe('运行态', () => {
 });
 
 describe('事件流', () => {
-  it('铺出事件行,来源下拉由数据自己长出来', async () => {
+  it('铺出事件行,来源候选由数据自己长出来', async () => {
     stubFetch((url) =>
       url.startsWith('/api/events')
         ? {
@@ -582,8 +582,8 @@ describe('事件流', () => {
     const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
     expect(body.children.length).toBe(2);
     expect(body.textContent).toContain('10:00:00');
-    const sel = root.findTag('select') as FakeEl;
-    expect(sel.children.map((o) => o.textContent)).toEqual(['全部来源', 'a', 'b']);
+    const list = root.findTag('datalist') as FakeEl;
+    expect(list.children.map((o) => o.value)).toEqual(['a', 'b']);
   });
 
   it('有调试通道就不自己轮询;event 帧到了才追一次', async () => {
@@ -598,6 +598,25 @@ describe('事件流', () => {
     sockets[0].emit({ t: 'event' });
     await flush();
     expect(fetched.some((u) => u.startsWith('/api/events?from='))).toBe(true);
+  });
+
+  it('追新按页接着取到服务端说没有更多,游标推进到每页末条而不是库尾', async () => {
+    const row = (cursor: number): unknown => ({ cursor, ts: '2026-08-12T10:00:00.000Z', source: 'a', type: 'msg', text: String(cursor) });
+    stubFetch((url) => {
+      if (url.startsWith('/api/events?from=1001')) return { latest: 1150, events: [1001, 1002].map(row), hasMore: true };
+      if (url.startsWith('/api/events?from=1003')) return { latest: 1150, events: [1003].map(row), hasMore: false };
+      if (url.startsWith('/api/events')) return { latest: 1000, events: [1000].map(row) };
+      return defaultReply(url);
+    });
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/events');
+    core.createCoreFeature({ env }).mount(ctx);
+    await flush();
+    sockets[0].up();
+    sockets[0].emit({ t: 'event' });
+    await flush();
+    const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
+    expect(body.children.map((r) => r.children[0].textContent)).toEqual(['#1000', '#1001', '#1002', '#1003']);
   });
 
   it('没有调试通道才退回轮询,离开子页即停', async () => {

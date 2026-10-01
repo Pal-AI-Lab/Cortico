@@ -354,6 +354,15 @@ describe('/api/events', () => {
     expect(d.events.map((e: { cursor: number }) => e.cursor)).toEqual([6, 7, 8, 9, 10]);
   });
 
+  it('from=6&limit=3 → 追新从头部取 6..8,并标出后面还有', async () => {
+    const d = await getJson(base() + '/api/events?from=6&limit=3');
+    expect(d.events.map((e: { cursor: number }) => e.cursor)).toEqual([6, 7, 8]);
+    expect(d.hasMore).toBe(true);
+    const rest = await getJson(base() + '/api/events?from=9&limit=3');
+    expect(rest.events.map((e: { cursor: number }) => e.cursor)).toEqual([9, 10]);
+    expect(rest.hasMore).toBe(false);
+  });
+
   it('limit=3 → 尾部3条(最近优先)', async () => {
     const d = await getJson(base() + '/api/events?limit=3');
     expect(d.events.map((e: { cursor: number }) => e.cursor)).toEqual([8, 9, 10]);

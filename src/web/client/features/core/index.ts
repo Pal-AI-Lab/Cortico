@@ -239,7 +239,7 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
             if (current === 'events') void events.poll();
             break;
           case 'runlog':
-            if (current === 'runlog') void runlog.refresh();
+            if (current === 'runlog') runlog.noteLive();
             break;
           default:
             break;
