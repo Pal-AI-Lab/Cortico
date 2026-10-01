@@ -457,7 +457,8 @@ export interface WebAppCheckpointDeps {
 /** 分时段/范围的用量聚合(用量·成本页数据源) */
 export interface WebAppUsageDeps {
   status?(): { pending: number; error: string | null };
-  aggregate(opts: { from?: string; to?: string; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' }): UsageAggregate;
+  /** `days` 与补空桶的截止时刻按部署时区解释,由实现方给定时区。 */
+  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' }): UsageAggregate;
 }
 
 
@@ -2038,6 +2039,8 @@ export class WebApp {
       if (from) opts.from = from;
       const to = strParam(req.query.to);
       if (to) opts.to = to;
+      const days = intParam(req.query.days);
+      if (days !== undefined && days >= 1) opts.days = days;
       res.json({ ...src.aggregate(opts), ledger: src.status?.() });
     }));
 

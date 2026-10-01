@@ -641,32 +641,11 @@ describe('格式化', () => {
 // ---------------------------------------------------------------------------
 
 describe('时间范围', () => {
-  const NOW = Date.parse('2026-08-12T09:00:00Z');
-
-  it('localDate 走本地时区的年月日，不走 toISOString', async () => {
-    const { localDate } = (await import(RANGE)) as Any;
-    const d = new Date(NOW);
-    const p = (n: number): string => String(n).padStart(2, '0');
-    expect(localDate(0, NOW)).toBe(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`);
-    const back = new Date(NOW - 6 * 86400000);
-    expect(localDate(6, NOW)).toBe(`${back.getFullYear()}-${p(back.getMonth() + 1)}-${p(back.getDate())}`);
-  });
-
-  it('usageRange：近 N 天含今天（起点是 N-1 天前）；0 档读自定义框，空串算不限', async () => {
-    const { usageRange, localDate } = (await import(RANGE)) as Any;
-    expect(usageRange(7, { from: '', to: '' }, NOW))
-      .toEqual({ from: localDate(6, NOW), to: localDate(0, NOW) });
-    expect(usageRange(1, { from: '', to: '' }, NOW))
-      .toEqual({ from: localDate(0, NOW), to: localDate(0, NOW) });
-    expect(usageRange(0, { from: '2026-01-01', to: '2026-02-01' }, NOW))
-      .toEqual({ from: '2026-01-01', to: '2026-02-01' });
-    expect(usageRange(0, { from: '', to: '' }, NOW)).toEqual({ from: null, to: null });
-  });
-
-  it('usageQuery：空的 from/to 不出现在 URL 里', async () => {
+  it('usageQuery：预设档只发 days，由服务端按部署时区取今天；自定义档空的 from/to 不出现在 URL 里', async () => {
     const { usageQuery } = (await import(RANGE)) as Any;
-    expect(usageQuery('auto', { from: null, to: null })).toBe('bucket=auto');
-    expect(usageQuery('day', { from: '2026-01-01', to: null })).toBe('bucket=day&from=2026-01-01');
+    expect(usageQuery('auto', 7, { from: '2026-01-01', to: '' })).toBe('bucket=auto&days=7');
+    expect(usageQuery('auto', 0, { from: '', to: '' })).toBe('bucket=auto');
+    expect(usageQuery('day', 0, { from: '2026-01-01', to: '' })).toBe('bucket=day&from=2026-01-01');
   });
 });
 
@@ -837,6 +816,46 @@ describe('用量页挂载', () => {
     expect(root.textContent).toContain('炸了');
   });
 
+  it('有调用但成本全为 0 时勾上拆分维度，主图画合计柱而不抛错', async () => {
+    const d = sample();
+    for (const p of d.series) {
+      p.cost = 0;
+      for (const g of Object.values(p.byRole) as Any[]) g.cost = 0;
+      for (const g of Object.values(p.byModel) as Any[]) g.cost = 0;
+    }
+    stubFetch({ '/api/usage': d });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const box = root.findAll('check').find((c: Any) => c.textContent.includes('角色'))!.findTag('input')!;
+    box.checked = true;
+    expect(() => box.dispatchEvent({ type: 'change' })).not.toThrow();
+    expect(root.findAllTag('svg')[0].findAll('barg').length).toBe(2);
+  });
+
+  it('先发的请求后返回时不覆盖后一次查询的结果', async () => {
+    const replies: Array<(body: unknown) => void> = [];
+    vi.stubGlobal('fetch', (url: unknown) => {
+      seen.push(String(url));
+      return new Promise((resolve) => {
+        replies.push((body) => resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(body)) }));
+      });
+    });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    root.findAll('seg').find((b: Any) => b.textContent === '今天')!.dispatchEvent({ type: 'click' });
+    const older = { ...sample(), from: '2026-07-01', to: '2026-08-02' };
+    const newer = { ...sample(), from: '2026-08-02', to: '2026-08-02' };
+    replies[1]!(newer);
+    await flush();
+    replies[0]!(older);
+    await flush();
+    expect(root.textContent).toContain('2026-08-02 ~ 2026-08-02');
+    expect(root.textContent).not.toContain('2026-07-01');
+  });
+
   it('勾上拆分维度 → 重画但不重取（数据没变，变的是画法）', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
@@ -877,9 +896,7 @@ describe('用量页挂载', () => {
     expect(seen.length).toBe(1);
   });
 
-  it('切到「自定义」时以预填日期发起查询', async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-08-13T09:00:00Z'));
+  it('切到「自定义」时以上一次结果的范围预填并发起查询', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -893,10 +910,10 @@ describe('用量页挂载', () => {
     expect(range.classList.contains('hidden')).toBe(false);
     const dates = range.findAllTag('input');
     expect(dates.length).toBe(2);
-    expect(dates[0].value).toBe('2026-08-07');
-    expect(dates[1].value).toBe('2026-08-13');
-    expect(seen.at(-1)).toContain('from=2026-08-07');
-    expect(seen.at(-1)).toContain('to=2026-08-13');
+    expect(dates[0].value).toBe('2026-08-01');
+    expect(dates[1].value).toBe('2026-08-02');
+    expect(seen.at(-1)).toContain('from=2026-08-01');
+    expect(seen.at(-1)).toContain('to=2026-08-02');
   });
 
   it('自动刷新：勾上才有表，取消即停；离开这一页一根都不剩', async () => {
