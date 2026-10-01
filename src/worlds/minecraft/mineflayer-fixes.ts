@@ -137,6 +137,7 @@ export function installMineflayerFixes(
   fixToolTierMaterials(bot, log);
   installComponentDigTime(bot);
   installStateIdGuard(bot, diag, () => tracing > 0);
+  installClosedWindowItemsDrop(bot, diag);
   installPacketTrace(bot, trace);
   installConfirmedPlace(bot as PatchedBot, diag, (n) => { tracing += n; });
   installConfirmedDig(bot as PatchedBot, log, diag);
@@ -145,7 +146,7 @@ export function installMineflayerFixes(
   installLightRelay(bot, log, diag);
   installDismountFix(bot, diag);
   installWallGap();
-  log.info(`mineflayer 修补已装上:合成取服务端产物、放置短超时重发、附魔按组件格式计入挖掘、挖掘等服务端改掉那一格、stateId 认当前窗口、光照段重新落位、水平碰撞留缝${diag ? '' : '(没给 World 日志,包流不留痕)'}`);
+  log.info(`mineflayer 修补已装上:合成取服务端产物、放置短超时重发、附魔按组件格式计入挖掘、挖掘等服务端改掉那一格、stateId 认当前窗口、丢弃关掉的窗口迟到的 window_items、光照段重新落位、水平碰撞留缝${diag ? '' : '(没给 World 日志,包流不留痕)'}`);
 }
 
 /** 原型上的标记:同一进程里多个连接、多份模块实例只改一次 */
@@ -386,12 +387,46 @@ function installComponentDigTime(bot: Bot): void {
 }
 
 /**
+ * 已关掉的容器窗口迟到的 window_items 整包丢弃。
+ *
+ * mineflayer 把 windowId 既不是 0 也不是当前窗口的 window_items 存进一个从不清空的
+ * 缓存,之后哪次 open_window 的窗口号与它相同,就拿它当新窗口的初始内容并立即发
+ * windowOpen。服务端窗口号在 1–100 里循环,所以一扇关掉的箱子的旧内容会被当成
+ * 隔了一百次开窗之后那扇窗(铁砧、熔炉……)的内容;开窗就读、读完就关的技能读到的是
+ * 旧箱子和旧背包,关窗时 copyInventory 再把它写进 bot.inventory。
+ * 服务端总是先发 open_window 再发该窗口的 window_items,丢掉这类包后 mineflayer
+ * 一律等新窗口自己的 window_items 才发 windowOpen。
+ */
+function installClosedWindowItemsDrop(bot: Bot, diag: MinecraftLog | undefined): void {
+  const client = bot._client as unknown as {
+    emit(name: string, ...args: unknown[]): boolean;
+  };
+  const origEmit = client.emit.bind(client);
+  client.emit = (name: string, ...args: unknown[]): boolean => {
+    if (name === 'window_items') {
+      const pkt = args[0] as { windowId?: number; items?: unknown[] } | undefined;
+      const curId = (bot.currentWindow as { id?: number } | null)?.id ?? null;
+      if (pkt && pkt.windowId !== 0 && pkt.windowId !== curId) {
+        diag?.write({
+          lane: 'skill', event: 'closed-window-items-drop',
+          msg: `丢掉窗口${pkt.windowId}迟到的 window_items(当前窗口${curId ?? '无'}),不让它成为同号新窗口的初始内容`,
+          data: { windowId: pkt.windowId, currentWindowId: curId, slots: pkt.items?.length ?? null },
+        });
+        return true;
+      }
+    }
+    return origEmit(name, ...args);
+  };
+}
+
+/**
  * 全局 stateId 只认当前打开窗口那条流。
  *
  * mineflayer 用任意 set_slot/window_items 的 stateId 顶掉全局值,而点击一律带
  * 全局值发出;开着工作台时窗口 0 的更新(副手槽 45 是常客)会让每次点击都带上
  * 错的 stateId,服务端按失步整窗回灌。windowId 与当前窗口对不上的包内容照常
- * 透传,stateId 改写成当前窗口最近一次的值;windowId=-2 没有对应容器,整包拦下。
+ * 透传(关掉的容器窗口的 window_items 除外,见 installClosedWindowItemsDrop),
+ * stateId 改写成当前窗口最近一次的值;windowId=-2 没有对应容器,整包拦下。
  */
 function installStateIdGuard(bot: Bot, diag: MinecraftLog | undefined, tracing: () => boolean): void {
   const client = bot._client as unknown as {

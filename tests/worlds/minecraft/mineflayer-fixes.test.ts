@@ -918,6 +918,74 @@ describe('stateId:windowId=-2 的 set_slot 拦在门外', () => {
   });
 });
 
+/**
+ * 走真的 mineflayer 物品栏插件:关掉的箱子窗口迟到的 window_items 不能成为
+ * 窗口号循环回来之后那扇铁砧窗口的内容,也不能经关窗回灌进 bot.inventory。
+ */
+describe('关掉的窗口迟到的 window_items', () => {
+  const VERSION = '1.20.6';
+  const mfReq = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
+  const registry = mfReq('minecraft-data')(VERSION) as {
+    itemsByName: Record<string, { id: number }>;
+    supportFeature(f: string): boolean;
+  };
+  const Item = mfReq('prismarine-item')(VERSION) as {
+    new (type: number, count: number): unknown;
+    toNotch(item: unknown): unknown;
+  };
+  const injectInventory = mfReq('mineflayer/lib/plugins/inventory.js') as (bot: unknown, opts: object) => void;
+
+  const stack = (name: string, count: number): unknown => Item.toNotch(new Item(registry.itemsByName[name].id, count));
+  const empty = (): unknown => Item.toNotch(null);
+
+  function inventoryBot() {
+    const bot = new EventEmitter() as unknown as EventEmitter & Record<string, unknown>;
+    const client = new EventEmitter() as unknown as EventEmitter & Record<string, unknown>;
+    client.write = (): void => {};
+    bot._client = client;
+    bot.version = VERSION;
+    bot.registry = registry;
+    bot.supportFeature = (f: string): boolean => registry.supportFeature(f);
+    bot.blockAt = (): null => null;
+    bot._genericPlace = async (): Promise<void> => {};
+    injectInventory(bot, {});
+    installMineflayerFixes(bot as never, log);
+    return {
+      bot: bot as unknown as EventEmitter & {
+        currentWindow: unknown;
+        inventory: { items(): Array<{ name: string }> };
+        closeWindow(win: unknown): void;
+      },
+      client,
+    };
+  }
+
+  it('同号铁砧窗口开出来时玩家那半是自己的,关窗后背包还是真实的账', () => {
+    const { bot, client } = inventoryBot();
+    const player = Array.from({ length: 36 }, (_, i) => (i === 0 ? stack('diamond_boots', 1) : empty()));
+    client.emit('window_items', { windowId: 0, stateId: 1, items: [...Array.from({ length: 9 }, empty), ...player, empty()] });
+
+    const chest = Array.from({ length: 27 }, () => stack('wheat_seeds', 64));
+    client.emit('open_window', { windowId: 5, inventoryType: 'minecraft:generic_9x3', windowTitle: '"chest"' });
+    client.emit('window_items', { windowId: 5, stateId: 2, items: [...chest, ...player] });
+    bot.closeWindow(bot.currentWindow);
+    // 服务端在收到关窗之前发出的整窗回灌,到达时客户端已经关了窗
+    client.emit('window_items', { windowId: 5, stateId: 3, items: [...chest, ...player] });
+
+    let seenAtOpen: string[] | null = null;
+    bot.once('windowOpen', (win: { items(): Array<{ name: string }> }) => {
+      seenAtOpen = win.items().map((i) => i.name);
+      bot.closeWindow(win);
+    });
+    client.emit('open_window', { windowId: 5, inventoryType: 'minecraft:anvil', windowTitle: '"anvil"' });
+    expect(seenAtOpen).toBeNull(); // 自己的 window_items 没到之前不发 windowOpen
+    client.emit('window_items', { windowId: 5, stateId: 4, items: [empty(), empty(), empty(), ...player] });
+
+    expect(seenAtOpen).toEqual(['diamond_boots']);
+    expect(bot.inventory.items().map((i) => i.name)).toEqual(['diamond_boots']);
+  });
+});
+
 describe('包流留痕:只在合成/放置那几百毫秒里记', () => {
   it('平时不记,合成期间的点击与窗口回灌都进日志', async () => {
     const world = fakeWorld({ gridWidth: 3, bag: [[1, 6], [2, 5]] });
