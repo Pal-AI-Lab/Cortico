@@ -671,8 +671,12 @@ async function runSkill(bot: Bot, call: SkillCall, ctx: SkillContext): Promise<s
           if (err instanceof Aborted) throw err;
           throw new SkillBlocked(`${head},但游不到看见的那处岸(${(err as Error).message});还没有脱离液体`);
         }
+        // 到岸就松跳键:按着它人一着地下一 tick 又起跳,落脚永远读不到
+        bot.setControlState('jump', false);
         if (!(await stableDryFooting(bot, ctx))) {
-          throw new SkillBlocked(`${head};我游到了岸边但没有稳定站上干燥落脚格,还没有脱离液体`);
+          throw new SkillBlocked(
+            `${head};我游到了岸边但没有稳定站上干燥落脚格,还没有脱离液体;${surfaceStateText(bot)}`,
+          );
         }
         const feet = feetOf(bot);
         const skyVisible = !skyBlocked(bot, feet.x, feet.y + 2, feet.z);

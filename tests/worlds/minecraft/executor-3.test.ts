@@ -1159,8 +1159,11 @@ describe('战逃与水面', () => {
     land?: boolean;
     roofY?: number;
     goto?: (bot: ReturnType<typeof diveBot>) => Promise<void>;
+    /** 寻路报到达时人还在登岸那一跳的半空,再过这么多 tick 才着地 */
+    landAfterTicks?: number;
   }) {
     const controls: Array<[string, boolean]> = [];
+    let airTicks = 0;
     const startedAt = Date.now();
     const bot = {
       controls,
@@ -1192,12 +1195,16 @@ describe('战逃与水面', () => {
         }
         return y <= 63 ? { name: 'water', boundingBox: 'empty' } : { name: 'air', boundingBox: 'empty' };
       },
+      waitForTicks: async (n: number) => {
+        airTicks += n;
+        if (opts.landAfterTicks !== undefined && airTicks >= opts.landAfterTicks) bot.entity.onGround = true;
+      },
       pathfinder: {
         stop() {},
         setGoal() {},
         goto: async () => {
           await opts.goto?.(bot);
-          bot.entity.onGround = true;
+          if (opts.landAfterTicks === undefined) bot.entity.onGround = true;
         },
       },
     };
@@ -1259,6 +1266,18 @@ describe('战逃与水面', () => {
     expect(reports[0].text).toContain('这里仍有遮盖,没有回到露天');
     expect(reports[0].text).toContain('out_of_liquid=true,standing=true,sky_visible=false,final_y=64');
     expect(reports[0].text).not.toContain('这里能看见天空');
+  });
+
+  // 寻路器在登岸那一跳的半空就报到达;当场读落脚会把已经上岸判成失败
+  it('surface 到达时人还在半空:等着地再判落脚,上岸照实报成功', async () => {
+    const bot = diveBot({ land: true, landAfterTicks: 4, goto: async (b) => { b.entity.position = new V(1.5, 64.4, 0.5); } });
+    bot.entity.position = new V(0.5, 63, 0.5);
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'surface' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('我脱离液体并站稳了');
+    expect(reports[0].text).toContain('standing=true');
   });
 
   it('surface 登岸寻路失败:跳键照样在退出前松开', async () => {

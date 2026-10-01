@@ -129,6 +129,13 @@ export function surfaceStateText(bot: Bot): string {
 }
 
 export async function stableDryFooting(bot: Bot, ctx: SkillContext): Promise<boolean> {
+  // 寻路器离节点中心水平 0.35、竖直 1 格内就算到达,登岸那一跳还在半空时就会报到。
+  // 人不在液体里又没着地,重力会把人落到某处,逐 tick 等它落下再读落脚
+  const entity = bot.entity as Bot['entity'] & { isInWater?: boolean; isInLava?: boolean };
+  while (!entity.onGround && entity.isInWater !== true && entity.isInLava !== true && !bodyInWater(bot)) {
+    checkAbort(ctx);
+    await bot.waitForTicks(1);
+  }
   if (!hasDryFooting(bot)) return false;
   await sleep(300);
   checkAbort(ctx);
