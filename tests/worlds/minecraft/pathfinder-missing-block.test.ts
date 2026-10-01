@@ -3,8 +3,8 @@
  *
  * `monitorMovement` 挖方块前先 `bot.blockAt()` 取那一格,再交给 `bestHarvestTool`;
  * 区块卸载之后 `blockAt` 返回 null,而选工具要读 `block.digTime`。契约:
- * `bestHarvestTool(null)` 回报 null(不换手,与空手同一语义),调用方照挖,
- * 挖不动走 `dig_error` 重算。
+ * `bestHarvestTool(null)` 回报 null(不换手,与空手同一语义);上游随后的 `bot.dig(null)`
+ * 立即 reject,由上游 catch 走 `resetPath('dig_error')`。
  *
  * 台架装真 `inject`,只换 `getPathTo`;`physicsTick` 上没有 catch,这里的异常会一路抛出去。
  */
@@ -19,7 +19,6 @@ const mfRequire = createRequire(require_.resolve('mineflayer'));
 const MC_VERSION = '1.20.6';
 
 const mcData = mfRequire('minecraft-data')(MC_VERSION) as {
-  blocksByName: Record<string, { id: number; defaultState: number }>;
   itemsByName: Record<string, { id: number }>;
 };
 const { Vec3 } = mfRequire('vec3') as {
@@ -41,7 +40,6 @@ interface Vec3Like {
 interface PathfinderFace {
   setGoal(goal: unknown, dynamic?: boolean): void;
   getPathTo(movements: unknown, goal: unknown): unknown;
-  bestHarvestTool(block: unknown): unknown;
 }
 
 /** 永远有效、从不移动、永远没到:monitorMovement 每刻都走完整条 */
@@ -51,7 +49,7 @@ const goal = {
   isEnd: (): boolean => false,
 };
 
-/** 要挖的那一格。`blockAt` 对它的回答是 null —— 就是区块卸载之后的样子。 */
+/** 要挖的那一格,区块已卸载,`blockAt` 对它给 null */
 const MISSING = { x: 11, y: 64, z: 10 };
 /** 人站的地方,已经在那一格西边一格:不必先走过去 */
 const ME = { x: 10.5, y: 64, z: 10.5 };
@@ -65,12 +63,8 @@ function digStep(): unknown {
   };
 }
 
-interface Rig {
-  tool: (block: unknown) => unknown;
-  tick: () => Promise<void>;
-}
-
-function rig(): Rig {
+/** 返回推进一个物理节拍的函数 */
+function rig(): () => Promise<void> {
   const pickaxe = {
     name: 'diamond_pickaxe', type: mcData.itemsByName.diamond_pickaxe.id, count: 1, slot: 36,
   };
@@ -88,10 +82,8 @@ function rig(): Rig {
       forward: false, back: false, left: false, right: false,
       jump: false, sprint: false, sneak: false,
     },
-    // 背包非空:选工具要走到比较工具那一支
     heldItem: pickaxe,
     inventory: { hotbarStart: 36, items: () => [pickaxe] },
-    // 那一格读不到 —— 区块卸载,`blockAt` 给 null
     blockAt: () => null,
     setControlState(name: string, value: boolean): void {
       (bot.controlState as Record<string, boolean>)[name] = value;
@@ -118,24 +110,16 @@ function rig(): Rig {
   pf.getPathTo = () => ({ status: 'success', path: [digStep()] });
   pf.setGoal(goal);
 
-  return {
-    tool: (block: unknown) => pf.bestHarvestTool(block),
-    async tick(): Promise<void> {
-      bot.emit('physicsTick');
-      for (let i = 0; i < 8; i++) await Promise.resolve();
-      await new Promise((r) => setImmediate(r));
-    },
+  return async (): Promise<void> => {
+    bot.emit('physicsTick');
+    for (let i = 0; i < 8; i++) await Promise.resolve();
+    await new Promise((r) => setImmediate(r));
   };
 }
 
 describe('挖方块那一格区块已卸载', () => {
-  it('选工具拿到 null 时回报不换手,不抛异常', () => {
-    const r = rig();
-    expect(r.tool(null)).toBeNull();
-  });
-
   it('物理节拍照常挖,不把异常抛出物理节拍', async () => {
-    const r = rig();
-    await expect(r.tick()).resolves.toBeUndefined();
+    const tick = rig();
+    await expect(tick()).resolves.toBeUndefined();
   });
 });

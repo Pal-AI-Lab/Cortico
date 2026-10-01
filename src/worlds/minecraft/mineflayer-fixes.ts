@@ -276,7 +276,7 @@ type PathfinderBlock = {
  */
 export function installPathfinderToolSelection(bot: Bot, log: Logger): void {
   const pathfinder = (bot as unknown as {
-    pathfinder?: { bestHarvestTool?: (block: PathfinderBlock) => ItemLike | null };
+    pathfinder?: { bestHarvestTool?: (block: PathfinderBlock | null) => ItemLike | null };
   }).pathfinder;
   if (typeof pathfinder?.bestHarvestTool !== 'function') {
     log.warn('寻路选工具修补没装上:pathfinder 尚未注入');
@@ -297,8 +297,8 @@ export function installPathfinderToolSelection(bot: Bot, log: Logger): void {
     );
 
   pathfinder.bestHarvestTool = (block): ItemLike | null => {
-    // 区块卸载之后 blockAt 给 null,digTime 无从算起。回报 null = 不换手,与"空手"
-    // 同一语义:调用方照挖,挖不动会走 dig_error 重算,异常不必抛进物理节拍。
+    // 区块卸载后上游 blockAt 给 null。回报 null 时上游不换手直接 bot.dig(null),
+    // dig 立即 reject,上游 catch 后 resetPath('dig_error') 重新规划。
     if (!block) return null;
     const held = bot.heldItem as (ItemLike & { type: number; slot?: number }) | null;
     // 空手时基线就是 null,规划侧读成徒手、执行侧读成不换手,两边都正确
