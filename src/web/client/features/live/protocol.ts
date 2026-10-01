@@ -61,6 +61,10 @@ export interface LoopStatus {
   paused?: boolean;
   scheduleBlocked?: boolean;
   truncating?: boolean;
+  /** 投递水位:最后一条已投递或已了结事件的游标。 */
+  lastDeliveredCursor?: number | null;
+  /** 水位之后该进上下文却还没投递的外部事件数。 */
+  behind?: number | null;
   context?: ContextBudget | null;
 }
 

@@ -19,7 +19,7 @@ export interface RunlogEntry {
   /** 折叠汇总行代表的重复条数 */
   repeat?: number;
   data?: unknown;
-  err?: { name: string; message: string };
+  err?: { name: string; message: string; stack?: string };
 }
 
 interface RunRow {
@@ -186,15 +186,31 @@ export function createRunlogView(deps: RunlogViewDeps): RunlogView {
     runsLoaded = true;
   };
 
-  /** 正文格:msg,折叠计数,`data` 摘要,err.message 走警示色。 */
+  /** 展开着的行。重查后按这把键重新展开,跟随新日志时不被收起。 */
+  const openRows = new Set<string>();
+  const rowKey = (en: RunlogEntry): string => `${en.ts}|${en.area}|${en.event ?? ''}|${en.msg}`;
+
+  /** 正文格:msg,折叠计数,`data` 摘要,err.message 走警示色;带 data 或 err 的行可展开看全文与堆栈。 */
   const bodyCell = (en: RunlogEntry): HTMLElement => {
-    const box = ui.h('span');
-    box.appendChild(ui.h('span', null, en.msg));
-    if (en.repeat) box.appendChild(ui.h('span', 'data-extra', ` ×${en.repeat + 1}`));
+    const line = ui.h('span');
+    line.appendChild(ui.h('span', null, en.msg));
+    if (en.repeat) line.appendChild(ui.h('span', 'data-extra', ` ×${en.repeat + 1}`));
     if (en.data !== undefined) {
-      box.appendChild(ui.h('span', 'data-extra', ` ${truncate(JSON.stringify(en.data), DATA_MAX)}`));
+      line.appendChild(ui.h('span', 'data-extra', ` ${truncate(JSON.stringify(en.data), DATA_MAX)}`));
     }
-    if (en.err) box.appendChild(ui.h('span', 'lv-error', ` ${en.err.message}`));
+    if (en.err) line.appendChild(ui.h('span', 'lv-error', ` ${en.err.message}`));
+    if (en.data === undefined && !en.err) return line;
+    const box = ui.h('details', 'logdetail');
+    const key = rowKey(en);
+    box.open = openRows.has(key);
+    box.addEventListener('toggle', () => {
+      if (box.open) openRows.add(key);
+      else openRows.delete(key);
+    }, { signal: deps.signal });
+    const summary = ui.h('summary');
+    summary.appendChild(line);
+    const full = ui.h('pre', 'mono', JSON.stringify({ msg: en.msg, data: en.data, err: en.err }, null, 2));
+    box.append(summary, full, ui.copyButton(() => JSON.stringify(en, null, 2), { label: S.copyEntry }));
     return box;
   };
 

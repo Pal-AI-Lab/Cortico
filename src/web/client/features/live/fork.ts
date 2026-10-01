@@ -87,6 +87,7 @@ export function createForkView(deps: ForkDeps): ForkView {
         S.forkInfo(count, ui.fmt.count(estTokens || 0), ended, Math.round(FORK_POLL_MS / 1000)),
       ),
     );
+    info.appendChild(ui.h('div', 'meta2', S.forkReadOnly));
     const back = ui.button(S.forkBack, {
       size: 'sm',
       onClick: () => view.switchTo(MAIN_ID, MAIN_LABEL),

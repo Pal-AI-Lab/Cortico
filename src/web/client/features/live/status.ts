@@ -43,25 +43,27 @@ export function createStatusBand(ui: ConsoleUi): StatusBand {
         el.appendChild(ui.chip(S.chipDisconnected));
         return;
       }
+      // 先列影响 bot 能否响应的状态,累计统计排在后面。
       const loop = loopOf(st);
+      if (loop.paused) el.appendChild(ui.chip(S.chipPaused, 'warn'));
+      else if (loop.scheduleBlocked) el.appendChild(ui.chip(S.chipScheduleBlocked, 'warn'));
+      if (loop.truncating) el.appendChild(ui.chip(S.chipTruncating, 'accent'));
+      if (loop.behind) el.appendChild(ui.chip(S.chipBehind(loop.behind), 'warn'));
+      // 人格概念(「梦中」这类)由Persona自报文本,框架照画不解释。
+      for (const chip of chipsOf(st)) el.appendChild(ui.chip(chip.label, chip.tone));
       if (loop.estTokens != null) {
         el.appendChild(chipOf(ui, [{ b: ui.fmt.count(loop.estTokens) }, ' tok']));
       }
-      if (loop.messageCount != null) el.appendChild(chipOf(ui, [{ b: loop.messageCount }, S.chipMsgs]));
       const u = loop.lastUsage;
       if (u && u.promptTokens) {
         el.appendChild(
           chipOf(ui, [S.chipCache, { b: ui.fmt.percent((u.cacheHitTokens || 0) / u.promptTokens) }]),
         );
       }
+      if (loop.messageCount != null) el.appendChild(chipOf(ui, [{ b: loop.messageCount }, S.chipMsgs]));
       if (loop.batchesHandled != null) {
         el.appendChild(chipOf(ui, [S.chipBatchesPre, { b: loop.batchesHandled }, S.chipBatchesPost]));
       }
-      if (loop.paused) el.appendChild(ui.chip(S.chipPaused, 'warn'));
-      else if (loop.scheduleBlocked) el.appendChild(ui.chip(S.chipScheduleBlocked, 'warn'));
-      if (loop.truncating) el.appendChild(ui.chip(S.chipTruncating, 'accent'));
-      // 人格概念(「梦中」这类)由Persona自报文本,框架照画不解释。
-      for (const chip of chipsOf(st)) el.appendChild(ui.chip(chip.label, chip.tone));
       if (st.terminalOnline != null) el.appendChild(chipOf(ui, [S.chipOnline, { b: st.terminalOnline }]));
     },
   };

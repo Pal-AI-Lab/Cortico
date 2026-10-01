@@ -117,12 +117,11 @@ export function mountUsage(ctx: FeatureContext): void {
   });
   const bkHint = ui.h('span', 'ubkhint');
   const rangeHint = ui.h('span', 'urangehint');
-  bar2.append(ui.h('span', 'ulabel', S.granularity), bucketSeg.el, bkHint, ui.h('span', 'grow'), rangeHint);
   let basis = 'marginal';
   let currency = '';
   const currencySelect = ui.select({ options: [{value:'',label:S.autoCurrency}], onChange: value => { currency = value; void load(); } });
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
-  bar2.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect);
+  bar2.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, ui.h('span', 'grow'), rangeHint);
   const billingHint = ui.h('p', 'muted');
   const controls = ui.h('div', 'usagecontrols');
   controls.append(bar1, bar2, billingHint);
@@ -149,7 +148,7 @@ export function mountUsage(ctx: FeatureContext): void {
     value: state.metric,
     onSelect: (v) => { state.metric = v as UsageMetric; renderMain(); },
   });
-  mainCtrls.append(metricSeg.el, ui.h('span', 'ulabel', S.split));
+  mainCtrls.append(metricSeg.el, ui.h('span', 'ulabel', S.granularity), bucketSeg.el, bkHint, ui.h('span', 'ulabel', S.split));
   for (const [dim, label] of [['type', S.dimType], ['role', S.dimRole], ['model', S.dimModel]] as const) {
     mainCtrls.appendChild(ui.checkbox(label, {
       onChange: (on) => { state.splitDims[dim] = on; renderMain(); },
@@ -187,14 +186,17 @@ export function mountUsage(ctx: FeatureContext): void {
 
   // ---- 两张分组表 -----------------------------------------------------------
   const GROUP_HEAD = [S.headCalls, S.headInput, S.headOutput, S.headCache, S.headCost, S.headAvg];
-  const roleSheet = ui.sheet({ title: S.byRole, en: 'by role' });
+  const roleSheet = ui.sheet({ title: S.byRole, en: 'by purpose' });
   const roleTable = ui.table({ head: [S.dimRole, ...GROUP_HEAD] });
   roleSheet.body.appendChild(roleTable.el);
   const modelSheet = ui.sheet({ title: S.byModel, en: 'by model' });
   const modelTable = ui.table({ head: [S.dimModel, ...GROUP_HEAD] });
   modelSheet.body.appendChild(modelTable.el);
+  const instanceSheet = ui.sheet({ title: S.byInstance, en: 'by connection' });
+  const instanceTable = ui.table({ head: [S.dimInstance, ...GROUP_HEAD] });
+  instanceSheet.body.appendChild(instanceTable.el);
   const tables = ui.h('div', 'usagetables');
-  tables.append(roleSheet.el, modelSheet.el);
+  tables.append(roleSheet.el, modelSheet.el, instanceSheet.el);
 
   const staleNote = ui.msgline('', true);
   const results = ui.h('div');
@@ -247,12 +249,12 @@ export function mountUsage(ctx: FeatureContext): void {
     cards.replaceChildren();
     const items: Parameters<typeof ui.stat>[0][] = [
       { k: S.cardKnownCost, v: costText(t.cost || 0, t, cur), accent: true },
+      { k: S.cardCoverage, v: `${t.pricedCalls || 0} / ${calls}`, unit: S.unpriced(t.unpricedCalls || 0) },
       { k: S.cardCalls, v: calls.toLocaleString() },
-      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(consoleFormat.count(Math.round(avgTok))) : '' },
       { k: S.cardInput, v: consoleFormat.count(t.promptTokens || 0), unit: S.hitRate(consoleFormat.percent(t.cacheHitRate)) },
       { k: S.cardOutput, v: consoleFormat.count(t.completionTokens || 0), unit: S.reasoningShare(consoleFormat.percent(rShare)) },
+      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(consoleFormat.count(Math.round(avgTok))) : '' },
       { k: S.cardCacheRate, v: consoleFormat.percent(t.cacheHitRate) },
-      { k: S.cardCoverage, v: `${t.pricedCalls || 0} / ${calls}`, unit: S.unpriced(t.unpricedCalls || 0) },
       { k: S.cardPeak, v: peak ? costText(peak.cost || 0, peak, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
     ];
     // 失败消耗是总消耗的子集。
@@ -308,7 +310,7 @@ export function mountUsage(ctx: FeatureContext): void {
   }
 
   /**
-   * 首列印的是**声明方给的名字**，给不出就印 id 原文。角色 id 由Persona定义、
+   * 首列印的是**声明方给的名字**，后面跟 id 原文；给不出名字就只印 id。角色 id 由Persona定义、
    * 模型名由供应商定义，控制台两边都不认识，也就不为任何一边备一张翻译表。
    */
   function renderGroup(
@@ -320,8 +322,10 @@ export function mountUsage(ctx: FeatureContext): void {
     if (!groups.length) return;
     for (const g of groups) {
       const avg = g.calls ? (g.cost || 0) / g.calls : 0;
+      const name = ui.h('span', null, g.label || g.key);
+      if (g.label && g.label !== g.key) name.appendChild(ui.h('span', 'data-extra', ` ${g.key}`));
       table.addRow([
-        g.label || g.key,
+        name,
         { text: g.calls || 0, cls: 'mono' },
         { text: consoleFormat.count(g.promptTokens), cls: 'mono' },
         { text: consoleFormat.count(g.completionTokens), cls: 'mono' },
@@ -358,6 +362,7 @@ export function mountUsage(ctx: FeatureContext): void {
     renderCalls();
     renderGroup(roleTable, d.byRole || [], d.currency || 'USD');
     renderGroup(modelTable, d.byModel || [], d.currency || 'USD');
+    renderGroup(instanceTable, d.byInstance || [], d.currency || 'USD');
     renderHints(d);
   }
 

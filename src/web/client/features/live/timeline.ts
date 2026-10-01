@@ -473,8 +473,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     if (ord) head.appendChild(ord);
     head.appendChild(status);
     head.appendChild(ui.h('span', 'grow'));
-    const rawToggle = ui.h('span', 'meta rawtoggle', S.rawItems);
-    rawToggle.setAttribute('role', 'button');
+    const rawToggle = ui.h('button', 'meta rawtoggle', S.rawItems);
+    rawToggle.type = 'button';
     head.appendChild(rawToggle);
     const body = ui.h('div', 'turnbody');
     const rawPre = ui.h('pre', 'mono');

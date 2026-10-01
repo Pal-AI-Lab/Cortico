@@ -211,6 +211,10 @@ class FakeDoc {
   createElement(tag: string): FakeEl {
     return new FakeEl(tag, this);
   }
+  /** 图标用的内联 SVG 走这条；命名空间在这套桩里不影响任何断言。 */
+  createElementNS(_ns: string, tag: string): FakeEl {
+    return new FakeEl(tag, this);
+  }
   addEventListener(type: string, fn: Listener, opts?: ListenOptions): void {
     this.listeners.add(type, fn, opts);
   }
@@ -498,7 +502,7 @@ describe('core 子页签', () => {
     core.createCoreFeature({ env }).mount(ctx);
     await flush();
     expect(root.findAll('strow').map((r) => r.find('stlabel')!.textContent)).toEqual(['事件库']);
-    expect(root.textContent).toContain('⚠ 一键清空全部');
+    expect(root.textContent).toContain('⚠ 一键清空服务端全部存储');
 
     const config = mkCtx(ALL_CAPS, '#/core/config');
     core.createCoreFeature({ env }).mount(config.ctx);
@@ -539,7 +543,7 @@ describe('core 子页签', () => {
 // ===========================================================================
 
 describe('运行态', () => {
-  it('八张读数卡,状态帧到了就重画', () => {
+  it('运行与投递状态排在累计统计之前,状态帧到了就重画', () => {
     stubFetch(defaultReply);
     const { env, sockets } = fakeEnv();
     const { ctx, root } = mkCtx(ALL_CAPS);
@@ -550,13 +554,15 @@ describe('运行态', () => {
       status: {
         latestEventCursor: 7,
         terminalOnline: 2,
-        loop: { estTokens: 12345, messageCount: 9, paused: true },
+        loop: { estTokens: 12345, messageCount: 9, paused: true, behind: 3, lastDeliveredCursor: 4 },
       },
     });
     const grid = root.find('statgrid') as FakeEl;
-    expect(grid.children.length).toBe(8);
+    expect(grid.children.length).toBe(11);
     expect(grid.textContent).toContain('12.3k');
-    expect(grid.textContent).toContain('暂停');
+    expect(grid.children[0].textContent).toContain('暂停');
+    expect(grid.children[1].textContent).toContain('3');
+    expect(grid.children[2].textContent).toContain('4/ 7');
   });
 
   // 暂停/继续与关机都不在这一页:它们在左栏右下角(shell),测试在 shell.test.ts。

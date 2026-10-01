@@ -11,6 +11,8 @@ const zh = {
   subRunlog: '运行日志',
   subData: '数据',
   subConfig: '配置',
+  groupObserve: '观察',
+  groupMaintain: '维护',
   dataTitle: 'Core 的数据',
   dataDesc: '事件库、session、运行日志、用量流水这些 Core 自己攒下的存储。',
   configTitle: 'Core 配置',
@@ -34,6 +36,12 @@ const zh = {
   // run.ts
   runTitle: '运行态',
   noStatus: '暂无状态',
+  statBehind: '待投递事件',
+  statDelivered: '投递水位',
+  statTruncating: '上下文交接',
+  truncatingOn: '进行中',
+  truncatingOff: '无',
+  statProvider: '当前模型供应商',
   statContext: '上下文',
   statMessages: 'session 消息',
   statCache: '缓存命中',
@@ -62,6 +70,8 @@ const zh = {
   logHeadArea: '区域',
   logHeadMsg: '内容',
   noLog: '暂无日志',
+  logDetail: '展开',
+  copyEntry: '复制这一条',
 
   // sessions.ts
   sessionsTitle: '会话统计',
@@ -73,7 +83,7 @@ const zh = {
   sesHeadOutput: '输出 tok',
   sesHeadMsgs: '消息',
   noSessions: '暂无 session',
-  running: '进行中',
+  running: '未结束',
   ended: '已结束',
 };
 
@@ -88,6 +98,8 @@ const en: typeof zh = {
   subRunlog: 'Run log',
   subData: 'Data',
   subConfig: 'Config',
+  groupObserve: 'Observe',
+  groupMaintain: 'Maintain',
   dataTitle: 'Core data',
   dataDesc: 'Storage Core accumulates on its own: the event store, the session, run logs and the usage ledger.',
   configTitle: 'Core config',
@@ -111,6 +123,12 @@ const en: typeof zh = {
   // run.ts
   runTitle: 'Loop status',
   noStatus: 'No status yet',
+  statBehind: 'Pending delivery',
+  statDelivered: 'Delivered up to',
+  statTruncating: 'Context handoff',
+  truncatingOn: 'in progress',
+  truncatingOff: 'none',
+  statProvider: 'Current model provider',
   statContext: 'Context',
   statMessages: 'session messages',
   statCache: 'Cache hit',
@@ -139,6 +157,8 @@ const en: typeof zh = {
   logHeadArea: 'Area',
   logHeadMsg: 'Message',
   noLog: 'No log entries',
+  logDetail: 'Expand',
+  copyEntry: 'Copy entry',
 
   // sessions.ts
   sessionsTitle: 'Session stats',
@@ -150,7 +170,7 @@ const en: typeof zh = {
   sesHeadOutput: 'Output tok',
   sesHeadMsgs: 'Messages',
   noSessions: 'No sessions yet',
-  running: 'running',
+  running: 'not ended',
   ended: 'ended',
 };
 

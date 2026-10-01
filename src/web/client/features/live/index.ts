@@ -161,7 +161,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const exportButton = ui.button('', {
     size: 'sm',
     onClick: () => {
-      void exportDiagnostics({ doc, signal: ctx.signal }).catch((err: unknown) => {
+      void exportDiagnostics({ ui, doc, signal: ctx.signal }).catch((err: unknown) => {
         ui.toast(S.exportFailed, 'bad');
         ctx.onError(err);
       });
@@ -192,6 +192,9 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   timeline.rebuild([], { empty: S.emptyConnecting });
 
   let providerReady = false;
+  const syncPlaceholder = (): void => {
+    composer.setPlaceholder(!fork.isMain() ? S.composerFork : providerReady ? null : S.composerNoProvider);
+  };
 
   const resumeRun = (): Promise<unknown> => post('/api/run/resume', {}, { signal: ctx.signal });
 
@@ -253,7 +256,10 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     mainMessages: () => state.messages,
     mainHead: () => state.head,
     sessions: () => state.sessions,
-    onChange: () => sessionBand.render(state.sessions, fork.id),
+    onChange: () => {
+      sessionBand.render(state.sessions, fork.id);
+      syncPlaceholder();
+    },
     onError: (err) => ctx.onError(err),
   });
 
@@ -282,7 +288,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     connectionValue.textContent = current ? `${current.name} · ${current.model ?? '—'}` : S.noProvider;
     connection.title = current ? `${current.moduleTitle} (${current.module})\n${current.baseUrl}` : S.noProvider;
     providerReady = current?.ready === true;
-    composer.setPlaceholder(providerReady ? null : S.composerNoProvider);
+    syncPlaceholder();
     onboarding?.setProvider(providerReady);
     if (st && applyDisplayName(doc, st.displayName, state.displayName)) {
       state.displayName = str(st.displayName);

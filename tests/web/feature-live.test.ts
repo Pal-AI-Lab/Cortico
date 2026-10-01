@@ -942,7 +942,15 @@ const stamp = (at: Date): string => {
 };
 
 describe('导出诊断', () => {
-  it('按一下就取诊断包,文件名带包里的 run id', () => {
+  /** 导出前的说明框里按「确认」。 */
+  const confirmExport = (doc: FakeDoc): void => {
+    const modal = doc.body.find('modal') as FakeEl;
+    expect(modal.textContent).toContain('私人信息');
+    const ok = modal.findAll('btn').find((b) => b.textContent === '确认') as FakeEl;
+    ok.dispatchEvent({ type: 'click' });
+  };
+
+  it('说明包里有什么,确认后取诊断包,文件名带包里的 run id', () => {
     stubFetch(() => ({ kind: 'cortico-diagnostics', run: { id: 'r-20260917-104402-c2ab' } }));
     const { env, sockets } = fakeEnv();
     const { ctx, root, doc, errors } = mkCtx({ debug: true });
@@ -952,6 +960,8 @@ describe('导出诊断', () => {
     const button = root.find('btn-ico') as FakeEl;
     expect(button.textContent).not.toBe('');
     button.dispatchEvent({ type: 'click' });
+    expect(fetched).not.toContain('/api/diagnostics');
+    confirmExport(doc);
     return flush().then(() => {
       expect(fetched).toContain('/api/diagnostics');
       expect(doc.created.filter((el) => el.tagName === 'a').at(-1)?.download)
@@ -966,9 +976,10 @@ describe('导出诊断', () => {
       return Promise.resolve(new Response('{"error":"没有调试通道"}', { status: 503 }));
     });
     const { env } = fakeEnv();
-    const { ctx, root, errors } = mkCtx({ debug: true });
+    const { ctx, root, doc, errors } = mkCtx({ debug: true });
     live.createLiveFeature({ env }).mount(ctx);
     (root.find('btn-ico') as FakeEl).dispatchEvent({ type: 'click' });
+    confirmExport(doc);
     await flush();
     expect(fetched).toContain('/api/diagnostics');
     expect(errors).toHaveLength(1);

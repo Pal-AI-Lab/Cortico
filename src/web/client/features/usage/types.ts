@@ -67,6 +67,8 @@ export interface UsageAggregate {
   totals?: UsageGroupStat | null;
   byRole?: UsageGroupStat[];
   byModel?: UsageGroupStat[];
+  /** 按发起调用的模型连接(Provider 实例)分组;同一模型走不同连接时分开。 */
+  byInstance?: UsageGroupStat[];
   /** 失败、丢弃和中断均计入 totals；此字段用于核对失败消耗。 */
   failed?: UsageAccum;
 }

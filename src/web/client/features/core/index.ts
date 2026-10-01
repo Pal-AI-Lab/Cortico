@@ -21,6 +21,9 @@ import { createRunView } from './run.ts';
 import { createSessionTable } from './sessions.ts';
 import { S } from './strings.ts';
 import { createConfigView } from '../config/view.ts';
+import { exportDiagnostics } from '../live/diagnostics.ts';
+import { S as LIVE_S } from '../live/strings.ts';
+import { icon } from '../../ui/icons.ts';
 import { createStorageView } from '../storage/view.ts';
 
 const CORE_ROUTE = 'core';
@@ -32,6 +35,9 @@ interface SubDef {
   label: string;
   need: string | null;
 }
+
+/** 只读的观察子页;其余子页会改配置或删数据,单独成组。 */
+const OBSERVE_SUBS = new Set(['run', 'sessions', 'events', 'runlog']);
 
 const CORE_SUBS: readonly SubDef[] = [
   { id: 'run', label: S.subRun, need: null },
@@ -77,14 +83,29 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const view = ui.h('div', 'coreview');
   const head = pageIntro(ui, S.pageTitle);
   head.className = 'featureintro pagehead';
-  const tabs = ui.segmented(
-    subs.map((s) => ({ value: s.id, label: s.label })),
+  const tabGroup = (ids: readonly SubDef[]) => ui.segmented(
+    ids.map((s) => ({ value: s.id, label: s.label })),
     { value: current, onSelect: (v) => show(v, true) },
   );
+  const observeSubs = subs.filter((s) => OBSERVE_SUBS.has(s.id));
+  const maintainSubs = subs.filter((s) => !OBSERVE_SUBS.has(s.id));
+  const tabs = [tabGroup(observeSubs), ...(maintainSubs.length ? [tabGroup(maintainSubs)] : [])];
   const tabBar = ui.h('div', 'subtabs');
-  tabBar.appendChild(tabs.el);
+  tabBar.append(ui.h('span', 'subtabgroup', S.groupObserve), tabs[0].el);
+  if (tabs[1]) tabBar.append(ui.h('span', 'subtabgroup', S.groupMaintain), tabs[1].el);
   const net = ui.msgline('');
-  tabBar.appendChild(net);
+  const exportButton = ui.button('', {
+    size: 'sm',
+    onClick: () => {
+      void exportDiagnostics({ ui, doc: ctx.root.ownerDocument, signal: ctx.signal }).catch((err: unknown) => {
+        ui.toast(LIVE_S.exportFailed, 'bad');
+        ctx.onError(err);
+      });
+    },
+  });
+  exportButton.className += ' btn-ico';
+  exportButton.append(icon(ctx.root.ownerDocument, 'download'), ui.h('span', null, LIVE_S.exportDiagnostics));
+  tabBar.append(net, ui.h('span', 'grow'), exportButton);
   const scroll = ui.h('div', 'scroll');
   const measure = ui.h('div', 'measure');
   scroll.appendChild(measure);
@@ -168,7 +189,7 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       if (current === 'events') events.setPolling(false);
       current = next;
     }
-    tabs.setValue(current);
+    for (const t of tabs) t.setValue(current);
     while (measure.children.length) measure.children[0].remove();
     const pane = panes[current];
     if (pane) measure.appendChild(pane);
