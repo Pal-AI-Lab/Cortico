@@ -83,6 +83,8 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
     type: 'search',
     cls: 'mono',
     placeholder: S.allSources,
+    // 清除按钮只派发 input,清空即回到全部来源。
+    onInput: (v) => { if (v === '') pickSource(''); },
     onChange: pickSource,
     onCommit: pickSource,
   });

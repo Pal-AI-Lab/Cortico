@@ -70,7 +70,7 @@ const zh = {
   autoBucket: (label: string) => `自动 → 按${label}`,
   rangeHint: (from: string, to: string, buckets: number, timezone: string | null) =>
     `${from} ~ ${to}${timezone ? ` (${timezone})` : ''} · ${buckets} 桶`,
-  compUnpriced: (n: number) => `另有 ${n} 次调用在当前账本未完整计价，未计入上图。`,
+  compUnpriced: (n: number) => `${n} 次调用在当前账本未完整计价，成本只含已知部分。`,
   stale: (err: string, at: string) => `刷新失败：${err}。下方是 ${at} 取回的结果。`,
   billingHint: '按请求时的报价快照统计。' +
     '总量包含失败、抢占与诊断请求；币种和费用口径分别汇总。',
@@ -169,7 +169,7 @@ const en: typeof zh = {
   autoBucket: (label: string) => `Auto → by ${label}`,
   rangeHint: (from: string, to: string, buckets: number, timezone: string | null) =>
     `${from} ~ ${to}${timezone ? ` (${timezone})` : ''} · ${buckets} buckets`,
-  compUnpriced: (n: number) => `${n} more calls are not fully priced in the current ledger and are left out above.`,
+  compUnpriced: (n: number) => `${n} calls are not fully priced in the current ledger; costs include the known part only.`,
   stale: (err: string, at: string) => `Refresh failed: ${err}. Results below were fetched at ${at}.`,
   billingHint: 'Computed from the price snapshot at request time. ' +
     'Totals include failed, preempted and diagnostic requests; currencies and cost bases are summed separately.',
