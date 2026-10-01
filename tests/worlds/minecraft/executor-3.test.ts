@@ -230,6 +230,37 @@ describe('显式维度穿越', () => {
     expect(exec.status().waiting).toHaveLength(0);
   });
 
+  it('A* 限时内没算完:照走手里那段路,走完从新位置再算一次(goto 共两次),到了就算做成', async () => {
+    const bot = combatBot({});
+    let calls = 0;
+    let moving = false;
+    const pf = {
+      goal: null as unknown,
+      stop() {},
+      setGoal(g: unknown) { pf.goal = g; },
+      isMoving: () => moving,
+      goto: async (g: unknown) => {
+        pf.goal = g;
+        calls++;
+        if (calls === 1) {
+          // 寻路器拿着最好的那段部分路径在走,goto 却已经以 Timeout reject
+          moving = true;
+          bot.entity.position = new V(5.5, 64, 0.5);
+          setTimeout(() => { bot.entity.position = new V(9.5, 64, 0.5); moving = false; }, 600);
+          throw Object.assign(new Error('Took to long to decide path to goal!'), { name: 'Timeout' });
+        }
+        bot.entity.position = new V(20.5, 64, 0.5);
+      },
+    };
+    Object.assign(bot, { pathfinder: pf });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'goto', at: [20, 64, 0] }]);
+    await waitUntil(() => reports.length === 1, 5000);
+
+    expect(reports[0].kind).toBe('done');
+    expect(calls).toBe(2);
+  });
+
   it('transit 步途中维度变化是它本来要做的事,不撤单', async () => {
     const bot = combatBot({ goto: () => new Promise<void>(() => {}) });
     Object.assign(bot, { game: { dimension: 'overworld' } });

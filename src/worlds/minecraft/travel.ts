@@ -589,7 +589,19 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     }
   })();
   try {
-    await bot.pathfinder.goto(goal);
+    for (;;) {
+      try {
+        await bot.pathfinder.goto(goal);
+        break;
+      } catch (err) {
+        // A* 在 thinkTimeout 内没算到目标时,寻路器手里有一段朝目标最好的路且正照着走,
+        // goto 却当场 reject。等这一段走完,从新位置再算下一段;零推进和总时限归上面的看门狗
+        if ((err as Error).name !== 'Timeout') throw err;
+        while (!stalled && !timedOut && !ctx.aborted()
+          && bot.pathfinder.goal === goal && bot.pathfinder.isMoving()) await sleep(200);
+        if (stalled || timedOut || ctx.aborted() || bot.pathfinder.goal !== goal) throw err;
+      }
+    }
   } catch (err) {
     // 中止时目标可能已归抢占方；此处不撤目标，撤销由 abortTask/pump 负责。
     if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
