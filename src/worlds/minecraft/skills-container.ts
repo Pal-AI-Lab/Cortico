@@ -16,7 +16,7 @@ import { roman, zhDimension, zhEnchant, zhName } from './names.ts';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, sleep, type SkillContext } from './skill-context.ts';
 import { AIR_NAMES, LIQUIDS, blockAtCell, cellText, dimensionOf, feetOf, resolveAt } from './cell-facts.ts';
 import { droppedStackOf, type ItemStack } from './terrain.ts';
-import { CONTAINER_FIND, FURNACE_KINDS, matchItemName } from './chests.ts';
+import { CONTAINER_FIND, FURNACE_KINDS, matchItemName, matchMaterialName } from './chests.ts';
 import { dropGoal, gotoGoal } from './travel.ts';
 import { type SkillCall } from './skills.ts';
 import { pickMissText, pickTargetOf, pickedText, type PickTarget } from './item-pick.ts';
@@ -766,11 +766,14 @@ export async function skillTake(bot: Bot, call: Extract<SkillCall, { skill: 'tak
   return `${head}。${notes.join('；')}`;
 }
 
-/** 输入槽只有一格:同一次只烧一种,包里符合的挑最多的那一摞 */
+/**
+ * 输入槽只有一格:同一次只烧一种。注册表里的真实 id 只认它自己(cod 不认 cooked_cod),
+ * 类别名才按后缀挑;同名的那一摞排最前,其余挑最多的那一摞。
+ */
 export function pickSmeltInput(bot: Bot, item: string) {
   return bot.inventory.items()
-    .filter((i) => matchItemName(item, i.name))
-    .sort((a, b) => b.count - a.count)[0];
+    .filter((i) => matchMaterialName(bot.registry, item, i.name))
+    .sort((a, b) => Number(b.name === item) - Number(a.name === item) || b.count - a.count)[0];
 }
 
 /**
@@ -915,7 +918,9 @@ export async function skillSmelt(
   const etaClock = loaded.doneAt !== null && ctx.clock ? `${ctx.clock(loaded.doneAt)} 左右,` : '';
   const estimate = loaded.doneAt === null ? '当前不估完成时间。'
     : `若燃料持续足够,预计 ${etaClock}${Math.max(0, Math.round((loaded.doneAt - Date.now()) / 1000))} 秒后出完,到时提醒查看。`;
-  return `${station}在${where}下料后读到:${staleNote}${slots}。${burning},${progress}。` +
+  const byCategory = input.name === item ? '' : `(按类别名「${item}」挑中的)`;
+  const putIn = `往输入槽投了包里的${zhName(input.name)}×${want}${byCategory},燃料${zhName(fuelItem.name)}×${fuelUse};`;
+  return `${station}${putIn}在${where}下料后读到:${staleNote}${slots}。${burning},${progress}。` +
     `${zhName(at.name)}烧一件约 ${perS} 秒。${estimate}` +
     `取货:{"skill":"take","at":[${at.x},${at.y},${at.z}],"all":true}`;
 }

@@ -1203,6 +1203,29 @@ describe('容器账本:下料入账、到期、抢占点名', () => {
     expect(rec.furnace!.input?.name).toBe('oak_log');
   });
 
+  it('input 写真实 id:包里只有熟鳕鱼时不拿它顶生鳕鱼进炉', async () => {
+    const book = new ChestBook(null);
+    const { bot, slots } = furnaceBot({ inv: { cooked_cod: 16, coal: 2 }, furnaces: FURNACE_AT });
+    const { exec, reports } = makeExecutorWith(bot, book);
+    exec.submit([{ skill: 'smelt', input: 'cod', count: 16, fuel: 'coal' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('包里没有生鳕鱼');
+    expect(slots().input).toBeNull();
+  });
+
+  it('生熟鳕鱼都在包里:投进去的是生鳕鱼,回执点名投了什么', async () => {
+    const book = new ChestBook(null);
+    const { bot, inv } = furnaceBot({ inv: { cod: 3, cooked_cod: 40, coal: 2 }, furnaces: FURNACE_AT });
+    const { exec, reports } = makeExecutorWith(bot, book);
+    exec.submit([{ skill: 'smelt', input: 'cod', count: 16, fuel: 'coal' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(inv.get('cod')).toBe(0);
+    expect(inv.get('cooked_cod')).toBe(40);
+    expect(reports[0].text).toContain('往输入槽投了包里的生鳕鱼×3');
+  });
+
   it('反射抢占的汇报点名账上还压着料的炉子', async () => {
     const book = new ChestBook(null);
     const { bot } = furnaceBot({ inv: { raw_iron: 3, oak_planks: 1 }, furnaces: FURNACE_AT });

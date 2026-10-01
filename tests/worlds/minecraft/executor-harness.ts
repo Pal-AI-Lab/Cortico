@@ -674,6 +674,7 @@ export function brewBot(opts: { inv?: Record<string, number>; standAt?: [number,
 export const SMELT_IDS: Record<string, number> = {
   raw_iron: 1, iron_ingot: 2, coal: 3, oak_planks: 4, oak_log: 5,
   charcoal: 6, furnace: 7, blast_furnace: 8, dirt: 9, sand: 10, glass: 11,
+  cod: 12, cooked_cod: 13,
 };
 
 /**
