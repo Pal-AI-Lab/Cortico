@@ -41,6 +41,19 @@ export interface RangedTarget {
   position: Point3;
   height?: number;
   width?: number;
+  /** 瞄的是这一格方块而不是实体:射线碰到这一格本身不算遮挡,不跟踪移动,没有近身下限 */
+  cell?: Point3;
+}
+
+/** 以一格方块的中心为靶;id 为 -1,不会与任何实体的受击事件对上 */
+export function cellTarget(cell: Point3): RangedTarget {
+  return {
+    id: -1,
+    position: { x: cell.x + 0.5, y: cell.y + 0.5, z: cell.z + 0.5 },
+    height: 0,
+    width: 0,
+    cell: { x: cell.x, y: cell.y, z: cell.z },
+  };
 }
 
 interface PositionVelocityEstimate {
@@ -267,7 +280,7 @@ function verticalFlight(dy: number): { ticks: number; direction: 1 | -1 } | null
   return { ticks, direction };
 }
 
-/** 眼睛到目标半身高的方块射线；读不到世界射线时保守地视为遮挡。 */
+/** 眼睛到目标半身高(方块靶为格心)的方块射线；读不到世界射线时保守地视为遮挡。 */
 export function hasRangedLos(bot: Bot, target: RangedTarget): boolean {
   try {
     const entity = bot.entity as Bot['entity'] & { eyeHeight?: number };
@@ -291,7 +304,12 @@ export function hasRangedLos(bot: Bot, target: RangedTarget): boolean {
       eye,
       delta.scaled(1 / distance),
       distance,
-      (block) => (block as { boundingBox?: string } | null)?.boundingBox === 'block',
+      (block) => {
+        const b = block as { boundingBox?: string; position?: Point3 } | null;
+        if (b?.boundingBox !== 'block') return false;
+        const cell = target.cell;
+        return !(cell && b.position && b.position.x === cell.x && b.position.y === cell.y && b.position.z === cell.z);
+      },
     );
     return hit == null;
   } catch {
@@ -400,7 +418,7 @@ export class BowController {
     const bow = bestRangedWeapon(bot);
     if (!bow) return this.blocked('aborted', 'bow_lost');
     if (!hasUsableArrows(bot)) return this.blocked('no_arrow');
-    if (rangedTargetDistance(bot, target) <= HYBRID_MELEE_AT) return this.blocked('too_close');
+    if (!target.cell && rangedTargetDistance(bot, target) <= HYBRID_MELEE_AT) return this.blocked('too_close');
     if (!this.hasLos(bot, target)) return this.blocked('no_los');
     if (!this.validLease(leaseToken)) return this.blocked('aborted', 'lease');
 
@@ -525,7 +543,7 @@ export class BowController {
       return { kind: 'blocked', reason: 'aborted', cause: 'bow_lost' };
     }
     if (!hasUsableArrows(drawing.bot)) return { kind: 'blocked', reason: 'no_arrow' };
-    if (rangedTargetDistance(drawing.bot, target) <= HYBRID_MELEE_AT) {
+    if (!target.cell && rangedTargetDistance(drawing.bot, target) <= HYBRID_MELEE_AT) {
       return { kind: 'blocked', reason: 'too_close' };
     }
     if (!this.hasLos(drawing.bot, target)) return { kind: 'blocked', reason: 'no_los' };
@@ -540,6 +558,7 @@ export class BowController {
   }
 
   private trackTarget(drawing: Drawing, fallback: RangedTarget): TrackedTarget | null {
+    if (fallback.cell) return { target: fallback, velocityPerTick: zeroPoint() };
     const resolved = this.opts.resolveTarget
       ? this.opts.resolveTarget(drawing.targetId)
       : fallback;

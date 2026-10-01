@@ -38,6 +38,8 @@ import { isSpawnAnchorBlock } from './policy.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { nearestBoat } from './placement.ts';
 import { itemMatchesPick } from './item-pick.ts';
+import { cellTarget, type BowShotResult } from './ranged.ts';
+import { rangedBlockedText } from './melee.ts';
 
 const { goals } = pathfinderPkg;
 
@@ -689,6 +691,7 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     if (held === ENDER_EYE_ITEM && blockAtCell(bot, cell)?.name !== 'end_portal_frame') {
       return throwEnderEye(bot, ctx);
     }
+    if (held === 'bow') return shootBowAt(bot, cell, ctx);
     // 投掷物的 at 是落点方向,不是要改的那一格
     if (held && isThrown(held)) {
       const before = invCount(bot, (n) => n === held);
@@ -856,6 +859,77 @@ export async function aimThenUse(bot: Bot, point: Vec3): Promise<void> {
   await bot.lookAt(point, true);
   await bot.waitForTicks(1);
   await bot.activateItem();
+}
+
+/** 原版箭的位置每 20 刻同步一次;超过一次同步间隔再加 10 刻网络抖动没动过,就是插住了 */
+const ARROW_SETTLED_MS = 1_500;
+/** 满弓竖直上射落回出手高度要 104 刻(5.2 秒),再加一次 20 刻的位置同步 */
+const ARROW_WATCH_MS = 6_200;
+/** 刚放出的箭在身边这么近的水平距离内生成;更远的是别处早先射的 */
+const ARROW_SPAWN_RADIUS = 3;
+
+/**
+ * 满弓朝那一格的格心射一支普通箭,盯到箭插住、不见或超时。
+ * 回执报落点、那一格射前射后的方块,以及包里普通箭的增减(带无限附魔时不减)。
+ */
+async function shootBowAt(bot: Bot, cell: Cell, ctx: SkillContext): Promise<string> {
+  const ranged = ctx.attack.ranged;
+  if (!ranged) throw new SkillBlocked('远程控制器现在不可用');
+  const before = blockAtCell(bot, cell);
+  const arrowsBefore = invCount(bot, (n) => n === 'arrow');
+  const known = new Set(Object.values(bot.entities).filter((e) => e?.name === 'arrow').map((e) => e.id));
+  const lease = ctx.attack.acquire(-1);
+  let shot: BowShotResult;
+  try {
+    shot = await ranged.shoot(cellTarget(cell), lease.token);
+  } finally {
+    ctx.attack.release(lease);
+  }
+  checkAbort(ctx);
+  if (shot.kind !== 'released') throw new SkillBlocked(`朝 ${cellText(cell)} 没射出去:${rangedBlockedText(shot)}`);
+
+  const from = bot.entity.position.clone();
+  const deadline = Date.now() + ARROW_WATCH_MS;
+  let arrowId: number | null = null;
+  let last: Vec3 | null = null;
+  let movedAt = Date.now();
+  let settled = false;
+  while (Date.now() < deadline) {
+    checkAbort(ctx);
+    const arrow: (typeof bot.entities)[number] | undefined = arrowId !== null
+      ? bot.entities[arrowId]
+      : Object.values(bot.entities).find((e) => e?.name === 'arrow' && e.position && !known.has(e.id)
+        && Math.hypot(e.position.x - from.x, e.position.z - from.z) <= ARROW_SPAWN_RADIUS);
+    if (arrow?.position) {
+      arrowId = arrow.id;
+      if (!last || !arrow.position.equals(last)) {
+        last = arrow.position.clone();
+        movedAt = Date.now();
+      } else if (Date.now() - movedAt >= ARROW_SETTLED_MS) {
+        settled = true;
+        break;
+      }
+    } else if (arrowId !== null) break;
+    await sleep(100);
+  }
+
+  const at = (p: Vec3): string => `(${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)})`;
+  const center = new Vec3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5);
+  const flight = !last
+    ? '一路没看见这支箭'
+    : settled
+      ? `箭插在 ${at(last)},离那一格中心 ${last.distanceTo(center).toFixed(1)} 格`
+      : arrowId !== null && !bot.entities[arrowId]
+        ? `箭在 ${at(last)} 之后不见了`
+        : `盯了 ${ARROW_WATCH_MS / 1000} 秒箭还在动,最后看见在 ${at(last)}`;
+  const after = blockAtCell(bot, cell);
+  const cellNote = !before || !after || after.stateId === before.stateId
+    ? ''
+    : after.name === before.name
+      ? `;那一格的${zhName(after.name)}状态变了`
+      : `;那一格从${zhName(before.name)}变成了${zhName(after.name)}`;
+  return `朝 ${cellText(cell)} 满弓放了一箭,${flight}${cellNote}。`
+    + `包里普通箭 ${arrowsBefore} → ${invCount(bot, (n) => n === 'arrow')} 支`;
 }
 
 /** 原版末影之眼飞 80 刻(4 秒)后落下或碎掉,盯 6 秒足够,盯不到就说盯不到 */

@@ -1203,8 +1203,10 @@ const SKILLS: readonly SkillSpec[] = [
 {"skill":"use","item":"shears","target":"sheep"} 右键活物:剪毛、挤奶、喂食、上鞍。
                                                  target 写 villager/wandering_trader = 看报价菜单(只看不买);
                                                  再带 "index":1,"times":2 = 按菜单 1 号成交 2 次
-{"skill":"use","item":"potion"}                  只给 item:对自己/面前用,喝药水、拉弓蓄力。
+{"skill":"use","item":"potion"}                  只给 item:对自己/面前用,喝药水。
                                                  投掷类(喷溅药水、末影珍珠、雪球、鸡蛋)再给 at = 朝那一格扔
+{"skill":"use","item":"bow","at":[12,70,-5]}     满弓朝那一格的中心射一支普通箭,不用走过去。回执报箭插在哪、
+                                                 那一格变没变;路上有别的方块挡着就受阻
 {"skill":"use","item":"ender_eye"}               扔末影之眼:回执报扔出点、飞了多远、方位角(正北 0°、正东 90°)、落没落地。
                                                  at 指末地传送门框架 = 把眼放进框,回执报这一圈几个框放了眼、门开没开
 {"skill":"use","at":[-147,72,101],"text":"欢迎来我家\\n可缇"}
