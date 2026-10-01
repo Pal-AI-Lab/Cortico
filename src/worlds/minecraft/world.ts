@@ -3661,6 +3661,7 @@ export class MinecraftWorld implements World {
       reactCooldownSec: () => this.cfg.reflex.reactCooldownSec,
       antiDrown: () => this.cfg.reflex.antiDrown,
       antiLava: () => this.cfg.reflex.antiLava,
+      currentTask: () => this.executor?.currentTask ?? null,
       combatHurt: (id, name) => (
         this.executor?.onCombatHurt(id, name) || this.combat?.onHurtBy(id, name) || false
       ),
@@ -6059,6 +6060,7 @@ export class MinecraftWorld implements World {
           && read(c.x, c.y + 1, c.z) && read(c.x, c.y - 1, c.z)) ?? null;
       },
       clearQueue: () => this.executor!.clear(),
+      dropReflexGoal: (holdMs) => this.reflexes?.abandonEscapeGoal('mc_escape 传送,反射的寻路目标作废', holdMs) ?? null,
       sendConsole: (line) => this.mcServer.command(line),
       chat: (text) => { bot.chat(text); },
       hold: (ms) => { this.escapeHoldUntil = Date.now() + ms; },

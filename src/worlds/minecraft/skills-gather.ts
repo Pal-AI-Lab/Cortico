@@ -698,13 +698,6 @@ export function findFishingSpot(bot: Bot, maxDistance: number): FishingSpot | nu
   return { cell: { x: pick.x, y: pick.y, z: pick.z }, open: open.length > 0 };
 }
 
-/** 最近一格看得见的水面(上方不是实心也不是液体);着火找水复用,半径可放大 */
-export function findFishingWater(bot: Bot, maxDistance = FISH_SCAN_R): Cell {
-  const spot = findFishingSpot(bot, maxDistance);
-  if (!spot) throw new SkillBlocked(`${maxDistance} 格内没看见能下竿的水面`);
-  return spot.cell;
-}
-
 /** 这片水没有开阔水域时回执里的那句事实 */
 export const NO_OPEN_WATER_NOTE = '这片水没有开阔水域,只能钓岸边(不出宝藏)';
 

@@ -37,7 +37,7 @@ import {
 import { roman, zhDimension, zhEnchant, zhEntity, zhName } from './names.ts';
 import {
   CROP_MAX_AGE, DIRECTIONS, DIRECTION_ZH, bearing, biomeAt, canSeeBlockAt, canSeeEntity,
-  bodyInWater, cropAgeAt, droppedStackOf, findEscapeCell, hazardTouch, hazardsWithin, headInWater,
+  ESCAPE_SAFE_GAP, bodyInWater, cropAgeAt, droppedStackOf, findEscapeCell, hazardTouch, hazardsWithin, headInWater,
   isDark, isNight, narrateInventory, nearestHazard, pocketScan, sampleLight, villagerNote, WATER_BLOCKS, wetNote,
   type Direction, type HazardCell, type ItemStack,
 } from './terrain.ts';
@@ -130,7 +130,7 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, holdTreadWater, levelTravelGoal, matchBlockIds, readStamp, releaseBody,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, levelTravelGoal, matchBlockIds, onEscapeGoal, readStamp, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, type DistanceMetric, withRouteScene,
 } from './travel.ts';
 import {
@@ -159,7 +159,7 @@ import { blockProp } from './cell-facts.ts';
 import { compositionText, noDropMaterials } from './receipt.ts';
 import { settleOnGround } from './travel.ts';
 import {
-  findFishingWater, skillCollect, skillFind, skillFish, skillProbe, skillTrade,
+  skillCollect, skillFind, skillFish, skillProbe, skillTrade,
 } from './skills-gather.ts';
 import { CONTAINER_FIND, FURNACE_KINDS } from './chests.ts';
 import { skillExcavate, skillTunnel } from './skills-dig.ts';
@@ -177,7 +177,7 @@ import {
 import { isKnownTarget, unknownUseTargetText } from './entity-facts.ts';
 import { skillAttack } from './melee.ts';
 import {
-  LEAD_ITEM, isBoat, skillAnvil, skillGrindstone, skillLead, skillRide, skillUse,
+  LEAD_ITEM, USE_SETTLE_MS, aimThenUse, isBoat, skillAnvil, skillGrindstone, skillLead, skillRide, skillUse,
 } from './skills-interact.ts';
 import {
   LAPIS, skillBrew, skillEnchant, skillPickup, skillSmelt, skillStow, skillTake, skillToss,
@@ -1447,6 +1447,8 @@ interface QueueHoldToken {
 interface QueueResumeResult {
   released: boolean;
   note: string | null;
+  /** 这一槽解了、另一槽还冻着时那一槽的理由;队列这时不开闸 */
+  stillHeld?: string;
 }
 
 /**
@@ -2175,7 +2177,7 @@ export class Executor {
         msg: `${slot === 'fall' ? '深坠' : '环境'}那一槽解了,另一槽还冻着(${other}),队列不开闸`,
         data: { slot, stillHeld: other, frozenId: this.frozen?.id ?? null },
       });
-      return { released: true, note: null };
+      return { released: true, note: null, stillHeld: other };
     }
     return { released: true, note: this.resume('queue') };
   }
@@ -2199,15 +2201,17 @@ export class Executor {
     const task = this.task;
     if (!task?.escape.active) this.suspend(`环境:${reason}`, 'queue');
     const selfRescue = task?.escape.active === true;
+    const msg = task && selfRescue
+      ? `环境危机接管(${reason}),任务#${task.id}正在自救,后续队列冻结到安全落脚`
+      : task
+        ? `环境危机接管(${reason}),任务#${task.id}与队列冻结到安全落脚`
+      : `环境危机接管(${reason}),队列冻结到安全落脚`;
     this.opts.diag?.write({
       lane: 'task', event: 'environment-hold', taskId: task?.id ?? this.frozen?.id,
-      msg: task && selfRescue
-        ? `环境危机接管(${reason}),任务#${task.id}正在自救,后续队列冻结到安全落脚`
-        : task
-          ? `环境危机接管(${reason}),任务#${task.id}与队列冻结到安全落脚`
-        : `环境危机接管(${reason}),队列冻结到安全落脚`,
+      msg,
       data: { reason, taskId: task?.id ?? null, frozenId: this.frozen?.id ?? null, selfRescue },
     });
+    this.opts.report({ kind: 'reflex', text: `[反射] ${msg};冻结期间新排的任务只排队不开跑。` });
     return token;
   }
 
@@ -3229,6 +3233,8 @@ interface ReflexOptions {
   antiDrown: () => boolean;
   /** 挨烧就跑(岩浆、火);关掉则连手动冲刺一起松手 */
   antiLava: () => boolean;
+  /** 执行器手上正在跑的任务;灭火找水不在它跑的时候抢身体 */
+  currentTask?: () => { id: number; label: string } | null;
   /**
    * 战斗会话接手受击:返回 true = 会话开打/已在打(反射不再自己抡,也不用
    * 反应冷却);false = 会话进不了场(关着/冷却/环境自保),退回反射的降级行为。
@@ -3329,13 +3335,15 @@ export class Reflexes {
   } | null = null;
   /** 反射自己下的逃生目标:哪条反射下的、什么目标、上次见到推进是什么时候、当时人在哪 */
   private escapeGoal: {
-    kind: 'drown' | 'lava' | 'flee';
+    kind: 'drown' | 'lava' | 'burn' | 'flee';
     goal: InstanceType<typeof goals.Goal>;
     since: number;
     at: { x: number; y: number; z: number };
-    /** 目标格(登岸/换气点):零推进撤销后进本轮溺水的排除集,不再重选 */
+    /** 目标格(登岸/换气点/灭火的水):零推进撤销后进本轮的排除集,不再重选 */
     target?: Cell;
   } | null = null;
+  /** 传送在飞到此刻为止;见 abandonEscapeGoal */
+  private goalHoldUntil = 0;
 
   constructor(private readonly opts: ReflexOptions) {}
 
@@ -3365,6 +3373,7 @@ export class Reflexes {
     const bot = this.opts.getBot();
     if (bot?.entity && this.lavaEscape !== null && !this.lavaEscape.handedOff) this.releaseDash(bot);
     this.lavaEscape = null;
+    this.burning = null;
     if (bot?.entity && this.buried !== null) bot.setControlState('jump', false);
     this.buried = null;
     this.drowning = false;
@@ -3417,7 +3426,7 @@ export class Reflexes {
    * 「下完就没人管」的目标。
    */
   private setEscapeGoal(
-    bot: Bot, kind: 'drown' | 'lava' | 'flee', goal: InstanceType<typeof goals.Goal>, target?: Cell,
+    bot: Bot, kind: 'drown' | 'lava' | 'burn' | 'flee', goal: InstanceType<typeof goals.Goal>, target?: Cell,
   ): void {
     // 同步登记给 releaseBody:别人交还身体时不许把正在救命的这一张撤掉。
     // 下达与登记是同一处(setOwnedGoal 记的就是 escape 这一档),两本账合成一本
@@ -3461,13 +3470,23 @@ export class Reflexes {
         position: bot.entity.position, health: bot.health,
       },
     });
+    this.opts.report({
+      kind: 'reflex',
+      text: `[反射] ${what}的寻路${esc.target ? `(去 ${cellText(esc.target)})` : ''}`
+        + `${fmtDur(now - esc.since)}没挪动,人在 ${cellText(feetOf(bot))},已撤掉目标`
+        + (esc.kind === 'flee' ? ',原地重下同一个目标。' : esc.kind === 'lava' ? ',改回手动冲刺。' : ',换一个目标重找。'),
+    });
     if (esc.kind === 'drown') {
       // 将零推进的登岸格列入本轮排除集，避免重试再次选中。
       if (esc.target) this.drownExcluded.add(cellKeyOf(esc.target));
       this.lastDrownEscapeAt = 0; // 下一拍 routeDrownToLand 重新找岸
+    } else if (esc.kind === 'burn') {
+      if (esc.target) this.burning?.excluded.add(cellKeyOf(esc.target));
+      this.lastBurnSeekAt = 0;
     } else if (esc.kind === 'lava' && this.lavaEscape !== null) {
       this.lavaEscape.handedOff = false; // 退回手动冲刺,冲够 DASH_MS 再交寻路器
       this.lavaEscape.startedAt = now;
+      this.lavaEscape.dashFrom = null;
     } else if (esc.kind === 'flee') {
       this.setEscapeGoal(bot, 'flee', esc.goal);
     }
@@ -3490,6 +3509,44 @@ export class Reflexes {
         + (kind !== null ? `;${Reflexes.ownerText(kind)}危机还在,下一拍重申` : ''),
       data: { owner: kind, willReassert: kind !== null },
     });
+  }
+
+  /**
+   * 传送(mc_escape)前撤掉反射自己下的寻路目标并松开冲刺键:目标格和方向都按传送前的位置算,
+   * 留着会在落地后把人拽回原处。各反射落地后按新位置重新判断;holdMs 内岩浆反射不再把落脚格
+   * 交给寻路器(溺水、灭火、低血脱离由 escapeActive 挡着)。返回撤了什么,没撤返回 null。
+   */
+  abandonEscapeGoal(why: string, holdMs: number): string | null {
+    const bot = this.opts.getBot();
+    if (!bot?.entity) return null;
+    this.goalHoldUntil = Date.now() + holdMs;
+    const bits: string[] = [];
+    const esc = this.escapeGoal;
+    if (esc !== null || onEscapeGoal(bot)) {
+      this.escapeGoal = null;
+      dropGoal(bot, 'escape', why, this.opts.diag);
+      bits.push(esc
+        ? `撤掉了反射正在走的${escapeIntent(esc.kind)}寻路${esc.target ? `(目标 ${cellText(esc.target)})` : ''}`
+        : '撤掉了反射正在走的寻路');
+    }
+    const lava = this.lavaEscape;
+    if (lava !== null && !lava.handedOff) {
+      this.releaseDash(bot);
+      bits.push('松开了逃离岩浆的冲刺键');
+    }
+    if (lava !== null) {
+      lava.handedOff = false;
+      lava.cell = null;
+      lava.dashFrom = null;
+    }
+    if (bits.length === 0) return null;
+    const text = bits.join(',');
+    this.opts.diag?.write({
+      lane: 'reflex', event: 'escape-goal-abandoned',
+      msg: `${why}:${text}`,
+      data: { kind: esc?.kind ?? null, target: esc?.target ?? null, position: bot.entity.position },
+    });
+    return text;
   }
 
   private beginEnvironment(reason: string): void {
@@ -3605,10 +3662,11 @@ export class Reflexes {
         + (resumed.released ? '恢复执行权' : '旧恢复租约已失效'),
       data: { position: bot.entity.position, health: bot.health, resumed },
     });
-    if (resumed.released && resumed.note) {
+    if (resumed.released) {
       this.opts.report({
         kind: 'reflex',
-        text: `[反射] 已稳定脱离环境危险;${resumed.note}。`,
+        text: `[反射] 已在 ${cellText(feetOf(bot))} 稳定落脚,环境冻结解除`
+          + Reflexes.resumedText(resumed),
       });
     }
   }
@@ -3629,9 +3687,19 @@ export class Reflexes {
       msg: `${why},` + (resumed.released ? '恢复执行权' : '旧恢复租约已失效'),
       data: { position: bot.entity.position, health: bot.health, resumed, why },
     });
-    if (resumed.released && resumed.note) {
-      this.opts.report({ kind: 'reflex', text: `[反射] ${why};${resumed.note}。` });
+    if (resumed.released) {
+      this.opts.report({
+        kind: 'reflex',
+        text: `[反射] ${why},环境冻结解除` + Reflexes.resumedText(resumed),
+      });
     }
+  }
+
+  /** 环境那一槽解了之后队列的下场:接着做哪件、另一槽还冻着、或者队列已经放开。 */
+  private static resumedText(resumed: QueueResumeResult): string {
+    if (resumed.note) return `;${resumed.note}。`;
+    if (resumed.stillHeld) return `;另一处冻结(${resumed.stillHeld})还在,队列还不开跑。`;
+    return ',队列放开了。';
   }
 
   /** 受击反应挂在 bot 事件上;重连换 bot 后重挂 */
@@ -3666,6 +3734,7 @@ export class Reflexes {
       // 氧气元数据死后停在旧值,复活后服务端不一定补发:读数再变之前只信水下计时
       this.oxygenTrusted = false;
       this.lavaEscape = null;
+      this.burning = null;
       this.buried = null;
       this.escapeGoal = null;
       clearEscapeGoalOwner(bot);
@@ -3686,19 +3755,28 @@ export class Reflexes {
   private static readonly LAVA_BOUT_GAP_MS = 30_000;
 
   /**
-   * 连续无危险接触且熄火满 600ms 才结算 lava-clear，期间不交还执行权。
-   * 600ms 约三次心跳，用于过滤危险边缘的采样抖动。
+   * 连续满 600ms 没有危险接触(着火时连 ON_FIRE_HAZARD_R 内的火源也没有)才结算 lava-clear，
+   * 期间不交还执行权。600ms 约三次心跳，用于过滤危险边缘的采样抖动。
    */
   private static readonly LAVA_CLEAR_DWELL_MS = 600;
+  /**
+   * 手动冲刺在 ESCAPE_STALL_MS 内的净位移不到这个数就算卡住。岩浆里横向游速约
+   * 0.8 格/秒(每刻 0.02 推力、0.5 阻力),5 秒该走 4 格;不到 1 格说明人没离开原来那一格附近。
+   */
+  private static readonly LAVA_DASH_STALL_MOVE = 1;
 
   private lastLavaReportAt = 0;
   private lavaEscape: {
     startedAt: number; handedOff: boolean; reported: boolean;
-    /** 头一次读到「不碰、也不烧」的时刻;再碰到就清回 null(见 LAVA_CLEAR_DWELL_MS) */
+    /** 头一次读到「不碰」的时刻;再碰到就清回 null(见 LAVA_CLEAR_DWELL_MS) */
     clearSince: number | null;
+    /** 本轮选定的落脚格;仍安全就一直朝它走 */
+    cell: Cell | null;
+    /** 冲刺卡住检测的窗口起点:从哪儿、什么时候开始量 */
+    dashFrom: { x: number; y: number; z: number; at: number } | null;
   } | null = null;
   /**
-   * 一轮岩浆的进出计次。只有火也熄灭才记 clear；短暂离开碰撞格但仍燃烧不结算。
+   * 一轮岩浆的进出计次。离开危险格满驻留窗口记 clear，身上还着火也照记，着火交给灭火反射。
    * 同一片危险区内再次接触仍用计次区分，避免把反复进出读成多次成功。
    */
   private lavaBout = { count: 0, firstAt: 0, lastClearAt: 0 };
@@ -3713,6 +3791,8 @@ export class Reflexes {
     const hazard = touch.touching
       ?? (touch.onFire ? nearestHazard(bot, Reflexes.ON_FIRE_HAZARD_R) : null);
     if (hazard === null) {
+      // 驻留窗口里就开始灭火:剩的血可能撑不过那 600ms
+      if (this.lavaEscape !== null || this.burning !== null) this.extinguish(bot, touch.onFire);
       this.endLavaEscape(bot, touch.onFire);
       return;
     }
@@ -3723,7 +3803,9 @@ export class Reflexes {
       // 正在飞的寻路多半就是把人送进来的那条;先撤掉,免得它把人拽回去
       dropGoal(bot, 'escape', '踩进岩浆,撤掉正在飞的那条路', this.opts.diag);
       this.escapeGoal = null;
-      this.lavaEscape = { startedAt: now, handedOff: false, reported: false, clearSince: null };
+      this.lavaEscape = {
+        startedAt: now, handedOff: false, reported: false, clearSince: null, cell: null, dashFrom: null,
+      };
       const fresh = this.lavaBout.count === 0
         || now - this.lavaBout.lastClearAt > Reflexes.LAVA_BOUT_GAP_MS;
       if (fresh) this.lavaBout = { count: 1, firstAt: now, lastClearAt: 0 };
@@ -3736,25 +3818,31 @@ export class Reflexes {
     if (esc.handedOff && now - esc.startedAt >= Reflexes.DASH_MS * 2) {
       esc.handedOff = false;
       esc.startedAt = now;
+      esc.dashFrom = null;
       dropGoal(bot, 'escape', '交给寻路器还在烧,收回来自己跑', this.opts.diag);
       this.escapeGoal = null;
+      this.opts.report({
+        kind: 'reflex', hurt: true,
+        text: `[反射] 逃离岩浆:寻路器走了 ${fmtDur(Reflexes.DASH_MS * 2)} 还贴着${zhName(hazard.name)},`
+          + `撤了寻路目标,改回手动冲刺。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
+      });
     }
-    // 落脚点逐 tick 复算:流动岩浆还在铺开,上一 tick 的安全格这一 tick 未必安全。
+    // 落脚点逐 tick 复核:流动岩浆还在铺开,上一 tick 的安全格这一 tick 未必安全,不安全了才重选。
     // 身上着着火时水格是最高优先的落脚点(preferWater),不再被当障碍排除
-    const cell = findEscapeCell(
-      bot, hazardsWithin(bot, Reflexes.ESCAPE_SCAN_R), Reflexes.ESCAPE_SCAN_R, touch.onFire,
-    );
+    const hazards = hazardsWithin(bot, Reflexes.ESCAPE_SCAN_R + ESCAPE_SAFE_GAP);
+    const cell = findEscapeCell(bot, hazards, Reflexes.ESCAPE_SCAN_R, touch.onFire, esc.cell);
+    esc.cell = cell;
     if (!esc.handedOff) {
-      if (cell !== null && now - esc.startedAt >= Reflexes.DASH_MS) {
+      if (cell !== null && now - esc.startedAt >= Reflexes.DASH_MS && now >= this.goalHoldUntil) {
         // 冲开一段之后多半已经出了岩浆,这时候再让寻路器把人送到落脚点
-        esc.handedOff = true;
-        this.releaseDash(bot);
-        this.setEscapeGoal(bot, 'lava', new goals.GoalBlock(cell.x, cell.y, cell.z));
+        this.handLavaToPathfinder(bot, esc, cell, `冲刺 ${fmtDur(now - esc.startedAt)} 后`);
       } else {
-        this.dashAway(bot, hazard, cell, touch.submerged);
+        this.dashAway(bot, hazards, cell, touch.submerged);
+        if (cell === null) this.watchLavaDash(bot, esc, now);
+        else esc.dashFrom = null;
       }
     }
-    if (now - this.lastLavaReportAt < Reflexes.LAVA_REPORT_MS) return;
+    if (esc.reported && now - this.lastLavaReportAt < Reflexes.LAVA_REPORT_MS) return;
     this.lastLavaReportAt = now;
     esc.reported = true;
     const what = zhName(hazard.name);
@@ -3779,18 +3867,27 @@ export class Reflexes {
 
   /**
    * 手动冲刺:寻路器算一条路要几百毫秒到两秒,岩浆里只有两秒半可活,这段时间
-   * 只能自己按方向键。有落脚格就朝它冲,没有就照着危险的反方向硬冲。
+   * 只能自己按方向键。有落脚格就朝它冲,没有就背着身边这片危险格的中心冲。
+   * 中心取扫描半径内全部危险格的平均:只背着最近那一格冲时,人一跨格最近格就换到另一侧,
+   * 朝向每拍翻转,人原地打转。
    */
   private dashAway(
     bot: Bot,
-    hazard: HazardCell,
+    hazards: HazardCell[],
     cell: { x: number; y: number; z: number } | null,
     submerged: boolean,
   ): void {
     const p = bot.entity.position;
+    const near = hazards.filter((h) => h.distance <= Reflexes.ESCAPE_SCAN_R);
+    const pool = near.length > 0 ? near : hazards;
+    const center = {
+      x: pool.reduce((s, h) => s + h.x, 0) / pool.length,
+      y: p.y,
+      z: pool.reduce((s, h) => s + h.z, 0) / pool.length,
+    };
     const aim = cell !== null
       ? new Vec3(cell.x + 0.5, cell.y + 1.6, cell.z + 0.5)
-      : awayFrom(p, hazard);
+      : awayFrom(p, center);
     void bot.lookAt(aim, true).catch(() => undefined);
     bot.setControlState('forward', true);
     bot.setControlState('sprint', true);
@@ -3804,54 +3901,303 @@ export class Reflexes {
     bot.setControlState('jump', false);
   }
 
-  /** 身上还烧着时找水的扫描半径;着火满时长 8 秒,值得看远一点 */
-  private static readonly BURN_WATER_SCAN_R = 16;
-  /** 两次找水之间的最短间隔:找块 + 下目标不便宜,寻路器也需要时间跑 */
-  private static readonly BURN_SEEK_MS = 2_000;
-  private lastBurnSeekAt = 0;
-
-  /** 脱离岩浆后若仍着火，保留本轮逃生控制并优先寻找水格。 */
-  private seekWaterWhileBurning(bot: Bot): void {
-    if (bodyInWater(bot)) return; // 已经泡进水里,火这就灭,等 clear 分支收尾
-    const now = Date.now();
-    if (now - this.lastBurnSeekAt < Reflexes.BURN_SEEK_MS) return;
-    this.lastBurnSeekAt = now;
-    // 已有在飞的逃生目标:watchEscapeGoal 在盯零推进,不重下
-    if (this.escapeGoal !== null) return;
-    let water: Cell | null = null;
-    try {
-      water = findFishingWater(bot, Reflexes.BURN_WATER_SCAN_R);
-    } catch {
-      water = null;
-    }
-    if (water === null) {
-      this.opts.diag?.write({
-        lane: 'reflex', event: 'burning-no-water',
-        msg: `身上还着着火,${Reflexes.BURN_WATER_SCAN_R} 格内没看见水`,
-        data: { position: bot.entity.position, health: bot.health },
-      });
-      return;
-    }
-    this.opts.diag?.write({
-      lane: 'reflex', event: 'burning-seek-water',
-      msg: `身上还着着火,去 (${water.x}, ${water.y}, ${water.z}) 的水里灭火`,
-      data: { water, position: bot.entity.position, health: bot.health },
+  /** 松开冲刺键,把落脚格交给寻路器,并告诉 bot 去哪儿。 */
+  private handLavaToPathfinder(
+    bot: Bot, esc: NonNullable<Reflexes['lavaEscape']>, cell: Cell, when: string,
+  ): void {
+    esc.handedOff = true;
+    esc.dashFrom = null;
+    this.releaseDash(bot);
+    this.setEscapeGoal(bot, 'lava', new goals.GoalBlock(cell.x, cell.y, cell.z));
+    this.opts.report({
+      kind: 'reflex', hurt: true,
+      text: `[反射] 逃离岩浆:${when}交给寻路器,去 ${cellText(cell)} 落脚。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
     });
-    this.setEscapeGoal(bot, 'lava', new goals.GoalBlock(water.x, water.y, water.z));
   }
 
-  /** 离开危险格、火已熄灭,并且这个状态连着站住 `LAVA_CLEAR_DWELL_MS` 之后才算这一轮逃离完成。 */
+  /**
+   * 没有落脚格时手动冲刺的卡住检测:ESCAPE_STALL_MS 内净位移不到 LAVA_DASH_STALL_MOVE
+   * 就把现场报给 bot,接着冲并重新计窗。有落脚格时冲满 DASH_MS 就交寻路器,轮不到这里。
+   */
+  private watchLavaDash(bot: Bot, esc: NonNullable<Reflexes['lavaEscape']>, now: number): void {
+    const p = bot.entity.position;
+    if (esc.dashFrom === null) {
+      esc.dashFrom = { x: p.x, y: p.y, z: p.z, at: now };
+      return;
+    }
+    const moved = Math.hypot(p.x - esc.dashFrom.x, p.y - esc.dashFrom.y, p.z - esc.dashFrom.z);
+    if (moved >= Reflexes.LAVA_DASH_STALL_MOVE) {
+      esc.dashFrom = { x: p.x, y: p.y, z: p.z, at: now };
+      return;
+    }
+    if (now - esc.dashFrom.at < ESCAPE_STALL_MS) return;
+    const heldMs = now - esc.dashFrom.at;
+    const footing = this.footingText(bot);
+    const where = cellText(feetOf(bot));
+    this.opts.diag?.write({
+      lane: 'reflex', event: 'lava-dash-stalled',
+      msg: `逃离岩浆冲刺 ${fmtDur(heldMs)} 只挪了 ${moved.toFixed(1)} 格,人在 ${where},脚下是${footing},附近没有安全落脚格`,
+      data: { moved, heldMs, footing, position: p, health: bot.health },
+    });
+    this.opts.report({
+      kind: 'reflex', hurt: true,
+      text: `[反射] 逃离岩浆卡住了:往背离岩浆的方向冲了 ${fmtDur(heldMs)},只挪了 ${moved.toFixed(1)} 格,`
+        + `人在 ${where},脚下是${footing};${Reflexes.ESCAPE_SCAN_R} 格内找不到离岩浆 ${ESCAPE_SAFE_GAP} 格以上`
+        + `能站的地方,还在往外冲。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
+    });
+    esc.dashFrom = { x: p.x, y: p.y, z: p.z, at: now };
+  }
+
+  /** 身上还烧着时找水的扫描半径;着火满时长 8 秒,值得看远一点 */
+  private static readonly BURN_WATER_SCAN_R = 16;
+  /** 扫遍已加载区块且确实没有水时,隔这么久再扫;找到水就下目标,由 watchEscapeGoal 盯着 */
+  private static readonly BURN_SEEK_MS = 2_000;
+  private lastBurnSeekAt = 0;
+  /**
+   * 碰过岩浆/火源之后身上还着火的这一段,直到火灭。只在岩浆反射接过手之后才有,
+   * 打怪被点着这类着火不归它。离开危险格后不冻结队列,bot 自己排的灭火照常跑。
+   */
+  private burning: {
+    /** 水桶那一下:untried 还没试,poured 倒成了(water 是那格水),skip 不倒或倒不成 */
+    pour: 'untried' | 'poured' | 'skip';
+    water: Cell | null;
+    /** 倒水在飞:这期间不结算、不找水 */
+    busy: boolean;
+    /** 找水落空/让路已经报过一次;同一段着火里同一句不重复报 */
+    told: Set<string>;
+    /** 找水目标零推进过的格,这一段着火里不再选 */
+    excluded: Set<string>;
+  } | null = null;
+
+  /**
+   * 灭火反射。包里有水桶就往自己身上倒水,火灭后用空桶舀回;没有水桶、在下界或倒不成时,
+   * 走去最近的水里(执行器手上有任务时不抢身体)。做了什么、结果如何都报给 bot。
+   */
+  private extinguish(bot: Bot, onFire: boolean): void {
+    if (!onFire) {
+      const done = this.burning;
+      if (done !== null && !done.busy) this.endBurning(bot, done);
+      return;
+    }
+    // 泡进水里,服务端这一刻就会熄火
+    if (bodyInWater(bot)) return;
+    this.burning ??= { pour: 'untried', water: null, busy: false, told: new Set(), excluded: new Set() };
+    const b = this.burning;
+    if (b.busy) return;
+    if (b.pour === 'untried') {
+      b.busy = true;
+      void this.pourWater(bot, b).finally(() => { b.busy = false; });
+      return;
+    }
+    this.seekWaterWhileBurning(bot, b);
+  }
+
+  /** 着火这一段里报给 bot 的话;key 给了就同一段里只报一次。 */
+  private reportBurn(
+    bot: Bot, text: string, b?: NonNullable<Reflexes['burning']>, key?: string,
+  ): void {
+    if (b && key) {
+      if (b.told.has(key)) return;
+      b.told.add(key);
+    }
+    this.opts.report({ kind: 'reflex', hurt: true, text: `[反射] ${text}。生命 ${Math.ceil(bot.health ?? 0)}/20。` });
+  }
+
+  /**
+   * 原版水桶规则:对脚下方块顶面用水桶,水落进脚这一格;脚这一格有草这类带外框的非实心
+   * 方块时点中的是它,水落到它上面那一格(头)。两格都在身上,倒进哪格都能灭火。
+   * 下界倒出来的水当场蒸发。
+   */
+  private async pourWater(bot: Bot, b: NonNullable<Reflexes['burning']>): Promise<void> {
+    const bucket = bot.inventory.items().find((i) => i.name === 'water_bucket');
+    if (!bucket) {
+      b.pour = 'skip';
+      return;
+    }
+    if (dimensionOf(bot).includes('nether')) {
+      b.pour = 'skip';
+      this.reportBurn(bot, '身上着着火;包里有水桶,但在下界倒出来的水会当场蒸发,没有倒');
+      return;
+    }
+    // 跳起来的那几拍脚下是空的,等落地再倒
+    if (!bot.entity.onGround) return;
+    const feet = feetOf(bot);
+    const floorCell = { x: feet.x, y: feet.y - 1, z: feet.z };
+    const floor = blockAtCell(bot, floorCell);
+    const at = blockAtCell(bot, feet);
+    // 刚传送过来脚下区块还没到:下一拍再看
+    if (floor === null || at === null) return;
+    if (floor.boundingBox !== 'block' || at.boundingBox === 'block') {
+      b.pour = 'skip';
+      this.reportBurn(
+        bot,
+        `身上着着火;包里有水桶,但脚下 ${cellText(floorCell)} 是${zhName(floor.name)}、`
+          + `脚这一格是${zhName(at.name)},水倒不到身上,没有倒`,
+      );
+      return;
+    }
+    const before = invCount(bot, (n) => n === 'water_bucket');
+    try {
+      await bot.equip(bucket, 'hand');
+      await aimThenUse(bot, new Vec3(feet.x + 0.5, feet.y, feet.z + 0.5));
+    } catch (err) {
+      b.pour = 'skip';
+      this.reportBurn(bot, `身上着着火;拿水桶往脚下倒水没做成(${(err as Error).message})`);
+      return;
+    }
+    await sleep(USE_SETTLE_MS);
+    const after = invCount(bot, (n) => n === 'water_bucket');
+    const head = { x: feet.x, y: feet.y + 1, z: feet.z };
+    const water = [feet, head].find((c) => WATER_BLOCKS.has(blockAtCell(bot, c)?.name ?? '')) ?? null;
+    if (water !== null) {
+      b.pour = 'poured';
+      b.water = water;
+      this.opts.diag?.write({
+        lane: 'reflex', event: 'burning-pour',
+        msg: `身上着着火,用水桶往 ${cellText(water)} 倒了水`,
+        data: { water, before, after, position: bot.entity.position, health: bot.health },
+      });
+      this.reportBurn(bot, `身上着着火,手上换成水桶往 ${cellText(water)} 倒了水灭火(包里水桶 ${before} → ${after})`);
+      return;
+    }
+    b.pour = 'skip';
+    const now = blockAtCell(bot, feet)?.name ?? '读不到的方块';
+    this.opts.diag?.write({
+      lane: 'reflex', event: 'burning-pour-failed',
+      msg: `用水桶对 ${cellText(floorCell)} 顶面右键,${cellText(feet)} 没读到水`,
+      data: { feet, now, before, after, position: bot.entity.position, health: bot.health },
+    });
+    this.reportBurn(
+      bot,
+      `身上着着火;手上换成水桶对脚下 ${cellText(floorCell)} 右键了,${cellText(feet)} 没读到水`
+        + `(那一格现在是${zhName(now)};包里水桶 ${before} → ${after})`,
+    );
+  }
+
+  /** 火灭了:撤掉找水目标;倒过水就用空桶把那格水舀回来。 */
+  private endBurning(bot: Bot, b: NonNullable<Reflexes['burning']>): void {
+    this.burning = null;
+    if (this.escapeGoal?.kind === 'burn') {
+      this.escapeGoal = null;
+      dropGoal(bot, 'escape', '火灭了,不用再去找水', this.opts.diag);
+    }
+    if (b.pour !== 'poured' || b.water === null) {
+      this.reportBurn(bot, '身上的火灭了');
+      return;
+    }
+    void this.scoopBack(bot, b.water);
+  }
+
+  private async scoopBack(bot: Bot, water: Cell): Promise<void> {
+    const bucket = bot.inventory.items().find((i) => i.name === 'bucket');
+    const name = blockAtCell(bot, water)?.name ?? '读不到的方块';
+    if (!bucket || !WATER_BLOCKS.has(name)) {
+      this.reportBurn(
+        bot,
+        `身上的火灭了;倒在 ${cellText(water)} 的水没舀回来(`
+          + (bucket ? `那一格现在是${zhName(name)}` : '包里没有空桶') + ')',
+      );
+      return;
+    }
+    const before = invCount(bot, (n) => n === 'water_bucket');
+    try {
+      await bot.equip(bucket, 'hand');
+      await aimThenUse(bot, new Vec3(water.x + 0.5, water.y + 0.5, water.z + 0.5));
+    } catch (err) {
+      this.reportBurn(bot, `身上的火灭了;拿空桶舀 ${cellText(water)} 的水没做成(${(err as Error).message}),那格水还在`);
+      return;
+    }
+    await sleep(USE_SETTLE_MS);
+    const after = invCount(bot, (n) => n === 'water_bucket');
+    const left = blockAtCell(bot, water)?.name ?? '读不到的方块';
+    this.reportBurn(
+      bot,
+      after > before
+        ? `身上的火灭了;用空桶把 ${cellText(water)} 的水舀回来了(包里水桶 ${before} → ${after})`
+        : `身上的火灭了;拿空桶对 ${cellText(water)} 右键了,水没舀回来(那一格现在是${zhName(left)};包里水桶 ${before} → ${after})`,
+    );
+  }
+
+  /**
+   * 去最近的水里灭火。目标取离人最近的水面格:绕去更远的水,路上蹚过的近处水格会被
+   * 寻路器当成要垫脚的空当。扫描只覆盖已加载区块,有区块没到时下一拍重扫。
+   */
+  private seekWaterWhileBurning(bot: Bot, b: NonNullable<Reflexes['burning']>): void {
+    // 已有在飞的逃生目标:watchEscapeGoal 在盯零推进,不重下
+    if (this.escapeGoal !== null) return;
+    // mc_escape 传送在飞或执行器的逃生任务在跑:这时下的目标会在落地后把人拽回原处
+    if (this.opts.escapeActive?.()) return;
+    const task = this.lavaEscape === null ? this.opts.currentTask?.() ?? null : null;
+    if (task) {
+      this.reportBurn(
+        bot,
+        `身上着着火,包里没有能用的水桶;执行器正在做任务#${task.id}「${task.label}」,反射不抢身体去找水`,
+        b, `task-${task.id}`,
+      );
+      return;
+    }
+    const now = Date.now();
+    if (now - this.lastBurnSeekAt < Reflexes.BURN_SEEK_MS) return;
+    const water = this.nearestWater(bot, b.excluded);
+    if (water === null) {
+      const loaded = this.columnsLoaded(bot, Reflexes.BURN_WATER_SCAN_R);
+      // 区块没到齐时这次落空不算数,下一拍重扫
+      if (loaded) this.lastBurnSeekAt = now;
+      const why = loaded
+        ? `${Reflexes.BURN_WATER_SCAN_R} 格内没有水`
+        : `身边 ${Reflexes.BURN_WATER_SCAN_R} 格内还有区块没加载,暂时看不到水`;
+      this.opts.diag?.write({
+        lane: 'reflex', event: 'burning-no-water',
+        msg: `身上还着着火,${why}`,
+        data: { loaded, position: bot.entity.position, health: bot.health },
+      });
+      this.reportBurn(bot, `身上着着火,包里没有能用的水桶;${why}`, b, loaded ? 'no-water' : 'unloaded');
+      return;
+    }
+    this.lastBurnSeekAt = now;
+    this.opts.diag?.write({
+      lane: 'reflex', event: 'burning-seek-water',
+      msg: `身上还着着火,去 ${cellText(water)} 的水里灭火`,
+      data: { water, position: bot.entity.position, health: bot.health },
+    });
+    this.setEscapeGoal(bot, 'burn', new goals.GoalBlock(water.x, water.y, water.z), water);
+    this.reportBurn(bot, `身上着着火,包里没有能用的水桶;反射接管寻路,去 ${cellText(water)} 的水里灭火`);
+  }
+
+  /** 离人最近、上面不是实心也不是液体的水格。 */
+  private nearestWater(bot: Bot, excluded: Set<string>): Cell | null {
+    const water = (bot.registry.blocksByName as Record<string, { id: number } | undefined>).water;
+    if (!water) return null;
+    const surface = (pos: Vec3): boolean => {
+      if (excluded.has(cellKeyOf(pos))) return false;
+      const above = bot.blockAt(pos.offset(0, 1, 0));
+      return !!above && above.boundingBox !== 'block' && !LIQUIDS.has(above.name);
+    };
+    const hit = bot.findBlocks({
+      matching: [water.id], maxDistance: Reflexes.BURN_WATER_SCAN_R, count: 1,
+      useExtraInfo: (blk: { position: Vec3 }) => surface(blk.position),
+    }).find(surface);
+    return hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
+  }
+
+  /** 以人为中心、半径 r 覆盖到的区块列是否都已加载。 */
+  private columnsLoaded(bot: Bot, r: number): boolean {
+    const p = bot.entity.position;
+    for (let cx = Math.floor((p.x - r) / 16); cx <= Math.floor((p.x + r) / 16); cx++) {
+      for (let cz = Math.floor((p.z - r) / 16); cz <= Math.floor((p.z + r) / 16); cz++) {
+        if (!bot.world.getColumn(cx, cz)) return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 离开危险格并且连着站住 `LAVA_CLEAR_DWELL_MS` 之后这一轮逃离完成。身上还着火也结算:
+   * 剩下的火归灭火反射,环境冻结当场解除,bot 自己排的灭火不再被压住。
+   */
   private endLavaEscape(bot: Bot, stillOnFire: boolean): void {
     const esc = this.lavaEscape;
     if (esc === null) return;
-    if (stillOnFire) {
-      // 远离火源后不必再背着火源乱跑,但燃烧状态仍属同一轮逃生,不能写 lava-clear
-      // 或报完成 —— 也不能松手:继续接管,把人往最近的水里带。
-      if (!esc.handedOff) this.releaseDash(bot);
-      esc.clearSince = null;
-      this.seekWaterWhileBurning(bot);
-      return;
-    }
     const now = Date.now();
     // 驻留窗口:单 tick 无接触撑不住「我出来了」这句断言(见 LAVA_CLEAR_DWELL_MS)。
     // 窗口里身体仍归环境自保 —— 不结算、不写 lava-clear、不交还执行权;
@@ -3870,24 +4216,26 @@ export class Reflexes {
       lane: 'reflex', event: 'lava-clear',
       // 第 2 次起仍该读成「又出来了一次」,不是「又成功了一次」
       msg: `脱离了 (${Math.round(p.x)}, ${Math.round(p.y)}, ${Math.round(p.z)}),`
-        + `火也灭了,生命 ${Math.ceil(bot.health ?? 0)}/20`
+        + `${stillOnFire ? '身上还着着火' : '火也灭了'},生命 ${Math.ceil(bot.health ?? 0)}/20`
         + (bout > 1
           ? `;本轮第 ${bout} 次脱离(首次接触已过 ${fmtDur(now - this.lavaBout.firstAt)})`
           : ''),
       data: {
-        position: p, onFire: false, health: bot.health, ms: now - esc.startedAt,
+        position: p, onFire: stillOnFire, health: bot.health, ms: now - esc.startedAt,
         dwellMs: Reflexes.LAVA_CLEAR_DWELL_MS,
         bout, boutMs: now - this.lavaBout.firstAt,
       },
     });
-    // 灭火后仍在水中且没有其他环境身份时立即释放环境租约；其余路径按稳定落脚窗口处理。
-    if (bodyInWater(bot)) this.releaseEnvironmentHoldNow(bot, '火灭了,人在水里(不等干燥落脚)');
-    if (!esc.reported) return;
-    this.opts.report({
-      kind: 'reflex',
-      hurt: true,
-      text: `[反射] 从火里出来了,火也灭了。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
-    });
+    if (esc.reported) {
+      this.opts.report({
+        kind: 'reflex',
+        hurt: true,
+        text: `[反射] 从火里出来了,${stillOnFire ? '身上还着着火' : '火也灭了'}。生命 ${Math.ceil(bot.health ?? 0)}/20。`,
+      });
+    }
+    // 着火不靠冻结队列来救;人在水里也站不出干燥落脚。两种情况都当场交还,其余按稳定落脚窗口。
+    if (stillOnFire) this.releaseEnvironmentHoldNow(bot, '离开了岩浆,身上还着着火,灭火不冻结队列');
+    else if (bodyInWater(bot)) this.releaseEnvironmentHoldNow(bot, '火灭了,人在水里(不等干燥落脚)');
   }
 
   /** 两条环境伤害日志之间的最短间隔;掉血播报归 World,这里只记诊断 */
@@ -3952,6 +4300,11 @@ export class Reflexes {
           block: was.block, position: bot.entity.position,
           health: bot.health, ms: Date.now() - was.startedAt,
         },
+      });
+      this.opts.report({
+        kind: 'reflex',
+        text: `[反射] 从${zhName(was.block)}里挖出来了,头那一格不再闷人,人在 ${cellText(feetOf(bot))}。`
+          + `生命 ${Math.ceil(bot.health ?? 0)}/20。`,
       });
       return;
     }
@@ -4035,7 +4388,10 @@ export class Reflexes {
     }
     const y = bot.entity.position.y;
     const falling = !bot.entity.onGround && (bot.entity.velocity?.y ?? 0) < 0 && !bodyInWater(bot);
-    if (!falling) {
+    // 半秒内落完的深坠两次心跳之间就着地了:落地这一拍按总落差补判一次
+    const landedDeep = !falling && this.fall !== null && !this.fall.handled
+      && this.fall.fromY - y >= FALL_TASK_STOP_BLOCKS;
+    if (!falling && !landedDeep) {
       if (this.fall?.stopped) {
         if (this.environmentOwnerKind !== null || !safeFallFooting(bot)) {
           this.fall.safeSince = null;
@@ -4062,6 +4418,12 @@ export class Reflexes {
             + (resumed ? '排队计划恢复' : '旧恢复租约已失效'),
           data: { position: bot.entity.position, health: bot.health, resumed },
         });
+        if (resumed) {
+          this.opts.report({
+            kind: 'reflex',
+            text: `[反射] 深坠落后已在 ${cellText(feetOf(bot))} 稳定落脚,深坠那一处队列冻结解除。`,
+          });
+        }
       }
       this.fall = null;
       return;
@@ -4118,6 +4480,12 @@ export class Reflexes {
         held: hold !== null, health: bot.health, position: bot.entity.position,
       },
     });
+    this.opts.report({
+      kind: 'reflex',
+      text: `[反射] ${landedDeep ? '深坠落着地' : '正在深坠落'},掉了 ${drop.toFixed(1)} 格,撤掉了正在走的寻路`
+        + (hold === null ? '(没有可冻结的队列)。' : ',排着的计划冻结到稳定落脚。')
+        + `人在 ${cellText(feetOf(bot))},生命 ${Math.ceil(bot.health ?? 0)}/20。`,
+    });
   }
 
   private drowning = false;
@@ -4170,6 +4538,12 @@ export class Reflexes {
             : `头出水且${why}(脚下还是水)`,
           data: { oxygen, oxygenTrusted: this.oxygenTrusted, dryFooting: dry, position: bot.entity.position },
         });
+        this.opts.report({
+          kind: 'reflex',
+          text: dry
+            ? `[反射] 溺水自救结束:离开水体,在 ${cellText(feetOf(bot))} 站稳了(氧气 ${oxygen}/20)。`
+            : `[反射] 溺水自救结束:头出水且${why},脚下还是水,人在 ${cellText(feetOf(bot))}。`,
+        });
         // 站稳那条路由 resumeEnvironmentWhenSafe 按稳定窗口交还;水面上没有那个窗口
         if (!dry) this.releaseEnvironmentHoldNow(bot, `头出水且${why}`);
         return;
@@ -4218,6 +4592,7 @@ export class Reflexes {
       });
       this.drowning = true;
       this.drownExcluded.clear();
+      this.drownRouteTold = null;
       if (now - this.lastDrownReportAt > 20_000) {
         this.lastDrownReportAt = now;
         this.opts.report({ kind: 'reflex', hurt: true, text: `[反射] ${why},正在上浮找岸。` });
@@ -4248,6 +4623,10 @@ export class Reflexes {
         data: { breath, position: bot.entity.position, oxygen, excluded: [...this.drownExcluded] },
       });
       this.setEscapeGoal(bot, 'drown', new goals.GoalBlock(breath.x, breath.y, breath.z), breath);
+      this.tellDrownRoute(
+        `breath:${cellKeyOf(breath)}`,
+        `[反射] 溺水自救:头顶被盖住,反射接管寻路,先游到 ${cellText(breath)} 的水面换气(氧气 ${oxygen}/20)。`,
+      );
       return;
     }
     const land = findNearbyAirColumn(bot, 12, up, excluded);
@@ -4262,6 +4641,21 @@ export class Reflexes {
     if (land) {
       this.setEscapeGoal(bot, 'drown', new goals.GoalBlock(land.x, land.y, land.z), land);
     }
+    this.tellDrownRoute(
+      land ? `land:${cellKeyOf(land)}` : 'noland',
+      land
+        ? `[反射] 溺水自救:反射接管寻路,往 ${cellText(land)} 的登岸点游(氧气 ${oxygen}/20)。`
+        : `[反射] 溺水自救:附近 12 格找不到能上去的岸,只按着跳往上浮换气(氧气 ${oxygen}/20)。`,
+    );
+  }
+
+  /** 这一轮溺水里上一次报给 bot 的去向;每 8 秒重找一次岸,去向没变就不重复报 */
+  private drownRouteTold: string | null = null;
+
+  private tellDrownRoute(key: string, text: string): void {
+    if (this.drownRouteTold === key) return;
+    this.drownRouteTold = key;
+    this.opts.report({ kind: 'reflex', text });
   }
 
   private async onHurt(

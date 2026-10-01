@@ -1528,7 +1528,8 @@ describe('Reflexes 岩浆', () => {
       lookAt: async (p: V) => { looks.push(p); },
       attack: () => {},
       blockAt(p: V) {
-        const name = world[`${p.x},${p.y},${p.z}`] ?? (p.y === 62 ? 'stone' : 'air');
+        const [x, y, z] = [Math.floor(p.x), Math.floor(p.y), Math.floor(p.z)];
+        const name = world[`${x},${y},${z}`] ?? (y === 62 ? 'stone' : 'air');
         return { name, boundingBox: name === 'stone' ? 'block' : 'empty' };
       },
       setControlState(k: string, v: boolean) { controls.push([k, v]); },
@@ -1568,29 +1569,101 @@ describe('Reflexes 岩浆', () => {
     bot.controls.some(([k, v]) => k === 'forward' && v);
 
   /**
-   * 脱离岩浆接触但仍着火时继续持有逃生执行权，将目标转到最近水格。
+   * 离开岩浆后只剩身上着火:岩浆那一轮结算、环境冻结当场解除(bot 自己排的灭火不被压住),
+   * 包里没有水桶时反射走去最近的水里,并把去向报出来。
    */
-  it('脱出后身上还烧着:不松手,逃生目标改下到最近的水格', async () => {
+  it('脱出后身上还烧着:冻结解除,包里没水桶就去最近的水里并报给 bot', async () => {
     const world: Record<string, string> = { '10,63,10': 'lava' };
     const bot = lavaBot(world);
     world['14,62,10'] = 'water';
     Object.assign(bot, {
       registry: { blocksByName: { water: { id: 99 } } },
       findBlocks: () => [new V(14, 62, 10)],
-      canSeeBlock: () => true,
     });
-    const { reflexes } = lavaReflexes(bot);
+    const { reflexes, reports, exec } = lavaReflexes(bot);
     reflexes.start();
     vi.advanceTimersByTime(250); // 岩浆反射触发,开始冲刺
-    // 离开危险格,但身上还烧着:这一轮逃生不能结束,也不能站着挨烧
+    expect(exec.status().hold).toBe('逃离岩浆');
     delete world['10,63,10'];
     bot.setFire(true);
     await vi.advanceTimersByTimeAsync(2_500);
-    expect(reflexes.envActive).toBe(true); // owner 还是 lava,没有松手
-    expect(reflexes.environmentOwnerKind).toBe('lava');
+    expect(reflexes.environmentOwnerKind).toBeNull();
+    expect(exec.status().hold).toBeNull();
     const goal = bot.pf.goal as { x?: number; y?: number; z?: number } | null;
     expect(goal).not.toBeNull();
     expect([goal!.x, goal!.y, goal!.z]).toEqual([14, 62, 10]);
+    expect(reports.some((r) => r.text.includes('去 (14, 62, 10) 的水里灭火'))).toBe(true);
+    reflexes.stop();
+  });
+
+  /** 灭火要用的那几样:水桶倒水/空桶舀水由 activateItem 按手上那件改世界和背包 */
+  function bucketBot(world: Record<string, string>, dimension = 'overworld') {
+    const bot = lavaBot(world);
+    let held: string | null = null;
+    let bag = [{ name: 'water_bucket', count: 1, type: 1 }];
+    const used: string[] = [];
+    Object.assign(bot.entity, { onGround: true });
+    Object.assign(bot, {
+      game: { dimension },
+      inventory: { items: () => bag },
+      equip: async (item: { name: string }) => { held = item.name; },
+      waitForTicks: async () => {},
+      activateItem: async () => {
+        used.push(held ?? '空手');
+        if (held === 'water_bucket') {
+          world['10,63,10'] = 'water';
+          bag = [{ name: 'bucket', count: 1, type: 2 }];
+          held = 'bucket';
+        } else if (held === 'bucket' && world['10,63,10'] === 'water') {
+          delete world['10,63,10'];
+          bag = [{ name: 'water_bucket', count: 1, type: 1 }];
+          held = 'water_bucket';
+        }
+      },
+      used,
+    });
+    return bot as typeof bot & { used: string[] };
+  }
+
+  /**
+   * 着火出了岩浆、包里有水桶:反射对脚下顶面倒水,火灭后用空桶舀回,每一步都报给 bot;
+   * 期间队列不冻结。
+   */
+  it('脱出后身上还烧着、包里有水桶:往脚下倒水灭火,火灭后舀回,都报给 bot', async () => {
+    const world: Record<string, string> = { '10,63,10': 'lava' };
+    const bot = bucketBot(world);
+    const { reflexes, reports, exec } = lavaReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(250);
+    delete world['10,63,10'];
+    bot.setFire(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(bot.used).toEqual(['water_bucket']);
+    // 瞄的是脚下那格方块的顶面中心:水落进脚这一格
+    expect(bot.looks.map((p) => [p.x, p.y, p.z])).toContainEqual([10.5, 63, 10.5]);
+    expect(reports.some((r) => r.text.includes('往 (10, 63, 10) 倒了水灭火'))).toBe(true);
+    bot.setFire(false);
+    await vi.advanceTimersByTimeAsync(1_500);
+    expect(bot.used).toEqual(['water_bucket', 'bucket']);
+    expect(world['10,63,10']).toBeUndefined();
+    expect(reports.some((r) => r.text.includes('舀回来了'))).toBe(true);
+    expect(exec.status().hold).toBeNull();
+    reflexes.stop();
+  });
+
+  it('下界里着火:水桶倒出来会蒸发,不倒,把这件事报给 bot', async () => {
+    const world: Record<string, string> = { '10,63,10': 'lava' };
+    const bot = bucketBot(world, 'the_nether');
+    Object.assign(bot, { registry: { blocksByName: { water: { id: 99 } } }, findBlocks: () => [] });
+    Object.assign(bot, { world: { getColumn: () => ({}) } });
+    const { reflexes, reports } = lavaReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(250);
+    delete world['10,63,10'];
+    bot.setFire(true);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(bot.used).toEqual([]);
+    expect(reports.some((r) => r.text.includes('蒸发'))).toBe(true);
     reflexes.stop();
   });
 
@@ -1674,7 +1747,7 @@ describe('Reflexes 岩浆', () => {
     expect(reports[0].text).toContain('身上着火');
   });
 
-  it('离开岩浆但身上仍着火:不写 lava-clear,火灭后才完成这一轮', () => {
+  it('离开岩浆但身上仍着火:站满驻留窗口照样结算,lava-clear 写明还着火', () => {
     const world: Record<string, string> = { '10,64,10': 'lava' };
     const bot = lavaBot(world);
     const diag = new MinecraftLog();
@@ -1683,16 +1756,14 @@ describe('Reflexes 岩浆', () => {
     reflexes.start();
     vi.advanceTimersByTime(250);
     delete world['10,64,10'];
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(400);
     expect(diag.after(0).filter((e) => e.event === 'lava-clear')).toEqual([]);
-
-    bot.setFire(false);
-    vi.advanceTimersByTime(800); // 火灭之后还要站满驻留窗口
+    vi.advanceTimersByTime(400);
     reflexes.stop();
     const clears = diag.after(0).filter((e) => e.event === 'lava-clear');
     expect(clears).toHaveLength(1);
-    expect(clears[0].data!.onFire).toBe(false);
-    expect(clears[0].msg).toContain('火也灭了');
+    expect(clears[0].data!.onFire).toBe(true);
+    expect(clears[0].msg).toContain('身上还着着火');
   });
 
   /**
@@ -1808,6 +1879,48 @@ describe('Reflexes 岩浆', () => {
     expect(reports).toHaveLength(2);
     expect(reports[1].text).toContain('出来了');
     expect(bot.controls[bot.controls.length - 1]).toEqual(['jump', false]);
+  });
+
+  /** 一片岩浆:x、z 都在 [lo, hi] 里的 y63 格 */
+  function lavaPool(lo: { x: number; z: number }, hi: { x: number; z: number }): Record<string, string> {
+    const world: Record<string, string> = {};
+    for (let x = lo.x; x <= hi.x; x++) {
+      for (let z = lo.z; z <= hi.z; z++) world[`${x},63,${z}`] = 'lava';
+    }
+    return world;
+  }
+
+  /**
+   * 第一拍在扫描窗口边上找到的落脚格,人一跨格窗口就移开、回头的直线又全是岩浆,
+   * 每拍重算会把它丢掉,人改成背着最近一格乱冲。选定的落脚格仍安全就一直朝它走。
+   */
+  it('人跨格后落脚格出了扫描窗口:仍朝第一拍选定的那一格冲', () => {
+    const bot = lavaBot(lavaPool({ x: 8, z: 8 }, { x: 10, z: 12 }), { x: 10.5, z: 10.5 });
+    const { reflexes } = lavaReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(250);
+    const first = bot.looks[bot.looks.length - 1];
+    expect(Math.floor(first.x)).toBe(14);
+    bot.entity.position = new V(9.9, 63, 10.5);
+    vi.advanceTimersByTime(400);
+    reflexes.stop();
+    const last = bot.looks[bot.looks.length - 1];
+    expect([last.x, last.y, last.z]).toEqual([first.x, first.y, first.z]);
+  });
+
+  /** 找不到落脚格时一直硬冲而不看人动没动,卡在原地十几秒也没人知道。 */
+  it('没有落脚格又冲不动:满 5 秒把卡住的现场报给 bot', () => {
+    const bot = lavaBot(lavaPool({ x: 6, z: 6 }, { x: 14, z: 14 }), { x: 10.5, z: 10.5 });
+    const { reflexes, reports } = lavaReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(4_800);
+    expect(reports.filter((r) => r.text.includes('卡住'))).toEqual([]);
+    vi.advanceTimersByTime(600);
+    reflexes.stop();
+    const stuck = reports.filter((r) => r.text.includes('卡住'));
+    expect(stuck).toHaveLength(1);
+    expect(stuck[0].text).toContain('人在 (10, 63, 10)');
+    expect(stuck[0].text).toContain('只挪了 0.0 格');
   });
 });
 

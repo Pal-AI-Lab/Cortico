@@ -302,6 +302,31 @@ describe('runEscape', () => {
     expect(out).toContain('这是 3 分钟内第 2 次回到同一张床。');
   });
 
+  /** 反射的寻路目标按传送前的位置下的,不在发传送指令前撤掉,落地后会把人拽回原处。 */
+  it('传送指令发出前撤掉反射的寻路目标,回执说撤了什么', async () => {
+    const pos = { x: 100, y: 12, z: -30 };
+    const consoles: string[] = [];
+    let consolesAtDrop: number | null = null;
+    const out = await runEscape({
+      getBot: () => ({ entity: { position: pos }, game: { dimension: 'overworld' }, spawnPoint: { x: 8, y: 64, z: 8 } }),
+      playerName: 'corti',
+      personalSpawn: null,
+      clearQueue: () => null,
+      dropReflexGoal: () => {
+        consolesAtDrop = consoles.length;
+        return '撤掉了反射正在走的登岸寻路(目标 (-707, 63, 128))';
+      },
+      sendConsole: (line) => { consoles.push(line); return true; },
+      chat: () => {},
+      hold: () => {},
+      waitMove: async () => { Object.assign(pos, { x: 8, y: 64, z: 8 }); return true; },
+      timeoutMs: 20,
+    });
+    expect(consolesAtDrop).toBe(0);
+    expect(consoles).toHaveLength(1);
+    expect(out).toContain('撤掉了反射正在走的登岸寻路');
+  });
+
   it('runEscape 走最近安全锚:去的是路标不是床,回执列全部候选与距离', async () => {
     const bed = spawnAt({ x: 5360, y: 76, z: 60 }, 'overworld', 'bed');
     const home = spawnAt({ x: 5200, y: 80, z: 50 }, 'overworld', 'mark', '家');

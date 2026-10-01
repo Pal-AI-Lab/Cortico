@@ -248,6 +248,11 @@ interface EscapeDeps {
    */
   landingAt?: (t: SpawnTarget) => Vec3like | false | null;
   clearQueue: () => string | null;
+  /**
+   * 撤掉反射自己下的寻路目标(登岸、逃岩浆、找水、低血脱离),holdMs 内不再下新的;
+   * 返回撤了什么,没撤返回 null。
+   */
+  dropReflexGoal?: (holdMs: number) => string | null;
   /** 托管服 stdin;成功返回 true,否则调用方改走 bot 聊天 */
   sendConsole: (line: string) => boolean;
   chat: (text: string) => void;
@@ -282,7 +287,12 @@ export async function runEscape(deps: EscapeDeps): Promise<string> {
   const timeoutMs = deps.timeoutMs ?? ESCAPE_TP_MS;
   deps.hold(timeoutMs + 500);
   const repeat = deps.noteRepeat?.(target) ?? null;
-  const cleared = deps.clearQueue();
+  const queueCleared = deps.clearQueue();
+  // 反射的寻路目标按传送前的位置下的,落地后还挂着就会把人拽回原处
+  const reflexDropped = deps.dropReflexGoal?.(timeoutMs + 500) ?? null;
+  const cleared = reflexDropped === null
+    ? queueCleared
+    : `${queueCleared ?? '队列本来就是空的'};${reflexDropped}`;
   const inLanding = (p: Vec3like): boolean => Math.floor(p.x) === Math.floor(target.x)
     && Math.floor(p.y) === Math.floor(target.y) && Math.floor(p.z) === Math.floor(target.z);
   if (alreadyNear(from, dim, target) && (!chosen?.landing || inLanding(from))) {

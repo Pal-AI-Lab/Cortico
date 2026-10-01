@@ -1982,6 +1982,46 @@ describe('Reflexes 摔落', () => {
   });
 
   /**
+   * 半秒落完 12 格:心跳只采到一次「已掉 5.9 格」,下一拍就着地了。落地这一拍按总落差
+   * 补判,撤掉原来那条路,否则人在坑底还沿着旧路走。
+   */
+  it('两次心跳之间就落完的深坠:落地那一拍按总落差叫停任务并撤路', () => {
+    const bot = fallBot();
+    const reports: TaskReport[] = [];
+    const stops: string[] = [];
+    const { exec: environmentExec } = makeExecutorOn(bot);
+    const reflexes = new Reflexes({
+      getBot: () => bot as never,
+      pauseEnvironment: (reason) => environmentExec.pauseForEnvironment(reason),
+      resumeEnvironment: (token) => environmentExec.resumeAfterEnvironment(token),
+      report: (r) => reports.push(r),
+      log,
+      preempt: () => {},
+      stopFallTask: (reason) => { stops.push(reason); return { owner: Symbol('fall') }; },
+      resumeAfterFall: () => false,
+      fightBack: () => false,
+      fleeHealth: () => 10,
+      reactCooldownSec: () => 8,
+      antiDrown: () => false,
+      antiLava: () => false,
+    });
+    bot.pf.setGoal('原来那条路');
+    reflexes.start();
+    vi.advanceTimersByTime(200); // 起跳点 y=80
+    bot.entity.position = new V(0.5, 74.1, 0.5);
+    vi.advanceTimersByTime(200); // 掉了 5.9 格,还没到阈值
+    expect(stops).toEqual([]);
+    bot.entity.position = new V(0.5, 67, 0.5);
+    bot.entity.onGround = true;
+    bot.entity.velocity = { x: 0, y: 0, z: 0 };
+    vi.advanceTimersByTime(200);
+    reflexes.stop();
+    expect(stops).toHaveLength(1);
+    expect(bot.pf.goal).toBeNull();
+    expect(reports.some((r) => r.text.includes('深坠落着地,掉了 13.0 格'))).toBe(true);
+  });
+
+  /**
    * 寻路目标带数值 Y 且位于当前位置下方至少阈值距离时，深坠守卫不撤销该任务。
    */
   it('寻路目标就在下方 ≥6 格:深坠不撤单(抢救豁免)', () => {
@@ -2081,9 +2121,9 @@ describe('Reflexes 摔落', () => {
     vi.advanceTimersByTime(200);
 
     expect(exec.current).toBeNull();
-    expect(reports).toHaveLength(1);
-    expect(reports[0].kind).toBe('cancelled');
+    expect(reports.map((r) => r.kind)).toEqual(['cancelled', 'reflex']);
     expect(reports[0].text).toContain('深坠落超过 6 格');
+    expect(reports[1].text).toContain('排着的计划冻结到稳定落脚');
     expect(bot.pf.goal).toBeNull();
     expect(diag.after(0).filter((e) => e.event === 'falling-stop')).toHaveLength(1);
     expect(bot.controls).toEqual([]);
@@ -2106,7 +2146,7 @@ describe('Reflexes 摔落', () => {
       : { name: 'air', boundingBox: 'empty' }) as typeof bot.blockAt;
     await vi.advanceTimersByTimeAsync(800);
 
-    expect(reports.map((r) => r.kind)).toEqual(['cancelled', 'cancelled', 'done']);
+    expect(reports.map((r) => r.kind)).toEqual(['cancelled', 'reflex', 'cancelled', 'done']);
     const safe = diag.after(0).filter((e) => e.event === 'falling-safe');
     expect(safe).toHaveLength(1);
     // 冻结已经由 mc_stop 解除,反射手里那张令牌落地时对不上号
@@ -3553,6 +3593,8 @@ describe('find 的行军代价上受理刻', () => {
 
 
 describe('Reflexes 防溺水:换气点、登岸通路与计时兜底', () => {
+  /** 触发那一句;反射接管寻路的去向与溺水结束另有报告 */
+  const alarms = (rs: TaskReport[]): TaskReport[] => rs.filter((r) => !r.text.includes('溺水自救'));
   /** 三维格子图的假 bot:`world` 给每格方块名;人在 (0,61,0),头在 y62 */
   function waterBot(world: (x: number, y: number, z: number) => string, oxygenLevel: number) {
     const goals: Array<{ x: number; y: number; z: number } | null> = [];
@@ -3663,17 +3705,32 @@ describe('Reflexes 防溺水:换气点、登岸通路与计时兜底', () => {
     expect(again).toBe(false);
   });
 
+  /** 登岸目标按传送前的位置算,mc_escape 传送前不撤,落地后寻路器会把人拽回原落水处。 */
+  it('传送前撤掉登岸寻路目标:寻路器目标清空,返回撤了什么', () => {
+    const bot = waterBot(pocket, 3);
+    const { reflexes, reports } = reflexesOn(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(2_600);
+    expect(setGoals(bot)).toHaveLength(1);
+    expect(reports.some((r) => r.text.includes('反射接管寻路'))).toBe(true);
+    const text = reflexes.abandonEscapeGoal('mc_escape 传送', 3_500);
+    expect(bot.goals[bot.goals.length - 1]).toBeNull();
+    expect(text).toContain('登岸寻路');
+    expect(text).toContain('(0, 62, 1)');
+    reflexes.stop();
+  });
+
   it('氧气读数一直不跌:头在水下满 10 秒按计时兜底触发', () => {
     const bot = waterBot(pocket, 20);
     const { reflexes, reports, events } = reflexesOn(bot);
     reflexes.start();
     vi.advanceTimersByTime(9_000);
-    expect(reports).toHaveLength(0);
+    expect(alarms(reports)).toHaveLength(0);
     vi.advanceTimersByTime(2_000);
     reflexes.stop();
-    expect(reports).toHaveLength(1);
-    expect(reports[0].text).toContain('头在水下已 10 秒');
-    expect(reports[0].text).toContain('氧气读数 20/20');
+    expect(alarms(reports)).toHaveLength(1);
+    expect(alarms(reports)[0].text).toContain('头在水下已 10 秒');
+    expect(alarms(reports)[0].text).toContain('氧气读数 20/20');
     expect(events()).toContain('drown-trigger');
   });
 
@@ -3685,13 +3742,13 @@ describe('Reflexes 防溺水:换气点、登岸通路与计时兜底', () => {
       bot.oxygenLevel = oxygen;
       vi.advanceTimersByTime(2_000);
     }
-    expect(reports).toHaveLength(0);
+    expect(alarms(reports)).toHaveLength(0);
     bot.oxygenLevel = 7;
     vi.advanceTimersByTime(1_000);
     reflexes.stop();
-    expect(reports).toHaveLength(1);
-    expect(reports[0].text).toContain('氧气读数 7/20');
-    expect(reports[0].text).not.toContain('没跌');
+    expect(alarms(reports)).toHaveLength(1);
+    expect(alarms(reports)[0].text).toContain('氧气读数 7/20');
+    expect(alarms(reports)[0].text).not.toContain('没跌');
     const trigger = diag.after(0).find((r) => r.event === 'drown-trigger');
     expect(trigger?.data).toMatchObject({ oxygen: 7, oxygenTrusted: true, byTimer: true });
     expect(trigger?.msg).not.toContain('没跌');
@@ -3717,11 +3774,11 @@ describe('Reflexes 防溺水:换气点、登岸通路与计时兜底', () => {
     vi.advanceTimersByTime(200);
     (reflexes as unknown as { deathHandler: () => void }).deathHandler();
     vi.advanceTimersByTime(6_000);
-    expect(reports).toHaveLength(0);
+    expect(alarms(reports)).toHaveLength(0);
     vi.advanceTimersByTime(5_000);
     reflexes.stop();
-    expect(reports).toHaveLength(1);
-    expect(reports[0].text).toContain('氧气读数复活后没刷新');
+    expect(alarms(reports)).toHaveLength(1);
+    expect(alarms(reports)[0].text).toContain('氧气读数复活后没刷新');
   });
 
   it('读数复活后变了一次就重新可信:又按氧气触发', () => {
@@ -3733,8 +3790,8 @@ describe('Reflexes 防溺水:换气点、登岸通路与计时兜底', () => {
     bot.oxygenLevel = 5;
     vi.advanceTimersByTime(2_600);
     reflexes.stop();
-    expect(reports).toHaveLength(1);
-    expect(reports[0].text).toContain('氧气 5/20');
+    expect(alarms(reports)).toHaveLength(1);
+    expect(alarms(reports)[0].text).toContain('氧气 5/20');
   });
 });
 

@@ -1934,13 +1934,14 @@ describe('Reflexes 窒息', () => {
     bot.hurt();
     await waitUntil(() => bot.dug.length === 2, 3000);
     expect(bot.dug).toEqual(['gravel', 'gravel']);
-    // 头顶通了:松开跳键,不再报第二条
+    // 头顶通了:松开跳键,只补一条挖出来了
     bot.hurt();
     await waitUntil(() => bot.controls.some(([k, v]) => k === 'jump' && !v), 3000);
     expect(reflexes.envActive).toBe(false);
     reflexes.stop();
     expect(bot.dug).toHaveLength(2);
-    expect(reports).toHaveLength(1);
+    expect(reports).toHaveLength(2);
+    expect(reports[1].text).toContain('挖出来了');
   });
 
   it('沙砾挖开后不再掉血:下一拍主动清掉被埋状态并松开跳键', async () => {

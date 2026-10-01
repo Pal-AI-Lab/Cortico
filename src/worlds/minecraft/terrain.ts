@@ -1270,8 +1270,11 @@ export function nearestHazard(bot: any, radius: number): HazardCell | null {
   return hazardsWithin(bot, radius)[0] ?? null;
 }
 
-/** 逃生落脚格离每一处危险都至少这么远才算安全 */
-const ESCAPE_SAFE_GAP = 3;
+/**
+ * 逃生落脚格离每一处危险都至少这么远才算安全。传给 findEscapeCell 的危险格要扫到
+ * 搜索半径再加这一段,否则窗口边上的候选格看不见窗口外紧挨着它的岩浆。
+ */
+export const ESCAPE_SAFE_GAP = 3;
 /** 逃生路线的抽样点数:够挡住"落脚点是安全的、可是路上还要蹚一遍岩浆" */
 const ROUTE_SAMPLES = 4;
 
@@ -1279,14 +1282,28 @@ const ROUTE_SAMPLES = 4;
  * 逃生格距每处危险至少 ESCAPE_SAFE_GAP 格，直线路径须通过危险格采样检查。
  * 距离评分兼顾远离危险与就近；默认要求脚下实心、脚与头可容身且无火和水。
  * preferWater 为 true 时优先水格，并允许水格下无实心支撑；找不到返回 null。
+ * keep 是上一拍选定的落脚格:仍满足间距与可站就沿用,不随人挪动后的扫描窗口丢掉。
  */
 export function findEscapeCell(
   bot: any,
   hazards: HazardCell[],
   maxR: number,
   preferWater = false,
+  keep: { x: number; y: number; z: number } | null = null,
 ): { x: number; y: number; z: number } | null {
   if (hazards.length === 0) return null;
+  const gapOf = (x: number, y: number, z: number): number => {
+    let gap = Infinity;
+    for (const h of hazards) {
+      const d = Math.hypot(x - h.x, y - h.y, z - h.z);
+      if (d < gap) gap = d;
+    }
+    return gap;
+  };
+  if (keep !== null && gapOf(keep.x, keep.y, keep.z) >= ESCAPE_SAFE_GAP
+    && standableFor(bot, new Vec3(keep.x, keep.y, keep.z), preferWater)) {
+    return keep;
+  }
   const p = bot.entity.position;
   const base = p.floored();
   const blocked = new Set(hazards.map((h) => `${h.x},${h.y},${h.z}`));
@@ -1295,11 +1312,7 @@ export function findEscapeCell(
     for (let dz = -maxR; dz <= maxR; dz++) {
       for (let dy = -1; dy <= 1; dy++) {
         const x = base.x + dx, y = base.y + dy, z = base.z + dz;
-        let gap = Infinity;
-        for (const h of hazards) {
-          const d = Math.hypot(x - h.x, y - h.y, z - h.z);
-          if (d < gap) gap = d;
-        }
+        const gap = gapOf(x, y, z);
         if (gap < ESCAPE_SAFE_GAP) continue;
         // 打分只用距离,便宜;读块的两道校验留到确定它比现任更好之后再做
         let score = gap * 2 - Math.hypot(dx, dy, dz);

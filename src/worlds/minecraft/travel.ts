@@ -405,9 +405,9 @@ export function clearEscapeGoalOwner(bot: Bot): void {
   if (goalOwners.get(bot)?.kind === 'escape') goalOwners.delete(bot);
 }
 
-/** 三条反射自救各自的说法;只出现在所有权账与回报里 */
-export function escapeIntent(kind: 'drown' | 'lava' | 'flee'): string {
-  return kind === 'drown' ? '登岸' : kind === 'lava' ? '逃离岩浆' : '低血脱离';
+/** 反射自救各自的说法;只出现在所有权账与回报里 */
+export function escapeIntent(kind: 'drown' | 'lava' | 'burn' | 'flee'): string {
+  return kind === 'drown' ? '登岸' : kind === 'lava' ? '逃离岩浆' : kind === 'burn' ? '着火找水' : '低血脱离';
 }
 
 /** 松开右键等于发射的那几样:取消归它们自己的持有者(切槽,不放箭) */
