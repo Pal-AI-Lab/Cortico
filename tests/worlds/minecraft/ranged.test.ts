@@ -216,6 +216,27 @@ describe('低弧瞄点', () => {
     expect(fromMovingShooter!.z).toBeLessThan(-0.5);
     expect(lowArcAimPoint(eye, unreachable)).toBeNull();
   });
+
+  it('沿瞄点射出的箭按原版逐刻运动(位移→×0.99→减 0.05)飞到目标处,高度落在目标中心', () => {
+    const eye = new Vec3(0, 65.62, 0);
+    // 站岛中心射柱顶水晶、离柱更远处射柱顶:不计阻力时这两处分别打低 1.7 与 4.1 格
+    for (const [horizontal, rise] of [[24, 0], [42, 40], [60, 40]]) {
+      const goal: RangedTarget = { id: 7, position: new Vec3(horizontal, eye.y + rise, 0), height: 0, width: 0 };
+      const aim = lowArcAimPoint(eye, goal)!;
+      const dir = aim.minus(eye).normalize();
+      let vx = dir.x * 3;
+      let vy = dir.y * 3;
+      let x = 0;
+      let y = eye.y - 0.1;
+      while (x + vx < horizontal) {
+        x += vx;
+        y += vy;
+        vx *= 0.99;
+        vy = vy * 0.99 - 0.05;
+      }
+      expect(y + vy * ((horizontal - x) / vx)).toBeCloseTo(goal.position.y, 1);
+    }
+  });
 });
 
 describe('PositionVelocityTracker', () => {

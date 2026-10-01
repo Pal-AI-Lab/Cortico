@@ -16,6 +16,13 @@ export const BOW_HIT_WINDOW_MS = 1_500;
 const AIM_STEP_MS = 50;
 const ARROW_SPEED_PER_TICK = 3;
 const ARROW_GRAVITY_PER_TICK = 0.05;
+/** 原版箭每刻先位移,再把速度乘这个系数,再减重力 */
+const ARROW_DRAG_PER_TICK = 0.99;
+/** 箭在射手眼高下方这么多格生成 */
+const ARROW_SPAWN_BELOW_EYE = 0.1;
+/** 仰角从朝下往朝上逐度扫,第一个够得着目标高度的角就是低弧那一侧,再在前一度之间二分 */
+const PITCH_SCAN_STEP = Math.PI / 180;
+const PITCH_BISECT_ROUNDS = 20;
 const MOTION_STALE_MS = 250;
 const MOTION_DECAY_MS = 250;
 const MOTION_MAX_BLOCKS_PER_TICK = 1.5;
@@ -164,7 +171,7 @@ function targetCenter(target: RangedTarget): Point3 {
   };
 }
 
-/** 满弓箭的低弧瞄点；速度由位置采样得到，单位为格/tick。 */
+/** 满弓箭的低弧瞄点,按原版箭的逐刻重力与阻力算;速度由位置采样得到,单位为格/tick。 */
 export function lowArcAimPoint(
   eye: Point3,
   target: RangedTarget,
@@ -183,7 +190,6 @@ export function lowArcAimPoint(
       z: center.z + velocity.z * flightTicks,
     };
     const horizontal = Math.hypot(predicted.x - eye.x, predicted.z - eye.z);
-    const speed2 = ARROW_SPEED_PER_TICK ** 2;
     const dy = predicted.y - eye.y;
     if (horizontal < 1e-6) {
       const vertical = verticalFlight(dy);
@@ -192,27 +198,73 @@ export function lowArcAimPoint(
       aim = new Vec3(predicted.x, eye.y + vertical.direction, predicted.z);
       continue;
     }
-    const disc = speed2 ** 2 - ARROW_GRAVITY_PER_TICK * (
-      ARROW_GRAVITY_PER_TICK * horizontal ** 2 + 2 * dy * speed2
-    );
-    if (disc < 0) return null;
-    const tan = (speed2 - Math.sqrt(disc)) / (ARROW_GRAVITY_PER_TICK * horizontal);
-    const cos = 1 / Math.sqrt(1 + tan ** 2);
-    flightTicks = horizontal / (ARROW_SPEED_PER_TICK * cos);
-    aim = new Vec3(predicted.x, eye.y + horizontal * tan, predicted.z);
+    const arc = lowArcPitch(horizontal, dy);
+    if (arc === null) return null;
+    flightTicks = arc.ticks;
+    aim = new Vec3(predicted.x, eye.y + horizontal * Math.tan(arc.pitch), predicted.z);
   }
   return new Vec3(aim.x, aim.y, aim.z);
 }
 
+/**
+ * 仰角 pitch 射出的箭飞到水平距离 horizontal 时相对眼睛的高度与所用刻数。
+ * 下落中已经低于 floor 还没飞到时返回 null:之后只会更低。
+ */
+function arrowHeightAt(
+  pitch: number,
+  horizontal: number,
+  floor: number,
+): { y: number; ticks: number } | null {
+  let vx = ARROW_SPEED_PER_TICK * Math.cos(pitch);
+  let vy = ARROW_SPEED_PER_TICK * Math.sin(pitch);
+  let x = 0;
+  let y = -ARROW_SPAWN_BELOW_EYE;
+  let ticks = 0;
+  for (;;) {
+    if (x + vx >= horizontal) {
+      const part = (horizontal - x) / vx;
+      return { y: y + vy * part, ticks: ticks + part };
+    }
+    x += vx;
+    y += vy;
+    ticks += 1;
+    vx *= ARROW_DRAG_PER_TICK;
+    vy = vy * ARROW_DRAG_PER_TICK - ARROW_GRAVITY_PER_TICK;
+    if (vy < 0 && y < floor) return null;
+  }
+}
+
+function lowArcPitch(horizontal: number, dy: number): { pitch: number; ticks: number } | null {
+  const reaches = (pitch: number): boolean => (arrowHeightAt(pitch, horizontal, dy)?.y ?? -Infinity) >= dy;
+  let below: number | null = null;
+  for (let pitch = -Math.PI / 2 + PITCH_SCAN_STEP; pitch < Math.PI / 2; pitch += PITCH_SCAN_STEP) {
+    if (!reaches(pitch)) {
+      below = pitch;
+      continue;
+    }
+    let above = pitch;
+    for (let round = 0; below !== null && round < PITCH_BISECT_ROUNDS; round += 1) {
+      const mid = (below + above) / 2;
+      if (reaches(mid)) above = mid;
+      else below = mid;
+    }
+    return { pitch: above, ticks: arrowHeightAt(above, horizontal, dy)!.ticks };
+  }
+  return null;
+}
+
 function verticalFlight(dy: number): { ticks: number; direction: 1 | -1 } | null {
-  if (Math.abs(dy) < 1e-6) return { ticks: 0, direction: 1 };
-  const direction = dy > 0 ? 1 : -1;
-  const discriminant = ARROW_SPEED_PER_TICK ** 2 - 2 * ARROW_GRAVITY_PER_TICK * dy;
-  if (discriminant < 0) return null;
-  const ticks = direction > 0
-    ? (ARROW_SPEED_PER_TICK - Math.sqrt(discriminant)) / ARROW_GRAVITY_PER_TICK
-    : (-ARROW_SPEED_PER_TICK + Math.sqrt(discriminant)) / ARROW_GRAVITY_PER_TICK;
-  return ticks >= 0 ? { ticks, direction } : null;
+  const direction = dy >= -ARROW_SPAWN_BELOW_EYE ? 1 : -1;
+  let vy = ARROW_SPEED_PER_TICK * direction;
+  let y = -ARROW_SPAWN_BELOW_EYE;
+  let ticks = 0;
+  while (direction > 0 ? y < dy : y > dy) {
+    if (direction > 0 && vy <= 0) return null;
+    y += vy;
+    ticks += 1;
+    vy = vy * ARROW_DRAG_PER_TICK - ARROW_GRAVITY_PER_TICK;
+  }
+  return { ticks, direction };
 }
 
 /** 眼睛到目标半身高的方块射线；读不到世界射线时保守地视为遮挡。 */
