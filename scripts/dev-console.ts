@@ -1150,7 +1150,7 @@ const app = new WebApp({
   }),
   sessions: { list: () => sessionsList, messages: (id) => (id === 'main' ? session : sessionsList.some((s) => s.id === id) ? session.slice(0, 4) : null), onChange: () => {} },
   storage: () => storage,
-  usage: { aggregate: (opts) => aggregateUsage(usageRecords, opts) },
+  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ }) },
 
   config: {
     groups: () => [...devConfigGroups,...devProviders.groups()].map((group) => ({ group, values: group.owner.startsWith('provider:') ? devProviders.values(group.id) : readGroupValues(devCfg, group) })),
