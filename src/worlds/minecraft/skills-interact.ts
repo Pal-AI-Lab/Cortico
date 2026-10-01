@@ -696,6 +696,10 @@ export async function useOnce(bot: Bot, call: Extract<SkillCall, { skill: 'use' 
     if (held && isThrown(held)) {
       const before = invCount(bot, (n) => n === held);
       await aimThenUse(bot, new Vec3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5));
+      if (held === 'trident') {
+        await bot.waitForTicks(TRIDENT_CHARGE_TICKS);
+        bot.deactivateItem();
+      }
       await sleep(300);
       return `朝 ${cellText(cell)} 扔了${label};包里还有 ${invCount(bot, (n) => n === held)} 个(扔前 ${before})`;
     }
@@ -860,6 +864,12 @@ export async function aimThenUse(bot: Bot, point: Vec3): Promise<void> {
   await bot.waitForTicks(1);
   await bot.activateItem();
 }
+
+/**
+ * 原版三叉戟松手时蓄力满 10 刻才掷出。服务端按自己收到按下与松开两个包之间的刻数算,
+ * 与客户端刻差一两刻,按住 12 刻再松。
+ */
+const TRIDENT_CHARGE_TICKS = 12;
 
 /** 原版箭的位置每 20 刻同步一次;超过一次同步间隔再加 10 刻网络抖动没动过,就是插住了 */
 const ARROW_SETTLED_MS = 1_500;
