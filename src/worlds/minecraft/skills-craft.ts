@@ -9,9 +9,9 @@ import { type SkillCall } from './skills.ts';
 import { zhName } from './names.ts';
 import { gridText, zhErrorText } from './receipt.ts';
 import {
-  CRAFT_SETTLE_MS, awaitCraftGain, invCount, invCountById, invGains, invItemNamed, invSnapshot,
-  invVariantGains, invVariantSnapshot,
-  namedLike, noSuchItem,
+  CRAFT_SETTLE_MS, INVENTORY_SLOTS, awaitCraftGain, invCount, invCountById, invGains,
+  invItemNamed, invSnapshot, invVariantGains, invVariantSnapshot,
+  namedLike, noSuchItem, offHandItem,
 } from './inventory.ts';
 import { CRAFTING_STATION, ensureStation, type Station } from './placement.ts';
 import {
@@ -394,10 +394,20 @@ export async function emptyHand(bot: Bot): Promise<string> {
   return `主手腾空了(原来拿的是${zhName(held.name)})`;
 }
 
-/** 副手腾空:副手物品挪回背包,背包满时同主手一样落在脚下 */
+/**
+ * 副手腾空:副手物品挪回背包。mineflayer 的 unequip 在包里既没空格、也没有能并进去的
+ * 同种未满一摞时把它扔到地上,这种包况下不腾,受阻说明;并进去一部分后余下的被扔掉时照实报。
+ */
 async function emptyOffHand(bot: Bot): Promise<string> {
-  const held = bot.inventory.slots[bot.getEquipmentDestSlot('off-hand')];
+  const held = offHandItem(bot);
   if (!held) return '副手本来就是空的';
+  const bag = bot.inventory.items();
+  if (bag.length >= INVENTORY_SLOTS && !bag.some((i) => i.type === held.type && i.count < i.stackSize)) {
+    throw new SkillBlocked(
+      `包里 ${INVENTORY_SLOTS} 格全满,副手的${pickLabel(pickTargetOf(held, bot.registry as never))}放不回包里;` +
+      '没腾,它还挂在副手',
+    );
+  }
   const before = invCount(bot, (n) => n === held.name);
   await bot.unequip('off-hand');
   const left = invCount(bot, (n) => n === held.name);
@@ -415,7 +425,8 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
   // equip "iron" 命中哪一件全看物品栏顺序,那不是她说的意思
   const items = bot.inventory.items();
   const item = invItemNamed(bot, want, call.pick);
-  const worn = item ? null : equippedAlready(bot, want, call.hand, call.pick);
+  const fromOffHand = !!item && item === offHandItem(bot);
+  const worn = item && !fromOffHand ? null : equippedAlready(bot, want, call.hand, call.pick);
   if (worn) return `${zhName(worn.name)}本来就${worn.where}`;
   if (!item) {
     const same = items.filter((i) => namedLike(want, i.name));
@@ -429,6 +440,12 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
   await bot.equip(item, dest);
   // 点名拿的时候回执念全标签:「拿起了弓」答不了「拿的是无限那把吗」
   const what = call.pick ? pickLabel(pickTargetOf(item, bot.registry as never)) : zhName(item.name);
+  if (dest === 'hand' && fromOffHand) {
+    // 从副手挪到快捷栏时,目标格原有的东西会被换进副手
+    const nowOff = offHandItem(bot);
+    return `把副手的${what}换到了主手;` +
+      (nowOff ? `快捷栏那格原来的${pickLabel(pickTargetOf(nowOff, bot.registry as never))}换进了副手` : '副手空了');
+  }
   if (dest === 'hand') return `手里拿起了${what}`;
   if (dest === 'off-hand') return `${what}挂上了副手`;
   return `穿上了${what}`;

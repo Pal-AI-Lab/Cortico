@@ -4,8 +4,8 @@
  * 挑与装备在这里,挖与放在技能族里;回执里的那一句由 toolTraceNote 出。
  */
 import type { Bot } from 'mineflayer';
-import { namedLike, type InvItem } from './inventory.ts';
-import { itemMatchesPick } from './item-pick.ts';
+import { itemsInReach, namedLike, offHandItem, type InvItem } from './inventory.ts';
+import { itemMatchesPick, pickLabel, pickTargetOf } from './item-pick.ts';
 import { readDurability } from './item-facts.ts';
 import { SkillBlocked, type ReserveHit, type SkillContext, type ToolTrace } from './skill-context.ts';
 import { matchItemName } from './chests.ts';
@@ -135,7 +135,9 @@ export function chooseTool(
     : harvest.length === 0 || harvest.includes(item.name);
 
   if (plan.mode === 'exact') {
-    const exact = bot.inventory.items().find((item) => item.name === plan.item && item.count > 0);
+    // 同名的几件(附魔不同)里,已经拿在主手的那件优先;其余按包里顺序,副手最后
+    const named = itemsInReach(bot).filter((item) => item.name === plan.item && item.count > 0);
+    const exact = named.find((item) => item === bot.heldItem) ?? named[0];
     if (!exact) {
       return { pick: null, canDrop: false, need, error: `包里没有本步指定的${zhName(plan.item)};没有改用别的工具` };
     }
@@ -164,8 +166,11 @@ export function chooseTool(
     ? harvest.map(toolKindOf)
     : [...(def?.material ?? '').matchAll(/mineable\/(\w+)/g)].map((m) => m[1]));
   if (kinds.size === 0) return { pick: null, canDrop: true, need, error: null };
-  const inClass = bot.inventory.items()
+  const ofKind = (items: InvItem[]): InvItem[] => items
     .filter((item) => [...kinds].some((kind) => item.name === kind || item.name.endsWith(`_${kind}`)));
+  // 副手那件只在包里没有能挖出掉落的同类工具时才动用,不拆掉副手上原来的安排
+  const inBag = ofKind(bot.inventory.items());
+  const inClass = inBag.some(canDrop) ? inBag : ofKind(itemsInReach(bot));
   if (inClass.length === 0 && harvest.length === 0) {
     return { pick: null, canDrop: true, need, error: null };
   }
@@ -205,10 +210,17 @@ export function chooseTool(
   };
 }
 
-export function recordToolChoice(ctx: SkillContext, block: string, plan: MiningToolPlan, decision: ToolDecision): void {
+/** 回执里念工具用全标签:同名的几把只靠附魔分得开 */
+function toolLabel(bot: Bot, item: InvItem): string {
+  return pickLabel(pickTargetOf(item, bot.registry as never));
+}
+
+export function recordToolChoice(
+  bot: Bot, ctx: SkillContext, block: string, plan: MiningToolPlan, decision: ToolDecision,
+): void {
   const trace = ctx.toolTrace;
   if (!trace) return;
-  const pick = decision.pick?.name ?? null;
+  const pick = decision.pick ? toolLabel(bot, decision.pick) : null;
   const first = trace.last === undefined;
   const changed = !first && trace.last !== pick;
   if (first || changed) {
@@ -217,20 +229,19 @@ export function recordToolChoice(ctx: SkillContext, block: string, plan: MiningT
         ? `${zhName(block)}不需工具,已换下耐久工具`
         : `挖到${zhName(block)}时换下耐久工具`);
     } else if (plan.mode === 'exact') {
-      trace.notes.push(`本步临时指定${zhName(pick)}`);
+      trace.notes.push(`本步临时指定${pick}`);
     } else if (plan.mode === 'fastest') {
-      trace.notes.push(`${first ? '本步临时用最快工具' : `挖到${zhName(block)}时换成`}:${zhName(pick)}`);
+      trace.notes.push(`${first ? '本步临时用最快工具' : `挖到${zhName(block)}时换成`}:${pick}`);
     } else {
-      trace.notes.push(`${first ? '节约模式选' : `挖到${zhName(block)}时换成`}:${zhName(pick)}`);
+      trace.notes.push(`${first ? '节约模式选' : `挖到${zhName(block)}时换成`}:${pick}`);
     }
     trace.last = pick;
   }
-  if (decision.pick) {
+  if (decision.pick && pick) {
     const d = nearBreak(decision.pick);
-    const key = decision.pick.name;
-    if (d && !trace.near.has(key)) {
-      trace.near.add(key);
-      trace.notes.push(`${zhName(decision.pick.name)}临近损坏,只剩 ${d.left}/${d.max} 耐久`);
+    if (d && !trace.near.has(pick)) {
+      trace.near.add(pick);
+      trace.notes.push(`${pick}临近损坏,只剩 ${d.left}/${d.max} 耐久`);
     }
   }
 }
@@ -251,7 +262,7 @@ export async function equipToolFor(
   if (decision.error) throw new SkillBlocked(decision.error);
   if (!decision.pick) {
     const replaced = await avoidUnsuitableHeldTool(bot);
-    if (plan && replaced) recordToolChoice(ctx, block.name, actualPlan, decision);
+    if (plan && replaced) recordToolChoice(bot, ctx, block.name, actualPlan, decision);
     return;
   }
   if (decision.reserve && ctx.reserveHits
@@ -263,9 +274,16 @@ export async function equipToolFor(
       reason: decision.reserve.reason,
     });
   }
+  const fromOffHand = decision.pick === offHandItem(bot);
   try {
     await bot.equip(decision.pick, 'hand');
-    if (plan) recordToolChoice(ctx, block.name, actualPlan, decision);
+    if (plan) recordToolChoice(bot, ctx, block.name, actualPlan, decision);
+    if (fromOffHand) {
+      // 从副手挪到快捷栏时,目标格原有的东西会被换进副手
+      const nowOff = offHandItem(bot);
+      ctx.toolTrace?.notes.push(`${toolLabel(bot, decision.pick)}是从副手换到主手的,`
+        + (nowOff ? `快捷栏那格原来的${toolLabel(bot, nowOff)}换进了副手` : '副手空了'));
+    }
   } catch {
     await avoidUnsuitableHeldTool(bot);
     throw new SkillBlocked(`选了${zhName(decision.pick.name)}挖${zhName(block.name)},但没能拿到手;没动方块`);

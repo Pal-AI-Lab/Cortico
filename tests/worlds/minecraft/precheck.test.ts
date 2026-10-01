@@ -306,6 +306,12 @@ describe('前置试算 · 判死的必须真的做不成', () => {
     expect(n?.text).toContain('包里没有');
   });
 
+  it('equip 主手点名的东西挂在副手:不报包里没有(执行时会从副手换过来)', () => {
+    const bot = fakeBot({ bag: [] });
+    (bot as unknown as { inventory: { slots?: unknown[] } }).inventory.slots =Object.assign([], { 45: { name: 'diamond_sword', count: 1, type: 7 } });
+    expect(precheckStep(bot, call({ skill: 'equip', item: 'diamond_sword', hand: 'main' }), makeDeps(bot))).toBeNull();
+  });
+
   it('use item 指向的那一格本身就是那件东西:照抄技能的正确写法提示', () => {
     const bot = fakeBot({ bag: [], blocks: { '3,64,0': 'white_bed' } });
     const n = precheckStep(bot, call({ skill: 'use', item: 'white_bed', at: [3, 64, 0] }), makeDeps(bot));

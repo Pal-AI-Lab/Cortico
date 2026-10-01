@@ -14,9 +14,26 @@ import { zhName } from './names.ts';
 /** 原版背包格数:9 快捷栏 + 27 主仓。盔甲 4 格与副手 1 格不在其中 */
 export const INVENTORY_SLOTS = 36;
 
-/** equip 的找法:精确名优先,退而求其次才用后缀/前缀(类别名 pickaxe→iron_pickaxe) */
+/** 副手在玩家窗口里的槽号。它和盔甲槽一样不在 `items()` 里 */
+const OFF_HAND_SLOT = 45;
+
+/** 副手里挂着的那一件;空着是 null */
+export function offHandItem(bot: Bot): InvItem | null {
+  return (bot.inventory?.slots?.[OFF_HAND_SLOT] as InvItem | null | undefined) ?? null;
+}
+
+/** 拿到主手能用的东西:包里的,加上副手那一件(排在最后) */
+export function itemsInReach(bot: Bot): InvItem[] {
+  const off = offHandItem(bot);
+  return [...(bot.inventory?.items?.() ?? []), ...(off ? [off] : [])];
+}
+
+/**
+ * equip 的找法:精确名优先,退而求其次才用后缀/前缀(类别名 pickaxe→iron_pickaxe)。
+ * 副手那件也在候选里;同一档名字下包里的先于副手的。
+ */
 export function invItemNamed(bot: Bot, want: string, pick?: string) {
-  const items = (bot.inventory?.items?.() ?? [])
+  const items = itemsInReach(bot)
     .filter((i) => itemMatchesPick(pick, i, bot.registry as never));
   return items.find((i) => i.name === want)
     ?? items.find((i) => i.name.endsWith(`_${want}`))

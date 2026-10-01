@@ -12,6 +12,7 @@ import type { SkillCall } from './skills.ts';
 import type { Cell } from './geometry.ts';
 import { matchItemName } from './chests.ts';
 import { equippedAlready } from './tools.ts';
+import { itemsInReach, offHandItem } from './inventory.ts';
 import { DRINKABLES } from './item-facts.ts';
 import { itemMatchesPick, pickMissText, pickTargetOf } from './item-pick.ts';
 import { zhDimension, zhEntity, zhName } from './names.ts';
@@ -35,6 +36,13 @@ function hasItem(bot: Bot, name: string, pick?: string): number {
       && itemMatchesPick(pick, it, bot.registry as never)) n += it.count;
   }
   return n;
+}
+
+/** 副手挂着的那件合不合这个名字与挑选词;equip 能把它换到主手 */
+function offHandHas(bot: Bot, name: string, pick?: string): boolean {
+  const off = offHandItem(bot);
+  return !!off && (matchItemName(name, off.name) || zhName(off.name) === name)
+    && itemMatchesPick(pick, off, bot.registry as never);
 }
 
 /**
@@ -531,7 +539,8 @@ function precheckLead(
 function precheckMiningTool(bot: Bot, call: SkillCall, deps: PrecheckDeps): PrecheckNote | null {
   if (call.skill !== 'collect' && call.skill !== 'excavate' && call.skill !== 'tunnel') return null;
   const tool = (call as MiningCall).tool;
-  const inventory = bot.inventory.items();
+  // 与执行器 chooseTool 同一个范围:包里加副手
+  const inventory = itemsInReach(bot);
   const exact = tool && tool !== 'fastest'
     ? inventory.find((entry) => entry.name === tool && entry.count > 0)
     : null;
@@ -595,7 +604,8 @@ export function precheckStep(bot: Bot, call: SkillCall, deps: PrecheckDeps): Pre
       case 'tunnel': return precheckTunnel(bot, call as never, deps.resolve) ?? precheckDeepKit(bot, call, deps);
       case 'excavate': return precheckDeepKit(bot, call, deps);
       case 'equip':
-        return call.item && equippedAlready(bot, call.item, call.hand, call.pick) ? null : precheckItemStep(bot, call, '拿');
+        return call.item && (equippedAlready(bot, call.item, call.hand, call.pick) || offHandHas(bot, call.item, call.pick))
+          ? null : precheckItemStep(bot, call, '拿');
       case 'toss': return precheckItemStep(bot, call, '扔');
       case 'stow': return precheckItemStep(bot, call, '存');
       case 'anvil': return precheckItemStep(bot, call, '用');

@@ -275,12 +275,38 @@ describe('equip:盔甲穿身上,不是全塞主手', () => {
       getEquipmentDestSlot: (dest: string) => (dest === 'off-hand' ? 45 : 36),
       equip: async (it: { name: string }, dest: string) => {
         equips.push([it.name, dest]);
+        // 从副手拿到主手:落进快捷栏的空格,副手空出来
+        if (dest === 'hand' && slots[45] === it) slots[45] = null;
         if (dest === 'hand') bot.heldItem = it;
       },
+      unequip: async (dest: string) => { equips.push(['(unequip)', dest]); },
       pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
     };
     return bot;
   }
+
+  it('剑挂在副手、包里没有:equip 主手把它换过来,不报包里没有', async () => {
+    const sword = { name: 'diamond_sword', type: 7, count: 1 };
+    const bot = offHandBot({ bag: [], offHand: sword });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', item: 'diamond_sword', hand: 'main' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(reports[0].kind).toBe('done');
+    expect(bot.equips).toEqual([['diamond_sword', 'hand']]);
+    expect(bot.heldItem).toBe(sword);
+    expect(reports[0].text).toContain('把副手的钻石剑换到了主手;副手空了');
+  });
+
+  it('包 36 格全满时腾副手:不腾、不扔,受阻说明东西还挂在副手', async () => {
+    const bag = Array.from({ length: 36 }, (_, i) => ({ name: 'cobblestone', type: 100, count: 64, stackSize: 64, slot: 9 + i }));
+    const bot = offHandBot({ bag, offHand: { name: 'diamond_sword', type: 7, count: 1 } });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', hand: 'off' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('没腾,它还挂在副手');
+    expect(bot.equips).toEqual([]);
+  });
 
   it('hand:"off" 把本来归主手的东西挂到副手', async () => {
     const bot = offHandBot({ bag: [{ name: 'filled_map', type: 5, count: 1 }] });
@@ -2206,7 +2232,7 @@ it('collect 挖之前先把趁手的家伙拿到手上', async () => {
     componentMap?: Map<string, { data: unknown }>;
   };
 
-  function tierBot(opts: { block: string; bag: TierItem[] }) {
+  function tierBot(opts: { block: string; bag: TierItem[]; offHand?: TierItem }) {
     const ITEMS: Record<number, string> = {
       10: 'wooden_pickaxe', 11: 'stone_pickaxe', 12: 'iron_pickaxe', 13: 'diamond_pickaxe',
       14: 'golden_pickaxe', 15: 'iron_shovel', 20: 'raw_iron', 21: 'obsidian', 22: 'cobblestone', 23: 'dirt',
@@ -2235,10 +2261,15 @@ it('collect 挖之前先把趁手的家伙拿到手上', async () => {
         items: Object.fromEntries(Object.entries(ITEMS).map(([id, name]) => [id, { name }])),
         itemsByName: Object.fromEntries(Object.entries(ITEMS).map(([id, name]) => [name, { id: Number(id) }])),
       },
-      inventory: { items: () => bag },
+      // 副手是窗口槽 45,不在 items() 里;从副手拿到主手后它落进快捷栏的空格
+      inventory: { items: () => bag, slots: Object.assign([] as Array<TierItem | null>, { 45: opts.offHand ?? null }) },
       heldItem: null as TierItem | null,
       equip: async (item: TierItem) => {
         equipped.push(item.name);
+        if (bot.inventory.slots[45] === item) {
+          bot.inventory.slots[45] = null;
+          bag.push(item);
+        }
         bot.heldItem = item;
       },
       lookAt: async () => {},
@@ -2417,6 +2448,37 @@ it('collect 挖之前先把趁手的家伙拿到手上', async () => {
     expect(b.reports[0].text).toContain('本步指定的木镐挖铁矿石不掉东西');
     expect(wrong.equipped).toEqual([]);
     expect(wrong.dug).toBe(0);
+  });
+
+  /** 附魔按组件格式写;字符串 id 不经 registry 也读得出名字 */
+  const enchanted = (name: string, type: number, ench: string, level: number): TierItem => ({
+    name, type, count: 1,
+    componentMap: new Map([['enchantments', { data: { enchantments: [{ id: `minecraft:${ench}`, level }] } }]]),
+  });
+
+  it('精确 tool 同名有几把:用已经拿在主手的那把,回执念出附魔', async () => {
+    const fortune = enchanted('diamond_pickaxe', 13, 'fortune', 3);
+    const efficiency = enchanted('diamond_pickaxe', 13, 'efficiency', 5);
+    const bot = tierBot({ block: 'stone', bag: [fortune, efficiency] });
+    bot.heldItem = efficiency;
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'collect', block: 'stone', count: 1, tool: 'diamond_pickaxe' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(bot.heldItem).toBe(efficiency);
+    expect(reports[0].text).toContain('本步临时指定钻石镐（效率V）');
+  });
+
+  it('镐挂在副手、包里没有:照样拿到主手挖,回执说明副手变成了什么', async () => {
+    const pick = { name: 'diamond_pickaxe', type: 13, count: 1 };
+    const bot = tierBot({ block: 'stone', bag: [], offHand: pick });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'collect', block: 'stone', count: 1 }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(bot.heldItem).toBe(pick);
+    expect(bot.dug).toBe(1);
+    expect(reports[0].text).toContain('钻石镐是从副手换到主手的,副手空了');
   });
 
   // 正则 `/_ore$|stone|deepslate|cobble/` 认不出黑曜石、安山岩、下界岩这一批,
