@@ -193,11 +193,6 @@ export class Runlog {
     this.writeListeners.push(cb);
   }
 
-  /** 内存中最近的日志记录，包含未写入文件的记录。 */
-  recent(limit = RING_SIZE): LogRecord[] {
-    return this.ring.slice(-limit);
-  }
-
   private fileThreshold(area: string): LogLevel {
     const levels = this.levels();
     if (levels.areas !== this.areaSpec) {
