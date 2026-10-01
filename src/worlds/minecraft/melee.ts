@@ -12,6 +12,7 @@ import {
 } from './ranged.ts';
 import { type AttackMode } from './skills.ts';
 import type { Bot } from 'mineflayer';
+import { Vec3 } from 'vec3';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Aborted, SkillBlocked, SkillNoop, checkAbort, type SkillContext } from './skill-context.ts';
 import { isKnownTarget } from './entity-facts.ts';
@@ -228,9 +229,25 @@ export const HOSTILE = new Set([
 
 /**
  * 找目标半径放宽的几种。末地主岛十根黑曜石柱围成半径约 42 的圈,柱高到 100 多格:
- * 站在岛上任一处,对面柱顶的水晶水平 84 格、高差 60 格上下,直线约 110 格;龙绕柱飞同一个范围。
+ * 对面柱顶的水晶水平 84 格、高差 60 格上下,直线约 110 格;龙绕柱飞同一个范围。
+ * 实际看得到多远由服务端的实体下发距离决定(Paper 的 entity-tracking-range.other 默认 64)。
  */
 const FAR_TARGETS: Record<string, number> = { end_crystal: 128, ender_dragon: 128 };
+
+/**
+ * 末影水晶不是活物,打掉时只有移除包,没有死亡状态;服务端紧接着在它的坐标上炸一次,
+ * 爆炸包只发给 64 格内的玩家。爆心就是水晶坐标,0.5 格只容浮点误差。
+ */
+const CRYSTAL_BLAST_MATCH = 0.5;
+const CRYSTAL_BLAST_REACH = 64;
+/** 移除包与爆炸包在服务端同一刻先后发出;移除先到时再等两刻收爆炸包 */
+const CRYSTAL_BLAST_WAIT_MS = 100;
+
+interface ExplosionPacket {
+  x?: number; y?: number; z?: number;
+  /** 1.21.11 起爆心收进 center */
+  center?: { x: number; y: number; z: number };
+}
 
 export async function skillAttack(
   bot: Bot,
@@ -244,7 +261,12 @@ export async function skillAttack(
   const radius = FAR_TARGETS[target] ?? 32;
   const entity = findEntity(bot, target, radius);
   // 要打的东西不在场 = 无事可做:没打输,是没得打(见 SkillNoop)
-  if (!entity) throw new SkillNoop(`附近 ${radius} 格内没有${zhEntity(target)}`);
+  if (!entity) {
+    throw new SkillNoop(
+      `附近 ${radius} 格内没有${zhEntity(target)}` +
+        (FAR_TARGETS[target] ? ';服务端只下发一定距离内的实体(Paper 默认 64 格),更远的看不到' : ''),
+    );
+  }
   const ranged = ctx.attack.ranged;
   const forcedRanged = mode === 'ranged' || mode === 'kite';
   if (forcedRanged) {
@@ -274,8 +296,19 @@ export async function skillAttack(
     if (best) await bot.equip(best, 'hand').catch(() => undefined);
   };
   if (weapon === 'melee') await equipMelee();
+  const crystal = entity.name === 'end_crystal';
+  let blasted = false;
+  let onBlast: (() => void) | null = null;
+  const onExplosion = (packet: ExplosionPacket): void => {
+    const at = packet.center ?? packet;
+    if (typeof at.x !== 'number' || typeof at.y !== 'number' || typeof at.z !== 'number') return;
+    if (entity.position.distanceTo(new Vec3(at.x, at.y, at.z)) > CRYSTAL_BLAST_MATCH) return;
+    blasted = true;
+    onBlast?.();
+  };
+  if (crystal) bot._client.on('explosion', onExplosion);
   try {
-    while (!stats.dead && entity.isValid && Date.now() < deadline) {
+    while (!stats.dead && !blasted && entity.isValid && Date.now() < deadline) {
       checkAbort(ctx);
       if (stats.disconnected) throw new SkillBlocked(`连接断了,主动攻击已取消;${attackStats(stats)}`);
       const floor = ctx.fleeHealth();
@@ -363,6 +396,8 @@ export async function skillAttack(
           stats.arrows += 1;
           continue;
         }
+        // 拉弓时目标已被移除(前一支箭打掉了水晶):交给循环后的结算
+        if (result.cause === 'target_lost' && !entity.isValid) break;
         if (forcedRanged) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${mode} 不会改用近战;${attackStats(stats)}`);
         }
@@ -404,11 +439,29 @@ export async function skillAttack(
         await sleep(50);
       }
     }
+    if (crystal && !blasted && !entity.isValid) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, CRYSTAL_BLAST_WAIT_MS);
+        onBlast = () => { clearTimeout(timer); resolve(); };
+      });
+    }
   } finally {
+    if (crystal) bot._client.removeListener('explosion', onExplosion);
     releaseMelee(bot);
     ranged?.abort();
     ctx.escape.active = false;
     ctx.attack.release(stats);
+  }
+  if (blasted) {
+    // 水晶受击不发受击事件,命中数读不到;炸了就是被打掉了
+    return `${zhEntity(target)}在原位炸了(放箭 ${stats.arrows} 支,挥击 ${stats.swings} 次)${underwaterOxygenNote(bot)}`;
+  }
+  if (crystal && !entity.isValid) {
+    const away = Math.round(entity.position.distanceTo(bot.entity.position));
+    throw new SkillBlocked(
+      `${zhEntity(target)}不见了,没收到它原位的爆炸(爆炸只通知 ${CRYSTAL_BLAST_REACH} 格内的玩家,消失时相距 ${away} 格);` +
+        attackStats(stats),
+    );
   }
   if (stats.dead) {
     return `打死了${zhEntity(target)}(${attackStats(stats)})${retreatFailed ? ';撤退没走开后回身打完' : ''}${underwaterOxygenNote(bot)}`;
