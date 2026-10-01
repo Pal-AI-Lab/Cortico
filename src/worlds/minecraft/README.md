@@ -588,6 +588,15 @@ ID，表示中文词表未覆盖。覆盖率可用 `scratch/` 下的探针脚本
 | `minecraft.world` | false | 节流后的位移、群系、天气、背包、饥饿和新出现敌对种类的变化摘要；仅含背包增减时使用 `piggyback` |
 | `minecraft.world.snapshot` | 投递成文 | 世界状态与队列，投递时读取；按 `snapshotSec` 限制频率，与上一份相同则不生成事件，详见「世界快照事件」 |
 | `minecraft.chat` | 被点名 true | 他人聊天；自己说话回录不投递 |
+| `minecraft.chat` | `piggyback` | `[MC 系统]` 服务器系统消息原文：命令反馈、插件回执、公告；`[MC 动作栏]` 动作栏原文 |
+
+系统消息里已有专报的不经 `[MC 系统]` 再转一遍：死亡广播与成就（键名
+`death.*`、`chat.type.advancement`）、`block.minecraft.set_spawn`、进出服广播
+（`multiplayer.player.joined` / `left`，由玩家列表事件成文）、被 mineflayer 聊天模式认成
+`chat` / `whisper` 的那几条（如 `[Server] hi`，照旧按 `[MC]` 聊天投递）。1.20.5 起成就键名
+是 `chat.type.advancement.{task,goal,challenge}`，这些按普通系统消息进 `[MC 系统]`。
+动作栏是一格会被覆盖的显示位，原版客户端每条显示 60 tick，期间收到同一文字只重置计时；
+因此同一文字距上一次收到不足 3 秒不再入流，过了显示期或换了文字才成新事件。
 
 画面**不是**事件：观众那边由 OBS 采集， World 只投递世界数据。
 
