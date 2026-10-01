@@ -221,7 +221,7 @@ describe('低弧瞄点', () => {
 
   it('沿瞄点射出的箭按原版逐刻运动(位移→×0.99→减 0.05)飞到目标处,高度落在目标中心', () => {
     const eye = new Vec3(0, 65.62, 0);
-    // 站岛中心射柱顶水晶、离柱更远处射柱顶:不计阻力时这两处分别打低 1.7 与 4.1 格
+    // 平射、站岛中心射柱顶水晶、离柱更远处射柱顶
     for (const [horizontal, rise] of [[24, 0], [42, 40], [60, 40]]) {
       const goal: RangedTarget = { id: 7, position: new Vec3(horizontal, eye.y + rise, 0), height: 0, width: 0 };
       const aim = lowArcAimPoint(eye, goal)!;
