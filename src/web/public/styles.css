@@ -570,7 +570,7 @@
   .segwrap { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
   .seg { background: var(--sheet); border: none; border-right: 1px solid var(--line-2); color: var(--ink-soft); font: 12.5px var(--sans); padding: 5px 12px; cursor: pointer; }
   .seg:last-child { border-right: none; }
-  .seg.active { background: var(--accent); color: var(--on-accent); }
+  .seg.active { background: var(--accent); color: #fff; }
   .seg:hover:not(.active) { background: var(--sheet-3); }
 
   .usagebar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
@@ -656,8 +656,8 @@
 
   .treerow { min-height: 34px; align-items: center; border-radius: 3px 8px 4px 2px; transition: background .14s, transform .14s; }
   .treerow:hover { transform: translateX(2px); }
-  .treerow.sel { background: var(--accent); color: var(--on-accent); }
-  .treerow.sel .fsize { color: color-mix(in srgb, var(--on-accent) 72%, transparent); }
+  .treerow.sel { background: var(--accent); color: #fff; }
+  .treerow.sel .fsize { color: color-mix(in srgb, #fff 72%, transparent); }
 
 
   .theme-current {
@@ -1883,7 +1883,7 @@
 .extension-tabs { position: sticky; top: 0; z-index: 21; display: grid; grid-template-columns: repeat(3, 1fr); padding: 6px; gap: 0; background: var(--background); border: 1px solid var(--border); border-radius: 12px; margin-bottom: 20px; isolation: isolate; }
 .extension-tab-indicator { position: absolute; z-index: -1; inset: 6px auto 6px 6px; width: calc((100% - 12px) / 3); border-radius: 8px; background: var(--accent); transform: translateX(calc(var(--tab-index, 0) * 100%)); transition: transform 180ms ease; }
 .extension-tabs .btn { border: 0; background: transparent; min-height: 38px; white-space: normal; }
-.extension-tabs .btn[aria-selected=true] { color: var(--on-accent); }
+.extension-tabs .btn[aria-selected=true] { color: #fff; }
 .extension-category > .sheet { margin: 0 0 28px; scroll-margin-top: 76px; }
 .extension-grid { display: grid; grid-template-columns: repeat(var(--extension-columns, 1), minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
 .extension-card { min-width: 0; border: 1px solid var(--border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--background); }
@@ -1928,10 +1928,10 @@
 .extension-manual-actions .msgline { flex: 1; margin: 0; min-width: 160px; font-size: 12px; }
 .extension-avatar-image, .extension-avatar-default { grid-area: 1 / 1; width: 100%; height: 100%; }
 .extension-avatar-image { display: block; object-fit: cover; border-radius: 12px; }
-.extension-avatar-default { position: relative; display: block; }
+.extension-avatar-default { display: grid; place-items: center; border-radius: 12px; background: color-mix(in srgb, var(--foreground) 4%, var(--background)); color: var(--ink-dim); }
 .extension-avatar-default[hidden] { display: none; }
-.extension-avatar .coomark { display: block; width: 100%; height: 100%; }
-.extension-avatar-initial { position: absolute; right: -4px; bottom: -4px; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 10px; display: grid; place-items: center; background: var(--accent); color: var(--on-accent); font: 700 11px/1 var(--sans); box-shadow: 0 0 0 2px var(--background); }
+.extension-avatar .brandmark { width: 32px; height: 32px; }
+.extension-avatar .accent { stroke: currentColor; }
 .extension-detail .kvtable { margin: 20px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .extension-detail .kvtable td { padding-block: 10px; }
 .extension-history { display: grid; gap: 0; margin: 12px 0 22px; border-block: 1px solid var(--line); }
@@ -1940,7 +1940,7 @@
 .extension-detail-actions { gap: 10px; margin-top: 24px; }
 .extension-detail-actions a.btn { border: 1px solid var(--line-strong); }
 .confirm-card .modalbody > .rowbar { margin-top: 24px; }
-.confirm-card .btn.danger { background: var(--danger); color: var(--paper); border-color: var(--danger); }
+.confirm-card .btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
 @media (prefers-reduced-motion: reduce) { .extension-card { transition: none; } .extension-card:hover { transform: none; } }
 .extension-detail-actions > button:last-child { margin-left: auto; }
 

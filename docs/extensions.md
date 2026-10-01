@@ -64,8 +64,8 @@ World 先在 World 页停用。
 包照常加载。
 
 `icon` 可选,是包内相对路径,指向 png、webp 或 svg。控制台卡片的头像取它,经
-`GET /api/extensions/icon?name=<包名>` 提供;没声明或文件不在时显示默认头像:Coopanion 的 Coo 图标,
-右下角是去掉作用域与 `cortico-<kind>-` 前缀后的首字。npm 市场里还没装的包都是默认头像。bot 包的 png 图标
+`GET /api/extensions/icon?name=<包名>` 提供;没声明或文件不在时显示淡色 Cortico 标志。
+npm 市场里还没装的包都是默认头像。bot 包的 png 图标
 在 `pnpm start --new` 新建部署时复制成部署的 `avatar.png`,之后头像以部署里的那份为准。路径不合格时给出
 warning 并忽略。
 
