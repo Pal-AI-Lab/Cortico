@@ -39,7 +39,8 @@
  *          {type:'greet', label}               按下终端页那颗按钮;label 是按钮上当时显示的字
  *   服务端→ {type:'msg', from, text, ts, images?}  广播(用户消息回显+bot消息);
  *                                              images 为 [{ref, mime, name?}](ref 是附件句柄)
- *          {type:'sys', text}                  系统提示
+ *          {type:'sys', text, kind?}           系统提示;kind 'rejected' = 这一帧没有被接收,
+ *                                              'warning' = 已接收但有附带说明
  *
  * 图片进媒体库(core data/media/),事件只带引用;正文末尾标注张数,模型不接受
  * 图像时标注里同时写明她看不到,不让她对着一句"附图"猜内容。
@@ -129,6 +130,7 @@ const zh = {
   helloFirst: '请先发送 hello 设置名字',
   imagesRejected: (reason: string) => `图片未发送: ${reason}`,
   botNotConnected: 'bot尚未连接,消息未送达',
+  deliveryFailed: (err: string) => `消息未送达: ${err}`,
   modelBlind: (model: string) => `当前模型 ${model} 不接收图像,她只看到每张图的文字说明`,
   unknownType: (type: string) => `未知消息类型: ${type}`,
   // ── 图片解析的拒收理由 ─────────────────────────────────────────────
@@ -177,6 +179,7 @@ const en: typeof zh = {
   helloFirst: 'Send hello to set a name first',
   imagesRejected: (reason) => `Images not sent: ${reason}`,
   botNotConnected: 'The bot is not connected yet; message not delivered',
+  deliveryFailed: (err) => `Message not delivered: ${err}`,
   modelBlind: (model) => `The current model ${model} does not accept images; she only sees each image's text description`,
   unknownType: (type) => `Unknown message type: ${type}`,
   imagesNotArray: 'images must be an array',
@@ -495,6 +498,11 @@ export class TerminalWorld implements World {
     this.broadcastSys((t) => t.left(name), null);
   }
 
+  /** 这一帧没有被接收,原因写在 text 里。 */
+  private reject(client: ChatClient, reason: string): void {
+    this.sendJson(client.peer, { type: 'sys', kind: 'rejected', text: reason });
+  }
+
   /** 给在场的每条流一句系统提示,各按自己的语言;`except` 那条不发。 */
   private broadcastSys(line: (t: TerminalText) => string, except: ChatClient | null): void {
     for (const c of [...this.clients]) {
@@ -515,11 +523,11 @@ export class TerminalWorld implements World {
     try {
       parsed = JSON.parse(raw);
     } catch {
-      this.sendJson(client.peer, { type: 'sys', text: t.notJson });
+      this.reject(client, t.notJson);
       return;
     }
     if (parsed === null || typeof parsed !== 'object') {
-      this.sendJson(client.peer, { type: 'sys', text: t.malformed });
+      this.reject(client, t.malformed);
       return;
     }
     const msg = parsed as Record<string, unknown>;
@@ -527,7 +535,7 @@ export class TerminalWorld implements World {
     if (msg.type === 'hello') {
       const name = typeof msg.name === 'string' ? msg.name.trim().slice(0, NAME_MAX) : '';
       if (!name) {
-        this.sendJson(client.peer, { type: 'sys', text: t.emptyName });
+        this.reject(client, t.emptyName);
         return;
       }
       const firstHello = client.name === null;
@@ -541,18 +549,18 @@ export class TerminalWorld implements World {
 
     if (msg.type === 'msg') {
       if (client.name === null) {
-        this.sendJson(client.peer, { type: 'sys', text: t.helloFirst });
+        this.reject(client, t.helloFirst);
         return;
       }
       const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, TEXT_MAX) : '';
       const parsed = parseImages(msg.images, t);
       if (!parsed.ok) {
-        this.sendJson(client.peer, { type: 'sys', text: t.imagesRejected(parsed.reason) });
+        this.reject(client, t.imagesRejected(parsed.reason));
         return;
       }
       if (!text && parsed.images.length === 0) return; // 空消息静默忽略
       if (!this.host) {
-        this.sendJson(client.peer, { type: 'sys', text: t.botNotConnected });
+        this.reject(client, t.botNotConnected);
         return;
       }
       // 图片随事件落库:core 分配句柄并把每张的文本形态接在正文后;回显与回放只带句柄。
@@ -592,20 +600,23 @@ export class TerminalWorld implements World {
           type: 'msg', from: client.name, text, ts: envelope.ts,
           ...(wireImages.length ? { images: wireImages } : {}),
         });
-      }).catch((e) => host.log.warn('消息事件投递失败', { err: String(e) }));
+      }).catch((e) => {
+        host.log.warn('消息事件投递失败', { err: String(e) });
+        this.reject(client, t.deliveryFailed(String(e)));
+      });
       if (total > 0 && !visible) {
-        this.sendJson(client.peer, { type: 'sys', text: t.modelBlind(host.modelFacts.model()) });
+        this.sendJson(client.peer, { type: 'sys', kind: 'warning', text: t.modelBlind(host.modelFacts.model()) });
       }
       return;
     }
 
     if (msg.type === 'greet') {
       if (client.name === null) {
-        this.sendJson(client.peer, { type: 'sys', text: t.helloFirst });
+        this.reject(client, t.helloFirst);
         return;
       }
       if (!this.host) {
-        this.sendJson(client.peer, { type: 'sys', text: t.botNotConnected });
+        this.reject(client, t.botNotConnected);
         return;
       }
       // 标签逐字进事件正文,所以压成一行并截断;没有标签就没有可引用的事实,这一帧作废。
@@ -623,11 +634,14 @@ export class TerminalWorld implements World {
           meta: { from: client.name, label },
         },
         { trigger: 'flush' },
-      ).catch((e) => host.log.warn('按钮事件投递失败', { err: String(e) }));
+      ).catch((e) => {
+        host.log.warn('按钮事件投递失败', { err: String(e) });
+        this.reject(client, t.deliveryFailed(String(e)));
+      });
       return;
     }
 
-    this.sendJson(client.peer, { type: 'sys', text: t.unknownType(String(msg.type)) });
+    this.reject(client, t.unknownType(String(msg.type)));
   }
 
   /** 已保存的终端事件里有没有人说过话。 */
