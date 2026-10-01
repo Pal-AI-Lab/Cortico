@@ -176,6 +176,52 @@ describe('显式维度穿越', () => {
     expect(reports[0].text).toContain('这处坐标属于下界,我当前在主世界');
     expect(goto).not.toHaveBeenCalled();
   });
+
+  it('非 transit 步途中维度变了:旧维度的寻路目标当刻撤掉,当前与排着的单各报取消', async () => {
+    const bot = combatBot({});
+    Object.assign(bot, { game: { dimension: 'overworld' } });
+    let fail: ((e: Error) => void) | null = null;
+    // 寻路器的约定:目标被撤时 goto 以错误结束
+    const pf = {
+      goal: null as unknown,
+      stop() {},
+      setGoal(g: unknown) {
+        pf.goal = g;
+        if (g === null) fail?.(new Error('GoalChanged'));
+      },
+      goto: (goal: FakeGoal) => new Promise<void>((_ok, reject) => { pf.goal = goal; fail = reject; }),
+    };
+    Object.assign(bot, { pathfinder: pf });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'goto', at: [1093, -13, 843] }]);
+    exec.submit([{ skill: 'goto', at: [1093, -13, 843] }]);
+    await waitUntil(() => pf.goal !== null);
+
+    (bot as unknown as { game: { dimension: string } }).game.dimension = 'the_end';
+    const note = exec.cancelForDimensionChange('overworld', 'the_end');
+
+    expect(pf.goal).toBeNull();
+    expect(note).toContain('寻路目标已撤');
+    expect(reports.map((r) => r.kind)).toEqual(['cancelled', 'cancelled']);
+    expect(reports[0].text).toContain('没经 transit 从主世界进入了末地');
+    await sleep(100);
+    // 被撤的那一单收尾时不再补一条终态,排着的也不会在末地开跑
+    expect(reports).toHaveLength(2);
+    expect(exec.status().waiting).toHaveLength(0);
+  });
+
+  it('transit 步途中维度变化是它本来要做的事,不撤单', async () => {
+    const bot = combatBot({ goto: () => new Promise<void>(() => {}) });
+    Object.assign(bot, { game: { dimension: 'overworld' } });
+    bot.blockAt = (() => ({ name: 'end_portal' })) as typeof bot.blockAt;
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'transit', at: [10, 64, 0] }]);
+    await sleep(10);
+
+    expect(exec.cancelForDimensionChange('overworld', 'the_end')).toBeNull();
+    expect(reports).toHaveLength(0);
+    expect(exec.current).not.toBeNull();
+  });
 });
 
 /** 带容器账本的执行器:账本相关技能(smelt 入账 / take at / 试算点名)用它 */

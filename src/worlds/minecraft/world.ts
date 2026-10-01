@@ -5515,7 +5515,12 @@ export class MinecraftWorld implements World {
         this.matureAnnounced.clear();
         this.lastDimension = dim;
         this.syncRealm();
-        this.emit('minecraft.event', `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。`, true);
+        const cancelled = this.executor?.cancelForDimensionChange(from, dim) ?? null;
+        this.emit(
+          'minecraft.event',
+          `[Minecraft] 从${zhDimension(from)}进入了${zhDimension(dim)}。${cancelled ? `${cancelled}。` : ''}`,
+          true,
+        );
         this.resyncSpectatorForDimension(dim);
       }
       if (dim) this.lastDimension = dim;

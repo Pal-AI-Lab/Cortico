@@ -2407,6 +2407,45 @@ export class Executor {
     }
   }
 
+  /**
+   * 维度变了而手上那一步不是 transit:当前、冻结和排队的计划都按旧维度坐标写的,
+   * 当刻撤单并撤掉寻路目标(包括逃生目标),每一件各自投递取消终态。
+   * 返回给 bot 的说明;没有可撤的东西时为 null。
+   */
+  cancelForDimensionChange(from: string, to: string): string | null {
+    const t = this.task;
+    if (t?.steps[t.stepIndex]?.skill === 'transit') return null;
+    const bot = this.opts.getBot();
+    const goal = bot?.pathfinder?.goal ?? null;
+    // 寻路目标的坐标同样属于旧维度,不管是谁下的都作废
+    if (goal) dropGoal(bot, 'task', `维度从${zhDimension(from)}变成${zhDimension(to)}`, this.opts.diag);
+    const dropped = this.queue.splice(0);
+    if (this.frozen) {
+      dropped.unshift(this.frozen);
+      this.frozen = null;
+    }
+    if (!t && dropped.length === 0) return goal ? '旧维度的寻路目标已撤' : null;
+    const by = `维度变化中止(没经 transit 从${zhDimension(from)}进入了${zhDimension(to)},`
+      + `计划里的坐标是按${zhDimension(from)}写的)`;
+    if (t) {
+      const at = this.progressOf(t);
+      this.abortTask(t, by);
+      this.reportCancelled(t, by, at);
+    }
+    for (const d of dropped) this.reportCancelled(d, by, Executor.frozenProgress(d));
+    this.opts.diag?.write({
+      lane: 'task', event: 'dimension-cancelled', taskId: t?.id ?? dropped[0]?.id,
+      msg: `维度从${zhDimension(from)}变成${zhDimension(to)},撤了${t ? `任务#${t.id}` : ''}`
+        + `${dropped.length > 0 ? `${t ? '和' : ''}排着的 ${dropped.length} 件` : ''},寻路目标已撤`,
+      data: { from, to, current: t?.id ?? null, dropped: dropped.map((d) => d.id), hadGoal: goal !== null },
+    });
+    return [
+      t ? `任务#${t.id}「${labelOf(t)}」已中止` : null,
+      dropped.length > 0 ? `排着的 ${dropped.map((d) => `任务#${d.id}`).join('、')} 也撤了` : null,
+      '寻路目标已撤,想在这边做事要按这边的坐标重新排',
+    ].filter(Boolean).join(';');
+  }
+
   /** 当前任务占用逃逸路径时为 true;反射层据此避免重复抢占。 */
   get escaping(): boolean {
     const t = this.task;
