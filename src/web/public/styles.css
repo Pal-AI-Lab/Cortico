@@ -164,6 +164,10 @@
 
 
   .subtabs { display: flex; gap: 4px; flex-wrap: wrap; padding: 12px 30px 0; flex: none; }
+  .subtabgroup { align-self: center; margin: 0 4px 0 10px; font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); }
+  .subtabgroup:first-child { margin-left: 0; }
+  .logdetail > summary { cursor: pointer; }
+  .logdetail > pre { margin: 6px 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 
   .sheet {
@@ -266,7 +270,7 @@
     display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
     font: 11.5px/1 var(--sans); color: var(--ink-soft); background: var(--sheet-2);
     border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; white-space: nowrap;
-    transition: border-color .12s, color .12s;
+    transition: border-color .12s, color .12s; text-align: left;
   }
   .sesscard:hover { border-color: var(--accent-2); color: var(--ink); }
   .sesscard.sel { border-color: var(--accent); }
@@ -379,7 +383,7 @@
 
   .turnbody { display: flex; flex-direction: column; gap: 10px; }
   .turnbody:empty { display: none; }
-  .rawtoggle { cursor: pointer; user-select: none; }
+  .rawtoggle { cursor: pointer; user-select: none; background: none; border: 0; padding: 0; }
   .rawtoggle:hover { color: var(--ink-soft); }
   .turnraw pre.mono { color: var(--ink-dim); font-size: 11.5px; max-height: 420px; overflow-y: auto; border-top: 1px dashed var(--line); padding-top: 8px; }
   .think { border-left: 3px solid color-mix(in srgb, var(--accent-2) 65%, transparent); padding-left: 12px; }

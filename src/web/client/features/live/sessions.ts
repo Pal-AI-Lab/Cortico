@@ -47,7 +47,8 @@ export function createSessionBand(deps: SessionBandDeps): SessionBand {
         ]
           .filter((c) => c !== '')
           .join(' ');
-        const card = ui.h('span', cls);
+        const card = ui.h('button', cls);
+        card.type = 'button';
         card.appendChild(ui.h('span', 'sdot'));
         const info = ui.h('span');
         info.appendChild(ui.h('b', null, s.label));

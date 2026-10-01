@@ -766,7 +766,7 @@ describe('存储页', () => {
     await flush();
     expect(root.findAll('strow').map((r: Any) => r.find('stlabel')!.textContent)).toEqual(['World 落盘', 'World 内存']);
     expect(root.findAll('stacklabel').map((l: Any) => l.textContent)).toEqual(['落盘 data/（重启后仍在）', '内存暂存（重启即清零）']);
-    expect(root.findButton('⚠ 一键清空全部')).toBeNull();
+    expect(root.findButton('⚠ 一键清空服务端全部存储')).toBeNull();
 
     const disk = await mkCtx({ storage: true });
     mountStorage(disk.ctx, { filter: (p) => p.key === 'events' });
@@ -840,7 +840,7 @@ describe('存储页', () => {
       '/api/storage': { parts },
     });
 
-    root.findButton('⚠ 一键清空全部')!.dispatchEvent({ type: 'click' });
+    root.findButton('⚠ 一键清空服务端全部存储')!.dispatchEvent({ type: 'click' });
     const modal = doc.body.find('modal')!;
     expect(modal.textContent).toContain('一键清空全部存储');
     answerConfirm(doc, true);

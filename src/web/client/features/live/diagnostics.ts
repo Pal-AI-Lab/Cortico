@@ -1,4 +1,6 @@
+import type { ConsoleUi } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
+import { S } from './strings.ts';
 
 /** `cortico-diagnostics-r-20260917-104402-c2ab-20260917-142530.json`;没有 run id 时写 norun。 */
 export function diagnosticsFileName(runId: string | null, at: Date): string {
@@ -22,11 +24,15 @@ export function downloadJson(doc: Document, name: string, data: unknown): void {
 }
 
 export interface DiagnosticsDeps {
+  ui: ConsoleUi;
   doc: Document;
   signal: AbortSignal;
 }
 
+/** 先说明包里有什么,确认后取包下载;取消时什么都不发。 */
 export async function exportDiagnostics(deps: DiagnosticsDeps): Promise<void> {
+  const ok = await deps.ui.confirm({ title: S.exportConfirmTitle, body: S.exportConfirmBody });
+  if (!ok || deps.signal.aborted) return;
   const bundle = await get<{ run?: { id?: string | null } }>('/api/diagnostics', { signal: deps.signal });
   downloadJson(deps.doc, diagnosticsFileName(bundle?.run?.id ?? null, new Date()), bundle);
 }

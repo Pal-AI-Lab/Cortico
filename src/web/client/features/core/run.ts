@@ -36,19 +36,24 @@ export function createRunView(deps: RunViewDeps): RunView {
       const u = loop.lastUsage ?? {};
       const cache =
         u.promptTokens ? ui.fmt.percent((u.cacheHitTokens || 0) / u.promptTokens) : '—';
+      const connection = st.modelConnection;
+      // 先列决定 bot 能否响应的状态,累计统计排在后面。
       const cards = [
-        { k: S.statContext, v: ui.fmt.count(loop.estTokens), unit: 'tok', accent: true },
-        { k: S.statMessages, v: loop.messageCount ?? '—', unit: S.unitMsgs },
-        { k: S.statCache, v: cache },
-        { k: S.statRounds, v: loop.roundsLastBatch ?? '—' },
-        { k: S.statBatches, v: loop.batchesHandled ?? '—' },
-        { k: S.statEvents, v: st.latestEventCursor ?? '—' },
-        { k: S.statOnline, v: st.terminalOnline ?? '—', unit: S.unitPeople },
         {
           k: S.statRun,
           v: loop.paused ? S.runPaused : loop.scheduleBlocked ? S.runBlocked : S.runRunning,
           accent: !!(loop.paused || loop.scheduleBlocked),
         },
+        { k: S.statBehind, v: loop.behind ?? '—', accent: !!loop.behind },
+        { k: S.statDelivered, v: loop.lastDeliveredCursor ?? '—', unit: `/ ${st.latestEventCursor ?? '—'}` },
+        { k: S.statTruncating, v: loop.truncating ? S.truncatingOn : S.truncatingOff, accent: !!loop.truncating },
+        { k: S.statProvider, v: connection ? connection.name : '—', unit: connection?.model ?? '' },
+        { k: S.statContext, v: ui.fmt.count(loop.estTokens), unit: 'tok' },
+        { k: S.statCache, v: cache },
+        { k: S.statMessages, v: loop.messageCount ?? '—', unit: S.unitMsgs },
+        { k: S.statRounds, v: loop.roundsLastBatch ?? '—' },
+        { k: S.statBatches, v: loop.batchesHandled ?? '—' },
+        { k: S.statOnline, v: st.terminalOnline ?? '—', unit: S.unitPeople },
       ];
       for (const c of cards) grid.appendChild(ui.stat(c));
     },

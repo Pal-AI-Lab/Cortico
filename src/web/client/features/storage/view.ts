@@ -1,6 +1,6 @@
 /**
  * 存储清单视图:列本页的项,落盘在内存前,每项可清除。清单由服务端声明,清除范围和结果由各项的实现决定;
- * `clearAll` 打开时多一颗一键清空,清的是服务端整张清单。
+ * `clearAll` 打开时多一颗一键清空,清的是服务端整张清单;确认框逐项列出受影响的存储项与归属。
  */
 
 import type { ConsoleUi } from '../../../shared/client-panel.ts';
@@ -102,9 +102,13 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
     }
   }
 
+  /** 最近一次取回的整张清单,确认框按它列出一键清空的范围。 */
+  let everything: StoragePartView[] = [];
+
   async function nuke(): Promise<void> {
     if (!nukeBtn) return;
-    const ok = await ui.confirm({ title: S.nukeTitle, body: S.nukeBody, danger: true });
+    const list = everything.map((p) => `· ${p.label} (${p.owner})`).join('\n');
+    const ok = await ui.confirm({ title: S.nukeTitle, body: `${S.nukeBody}\n\n${list}`, danger: true });
     if (!ok || signal.aborted) return;
     const lock = ui.disable(nukeBtn);
     try {
@@ -131,6 +135,7 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
       const data = await get<{ parts?: StoragePartView[] }>('/api/storage', { signal });
       if (signal.aborted) return;
       const all = data.parts || [];
+      everything = all;
       const parts = deps.filter ? all.filter((p) => deps.filter!(p)) : all;
       body.replaceChildren();
       if (!parts.length) {
