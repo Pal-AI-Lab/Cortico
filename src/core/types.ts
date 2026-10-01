@@ -373,7 +373,7 @@ export interface UsageRecord {
   outcome?: 'failed' | 'discarded';
   /** 请求前缀 SHA 指纹的前 12 位，用于判断前缀是否变化。 */
   prefixHash?: string;
-  /** 失败调用从开流到失败的耗时（ms）。 */
+  /** 失败调用从开流到失败的耗时（ms），只在 outcome 为 failed 时写；每次尝试的耗时都在 attempt.elapsedMs。 */
   failedAfterMs?: number;
   /** 失败调用的上游请求 id。 */
   requestId?: string;

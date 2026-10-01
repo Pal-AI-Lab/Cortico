@@ -113,6 +113,7 @@ export class SessionTracker {
           const attempt = structuredClone(source);
           if (extra?.outcome === 'discarded' && (attempt.outcome === 'completed' || attempt.outcome === 'incomplete')) attempt.outcome = 'discarded';
           const usage = usageCounters(attempt.meters);
+          const failed = attempt.outcome === 'failed' || attempt.outcome === 'aborted';
           const stats = entry.stats;
           stats.calls++;
           stats.promptTokens += usage.promptTokens;
@@ -122,9 +123,9 @@ export class SessionTracker {
           stats.reasoningTokens += usage.reasoningTokens ?? 0;
           this.onRecord?.({ version: 2, attempt, ts: nowIso(this.timezone, new Date(attempt.startedAt)), sessionId: id,
             role: stats.role, label: stats.label, model: attempt.origin.model, ...usage, reasoningTokens: usage.reasoningTokens ?? 0,
-            failedAfterMs: attempt.elapsedMs, ...(attempt.requestId ? { requestId: attempt.requestId } : {}),
+            ...(failed ? { failedAfterMs: attempt.elapsedMs } : {}), ...(attempt.requestId ? { requestId: attempt.requestId } : {}),
             ...(attempt.status !== null ? { status: attempt.status } : {}),
-            ...(attempt.outcome === 'completed' || attempt.outcome === 'incomplete' ? {} : { outcome: attempt.outcome === 'discarded' ? 'discarded' : 'failed' }),
+            ...(failed ? { outcome: 'failed' } : attempt.outcome === 'discarded' ? { outcome: 'discarded' } : {}),
             ...(extra?.prefixHash ? { prefixHash: extra.prefixHash } : {}),
           });
         }

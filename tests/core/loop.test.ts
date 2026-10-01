@@ -2959,12 +2959,13 @@ describe('MainLoop 失败流入账', () => {
     expect(rows[0].attempt?.meters.output).toBeNull();
   });
 
-  it('成功的一发照旧记成功行(不带 outcome 键)', async () => {
+  it('成功的一发照旧记成功行(不带 outcome 和 failedAfterMs 键)', async () => {
     const { rows, tracker } = rigWithUsage();
     rig = makeRig({ tracker });
     rig.start();
     await until(() => rows.length >= 1);
     expect(rows[0].outcome).toBeUndefined();
+    expect(rows[0]).not.toHaveProperty('failedAfterMs');
   });
 
   it('主循环把请求前缀哈希带进流水(前缀断裂可归因)', async () => {
