@@ -155,6 +155,47 @@ export function installMineflayerFixes(
   log.info(`mineflayer 修补已装上:合成取服务端产物、放置短超时重发、附魔按组件格式计入挖掘、挖掘等服务端改掉那一格、stateId 认当前窗口、丢弃关掉的窗口迟到的 window_items、光照段重新落位、水平碰撞留缝${diag ? '' : '(没给 World 日志,包流不留痕)'}`);
 }
 
+/** 带水平随机偏移且有碰撞箱的方块,值是原版的偏移上限(格) */
+const OFFSET_MAX: Record<string, number> = { pointed_dripstone: 0.125, bamboo: 0.25 };
+
+/** 原版 Mth.getSeed(x, 0, z) 起算的水平偏移(BlockBehaviour 的 OffsetType.XZ) */
+export function blockOffsetXZ(x: number, z: number, max: number): [number, number] {
+  let l = BigInt.asIntN(64, BigInt(Math.imul(x, 3129871)) ^ BigInt.asIntN(64, BigInt(z) * 116129781n));
+  l = BigInt.asIntN(64, l * l * 42317861n + l * 11n) >> 16n;
+  const axis = (bits: bigint): number =>
+    Math.min(max, Math.max(-max, (Math.fround(Number(bits & 15n) / 15) - 0.5) * 0.5));
+  return [axis(l), axis(l >> 8n)];
+}
+
+/**
+ * 滴水石锥与竹子的碰撞箱按所在格的原版偏移摆放。minecraft-data 的碰撞箱取自 (0,0,0) 那一格,
+ * 那一格两轴偏移都是负的上限;服务端按每格自己的偏移判碰撞,客户端照原数据走会走进服务端眼里的
+ * 实心,每一拍被拉回原位,人钉在原地。bot 的物理、寻路器和它的跳跃模拟都经 bot.blockAt 读格,改这一处。
+ * 经 bot.loadPlugin 装:要等注册表和 blockAt 都就位。
+ */
+export function installOffsetShapes(bot: Bot): void {
+  const reg = bot.registry as unknown as { blocksByName: Record<string, { id: number } | undefined> };
+  const maxById = new Map<number, number>();
+  for (const [name, max] of Object.entries(OFFSET_MAX)) {
+    const id = reg.blocksByName[name]?.id;
+    if (id !== undefined) maxById.set(id, max);
+  }
+  const origin = new Map([...new Set(maxById.values())].map((max) => [max, blockOffsetXZ(0, 0, max)]));
+  const blockAt = bot.blockAt.bind(bot);
+  bot.blockAt = ((pos: Parameters<Bot['blockAt']>[0], extraInfos?: boolean) => {
+    const block = blockAt(pos, extraInfos);
+    const max = block ? maxById.get(block.type) : undefined;
+    if (block === null || max === undefined) return block;
+    const [ox, oz] = blockOffsetXZ(block.position.x, block.position.z, max);
+    const [bx, bz] = origin.get(max)!;
+    const dx = ox - bx;
+    const dz = oz - bz;
+    // 每次读格都是新的 Block,shapes 却指向注册表里共用的数组:换成新数组,不改原数组
+    block.shapes = block.shapes.map(([x0, y0, z0, x1, y1, z1]) => [x0 + dx, y0, z0 + dz, x1 + dx, y1, z1 + dz]);
+    return block;
+  }) as Bot['blockAt'];
+}
+
 /** 原型上的标记:同一进程里多个连接、多份模块实例只改一次 */
 const WALL_GAP_MARK = Symbol.for('cortico.minecraft.wallGap');
 

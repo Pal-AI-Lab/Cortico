@@ -11,7 +11,7 @@ import { Vec3 } from 'vec3';
 import type { Logger } from '../../core/types.ts';
 import type { RouteProbe, TargetDiag } from './executor.ts';
 import type { MinecraftLog } from './log.ts';
-import { installMineflayerFixes, installPathfinderToolSelection } from './mineflayer-fixes.ts';
+import { installMineflayerFixes, installOffsetShapes, installPathfinderToolSelection } from './mineflayer-fixes.ts';
 import {
   installPathfinderPerf, setDigBackoff, setNoPlaceCells, setSiteZones, type SiteZone,
 } from './pathfinder-perf.ts';
@@ -333,6 +333,7 @@ export class Bridge {
     trackDamageSources(bot);
     /** 修补须通过插件注入，等待 Mineflayer 的 inject_allowed。 */
     bot.loadPlugin((b) => installMineflayerFixes(b, log, this.opts.diag, this.opts.showTempo));
+    bot.loadPlugin(installOffsetShapes);
     bot.loadPlugin(pathfinder);
     installPathfinderPerf(log);
     (bot._client as unknown as { on(ev: string, cb: (pkt: { windowId: number }) => void): void }).on(

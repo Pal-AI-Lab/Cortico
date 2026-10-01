@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';
 import {
-  WALL_GAP, installMineflayerFixes, installPathfinderToolSelection, installWallGap,
+  WALL_GAP, installMineflayerFixes, installOffsetShapes, installPathfinderToolSelection, installWallGap,
 } from '../../../src/worlds/minecraft/mineflayer-fixes.ts';
 import { MinecraftLog } from '../../../src/worlds/minecraft/log.ts';
 import { PLACE_REACH } from '../../../src/worlds/minecraft/cell-facts.ts';
@@ -1758,5 +1758,45 @@ describe('installWallGap:水平碰撞停在离方块面 WALL_GAP 处', () => {
     installWallGap();
     const s = walk(makeWorld(false), stateAt(0.5, 64, 3.5, 0, { forward: true }), 60);
     expect(s.pos.z - HALF - 1).toBeCloseTo(WALL_GAP, 9);
+  });
+});
+
+describe('滴水石锥与竹子按格偏移碰撞箱', () => {
+  const req = createRequire(createRequire(import.meta.url).resolve('mineflayer/package.json'));
+  const registry = req('prismarine-registry')('1.20.6');
+  const World = req('prismarine-world')(registry);
+  const Chunk = req('prismarine-chunk')(registry);
+  const { Vec3 } = req('vec3');
+  /** 石笋尖:朝上、上面是空气 */
+  const Block = req('prismarine-block')(registry);
+  const TIP = Block.fromProperties('pointed_dripstone', {
+    thickness: 'tip', vertical_direction: 'up', waterlogged: false,
+  }, 0).stateId as number;
+
+  function botAt(cells: Array<[number, number, number]>) {
+    const world = new World(null).sync;
+    for (const [x, , z] of cells) world.setColumn(x >> 4, z >> 4, new Chunk({ minY: -64, worldHeight: 384 }));
+    for (const [x, y, z] of cells) world.setBlockStateId(new Vec3(x, y, z), TIP);
+    const bot = { registry, blockAt: (p: unknown) => world.getBlock(p) };
+    installOffsetShapes(bot as never);
+    return bot as unknown as { blockAt(p: unknown): { shapes: number[][] } };
+  }
+
+  it('(-150,-11,63) 那根石笋尖按服务端偏移摆:北沿在 z=63.8125,不是注册表里的 63.5625', () => {
+    const bot = botAt([[-150, -11, 63]]);
+    const [[x0, , z0, x1, , z1]] = bot.blockAt(new Vec3(-150, -11, 63)).shapes;
+    // 原版石笋尖是 5..11 像素见方,这一格偏移 (+0.1167, +0.125)
+    expect(-150 + x0).toBeCloseTo(-150 + 0.3125 + 7 / 60, 4);
+    expect(-150 + x1).toBeCloseTo(-150 + 0.6875 + 7 / 60, 4);
+    expect(63 + z0).toBeCloseTo(63.4375, 6);
+    expect(63 + z1).toBeCloseTo(63.8125, 6);
+  });
+
+  it('(0,0) 那一格就是注册表取形状的那一格,不挪;注册表里共用的数组不被改', () => {
+    const bot = botAt([[0, -11, 0], [-150, -11, 63]]);
+    const shared = JSON.stringify(registry.blockCollisionShapes.shapes[
+      registry.blockCollisionShapes.blocks.pointed_dripstone[TIP - registry.blocksByName.pointed_dripstone.minStateId]]);
+    bot.blockAt(new Vec3(-150, -11, 63));
+    expect(JSON.stringify(bot.blockAt(new Vec3(0, -11, 0)).shapes)).toBe(shared);
   });
 });
