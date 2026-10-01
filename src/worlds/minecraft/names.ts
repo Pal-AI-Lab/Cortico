@@ -209,7 +209,7 @@ const BASE: Record<string, string> = {
 const BASE_KEYS = Object.keys(BASE).sort((a, b) => b.length - a.length);
 
 const ENTITIES: Record<string, string> = {
-  allay: '悦灵', armadillo: '犰狳', armor_stand: '盔甲架', arrow: '箭', axolotl: '美西螈',
+  allay: '悦灵', area_effect_cloud: '区域效果云', armadillo: '犰狳', armor_stand: '盔甲架', arrow: '箭', axolotl: '美西螈',
   bat: '蝙蝠', bee: '蜜蜂', blaze: '烈焰人', boat: '船', bogged: '沼骸', breeze: '旋风人',
   camel: '骆驼', cat: '猫', cave_spider: '洞穴蜘蛛', chest_boat: '运输船',
   chest_minecart: '运输矿车', chicken: '鸡', cod: '鳕鱼', cow: '牛', creeper: '苦力怕',

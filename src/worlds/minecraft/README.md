@@ -36,6 +36,7 @@ cell-facts.ts    格的读法:锚点落到哪一格、脚下与参照面、区�
 geometry.ts      形状与锚点的纯几何:解析、栅格化
 item-facts.ts / entity-facts.ts / item-pick.ts / item-break.ts / piglin.ts
                  物品与实体的事实读法
+damage-source.ts 自己挨打的来由:damage_event 的伤害类型、起因实体与直接实体
 names.ts         方块/实体/生物群系/附魔/效果的中文名表
 
 技能

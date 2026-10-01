@@ -21,6 +21,7 @@ import { pocketScan, standCellsAround } from './terrain.ts';
 import { trackWindowProps } from './containers.ts';
 import { installTreadWater } from './travel.ts';
 import { trackMaps } from './map-view.ts';
+import { trackDamageSources } from './damage-source.ts';
 
 interface BridgeOptions {
   host: string;
@@ -329,6 +330,7 @@ export class Bridge {
     this._invSynced = false;
     // 包里地图的整张画面服务端只在登录后第一刻推一次,早于 spawn;挂在 spawn 上就只剩增量
     trackMaps(bot);
+    trackDamageSources(bot);
     /** 修补须通过插件注入，等待 Mineflayer 的 inject_allowed。 */
     bot.loadPlugin((b) => installMineflayerFixes(b, log, this.opts.diag, this.opts.showTempo));
     bot.loadPlugin(pathfinder);
