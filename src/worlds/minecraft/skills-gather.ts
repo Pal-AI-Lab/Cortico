@@ -18,6 +18,7 @@ import {
 } from './inventory.ts';
 import { Upkeep, pushPocketLine, standableCell } from './placement.ts';
 import { zhEntity, zhName } from './names.ts';
+import { metaOf } from './entity-facts.ts';
 import { equipToolFor, harvestFact, miningToolPlan } from './tools.ts';
 import { bestWeapon } from './melee.ts';
 import { type FindKind } from './search-observation.ts';
@@ -723,7 +724,7 @@ export const AIM_MAX_DEG = 45;
 export const AIM_STEP_DEG = 1;
 
 export type BobberHit =
-  | { hit: 'water'; x: number; y: number; z: number; dist: number }
+  | { hit: 'water'; x: number; y: number; z: number; dist: number; ticks: number }
   | { hit: 'solid' | 'unloaded' | 'lost' };
 
 /** 落点搜索用的方块视图:只要名字和挡不挡路 */
@@ -758,7 +759,7 @@ export function simulateBobber(
       const b = peek(Math.floor(qx), Math.floor(qy), Math.floor(qz));
       if (!b) return { hit: 'unloaded' };
       if (b.name === 'water') {
-        return { hit: 'water', x: qx, y: qy, z: qz, dist: Math.hypot(qx - eye.x, qz - eye.z) };
+        return { hit: 'water', x: qx, y: qy, z: qz, dist: Math.hypot(qx - eye.x, qz - eye.z), ticks: t + 1 };
       }
       if (b.solid) return { hit: 'solid' };
     }
@@ -771,8 +772,8 @@ export function simulateBobber(
   return { hit: 'lost' };
 }
 
-/** 一个候选抛法:仰角(弧度)与它预测的落水点离目标格中心多远 */
-export type AimPlan = { elev: number; dist: number; miss: number };
+/** 一个候选抛法:仰角(弧度)、它预测的落水点离目标格中心多远、出手后第几 tick 落水 */
+export type AimPlan = { elev: number; dist: number; miss: number; ticks: number };
 
 /**
  * 搜出所有能落进水里的仰角,按落点离目标格多近排序。
@@ -806,7 +807,7 @@ export function planFishingCasts(bot: Bot, target: Cell): AimPlan[] {
     const elev = (deg * Math.PI) / 180;
     const r = simulateBobber(eye, hx, hz, elev, peek);
     if (r.hit !== 'water') continue;
-    plans.push({ elev, dist: r.dist, miss: Math.hypot(r.x - tx, r.y - ty, r.z - tz) });
+    plans.push({ elev, dist: r.dist, miss: Math.hypot(r.x - tx, r.y - ty, r.z - tz), ticks: r.ticks });
   }
   plans.sort((a, b) => a.miss - b.miss);
   return plans;
@@ -826,47 +827,57 @@ export function findBobber(bot: Bot): NonNullable<Bot['entities'][string]> | nul
   return best;
 }
 
-/** 浮标此刻所在的那一格 */
-export function bobberCell(bot: Bot): { name: string; x: number; y: number; z: number } | null {
-  const e = findBobber(bot);
-  if (!e) return null;
-  const p = e.position;
-  const x = Math.floor(p.x);
-  const y = Math.floor(p.y);
-  const z = Math.floor(p.z);
-  const b = bot.blockAt(new Vec3(x, y, z));
-  return { name: b?.name ?? 'unknown', x, y, z };
-}
-
-/** 抛出后等浮标停下来的上限;飞行一般 10~30 tick */
-export const BOBBER_SETTLE_MS = 2_000;
+/** 原版 EntityType.FISHING_BOBBER 注册时 updateInterval(5):服务端每 5 tick 才同步一次浮标位移 */
+export const BOBBER_SYNC_TICKS = 5;
+const TICK_MS = 50;
 /** 落点不是水就收竿换仰角重抛,一次 fish 最多抛这么多竿 */
 export const FISH_CAST_TRIES = 3;
 
+/** 浮标落定在哪:水里、搁在某个方块上、钩在某个实体身上 */
+export type BobberLanding =
+  | { kind: 'water'; x: number; y: number; z: number }
+  | { kind: 'rest'; name: string; x: number; y: number; z: number }
+  | { kind: 'hooked'; name: string };
+
+/** 原版浮标按 FluidTags.WATER 认水:水,以及恒带水源的水草/气泡柱 */
+function holdsWater(b: { name: string } | null): boolean {
+  return b !== null && (b.name === 'water' || OPEN_WATER_INSIDE.has(b.name));
+}
+
 /**
- * 等浮标停稳并回报它停在哪一格。落进水里立刻回;落在地上要连着几次读数不动才算停。
- * 始终看不见浮标实体(实体没同步过来)回 null——那种情况不拦着,照旧等咬钩。
+ * 按浮标此刻同步到的位置判它落在哪,判不出回 null(还在飞、位置没同步到、区块没加载)。
+ *
+ * 原版 FishingHook.tick:飞行中碰到水就转入漂浮态,此后弹簧把它往「所在格 y + 液面高度」拉,
+ * 水面格上方那一格液面高度为 0,所以漂浮的浮标在水面上下来回,坐标常落在水面格的上一格。
+ * 落在方块上的浮标速度清零、不再移动,服务端也就不再发位移;钩住实体时元数据 hooked_entity
+ * 是那个实体的 id+1。
+ *
+ * landed:按弹道预测已经落水并又过了一个同步周期;quiet:上一次位移之后整整一个同步周期没再动。
  */
-export async function settleBobber(bot: Bot, ctx: SkillContext): Promise<{ name: string; x: number; y: number; z: number } | null> {
-  const deadline = Date.now() + BOBBER_SETTLE_MS;
-  let last: string | null = null;
-  let stable = 0;
-  while (Date.now() < deadline) {
-    checkAbort(ctx);
-    await sleep(100);
-    const at = bobberCell(bot);
-    if (!at) { last = null; stable = 0; continue; }
-    if (at.name === 'water') return at;
-    const key = `${at.x},${at.y},${at.z}`;
-    if (key === last) {
-      stable++;
-      if (stable >= 3) return at;
-    } else {
-      last = key;
-      stable = 0;
-    }
+export function bobberLanding(
+  bot: Bot,
+  e: NonNullable<Bot['entities'][string]>,
+  landed: boolean,
+  quiet: boolean,
+): BobberLanding | null {
+  const hooked = metaOf(bot, e, 'hooked_entity');
+  if (typeof hooked === 'number' && hooked > 0) {
+    return { kind: 'hooked', name: bot.entities[hooked - 1]?.name ?? 'unknown' };
   }
-  return bobberCell(bot);
+  const x = Math.floor(e.position.x);
+  const y = Math.floor(e.position.y);
+  const z = Math.floor(e.position.z);
+  const here = bot.blockAt(new Vec3(x, y, z));
+  if (!here) return null;
+  if (holdsWater(here)) return { kind: 'water', x, y, z };
+  if (!landed) return null;
+  const below = bot.blockAt(new Vec3(x, y - 1, z));
+  if (here.boundingBox !== 'block' && holdsWater(below)) return { kind: 'water', x, y: y - 1, z };
+  if (!quiet) return null;
+  if (here.boundingBox === 'block') return { kind: 'rest', name: here.name, x, y, z };
+  if (below?.boundingBox === 'block') return { kind: 'rest', name: below.name, x, y: y - 1, z };
+  // 底下没有能托住它的东西:这个读数是飞行中或没同步到的位置
+  return null;
 }
 
 /**
@@ -956,7 +967,10 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
 
   const before = invSnapshot(bot);
   let outcome = '';
-  let strayCell: { name: string; x: number; y: number; z: number } | null = null;
+  /** 最后一竿没进水时它落在哪 */
+  let stray: Exclude<BobberLanding, { kind: 'water' }> | null = null;
+  /** 等满时限还判不出落点:这一竿看到浮标的情况 */
+  let unseen = '';
   /** 浮标头顶到世界顶之间有实心遮盖:原版倒计时减半,等待上限随之放宽 */
   let covered = false;
   let waitMs = FISH_WAIT_MS;
@@ -965,38 +979,76 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
     checkAbort(ctx);
     casts++;
     await bot.look(yaw, plan.elev, true);
+    const castAt = Date.now();
+    let settled = false;
     const cast = bot.fish().then(() => 'caught' as const, (e: Error) => `失败:${e.message}`);
-    // 先看浮标真落在哪:落岸上就收竿换下一个仰角,不白等 45 秒
-    const landed = await Promise.race([cast.then(() => null), settleBobber(bot, ctx)]);
-    if (landed && landed.name !== 'water') {
-      strayCell = landed;
-      bot.activateItem(); // 收竿销毁浮标,挂着的 fish() 以 Fishing cancelled 收场
-      // 浮标销毁包没来的话 fish() 会一直挂着,不等它,让下一竿的 fish() 去取消它
-      await Promise.race([cast.catch(() => undefined), sleep(500)]);
-      continue;
-    }
-    strayCell = null;
-    // 浮标实体没同步过来时读不到它头顶,按露天等
-    covered = landed !== null && skyBlocked(bot, landed.x, landed.y + 1, landed.z);
-    waitMs = fishWaitMs(covered);
-    const deadline = Date.now() + waitMs;
+    void cast.then(() => { settled = true; });
+    // mineflayer 钓鱼插件只认一只浮标(lastBobber),浮标销毁包到达才放开它。收竿后不等
+    // fish() 收场就开下一竿,新浮标不被登记,旧浮标的销毁包反倒取消掉新的一竿。
+    // fish() 已收场或从没见到浮标时不挥竿:手上没有浮标时挥竿是再抛一竿。
+    const reel = async (): Promise<void> => {
+      if (settled || !findBobber(bot)) return;
+      bot.activateItem();
+      await cast;
+    };
+    let landing: BobberLanding | null = null;
+    /** 正在看的那只浮标:何时第一次看到、上次读到的坐标、坐标最后一次变化的时刻 */
+    let seen = null as { id: number; at: number; pos: string; movedAt: number } | null;
+    let lastSeen: Vec3 | null = null;
+    waitMs = FISH_WAIT_MS;
+    covered = false;
     for (;;) {
-      const r = await Promise.race([cast, sleep(250).then(() => null)]);
+      const r = await Promise.race([cast, sleep(100).then(() => null)]);
       if (r !== null) { outcome = r; break; }
-      if (ctx.aborted() || Date.now() >= deadline) {
-        bot.activateItem(); // 收竿;浮标销毁让还挂着的 fish() 取消掉
-        if (ctx.aborted()) throw new Aborted(ctx.abortedBy?.() ?? null);
+      if (ctx.aborted()) {
+        await reel();
+        throw new Aborted(ctx.abortedBy?.() ?? null);
+      }
+      const now = Date.now();
+      if (landing === null) {
+        const e = findBobber(bot);
+        if (e) {
+          const pos = `${e.position.x},${e.position.y},${e.position.z}`;
+          if (seen?.id !== e.id) seen = { id: e.id, at: now, pos, movedAt: now };
+          else if (seen.pos !== pos) { seen.pos = pos; seen.movedAt = now; }
+          lastSeen = e.position.clone();
+          landing = bobberLanding(
+            bot, e,
+            now - seen.at >= (plan.ticks + BOBBER_SYNC_TICKS) * TICK_MS,
+            now - seen.movedAt >= BOBBER_SYNC_TICKS * TICK_MS,
+          );
+          if (landing?.kind === 'water') {
+            covered = skyBlocked(bot, landing.x, landing.y + 1, landing.z);
+            waitMs = fishWaitMs(covered);
+          }
+        }
+      }
+      if (landing !== null && landing.kind !== 'water') break;
+      if (now - castAt >= waitMs) {
+        await reel();
         outcome = 'timeout';
+        if (landing === null) {
+          unseen = lastSeen
+            ? `;浮标一直没读到落点,最后同步到的位置是 (${lastSeen.x.toFixed(1)}, ${lastSeen.y.toFixed(1)}, ${lastSeen.z.toFixed(1)})`
+            : ';这一竿一直没看见浮标实体';
+        }
         break;
       }
     }
+    if (landing !== null && landing.kind !== 'water' && outcome === '') {
+      // 落岸上、钩到实体就收竿换下一个仰角,不白等 45 秒
+      stray = landing;
+      await reel();
+      continue;
+    }
+    stray = null;
     break;
   }
-  if (strayCell) {
-    throw new SkillBlocked(
-      `抛了 ${casts} 竿,浮标都落在 (${strayCell.x}, ${strayCell.y}, ${strayCell.z}) 的${zhName(strayCell.name)}上、没进水里;` +
-      '换个站位或指一片更开阔的水面',
-    );
+  if (stray) {
+    const where = stray.kind === 'hooked'
+      ? `最后一竿浮标钩在了${zhEntity(stray.name)}身上`
+      : `浮标都落在 (${stray.x}, ${stray.y}, ${stray.z}) 的${zhName(stray.name)}上`;
+    throw new SkillBlocked(`抛了 ${casts} 竿,${where}、没进水里;换个站位或指一片更开阔的水面`);
   }
   const notes = `${covered ? ';这里浮标头顶看不到天,咬钩慢' : ''}${openNote}`;
   if (outcome === 'caught') {
@@ -1010,7 +1062,7 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
       : `咬钩了也收了线,东西没进包(包里还有 ${PLAYER_SLOTS - used} 格空位)${notes}`;
   }
   if (outcome === 'timeout') {
-    throw new SkillBlocked(`在 ${cellText(water)} 抛竿等了 ${Math.round(waitMs / 1000)} 秒没鱼咬钩,收竿了${notes}`);
+    throw new SkillBlocked(`在 ${cellText(water)} 抛竿等了 ${Math.round(waitMs / 1000)} 秒没鱼咬钩,收竿了${unseen}${notes}`);
   }
   throw new SkillBlocked(`这竿没钓成: ${zhErrorText(outcome.replace(/^失败:/, ''))}`);
 }

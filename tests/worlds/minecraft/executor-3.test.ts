@@ -2829,13 +2829,20 @@ describe('fish:走到水边钓一竿,收获按物品栏差分照实报', () => {
     loot?: { name: string; type: number };
     /** 抛出去的浮标停在哪(不给就当浮标实体没同步过来) */
     bobberAt?: [number, number, number];
+    /** 实心方块 */
+    solid?: Array<[number, number, number]>;
   }) {
     const inv: Array<{ name: string; count: number; type: number }> = [];
     if (opts.rod !== false) inv.push({ name: 'fishing_rod', count: 1, type: 30 });
     const water = new Set((opts.water ?? []).map(([x, y, z]) => `${x},${y},${z}`));
+    const solid = new Set((opts.solid ?? []).map(([x, y, z]) => `${x},${y},${z}`));
     let reeled = 0;
+    /** 挂着的 fish():收竿后浮标销毁包隔一段网络延迟才到,到了它才以 Fishing cancelled 收场 */
+    let pending: { reject: (e: Error) => void } | null = null;
+    let overlapped = 0;
     const bot = {
       reeledCount: () => reeled,
+      overlapCount: () => overlapped,
       entity: { id: 9, position: new V(0.5, 64, 0.5), onGround: true },
       entities: opts.bobberAt
         ? { 7: { id: 7, name: 'fishing_bobber', position: new V(...opts.bobberAt) } }
@@ -2845,16 +2852,27 @@ describe('fish:走到水边钓一竿,收获按物品栏差分照实报', () => {
       findBlocks: () => (opts.water ?? []).map(([x, y, z]) => new V(x, y, z)),
       canSeeBlock: () => true,
       blockAt: (p: V) => {
-        const name = water.has(`${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`) ? 'water' : 'air';
+        const k = `${Math.floor(p.x)},${Math.floor(p.y)},${Math.floor(p.z)}`;
+        if (solid.has(k)) return { name: 'stone', position: p.floored(), boundingBox: 'block', diggable: true };
+        const name = water.has(k) ? 'water' : 'air';
         return { name, position: p.floored(), boundingBox: 'empty', diggable: true };
       },
       equip: async () => {},
       lookAt: async () => {},
       look: async () => {},
-      activateItem: () => { reeled++; },
-      fish: () => new Promise<void>((resolve) => {
+      activateItem: () => {
+        reeled++;
+        const cast = pending;
+        if (cast) setTimeout(() => cast.reject(new Error('Fishing cancelled')), 30);
+      },
+      fish: () => new Promise<void>((resolve, reject) => {
+        if (pending) overlapped++;
+        const me = { reject: (e: Error) => { if (pending === me) pending = null; reject(e); } };
+        pending = me;
         if (opts.biteAfterMs === undefined) return; // 永不咬钩,等收竿
         setTimeout(() => {
+          if (pending !== me) return;
+          pending = null;
           if (opts.loot) inv.push({ name: opts.loot.name, count: 1, type: opts.loot.type });
           resolve();
         }, opts.biteAfterMs);
@@ -2962,15 +2980,54 @@ describe('fish:走到水边钓一竿,收获按物品栏差分照实报', () => {
   });
 
   it('浮标落在岸上:立刻收竿换仰角重抛,抛满还是不进水就照实受阻', async () => {
-    const bot = fishBot({ water: [[2, 63, 0]], bobberAt: [1.5, 64.2, 0.5] });
+    // 浮标搁在 (1,63,0) 那块石头顶上
+    const bot = fishBot({ water: [[2, 63, 0]], solid: [[1, 63, 0]], bobberAt: [1.5, 64, 0.5] });
     const { exec, reports } = makeExecutorOn(bot);
     exec.submit([{ skill: 'fish' }]);
     await waitUntil(() => reports.length === 1, 15000);
     expect(reports[0].kind).toBe('blocked');
     expect(reports[0].text).toContain('没进水里');
-    expect(reports[0].text).toContain('(1, 64, 0)');
+    expect(reports[0].text).toContain('(1, 63, 0) 的石头上');
     // 三竿三次收竿,不是干等满 45 秒
     expect(bot.reeledCount()).toBe(3);
+    // 每竿收竿后都等挂着的 fish() 收场才抛下一竿
+    expect(bot.overlapCount()).toBe(0);
+  }, 20000);
+
+  // 10/01 17:10–17:44:超时收竿后不等 fish() 收场,下一竿被旧浮标的销毁包取消(0.2s「浮标没了」),
+  // 与 45 秒空等交替出现
+  it('等满时限收竿:等这一竿的 fish() 收场才开下一竿', async () => {
+    const bot = fishBot({ water: [[2, 63, 0]], bobberAt: [2.5, 63.5, 0.5] });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'fish' }, { skill: 'fish' }]);
+    await waitUntil(() => reports.length === 1, 200_000);
+    expect(reports[0].text).not.toContain('浮标没了');
+    expect(reports[0].text.match(/等了 45 秒没鱼咬钩/g)?.length).toBe(2);
+    expect(bot.overlapCount()).toBe(0);
+  }, 20000);
+
+  // 原版浮标漂在水面时会冒到水面格上一格;10/01 有 33 竿这样被判成「落在空气上」
+  it('浮标漂在水面格上一格:算进水,照常等咬钩', async () => {
+    const bot = fishBot({ water: [[2, 63, 0]], bobberAt: [2.5, 64.05, 0.5], biteAfterMs: 3000, loot: { name: 'cod', type: 21 } });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'fish' }]);
+    await waitUntil(() => reports.length === 1, 15000);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('钓上来生鳕鱼×1');
+    expect(bot.reeledCount()).toBe(0);
+  }, 20000);
+
+  // 飞行中/没同步到的读数悬在空中;10/01 有 44 竿在水面上 2–4 格被判成「落在空气上」
+  it('浮标读数悬在空中:不当落点,等它真落进水', async () => {
+    const bot = fishBot({ water: [[2, 63, 0]], bobberAt: [1.5, 66.2, 0.5], biteAfterMs: 4000, loot: { name: 'cod', type: 21 } });
+    const bobber = bot.entities[7]!;
+    setTimeout(() => { bobber.position = new V(2.5, 63.5, 0.5); }, 2500);
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'fish' }]);
+    await waitUntil(() => reports.length === 1, 15000);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('钓上来生鳕鱼×1');
+    expect(bot.reeledCount()).toBe(0);
   }, 20000);
 });
 
