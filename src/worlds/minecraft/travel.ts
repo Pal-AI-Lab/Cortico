@@ -275,6 +275,8 @@ export interface PathSupportFailure {
   x: number;
   y: number;
   z: number;
+  /** 重试前人眼离那一格已超出手长时的距离;三次发满的失败没有 */
+  leftReach?: number;
 }
 
 export function pathSupportFailureOf(bot: Bot): PathSupportFailure | null {
@@ -595,8 +597,11 @@ export async function gotoGoalOnce(bot: Bot, goal: InstanceType<typeof goals.Goa
     const support = supportBlocked();
     if (support) {
       throw new SkillBlocked(
-        `走不过去:搭路支撑 (${support.x}, ${support.y}, ${support.z}) 放了三次仍是${zhName(support.was)},`
-        + '服务端未确认;已取消这段路径',
+        support.leftReach !== undefined
+          ? `走不过去:搭路支撑 (${support.x}, ${support.y}, ${support.z}) 还没放上,人已经离开它 `
+            + `${support.leftReach} 格(超出手长);已取消这段路径`
+          : `走不过去:搭路支撑 (${support.x}, ${support.y}, ${support.z}) 放了三次仍是${zhName(support.was)},`
+            + '服务端未确认;已取消这段路径',
       );
     }
     if (stalled) throw stallError(stalled);

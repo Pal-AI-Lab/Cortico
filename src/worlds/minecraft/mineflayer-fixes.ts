@@ -21,6 +21,7 @@ import { setNameRegistry, zhName } from './names.ts';
 import { PLACE_MISS_TTL_MS } from './pathfinder-perf.ts';
 import { ShowPacer, type ShowTempo } from './show.ts';
 import { dropOwnedGoal } from './executor.ts';
+import { PLACE_REACH } from './cell-facts.ts';
 
 /** 单次点击等待服务端确认的上限。 */
 const CLICK_ACK_MS = 400;
@@ -93,8 +94,13 @@ interface PatchedBot extends Bot {
    * 直接技能将其写入回执；寻路另记 pathSupportFailure 并终止当前移动段。
    */
   placeMisses?: Array<{ was: string; x: number; y: number; z: number; at: number }>;
-  /** 最近一次寻路支撑未确认；执行器按 seq 区分本段路径与旧失败。 */
-  pathSupportFailure?: { seq: number; generation: number; was: string; x: number; y: number; z: number };
+  /**
+   * 最近一次寻路支撑未确认；执行器按 seq 区分本段路径与旧失败。
+   * leftReach:重试前人眼离那一格的距离已超出手长,没把三次发满。
+   */
+  pathSupportFailure?: {
+    seq: number; generation: number; was: string; x: number; y: number; z: number; leftReach?: number;
+  };
   /**
    * 此刻有几笔寻路支撑放置在飞。纯诊断读数(零位移探针要的那一格),不参与任何判据 ——
    * 所有权已经改成按 flight 记,不再有"当前那一次"这种全局单槽。
@@ -705,9 +711,24 @@ function installConfirmedPlace(
     // 期望落地的是哪一样:`_genericPlace` 放的就是手上这件。取得到方块名才校验身份,
     // 取不到(水桶、红石粉、种子这类"物品名 ≠ 方块名"的)一律降级为旧口径并在 diag 标注
     const want = placedBlockExpectation(bot);
+    const eyeDist = (): number | null => {
+      const feet = bot.entity?.position;
+      return feet
+        ? Math.hypot(feet.x - (dest.x + 0.5), feet.y + 1.62 - (dest.y + 0.5), feet.z - (dest.z + 0.5))
+        : null;
+    };
+    let tries = 0;
+    /** 重试前人已经离开手长(多半是脚下支撑没放上、人掉下去了):再发包服务端也只会拒 */
+    let leftReach: number | null = null;
     setTracing(1);
     try {
       for (let attempt = 1; attempt <= PLACE_TRIES; attempt++) {
+        const d = attempt > 1 ? eyeDist() : null;
+        if (d !== null && d > PLACE_REACH && !changedAt(bot, dest, before, want)) {
+          leftReach = d;
+          break;
+        }
+        tries = attempt;
         // 重试前回读目标位置;前次放置的迟到回包不得触发重复放置。
         const ok = attempt > 1 && changedAt(bot, dest, before, want)
           ? true
@@ -738,10 +759,13 @@ function installConfirmedPlace(
       setTracing(-1);
     }
     const was = before?.name ?? 'air';
-    const misses = (bot.placeMisses ??= []);
-    // at 供寻路器的被拒格黑名单判时效(pathfinder-perf 模块头第 8 条)
-    misses.push({ was, x: dest.x, y: dest.y, z: dest.z, at: Date.now() });
-    if (misses.length > 256) misses.splice(0, misses.length - 256);
+    // 人走出手长而没发满的那一格不算服务端拒放,不进拒放黑名单
+    if (leftReach === null) {
+      const misses = (bot.placeMisses ??= []);
+      // at 供寻路器的被拒格黑名单判时效(pathfinder-perf 模块头第 8 条)
+      misses.push({ was, x: dest.x, y: dest.y, z: dest.z, at: Date.now() });
+      if (misses.length > 256) misses.splice(0, misses.length - 256);
+    }
     // 寻路支撑未获服务端确认时撤销目标，避免再次使用未成立的承重条件。
     // 每次放置由自己的 flight 持有所有权；代次校验用于排除迟到结果。
     const owns = pathPlacement !== null
@@ -752,36 +776,39 @@ function installConfirmedPlace(
       bot.pathSupportFailure = {
         seq, generation: pathPlacement.flight.generation, was,
         x: dest.x, y: dest.y, z: dest.z,
+        ...(leftReach !== null ? { leftReach: Number(leftReach.toFixed(1)) } : {}),
       };
+      const why = leftReach !== null
+        ? `搭路支撑 (${dest.x}, ${dest.y}, ${dest.z}) 没放上,人已离开它 ${leftReach.toFixed(1)} 格`
+        : `搭路支撑 (${dest.x}, ${dest.y}, ${dest.z}) 三次未确认`;
       // 撤的是谁的目标要说得出来:这一路与 executor/combat/反射共用同一本所有权账
-      dropOwnedGoal(bot, 'path-support', `搭路支撑 (${dest.x}, ${dest.y}, ${dest.z}) 三次未确认`, diag);
+      dropOwnedGoal(bot, 'path-support', why, diag);
       diag?.write({
         lane: 'skill', event: 'path-support-unconfirmed',
-        msg: `寻路支撑 (${dest.x}, ${dest.y}, ${dest.z}) 未确认,已取消当前移动段`,
+        msg: `${why},已取消当前移动段`,
         data: {
           seq, generation: pathPlacement.flight.generation, was,
-          at: { x: dest.x, y: dest.y, z: dest.z },
+          at: { x: dest.x, y: dest.y, z: dest.z }, leftReach,
         },
       });
     }
     // 现场几何随案卷:拒放的规律(台架实测"越贴身越拒",脚下低一格 0%)要靠
     // 人在哪、离目标多远、有没有潜行这几个数才能对上号,只有坐标断不了案
     const feet = bot.entity?.position;
-    const eye = feet ? { x: feet.x, y: feet.y + 1.62, z: feet.z } : null;
+    const dist = eyeDist();
     diag?.write({
       lane: 'skill', event: 'place-unconfirmed', durMs: Date.now() - startedAt,
-      msg: `放了 ${PLACE_TRIES} 次,(${dest.x}, ${dest.y}, ${dest.z}) 回读`
+      msg: `放了 ${tries} 次,(${dest.x}, ${dest.y}, ${dest.z}) 回读`
         + (want !== null && bot.blockAt(dest)?.name !== (before?.name ?? null)
           ? `变成了${bot.blockAt(dest)?.name ?? '空气'},不是要放的 ${want}`
-          : `还是${before?.name ?? '空气'}`),
+          : `还是${before?.name ?? '空气'}`)
+        + (leftReach !== null ? `;人离开那一格 ${leftReach.toFixed(1)} 格,超出手长 ${PLACE_REACH},不再重发` : ''),
       data: {
         at: { x: dest.x, y: dest.y, z: dest.z },
         was: before?.name ?? null,
         want, identityChecked: want !== null, now: bot.blockAt(dest)?.name ?? null,
         feet: feet ? { x: Number(feet.x.toFixed(2)), y: Number(feet.y.toFixed(2)), z: Number(feet.z.toFixed(2)) } : null,
-        eyeDist: eye
-          ? Number(Math.hypot(eye.x - (dest.x + 0.5), eye.y - (dest.y + 0.5), eye.z - (dest.z + 0.5)).toFixed(2))
-          : null,
+        eyeDist: dist !== null ? Number(dist.toFixed(2)) : null,
         sneak: (bot as unknown as { controlState?: Record<string, boolean> }).controlState?.sneak ?? null,
         face: faceVector && typeof faceVector === 'object'
           ? { x: (faceVector as { x: number }).x, y: (faceVector as { y: number }).y, z: (faceVector as { z: number }).z }

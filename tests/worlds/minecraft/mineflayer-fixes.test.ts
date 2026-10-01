@@ -5,6 +5,7 @@ import {
   WALL_GAP, installMineflayerFixes, installPathfinderToolSelection, installWallGap,
 } from '../../../src/worlds/minecraft/mineflayer-fixes.ts';
 import { MinecraftLog } from '../../../src/worlds/minecraft/log.ts';
+import { PLACE_REACH } from '../../../src/worlds/minecraft/cell-facts.ts';
 import type { Logger } from '../../../src/core/types.ts';
 
 const log = { child() { return this; }, info() {}, warn() {}, error() {}, debug() {}, trace() {}, emit() {} } as unknown as Logger;
@@ -468,6 +469,35 @@ describe('放方块:短超时 + 就地重发', () => {
     expect((bot as unknown as { pathSupportFailure: unknown }).pathSupportFailure).toEqual({
       seq: 1, generation: 0, was: 'air', x: 1, y: 2, z: 3,
     });
+  });
+
+  /**
+   * 脚下支撑第一次没放上、人就掉下去了:再发两遍服务端只会拒,还白白多等两轮确认才撤路,
+   * 人落地后沿旧路继续走。重试前人已出手长就当场判失败并撤路,这一格也不进拒放黑名单。
+   */
+  it('寻路垫脚第一次没放上、人已掉出手长:不再重发,当场撤路并报离开了几格', async () => {
+    const bot = placeBot(99, true);
+    const feet = { x: 1.5, y: 3, z: 3.5 };
+    Object.assign(bot, { entity: { position: feet } });
+    const place = bot._genericPlace as () => Promise<void>;
+    bot._genericPlace = async (): Promise<void> => {
+      await place();
+      feet.y = -9; // 落到 12 格下
+    };
+    installMineflayerFixes(bot as never, log);
+
+    await Promise.all([
+      expect(
+        (bot as unknown as { placeBlock(a: unknown, b: unknown): Promise<void> }).placeBlock(ref, {}),
+      ).rejects.toThrow('No block has been placed'),
+      vi.runAllTimersAsync(),
+    ]);
+
+    expect((bot as unknown as { attempts: number }).attempts).toBe(1);
+    expect((bot as unknown as { pathGoals: unknown[] }).pathGoals).toEqual([null]);
+    const failure = (bot as unknown as { pathSupportFailure: { leftReach?: number } }).pathSupportFailure;
+    expect(failure.leftReach).toBeGreaterThan(PLACE_REACH);
+    expect((bot as unknown as { placeMisses?: unknown[] }).placeMisses ?? []).toEqual([]);
   });
 
   it('同代同格的七个重叠垫脚请求共享一次三遍确认', async () => {
