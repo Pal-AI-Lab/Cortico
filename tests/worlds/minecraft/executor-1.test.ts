@@ -1049,6 +1049,65 @@ describe('toss / pickup 过滤 / 箱子', () => {
     expect(reports[0].text).toContain('存了圆石×64');
     expect(book.get('overworld', { x: 2, y: 64, z: 0 })?.items).toEqual([{ name: 'cobblestone', count: 64 }]);
   });
+
+  it('stow:首选箱子放不下就换下一口,大箱子另一半不重开,回执逐口报数和剩下的', async () => {
+    let inv = 64;
+    // (2,64,0)+(2,64,1) 是一口朝东的大箱子,两半开出同一扇窗;(5,64,0) 是单箱
+    const boxes = new Map<string, { room: number; held: number }>([
+      ['double', { room: 20, held: 0 }], ['single', { room: 30, held: 0 }],
+    ]);
+    const cells: Record<string, { box: string; props: Record<string, string> }> = {
+      '2,64,0': { box: 'double', props: { facing: 'east', type: 'left' } },
+      '2,64,1': { box: 'double', props: { facing: 'east', type: 'right' } },
+      '5,64,0': { box: 'single', props: { facing: 'east', type: 'single' } },
+    };
+    const opens: string[] = [];
+    const bot = {
+      entity: { id: 1, position: new V(0.5, 64, 0.5) },
+      entities: {},
+      game: { dimension: 'overworld' },
+      registry: { blocksByName: { chest: { id: 54, name: 'chest' } }, itemsByName: {} },
+      inventory: { items: () => (inv > 0 ? [{ type: 4, metadata: 0, name: 'cod', count: inv }] : []) },
+      findBlocks: () => Object.keys(cells).map((k) => new V(...(k.split(',').map(Number) as [number, number, number]))),
+      blockAt: (p: V) => {
+        const c = cells[`${p.x},${p.y},${p.z}`];
+        return c
+          ? { name: 'chest', position: p, boundingBox: 'block', getProperties: () => c.props }
+          : { name: 'air', position: p, boundingBox: 'empty', getProperties: () => ({}) };
+      },
+      openContainer: async (block: { position: V }) => {
+        const box = boxes.get(cells[`${block.position.x},${block.position.y},${block.position.z}`].box)!;
+        opens.push(`${block.position.x},${block.position.y},${block.position.z}`);
+        return {
+          deposit: async (_t: number, _m: number | null, n: number) => {
+            if (box.room === 0) throw new Error('destination full');
+            const k = Math.min(n, box.room);
+            box.room -= k;
+            box.held += k;
+            inv -= k;
+          },
+          withdraw: async () => {},
+          containerItems: () => (box.held > 0 ? [{ type: 4, metadata: 0, name: 'cod', count: box.held }] : []),
+          inventoryStart: 27,
+          close: () => {},
+        };
+      },
+      pathfinder: {
+        stop() {}, setGoal() {},
+        goto: async (g: FakeGoal) => { bot.entity.position = new V(g.x! + 0.5, g.y!, g.z! + 0.5); },
+      },
+    };
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'stow', item: 'cod', count: 64 }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('done');
+    expect(opens).toEqual(['2,64,0', '5,64,0']);
+    expect(inv).toBe(14);
+    expect(reports[0].text).toContain('分 2 口箱子存,共存进生鳕鱼×50');
+    expect(reports[0].text).toContain('还有生鳕鱼×14没放下');
+    expect(reports[0].text).toContain('往(2, 64, 0) 的箱子存了生鳕鱼×20');
+    expect(reports[0].text).toContain('往(5, 64, 0) 的箱子存了生鳕鱼×30');
+  });
 });
 
 describe('brew · 与 smelt 同构的下料点火就走', () => {

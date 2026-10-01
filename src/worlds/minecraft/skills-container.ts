@@ -303,26 +303,21 @@ export function stowReceipt(
   return { ok: true, text: `${head}${tail}` };
 }
 
-export async function skillStow(
-  bot: Bot, call: Extract<SkillCall, { skill: 'stow' }>, ctx: SkillContext,
-): Promise<string> {
-  const { item, count, pick } = call;
-  if (invCount(bot, itemPredOf(bot, item, pick)) === 0) throw noSuchItem(bot, item, pick);
-  const found = findContainers(bot, 32);
-  if (found.length === 0) throw noContainerNearby(bot, ctx);
-  const target = orderForStow(found, ctx, bot, item)[0];
+type StowPlanStep = { stepIndex: number | null; item: string; count: number; pick?: string };
+
+/** 开一口箱子按 plan 逐样存,关窗对账;打不开时抛 SkillBlocked */
+async function stowIntoOne(
+  bot: Bot, ctx: SkillContext, target: ReturnType<typeof orderForStow>[number], plan: StowPlanStep[], show: ShowPacer,
+): Promise<{ done: Array<{ e: StowEntry; text: string; ok: boolean }>; aborted: Aborted | null }> {
   const where = `(${target.x}, ${target.y}, ${target.z}) 的${zhName(target.name)}`;
-  const plan: Array<{ stepIndex: number | null; item: string; count: number; pick?: string }> = [
-    { stepIndex: null, item, count, ...(pick ? { pick } : {}) },
-    ...collectStowBatch(bot, ctx, found, target),
-  ];
-  const show = new ShowPacer(ctx.showTempo?.() ?? null);
   let chest;
   try {
     await show.openGap();
     chest = await openNearbyContainer(bot, target, ctx);
   } catch (err) {
-    if (err instanceof Aborted || err instanceof SkillBlocked) throw err;
+    if (err instanceof Aborted) throw err;
+    // 换箱接着存时一单里会有好几口箱子的结果,每一句都要带上是哪一口
+    if (err instanceof SkillBlocked) throw new SkillBlocked(`${where}:${err.message}`, err.scene, err.source);
     throw new SkillBlocked(`打不开 ${where}: ${zhErrorText((err as Error).message)}`);
   }
   const entries: StowEntry[] = [];
@@ -412,18 +407,89 @@ export async function skillStow(
     done.push({ e, ...r });
   }
 
-  // 并进来的步:成了才登记(登记的那一步不会再跑)。没成的不登记——它自己跑一趟,
-  // 自己报自己的理由;它一格都没动过,重跑不会重复扣料。
-  const first = done[0];
-  for (const d of done.slice(1)) {
-    if (!d.ok || d.e.stepIndex === null) continue;
-    ctx.batch?.absorb(d.e.stepIndex, `(跟第 ${(ctx.batch.index ?? 0) + 1} 步同一次开窗)${d.text}`);
+  return { done, aborted };
+}
+
+const CLOCKWISE: Record<string, Cell> = {
+  north: { x: 1, y: 0, z: 0 }, east: { x: 0, y: 0, z: 1 }, south: { x: -1, y: 0, z: 0 }, west: { x: 0, y: 0, z: -1 },
+};
+const COUNTER_CLOCKWISE: Record<string, Cell> = {
+  north: { x: -1, y: 0, z: 0 }, east: { x: 0, y: 0, z: -1 }, south: { x: 1, y: 0, z: 0 }, west: { x: 0, y: 0, z: 1 },
+};
+
+/**
+ * 大箱子另一半所在的格;单箱和非箱子为 null。原版判据:type=left 的另一半在朝向的
+ * 顺时针一侧,type=right 在逆时针一侧。两半开出来是同一扇窗。
+ */
+export function chestPartnerCell(bot: Bot, cell: Cell): Cell | null {
+  const props = blockAtCell(bot, cell)?.getProperties() as { facing?: string; type?: string } | undefined;
+  const side = props?.type === 'left' ? CLOCKWISE : props?.type === 'right' ? COUNTER_CLOCKWISE : null;
+  const d = side && props?.facing ? side[props.facing] : undefined;
+  return d ? { x: cell.x + d.x, y: cell.y, z: cell.z + d.z } : null;
+}
+
+/**
+ * 存进附近箱子。首选那口按 orderForStow 挑,相邻 stow 步并进同一次开窗;这一步的
+ * 东西没存完就按同一顺序换下一口接着存,大箱子的另一半不重开。回执逐口报存了多少,
+ * 最后还剩几个没放下。
+ */
+export async function skillStow(
+  bot: Bot, call: Extract<SkillCall, { skill: 'stow' }>, ctx: SkillContext,
+): Promise<string> {
+  const { item, count, pick } = call;
+  const pred = itemPredOf(bot, item, pick);
+  const have = invCount(bot, pred);
+  if (have === 0) throw noSuchItem(bot, item, pick);
+  const found = findContainers(bot, 32);
+  if (found.length === 0) throw noContainerNearby(bot, ctx);
+  const ordered = orderForStow(found, ctx, bot, item);
+  const want = Math.min(count, have);
+  const show = new ShowPacer(ctx.showTempo?.() ?? null);
+  const lines: Array<{ ok: boolean; text: string }> = [];
+  const opened: Cell[] = [];
+  let stored = 0;
+  for (const [i, target] of ordered.entries()) {
+    if (i > 0) {
+      if (stored >= want || invCount(bot, pred) === 0) break;
+      const sameWindow = opened.some((c) => {
+        const p = chestPartnerCell(bot, c);
+        return p !== null && p.x === target.x && p.y === target.y && p.z === target.z;
+      });
+      if (sameWindow) continue;
+    }
+    const here: StowPlanStep = { stepIndex: null, item, count: want - stored, ...(pick ? { pick } : {}) };
+    const plan = i === 0 ? [here, ...collectStowBatch(bot, ctx, found, target)] : [here];
+    let r: Awaited<ReturnType<typeof stowIntoOne>>;
+    try {
+      r = await stowIntoOne(bot, ctx, target, plan, show);
+    } catch (err) {
+      if (!(err instanceof SkillBlocked)) throw err;
+      lines.push({ ok: false, text: err.message });
+      continue;
+    }
+    opened.push(target);
+    const [mine, ...batched] = r.done;
+    // 并进来的步:成了才登记(登记的那一步不会再跑)。没成的不登记——它自己跑一趟,
+    // 自己报自己的理由;它一格都没动过,重跑不会重复扣料。
+    for (const d of batched) {
+      if (!d.ok || d.e.stepIndex === null) continue;
+      ctx.batch?.absorb(d.e.stepIndex, `(跟第 ${(ctx.batch.index ?? 0) + 1} 步同一次开窗)${d.text}`);
+    }
+    lines.push({ ok: mine.ok, text: mine.text });
+    if (mine.ok) stored += mine.e.deposited;
+    if (r.aborted) throw r.aborted;
   }
-  if (aborted) throw aborted;
-  if (!first.ok) throw new SkillBlocked(first.text);
+  const anyOk = lines.some((l) => l.ok);
+  let text = lines.map((l) => l.text).join(';');
+  if (lines.length > 1) {
+    const left = Math.min(want - stored, invCount(bot, pred));
+    const tail = left > 0 ? `;还有${zhName(item)}×${left}没放下,32 格内找到的箱子都试过了` : '';
+    text = `分 ${lines.length} 口箱子存,共存进${zhName(item)}×${stored}${tail}。${text}`;
+  }
+  if (!anyOk) throw new SkillBlocked(text);
   // 存进箱子的床同样离开了地面:重生点跟着作废,这一句不能省
   const anchor = isSpawnAnchorBlock(item) ? anchorInHandNote(bot, ctx, [zhName(item)], '存走') : '';
-  return `${first.text}${anchor}`;
+  return `${text}${anchor}`;
 }
 
 /**

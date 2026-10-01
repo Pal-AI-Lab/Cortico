@@ -1440,7 +1440,7 @@ const SKILLS: readonly SkillSpec[] = [
   },
   {
     name: 'stow',
-    doc: `{"skill":"stow","item":"cobblestone","count":64} 存进附近箱子(32 格内)。先找上次看见还有空位的,没有就开最近没开过的
+    doc: `{"skill":"stow","item":"cobblestone","count":64} 存进附近箱子(32 格内)。先找上次看见还有空位的,没有就开最近没开过的;放不下的换下一口接着存
 {"skill":"stow","item":"enchanted_book","pick":"精准采集","count":1}
                                                  同 id 的几件里只存点名的那件(留下别的)`,
     fields: [
