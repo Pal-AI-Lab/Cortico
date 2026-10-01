@@ -147,6 +147,14 @@ interface DimensionPoint extends Vec3like {
 const PROXIMITY_ENTER = 16;
 const PROXIMITY_EXIT = 24;
 
+/** 原版客户端动作栏一条文字显示 60 tick(Gui.setOverlayMessage),期间收到同一文字只重置计时。 */
+export const ACTION_BAR_SHOW_MS = 60 * 50;
+
+/** 进出服广播由 playerJoined/playerLeft 成文。 */
+const PLAYER_LIST_TRANSLATES = new Set([
+  'multiplayer.player.joined', 'multiplayer.player.joined.renamed', 'multiplayer.player.left',
+]);
+
 /** mc_escape「第几次回到同一处」的统计窗口 */
 const ESCAPE_REPEAT_WINDOW_MS = 15 * 60_000;
 
@@ -5469,7 +5477,8 @@ export class MinecraftWorld implements World {
       this.scheduleGuiKick();
     });
 
-    bot.on('chat', (username: string, message: string) => {
+    bot.on('chat', (username: string, message: string, _translate: unknown, jsonMsg: object) => {
+      this.chatClaimed.add(jsonMsg);
       if (username === this.chatName()) {
         // 自己说的话:落库存档,但不投递——拿自己的话叫醒自己没有意义
         this.emit('minecraft.chat', `[MC] ${username}: ${message}`, false, { deliver: false });
@@ -5478,7 +5487,8 @@ export class MinecraftWorld implements World {
       const mentioned = message.includes(this.chatName()) || message.includes(this.botName);
       this.emit('minecraft.chat', `[MC] ${username}: ${message}`, mentioned, undefined, username);
     });
-    bot.on('whisper', (username: string, message: string) => {
+    bot.on('whisper', (username: string, message: string, _translate: unknown, jsonMsg: object) => {
+      this.chatClaimed.add(jsonMsg);
       if (username === this.chatName()) return;
       this.emit('minecraft.chat', `[MC 私聊] ${username}: ${message}`, true, undefined, username);
     });
@@ -5601,8 +5611,16 @@ export class MinecraftWorld implements World {
         this.rememberPersonalSpawn(bot, `${SET_SPAWN_TRANSLATE} 系统消息`);
         return;
       }
+      if (position === 'game_info') {
+        this.forwardServerMessage(jsonMsg, 'actionBar');
+        return;
+      }
       if (position !== 'system') return;
-      if (!key.startsWith('death.') && key !== 'chat.type.advancement') return;
+      if (PLAYER_LIST_TRANSLATES.has(key)) return;
+      if (!key.startsWith('death.') && key !== 'chat.type.advancement') {
+        this.forwardServerMessage(jsonMsg, 'system');
+        return;
+      }
       const text = jsonMsg.toString();
       if (!text) return;
       if (text.includes(this.chatName())) {
@@ -5889,6 +5907,32 @@ export class MinecraftWorld implements World {
   /** Boss 血条已报过的 25% 档位(按标题) */
   private readonly bossQuarter = new Map<string, number>();
   private lastBoomAt = 0;
+  /** mineflayer 聊天模式已派发成 chat/whisper 的消息对象 */
+  private readonly chatClaimed = new WeakSet<object>();
+  /** 最近一条动作栏文字及收到时刻 */
+  private lastActionBar: { text: string; at: number } | null = null;
+
+  /**
+   * 服务器系统消息与动作栏原文以 piggyback 进 minecraft.chat,随下一批投递,不单独唤醒。
+   * mineflayer 在 message 之后才同步派发 chat/whisper,转发放到微任务里,
+   * 已由那两路处理的同一条消息在此跳过。动作栏同一文字在显示期内重发只是续显,不再入流。
+   */
+  private forwardServerMessage(jsonMsg: { toString(): string }, slot: 'system' | 'actionBar'): void {
+    queueMicrotask(() => {
+      if (this.chatClaimed.has(jsonMsg)) return;
+      const text = jsonMsg.toString().trim();
+      if (!text) return;
+      if (slot === 'system') {
+        this.emit('minecraft.chat', `[MC 系统] ${text}`, false, { trigger: 'piggyback' });
+        return;
+      }
+      const now = Date.now();
+      const prev = this.lastActionBar;
+      this.lastActionBar = { text, at: now };
+      if (prev?.text === text && now - prev.at < ACTION_BAR_SHOW_MS) return;
+      this.emit('minecraft.chat', `[MC 动作栏] ${text}`, false, { trigger: 'piggyback' });
+    });
+  }
 
   /**
    * 实体接近报告:16 格进、24 格出的滞回状态机,1s 采样。

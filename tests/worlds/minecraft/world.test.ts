@@ -1,10 +1,11 @@
 import { EventEmitter } from 'node:events';
+import { createRequire } from 'node:module';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWorldEnvPrompt } from '../../../src/core/prefix.ts';
-import { MinecraftWorld, MINECRAFT_TOOL_DECLS, PwsrTables, GOAL_TABLE_DECL, goalAge, applyGoal, goalSnapshotLine, staleGoalNotice, GOAL_NOTICE_HOURLY_CAP, GOAL_STALE_COOLDOWN_MS, GOAL_STALE_MS, GOAL_STALE_TASKS, MAP_KINDS, MAP_SLOTS, MAP_SLOTS_TIGHT, MAP_TABLE_DECL, MARK_NEAR_MAX, mapSnapshotLine, checkMark, dangerZonesAt, markBearing, nearMarkText, nearestMark, parseMap, renderDifficultyFact, type MinecraftGoal, type MinecraftMark } from '../../../src/worlds/minecraft/world.ts';
+import { ACTION_BAR_SHOW_MS, MinecraftWorld, MINECRAFT_TOOL_DECLS, PwsrTables, GOAL_TABLE_DECL, goalAge, applyGoal, goalSnapshotLine, staleGoalNotice, GOAL_NOTICE_HOURLY_CAP, GOAL_STALE_COOLDOWN_MS, GOAL_STALE_MS, GOAL_STALE_TASKS, MAP_KINDS, MAP_SLOTS, MAP_SLOTS_TIGHT, MAP_TABLE_DECL, MARK_NEAR_MAX, mapSnapshotLine, checkMark, dangerZonesAt, markBearing, nearMarkText, nearestMark, parseMap, renderDifficultyFact, type MinecraftGoal, type MinecraftMark } from '../../../src/worlds/minecraft/world.ts';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../../../src/worlds/minecraft/config.ts';
 import { acceptBlueprint } from '../../../src/worlds/minecraft/blueprint-plan.ts';
 import { parseGoalPlan, recordGoalJudgment } from '../../../src/worlds/minecraft/goal-plan.ts';
@@ -949,6 +950,69 @@ async function started(over: Partial<MinecraftConfigSection> = {}) {
     queueText: () => renderQueue((m as any).executor.status()),
   };
 }
+
+describe('服务器系统消息与动作栏', () => {
+  const mfReq = createRequire(createRequire(import.meta.url).resolve('mineflayer'));
+  const registry = mfReq('prismarine-registry')('1.20.6') as { supportFeature(f: string): boolean };
+  const injectChat = mfReq('mineflayer/lib/plugins/chat.js') as (bot: unknown, opts: object) => void;
+
+  /** 真 mineflayer 聊天插件:systemChat 包 → message/messagestr → 聊天模式派发 chat/whisper */
+  function chatRig() {
+    const m = new MinecraftWorld({ cfg: cfg() });
+    const host = new FakeHost();
+    stub(m, { host });
+    const bot = Object.assign(new EventEmitter(), idleBot() as Record<string, unknown>, {
+      registry,
+      supportFeature: (f: string) => registry.supportFeature(f),
+    }) as unknown as EventEmitter & { _client: EventEmitter };
+    injectChat(bot, {});
+    (m as unknown as { hookBotEvents(bot: unknown): void }).hookBotEvents(bot);
+    const send = async (component: object, positionId: 1 | 2): Promise<void> => {
+      bot._client.emit('systemChat', { formattedMessage: JSON.stringify(component), positionId });
+      await Promise.resolve();
+    };
+    const sent = () => host.events.map((e, i) => ({ text: e.text, trigger: (host.pushOpts[i] as { trigger?: string } | undefined)?.trigger }));
+    return { send, sent };
+  }
+
+  it('插件回执与命令反馈 piggyback 进 minecraft.chat;进出服广播与已成聊天的消息不重复转发', async () => {
+    const { send, sent } = chatRig();
+    await send({ text: '技能列表:火球术(10 魔力)' }, 1);
+    await send({ translate: 'commands.time.set', with: ['1000'] }, 1);
+    await send({ translate: 'multiplayer.player.joined', with: ['Alex'] }, 1);
+    await send({ text: '[Server] hello' }, 1);
+    expect(sent()).toEqual([
+      { text: '[MC 系统] 技能列表:火球术(10 魔力)', trigger: 'piggyback' },
+      { text: '[MC 系统] Set the time to 1000', trigger: 'piggyback' },
+      { text: '[MC] Server: hello', trigger: 'debounce' },
+    ]);
+  });
+
+  it('动作栏同一文字在显示期内重发只算续显;显示期过了或换了文字才再入流', async () => {
+    const { send, sent } = chatRig();
+    let now = 1_000_000;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      await send({ text: '魔力 50/100' }, 2);
+      now += ACTION_BAR_SHOW_MS - 1;
+      await send({ text: '魔力 50/100' }, 2);
+      now += ACTION_BAR_SHOW_MS - 1;
+      await send({ text: '魔力 50/100' }, 2);
+      now += ACTION_BAR_SHOW_MS;
+      await send({ text: '魔力 50/100' }, 2);
+      await send({ text: '魔力 40/100' }, 2);
+      await send({ text: '魔力 50/100' }, 2);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(sent()).toEqual([
+      { text: '[MC 动作栏] 魔力 50/100', trigger: 'piggyback' },
+      { text: '[MC 动作栏] 魔力 50/100', trigger: 'piggyback' },
+      { text: '[MC 动作栏] 魔力 40/100', trigger: 'piggyback' },
+      { text: '[MC 动作栏] 魔力 50/100', trigger: 'piggyback' },
+    ]);
+  });
+});
 
 describe('MinecraftWorld 物品损坏事件', () => {
   interface BreakItem {
