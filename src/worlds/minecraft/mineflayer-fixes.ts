@@ -249,6 +249,9 @@ export function installPathfinderToolSelection(bot: Bot, log: Logger): void {
     );
 
   pathfinder.bestHarvestTool = (block): ItemLike | null => {
+    // 区块卸载之后 blockAt 给 null,digTime 无从算起。回报 null = 不换手,与"空手"
+    // 同一语义:调用方照挖,挖不动会走 dig_error 重算,异常不必抛进物理节拍。
+    if (!block) return null;
     const held = bot.heldItem as (ItemLike & { type: number; slot?: number }) | null;
     // 空手时基线就是 null,规划侧读成徒手、执行侧读成不换手,两边都正确
     let best: (ItemLike & { type: number; slot?: number }) | null = held;
