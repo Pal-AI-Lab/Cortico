@@ -3830,7 +3830,7 @@ export class Reflexes {
     const hazard = touch.touching
       ?? (touch.onFire ? nearestHazard(bot, Reflexes.ON_FIRE_HAZARD_R) : null);
     if (hazard === null) {
-      // 驻留窗口里就开始灭火:剩的血可能撑不过那 600ms
+      // 灭火不等驻留窗口结算
       if (this.lavaEscape !== null || this.burning !== null) this.extinguish(bot, touch.onFire);
       this.endLavaEscape(bot, touch.onFire);
       return;

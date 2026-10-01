@@ -6332,7 +6332,7 @@ export class MinecraftWorld implements World {
     const urgent = health < 10 || lost >= URGENT_LOSS;
     if (!urgent && now - this.lastDamageNoticeAt < 6_000) return;
     this.lastDamageNoticeAt = now;
-    // 来由只报服务端 damage_event 给的事实;没收到就不说,附近的敌对生物不一定是打人的那个
+    // 来由只报服务端 damage_event 给的事实;没收到就不说
     const source = selfDamageText(hits);
     const from = source ? `(${source})` : '';
     this.emit(
