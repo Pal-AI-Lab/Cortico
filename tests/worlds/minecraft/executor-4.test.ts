@@ -4766,7 +4766,7 @@ describe('anvil/grindstone:铁砧与砂轮', () => {
         itemsByName: {},
         entitiesByName: {},
         enchantments: {
-          13: { name: 'sharpness' }, 30: { name: 'infinity' },
+          13: { name: 'sharpness' }, 20: { name: 'fire_aspect' }, 30: { name: 'infinity' },
           31: { name: 'silk_touch' }, 32: { name: 'piercing' },
         },
       },
@@ -4807,6 +4807,8 @@ describe('anvil/grindstone:铁砧与砂轮', () => {
         } else {
           bot.experience.points += opts.xpRefund ?? 0;
         }
+        // shift 取出的产物落进背包段的下一格,窗口账上那一格随之有了它
+        win.slots[win.inventoryStart + bag.length] = win.slots[2];
         bag.push(win.slots[2]!);
         win.slots[0] = null;
         if (opts.station === 'anvil') win.slots[1] = null;
@@ -4888,6 +4890,30 @@ describe('anvil/grindstone:铁砧与砂轮', () => {
       .map((i) => (i.componentMap?.get('stored_enchantments')?.data as
         { enchantments: Array<{ id: number }> }).enchantments[0].id);
     expect(left.sort()).toEqual([31, 32]);
+  });
+
+  it('铁砧:包里还有别的同名件时,回执报的是取出来的那件产物', async () => {
+    const fire = (id: number) => new Map<string, { data?: unknown }>([
+      ['stored_enchantments', { data: { enchantments: [{ id, level: 2 }] } }],
+    ]);
+    const bot = stationBot({
+      station: 'anvil',
+      bag: [
+        { name: 'diamond_sword', count: 1, type: 21, componentMap: sharp3() },
+        { name: 'diamond_sword', count: 1, type: 21 },
+        { name: 'enchanted_book', count: 1, type: 13, componentMap: fire(20) },
+      ],
+      out: {
+        name: 'diamond_sword', count: 1, type: 21,
+        componentMap: new Map([['enchantments', { data: { enchantments: [{ id: 13, level: 3 }, { id: 20, level: 2 }] } }]]),
+      },
+      xpCost: 3,
+    });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'anvil', op: 'combine', item: 'diamond_sword', with: 'enchanted_book' }]);
+    await waitUntil(() => reports.length === 1, 10_000);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain('附魔 sharpness3、fire_aspect2)');
   });
 
   it('铁砧不认这一对:产出槽没出东西按受阻收场,料退回包里', async () => {

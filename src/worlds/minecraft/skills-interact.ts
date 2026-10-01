@@ -32,7 +32,7 @@ import { consumeHeldFood, equipNamed } from './skills-craft.ts';
 import { matchItemName } from './chests.ts';
 import {
   ANVIL_BLOCKS, STATION_FIND_R, WINDOW_SETTLE_MS, findStationCell, openStationWindow,
-  putIntoStation, rememberWindow, stationItemFacts,
+  putIntoStation, rememberWindow, stationItemFacts, type StationWindow,
 } from './containers.ts';
 import { isSpawnAnchorBlock } from './policy.ts';
 import { DRINKABLES } from './item-facts.ts';
@@ -1668,6 +1668,20 @@ export async function rideDrive(bot: Bot, ctx: SkillContext, to: Cell): Promise<
 
 // ======================== anvil / grindstone:通用窗口协议 ========================
 
+/**
+ * shift 点产出槽(2 号格)把产物取进包,返回它落进的那一格;窗口背包段里没有哪格
+ * 多出这样东西时返回 null。包里可能还有别的同名件,产物只认这一格。
+ */
+async function shiftTakeOutput(bot: Bot, win: StationWindow, outName: string): Promise<{ name: string } | null> {
+  const bagBefore = win.slots.slice(win.inventoryStart, win.inventoryEnd);
+  await (bot as unknown as { clickWindow(s: number, b: number, m: number): Promise<void> }).clickWindow(2, 0, 1);
+  await sleep(WINDOW_SETTLE_MS);
+  return win.slots.slice(win.inventoryStart, win.inventoryEnd).find((s, i) => {
+    const prev = bagBefore[i];
+    return s !== null && s.name === outName && (prev === null || prev.name !== s.name || s.count > prev.count);
+  }) ?? null;
+}
+
 export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'anvil' }>, ctx: SkillContext): Promise<string> {
   const cell = call.at ? resolveAt(bot, call.at) : findStationCell(bot, ANVIL_BLOCKS);
   if (!cell) throw new SkillBlocked(`附近 ${STATION_FIND_R} 格内没有铁砧;放一个再来,或用 at 指一格`);
@@ -1702,6 +1716,8 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
   (client as unknown as { on(n: string, f: unknown): void }).on('craft_progress_bar', onProp);
   const { win, blockName } = await openStationWindow(bot, ctx, cell, ANVIL_BLOCKS, '铁砧');
   let out: { name: string } | null = null;
+  /** shift 取出后产物落进的那一格(窗口里玩家背包段);没看到落格时为 null */
+  let landed: { name: string } | null = null;
   try {
     await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
     await sleep(300);
@@ -1722,11 +1738,7 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
         [], 'server',
       );
     }
-    const outFacts = stationItemFacts(bot, out);
-    await (bot as unknown as { clickWindow(s: number, b: number, m: number): Promise<void> }).clickWindow(2, 0, 1);
-    await sleep(WINDOW_SETTLE_MS);
-    // 产出留在读数里,取没取到由下面的等级/库存判
-    void outFacts;
+    landed = await shiftTakeOutput(bot, win, out.name);
   } finally {
     (client as unknown as { removeListener(n: string, f: unknown): void }).removeListener('craft_progress_bar', onProp);
     try { bot.closeWindow(win as never); } catch { /* 已关 */ }
@@ -1741,7 +1753,9 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
       throw new SkillBlocked(`铁砧的产出没拿到手:经验一级没扣、包里一样没动(${gate};等级不够时原版不给取)`, [], 'server');
     }
   }
-  const result = bot.inventory.items().find((i) => i.name === (out?.name ?? call.item));
+  const product = landed
+    ? `${zhName(landed.name)}(${stationItemFacts(bot, landed)})`
+    : `${zhName(out.name)}(${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格)`;
   const anvilNow = blockAtCell(bot, cell)?.name ?? null;
   const wear = anvilNow === blockName
     ? ''
@@ -1752,7 +1766,7 @@ export async function skillAnvil(bot: Bot, call: Extract<SkillCall, { skill: 'an
     ? `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}改名成「${call.name}」`
     : `在 ${cellText(cell)} 的${zhName(blockName)}上把${askedLabel(bot, call.item, call.pick, main)}`
       + `和${askedLabel(bot, call.with!, call.withPick, withOne)}合了`;
-  return `${head}:产物${result ? `${zhName(result.name)}(${stationItemFacts(bot, result)})` : '已入包'};`
+  return `${head}:产物${product};`
     + `花了 ${Math.max(spent, 0)} 级经验(${lvl0} → ${lvl1})${wear}`;
 }
 
@@ -1770,6 +1784,7 @@ export async function skillGrindstone(bot: Bot, call: Extract<SkillCall, { skill
   const pts0 = bot.experience.points;
   const { win } = await openStationWindow(bot, ctx, cell, ['grindstone'], '砂轮');
   let out: { name: string } | null = null;
+  let landed: { name: string } | null = null;
   try {
     await putIntoStation(bot, win, mainPred, 0, itemAsked(call.item, call.pick));
     if (call.with) {
@@ -1787,17 +1802,16 @@ export async function skillGrindstone(bot: Bot, call: Extract<SkillCall, { skill
         [], 'server',
       );
     }
-    await (bot as unknown as { clickWindow(s: number, b: number, m: number): Promise<void> }).clickWindow(2, 0, 1);
-    await sleep(WINDOW_SETTLE_MS);
+    landed = await shiftTakeOutput(bot, win, out.name);
   } finally {
     try { bot.closeWindow(win as never); } catch { /* 已关 */ }
   }
   await sleep(400); // 经验球飞过来要一拍
-  const result = bot.inventory.items().find((i) => i.name === (out?.name ?? call.item));
+  const result = landed ? stationItemFacts(bot, landed) : `${stationItemFacts(bot, out)};这是取出前产出槽的读数,没看到它落进包里哪一格`;
   const gained = bot.experience.points - pts0;
   const xpNote = gained > 0 ? `;返还了 ${gained} 点经验(附魔按原版比例折算)` : ';没有经验返还';
   return `在 ${cellText(cell)} 的砂轮上磨了${askedLabel(bot, call.item, call.pick, main)}`
     + `${call.with ? `+${itemAsked(call.with, call.withPick)}` : ''}:`
-    + `磨之前(${beforeFacts}),磨完(${result ? stationItemFacts(bot, result) : '产物读不到'})${xpNote}`;
+    + `磨之前(${beforeFacts}),磨完(${result})${xpNote}`;
 }
 
