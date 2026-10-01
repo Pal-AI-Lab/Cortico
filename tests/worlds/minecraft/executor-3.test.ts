@@ -3850,6 +3850,17 @@ describe('fish:开阔水域优先、视线放宽、包满与遮蔽的回执', ()
     expect(findFishingSpot(far as never, 12)).toBeNull();
   });
 
+  // 10/01 14:56、22:46 在家里箱子旁:5 格外就有水面,被平台边的墙挡住,回执只说「没看见」
+  it('水面都被挡着:回执点出最近那格水面在哪', async () => {
+    const bot = lakeBot({ lake: { x0: 5, x1: 12, z0: -6, z1: 6, depth: 3 }, canSee: () => false });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'fish' }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('没看见能下竿的水面');
+    expect(reports[0].text).toContain('(5, 63, 0) 有水面');
+  });
+
   it('小池钓成:回执带「这片水没有开阔水域」,站在原地抛得到就不走过去', async () => {
     const bot = lakeBot({ lake: SHALLOW, biteAfterMs: 50, loot: { name: 'cod', type: 21 } });
     const { exec, reports } = makeExecutorOn(bot);

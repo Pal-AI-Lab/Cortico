@@ -645,21 +645,26 @@ export function isOpenFishingWater(bot: Bot, c: Cell): boolean {
 /** 选点结果:选中的水面格,以及它是不是开阔水域(有开阔水域就一定选它) */
 export interface FishingSpot { cell: Cell; open: boolean }
 
-/**
- * 候选水面上方须非实心且非液体，优先开阔水域，再按距离选择。
- * FISH_NEAR_R 内免视线检查；更远候选须可见或沿水面连接到可见/近处水格。
- */
-export function findFishingSpot(bot: Bot, maxDistance: number): FishingSpot | null {
+/** maxDistance 内的水面格(上方非实心且非液体) */
+export function surfaceWaterNear(bot: Bot, maxDistance: number): Vec3[] {
   const water = (bot.registry.blocksByName as Record<string, { id: number } | undefined>).water;
   if (!water) throw new SkillBlocked('这个世界没有水这种方块');
-  const me = bot.entity.position;
   // 只要水面格:深处的水格再多也不是落点。半径 12 的一片湖水面约 450 格,上限放宽到装得下
   const surface = (b: { name: string; position: Vec3 }): boolean => {
     const above = bot.blockAt(b.position.offset(0, 1, 0));
     return !!above && above.boundingBox !== 'block' && !LIQUIDS.has(above.name);
   };
-  const found = bot.findBlocks({ matching: [water.id], maxDistance, count: 512, useExtraInfo: surface })
+  return bot.findBlocks({ matching: [water.id], maxDistance, count: 512, useExtraInfo: surface })
     .filter((p) => surface({ name: 'water', position: p }));
+}
+
+/**
+ * 候选水面上方须非实心且非液体，优先开阔水域，再按距离选择。
+ * FISH_NEAR_R 内免视线检查；更远候选须可见或沿水面连接到可见/近处水格。
+ */
+export function findFishingSpot(bot: Bot, maxDistance: number): FishingSpot | null {
+  const me = bot.entity.position;
+  const found = surfaceWaterNear(bot, maxDistance);
   if (found.length === 0) return null;
   const key = (p: { x: number; y: number; z: number }): string => `${p.x},${p.y},${p.z}`;
   const byKey = new Map<string, Vec3>();
@@ -924,7 +929,16 @@ export async function skillFish(bot: Bot, call: Extract<SkillCall, { skill: 'fis
     }
   } else {
     const spot = findFishingSpot(bot, FISH_SCAN_R);
-    if (!spot) throw new SkillBlocked(`${FISH_SCAN_R} 格内没看见能下竿的水面`);
+    if (!spot) {
+      // 水面被墙或箱子挡在视线外时,说出最近那格在哪,她可以用 at 指过去
+      const me = bot.entity.position;
+      const hidden = surfaceWaterNear(bot, FISH_SCAN_R)
+        .reduce<Vec3 | null>((a, p) => (a === null || p.distanceTo(me) < a.distanceTo(me) ? p : a), null);
+      throw new SkillBlocked(hidden
+        ? `${FISH_SCAN_R} 格内没看见能下竿的水面;离我 ${hidden.distanceTo(me).toFixed(1)} 格的`
+          + ` ${cellText(hidden)} 有水面,从这儿看过去被挡着,要钓那里就用 at 指给我`
+        : `${FISH_SCAN_R} 格内没看见能下竿的水面,也没有露出水面的水`);
+    }
     water = spot.cell;
     if (!spot.open) openNote = `;${NO_OPEN_WATER_NOTE}`;
   }
