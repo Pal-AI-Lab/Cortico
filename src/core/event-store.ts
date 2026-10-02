@@ -1,7 +1,8 @@
 /**
  * 事件库:按 run 分片的 JSONL,`data/runs/<run>/events.jsonl` 一行一个 EventEnvelope。
  * cursor 跨 run 全局单调:开机时从已有分片的末行续号。当前 run 常驻内存,更早的
- * 分片按 cursor / ts 区间按需装载;range / around / grep 跨分片作答。
+ * 分片按 cursor / ts 区间按需装载,装载缓存设 LRU 上限(当前 run 不逐出);
+ * range / around / grep 跨分片作答。
  */
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,6 +22,8 @@ export interface JsonlEventStoreOptions {
   /** 当前 run id;新事件写进它的分片 */
   run: string;
   log?: Logger;
+  /** 已装载历史分片的缓存上限,超出按 LRU 逐出、下次访问再从磁盘读;默认 8。当前 run 不逐出。 */
+  maxLoadedSegments?: number;
 }
 
 interface Segment {
@@ -96,10 +99,14 @@ export class JsonlEventStore implements EventStore {
   /** 文件大小不符的错误只报告一次。 */
   private concurrencyReported = false;
   private appendListeners: Array<(e: EventEnvelope) => void> = [];
+  /** 已装载的历史分片,按最近使用排在尾端;当前 run 不进此表(常驻,不逐出)。 */
+  private readonly loadedLru: Segment[] = [];
+  private readonly maxLoadedSegments: number;
 
   constructor(opts: JsonlEventStoreOptions) {
     this.log = opts.log ?? nullLogger();
     this.run = opts.run;
+    this.maxLoadedSegments = Math.max(0, opts.maxLoadedSegments ?? 8);
     const runsDir = runsDirOf(opts.dataDir);
     for (const id of listRuns(opts.dataDir)) {
       if (id === this.run) continue;
@@ -154,7 +161,10 @@ export class JsonlEventStore implements EventStore {
   }
 
   private load(segment: Segment): EventEnvelope[] {
-    if (segment.events) return segment.events;
+    if (segment.events) {
+      if (segment !== this.current) this.touchLoaded(segment);
+      return segment.events;
+    }
     let raw = '';
     try {
       raw = readFileSync(segment.file, 'utf8');
@@ -162,7 +172,21 @@ export class JsonlEventStore implements EventStore {
       this.log.warn('事件分片读取失败', { run: segment.run, err: error });
     }
     segment.events = this.parseAll(raw, segment.run);
+    if (segment !== this.current) {
+      this.touchLoaded(segment);
+      // 超出上限就逐出最久未用的分片:磁盘是完整事实,下次访问再读回来
+      while (this.loadedLru.length > this.maxLoadedSegments) {
+        const oldest = this.loadedLru.shift()!;
+        oldest.events = null;
+      }
+    }
     return segment.events;
+  }
+
+  private touchLoaded(segment: Segment): void {
+    const i = this.loadedLru.indexOf(segment);
+    if (i >= 0) this.loadedLru.splice(i, 1);
+    this.loadedLru.push(segment);
   }
 
   append(e: Omit<EventEnvelope, 'cursor'>): EventEnvelope {
@@ -236,6 +260,27 @@ export class JsonlEventStore implements EventStore {
   }
 
   range(q: EventRangeQuery): EventEnvelope[] {
+    const limit = q.limit !== undefined && q.limit >= 0 ? q.limit : undefined;
+    // 无起点区间的 limit 查询只要最近的几条:从尾部分片倒着凑,不触碰更早的历史
+    if (limit !== undefined && q.fromCursor === undefined && q.fromTs === undefined) {
+      if (limit === 0) return [];
+      const matched: EventEnvelope[] = [];
+      for (const segment of [...this.segmentsIn(q)].reverse()) {
+        const events = this.load(segment);
+        for (let i = events.length - 1; i >= 0; i--) {
+          const e = events[i];
+          if (q.toCursor !== undefined && e.cursor > q.toCursor) continue;
+          if (q.toTs !== undefined && e.ts > q.toTs) continue;
+          if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
+          if (q.source !== undefined && e.source !== q.source) continue;
+          if (q.origin !== undefined && e.origin !== q.origin) continue;
+          matched.push(e);
+          if (matched.length >= limit) { matched.reverse(); return matched; }
+        }
+      }
+      matched.reverse();
+      return matched;
+    }
     const matched: EventEnvelope[] = [];
     for (const segment of this.segmentsIn(q)) {
       const events = this.load(segment);
@@ -252,8 +297,8 @@ export class JsonlEventStore implements EventStore {
       }
     }
     // limit从区间尾部取(最近优先),返回仍按游标升序
-    if (q.limit !== undefined && q.limit >= 0 && matched.length > q.limit) {
-      return matched.slice(matched.length - q.limit);
+    if (limit !== undefined && matched.length > limit) {
+      return matched.slice(matched.length - limit);
     }
     return matched;
   }

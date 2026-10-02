@@ -1,12 +1,28 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { JsonlEventStore } from '../../src/core/event-store.ts';
+import type { JsonlEventStoreOptions } from '../../src/core/event-store.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { makeTmpDir } from './helpers.ts';
 
 const RUN_A = 'r-20260101-000000-aaaa';
 const RUN_B = 'r-20260101-000100-bbbb';
+const RUN_C = 'r-20260101-000200-cccc';
+
+/** readFileSync 的旁观钩子:node 内建模块的属性不可重定义,只能整 module 代理一次。 */
+const fsHooks = vi.hoisted(() => ({ reads: [] as string[] }));
+vi.mock('node:fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:fs')>();
+  return {
+    ...actual,
+    default: actual,
+    readFileSync: (file: string, ...rest: unknown[]) => {
+      fsHooks.reads.push(String(file));
+      return actual.readFileSync(file, ...rest as []);
+    },
+  };
+});
 
 /** 记下每一级日志的调用,用来断言装载期/写盘期的机械告警。 */
 function spyLogger() {
@@ -34,9 +50,10 @@ function seed(store: JsonlEventStore, n: number, offset = 0): void {
 
 describe('JsonlEventStore', () => {
   let tmp: ReturnType<typeof makeTmpDir>;
-  const open = (run = RUN_A, log = nullLogger()) => new JsonlEventStore({ dataDir: tmp.dir, run, log });
+  const open = (run = RUN_A, log = nullLogger(), opts: Partial<JsonlEventStoreOptions> = {}) =>
+    new JsonlEventStore({ dataDir: tmp.dir, run, log, ...opts });
   const fileOf = (run: string) => join(tmp.dir, 'runs', run, 'events.jsonl');
-  beforeEach(() => (tmp = makeTmpDir()));
+  beforeEach(() => (tmp = makeTmpDir(), fsHooks.reads.length = 0));
   afterEach(() => tmp.cleanup());
 
   it('append游标从1递增,get/latestCursor一致,记录带 run', () => {
@@ -85,6 +102,33 @@ describe('JsonlEventStore', () => {
     // limit最近优先,仍升序
     expect(store.range({ limit: 3 }).map((e) => e.cursor)).toEqual([8, 9, 10]);
     expect(store.range({ fromCursor: 2, toCursor: 9, limit: 2 }).map((e) => e.cursor)).toEqual([8, 9]);
+  });
+
+  it('无起点的 limit 查询从当前分片倒着凑,不装载更早的历史', () => {
+    const a = open(RUN_A); seed(a, 10);
+    const b = open(RUN_B); seed(b, 10, 10); // cursor 11..20,RUN_B 为当前 run
+    fsHooks.reads.length = 0;
+    expect(b.range({ limit: 5 }).map((e) => e.cursor)).toEqual([16, 17, 18, 19, 20]);
+    // 尾部在内存里就够了:连当前分片都不必重读,更没碰 RUN_A
+    expect(fsHooks.reads).toEqual([]);
+    expect(b.range({ senderKey: 'alice', limit: 2 }).map((e) => e.cursor)).toEqual([15, 18]);
+    expect(fsHooks.reads).toEqual([]);
+    // 起点查询不受影响,仍按需装载旧分片
+    expect(b.range({ fromCursor: 2, toCursor: 4 }).map((e) => e.cursor)).toEqual([2, 3, 4]);
+    expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
+  });
+
+  it('历史分片装载缓存按 LRU 逐出,再次访问从磁盘重读', () => {
+    const a = open(RUN_A); seed(a, 6);      // 1..6
+    const b = open(RUN_B); seed(b, 6, 6);   // 7..12
+    const store = open(RUN_C, nullLogger(), { maxLoadedSegments: 1 });
+    expect(store.get(1)?.cursor).toBe(1);   // 装载 RUN_A
+    expect(store.get(7)?.cursor).toBe(7);   // 装载 RUN_B,逐出 RUN_A
+    fsHooks.reads.length = 0;
+    expect(store.get(2)?.cursor).toBe(2);   // RUN_A 已被逐出,必须重读
+    expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
+    expect(store.get(8)?.cursor).toBe(8);   // 逐出又回来,结果仍正确
+    expect(store.range({}).map((e) => e.cursor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
   it('clear 只清当前 run 的分片,游标不回退,重启后仍从续号处起', () => {
