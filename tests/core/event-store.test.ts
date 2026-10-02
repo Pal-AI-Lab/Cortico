@@ -131,6 +131,37 @@ describe('JsonlEventStore', () => {
     expect(store.range({}).map((e) => e.cursor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
   });
 
+  it('当前 run 的事件内存有水位,裁掉的头部仍可从磁盘查回', () => {
+    const store = open(RUN_A, nullLogger(), { maxCurrentEvents: 5 });
+    seed(store, 12); // 文件与游标 1..12,内存尾窗只留 8..12
+    expect(store.currentCount()).toBe(12); // 汇报分片全量,不是内存窗
+    fsHooks.reads.length = 0;
+    expect(store.range({ limit: 3 }).map((e) => e.cursor)).toEqual([10, 11, 12]); // 尾窗直答
+    expect(fsHooks.reads).toEqual([]);
+    for (let c = 1; c <= 12; c++) expect(store.get(c)?.cursor).toBe(c); // 触头部,重读
+    expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
+    expect(store.range({ fromCursor: 2, toCursor: 4 }).map((e) => e.cursor)).toEqual([2, 3, 4]);
+    expect(store.range({}).map((e) => e.cursor)).toEqual(Array.from({ length: 12 }, (_, i) => i + 1));
+    // 重读回全量后继续追加,再次按水位裁剪,游标语义不破
+    seed(store, 3, 12); // 13..15
+    expect(store.latestCursor()).toBe(15);
+    expect(store.get(13)?.cursor).toBe(13);
+    expect(store.range({ limit: 2 }).map((e) => e.cursor)).toEqual([14, 15]);
+    expect(store.currentCount()).toBe(15);
+    // 重启后默认水位,分片完整读回
+    const re = open();
+    expect(re.range({}).map((e) => e.cursor)).toEqual(Array.from({ length: 15 }, (_, i) => i + 1));
+    expect(re.currentCount()).toBe(15);
+  });
+
+  it('尾部 limit 查询在尾窗凑不够时读回被裁的头部', () => {
+    const store = open(RUN_A, nullLogger(), { maxCurrentEvents: 3 });
+    seed(store, 10); // 内存留 8,9,10
+    // alice 的游标是 3,6,9:尾窗里只有 9,要凑 3 条必须读回头部
+    expect(store.range({ senderKey: 'alice', limit: 3 }).map((e) => e.cursor)).toEqual([3, 6, 9]);
+    expect(store.currentCount()).toBe(10);
+  });
+
   it('clear 只清当前 run 的分片,游标不回退,重启后仍从续号处起', () => {
     const store = open();
     seed(store, 5);

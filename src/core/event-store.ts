@@ -1,8 +1,8 @@
 /**
  * 事件库:按 run 分片的 JSONL,`data/runs/<run>/events.jsonl` 一行一个 EventEnvelope。
- * cursor 跨 run 全局单调:开机时从已有分片的末行续号。当前 run 常驻内存,更早的
- * 分片按 cursor / ts 区间按需装载,装载缓存设 LRU 上限(当前 run 不逐出);
- * range / around / grep 跨分片作答。
+ * cursor 跨 run 全局单调:开机时从已有分片的末行续号。当前 run 常驻内存的尾窗(超出
+ * 水位裁掉头部,查询触及时从磁盘整段读回);更早的分片按 cursor / ts 区间按需装载,
+ * 装载缓存设 LRU 上限(当前 run 不逐出);range / around / grep 跨分片作答。
  */
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,6 +24,8 @@ export interface JsonlEventStoreOptions {
   log?: Logger;
   /** 已装载历史分片的缓存上限,超出按 LRU 逐出、下次访问再从磁盘读;默认 8。当前 run 不逐出。 */
   maxLoadedSegments?: number;
+  /** 当前 run 常驻内存的事件条数上限,超出裁掉最旧的一段(磁盘仍全量);默认 10000。 */
+  maxCurrentEvents?: number;
 }
 
 interface Segment {
@@ -102,11 +104,17 @@ export class JsonlEventStore implements EventStore {
   /** 已装载的历史分片,按最近使用排在尾端;当前 run 不进此表(常驻,不逐出)。 */
   private readonly loadedLru: Segment[] = [];
   private readonly maxLoadedSegments: number;
+  private readonly maxCurrentEvents: number;
+  /** 当前 run 内存尾窗里最旧的 cursor;未裁剪时等于 current.first。磁盘始终是全量事实。 */
+  private currentMemFrom = 0;
+  /** 当前 run 分片的累计条数(含被水位裁出内存的),currentCount 汇报它。 */
+  private currentTotal = 0;
 
   constructor(opts: JsonlEventStoreOptions) {
     this.log = opts.log ?? nullLogger();
     this.run = opts.run;
     this.maxLoadedSegments = Math.max(0, opts.maxLoadedSegments ?? 8);
+    this.maxCurrentEvents = Math.max(1, opts.maxCurrentEvents ?? 10000);
     const runsDir = runsDirOf(opts.dataDir);
     for (const id of listRuns(opts.dataDir)) {
       if (id === this.run) continue;
@@ -141,6 +149,8 @@ export class JsonlEventStore implements EventStore {
         this.current.lastTs = events[events.length - 1].ts;
         this.next = Math.max(this.next, this.current.last + 1);
       }
+      this.currentMemFrom = this.current.first;
+      this.currentTotal = events.length;
     }
     this.segments.push(this.current);
   }
@@ -189,12 +199,47 @@ export class JsonlEventStore implements EventStore {
     this.loadedLru.push(segment);
   }
 
+  /** 当前 run 的内存尾窗是否被水位裁过(裁过则 first 之前到 memFrom 之间只在磁盘上)。 */
+  private trimmed(): boolean {
+    return this.currentMemFrom > this.current.first;
+  }
+
+  /**
+   * 查询触及当前 run 被裁掉的头部时,从磁盘把整个分片读回内存(随后继续追加会再次
+   * 裁剪)。`neededFrom` 给出查询关心的最老 cursor:不比 memFrom 更老就不必重读;
+   * undefined 表示需要全量。读失败保持尾窗不动,查得到多少算多少。
+   */
+  private ensureCurrentCoverage(neededFrom: number | undefined): void {
+    if (!this.trimmed()) return;
+    if (neededFrom !== undefined && neededFrom >= this.currentMemFrom) return;
+    let raw = '';
+    try {
+      raw = readFileSync(this.current.file, 'utf8');
+    } catch (error) {
+      this.log.warn('当前 run 分片重读失败', { run: this.run, err: error });
+      return;
+    }
+    const events = this.parseAll(raw, this.run);
+    this.current.events = events;
+    this.currentMemFrom = events[0]?.cursor ?? this.currentMemFrom;
+  }
+
   append(e: Omit<EventEnvelope, 'cursor'>): EventEnvelope {
     this.checkExclusiveWrite();
     const envelope: EventEnvelope = { ...e, cursor: this.next++, run: this.run };
     const events = this.current.events!;
     events.push(envelope);
-    if (events.length === 1) { this.current.first = envelope.cursor; this.current.firstTs = envelope.ts; }
+    this.currentTotal++;
+    if (events.length === 1) {
+      this.current.first = envelope.cursor;
+      this.current.firstTs = envelope.ts;
+      this.currentMemFrom = envelope.cursor;
+    }
+    // 内存只留尾窗:被裁掉的头部以磁盘为准,查询触及时整段读回(见 ensureCurrentCoverage)
+    if (events.length > this.maxCurrentEvents) {
+      events.splice(0, events.length - this.maxCurrentEvents);
+      this.currentMemFrom = events[0].cursor;
+    }
     this.current.last = envelope.cursor;
     this.current.lastTs = envelope.ts;
     const line = JSON.stringify(envelope) + '\n';
@@ -232,13 +277,14 @@ export class JsonlEventStore implements EventStore {
 
   /** 当前 run 分片里的条数 */
   currentCount(): number {
-    return this.current.events!.length;
+    return this.currentTotal;
   }
 
   get(cursor: number): EventEnvelope | undefined {
     if (!Number.isInteger(cursor) || cursor < 1) return undefined;
     const segment = this.segments.find((s) => s.first <= cursor && cursor <= s.last);
     if (!segment) return undefined;
+    if (segment === this.current) this.ensureCurrentCoverage(cursor);
     const events = this.load(segment);
     const i = lowerBound(events, cursor);
     return events[i]?.cursor === cursor ? events[i] : undefined;
@@ -259,6 +305,20 @@ export class JsonlEventStore implements EventStore {
     });
   }
 
+  /** 把一个分片里的事件从最新往最老筛进 out,凑够 limit 条即止。 */
+  private scanNewestFirst(events: EventEnvelope[], q: EventRangeQuery, out: EventEnvelope[], limit: number): void {
+    for (let i = events.length - 1; i >= 0; i--) {
+      const e = events[i];
+      if (q.toCursor !== undefined && e.cursor > q.toCursor) continue;
+      if (q.toTs !== undefined && e.ts > q.toTs) continue;
+      if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
+      if (q.source !== undefined && e.source !== q.source) continue;
+      if (q.origin !== undefined && e.origin !== q.origin) continue;
+      out.push(e);
+      if (out.length >= limit) return;
+    }
+  }
+
   range(q: EventRangeQuery): EventEnvelope[] {
     const limit = q.limit !== undefined && q.limit >= 0 ? q.limit : undefined;
     // 无起点区间的 limit 查询只要最近的几条:从尾部分片倒着凑,不触碰更早的历史
@@ -267,22 +327,21 @@ export class JsonlEventStore implements EventStore {
       const matched: EventEnvelope[] = [];
       for (const segment of [...this.segmentsIn(q)].reverse()) {
         const events = this.load(segment);
-        for (let i = events.length - 1; i >= 0; i--) {
-          const e = events[i];
-          if (q.toCursor !== undefined && e.cursor > q.toCursor) continue;
-          if (q.toTs !== undefined && e.ts > q.toTs) continue;
-          if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
-          if (q.source !== undefined && e.source !== q.source) continue;
-          if (q.origin !== undefined && e.origin !== q.origin) continue;
-          matched.push(e);
-          if (matched.length >= limit) { matched.reverse(); return matched; }
+        this.scanNewestFirst(events, q, matched, limit);
+        // 倒序遍历里当前 run 排最前:尾窗没凑够且头部被水位裁过时,读回全量再扫一遍
+        if (segment === this.current && matched.length < limit && this.trimmed()) {
+          this.ensureCurrentCoverage(undefined);
+          matched.length = 0;
+          this.scanNewestFirst(this.current.events!, q, matched, limit);
         }
+        if (matched.length >= limit) { matched.reverse(); return matched; }
       }
       matched.reverse();
       return matched;
     }
     const matched: EventEnvelope[] = [];
     for (const segment of this.segmentsIn(q)) {
+      if (segment === this.current) this.ensureCurrentCoverage(q.fromCursor);
       const events = this.load(segment);
       const start = q.fromCursor !== undefined ? lowerBound(events, q.fromCursor) : 0;
       for (let i = start; i < events.length; i++) {
@@ -314,6 +373,7 @@ export class JsonlEventStore implements EventStore {
     const kw = q.keyword.toLowerCase();
     const ctx = Math.max(0, q.context);
     const hits: EventGrepHit[] = [];
+    this.ensureCurrentCoverage(undefined); // grep 扫全量,先补齐被裁掉的头部
     for (const segment of this.segmentsIn(q)) {
       for (const e of this.load(segment)) {
         if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
@@ -335,12 +395,14 @@ export class JsonlEventStore implements EventStore {
    * 更早的 run 不受影响。返回清掉的条数。
    */
   clear(): number {
-    const n = this.current.events!.length;
+    const n = this.currentTotal;
     this.current.events = [];
     this.current.first = 0;
     this.current.last = 0;
     this.current.firstTs = '';
     this.current.lastTs = '';
+    this.currentMemFrom = 0;
+    this.currentTotal = 0;
     if (existsSync(this.current.file)) rmSync(this.current.file);
     this.expectedSize = 0;
     this.log.warn('当前 run 的事件分片已清空', { cleared: n, run: this.run });
