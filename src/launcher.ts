@@ -18,6 +18,7 @@ import { extensionIconFile, extensionsDir, importBotDefinition, loadExtensions, 
 import { parseExtensionManifest } from './extensions/manifest.ts';
 import { withWorlds } from './world.ts';
 import { BUILTIN_WORLDS } from './worlds/index.ts';
+import { checkFrameworkRelease } from './web/framework-release.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
 import { deploymentDir, deploymentRoot, mainRepoRoot, packageDir, providerDir, providersRoot, readDeploymentManifest, repoRoot } from './paths.ts';
 
@@ -151,6 +152,18 @@ async function main(): Promise<void> {
   }
 
   const botName = pickBotName();
+
+  // 与启动并行查最新 Release;查完时摘要还没打印就并进摘要,打印过了就单独补一行。
+  // 查询失败不提示，与控制台字标下的更新提示一致。
+  let summaryPrinted = false;
+  let releaseNotice: string | null = null;
+  void checkFrameworkRelease().then(({ currentVersion, update }) => {
+    if (!update) return;
+    const line = `  ⚠ Cortico ${update.version} 已发布，本地是 ${currentVersion}:${update.url}`;
+    if (summaryPrinted) console.log(line);
+    else releaseNotice = line;
+  }, () => {});
+
   const { definition: loadedDefinition, deployDir: botDir, pkgDir, botPackage } = await loadBotDefinition(botName);
 
   // 扩展 provider 必须在 createBot 解析端点配置前注册。
@@ -239,10 +252,12 @@ async function main(): Promise<void> {
     const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
     console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「模型提供商」页修改密钥变量名或补填密钥`);
   }
+  if (releaseNotice) console.log(releaseNotice);
   if (paused) {
     console.log('  ⏸ 已暂停');
   }
   console.log('');
+  summaryPrinted = true;
 
   const openBrowserFlag =
     process.env.CORTICO_OPEN_BROWSER === '1' ||
