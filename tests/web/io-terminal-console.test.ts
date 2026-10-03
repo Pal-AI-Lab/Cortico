@@ -636,14 +636,14 @@ describe('开场那颗按钮', () => {
     expect(host.pushed.some((p) => p.e.type === 'terminal.invite')).toBe(false);
   });
 
-  it('较早的发言不会被后面几十条按钮事件挤出判断范围', async () => {
+  it('较早的发言不会被后面几百条按钮事件挤出判断范围', async () => {
     const host = new FakeHost();
     await host.pushEvent({
       type: 'terminal.message', source: 'terminal', origin: 'external',
       ts: '2026-01-01T00:00:00Z', text: 'hello', senderKey: 'operator',
       meta: { from: 'operator', body: 'hello' },
     });
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 250; i++) {
       await host.pushEvent({
         type: 'terminal.invite', source: 'terminal', origin: 'internal',
         ts: '2026-01-01T00:00:00Z', text: 'pressed a button', senderKey: 'operator',
