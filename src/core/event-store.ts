@@ -1,7 +1,8 @@
 /**
  * 事件库:按 run 分片的 JSONL,`data/runs/<run>/events.jsonl` 一行一个 EventEnvelope。
  * cursor 跨 run 全局单调:开机时从已有分片的末行续号。当前 run 常驻内存,更早的
- * 分片按 cursor / ts 区间按需装载;range / around / grep 跨分片作答。
+ * 分片按 cursor / ts 区间按需装载,只缓存最近一次查询读到的那些;range / around / grep
+ * 跨分片作答。
  */
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -96,6 +97,12 @@ export class JsonlEventStore implements EventStore {
   /** 文件大小不符的错误只报告一次。 */
   private concurrencyReported = false;
   private appendListeners: Array<(e: EventEnvelope) => void> = [];
+  /**
+   * 最近一次查询(get / range / around / grep,grep 为每条命中取上下文的 around 也各算一次)
+   * 读到的历史分片。其余历史分片在查询结束时、以及从磁盘装载新分片之前释放,所以缓存里的
+   * 历史分片不超过一次查询要读的那些;连续查询落在同一批分片上时不重读磁盘。
+   */
+  private readonly touched = new Set<Segment>();
 
   constructor(opts: JsonlEventStoreOptions) {
     this.log = opts.log ?? nullLogger();
@@ -154,7 +161,9 @@ export class JsonlEventStore implements EventStore {
   }
 
   private load(segment: Segment): EventEnvelope[] {
+    if (segment !== this.current) this.touched.add(segment);
     if (segment.events) return segment.events;
+    this.releaseUntouched();
     let raw = '';
     try {
       raw = readFileSync(segment.file, 'utf8');
@@ -163,6 +172,21 @@ export class JsonlEventStore implements EventStore {
     }
     segment.events = this.parseAll(raw, segment.run);
     return segment.events;
+  }
+
+  private releaseUntouched(): void {
+    for (const s of this.segments) {
+      if (s !== this.current && !this.touched.has(s)) s.events = null;
+    }
+  }
+
+  private query<T>(read: () => T): T {
+    this.touched.clear();
+    try {
+      return read();
+    } finally {
+      this.releaseUntouched();
+    }
   }
 
   append(e: Omit<EventEnvelope, 'cursor'>): EventEnvelope {
@@ -215,9 +239,11 @@ export class JsonlEventStore implements EventStore {
     if (!Number.isInteger(cursor) || cursor < 1) return undefined;
     const segment = this.segments.find((s) => s.first <= cursor && cursor <= s.last);
     if (!segment) return undefined;
-    const events = this.load(segment);
-    const i = lowerBound(events, cursor);
-    return events[i]?.cursor === cursor ? events[i] : undefined;
+    return this.query(() => {
+      const events = this.load(segment);
+      const i = lowerBound(events, cursor);
+      return events[i]?.cursor === cursor ? events[i] : undefined;
+    });
   }
 
   latestCursor(): number {
@@ -236,6 +262,31 @@ export class JsonlEventStore implements EventStore {
   }
 
   range(q: EventRangeQuery): EventEnvelope[] {
+    return this.query(() => this.scanRange(q));
+  }
+
+  private scanRange(q: EventRangeQuery): EventEnvelope[] {
+    const limit = q.limit !== undefined && q.limit >= 0 ? q.limit : undefined;
+    // 无起点区间的 limit 查询只要最近的几条:从尾部分片倒着凑,不触碰更早的历史
+    if (limit !== undefined && q.fromCursor === undefined && q.fromTs === undefined) {
+      if (limit === 0) return [];
+      const matched: EventEnvelope[] = [];
+      for (const segment of [...this.segmentsIn(q)].reverse()) {
+        const events = this.load(segment);
+        for (let i = events.length - 1; i >= 0; i--) {
+          const e = events[i];
+          if (q.toCursor !== undefined && e.cursor > q.toCursor) continue;
+          if (q.toTs !== undefined && e.ts > q.toTs) continue;
+          if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
+          if (q.source !== undefined && e.source !== q.source) continue;
+          if (q.origin !== undefined && e.origin !== q.origin) continue;
+          matched.push(e);
+          if (matched.length >= limit) { matched.reverse(); return matched; }
+        }
+      }
+      matched.reverse();
+      return matched;
+    }
     const matched: EventEnvelope[] = [];
     for (const segment of this.segmentsIn(q)) {
       const events = this.load(segment);
@@ -252,8 +303,8 @@ export class JsonlEventStore implements EventStore {
       }
     }
     // limit从区间尾部取(最近优先),返回仍按游标升序
-    if (q.limit !== undefined && q.limit >= 0 && matched.length > q.limit) {
-      return matched.slice(matched.length - q.limit);
+    if (limit !== undefined && matched.length > limit) {
+      return matched.slice(matched.length - limit);
     }
     return matched;
   }
@@ -266,6 +317,10 @@ export class JsonlEventStore implements EventStore {
   }
 
   grep(q: EventGrepQuery): EventGrepHit[] {
+    return this.query(() => this.scanGrep(q));
+  }
+
+  private scanGrep(q: EventGrepQuery): EventGrepHit[] {
     const kw = q.keyword.toLowerCase();
     const ctx = Math.max(0, q.context);
     const hits: EventGrepHit[] = [];
