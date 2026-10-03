@@ -3288,13 +3288,8 @@ interface ReflexOptions {
  */
 const REFLEX_TICK_MS = 200;
 
-/**
- * 逃跑方向:背对危险格的水平反方向,取 6 格远处一个供 lookAt 用的瞄点。
- *
- * 导出只为单测:它是唯一算方向的地方,而"算出非有限瞄点"会把朝向写坏(见 antiLava 里那段),
- * 所以它的退化输入要有明确结果,值得直接钉住。
- */
-export function awayFrom(p: { x: number; y: number; z: number }, hazard: { x: number; y: number; z: number }): Vec3 {
+/** 逃跑方向:背对危险格的水平反方向,取 6 格远处一个供 lookAt 用的瞄点 */
+function awayFrom(p: { x: number; y: number; z: number }, hazard: { x: number; y: number; z: number }): Vec3 {
   const dx = p.x - (hazard.x + 0.5);
   const dz = p.z - (hazard.z + 0.5);
   const len = Math.hypot(dx, dz);
@@ -3872,12 +3867,9 @@ export class Reflexes {
       });
     }
     // 落脚点逐 tick 复核:流动岩浆还在铺开,上一 tick 的安全格这一 tick 未必安全,不安全了才重选。
-    // 身上着着火时水格是最高优先的落脚点(preferWater),不再被当障碍排除
-    //
-    // 兜底必须并进来:`hazardsWithin` 只扫 BURNING_BLOCKS,而 `hazardTouch` 有一条"脚下是灼热
-    // 地面"的兜底 —— 于是"整个人站在岩浆块上"这种最常见的情形恰好是 hazards 为空、hazard 有值。
-    // 那会让 `dashAway` 的 pool 为空,空数组的平均是 0/0 = NaN,瞄点跟着是 NaN,
-    // `bot.lookAt(NaN, …)` 再把朝向写成 NaN(实测 2026-10-03 00:09:13)。
+    // 身上着着火时水格是最高优先的落脚点(preferWater),不再被当障碍排除。
+    // 列表总含碰到的那一格:hazardTouch 认脚下的灼热地面,hazardsWithin 只扫 BURNING_BLOCKS,
+    // 而 dashAway 取列表均值作危险中心,列表不能为空。
     const hazards = hazardsWithin(bot, Reflexes.ESCAPE_SCAN_R + ESCAPE_SAFE_GAP);
     if (!hazards.some((h) => h.x === hazard.x && h.y === hazard.y && h.z === hazard.z)) {
       hazards.push(hazard);
@@ -3932,32 +3924,14 @@ export class Reflexes {
     const p = bot.entity.position;
     const near = hazards.filter((h) => h.distance <= Reflexes.ESCAPE_SCAN_R);
     const pool = near.length > 0 ? near : hazards;
-    // pool 为空时平均值是 0/0 = NaN,而 NaN 瞄点会把朝向写坏(见 antiLava 里那段注释)。
-    // 正常情况下 antiLava 已经保证 hazards 至少含当前那个危险格;这里再守一道,
-    // 万一将来又有别的调用方传空数组进来,也只会退化成"往正北冲",不会写出 NaN。
-    const center = pool.length > 0
-      ? {
-        x: pool.reduce((s, h) => s + h.x, 0) / pool.length,
-        y: p.y,
-        z: pool.reduce((s, h) => s + h.z, 0) / pool.length,
-      }
-      : { x: p.x, y: p.y, z: p.z };
+    const center = {
+      x: pool.reduce((s, h) => s + h.x, 0) / pool.length,
+      y: p.y,
+      z: pool.reduce((s, h) => s + h.z, 0) / pool.length,
+    };
     const aim = cell !== null
       ? new Vec3(cell.x + 0.5, cell.y + 1.6, cell.z + 0.5)
       : awayFrom(p, center);
-    if (!Number.isFinite(aim.x) || !Number.isFinite(aim.z)) {
-      this.opts.diag?.write({
-        lane: 'reflex', event: 'dash-aim-nan',
-        msg: `逃跑瞄点非有限:aim=(${aim.x}, ${aim.y}, ${aim.z})`,
-        data: {
-          p: { x: p.x, y: p.y, z: p.z },
-          hazardsLen: hazards.length, nearLen: near.length, poolLen: pool.length,
-          center, cell,
-          hazards: hazards.slice(0, 4).map((h) => ({ x: h.x, y: h.y, z: h.z, d: h.distance })),
-          aim: { x: aim.x, y: aim.y, z: aim.z },
-        },
-      });
-    }
     void bot.lookAt(aim, true).catch(() => undefined);
     bot.setControlState('forward', true);
     bot.setControlState('sprint', true);

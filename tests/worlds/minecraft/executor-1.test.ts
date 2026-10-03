@@ -1845,6 +1845,17 @@ describe('Reflexes 岩浆', () => {
     expect(Math.hypot(aim.x - 10, aim.z - 10)).toBeGreaterThanOrEqual(3);
   });
 
+  it('只站在岩浆块上、周围没有烧人的方块:冲刺瞄点是有限坐标', () => {
+    const bot = lavaBot({ '10,62,10': 'magma_block' });
+    const { reflexes } = lavaReflexes(bot);
+    reflexes.start();
+    vi.advanceTimersByTime(250);
+    reflexes.stop();
+    const aim = bot.looks[0];
+    expect(aim).toBeDefined();
+    expect([aim.x, aim.y, aim.z].every(Number.isFinite)).toBe(true);
+  });
+
   it('陷进岩浆里要一直按跳:人在往下沉', () => {
     const bot = lavaBot({ '10,63,10': 'lava' });
     const { reflexes } = lavaReflexes(bot);
