@@ -3867,8 +3867,13 @@ export class Reflexes {
       });
     }
     // 落脚点逐 tick 复核:流动岩浆还在铺开,上一 tick 的安全格这一 tick 未必安全,不安全了才重选。
-    // 身上着着火时水格是最高优先的落脚点(preferWater),不再被当障碍排除
+    // 身上着着火时水格是最高优先的落脚点(preferWater),不再被当障碍排除。
+    // 列表总含碰到的那一格:hazardTouch 认脚下的灼热地面,hazardsWithin 只扫 BURNING_BLOCKS,
+    // 而 dashAway 取列表均值作危险中心,列表不能为空。
     const hazards = hazardsWithin(bot, Reflexes.ESCAPE_SCAN_R + ESCAPE_SAFE_GAP);
+    if (!hazards.some((h) => h.x === hazard.x && h.y === hazard.y && h.z === hazard.z)) {
+      hazards.push(hazard);
+    }
     const cell = findEscapeCell(bot, hazards, Reflexes.ESCAPE_SCAN_R, touch.onFire, esc.cell);
     esc.cell = cell;
     if (!esc.handedOff) {
