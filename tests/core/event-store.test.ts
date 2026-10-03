@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { JsonlEventStore } from '../../src/core/event-store.ts';
-import type { JsonlEventStoreOptions } from '../../src/core/event-store.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { makeTmpDir } from './helpers.ts';
 
@@ -50,8 +49,7 @@ function seed(store: JsonlEventStore, n: number, offset = 0): void {
 
 describe('JsonlEventStore', () => {
   let tmp: ReturnType<typeof makeTmpDir>;
-  const open = (run = RUN_A, log = nullLogger(), opts: Partial<JsonlEventStoreOptions> = {}) =>
-    new JsonlEventStore({ dataDir: tmp.dir, run, log, ...opts });
+  const open = (run = RUN_A, log = nullLogger()) => new JsonlEventStore({ dataDir: tmp.dir, run, log });
   const fileOf = (run: string) => join(tmp.dir, 'runs', run, 'events.jsonl');
   beforeEach(() => (tmp = makeTmpDir(), fsHooks.reads.length = 0));
   afterEach(() => tmp.cleanup());
@@ -118,17 +116,24 @@ describe('JsonlEventStore', () => {
     expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
   });
 
-  it('历史分片装载缓存按 LRU 逐出,再次访问从磁盘重读', () => {
+  it('历史分片只缓存最近一次查询读到的:同批分片上的连续查询各分片只读一次磁盘', () => {
     const a = open(RUN_A); seed(a, 6);      // 1..6
     const b = open(RUN_B); seed(b, 6, 6);   // 7..12
-    const store = open(RUN_C, nullLogger(), { maxLoadedSegments: 1 });
-    expect(store.get(1)?.cursor).toBe(1);   // 装载 RUN_A
-    expect(store.get(7)?.cursor).toBe(7);   // 装载 RUN_B,逐出 RUN_A
+    const store = open(RUN_C);
+    const readsOf = (run: string) => fsHooks.reads.filter((f) => f.includes(run)).length;
     fsHooks.reads.length = 0;
-    expect(store.get(2)?.cursor).toBe(2);   // RUN_A 已被逐出,必须重读
-    expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
-    expect(store.get(8)?.cursor).toBe(8);   // 逐出又回来,结果仍正确
-    expect(store.range({}).map((e) => e.cursor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(store.get(1)?.cursor).toBe(1);
+    expect(store.get(2)?.cursor).toBe(2);
+    expect(readsOf(RUN_A)).toBe(1);
+    // 换到 RUN_B 的查询结束后 RUN_A 被释放,再查 RUN_A 要重读
+    expect(store.get(7)?.cursor).toBe(7);
+    expect(store.get(3)?.cursor).toBe(3);
+    expect(readsOf(RUN_A)).toBe(2);
+    // grep 为每条命中取上下文,每个分片仍只读一次
+    fsHooks.reads.length = 0;
+    expect(store.grep({ keyword: '条消息', context: 1 }).map((h) => h.hitCursor)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
+    expect(readsOf(RUN_A)).toBe(0);
+    expect(readsOf(RUN_B)).toBe(1);
   });
 
   it('clear 只清当前 run 的分片,游标不回退,重启后仍从续号处起', () => {

@@ -1,8 +1,8 @@
 /**
  * 事件库:按 run 分片的 JSONL,`data/runs/<run>/events.jsonl` 一行一个 EventEnvelope。
  * cursor 跨 run 全局单调:开机时从已有分片的末行续号。当前 run 常驻内存,更早的
- * 分片按 cursor / ts 区间按需装载,装载缓存设 LRU 上限(当前 run 不逐出);
- * range / around / grep 跨分片作答。
+ * 分片按 cursor / ts 区间按需装载,只缓存最近一次查询读到的那些;range / around / grep
+ * 跨分片作答。
  */
 import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -22,8 +22,6 @@ export interface JsonlEventStoreOptions {
   /** 当前 run id;新事件写进它的分片 */
   run: string;
   log?: Logger;
-  /** 已装载历史分片的缓存上限,超出按 LRU 逐出、下次访问再从磁盘读;默认 8。当前 run 不逐出。 */
-  maxLoadedSegments?: number;
 }
 
 interface Segment {
@@ -99,14 +97,16 @@ export class JsonlEventStore implements EventStore {
   /** 文件大小不符的错误只报告一次。 */
   private concurrencyReported = false;
   private appendListeners: Array<(e: EventEnvelope) => void> = [];
-  /** 已装载的历史分片,按最近使用排在尾端;当前 run 不进此表(常驻,不逐出)。 */
-  private readonly loadedLru: Segment[] = [];
-  private readonly maxLoadedSegments: number;
+  /**
+   * 最近一次查询(get / range / around / grep,grep 为每条命中取上下文的 around 也各算一次)
+   * 读到的历史分片。其余历史分片在查询结束时、以及从磁盘装载新分片之前释放,所以缓存里的
+   * 历史分片不超过一次查询要读的那些;连续查询落在同一批分片上时不重读磁盘。
+   */
+  private readonly touched = new Set<Segment>();
 
   constructor(opts: JsonlEventStoreOptions) {
     this.log = opts.log ?? nullLogger();
     this.run = opts.run;
-    this.maxLoadedSegments = Math.max(0, opts.maxLoadedSegments ?? 8);
     const runsDir = runsDirOf(opts.dataDir);
     for (const id of listRuns(opts.dataDir)) {
       if (id === this.run) continue;
@@ -161,10 +161,9 @@ export class JsonlEventStore implements EventStore {
   }
 
   private load(segment: Segment): EventEnvelope[] {
-    if (segment.events) {
-      if (segment !== this.current) this.touchLoaded(segment);
-      return segment.events;
-    }
+    if (segment !== this.current) this.touched.add(segment);
+    if (segment.events) return segment.events;
+    this.releaseUntouched();
     let raw = '';
     try {
       raw = readFileSync(segment.file, 'utf8');
@@ -172,21 +171,22 @@ export class JsonlEventStore implements EventStore {
       this.log.warn('事件分片读取失败', { run: segment.run, err: error });
     }
     segment.events = this.parseAll(raw, segment.run);
-    if (segment !== this.current) {
-      this.touchLoaded(segment);
-      // 超出上限就逐出最久未用的分片:磁盘是完整事实,下次访问再读回来
-      while (this.loadedLru.length > this.maxLoadedSegments) {
-        const oldest = this.loadedLru.shift()!;
-        oldest.events = null;
-      }
-    }
     return segment.events;
   }
 
-  private touchLoaded(segment: Segment): void {
-    const i = this.loadedLru.indexOf(segment);
-    if (i >= 0) this.loadedLru.splice(i, 1);
-    this.loadedLru.push(segment);
+  private releaseUntouched(): void {
+    for (const s of this.segments) {
+      if (s !== this.current && !this.touched.has(s)) s.events = null;
+    }
+  }
+
+  private query<T>(read: () => T): T {
+    this.touched.clear();
+    try {
+      return read();
+    } finally {
+      this.releaseUntouched();
+    }
   }
 
   append(e: Omit<EventEnvelope, 'cursor'>): EventEnvelope {
@@ -239,9 +239,11 @@ export class JsonlEventStore implements EventStore {
     if (!Number.isInteger(cursor) || cursor < 1) return undefined;
     const segment = this.segments.find((s) => s.first <= cursor && cursor <= s.last);
     if (!segment) return undefined;
-    const events = this.load(segment);
-    const i = lowerBound(events, cursor);
-    return events[i]?.cursor === cursor ? events[i] : undefined;
+    return this.query(() => {
+      const events = this.load(segment);
+      const i = lowerBound(events, cursor);
+      return events[i]?.cursor === cursor ? events[i] : undefined;
+    });
   }
 
   latestCursor(): number {
@@ -260,6 +262,10 @@ export class JsonlEventStore implements EventStore {
   }
 
   range(q: EventRangeQuery): EventEnvelope[] {
+    return this.query(() => this.scanRange(q));
+  }
+
+  private scanRange(q: EventRangeQuery): EventEnvelope[] {
     const limit = q.limit !== undefined && q.limit >= 0 ? q.limit : undefined;
     // 无起点区间的 limit 查询只要最近的几条:从尾部分片倒着凑,不触碰更早的历史
     if (limit !== undefined && q.fromCursor === undefined && q.fromTs === undefined) {
@@ -311,6 +317,10 @@ export class JsonlEventStore implements EventStore {
   }
 
   grep(q: EventGrepQuery): EventGrepHit[] {
+    return this.query(() => this.scanGrep(q));
+  }
+
+  private scanGrep(q: EventGrepQuery): EventGrepHit[] {
     const kw = q.keyword.toLowerCase();
     const ctx = Math.max(0, q.context);
     const hits: EventGrepHit[] = [];
