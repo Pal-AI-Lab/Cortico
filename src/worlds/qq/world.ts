@@ -42,6 +42,7 @@ import {
   makeImagePolicy,
   parseJsonCard,
   renderIncoming,
+  renderJsonCardText,
   renderSegmentsPlain,
   type ImageRenderPolicy,
   type JsonCardRenderPolicy,
@@ -761,23 +762,23 @@ export class QQWorld implements World {
         const it = cardItems[cIdx];
         const early = cardPrecheck[cIdx];
         cIdx++;
-        const promptText = it.prompt ? `[分享:${it.prompt}]` : '[json]';
-        if (!it.id) return promptText;
+        const cardText = renderJsonCardText(it);
+        if (!it.id) return cardText;
         collected.push({ id: it.id, url: it.previewUrl! });
         earlyResolved.push(early);
-        if (early) return `${promptText} ${this.inlineVisionText(it.id, '', early.meta, '封面')}`;
+        if (early) return `${cardText} ${this.inlineVisionText(it.id, '', early.meta, '封面')}`;
         return passive
-          ? `${promptText} [封面 ${it.id} 正在载入VLM理解中...]`
-          : `${promptText} [封面 ${it.id}]`;
+          ? `${cardText} [封面 ${it.id} 正在载入VLM理解中...]`
+          : `${cardText} [封面 ${it.id}]`;
       };
     } else {
       renderImage = this.imagePolicy;
-      renderJsonCard = (info) =>
-        !info.prompt
-          ? '[json]'
-          : info.previewUrl
-            ? `[分享:${info.prompt}] ${this.imagePolicy({ url: info.previewUrl })}`
-            : `[分享:${info.prompt}]`;
+      renderJsonCard = (info) => {
+        const cardText = renderJsonCardText(info);
+        return cardText !== '[json]' && info.previewUrl
+          ? `${cardText} ${this.imagePolicy({ url: info.previewUrl })}`
+          : cardText;
+      };
     }
 
     const selfName =
