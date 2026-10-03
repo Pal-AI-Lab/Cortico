@@ -35,7 +35,6 @@ OneBot v11 标准动作:`get_login_info`、`get_group_info`、`get_group_member_
 ## 分享卡片
 
 JSON 分享卡片的来源名、内容标题和目标链接写入消息正文。直接消息、引用取回与合并转发使用相同解析规则。
-Persona 可将正文中的目标链接传给其它 World 或扩展提供的工具。
 
 | 卡片字段 | 小程序 `meta.detail_1` | 普通分享 `meta.news` |
 |---|---|---|
