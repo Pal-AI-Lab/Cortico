@@ -118,6 +118,7 @@ Cortico 采用严格解耦的四层架构设计：
 | [runs.md](docs/runs.md) | 运行记录目录、日志结构与 `pnpm logq` 检索工具 |
 | [personas.md](docs/personas.md) | Persona 生命周期钩子、Memory 架构与装配机制 |
 | [worlds.md](docs/worlds.md) | World 交互契约：事件投递、工具执行与环境提示词 |
+| [world-compatibility.md](docs/world-compatibility.md) | 其他架构的 bot 挂载 Cortico World 的兼容等级与对照表 |
 | [extensions.md](docs/extensions.md) | 扩展包规范、Manifest 定义与动态加载器 |
 | [environment-variables.md](docs/environment-variables.md) | `CORTICO_*` 环境变量规范与三层 `.env` 文件继承 |
 | [windows.md](docs/windows.md) | Windows 环境兼容性与运行说明 |

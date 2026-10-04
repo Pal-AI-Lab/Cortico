@@ -4,6 +4,7 @@
 
 World 通过事件报告外部环境变化,通过工具提供外部操作,并向 system 前缀提供环境描述。
 World 不直接访问 Memory 或调用 Persona 的工具。
+其他架构的 bot 挂载 World 需要的能力分级见 [world-compatibility.md](world-compatibility.md)。
 
 ## 契约
 
