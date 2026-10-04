@@ -1067,27 +1067,27 @@ export function createBot<C extends CoreConfig>(
   });
 
   // 未激活实例也提供配置；组 id、owner 和配置键不随语言变化。
-  // World 交来的形状不完整的组跳过并记错,其余组照常列出和保存。
-  const worldConfigGroups = (world: World, language: Language): ConfigGroup[] => {
-    const groups = world.console?.(language)?.config ?? [];
+  // bot 包、World、provider 交来的形状不完整的组跳过,并记在交来方的日志名下;其余组照常列出和保存。
+  const wellFormedGroups = (source: string, groups: readonly ConfigGroup[]): ConfigGroup[] => {
     const malformed = groups.filter((g) => !isConfigGroup(g));
-    if (!malformed.length) return groups;
-    core.runlog.logger(`worlds.${world.id}`).error('配置组缺 id、owner 或 schema.properties,已跳过', {
-      fields: malformed.map((g) => (g && typeof g === 'object' ? Object.keys(g) : typeof g)),
-    });
+    if (malformed.length) {
+      core.runlog.logger(source).error('配置组缺 id、owner 或 schema.properties,已跳过', {
+        fields: malformed.map((g) => (g && typeof g === 'object' ? Object.keys(g) : typeof g)),
+      });
+    }
     return groups.filter(isConfigGroup);
   };
 
   const configGroups = (language: Language): ConfigGroup[] => [
     coreConfigGroup(language),
-    ...(contribution.configGroups ?? []),
-    ...assembly.instances().flatMap((m) => worldConfigGroups(m, language)),
+    ...wellFormedGroups('persona', contribution.configGroups ?? []),
+    ...assembly.instances().flatMap((m) => wellFormedGroups(`worlds.${m.id}`, m.console?.(language)?.config ?? [])),
   ];
 
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
   const providerSettings = new ProviderSettings(cfg,core.providers,join(loaded.rootDir,'config.json'),loaded.providersDir ?? join(loaded.rootDir,'providers'));
   const providerHub = new ProviderHub(cfg, core.providers, providerSettings, join(loaded.rootDir, 'config.json'), loaded.providersDir ?? join(loaded.rootDir, 'providers'));
-  const allConfigGroups = (language: Language) => [...configGroups(language),...providerSettings.groups(language)];
+  const allConfigGroups = (language: Language) => [...configGroups(language),...wellFormedGroups('provider', providerSettings.groups(language))];
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
   let webApp: WebApp | null = null;
