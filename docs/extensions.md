@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/install.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/install.ts, src/web/server.ts, src/web/client/features/extensions/index.ts -->
 
 # 扩展
 
@@ -40,10 +40,12 @@ World 先在 World 页停用。
 临时副本正常完成或失败后清理；恢复未完成时保留原文件路径并返回错误。
 异常退出留下 `.install-lock` 时，检查同级临时副本与正式安装后再移除锁。
 包详情返回 registry 中仍存在的全部发布版本，按发布时间从新到旧排列。
+控制台的“历史版本”可安装、更新或回退到指定版本；内置扩展不提供版本切换。
 `POST /api/extensions/version` 安装指定版本，要求包名、目标版本、原安装版本与扩展类别。
 本机链接不提供 npm 版本切换。
 版本切换在目录锁内核对原安装版本、扩展类别与契约，并校验下载后的包与确切版本。
 配置、Memory 和部署数据不随包回退；旧包对新版数据的兼容性由扩展自身决定。
+已安装卡片点击打开详情。垃圾桶第一次点击展开确认，第二次点击卸载；点击别处或 Esc 取消。
 契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。
 磁盘版本与本进程加载版本不同，即使依赖范围没变，扩展仍标为「待重启」。
