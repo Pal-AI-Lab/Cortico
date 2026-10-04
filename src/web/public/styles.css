@@ -1905,7 +1905,7 @@
 .extension-installed-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .extension-status-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: auto; }
 .extension-status-row .extension-status { flex: 1; min-width: 0; }
-.extension-status-row .extension-erase { position: static; flex: none; height: auto; min-height: 24px; padding: 0; }
+.extension-status-row .extension-erase { position: static; flex: none; height: auto; min-height: 24px; padding: 0; transform: translateY(2px); }
 .extension-status-row .extension-erase .icon { width: 16px; height: 16px; }
 .extension-status-row .extension-erase.is-armed { padding: 3px 6px; margin-block: -3px; }
 .extension-status-row .extension-erase:disabled { opacity: .35; cursor: default; }
