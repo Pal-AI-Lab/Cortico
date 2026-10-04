@@ -484,3 +484,72 @@ describe('extensionsDir', () => {
     expect(extensionsDir(root, { [EXTENSIONS_DIR_ENV]: data })).toBe(data);
   });
 });
+
+
+describe('ExtensionManager.changeVersion', () => {
+  async function versionManager(opts: { fail?: boolean; wrongVersion?: boolean; kind?: string; api?: number } = {}) {
+    const booted = await loadExtensions(root);
+    const pkg = (version: string) => ({ name: 'example', version, type: 'module', keywords: ['cortico-world'], cortico: { kind: opts.kind ?? 'world', api: opts.api ?? EXTENSION_API_VERSIONS.world } });
+    const mgr = new ExtensionManager(root, booted, {
+      fetchJson: async () => ({ 'dist-tags': { latest: '2.0.0' }, versions: { '1.0.0': pkg('1.0.0'), '2.0.0': pkg('2.0.0') } }),
+      run: async (args, stage) => {
+        const version = args[1].slice(args[1].lastIndexOf('@') + 1);
+        const file = join(stage, 'package.json');
+        const manifest = JSON.parse(readFileSync(file, 'utf8'));
+        manifest.dependencies.example = version;
+        writeFileSync(file, JSON.stringify(manifest));
+        mkdirSync(join(stage, 'node_modules', 'example'), { recursive: true });
+        writeFileSync(join(stage, 'node_modules', 'example', 'package.json'), JSON.stringify(pkg(opts.wrongVersion ? '9.0.0' : version)));
+        writeFileSync(join(stage, 'pnpm-lock.yaml'), `example: ${version}`);
+        return { code: opts.fail ? 1 : 0, output: opts.fail ? 'build failed' : 'installed' };
+      },
+    });
+    return mgr;
+  }
+  const installedVersion = () => JSON.parse(readFileSync(join(root, 'extensions/node_modules/example/package.json'), 'utf8')).version;
+
+  it('rolls back to a pinned release and leaves the runtime pending restart', async () => {
+    installFake('example'); installFake('other', { body: definitionSource('other') });
+    const mgr = await versionManager();
+    await mgr.changeVersion('example', '1.0.0', installedVersion(), 'world');
+    expect(installedVersion()).toBe('1.0.0');
+    expect(readInstalled(join(root, 'extensions')).find(item => item.name === 'example')?.spec).toBe('1.0.0');
+    expect(mgr.list().extensions.find(item => item.name === 'example')).toMatchObject({ installedVersion: '1.0.0', state: 'pending-restart' });
+    expect(JSON.parse(readFileSync(join(root, 'extensions/node_modules/other/package.json'), 'utf8')).version).toBe('1.2.3');
+  });
+
+  it('refuses a stale detail or a replaced local link', async () => {
+    installFake('example'); const mgr = await versionManager();
+    await expect(mgr.changeVersion('example', '1.0.0', '0.0.0', 'world')).rejects.toThrow('已变化');
+    expect(installedVersion()).toBe('1.2.3');
+    installFake('example', { spec: 'link:../local' });
+    await expect(mgr.changeVersion('example', '1.0.0', installedVersion(), 'world')).rejects.toThrow('本机链接');
+    expect(readInstalled(join(root, 'extensions'))[0].spec).toBe('link:../local');
+  });
+
+  it('refuses non-exact, missing and incompatible target versions', async () => {
+    installFake('example'); const mgr = await versionManager();
+    await expect(mgr.changeVersion('example', 'latest', installedVersion(), 'world')).rejects.toThrow('确切');
+    await expect(mgr.changeVersion('example', '3.0.0', installedVersion(), 'world')).rejects.toThrow('3.0.0');
+    await expect(mgr.changeVersion('example', '1.0.0', installedVersion(), 'provider')).rejects.toThrow('world');
+    const incompatible = await versionManager({ api: EXTENSION_API_VERSIONS.world + 1 });
+    await expect(incompatible.changeVersion('example', '1.0.0', installedVersion(), 'world')).rejects.toThrow('契约');
+    expect(installedVersion()).toBe('1.2.3');
+  });
+
+  it.each([{ fail: true }, { wrongVersion: true }])('a failed or incorrect install restores the dependency and lockfile: %j', async opts => {
+    installFake('example'); writeFileSync(join(root, 'extensions/pnpm-lock.yaml'), 'original');
+    const mgr = await versionManager(opts);
+    await expect(mgr.changeVersion('example', '1.0.0', installedVersion(), 'world')).rejects.toThrow('原安装');
+    expect(installedVersion()).toBe('1.2.3');
+    expect(readFileSync(join(root, 'extensions/pnpm-lock.yaml'), 'utf8')).toBe('original');
+  });
+
+  it('installs a historical release only while the package is still absent', async () => {
+    const mgr = await versionManager();
+    await mgr.changeVersion('example', '1.0.0', null, 'world');
+    expect(installedVersion()).toBe('1.0.0');
+    await expect(mgr.changeVersion('example', '2.0.0', null, 'world')).rejects.toThrow('已变化');
+    expect(installedVersion()).toBe('1.0.0');
+  });
+});

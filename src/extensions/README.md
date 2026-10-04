@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/install.ts, src/extensions.ts -->
+<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/install.ts, src/extensions/versions.ts, src/extensions.ts -->
 
 # src/extensions
 

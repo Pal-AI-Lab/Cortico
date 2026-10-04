@@ -61,6 +61,19 @@ describe('mutateInstallation', () => {
     expect(existsSync(join(dir, '.install-lock'))).toBe(false);
   });
 
+  it.each(['json', 'yaml'])('the %s module manifest keeps pnpm in the staged store until publication', async format => {
+    const store = join(dir, 'node_modules', '.pnpm');
+    const file = join(dir, 'node_modules', '.modules.yaml');
+    writeFileSync(file, format === 'json' ? JSON.stringify({ virtualStoreDir: store, storeDir: 'shared-cache' }) : `virtualStoreDir: ${JSON.stringify(store)}\nstoreDir: shared-cache\n`);
+    const value = (text: string) => format === 'json' ? JSON.parse(text).virtualStoreDir : JSON.parse(/^virtualStoreDir: (.+)$/m.exec(text)![1]);
+    await mutateInstallation(dir, async stage => {
+      expect(value(readFileSync(join(stage, 'node_modules', '.modules.yaml'), 'utf8'))).toBe(join(stage, 'node_modules', '.pnpm'));
+    });
+    const text = readFileSync(file, 'utf8');
+    expect(value(text)).toBe(store);
+    expect(text).toContain('shared-cache');
+  });
+
   it('internal junctions point to the staged tree while external local links remain usable', async () => {
     const local = join(root, 'local'); mkdirSync(local);
     const modules = join(dir, 'node_modules');

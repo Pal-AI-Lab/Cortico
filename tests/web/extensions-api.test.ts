@@ -1,11 +1,13 @@
 /** 扩展管理接口覆盖 World、provider 与 bot 包。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type ExtensionInstallTarget } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
+import { ExtensionManager } from '../../src/extensions.ts';
+import { EXTENSION_API_VERSIONS } from '../../src/extensions/manifest.ts';
 
 let app: WebApp;
 let port: number;
@@ -222,4 +224,39 @@ describe('/api/extensions/icon', () => {
     expect((await raw('/api/extensions/icon?name=plain')).status).toBe(404);
     expect((await raw('/api/extensions/icon')).status).toBe(400);
   });
+});
+
+
+it('version changes validate the request and snapshot against the real shared install', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'webtest-extension-version-'));
+  const extensions = join(root, 'extensions');
+  const pkgDir = join(extensions, 'node_modules', 'example'); mkdirSync(pkgDir, { recursive: true });
+  const pkg = (version: string) => ({ name: 'example', version, type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } });
+  writeFileSync(join(extensions, 'package.json'), JSON.stringify({ dependencies: { example: '2.0.0' } }));
+  writeFileSync(join(pkgDir, 'package.json'), JSON.stringify(pkg('2.0.0')));
+  const manager = new ExtensionManager(root, { dir: extensions, records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    fetchJson: async () => ({ 'dist-tags': { latest: '2.0.0' }, versions: { '1.0.0': pkg('1.0.0'), '2.0.0': pkg('2.0.0') } }),
+    run: async (args, cwd) => {
+      const version = args[1].split('@').at(-1)!;
+      writeFileSync(join(cwd, 'package.json'), JSON.stringify({ dependencies: { example: version } }));
+      writeFileSync(join(cwd, 'node_modules', 'example', 'package.json'), JSON.stringify(pkg(version)));
+      return { code: 0, output: 'installed' };
+    },
+  });
+  const server = new WebApp({ store: new FakeStore(), memoryDir: root, dataDir: root, getStatus: () => ({}), extensions: manager, log: nullLogger() });
+  try {
+    const port = await server.start(0);
+    const change = async (body: unknown) => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/extensions/version`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      return { status: response.status, body: await response.json() as { error?: string; ok?: boolean; restartRequired?: boolean } };
+    };
+    const target = { name: 'example', version: '1.0.0', expectedVersion: '2.0.0', kind: 'world' };
+    expect((await change({ ...target, expectedVersion: undefined })).status).toBe(400);
+    expect((await change({ ...target, kind: 'persona' })).status).toBe(400);
+    expect((await change({ ...target, expectedVersion: '1.5.0' })).body.error).toContain('已变化');
+    expect(JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version).toBe('2.0.0');
+    expect((await change(target)).body).toMatchObject({ ok: true, restartRequired: true });
+    expect(JSON.parse(readFileSync(join(pkgDir, 'package.json'), 'utf8')).version).toBe('1.0.0');
+    expect((await change(target)).status).toBe(400);
+  } finally { await server.stop(); rmSync(root, { recursive: true, force: true }); }
 });
