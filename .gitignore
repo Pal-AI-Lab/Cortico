@@ -34,7 +34,7 @@ scratch/
 # 控制台装的扩展(npm 包),属部署状态。
 # 锚在仓库根上:不带斜杠会连 src/web/client/features/extensions/ 一起吞掉。
 /extensions/
-# 扩展安装的同级临时副本；正常完成或失败后自动清理。
+# 扩展安装的同级临时副本；恢复未完成或清理失败时保留。
 /.extensions-operations-*/
 
 # Corti 运维目录(数据归档+复盘),不入库

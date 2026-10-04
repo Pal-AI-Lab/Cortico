@@ -1,4 +1,6 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -14,6 +16,25 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(root, { recursive: true, force: true }));
 const leftovers = () => readdirSync(root).filter(name => name.startsWith('.extensions-operations-'));
+
+async function preventCleanup(stage: string): Promise<() => Promise<void>> {
+  const held = join(stage, 'held'); mkdirSync(held);
+  const file = join(held, 'file'); writeFileSync(file, 'held');
+  if (process.platform !== 'win32') {
+    chmodSync(held, 0o500);
+    return async () => { chmodSync(held, 0o700); };
+  }
+  const script = `$file = [System.IO.File]::Open('${file.replace(/'/g, "''")}', [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read); [Console]::WriteLine('ready'); [Console]::Out.Flush(); [Console]::ReadLine() | Out-Null; $file.Dispose()`;
+  const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { windowsHide: true });
+  await new Promise<void>((resolve, reject) => {
+    let error = '';
+    child.stderr.on('data', chunk => { error += String(chunk); });
+    child.stdout.once('data', () => resolve());
+    child.once('error', reject);
+    child.once('exit', code => reject(new Error(`file holder exited ${code}: ${error}`)));
+  });
+  return async () => { const exited = once(child, 'exit'); child.stdin.end('\n'); await exited; };
+}
 
 describe('mutateInstallation', () => {
   it('publishes the prepared dependency tree and metadata together', async () => {
@@ -51,6 +72,40 @@ describe('mutateInstallation', () => {
     expect(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies.example).toBe('1.0.0');
     expect(readFileSync(join(dir, 'pnpm-lock.yaml'), 'utf8')).toBe('original lock');
     expect(leftovers()).toEqual([]);
+  });
+
+  it.skipIf(process.platform !== 'win32' && process.getuid?.() === 0)('cleanup failure preserves the package failure and reports the remaining directory', async () => {
+    let release!: () => Promise<void>;
+    let stage!: string;
+    const cause = new Error('package build failed');
+    try {
+      const operation = mutateInstallation(dir, async path => {
+        stage = path; release = await preventCleanup(stage);
+        throw cause;
+      });
+      await expect(operation).rejects.toMatchObject({ cause, message: expect.stringContaining('package build failed') });
+      await expect(operation).rejects.toThrow('临时文件清理失败');
+      await expect(operation).rejects.toThrow(stage);
+      expect(existsSync(stage)).toBe(true);
+      expect(readFileSync(join(dir, 'pnpm-lock.yaml'), 'utf8')).toBe('original lock');
+      expect(existsSync(join(dir, '.install-lock'))).toBe(false);
+    } finally { await release?.(); }
+  });
+
+  it.skipIf(process.platform !== 'win32' && process.getuid?.() === 0)('a published installation stays successful when temporary cleanup fails', async () => {
+    let release!: () => Promise<void>;
+    let stage!: string;
+    try {
+      const result = await mutateInstallation(dir, async path => {
+        stage = path; release = await preventCleanup(stage);
+        writeFileSync(join(stage, 'package.json'), '{"dependencies":{"example":"0.9.0"}}');
+        return 'installed';
+      });
+      expect(result.value).toBe('installed');
+      expect(result.cleanupWarning).toContain(stage);
+      expect(JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')).dependencies.example).toBe('0.9.0');
+      expect(existsSync(join(dir, '.install-lock'))).toBe(false);
+    } finally { await release?.(); }
   });
 
   it('two managers cannot mutate the same shared directory concurrently', async () => {

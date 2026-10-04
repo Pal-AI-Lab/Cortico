@@ -84,6 +84,7 @@ async function prepareInstallation<T>(dir: string, work: (stage: string) => Prom
   const replaced: string[] = [];
   let preserve = false;
   let completed: { value: T; cleanupWarning?: string } | undefined;
+  let failure: Error | undefined;
   try {
     for (const name of readdirSync(dir)) if (name !== '.install-lock') copyTree(join(dir, name), join(stage, name), dir, stage);
     mkdirSync(backup);
@@ -117,14 +118,15 @@ async function prepareInstallation<T>(dir: string, work: (stage: string) => Prom
     return completed;
   } catch (error) {
     if (preserve) throw error;
-    throw new Error(`操作失败，原安装已保留或恢复。\n${error instanceof Error ? error.message : String(error)}`);
+    failure = new Error(`操作失败，原安装已保留或恢复。\n${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    throw failure;
   } finally {
     if (!preserve) {
-      try { rmSync(stage, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); }
+      try { rmSync(stage, { recursive: true, force: true }); }
       catch (error) {
         const warning = `临时文件清理失败，目录保留在 ${stage}。${String(error)}`;
         if (completed) completed.cleanupWarning = warning;
-        else throw new Error(`原安装未被替换。${warning}`);
+        else failure!.message += '\n' + warning;
       }
     }
   }
