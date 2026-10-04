@@ -525,9 +525,20 @@ describe('extension card and history controls', () => {
     } });
     const history = detail.querySelector('details')!; history.open = true;
     const row = [...detail.querySelectorAll('.extension-history > div')].find(row => row.textContent?.includes('0.9.0'))!;
+    const fetch = globalThis.fetch;
+    let refreshStarted = false;
+    let completeRefresh!: () => void;
+    const refresh = new Promise<void>(resolve => { completeRefresh = resolve; });
+    vi.stubGlobal('fetch', async (url: Parameters<typeof fetch>[0], init: Parameters<typeof fetch>[1]) => {
+      if (String(url) === '/api/extensions/updates') { refreshStarted = true; await refresh; }
+      return fetch(url, init);
+    });
     button(row, '回退').click(); await flush();
-    expect(document.body.textContent).toContain('1.0.0 → 0.9.0'); answer(true); await flush();
-    expect(detail.querySelector('.extension-operation-feedback')?.textContent).toContain('回退成功');
+    expect(document.body.textContent).toContain('1.0.0 → 0.9.0'); answer(true);
+    await vi.waitFor(() => expect(refreshStarted).toBe(true));
+    expect(detail.querySelector('.extension-operation-feedback')?.textContent).toContain('正在回退');
+    completeRefresh();
+    await vi.waitFor(() => expect(detail.querySelector('.extension-operation-feedback')?.textContent).toContain('回退成功'));
     expect(detail.querySelector('details')?.open).toBe(true);
     const currentRow = [...detail.querySelectorAll('.extension-history > div')].find(row => row.textContent?.includes('0.9.0'))!;
     expect(button(currentRow, '当前版本').disabled).toBe(true);
@@ -540,9 +551,9 @@ describe('extension card and history controls', () => {
     const detail = await installedHistory({ installStatus: 400 });
     const row = [...detail.querySelectorAll('.extension-history > div')].find(row => row.textContent?.includes('0.9.0'))!;
     button(row, '回退').click(); await flush();
-    expect(document.body.textContent).toContain('1.0.0 → 0.9.0'); answer(true); await flush();
+    expect(document.body.textContent).toContain('1.0.0 → 0.9.0'); answer(true);
+    await vi.waitFor(() => expect(detail.querySelector('.extension-operation-feedback.bad')?.textContent).toContain('原安装'));
     expect(calls.find(call => call.url === '/api/extensions/version')?.body).toEqual({ name: 'alpha-mod', version: '0.9.0', expectedVersion: '1.0.0', kind: 'world' });
-    expect(detail.querySelector('.extension-operation-feedback.bad')?.textContent).toContain('原安装');
     const freshRow = [...detail.querySelectorAll('.extension-history > div')].find(row => row.textContent?.includes('0.9.0'))!;
     expect(button(freshRow, '回退').disabled).toBe(false);
   });
