@@ -2091,7 +2091,7 @@ export class WebApp {
         });
     });
 
-    app.post('/api/config', express.json(), (req: Request, res: Response) => {
+    app.post('/api/config', express.json(), wrap((req, res) => {
       const src = this.deps.config;
       if (!src) { res.status(503).json({ error: '配置项声明不可用' }); return; }
       const body = (req.body ?? {}) as Record<string, unknown>;
@@ -2103,14 +2103,10 @@ export class WebApp {
       // 校验完全按声明走:schema 里没声明的键一律忽略,控制台不能靠猜往配置里塞东西
       const parsed = coerceGroupValues(entry.group, values, language);
       if ('error' in parsed) { res.status(400).json({ error: parsed.error }); return; }
-      try {
-        const result = src.set(groupId, parsed.values, language);
-        this.deps.log.warn('配置项已修改', { group: groupId });
-        res.json({ ok: true, result, groups: src.groups(language) });
-      } catch (err) {
-        res.status(500).json({ error: String(err) });
-      }
-    });
+      const result = src.set(groupId, parsed.values, language);
+      this.deps.log.warn('配置项已修改', { group: groupId });
+      res.json({ ok: true, result, groups: src.groups(language) });
+    }));
 
     /**
      * 扩展的浏览器端产物。**逐个文件发,不挂目录**:URL 里的三段只用来在产物表里

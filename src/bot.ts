@@ -35,7 +35,7 @@ import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
 import { providerModules } from './providers/registry.ts';
 import { repoRoot } from './paths.ts';
-import { readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
+import { isConfigGroup, readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
 import type { ConfigValues } from './core/config-schema.ts';
 import {
   PromptRevisionConflict,
@@ -1067,11 +1067,21 @@ export function createBot<C extends CoreConfig>(
   });
 
   // 未激活实例也提供配置；组 id、owner 和配置键不随语言变化。
+  // World 交来的形状不完整的组跳过并记错,其余组照常列出和保存。
+  const worldConfigGroups = (world: World, language: Language): ConfigGroup[] => {
+    const groups = world.console?.(language)?.config ?? [];
+    const malformed = groups.filter((g) => !isConfigGroup(g));
+    if (!malformed.length) return groups;
+    core.runlog.logger(`worlds.${world.id}`).error('配置组缺 id、owner 或 schema.properties,已跳过', {
+      fields: malformed.map((g) => (g && typeof g === 'object' ? Object.keys(g) : typeof g)),
+    });
+    return groups.filter(isConfigGroup);
+  };
 
   const configGroups = (language: Language): ConfigGroup[] => [
     coreConfigGroup(language),
     ...(contribution.configGroups ?? []),
-    ...assembly.instances().flatMap((m) => m.console?.(language)?.config ?? []),
+    ...assembly.instances().flatMap((m) => worldConfigGroups(m, language)),
   ];
 
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
