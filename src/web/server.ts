@@ -256,7 +256,7 @@ export interface ExtensionPackageDetail {
   /** 这个包第一次发布的时间 */
   created?: string;
   versionCount: number;
-  /** 最近几个版本,新的在前 */
+  /** registry 中仍有包声明的全部版本，按发布时间从新到旧排列。 */
   history: Array<{ version: string; date: string }>;
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;

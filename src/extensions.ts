@@ -7,7 +7,7 @@
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
@@ -32,6 +32,7 @@ import {
   type ExtensionPackageJson,
 } from './extensions/manifest.ts';
 import { registerFrameworkResolver } from './extensions/runtime.ts';
+import { mutateInstallation } from './extensions/install.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/console-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -362,7 +363,7 @@ const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 const VERSION_SPEC = /^[0-9a-zA-Z.^~*+-]{1,64}$/;
 
 /** 比较 npm 的标准 SemVer；无法比较时不猜测是否有更新。 */
-function newerVersion(latest: string, installed: string): boolean | null {
+export function newerVersion(latest: string, installed: string): boolean | null {
   const parse = (value: string) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
   const a = parse(latest);
   const b = parse(installed);
@@ -687,10 +688,9 @@ export class ExtensionManager {
     if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
 
     const parsed = parseExtensionManifest(v);
-    const times = Object.entries(doc.time ?? {}).filter(([k]) => k !== 'created' && k !== 'modified');
+    const times = Object.keys(doc.versions ?? {}).map(version => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
-      .slice(0, 6)
       .map(([version, date]) => ({ version, date }));
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);
@@ -752,12 +752,7 @@ export class ExtensionManager {
 
   async install(target: ExtensionInstallTarget): Promise<string> {
     const spec = this.installSpec(target);
-    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
-    const pkgFile = join(this.dir, 'package.json');
-    if (!existsSync(pkgFile)) {
-      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
-    }
-    const output = await this.exclusive(['add', spec, '--ignore-workspace']);
+    const output = await this.exclusive(['add', spec, '--save-exact', '--ignore-workspace']);
     return `已安装 ${spec}。重启进程后加载。\n${output}`;
   }
 
@@ -788,10 +783,12 @@ export class ExtensionManager {
     if (this.busy) throw new Error('已有一个安装 / 卸载在进行,等它结束。');
     this.busy = true;
     try {
-      const { code, output } = await this.run(args, this.dir);
-      const tail = output.trim().split('\n').slice(-20).join('\n');
-      if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
-      return tail;
+      return await mutateInstallation(this.dir, async stage => {
+        const { code, output } = await this.run(args, stage);
+        const tail = output.trim().split('\n').slice(-20).join('\n');
+        if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
+        return tail;
+      });
     } finally {
       this.busy = false;
     }

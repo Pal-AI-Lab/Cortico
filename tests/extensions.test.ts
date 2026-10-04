@@ -148,15 +148,15 @@ describe('ExtensionManager', () => {
     return { mgr, runs, urls, release: () => release?.() };
   }
 
-  it('install:合法包名 → pnpm add name@version --ignore-workspace,在 extensions/ 里跑;首次先造 package.json', async () => {
+  it('install:首次安装生成独立依赖清单并报告重启要求', async () => {
     const { mgr, runs } = manager();
     const msg = await mgr.install({ name: '@acme/cortico-world-x', version: '^1.2.0' });
-    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--save-exact', '--ignore-workspace'], cwd: expect.stringContaining('.extensions-operations-') }]);
     expect(JSON.parse(readFileSync(join(root, 'extensions/package.json'), 'utf8'))).toMatchObject({ private: true, dependencies: {} });
     expect(msg).toContain('重启');
     expect(msg).toContain('Done in 1s');
     await mgr.install({ name: 'plain' });
-    expect(runs[1].args).toEqual(['add', 'plain', '--ignore-workspace']);
+    expect(runs[1].args).toEqual(['add', 'plain', '--save-exact', '--ignore-workspace']);
   });
 
   it('install:本机目录必须存在且含 package.json,按绝对路径交给 pnpm', async () => {
@@ -167,7 +167,7 @@ describe('ExtensionManager', () => {
     mkdirSync(join(root, 'my mod'));
     writeFileSync(join(root, 'my mod/package.json'), '{}');
     await mgr.install({ path: './my mod' });
-    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--ignore-workspace']);
+    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--save-exact', '--ignore-workspace']);
   });
 
   it('install:拒绝带 shell 元字符的包名、版本与路径,一次 pnpm 都不起', async () => {
@@ -202,7 +202,7 @@ describe('ExtensionManager', () => {
     await expect(mgr.uninstall('absent')).rejects.toThrow('没有安装');
     await expect(mgr.uninstall('bad name')).rejects.toThrow('包名');
     const msg = await mgr.uninstall('present');
-    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace'], cwd: expect.stringContaining('.extensions-operations-') }]);
     expect(msg).toContain('重启');
   });
 
@@ -328,6 +328,15 @@ describe('ExtensionManager', () => {
     expect(await mgr.packageInfo('tagged', 'next')).toMatchObject({ version: '2.0.0-rc.1', displayName: 'Tagged 2.0.0-rc.1' });
     expect((await mgr.packageInfo('tagged', '1.0.0')).version).toBe('1.0.0');
     await expect(mgr.packageInfo('tagged', '9.9.9')).rejects.toThrow('9.9.9');
+  });
+
+  it('packageInfo:发布历史超过六版时全部返回，排除已撤回的版本', async () => {
+    const versions = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`1.0.${i}`, { name: 'example', version: `1.0.${i}`, type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } }]));
+    const time = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`1.0.${i}`, `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`]));
+    const { mgr } = manager({}, { packument: { 'dist-tags': { latest: '1.0.8' }, versions, time } });
+    const info = await mgr.packageInfo('example');
+    expect(info.versionCount).toBe(Object.keys(versions).length);
+    expect(info.history.map(entry => entry.version)).toEqual(Object.keys(versions).reverse());
   });
 
   it('icon:声明了且文件在包里才给;list 标出有图标的包', async () => {
