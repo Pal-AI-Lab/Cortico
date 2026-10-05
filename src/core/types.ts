@@ -215,8 +215,8 @@ export interface ToolCallContext {
    */
   round?: number;
   /**
-   * 宿主放弃本次调用时触发，跨进程代理超时也会触发。
-   * 耗时工具必须在提交外部副作用前检查此信号。
+   * 宿主放弃本次调用时触发：关机、循环换代、跨进程代理超时；ToolDef.interruptible 的工具
+   * 还会在 interrupt 事件到达时触发。耗时工具必须在提交外部副作用前检查此信号。
    */
   signal?: AbortSignal;
 }
@@ -246,6 +246,11 @@ export interface ToolDef extends ToolSchema {
    * 通常同时设置 barrierAfter，使同一条输出中的后续调用得到未执行回执。
    */
   endsTurn?: boolean;
+  /**
+   * interrupt 事件到达时 ctx.signal 触发，handler 停止并返回已完成部分的回执；Core 等它返回，
+   * 并在回执末尾注明执行中收到打断。缺省时工具执行到结束，interrupt 只跳过本轮尚未开始的调用。
+   */
+  interruptible?: boolean;
   handler: (args: Record<string, unknown>, ctx: ToolCallContext) => Promise<string | ToolOutcome>;
 }
 
@@ -416,10 +421,19 @@ export interface SessionDecl {
 /** 接收模型输出流；Core 不解释增量中的语义。 */
 export interface OutputTap {
   onEvent(event: StreamEvent): void;
-  /** 返回 true 表示增量已产生外部输出，此后主循环不再允许抢占该轮。 */
+  /**
+   * 返回 true 表示增量已产生外部输出，此后 preempt 不再取消该轮。未实现时按
+   * defaultExternalizes 判定；合并多个接收器时逐个按同一规则判定。
+   */
   externalizes?(event: StreamEvent): boolean;
   onRoundEnd?(): void;
   onAbort?(reason: string): void;
+}
+
+/** 接收器未声明 externalizes 时的判定：正文或拒答增量，或出现函数调用。 */
+export function defaultExternalizes(event: StreamEvent): boolean {
+  return event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta'
+    || (event.type === 'response.output_item.added' && event.item?.type === 'function_call');
 }
 
 export interface ForkOptions {
@@ -557,10 +571,22 @@ export interface ModelFacts {
   contextWindow(): number | undefined;
 }
 
-/** 事件的投递触发方式，由产生方选择；与事件的渲染时机独立。 */
+/**
+ * 事件的投递触发方式，由产生方选择；与事件的渲染时机独立。
+ * 主循环在一批之内的轮次边界接收新事件：工具全部返回后，或 preempt、interrupt 取消模型轮后。
+ * 两者到达时没有可取消的模型轮，事件在下一次模型请求前送入。
+ */
 export type TriggerMode =
-  /** 立即投递整批，并请求取消尚未产生外部输出的在途模型轮；是否可取消由主循环判断。 */
+  /**
+   * 立即投递整批，取消尚未产生外部输出的在途模型轮，丢弃该轮输出，在同一批内带着新事件重新请求。
+   * 已有外部输出或正在执行工具时不取消。
+   */
   | 'preempt'
+  /**
+   * 立即投递整批，并停止当前轮：模型调用无论有无外部输出都取消，已有输出保留；执行中的
+   * interruptible 工具收到 signal；本轮尚未开始的工具调用不执行。新事件接在本轮回执之后。
+   */
+  | 'interrupt'
   /** 立即投递整批积压。 */
   | 'flush'
   /** 按 quietGapMs、minBatchAgeMs、maxBatchAgeMs 和 maxBatchSize 合批。 */
@@ -656,6 +682,16 @@ export interface WorldHost {
    * 取走后不会在后续批次重复投递。
    */
   drainPendingEvents(filter: (e: EventEnvelope) => boolean): Promise<EventEnvelope[]>;
+  /**
+   * 撤回本 World 一条尚未投递的事件：移出队列，事件库追加撤回记录，重启不再补投。
+   * 事件已进入投递或不在队列中时返回 false。
+   */
+  withdrawPending?(cursor: number): Promise<boolean>;
+  /**
+   * 把本 World 一条尚未投递的事件改为 flush、preempt 或 interrupt 立即触发；暂停与投递闸门
+   * 照常生效。事件已进入投递或不在队列中时返回 false。
+   */
+  promotePending?(cursor: number, trigger: 'flush' | 'preempt' | 'interrupt'): Promise<boolean>;
   /** 当前模型的能力；渲染层据 MIME 支持决定是否附加二进制内容。 */
   modelFacts: ModelFacts;
   /**
@@ -853,6 +889,12 @@ export interface World {
    * 隐藏 World 不接收通知。
    */
   onTurnEnded?(): void;
+  /**
+   * 本 World 产生的事件离开队列时调用：delivered 表示已写入主 session，discarded 表示被操作者
+   * 清空队列丢弃。经 withdrawPending 撤回的事件不通知；drainPendingEvents 取走的事件只在
+   * 之后经 queueExternalEvents 写入 session 时通知。
+   */
+  onEventsSettled?(events: readonly EventEnvelope[], outcome: 'delivered' | 'discarded'): void;
   /**
    * stop() 完成后返回外部状态检查的同步只读快照。
    * 网络检查须在 stop() 的既有期限内完成并缓存。

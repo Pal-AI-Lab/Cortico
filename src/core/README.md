@@ -43,7 +43,8 @@ Persona 通过 `CoreApi` 访问：`injectInternal` / `injectDeferred` / `injectE
 
 ## 总线与唤醒
 
-`WakeBus` 提供 `preempt`、`flush`、`debounce`、`piggyback` 四种触发模式。
+`WakeBus` 提供 `preempt`、`interrupt`、`flush`、`debounce`、`piggyback` 五种触发模式。
+`preempt` 与 `interrupt` 投递后通知主循环,取消范围由主循环裁决;`promote` 把排队项改为立即触发。
 debounce 的计划投递时刻为 `min(首件时刻 + maxBatchAgeMs, max(首件时刻 + minBatchAgeMs,
 末件时刻 + quietGapMs))`；计数达到 `maxBatchSize` 时立即投递。
 计数包含外部即时事件与候选，不包含内部事件、延迟渲染项或 piggyback 项。
@@ -53,7 +54,8 @@ piggyback 只入队，随后续唤醒一起投递。
 `nextBatch()` 仅支持一个消费者，每次按 FIFO 顺序取走整批。`batching` 使用共享配置引用，
 更新后的值在下一次入队时参与计算。
 
-投递水位 `lastDeliveredCursor` 持久化，队列不持久化。重启时补投水位之后的外部事件；
+投递水位 `lastDeliveredCursor` 持久化，队列不持久化。重启时补投水位之后的外部事件,跳过有
+`core.withdrawal` 撤回记录的事件；
 已被候选处理结果引用的原始归档不重复投递。内部事件仅在当次运行投递。清空分片或跳过损坏行
 留下的游标空位没有可投递内容，不阻止水位推进。
 
@@ -64,6 +66,10 @@ piggyback 只入队，随后续唤醒一起投递。
 记录 warn 并结束本批。`endsTurn` 工具和自然结束共用结束处理；本批结束时尚未处理的事件
 退回总线，进入下一批。控制台的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。
+
+`preempt` 取消尚未外化的模型轮,`interrupt` 取消模型轮(已外化的输出保留)或停止 `interruptible`
+工具、跳过本轮尚未开始的调用。两者取消后在同一批内接收新事件并开始下一轮,被取消的轮计入轮数,
+不调用 `onTurnEnded`;到达时没有可取消的轮,事件在下一次模型请求前送入。
 
 一批正文归档后，Core 调用 `Persona.onDelivery` 并等待它返回的 Promise,不设期限。完成前
 `injectInternal` 的内容排在这批的内部行末尾、外部正文之前;完成后的注入进入总线。
