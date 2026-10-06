@@ -1397,9 +1397,11 @@ export class MainLoop {
     this.noteHandled(events, this.generation);
   }
 
-  /** 事件库追加撤回记录并结清水位；重启补投按记录跳过该事件。 */
+  /**
+   * 事件库追加撤回记录并结清水位；重启补投按记录跳过该事件。事件此时已离开队列，循环停止后
+   * 仍写记录，水位由重启时按记录结清。
+   */
   recordWithdrawn(event: EventEnvelope): void {
-    if (!this.activeNow()) return;
     const { store, cfg } = this.d;
     store.append({
       type: WITHDRAWAL_TYPE,
