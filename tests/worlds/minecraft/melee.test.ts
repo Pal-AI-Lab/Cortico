@@ -24,7 +24,7 @@ describe('skillAttack 找目标的半径', () => {
 });
 
 describe('skillAttack auto 的弓受阻', () => {
-  it('8 格外射线被挡:受阻收手,不在换近战与切回弓之间空转(#175)', async () => {
+  it('8 格外射线被挡:受阻收手', async () => {
     const started = Date.now();
     const dragon = { id: 47, name: 'ender_dragon', type: 'mob', position: new V(20, 66, 0), height: 8, width: 16, isValid: true };
     const items = [

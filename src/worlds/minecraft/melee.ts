@@ -401,7 +401,7 @@ export async function skillAttack(
         ) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${attackStats(stats)}`);
         }
-        // 选武器仍会选弓的距离上不改近战:即时拒绝的射击不经过定时器,循环会占住事件循环
+        // 选武器仍会选弓的距离上不改近战,射不出就受阻
         const away = entity.position.distanceTo(bot.entity.position);
         if (chooseHybridWeapon('melee', away, Boolean(ranged.ready(bot))) === 'ranged') {
           throw new SkillBlocked(
