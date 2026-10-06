@@ -98,6 +98,8 @@ export interface TimelineView {
   ): void;
   /** 追加一条(实时帧)。`live` 决定要不要动画与打字机。 */
   append(m: ContextRecord, index: number, live: boolean): void;
+  /** 时间线下方的一行运行状态;null 时隐藏。重画不动它。 */
+  setActivity(text: string | null): void;
   /** 说话人展示名。头像图片加载不到时,ASSISTANT 组左栏的占位圆里印它的首字;下一次画到组时生效。 */
   setSpeaker(name: string): void;
   /** 开场引导期间把系统前缀那张卡收起来，下一次重画生效。 */
@@ -113,8 +115,9 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   const scroll = ui.h('div', 'tlscroll');
   const inner = ui.h('div', 'tlinner');
   scroll.appendChild(inner);
-  const think = ui.h('div', 'tlthink hidden');
-  think.append(ui.h('span', 'pulse'), ui.h('span', null, S.thinking));
+  const activity = ui.h('div', 'tlthink hidden');
+  const activityText = ui.h('span');
+  activity.append(ui.h('span', 'pulse'), activityText);
   const jump = ui.button(S.jumpBottom, {
     size: 'sm',
     onClick: () => {
@@ -123,7 +126,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     },
   });
   jump.className = 'btn sm tljump hidden';
-  el.append(scroll, think, jump);
+  el.append(scroll, activity, jump);
 
   /** call_id → 那颗卡上等结果的槽位。每次重画清空。 */
   const toolCalls = new Map<string, HTMLElement>();
@@ -495,7 +498,6 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   const renderOne = (entry: ContextRecord, index: Ordinal, live: boolean): void => {
     const item = entry.item;
     if (isAssistantSide(item)) {
-      if (live) hideThinking();
       const t = ensureTurn(entry, index, live);
       t.entries.push(entry);
       const status = entry.context.responseStatus;
@@ -514,7 +516,6 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     let node: HTMLElement | null;
     if (item.type === 'message' && item.role === 'user') {
       node = renderWorld(entry, index, live);
-      if (live) showThinking();
     } else if (isPrefix(item)) node = hideSystem ? null : renderSystem(entry, live);
     else if (item.type === 'function_call_output') node = renderToolResult(entry, index, live);
     else node = renderOther(entry, index, live);
@@ -530,21 +531,12 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     inner.appendChild(ui.h('div', 'divider sessionhead', S.headEnd));
   };
 
-  function showThinking(): void {
-    toggleClass(think, 'hidden', false);
-    stick();
-  }
-  function hideThinking(): void {
-    toggleClass(think, 'hidden', true);
-  }
-
   return {
     el,
     rebuild(messages, opts) {
       const wasStuck = autoScroll;
       const keepTop = scroll.scrollTop;
       stopTyping();
-      hideThinking();
       toolCalls.clear();
       turn = null;
       inner.replaceChildren();
@@ -575,6 +567,11 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     },
     append(entry, index, live) {
       renderOne(entry, index, live);
+    },
+    setActivity(text) {
+      activityText.textContent = text ?? '';
+      toggleClass(activity, 'hidden', text === null);
+      if (text !== null) stick();
     },
     setHideSystem(hide) {
       hideSystem = hide;

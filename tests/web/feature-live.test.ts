@@ -622,6 +622,25 @@ describe('live feature 挂载', () => {
     expect(doc.title).toBe('控制台 · 某某');
   });
 
+  it('时间线下方那行只按 core 的运行阶段显示:追加 user 消息不显示,phase 帧给出轮次与工具名,idle 收起', () => {
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true, sessions: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    sockets[0].up();
+    const idle = { state: 'idle', running: [], since: '2026-10-05T10:00:00+08:00' };
+    sockets[0].emit({ t: 'hello', session: [{ role: 'system', content: '前缀' }], status: { loop: { phase: idle } } });
+    const line = root.find('tlthink') as FakeEl;
+    sockets[0].emit({ t: 'session.append', index: 1, message: { role: 'user', content: '在吗' } });
+    expect(line.className).toContain('hidden');
+
+    sockets[0].emit({ t: 'phase', phase: { state: 'tools', round: 2, running: ['walk'], since: '2026-10-05T10:00:01+08:00' } });
+    expect(line.className).not.toContain('hidden');
+    expect(line.textContent).toBe('执行工具 · 第 2 轮 · 运行中：walk');
+
+    sockets[0].emit({ t: 'phase', phase: idle });
+    expect(line.className).toContain('hidden');
+  });
+
   it('工具回执按 call_id 填回等结果的那个槽位,不新开一张卡', () => {
     const { env, sockets } = fakeEnv();
     const { ctx, root } = mkCtx({ debug: true, sessions: true });

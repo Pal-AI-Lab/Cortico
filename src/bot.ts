@@ -1243,6 +1243,7 @@ export function createBot<C extends CoreConfig>(
         onSessionReset: (cb) => core.session.onReset(cb),
         onEvent: (cb) => core.store.onAppend(cb),
         onRunlog: (cb) => core.runlog.onWrite(cb),
+        onRunPhase: (cb) => core.loop.onRunPhase(cb),
         runId: () => core.run.id,
         toolSchemas: () => core.loop.getToolSchemas(),
       },

@@ -21,7 +21,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   EventEnvelope, EventRangeQuery, EventStoreReader, Logger,
   ConfigGroup, ConfigValues, WorldConsoleDecl,
-  LogRecord, OwnedStoragePart, StoragePart, ToolSchema,
+  LogRecord, OwnedStoragePart, StoragePart, ToolSchema, RunPhase,
 } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
@@ -101,6 +101,8 @@ export interface WebAppDebugDeps {
   onSessionReset(cb: (messages: ContextRecord[]) => void): void;
   onEvent(cb: (e: EventEnvelope) => void): void;
   onRunlog(cb: (entry: LogRecord) => void): void;
+  /** 主循环的 RunPhase 变化;缺席时状态帧里的 loop.phase 只随其他帧更新。 */
+  onRunPhase?(cb: (phase: RunPhase) => void): void;
   /** 当前 run id;/api/log 缺省读它的 log.jsonl */
   runId?(): string;
   /** 主循环当前工具表schema(run()前为空数组) */
@@ -881,6 +883,8 @@ export class WebApp {
       }));
       dbg.onEvent((envelope) => this.debugBroadcast({ t: 'event', envelope }));
       dbg.onRunlog((entry) => this.debugBroadcast({ t: 'runlog', entry }));
+      // 工具每次开始与结束都会变,单独成帧:status 帧要估算 token、扫描投递积压,不随它重算。
+      dbg.onRunPhase?.((phase) => this.debugBroadcast({ t: 'phase', phase }));
     }
     // session统计变化→全量列表推送(列表小,每次LLM调用一帧,频率低)。
     // 同帧也走debug通道(chat调试台已连/ws/debug,免开第二条连接)。

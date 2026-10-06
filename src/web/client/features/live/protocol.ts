@@ -52,6 +52,15 @@ export interface ContextBudget {
   countedTokens?: number;
 }
 
+/** core 主循环的运行阶段:`status.loop.phase` 与 `phase` 帧;字段含义见 core 的 RunPhase。 */
+export interface RunPhase {
+  state: 'idle' | 'delivering' | 'model' | 'tools' | 'backoff' | 'handoff';
+  round?: number;
+  running: readonly string[];
+  retryAt?: string;
+  since: string;
+}
+
 export interface LoopStatus {
   estTokens?: number | null;
   messageCount?: number | null;
@@ -66,6 +75,7 @@ export interface LoopStatus {
   /** 水位之后该进上下文却还没投递的外部事件数。 */
   behind?: number | null;
   context?: ContextBudget | null;
+  phase?: RunPhase | null;
 }
 
 /** Persona自报的一枚状态筹码。框架照文本渲染,不解释里面说的是什么。 */

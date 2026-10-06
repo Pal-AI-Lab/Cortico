@@ -30,7 +30,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 
 | 路由 | 页 | 内容 |
 |---|---|---|
-| `live` | 终端 | 与 bot 对话、时间线、上下文圈、fork;全新部署上多一组开场引导 |
+| `live` | 终端 | 与 bot 对话、时间线、主循环运行阶段、上下文圈、fork;全新部署上多一组开场引导 |
 | `core` | 运行诊断 | run、session、事件、运行日志,以及 Core 自己的数据与配置 |
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
