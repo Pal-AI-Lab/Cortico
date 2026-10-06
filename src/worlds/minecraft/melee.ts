@@ -401,6 +401,15 @@ export async function skillAttack(
         ) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${attackStats(stats)}`);
         }
+        // 8 格外换近战,下一轮选武器又会切回弓;拒绝是立即返回的,循环就不让出事件循环,
+        // 心跳和实体更新都进不来(#175)。这时受阻收手,换站位由 agent 决定
+        const away = entity.position.distanceTo(bot.entity.position);
+        if (chooseHybridWeapon('melee', away, Boolean(ranged.ready(bot))) === 'ranged') {
+          throw new SkillBlocked(
+            `${rangedBlockedText(result)};相距 ${Math.round(away * 10) / 10} 格,auto 在 8 格外不改近战;` +
+              `${attackStats(stats)}${underwaterOxygenNote(bot)}`,
+          );
+        }
         weapon = 'melee';
         await equipMelee();
         continue;
