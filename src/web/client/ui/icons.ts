@@ -2,6 +2,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 
 export type ConsoleIconName =
   | 'terminal'
+  | 'message'
   | 'activity'
   | 'chart'
   | 'boxes'
@@ -28,6 +29,7 @@ const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
     ['path', { d: 'm4 17 6-6-6-6' }],
     ['path', { d: 'M12 19h8' }],
   ],
+  message: [['path', { d: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z' }]],
   activity: [
     ['path', { d: 'M3 12h4l2-7 4 14 2-7h6' }],
   ],
