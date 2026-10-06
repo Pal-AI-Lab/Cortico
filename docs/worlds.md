@@ -31,7 +31,7 @@ Core 通过 `WorldHost` 向 World 提供以下能力:
 | `pushCandidate?(spec, { trigger })` | 先归档原始事件,在投递时选择内容并生成正文 |
 | `store`、`drainPendingEvents(filter)` | 读事件库;消费待投递事件(一次性) |
 | `withdrawPending?(cursor)` | 撤回本 World 一条未投递的事件;事件库追加撤回记录,重启不补投 |
-| `promotePending?(cursor, trigger)` | 把本 World 一条未投递的事件改为 `flush`、`preempt` 或 `interrupt` |
+| `promotePending?(cursor, trigger)` | 让本 World 一条未投递的事件按 `flush`、`preempt` 或 `interrupt` 立即触发;暂停或闸门挡着时,放行后随整批投递,不打断 |
 | `modelFacts` | 当前端点的模型名、接受的 MIME 与上下文窗口，每次调用按当前端点读取;未选端点或端点未选模型时 `accepts` 为 false |
 | `blob(handle)`、`reportUsage()`、`llmStalls?()` | 附件、用量上报、模型停滞查询 |
 | `cognition?` | 向 Persona 请求后台认知计算;Persona 未提供时该成员不存在 |

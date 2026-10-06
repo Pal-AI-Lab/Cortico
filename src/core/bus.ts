@@ -147,7 +147,7 @@ export class WakeBus {
 
   /**
    * 把首个匹配的排队项改为按 trigger 立即投递；piggyback 项随之可单独触发投递。
-   * 闸门未放行时只改标志，等闸门放行。没有匹配项时返回 false。
+   * 暂停或闸门未放行时只改标志，放行时随整批投递，不再通知主循环。没有匹配项时返回 false。
    */
   promote(pred: (item: WakeItem) => boolean, trigger: 'flush' | 'preempt' | 'interrupt'): boolean {
     const queued = this.queue.find((q) => pred(q.item));

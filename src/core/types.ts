@@ -688,8 +688,9 @@ export interface WorldHost {
    */
   withdrawPending?(cursor: number): Promise<boolean>;
   /**
-   * 把本 World 一条尚未投递的事件改为 flush、preempt 或 interrupt 立即触发；暂停与投递闸门
-   * 照常生效。事件已进入投递或不在队列中时返回 false。
+   * 让本 World 一条尚未投递的事件按 flush、preempt 或 interrupt 立即触发投递。人工暂停或投递闸门
+   * 未放行时只取消它的 piggyback，放行后随整批投递，不按 trigger 取消模型轮或工具。事件已进入投递
+   * 或不在队列中时返回 false。
    */
   promotePending?(cursor: number, trigger: 'flush' | 'preempt' | 'interrupt'): Promise<boolean>;
   /** 当前模型的能力；渲染层据 MIME 支持决定是否附加二进制内容。 */
