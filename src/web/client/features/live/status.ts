@@ -3,7 +3,7 @@
  */
 
 import type { ConsoleUi } from '../../../shared/client-panel.ts';
-import { chipsOf, loopOf, type StatusSnapshot } from './protocol.ts';
+import { chipsOf, loopOf, type RunPhase, type StatusSnapshot } from './protocol.ts';
 import { S } from './strings.ts';
 
 /** 一枚 chip:纯文本片段与要加粗的读数交替。 */
@@ -26,6 +26,24 @@ export function applyDisplayName(doc: Document, name: string | undefined, curren
   if (!name || name === current) return false;
   doc.title = S.docTitle(name);
   return true;
+}
+
+/** 主循环运行阶段的一行说明;idle 或没有阶段时为 null。 */
+export function phaseLabel(ui: ConsoleUi, phase: RunPhase | null): string | null {
+  if (!phase) return null;
+  let head: string;
+  switch (phase.state) {
+    case 'delivering': head = S.phaseDelivering; break;
+    case 'model': head = S.phaseModel; break;
+    case 'tools': head = S.phaseTools; break;
+    case 'backoff': head = S.phaseBackoff(ui.fmt.clock(phase.retryAt)); break;
+    case 'handoff': head = S.phaseHandoff; break;
+    default: return null;
+  }
+  const parts = [head];
+  if (phase.round !== undefined) parts.push(S.phaseRound(phase.round));
+  if (phase.running.length > 0) parts.push(S.phaseRunning(phase.running.join(', ')));
+  return parts.join(' · ');
 }
 
 export interface StatusBand {

@@ -51,6 +51,8 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 
 `WebApp` 默认监听 `127.0.0.1`，支持由依赖配置指定监听地址。从首选端口起最多尝试五个端口；
 端口为 0 时仅申请一次系统分配。WebSocket 使用 `noServer` 分派 `/ws/debug`、`/ws/sessions` 和面板流。
+`/ws/debug` 在主循环的 `RunPhase` 改变时推 `phase` 帧,值与 `status` 帧的 `loop.phase` 相同;
+`status` 帧只在 session 追加、暂停与继续、端点变更时推送。
 所有请求与 upgrade 先校验 Host 头：只接受回环名、显式绑定的地址和 `allowedHosts` 里的名字，绑到通配地址时不校验。
 写请求与 upgrade 再按 Host 校验 Origin，拒绝不匹配或无效的 Origin；缺少 Origin 时放行，Origin 是
 `allowedHosts` 里的名字时放行。监听非回环地址而没有设访问密码时启动记一条 warn。

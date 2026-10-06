@@ -78,6 +78,12 @@ piggyback 只入队，随后续唤醒一起投递。
 默认允许连续重试 2 次、每批最多 4 次，退避为 2 秒、10 秒；上下文超限、抢占、关机或轮数
 达到硬上限时不重试。
 
+`MainLoop` 维护 `RunPhase`:`delivering`(写入一批事件,含等待 `onDelivery`)、`model`、`tools`、
+`backoff`(带 `retryAt`)、`handoff`,其余时刻是 `idle`;一批的轮次结束即回到 `idle`,批末钩子在
+`idle` 下运行。`running` 按开始顺序列出执行中的工具,含流式提前执行的调用。state 或 round 改变、
+工具开始或结束时同步通知可见 World 的 `onRunPhase` 与控制台的订阅,异常记 warn;`getStatus().phase`
+返回当前值。暂停与投递闸门不进入 `RunPhase`,由 `paused`、`scheduleBlocked` 报告。
+
 参数不是合法 JSON 时返回 `TOOL_FAILED_BAD_ARGS`，不执行工具；未知工具返回 `UNKNOWN_TOOL`；
 handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执行完整的工具调用，遵守
 `barrierAfter` 顺序，并按 call id 配对结果。回执超过 8000 字符时记录 warn。

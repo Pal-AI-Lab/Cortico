@@ -20,6 +20,7 @@ World 不直接访问 Memory 或调用 Persona 的工具。
 | `outputTap?()` | 主 session 输出流的接收器(演出、字幕);这一刻没有接收器时返回 `undefined` |
 | `onHandoffEnded?()`、`onTurnEnded?()` | 交接结束与主循环一轮结束的通知;隐藏的 World 不接收 |
 | `onEventsSettled?(events, outcome)` | 本 World 的事件写入主 session(`delivered`)或被操作者清空队列丢弃(`discarded`) |
+| `onRunPhase?(phase)` | 主循环的 `RunPhase`(`idle`、`delivering`、`model`、`tools`、`backoff`、`handoff`,轮序号,执行中的工具名)改变时同步调用;隐藏的 World 不接收 |
 | `shutdownVerification?()` | 关机前要核对的外部状态,同步只读快照 |
 
 Core 通过 `WorldHost` 向 World 提供以下能力:

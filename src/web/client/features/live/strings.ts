@@ -39,6 +39,13 @@ const zh = {
   chipScheduleBlocked: '◷ 闹钟阻断',
   chipTruncating: '截断中',
   chipOnline: '在线 ',
+  phaseDelivering: '正在把事件写入上下文',
+  phaseModel: '等待模型输出',
+  phaseTools: '执行工具',
+  phaseBackoff: (clock: string) => `模型调用失败，${clock} 重试`,
+  phaseHandoff: '上下文交接中',
+  phaseRound: (n: number) => `第 ${n} 轮`,
+  phaseRunning: (names: string) => `运行中：${names}`,
 
   // fork.ts
   mainLabel: "主 session",
@@ -67,7 +74,6 @@ const zh = {
     `输入 ${prompt} / 输出 ${completion} / 命中 ${hit}`,
 
   // timeline.ts
-  thinking: '已进上下文，尚无 assistant 输出',
   jumpBottom: '↓ 回到底部',
   foldHead: (open: boolean, n: number) => `${open ? '▾' : '▸'} ${n} 字`,
   ordinalTitle: (index: number) => `session 第 ${index} 条 Item`,
@@ -171,6 +177,13 @@ const en: typeof zh = {
   chipScheduleBlocked: '◷ Schedule blocked',
   chipTruncating: 'Truncating',
   chipOnline: 'online ',
+  phaseDelivering: 'Writing events into context',
+  phaseModel: 'Waiting for model output',
+  phaseTools: 'Running tools',
+  phaseBackoff: (clock: string) => `Model call failed; retrying at ${clock}`,
+  phaseHandoff: 'Context handoff in progress',
+  phaseRound: (n: number) => `round ${n}`,
+  phaseRunning: (names: string) => `running: ${names}`,
 
   // fork.ts
   mainLabel: "Main session",
@@ -199,7 +212,6 @@ const en: typeof zh = {
     `input ${prompt} / output ${completion} / cache hits ${hit}`,
 
   // timeline.ts
-  thinking: 'In context; no assistant output yet',
   jumpBottom: '↓ Back to bottom',
   foldHead: (open: boolean, n: number) => `${open ? '▾' : '▸'} ${n} chars`,
   ordinalTitle: (index: number) => `Item #${index} in session`,
