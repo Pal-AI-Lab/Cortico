@@ -58,7 +58,7 @@ export interface RunPhase {
   round?: number;
   running: readonly string[];
   retryAt?: string;
-  since: string;
+  enteredAt: string;
 }
 
 export interface LoopStatus {

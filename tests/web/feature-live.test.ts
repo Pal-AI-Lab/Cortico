@@ -627,13 +627,13 @@ describe('live feature 挂载', () => {
     const { ctx, root } = mkCtx({ debug: true, sessions: true });
     live.createLiveFeature({ env }).mount(ctx);
     sockets[0].up();
-    const idle = { state: 'idle', running: [], since: '2026-10-05T10:00:00+08:00' };
+    const idle = { state: 'idle', running: [], enteredAt: '2026-10-05T10:00:00+08:00' };
     sockets[0].emit({ t: 'hello', session: [{ role: 'system', content: '前缀' }], status: { loop: { phase: idle } } });
     const line = root.find('tlthink') as FakeEl;
     sockets[0].emit({ t: 'session.append', index: 1, message: { role: 'user', content: '在吗' } });
     expect(line.className).toContain('hidden');
 
-    sockets[0].emit({ t: 'phase', phase: { state: 'tools', round: 2, running: ['walk'], since: '2026-10-05T10:00:01+08:00' } });
+    sockets[0].emit({ t: 'phase', phase: { state: 'tools', round: 2, running: ['walk'], enteredAt: '2026-10-05T10:00:01+08:00' } });
     expect(line.className).not.toContain('hidden');
     expect(line.textContent).toBe('执行工具 · 第 2 轮 · 运行中：walk');
 
