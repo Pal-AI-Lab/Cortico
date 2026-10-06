@@ -19,7 +19,7 @@ import { SessionTracker } from '../../src/core/sessions.ts';
 import { INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
-import type { Logger, CandidateProjector, EventEnvelope, World, WorldHost, ToolDef } from '../../src/core/types.ts';
+import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import {
   activeSpec,
@@ -3535,6 +3535,64 @@ describe("MainLoop 重新请求、轮次边界与统计", () => {
     await until(() => rows.some((row) => row.level === 'warn' && row.msg.includes('工具回执过长')));
     await until(() => rig.session.messages.some((m) => m.tool_call_id === 'b1'));
     expect(rig.session.messages.find((m) => m.tool_call_id === 'b1')?.content.length).toBe(9_000);
+  });
+});
+
+describe('MainLoop RunPhase', () => {
+  let rig: ReturnType<typeof makeRig>;
+  afterEach(async () => {
+    if (rig) await rig.cleanup();
+  });
+
+  /** 启动并等开场那一批回到 idle,再清空已记录的通知。 */
+  async function startQuiet(seen: RunPhase[]): Promise<void> {
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1 && seen.at(-1)?.state === 'idle');
+    seen.length = 0;
+  }
+
+  it('带工具调用的一批:可见 World 依次看到投递、模型、工具开始与结束、下一轮模型、空闲;隐藏 World 收不到', async () => {
+    const seen: RunPhase[] = [];
+    let hiddenCalls = 0;
+    const pet: World = { ...makeFakeIO('pet', [makeTool('walk', async () => { await sleep(20); return 'ok'; })]), onRunPhase: (p) => { seen.push(p); } };
+    const hidden: World = { ...makeFakeIO('hidden'), onRunPhase: () => { hiddenCalls++; } };
+    rig = makeRig({ worlds: [pet, hidden], hiddenWorlds: ['hidden'] });
+    await startQuiet(seen);
+    rig.llm.script(toolReply([{ name: 'walk' }]));
+    rig.pushEvent('去散步');
+    await until(() => seen.at(-1)?.state === 'idle');
+    expect(seen.map((p) => [p.state, p.round, p.running])).toEqual([
+      ['delivering', undefined, []],
+      ['model', 1, []],
+      ['tools', 1, []],
+      ['tools', 1, ['walk']],
+      ['tools', 1, []],
+      ['model', 2, []],
+      ['idle', undefined, []],
+    ]);
+    expect(rig.loop.getStatus().phase).toBe(seen.at(-1));
+    expect(hiddenCalls).toBe(0);
+  });
+
+  it('可重试的失败进入 backoff,retryAt 是重新请求的时刻', async () => {
+    const delayMs = 120;
+    const seen: RunPhase[] = [];
+    const pet: World = { ...makeFakeIO('pet'), onRunPhase: (p) => { seen.push(p); } };
+    rig = makeRig({ worlds: [pet], resubmit: { maxConsecutive: 2, maxPerBatch: 4, backoffMs: [delayMs] } });
+    await startQuiet(seen);
+    rig.llm.throwNext = new Error('upstream down');
+    rig.llm.script(textReply('好了'));
+    rig.pushEvent('在吗');
+    await until(() => seen.at(-1)?.state === 'idle');
+    expect(seen.map((p) => [p.state, p.round])).toEqual([
+      ['delivering', undefined], ['model', 1], ['backoff', 1], ['model', 2], ['idle', undefined],
+    ]);
+    const [, , backoff, retry] = seen;
+    const retryInMs = Date.parse(backoff.retryAt!) - Date.parse(backoff.since);
+    expect(retryInMs).toBeGreaterThan(0);
+    expect(retryInMs).toBeLessThanOrEqual(delayMs);
+    // 定时器按毫秒取整,允许早 1 毫秒。
+    expect(Date.parse(retry.since)).toBeGreaterThanOrEqual(Date.parse(backoff.retryAt!) - 1);
   });
 });
 

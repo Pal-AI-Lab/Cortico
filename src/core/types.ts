@@ -856,6 +856,24 @@ export interface ShutdownExternalCheck {
   manualAction: string;
 }
 
+/** 主 session 循环此刻在做什么;每个字段都是 Core 直接观察到的事实。 */
+export interface RunPhase {
+  /**
+   * idle:等待下一批事件,批末钩子也在此状态运行;delivering:把一批事件写入主 session,含等待
+   * Persona.onDelivery;model:模型调用进行中;tools:本轮模型输出已结束,执行其中的工具调用;
+   * backoff:模型调用失败,等待重试;handoff:上下文交接进行中。
+   */
+  state: 'idle' | 'delivering' | 'model' | 'tools' | 'backoff' | 'handoff';
+  /** 本批的轮序号,从 1 起;轮间的 delivering 带当前轮。idle、handoff 与一批的首次 delivering 时缺省。 */
+  round?: number;
+  /** 正在执行的工具名,按开始顺序;包含模型输出期间提前执行的调用。 */
+  running: readonly string[];
+  /** backoff 时下一次请求的时刻(ISO)。 */
+  retryAt?: string;
+  /** 进入当前 state 的时刻(ISO,部署时区)。 */
+  since: string;
+}
+
 /** World 的环境描述、事件和工具契约。 */
 export interface World {
   id: string;
@@ -896,6 +914,11 @@ export interface World {
    * 之后经 queueExternalEvents 写入 session 时通知。
    */
   onEventsSettled?(events: readonly EventEnvelope[], outcome: 'delivered' | 'discarded'): void;
+  /**
+   * 主循环的 RunPhase 变化时同步调用:state 或 round 改变、工具开始或结束。在主循环的调用栈上执行,
+   * 只记录状态,不做耗时操作。隐藏 World 不接收通知。
+   */
+  onRunPhase?(phase: RunPhase): void;
   /**
    * stop() 完成后返回外部状态检查的同步只读快照。
    * 网络检查须在 stop() 的既有期限内完成并缓存。

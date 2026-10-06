@@ -44,6 +44,7 @@
 - `outputTap()`:把主 session 的模型输出流逐段交给 World;`externalizes` 返回 true 后,该轮不再被 `preempt` 取消。
 - `cognition`:World 向 Persona 请求后台认知计算。
 - `llmStalls(withinMs)`:最近一段时间内模型调用失败或流中断的次数。
+- `onRunPhase(phase)`:主循环进入投递、模型调用、工具执行、重试等待、交接或空闲时,以及工具开始或结束时同步通知。
 
 控制台面板与配置组不属于等级;没有控制台的宿主由 World 的配置文件提供配置。
 
