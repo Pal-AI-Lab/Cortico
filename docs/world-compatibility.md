@@ -28,17 +28,20 @@
 
 ## L3 投递语义
 
-- 按 `trigger` 安排投递:`preempt` 请求中断在途模型调用并立即投递,`flush` 立即投递并带上积压,
+- 按 `trigger` 安排投递:`preempt` 取消尚未产生外部输出的模型调用并立即投递,`interrupt` 停止当前轮
+  (模型调用与 `interruptible` 工具)并立即投递,`flush` 立即投递并带上积压,
   `debounce` 参与合批,`piggyback` 只排队、随其他批次投递;`deliver: false` 只存储。
 - `pushDeferred`:投递时才调用 `render` 生成正文;返回 null、抛错或超时时不存储、不投递。
 - `pushCandidate`:先归档原始事件,投递时整批交给 World 选取并生成正文。
 - `ephemeral` 事件在下一批投递时从 session 移除,事件库保留。
 - 提供事件库读取(`store`)、`drainPendingEvents(filter)` 与工具执行期间的 `queueExternalEvents`。
+- `withdrawPending` 撤回、`promotePending` 提级未投递的事件;事件写入 session 或被丢弃时调用
+  `onEventsSettled`。
 - 上下文交接后、恢复投递前调用 `onHandoffEnded()`。
 
 ## L4 实时
 
-- `outputTap()`:把主 session 的模型输出流逐段交给 World;`externalizes` 返回 true 后,该轮不再被抢占。
+- `outputTap()`:把主 session 的模型输出流逐段交给 World;`externalizes` 返回 true 后,该轮不再被 `preempt` 取消。
 - `cognition`:World 向 Persona 请求后台认知计算。
 - `llmStalls(withinMs)`:最近一段时间内模型调用失败或流中断的次数。
 
