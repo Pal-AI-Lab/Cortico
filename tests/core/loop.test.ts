@@ -3588,11 +3588,11 @@ describe('MainLoop RunPhase', () => {
       ['delivering', undefined], ['model', 1], ['backoff', 1], ['model', 2], ['idle', undefined],
     ]);
     const [, , backoff, retry] = seen;
-    const retryInMs = Date.parse(backoff.retryAt!) - Date.parse(backoff.since);
+    const retryInMs = Date.parse(backoff.retryAt!) - Date.parse(backoff.enteredAt);
     expect(retryInMs).toBeGreaterThan(0);
     expect(retryInMs).toBeLessThanOrEqual(delayMs);
     // 定时器按毫秒取整,允许早 1 毫秒。
-    expect(Date.parse(retry.since)).toBeGreaterThanOrEqual(Date.parse(backoff.retryAt!) - 1);
+    expect(Date.parse(retry.enteredAt)).toBeGreaterThanOrEqual(Date.parse(backoff.retryAt!) - 1);
   });
 });
 

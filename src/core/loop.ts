@@ -340,7 +340,7 @@ export class MainLoop {
 
   constructor(deps: MainLoopDeps) {
     this.d = deps;
-    this.phase = { state: 'idle', running: [], since: nowIso(deps.cfg.timezone) };
+    this.phase = { state: 'idle', running: [], enteredAt: nowIso(deps.cfg.timezone) };
     deps.session.onReset(() => { this.anchor = null; });
   }
 
@@ -349,7 +349,7 @@ export class MainLoop {
     this.phaseListeners.push(listener);
   }
 
-  /** state、round 或 retryAt 不变时不通知,since 保持进入时的时刻。 */
+  /** state、round 或 retryAt 不变时不通知,enteredAt 保持进入时的时刻。 */
   private enterPhase(state: RunPhase['state'], detail: { round?: number; retryAt?: string } = {}): void {
     const cur = this.phase;
     if (cur.state === state && cur.round === detail.round && cur.retryAt === detail.retryAt) return;
@@ -358,7 +358,7 @@ export class MainLoop {
       ...(detail.round !== undefined ? { round: detail.round } : {}),
       running: [...this.runningTools.values()],
       ...(detail.retryAt !== undefined ? { retryAt: detail.retryAt } : {}),
-      since: nowIso(this.d.cfg.timezone),
+      enteredAt: nowIso(this.d.cfg.timezone),
     };
     this.emitPhase();
   }

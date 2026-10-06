@@ -871,7 +871,7 @@ export interface RunPhase {
   /** backoff 时下一次请求的时刻(ISO)。 */
   retryAt?: string;
   /** 进入当前 state 的时刻(ISO,部署时区)。 */
-  since: string;
+  enteredAt: string;
 }
 
 /** World 的环境描述、事件和工具契约。 */
