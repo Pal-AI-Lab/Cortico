@@ -33,8 +33,8 @@ export const NOT_EXECUTED_THREAD_ENDED = '[not executed: this thread already end
 export const NOT_EXECUTED_STREAM_ABORTED = '[not executed: stream aborted mid-response]';
 /** interrupt 事件到达时本轮尚未开始的调用 */
 export const NOT_EXECUTED_INTERRUPTED = '[not executed: interrupted by a new event]';
-/** interruptible 工具执行期间收到 interrupt,接在它的回执之后 */
-export const INTERRUPTED_WHILE_RUNNING = '[interrupted by a new event while running]';
+/** interruptible 工具执行期间发出过 interrupt 信号,接在它的回执之后;做到哪一步由回执正文说明 */
+export const INTERRUPTED_WHILE_RUNNING = '[an interrupt signal was sent while this tool ran]';
 /** 主循环已停 */
 export const NOT_EXECUTED_LOOP_STOPPED = '[not executed: main loop stopped]';
 /** 关机打断了这一轮,回执取不回来了 */

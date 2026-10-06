@@ -248,7 +248,7 @@ export interface ToolDef extends ToolSchema {
   endsTurn?: boolean;
   /**
    * interrupt 事件到达时 ctx.signal 触发，handler 停止并返回已完成部分的回执；Core 等它返回，
-   * 并在回执末尾注明执行中收到打断。缺省时工具执行到结束，interrupt 只跳过本轮尚未开始的调用。
+   * 并在回执末尾注明执行期间发出过打断信号。缺省时工具执行到结束，interrupt 只跳过本轮尚未开始的调用。
    */
   interruptible?: boolean;
   handler: (args: Record<string, unknown>, ctx: ToolCallContext) => Promise<string | ToolOutcome>;
