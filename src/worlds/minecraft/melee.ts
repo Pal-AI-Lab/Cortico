@@ -7,7 +7,7 @@ import { piglinIsHostile } from './piglin.ts';
 import { sleep, type TaskAttackLease } from './skill-context.ts';
 import { headInWater } from './terrain.ts';
 import {
-  HYBRID_MELEE_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, bestRangedWeapon, hasRangedLos, hasUsableArrows,
+  HYBRID_MELEE_AT, HYBRID_RANGED_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, bestRangedWeapon, hasRangedLos, hasUsableArrows,
   type BowShotResult, type RangedTarget,
 } from './ranged.ts';
 import { type AttackMode } from './skills.ts';
@@ -401,12 +401,11 @@ export async function skillAttack(
         ) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${attackStats(stats)}`);
         }
-        // 8 格外换近战,下一轮选武器又会切回弓;拒绝是立即返回的,循环就不让出事件循环,
-        // 心跳和实体更新都进不来(#175)。这时受阻收手,换站位由 agent 决定
+        // 选武器仍会选弓的距离上不改近战:即时拒绝的射击不经过定时器,循环会占住事件循环
         const away = entity.position.distanceTo(bot.entity.position);
         if (chooseHybridWeapon('melee', away, Boolean(ranged.ready(bot))) === 'ranged') {
           throw new SkillBlocked(
-            `${rangedBlockedText(result)};相距 ${Math.round(away * 10) / 10} 格,auto 在 8 格外不改近战;` +
+            `${rangedBlockedText(result)};相距 ${Math.round(away * 10) / 10} 格,auto 在 ${HYBRID_RANGED_AT} 格外不改近战;` +
               `${attackStats(stats)}${underwaterOxygenNote(bot)}`,
           );
         }
