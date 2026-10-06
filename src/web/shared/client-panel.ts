@@ -445,6 +445,11 @@ export interface ConsolePromptInput {
   setDisabled(disabled: boolean): void;
   /** 盖住输入框里的灰字。`null` 回到构造时给的那一句。 */
   setPlaceholder(text: string | null): void;
+  /**
+   * 把文字与已归一化的图片放回输入框:文字接在已有内容之前,空一行隔开;图片放进托盘,
+   * 超出张数上限的部分不放并给出提示。不提交。
+   */
+  restore(text: string, images?: readonly ConsoleImageAttachment[]): void;
 }
 
 export interface ConsoleTableOptions {
