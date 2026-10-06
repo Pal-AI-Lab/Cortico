@@ -6,7 +6,7 @@ import { readDurability, type ItemLike } from './item-facts.ts';
 export const RANGED_ENTER_RANGE = 32;
 /** 已进入远程交战后允许继续追踪的最大距离，避免目标在边界来回抖动。 */
 export const RANGED_EXIT_RANGE = 40;
-const HYBRID_RANGED_AT = 8;
+export const HYBRID_RANGED_AT = 8;
 export const HYBRID_MELEE_AT = 5.5;
 export const KITE_MIN_RANGE = 8;
 export const KITE_MAX_RANGE = 14;
