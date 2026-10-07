@@ -11,7 +11,7 @@ import type { ConfigGroup, CoreConfig, World } from '../core/types.ts';
 import { MODULE_LAMP_MAX } from '../core/types.ts';
 import type { LoadedConfig } from '../core/config.ts';
 import { CORE_DEFAULTS } from '../core/config.ts';
-import { getByPath } from '../core/config-schema.ts';
+import { getByPath, isConfigGroup } from '../core/config-schema.ts';
 import { RESERVED_FRAME_NAMES } from '../core/loop.ts';
 import { nullLogger } from '../core/util.ts';
 import type { Language } from '../core/language.ts';
@@ -45,6 +45,10 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
  * provider 的旋钮写进端点条目而不是 `defaults()`,所以只核对段。
  */
 function configPathProblems(group: ConfigGroup, prefix: string, defaults?: Record<string, unknown>): string[] {
+  if (!isConfigGroup(group)) {
+    const fields = isPlainObject(group) ? Object.keys(group).join(', ') : typeof group;
+    return [`有一个配置组缺 id、owner 或 schema.properties(实际字段: ${fields}):控制台会跳过它。`];
+  }
   const problems: string[] = [];
   for (const path of Object.keys(group.schema.properties ?? {})) {
     if (!path.startsWith(prefix)) {

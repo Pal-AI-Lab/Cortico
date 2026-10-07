@@ -18,7 +18,9 @@ import { exportDiagnostics } from './diagnostics.ts';
 import { createForkView, MAIN_ID, MAIN_LABEL } from './fork.ts';
 import {
   arr,
+  loopOf,
   str,
+  type RunPhase,
   type SessionStat,
   type StatusSnapshot,
   type ToolSchemaDoc,
@@ -26,7 +28,7 @@ import {
 import { icon } from '../../ui/icons.ts';
 import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
-import { applyDisplayName, createStatusBand } from './status.ts';
+import { applyDisplayName, createStatusBand, phaseLabel } from './status.ts';
 import { S } from './strings.ts';
 import { createTimeline } from './timeline.ts';
 
@@ -82,6 +84,8 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     status: null as StatusSnapshot | null,
     sessions: [] as SessionStat[],
     displayName: '',
+    /** 主循环运行阶段,只取自调试通道的帧;断线时清空。 */
+    phase: null as RunPhase | null,
   };
 
   const view = ui.h('div', 'liveview');
@@ -143,8 +147,17 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     if (event.key === 'Escape') closeCtx();
   }, { signal: ctx.signal });
 
+  /** 运行阶段说的是主 session,查看后台会话时不显示。 */
+  const syncActivity = (): void => {
+    timeline.setActivity(fork.isMain() ? phaseLabel(ui, state.phase) : null);
+  };
+
   let netEl: HTMLElement = ui.pill(S.netConnecting, 'plain');
   const setNet = (online: boolean): void => {
+    if (!online) {
+      state.phase = null;
+      syncActivity();
+    }
     const next = ui.pill(online ? S.netOnline : S.netOffline, online ? 'on' : 'off');
     netEl.replaceWith(next);
     netEl = next;
@@ -259,6 +272,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     onChange: () => {
       sessionBand.render(state.sessions, fork.id);
       syncPlaceholder();
+      syncActivity();
     },
     onError: (err) => ctx.onError(err),
   });
@@ -316,6 +330,8 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         setStatus((f.status as StatusSnapshot | null) ?? null);
         timeline.rebuild(state.messages, { head: state.head });
         setSessions(arr<SessionStat>(f.sessions));
+        state.phase = loopOf(state.status).phase ?? null;
+        syncActivity();
         break;
       }
       case 'session.append': {
@@ -344,6 +360,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         break;
       case 'status':
         setStatus((f.status as StatusSnapshot | null) ?? null);
+        state.phase = loopOf(state.status).phase ?? null;
+        syncActivity();
+        break;
+      case 'phase':
+        state.phase = (f.phase as RunPhase | null) ?? null;
+        syncActivity();
         break;
       case 'sessions':
         setSessions(arr<SessionStat>(f.sessions));

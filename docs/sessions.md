@@ -26,6 +26,12 @@ Persona 声明,Core 只把 `role` 当分类标签。
 模型返回的工具调用只有 `status` 为 `completed` 才执行。其余的回执为未执行,主循环记一条 warn
 (工具名、`call_id`、原始 `status`),同一轮排在它后面的调用也不执行。
 
+一批之内,新事件在轮次边界进入上下文:本轮工具全部返回之后,或 `preempt`、`interrupt` 取消模型轮
+之后。`preempt` 只取消 `outputTap` 尚未报告外部输出的模型轮,丢弃其输出;`interrupt` 取消模型轮时
+保留已外化的输出,执行工具期间则停止 `interruptible` 工具、跳过本轮尚未开始的调用。两者取消后都在
+同一批内带着新事件开始下一轮,被取消的轮计入 `rounds()` 的轮数,不调用 `onTurnEnded`;到达时没有
+可取消的轮,事件在下一次模型请求前送入。
+
 ## 上下文与交接
 
 Core 的输入上限为 `hardTokens = max(0, 生效窗口 − (spec.maxTokens ?? 0))`。生效窗口取服务探测值与配置的

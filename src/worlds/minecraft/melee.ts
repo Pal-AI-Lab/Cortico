@@ -7,7 +7,7 @@ import { piglinIsHostile } from './piglin.ts';
 import { sleep, type TaskAttackLease } from './skill-context.ts';
 import { headInWater } from './terrain.ts';
 import {
-  HYBRID_MELEE_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, bestRangedWeapon, hasRangedLos, hasUsableArrows,
+  HYBRID_MELEE_AT, HYBRID_RANGED_AT, KITE_MAX_RANGE, KITE_MIN_RANGE, bestRangedWeapon, hasRangedLos, hasUsableArrows,
   type BowShotResult, type RangedTarget,
 } from './ranged.ts';
 import { type AttackMode } from './skills.ts';
@@ -400,6 +400,14 @@ export async function skillAttack(
           ['bot_lost', 'lease', 'death', 'target_lost'].includes(result.cause ?? '')
         ) {
           throw new SkillBlocked(`${rangedBlockedText(result)};${attackStats(stats)}`);
+        }
+        // 选武器仍会选弓的距离上不改近战,射不出就受阻
+        const away = entity.position.distanceTo(bot.entity.position);
+        if (chooseHybridWeapon('melee', away, Boolean(ranged.ready(bot))) === 'ranged') {
+          throw new SkillBlocked(
+            `${rangedBlockedText(result)};相距 ${Math.round(away * 10) / 10} 格,auto 在 ${HYBRID_RANGED_AT} 格外不改近战;` +
+              `${attackStats(stats)}${underwaterOxygenNote(bot)}`,
+          );
         }
         weapon = 'melee';
         await equipMelee();

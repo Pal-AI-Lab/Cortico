@@ -5,6 +5,7 @@
  * 队列包含即时事件、延迟渲染项与候选项。延迟渲染项不参与关键词匹配或外部事件计数；
  * 候选项按外部事件计数，关键词只检查 gateText。
  * piggyback 不触发计时、关键词或溢出，也不单独获得投递许可；需要其他项触发投递。
+ * preempt 与 interrupt 投递后通知主循环；取消哪一部分由主循环裁决。
  * 人工暂停阻止所有投递。DeliveryGate 解除、关键词回调授权或溢出授权均放行整批。
  */
 import type { DeliveryGate, EventOrigin, Logger, TriggerMode, WakeItem } from './types.ts';
@@ -45,8 +46,8 @@ export class WakeBus {
   private waiter: ((batch: WakeItem[]) => void) | null = null;
   /** 已到投递条件但没有消费者在等:置真,消费者一来就取走 */
   private ready = false;
-  /** preempt 只报告机械时机；是否仍可安全取消由主循环裁决。 */
-  private preemptHandler: (() => void) | null = null;
+  /** preempt 与 interrupt 只报告机械时机；取消范围由主循环裁决。 */
+  private preemptHandler: ((trigger: 'preempt' | 'interrupt') => void) | null = null;
 
   private readonly log: Logger;
 
@@ -55,7 +56,7 @@ export class WakeBus {
     this.log = log;
   }
 
-  setPreemptHandler(handler: () => void): void {
+  setPreemptHandler(handler: (trigger: 'preempt' | 'interrupt') => void): void {
     this.preemptHandler = handler;
   }
 
@@ -97,7 +98,7 @@ export class WakeBus {
       return;
     }
 
-    if (trigger === 'preempt') {
+    if (trigger === 'preempt' || trigger === 'interrupt') {
       const permitted = !this.blocked();
       this.deliver();
       this.notifyPreempt(trigger, permitted);
@@ -136,12 +137,27 @@ export class WakeBus {
     return this.paused || (this.gate !== null && !this.bypassGateOnce);
   }
 
-  /** 已获准投递的 preempt 才能取消当前模型轮；暂停与闸门继续拥有更高优先级。 */
+  /** 已获准投递的 preempt 与 interrupt 才通知主循环；暂停与闸门继续拥有更高优先级。 */
   private notifyPreempt(trigger: TriggerMode, permitted: boolean): void {
-    if (trigger === 'preempt' && permitted && !this.paused) {
-      this.log.emit('debug', '抢占:请求取消尚未外化的在途模型轮', { event: 'preempt' });
-      this.preemptHandler?.();
+    if ((trigger === 'preempt' || trigger === 'interrupt') && permitted && !this.paused) {
+      this.log.emit('debug', trigger === 'preempt' ? '抢占:请求取消尚未外化的在途模型轮' : '打断:请求停止当前轮', { event: trigger });
+      this.preemptHandler?.(trigger);
     }
+  }
+
+  /**
+   * 把首个匹配的排队项改为按 trigger 立即投递；piggyback 项随之可单独触发投递。
+   * 暂停或闸门未放行时只改标志，放行时随整批投递，不再通知主循环。没有匹配项时返回 false。
+   */
+  promote(pred: (item: WakeItem) => boolean, trigger: 'flush' | 'preempt' | 'interrupt'): boolean {
+    const queued = this.queue.find((q) => pred(q.item));
+    if (!queued) return false;
+    queued.piggyback = false;
+    if (this.gate !== null && !this.bypassGateOnce) return true;
+    const permitted = !this.blocked();
+    this.deliver(this.bypassGateOnce);
+    this.notifyPreempt(trigger, permitted);
+    return true;
   }
 
   /** 人工暂停/继续(控制台);继续时积压一次性投递 */

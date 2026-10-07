@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import { skillAttack } from '../../../src/worlds/minecraft/melee.ts';
+import { BowController } from '../../../src/worlds/minecraft/ranged.ts';
 import { SkillBlocked, type SkillContext } from '../../../src/worlds/minecraft/skill-context.ts';
 import { V } from './executor-harness.ts';
 
@@ -19,6 +20,50 @@ describe('skillAttack 找目标的半径', () => {
     const err = await skillAttack(bot as never, 'end_crystal', 'ranged', ctx).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(SkillBlocked);
     expect((err as Error).message).toContain('不会改用近战');
+  });
+});
+
+describe('skillAttack auto 的弓受阻', () => {
+  it('8 格外射线被挡:受阻收手', async () => {
+    const started = Date.now();
+    const dragon = { id: 47, name: 'ender_dragon', type: 'mob', position: new V(20, 66, 0), height: 8, width: 16, isValid: true };
+    const items = [
+      { name: 'diamond_sword', type: 1, count: 1 },
+      { name: 'bow', type: 2, count: 1, maxDurability: 384, durabilityUsed: 0 },
+      { name: 'arrow', type: 3, count: 64 },
+    ];
+    const bot = {
+      entity: { id: 1, position: new V(0, 66, 0), onGround: true },
+      entities: { 47: dragon },
+      players: {},
+      health: 20,
+      registry: { entitiesByName: { ender_dragon: {} } },
+      inventory: { items: () => items },
+      heldItem: items[0],
+      usingHeldItem: false,
+      equip: async function (this: { heldItem: unknown }, item: unknown) { this.heldItem = item; },
+      lookAt: async () => undefined,
+      setControlState: () => undefined,
+      blockAt: () => null,
+      pathfinder: { setGoal: () => undefined },
+    };
+    const bow = new BowController({ getBot: () => bot as never, hasLos: () => false, leaseValid: () => true, emit: () => undefined });
+    const lease = { token: {}, targetId: 47, swings: 0, meleeHits: 0, arrows: 0, rangedHits: 0, hurts: 0, dead: false, disconnected: false };
+    const ctx = {
+      // 空转时零延时定时器都进不来,只能靠墙钟收住,否则整个测试进程卡死
+      aborted: () => Date.now() - started >= 2_000,
+      abortedBy: () => 'test deadline',
+      fleeHealth: () => 0,
+      escape: { active: false },
+      attack: {
+        acquire: () => lease,
+        release: () => undefined,
+        ranged: { ready: () => true, abort: () => bow.abort(), shoot: (t: never, token: unknown) => bow.shoot(t, token) },
+      },
+    } as unknown as SkillContext;
+    const err = await skillAttack(bot as never, 'ender_dragon', 'auto', ctx).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(SkillBlocked);
+    expect((err as Error).message).toContain('目标被方块挡住,没有射线;相距 20 格,auto 在 8 格外不改近战');
   });
 });
 

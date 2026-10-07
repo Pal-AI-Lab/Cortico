@@ -276,6 +276,17 @@ describe('WakeBus', () => {
     expect(preempts).toBe(1);
   });
 
+  it('promote 把排队中的 piggyback 项改为 interrupt:立即投递并通知主循环，已取走的项返回 false', async () => {
+    const bus = new WakeBus({ quietGapMs: 10_000, minBatchAgeMs: 0, maxBatchAgeMs: 60_000, maxBatchSize: 100 });
+    const notified: string[] = [];
+    bus.setPreemptHandler((trigger) => { notified.push(trigger); });
+    bus.push(evt(1), { trigger: 'piggyback' });
+    expect(bus.promote((it) => it.event?.cursor === 1, 'interrupt')).toBe(true);
+    expect(notified).toEqual(['interrupt']);
+    expect(await bus.nextBatch()).toEqual([evt(1)]);
+    expect(bus.promote((it) => it.event?.cursor === 1, 'interrupt')).toBe(false);
+  });
+
   it('preempt 被关键词闸门放行后通知主循环，整批顺序不变', async () => {
     const bus = new WakeBus({ quietGapMs: 10_000, minBatchAgeMs: 0, maxBatchAgeMs: 60_000, maxBatchSize: 100 });
     let preempts = 0;

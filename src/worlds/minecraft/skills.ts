@@ -1392,7 +1392,8 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'attack',
     doc: `{"skill":"attack","target":"zombie"}             攻击最近的该目标。mode 不写/auto = 距离判断近战或弓(8 格切弓、5.5 格切回近战);
                                                  melee = 只近战;ranged = 只用弓;kite = 用弓并尽量保持 8–14 格。
-                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战。
+                                                 ranged/kite 没有可用弓箭或看不见目标时会受阻,不会暗换近战;
+                                                 auto 在 8 格外这一箭射不出(被挡、没弹道等)也受阻收手,换站位再下单。
                                                  end_crystal / ender_dragon 在 128 格内找,其余 32 格`,
     fields: [
       { key: 'target', kind: 'string', required: true, hint: '实体英文 id 或玩家名' },

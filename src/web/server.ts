@@ -21,7 +21,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   EventEnvelope, EventRangeQuery, EventStoreReader, Logger,
   ConfigGroup, ConfigValues, WorldConsoleDecl,
-  LogRecord, OwnedStoragePart, StoragePart, ToolSchema,
+  LogRecord, OwnedStoragePart, StoragePart, ToolSchema, RunPhase,
 } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
@@ -101,6 +101,8 @@ export interface WebAppDebugDeps {
   onSessionReset(cb: (messages: ContextRecord[]) => void): void;
   onEvent(cb: (e: EventEnvelope) => void): void;
   onRunlog(cb: (entry: LogRecord) => void): void;
+  /** 主循环的 RunPhase 变化;缺席时状态帧里的 loop.phase 只随其他帧更新。 */
+  onRunPhase?(cb: (phase: RunPhase) => void): void;
   /** 当前 run id;/api/log 缺省读它的 log.jsonl */
   runId?(): string;
   /** 主循环当前工具表schema(run()前为空数组) */
@@ -881,6 +883,8 @@ export class WebApp {
       }));
       dbg.onEvent((envelope) => this.debugBroadcast({ t: 'event', envelope }));
       dbg.onRunlog((entry) => this.debugBroadcast({ t: 'runlog', entry }));
+      // 工具每次开始与结束都会变,单独成帧:status 帧要估算 token、扫描投递积压,不随它重算。
+      dbg.onRunPhase?.((phase) => this.debugBroadcast({ t: 'phase', phase }));
     }
     // session统计变化→全量列表推送(列表小,每次LLM调用一帧,频率低)。
     // 同帧也走debug通道(chat调试台已连/ws/debug,免开第二条连接)。
@@ -2091,7 +2095,7 @@ export class WebApp {
         });
     });
 
-    app.post('/api/config', express.json(), (req: Request, res: Response) => {
+    app.post('/api/config', express.json(), wrap((req, res) => {
       const src = this.deps.config;
       if (!src) { res.status(503).json({ error: '配置项声明不可用' }); return; }
       const body = (req.body ?? {}) as Record<string, unknown>;
@@ -2103,14 +2107,10 @@ export class WebApp {
       // 校验完全按声明走:schema 里没声明的键一律忽略,控制台不能靠猜往配置里塞东西
       const parsed = coerceGroupValues(entry.group, values, language);
       if ('error' in parsed) { res.status(400).json({ error: parsed.error }); return; }
-      try {
-        const result = src.set(groupId, parsed.values, language);
-        this.deps.log.warn('配置项已修改', { group: groupId });
-        res.json({ ok: true, result, groups: src.groups(language) });
-      } catch (err) {
-        res.status(500).json({ error: String(err) });
-      }
-    });
+      const result = src.set(groupId, parsed.values, language);
+      this.deps.log.warn('配置项已修改', { group: groupId });
+      res.json({ ok: true, result, groups: src.groups(language) });
+    }));
 
     /**
      * 扩展的浏览器端产物。**逐个文件发,不挂目录**:URL 里的三段只用来在产物表里

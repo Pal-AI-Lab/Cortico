@@ -21,6 +21,7 @@ interface ComposerHandle {
   focus(): void;
   setDisabled(disabled: boolean): void;
   setPlaceholder(text: string | null): void;
+  restore(text: string, images: readonly ConsoleImageAttachment[]): void;
 }
 
 /** 托盘里的一张:归一化结果 + 同一份字节的 data URL 缩略图。 */
@@ -150,7 +151,19 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInp
       focus: () => textarea.current?.focus(),
       setDisabled,
       setPlaceholder,
-    }), []);
+      restore: (text, images) => {
+        if (text) setValue((now) => (now ? `${text}
+
+${now}` : text));
+        if (images.length === 0) return;
+        setAttached((now) => {
+          const room = Math.max(0, maxImages - now.length);
+          if (images.length > room) setNote(S.tooManyImages(maxImages));
+          const back = images.slice(0, room).map((image) => ({ id: nextId.current++, image, src: `data:${image.mime};base64,${image.base64}` }));
+          return [...back, ...now];
+        });
+      },
+    }), [maxImages]);
 
     /** 收一批文件。超出张数的整批拒;单张失败只报那一张,其余照收。 */
     const addFiles = (files: Iterable<File>): void => {
@@ -319,5 +332,6 @@ export function promptInput(
     focus: () => handle.current?.focus(),
     setDisabled: (disabled) => handle.current?.setDisabled(disabled),
     setPlaceholder: (text) => handle.current?.setPlaceholder(text),
+    restore: (text, images = []) => handle.current?.restore(text, images),
   };
 }

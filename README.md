@@ -118,6 +118,7 @@ Cortico strictly separates concerns across four distinct layers:
 | [runs.md](docs/runs.md) | Runtime directories, structured logs, and `pnpm logq` CLI |
 | [personas.md](docs/personas.md) | Persona lifecycle hooks, Memory architecture, and bot assembly |
 | [worlds.md](docs/worlds.md) | The World contract: events, tools, and environment prompts |
+| [world-compatibility.md](docs/world-compatibility.md) | Compatibility levels for other bot architectures mounting Cortico Worlds |
 | [extensions.md](docs/extensions.md) | Extension package specifications, manifests, and dynamic loading |
 | [environment-variables.md](docs/environment-variables.md) | `CORTICO_*` environment configuration and the `.env` hierarchy |
 | [windows.md](docs/windows.md) | Windows environment compatibility and setup |
