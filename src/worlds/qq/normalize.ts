@@ -62,7 +62,6 @@ export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
   if (!parsed || typeof parsed !== 'object') return {};
   const obj = parsed as Record<string, unknown>;
   const prompt = nonEmptyString(obj.prompt);
-  // the card does not show its link: one that is not a single http(s) URL would put text into the body nobody in the chat sees
   const link = (v: unknown): string | undefined => {
     const s = nonEmptyString(v);
     return s && /^https?:\/\/\S+$/.test(s) ? s : undefined;
