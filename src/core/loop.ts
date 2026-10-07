@@ -105,8 +105,6 @@ export interface MainLoopDeps {
   decl: SessionDecl;
   /** 当前活跃端点的模型配置，每轮读取。 */
   spec: () => ModelSpec;
-  /** 按端点名取客户端与模型配置，供 Persona.mainEndpoint 使用；端点不存在或未选模型时抛错。 */
-  endpoint?: (name: string) => { llm: ResponseClient; spec: ModelSpec };
   context: ContextFacts;
   /** 记录落库刻的附件内部化(新字节进日志附件库、已有句柄补 mime);core 提供 */
   blobs: { intern(inputs: readonly (BlobInput | BlobRef)[] | undefined): BlobRef[] | undefined };
@@ -1173,10 +1171,9 @@ export class MainLoop {
         // role 仅用于故障分类，不写入请求体。
         const llmStart = Date.now();
         let res: Awaited<ReturnType<typeof llm.respond>>;
-        const route = this.requestEndpoint(llm, spec);
         try {
-          res = await route.llm.respond(responseRequest(route.spec, outbound, schemas), {
-            context: outbound, nativeSpec: route.spec,
+          res = await llm.respond(responseRequest(spec, outbound, schemas), {
+            context: outbound, nativeSpec: spec,
             ...(tapEvents ?? {}),
             role: decl.id,
             sessionId: this.mainTrack?.id,
@@ -1641,21 +1638,6 @@ export class MainLoop {
     const summary = { beforeTokens: before, afterTokens: this.estTokens(), kept: newTail.length, dropped: Math.max(0, snapshot.length - newTail.length) };
     this.d.transcript?.boundary('handoff', summary);
     log.emit('info', '上下文交接完成', { event: 'handoff', data: summary });
-  }
-
-  /** 这次请求的客户端与模型配置：Persona.mainEndpoint 给出的端点，不可用时回到活跃端点。 */
-  private requestEndpoint(llm: ResponseClient, spec: ModelSpec): { llm: ResponseClient; spec: ModelSpec } {
-    const { persona, endpoint, log } = this.d;
-    if (!persona.mainEndpoint || !endpoint) return { llm, spec };
-    let name: string | null = null;
-    try {
-      name = persona.mainEndpoint();
-      return name === null ? { llm, spec } : endpoint(name);
-    } catch (error) {
-      if (name === null) log.warn('mainEndpoint 钩子抛错,这次请求用活跃端点', { error: String(error) });
-      else log.warn('mainEndpoint 返回的端点不存在或未选模型,这次请求用活跃端点', { provider: name, error: String(error) });
-      return { llm, spec };
-    }
   }
 
   /**
