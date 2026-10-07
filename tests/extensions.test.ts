@@ -231,9 +231,9 @@ describe('ExtensionManager', () => {
     expect(extensions.find((p) => p.name === 'broken')?.reason).toContain('WorldDefinition');
   });
 
-  it('list:本机 package.json 的显示名、作者、许可证与链接随条目给出,启动后新装的包也有', async () => {
+  it.each(['string', 'object'])('list:本机作者与包元数据随条目给出,启动后新装的包也有 (%s)', async (shape) => {
     const meta = {
-      author: { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
+      author: shape === 'string' ? 'Example author' : { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
       repository: { url: 'git+https://example.test/org/repo.git' }, bugs: 'https://example.test/issues',
       cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: '示例 World' },
     };
@@ -244,10 +244,11 @@ describe('ExtensionManager', () => {
     for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)).toMatchObject({
       author: 'Example author',
       metadata: {
-        displayName: '示例 World', license: 'MIT', publisher: 'Example author',
+        displayName: '示例 World', license: 'MIT', author: 'Example author',
         links: { repository: 'https://example.test/org/repo', homepage: 'https://example.test/home', bugs: 'https://example.test/issues' },
       },
     });
+    for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)?.metadata).not.toHaveProperty('publisher');
   });
 
   it('list:随框架提供的条目排在已装包之后;decorate 作用在每一条上', async () => {
@@ -355,6 +356,25 @@ describe('ExtensionManager', () => {
     await expect(mgr.check({ path: local })).rejects.toThrow('cortico');
     await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('目录不存在');
     expect(runs).toEqual([]);
+  });
+
+  it.each([
+    { shape: 'string', author: 'Example author', expected: 'Example author' },
+    { shape: 'object', author: { name: 'Example author' }, expected: 'Example author' },
+    { shape: 'missing', author: undefined, expected: undefined },
+  ])('packageInfo:作者与发布者分别返回 ($shape)', async ({ author, expected }) => {
+    const publisher = 'Automated publisher';
+    const { mgr } = manager({}, { packument: {
+      'dist-tags': { latest: '1.0.0' },
+      versions: { '1.0.0': {
+        name: 'authored-mod', version: '1.0.0', author, _npmUser: { name: publisher },
+        cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world },
+      } },
+    } });
+    const info = await mgr.packageInfo('authored-mod');
+    expect(info.publisher).toBe(publisher);
+    if (expected) expect(info.author).toBe(expected);
+    else expect(info).not.toHaveProperty('author');
   });
 
   it('packageInfo:latest 版本的 cortico 块按本机同一套判据解析,已安装的带上版本范围', async () => {

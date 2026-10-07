@@ -1312,6 +1312,7 @@ const app = new WebApp({
         fileCount: 41,
         dependencies: ['ws', 'undici'],
         maintainers: [hit.publisher ?? 'someone'],
+        author: devExtensions.find(p => p.name === name)?.author ?? 'example-author',
         publisher: hit.publisher,
         links: { ...hit.links, npm: hit.links.npm ?? `https://www.npmjs.com/package/${name}`, bugs: `${hit.links.repository ?? ''}/issues` },
         installed: devExtensions.some((p) => p.name === name && p.state !== 'removed'),

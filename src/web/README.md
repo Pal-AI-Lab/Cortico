@@ -38,6 +38,7 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 | `/api/console/lamps` | 状态灯。 |
 | `/api/extensions` | 扩展目录、各扩展状态、作者与本机包元数据;随框架提供的 World 与供应商列在最后。 |
 | `/api/extensions/updates` | 已安装 npm 扩展的可用新版本及逐包检查错误。 |
+| `/api/extensions/package` | 指定包版本的详情，分别返回作者 `author` 与 npm 发布者 `publisher`。 |
 | `/api/extensions/icon` | 已装包声明的图标文件;没有时 404。SVG 带禁脚本的 CSP。 |
 | `/api/extensions/check` | 安装前只读 manifest 的检查;`kind` 给了就要求类别一致。 |
 | `/api/run/lifecycle` | 本进程的 bootId、部署摘要与是否就绪;控制台据此认出重启后的新进程。 |
@@ -65,6 +66,8 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 `createBot()` 通过 `WebAppDeps` 注入事件库、session、运行控制、配置、存储、`consolePageSources` 和扩展信息。
 
 ## 浏览器
+
+扩展卡片与详情页的作者来自包的 `author`；缺少作者时显示“未提供”。已安装卡片读取本机元数据，市场卡片复用包详情请求。
 
 `features/providers` 一次编辑一条端点,改动只进浏览器暂存,保存时整条提交。模块面板挂在所选端点
 的作用域里,面板的 `setConfig` 同样进暂存;`llm-settings` 的服务接口保留,旧的 `llm:<kind>` 路由

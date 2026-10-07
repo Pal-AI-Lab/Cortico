@@ -490,7 +490,7 @@ export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPac
     ...(pkg.engines?.node ? { engines: pkg.engines.node } : {}),
     dependencies: Object.keys(pkg.dependencies ?? {}),
     ...(pkg.keywords?.length ? { keywords: pkg.keywords } : {}),
-    ...(author ? { publisher: author } : {}),
+    ...(author ? { author } : {}),
     links: {
       ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
       ...(pkg.homepage ? { homepage: pkg.homepage } : {}),
@@ -695,6 +695,7 @@ export class ExtensionManager {
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);
     const bugs = urlOf(v.bugs);
+    const author = packageAuthor(v);
 
     return {
       name,
@@ -717,6 +718,7 @@ export class ExtensionManager {
       ...(v.dist?.fileCount ? { fileCount: v.dist.fileCount } : {}),
       dependencies: Object.keys(v.dependencies ?? {}),
       maintainers: (v.maintainers ?? []).map((m) => m.username ?? m.name ?? '').filter(Boolean),
+      ...(author ? { author } : {}),
       ...(v._npmUser?.name ? { publisher: v._npmUser.name } : {}),
       links: {
         npm: `https://www.npmjs.com/package/${name}`,
