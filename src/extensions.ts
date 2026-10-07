@@ -729,10 +729,9 @@ export class ExtensionManager {
     if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
 
     const parsed = parseExtensionManifest(v);
-    const times = Object.entries(doc.time ?? {}).filter(([k]) => k !== 'created' && k !== 'modified');
+    const times = Object.keys(doc.versions ?? {}).map((version) => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
-      .slice(0, 6)
       .map(([version, date]) => ({ version, date }));
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);

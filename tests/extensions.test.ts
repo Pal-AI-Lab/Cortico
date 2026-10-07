@@ -336,6 +336,15 @@ describe('ExtensionManager', () => {
     await expect(mgr.packageInfo('tagged', '9.9.9')).rejects.toThrow('9.9.9');
   });
 
+  it('packageInfo:发布历史超过六版时全部返回，排除已撤回的版本', async () => {
+    const versions = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [`1.0.${i}`, { name: 'example', version: `1.0.${i}`, type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } }]));
+    const time = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [`1.0.${i}`, `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`]));
+    const { mgr } = manager({}, { packument: { 'dist-tags': { latest: '1.0.8' }, versions, time } });
+    const info = await mgr.packageInfo('example');
+    expect(info.versionCount).toBe(Object.keys(versions).length);
+    expect(info.history.map(entry => entry.version)).toEqual(Object.keys(versions).reverse());
+  });
+
   it('icon:声明了且文件在包里才给;list 标出有图标的包', async () => {
     const cortico = (icon: string) => ({ cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, icon } });
     installFake('pictured', { body: definitionSource('pictured'), pkg: cortico('assets/icon.svg') });

@@ -1,7 +1,7 @@
 /** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。类别取路由第二段。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
-import { brandMark } from '../../ui/icons.ts';
+import { icon, brandMark } from '../../ui/icons.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { S } from './strings.ts';
@@ -192,6 +192,11 @@ export function mountExtensions(ctx: FeatureContext): void {
   };
   /** 正在安装或删除的包;同一个包的第二次操作等前一次回来。 */
   const busy = new Set<string>();
+  let armed: (() => void) | null = null;
+  const disarm = () => { armed?.(); armed = null; };
+  const doc = root.ownerDocument;
+  doc.addEventListener('click', event => { if (!(event.target as Element).closest('.extension-erase')) disarm(); }, { signal });
+  doc.addEventListener('keydown', event => { if (event.key === 'Escape') disarm(); }, { signal });
   const intro = pageIntro(ui, S.introTitle, S.scope);
   const tabs = ui.h('div', 'extension-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', S.introTitle);
   const indicator = ui.h('span', 'extension-tab-indicator'); indicator.setAttribute('aria-hidden', 'true'); tabs.append(indicator);
@@ -263,7 +268,12 @@ export function mountExtensions(ctx: FeatureContext): void {
     if (!item.builtin && !/^(link:|file:)/.test(item.spec) && item.state !== 'removed') {
       void fetchDetail(item.name).then(data => {
         if (!signal.aborted && box.isConnected) renderDetail(box, data, kind, hit, item);
-      }).catch(error => { if (!signal.aborted && box.isConnected) box.append(ui.msgline(errorText(error), true)); });
+      }).catch(error => {
+        if (!signal.aborted && box.isConnected) {
+          const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback')!;
+          feedback.textContent = errorText(error); feedback.classList.add('bad');
+        }
+      });
     }
   }
   /** 包声明了图标就显示图标;没有或取不到时显示 Cortico 标志。 */
@@ -280,10 +290,13 @@ export function mountExtensions(ctx: FeatureContext): void {
     return avatar;
   }
   function installedCard(item: ExtensionView) {
-    const card = ui.h('article', 'extension-card' + (item.enabled ? ' is-enabled' : ''));
+    const card = ui.h('article', 'extension-card extension-installed-card' + (item.enabled ? ' is-enabled' : ''));
+    card.tabIndex = 0; card.setAttribute('aria-label', item.metadata?.displayName ?? item.label ?? item.name);
+    card.addEventListener('click', event => { if (!(event.target as Element).closest('button, a')) showLocal(item); }, { signal });
+    card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); showLocal(item); } }, { signal });
     const heading = ui.h('div', 'extension-card-heading');
     heading.append(packageAvatar(item.icon ? iconUrl(item.name, item.installedVersion ?? item.version) : undefined));
-    const title = ui.button(item.metadata?.displayName ?? item.label ?? item.name, { onClick: () => showLocal(item) }); title.className = 'extension-card-title'; title.title = item.label ?? item.name;
+    const title = ui.h('span', 'extension-card-title', item.metadata?.displayName ?? item.label ?? item.name); title.title = item.label ?? item.name;
     heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'provider' ? S.alreadyInstalled : item.kind === 'bot' ? S.adopted : S.stateLoaded, 'on'));
     card.append(heading);
     const text = item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.kind === 'provider' ? S.alreadyInstalled : item.enabled ? (item.kind === 'bot' ? S.adopted : S.enabled) : stateLabels[item.state];
@@ -291,7 +304,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
     const author = item.author ?? S.unknownAuthor;
     card.append(ui.h('div', 'extension-meta', [item.builtin ? S.builtin : '', S.version(item.installedVersion ?? item.version ?? '—'), S.author(author)].filter(Boolean).join(' · ')));
-    card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
+    const status = ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`);
     if (item.description) card.append(ui.h('p', 'extension-description', item.description));
     const version = ui.h('div', 'extension-secondary');
     const update = updates.get(item.name);
@@ -304,20 +317,25 @@ export function mountExtensions(ctx: FeatureContext): void {
     } else version.textContent = item.hidden ? S.hidden : item.installedVersion && item.version !== item.installedVersion ? S.runtimeVersion(item.version ?? '—') : '';
     if (version.hasChildNodes()) card.append(version);
     for (const problem of update?.problems ?? []) card.append(ui.msgline(problem, true));
-    const actions = ui.h('div', 'extension-card-actions');
-    const owner = kind;
+    const footer = ui.h('div', 'extension-status-row'); footer.append(status);
     if (item.state !== 'removed') {
-      if (item.kind === 'bot') actions.append(ui.button(S.create, { onClick: () => { const box = ui.h('div'); box.append(ui.h('p', '', S.createBody), ui.h('pre', '', 'pnpm start --new')); ui.drawer(item.name, box); } }));
-      else if (item.state === 'pending-restart' && canRestart) actions.append(ui.button(S.restartProcess, { onClick: () => void restart() }));
-      else if (item.kind === 'world' && item.enabled && item.worldId) actions.append(ui.button(S.manage, { onClick: () => router.navigate(['provider', 'world:' + item.worldId]) }));
-      else actions.append(ui.button(S.details, { onClick: () => showLocal(item) }));
-      const remove = ui.button(S.remove, { variant: 'danger', onClick: async () => { if (await ui.confirm({ title: item.name, body: S.removeBody, danger: true })) void operate('delete', { name: item.name }, 'management', owner); } });
+      const remove = ui.h('button', 'connection-erase extension-erase') as HTMLButtonElement; remove.type = 'button';
+      const text = ui.h('span', 'connection-erase-text'); text.append(ui.h('span', '', S.eraseConfirm));
+      remove.append(icon(doc, 'trash'), text); remove.setAttribute('aria-label', S.remove); remove.title = S.removeBody;
       if (item.builtin) { remove.disabled = true; remove.title = S.builtinNote; }
       else if (item.enabled && item.kind !== 'provider') { remove.disabled = true; remove.title = S.removeInUse; }
       else remove.disabled = busy.has(item.name);
-      actions.append(remove);
+      const owner = kind;
+      remove.addEventListener('click', event => {
+        event.stopPropagation(); const wasArmed = remove.classList.contains('is-armed'); disarm();
+        if (wasArmed) { void operate('delete', { name: item.name }, 'management', owner); return; }
+        remove.classList.add('is-armed'); remove.setAttribute('aria-label', S.eraseConfirm);
+        const warning = ui.msgline(S.removeBody, true); card.insertBefore(warning, footer);
+        armed = () => { remove.classList.remove('is-armed'); remove.setAttribute('aria-label', S.remove); warning.remove(); };
+      }, { signal });
+      footer.append(remove);
     }
-    card.append(actions); return card;
+    card.append(footer); return card;
   }
   function renderInstalled() {
     if (!installedGrid) return;
@@ -409,7 +427,9 @@ export function mountExtensions(ctx: FeatureContext): void {
   function renderDetail(box: HTMLElement, data: PackageDetailView, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
       const title = box.closest('.modalcard')?.querySelector('.modaltitle');
       if (title) title.textContent = data.displayName ?? item?.metadata?.displayName ?? item?.label ?? data.name;
-      box.replaceChildren(ui.h('h4', '', S.introduction), ui.h('p', '', item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'));
+      const historyOpen = box.querySelector('details')?.open ?? false;
+      box.replaceChildren(ui.h('h4', '', S.introduction), ui.h('p', '', item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'), ui.h('h4', '', S.information));
+      const feedback = ui.msgline(); feedback.classList.add('extension-operation-feedback'); feedback.setAttribute('role', 'status'); box.append(feedback);
       if (item?.reason) box.append(ui.msgline(item.reason, true));
       if (item?.console === 'missing') box.append(ui.msgline(S.noteConsoleMissing, true));
       for (const text of [...data.problems ?? [], ...data.warnings]) box.append(ui.msgline(text, true));
@@ -427,9 +447,9 @@ export function mountExtensions(ctx: FeatureContext): void {
         { k: S.fieldKeywords, v: data.keywords?.join(S.listSeparator) || '—' },
         { k: S.fieldDownloads, v: hit ? S.downloadsPerMonth(ui.fmt.count(hit.downloads)) : '—' }, { k: S.fieldDependents, v: hit ? String(hit.dependents) : '—' },
       ];
-      box.append(ui.h('h4', '', S.information), ui.kv(rows));
+      box.append(ui.kv(rows));
       {
-        const releases = ui.h('details', 'extension-releases');
+        const releases = ui.h('details', 'extension-releases'); releases.open = historyOpen;
         const summary = ui.h('summary', '', S.fieldHistory);
         summary.addEventListener('click', () => {
           const card = box.closest<HTMLElement>('.modalcard');
@@ -437,9 +457,20 @@ export function mountExtensions(ctx: FeatureContext): void {
         });
         releases.append(summary);
         const history = ui.h('div', 'extension-history');
-        for (const release of data.history) { const row = ui.h('div'); row.append(ui.h('code', '', release.version), ui.h('time', 'muted', release.date.slice(0, 10))); history.append(row); }
-        releases.append(data.history.length ? history : ui.h('p', 'muted', S.noHistory)); box.append(releases);
+        const current = item ?? installed.find(entry => entry.name === data.name && entry.state !== 'removed');
+        const linked = /^(link:|file:)/.test(current?.spec ?? '');
+        for (const release of data.history) {
+          const row = ui.h('div');
+          const same = (current?.installedVersion ?? current?.version) === release.version;
+          const button = ui.button(same ? S.currentVersion : S.installVersion, { variant: 'danger', size: 'sm', onClick: () => void installRelease(box, data, release.version, owner, hit, item) });
+          button.classList.add('extension-version-action');
+          button.disabled = same || linked || busy.has(data.name);
+          if (linked) button.title = S.localVersionNote;
+          row.append(ui.h('code', '', release.version), ui.h('time', 'muted', release.date.slice(0, 10) || '—'), button); history.append(row);
+        }
+        releases.append(data.history.length ? history : ui.h('p', 'muted extension-history-empty', S.noHistory)); box.append(releases);
       }
+      if (item?.kind === 'bot') box.append(ui.h('p', 'extension-create-help', S.createBody), ui.h('pre', '', 'pnpm start --new'));
       const actions = ui.rowbar(); actions.classList.add('extension-detail-actions');
       for (const [name, href] of Object.entries(data.links)) if (href && /^https?:\/\//i.test(href)) { const a = ui.h('a', 'btn secondary', S.linkNames[name as keyof typeof S.linkNames]); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; actions.append(a); }
       if (!item) {
@@ -448,6 +479,25 @@ export function mountExtensions(ctx: FeatureContext): void {
         button.disabled = isInstalled || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner; actions.append(ui.h('span', 'grow'), button);
       }
       if (actions.hasChildNodes()) box.append(actions);
+  }
+  /** 历史版本走与市场安装相同的 check → install;结果同时写进抽屉。 */
+  async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
+    const current = installed.find(entry => entry.name === data.name && entry.state !== 'removed');
+    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), danger: true })) return;
+    if (signal.aborted || busy.has(data.name)) return;
+    const show = (note: { text: string; bad: boolean } | undefined) => {
+      const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback');
+      if (feedback && note) { feedback.textContent = note.text; feedback.classList.toggle('bad', note.bad); }
+    };
+    const done = operate('install', { name: data.name, version }, 'management', owner);
+    box.querySelectorAll<HTMLButtonElement>('.extension-version-action').forEach(button => { button.disabled = true; });
+    show(states[owner].messages.management);
+    await done;
+    const result = states[owner].messages.management;
+    await checkUpdates();
+    if (signal.aborted || !box.isConnected) return;
+    renderDetail(box, data, owner, hit, item && installed.find(entry => entry.name === data.name && entry.state !== 'removed'));
+    show(result);
   }
   function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
     const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail));

@@ -35,6 +35,7 @@ World 先在 World 页停用。
 
 扩展更新检查在页面打开及清单刷新时执行。发现新版时显示磁盘版本与 `latest` 版本；
 更新会向 `extensions/` 执行 `pnpm add`，重启进程后加载新版，不需要先卸载。
+详情的历史版本可安装 registry 中仍存在的任一版本，经 check 后 `pnpm add name@version`，重启后生效；配置与 Memory 不随包回退。
 契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。错误里带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。

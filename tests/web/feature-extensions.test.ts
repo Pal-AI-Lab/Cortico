@@ -70,7 +70,7 @@ let calls: Array<{ url: string; method: string; body: Any }> = [];
 
 function stub(over: {
   list?: unknown; updates?: unknown; updateStatus?: number; installStatus?: number; checkStatus?: number;
-  hits?: unknown; detail?: Any; detailStatus?: number; restart?: unknown;
+  hits?: unknown; detail?: Any; detailStatus?: number; restart?: unknown; onInstall?: (body: Any) => void;
 } = {}): void {
   vi.stubGlobal('fetch', (url: unknown, init: Any) => {
     const u = String(url);
@@ -89,7 +89,7 @@ function stub(over: {
       status = over.checkStatus ?? 200;
       body = status === 200 ? { name: payload.target.name ?? 'local-mod', version: payload.target.version ?? '1.0.0', kind: payload.kind } : { error: '扩展实际类型为 provider，请切换到对应分类。' };
     }
-    else if (u === '/api/extensions/install') { status = over.installStatus ?? 200; body = status === 200 ? { ok: true, result: '已安装 x。重启进程后加载。\n+ x 1.0.0' } : { error: 'pnpm add 退出码 1' }; }
+    else if (u === '/api/extensions/install') { status = over.installStatus ?? 200; if (status === 200) over.onInstall?.(JSON.parse(init.body)); body = status === 200 ? { ok: true, result: '已安装 x。重启进程后加载。\n+ x 1.0.0' } : { error: 'pnpm add 退出码 1' }; }
     else if (u === '/api/extensions/uninstall') body = { ok: true, result: '已卸载 x。' };
     else if (u === '/api/run/lifecycle') body = LIFE;
     else if (u === '/api/run/restart') body = over.restart ?? { ok: true, result: '本地关机完成,进程即将退出', steps: [{ label: '按住事件投递', ok: true, elapsedMs: 2 }] };
@@ -122,6 +122,7 @@ function mkCtx(caps: Record<string, boolean> = { extensions: true, restart: true
   };
 }
 
+const erase = (el: ParentNode): HTMLButtonElement => el.querySelector('.extension-erase') as HTMLButtonElement;
 const buttons = (el: ParentNode): HTMLButtonElement[] => [...el.querySelectorAll('button')] as HTMLButtonElement[];
 const button = (el: ParentNode, text: string): HTMLButtonElement => {
   const hit = buttons(el).find((b) => b.textContent?.trim() === text);
@@ -189,8 +190,8 @@ describe('extension categories', () => {
   it('keeps Bot templates free of load/unload actions and shows creation instructions', async () => {
     stub({ list: { ...LIST, extensions: [{ ...LIST.extensions[0], name: 'sample-template', kind: 'bot', enabled: true }] } });
     const { ctx, root } = mount(); await flush(); await switchTo(ctx, 'bot');
-    expect(installedCards(root).textContent).toContain('当前 Bot 正在采用'); expect(button(root, '创建实例说明')).toBeTruthy();
-    expect(button(root, '删除扩展').disabled).toBe(true); button(root, '创建实例说明').click(); expect(document.body.textContent).toContain('pnpm start --new');
+    expect(installedCards(root).textContent).toContain('当前 Bot 正在采用');
+    expect(erase(installedCards(root)).disabled).toBe(true); (installedCards(root).firstElementChild as HTMLElement).click(); expect(document.body.textContent).toContain('pnpm start --new');
   });
   it('disables incompatible updates and states the reason on the card', async () => {
     stub({ updates: { updates: [{ name: 'alpha-mod', installedVersion: '1.0.0', latestVersion: '2.0.0', problems: ['扩展要求契约 v9'] }], errors: [] } });
@@ -215,7 +216,6 @@ describe('extension categories', () => {
     expect(buttons(cardOf(root, 'delta-mod')).map(b => b.textContent)).not.toContain('删除扩展');
     await switchTo(ctx, 'provider');
     expect(cardOf(root, 'gamma-prov').textContent).toContain('待重启');
-    expect(button(cardOf(root, 'gamma-prov'), '重启进程')).toBeTruthy();
   });
 });
 
@@ -307,11 +307,12 @@ describe('installation feedback', () => {
     expect(calls.find(c => c.url === '/api/extensions/check')?.body).toEqual({ target: { path: 'C:/work/my-world' }, kind: 'world' });
     expect(calls.find(c => c.url === '/api/extensions/install')?.body).toEqual({ path: 'C:/work/my-world' });
   });
-  it('deleting asks first, then uninstalls by name and reloads the list', async () => {
+  it('the trash button first states the shared-directory effect, then uninstalls and reloads', async () => {
     stub(); const { root } = mount(); await flush();
-    button(cardOf(root, 'beta-mod'), '删除扩展').click(); await flush();
+    erase(cardOf(root, 'beta-mod')).click(); await flush();
     expect(calls.some(c => c.url === '/api/extensions/uninstall')).toBe(false);
-    answer(true); await flush();
+    expect(cardOf(root, 'beta-mod').textContent).toContain('使用它的其他 Bot 也会受到影响');
+    erase(cardOf(root, 'beta-mod')).click(); await flush();
     expect(calls.find(c => c.url === '/api/extensions/uninstall')?.body).toEqual({ name: 'beta-mod' });
     expect(calls.filter(c => c.url === '/api/extensions').length).toBe(2);
     expect(sheets(root)[0].textContent).toContain('删除成功');
@@ -420,11 +421,11 @@ describe('restart', () => {
   it('without the restart capability there is no restart button and pending cards offer details', async () => {
     stub(); const { ctx, root } = mount({ extensions: true }); await flush(); await switchTo(ctx, 'provider');
     expect(buttons(root).map(b => b.textContent)).not.toContain('重启进程');
-    expect(button(cardOf(root, 'gamma-prov'), '详情')).toBeTruthy();
+    cardOf(root, 'gamma-prov').click(); await flush(); expect(document.querySelector('.extension-detail')).toBeTruthy();
   });
   it('a remount shows the category help, not the result of an earlier operation', async () => {
     stub(); const first = mount(); await flush();
-    button(cardOf(first.root, 'beta-mod'), '删除扩展').click(); await flush(); answer(true); await flush();
+    erase(cardOf(first.root, 'beta-mod')).click(); erase(cardOf(first.root, 'beta-mod')).click(); await flush();
     expect(sheets(first.root)[0].textContent).toContain('删除成功');
     first.lifecycle.dispose(); first.root.remove();
     const second = mount(); await flush();
@@ -434,7 +435,7 @@ describe('restart', () => {
 });
 
 describe('extension review interactions', () => {
-  it('an enabled World awaiting restart offers the restart; built-ins and enabled Worlds cannot be deleted', async () => {
+  it('built-ins and enabled Worlds cannot be deleted', async () => {
     stub({ list: { dir: LIST.dir, extensions: [
       { ...LIST.extensions[0], enabled: true, installedVersion: '2.0.0', state: 'pending-restart' },
       { ...LIST.extensions[0], name: 'builtin:world:example', builtin: true, label: 'Built-in example' },
@@ -442,12 +443,10 @@ describe('extension review interactions', () => {
     ] } });
     const { root } = mount(); await flush(); const cards = installedCards(root).querySelectorAll('.extension-card');
     expect(cards[0].querySelector('.extension-card-heading')?.textContent).toContain('已加载');
-    expect(button(cards[0], '重启进程')).toBeTruthy();
-    expect(button(cards[1], '删除扩展').disabled).toBe(true);
+    expect(erase(cards[1]).disabled).toBe(true);
     const running = cardOf(root, 'Running');
-    expect(button(running, '管理 World')).toBeTruthy();
-    expect(button(running, '删除扩展').disabled).toBe(true);
-    expect(button(running, '删除扩展').title).toContain('停用后才能删除');
+    expect(erase(running).disabled).toBe(true);
+    expect(erase(running).title).toContain('停用后才能删除');
   });
   it('filters installed modules independently and lets users override each page capacity', async () => {
     stub({ list: { dir: LIST.dir, extensions: Array.from({length: 8}, (_, i) => ({ ...LIST.extensions[0], name: `module-${i}`, label: `模块 ${i}` })) } });
@@ -467,13 +466,13 @@ describe('extension review interactions', () => {
     expect(detail.textContent).toContain('维护者'); expect(detail.textContent).toContain('200.0K');
     expect(detail.querySelectorAll('.extension-history > div')).toHaveLength(2);
     expect(detail.querySelector('details')?.open).toBe(false);
-    expect(detail.querySelector('summary')?.textContent).toBe('最近版本');
+    expect(detail.querySelector('summary')?.textContent).toBe('历史版本');
     expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
     expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('下载量：42/月');
   });
   it('keeps installed metadata available when registry details fail', async () => {
     stub({ detailStatus: 503, list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], metadata: { license: 'MIT', dependencies: ['example-dependency'], links: { repository: 'https://git.example/module' } } }] } });
-    const { root } = mount(); await flush(); button(root, '甲扩展').click(); await flush();
+    const { root } = mount(); await flush(); cardOf(root, '甲扩展').click(); await flush();
     const detail = document.querySelector('.extension-detail')!;
     expect([...detail.querySelectorAll('h4')].map(node => node.textContent)).toEqual(['简介', '信息']);
     expect(detail.textContent).toContain('MIT'); expect(detail.textContent).toContain('example-dependency');
@@ -505,5 +504,81 @@ describe('feature contract', () => {
     const before = calls.length;
     button(root, '↻ 刷新').click(); await flush();
     expect(calls.length).toBe(before);
+  });
+});
+
+
+describe('extension card and history controls', () => {
+  it('the installed card opens its details from the keyboard', async () => {
+    stub(); const { root } = mount(); await flush(); const card = cardOf(root, '甲扩展');
+    card.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush();
+    expect(document.querySelector('.extension-detail')).toBeTruthy();
+  });
+
+  it('trash confirmation cancels on outside click or Escape and never opens details', async () => {
+    stub(); const { root } = mount(); await flush(); const remove = erase(cardOf(root, 'beta-mod'));
+    remove.click(); expect(remove.classList.contains('is-armed')).toBe(true);
+    expect(document.querySelector('.modal')).toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(remove.classList.contains('is-armed')).toBe(false);
+    expect(cardOf(root, 'beta-mod').textContent).not.toContain('使用它的其他 Bot 也会受到影响');
+    remove.click(); document.body.click(); expect(remove.classList.contains('is-armed')).toBe(false);
+    expect(calls.some(call => call.url === '/api/extensions/uninstall')).toBe(false);
+  });
+
+  async function installedHistory(options: Parameters<typeof stub>[0] = {}) {
+    stub({ ...options, detail: { ...DETAIL, name: 'alpha-mod', version: '2.0.0', history: [
+      { version: '2.0.0', date: '2026-03-01' },
+      { version: '1.0.0', date: '2026-02-01' },
+      { version: '0.9.0', date: '2026-01-01' },
+    ], ...options?.detail } });
+    const { root } = mount(); await flush(); cardOf(root, '甲扩展').click(); await flush();
+    return document.querySelector('.extension-detail') as HTMLElement;
+  }
+  const historyRow = (detail: HTMLElement, version: string) => [...detail.querySelectorAll('.extension-history > div')].find(row => row.querySelector('code')?.textContent === version)!;
+
+  it('puts package problems below Information and disables the installed release', async () => {
+    const detail = await installedHistory({ detail: { problems: ['invalid manifest'] } });
+    const headings = detail.querySelectorAll('h4');
+    const problem = [...detail.querySelectorAll('.msgline.bad')].find(node => node.textContent === 'invalid manifest')!;
+    expect(headings[1].compareDocumentPosition(problem) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(button(historyRow(detail, '1.0.0'), '当前版本').disabled).toBe(true);
+    expect(button(historyRow(detail, '0.9.0'), '安装此版本').disabled).toBe(false);
+  });
+
+  it('installing a release goes through check and install, then refreshes the drawer', async () => {
+    const current = { ...LIST, extensions: LIST.extensions.map((item: Any) => ({ ...item })) };
+    const detail = await installedHistory({ list: current, onInstall: payload => {
+      const item = current.extensions.find((entry: Any) => entry.name === payload.name)!;
+      item.installedVersion = payload.version; item.state = 'pending-restart';
+    } });
+    detail.querySelector('details')!.open = true;
+    button(historyRow(detail, '0.9.0'), '安装此版本').click(); await flush();
+    expect(document.body.textContent).toContain('1.0.0 → 0.9.0'); answer(true);
+    await vi.waitFor(() => expect(detail.querySelector('.extension-operation-feedback')?.textContent).toContain('成功'));
+    expect(calls.find(call => call.url === '/api/extensions/check')?.body).toEqual({ target: { name: 'alpha-mod', version: '0.9.0' }, kind: 'world' });
+    expect(calls.find(call => call.url === '/api/extensions/install')?.body).toEqual({ name: 'alpha-mod', version: '0.9.0' });
+    expect(calls.slice(calls.findIndex(call => call.url === '/api/extensions/install')).some(call => call.url === '/api/extensions/updates')).toBe(true);
+    expect(detail.querySelector('details')?.open).toBe(true);
+    expect(button(historyRow(detail, '0.9.0'), '当前版本').disabled).toBe(true);
+    const installedRow = [...detail.querySelectorAll('tr')].find(row => row.textContent?.includes('已安装版本'))!;
+    expect(installedRow.textContent).toContain('0.9.0');
+    expect(document.querySelector('.extension-status')?.textContent).toContain('待重启');
+  });
+
+  it('a failed release install keeps the error in the drawer and re-enables the row', async () => {
+    const detail = await installedHistory({ installStatus: 400 });
+    button(historyRow(detail, '0.9.0'), '安装此版本').click(); await flush(); answer(true);
+    await vi.waitFor(() => expect(detail.querySelector('.extension-operation-feedback.bad')?.textContent).toContain('pnpm add 退出码 1'));
+    expect(button(historyRow(detail, '0.9.0'), '安装此版本').disabled).toBe(false);
+  });
+
+  it('a package installed from a local link offers no npm release install', async () => {
+    stub({ list: { ...LIST, extensions: [{ ...LIST.extensions[0], spec: 'link:../local' }] }, detail: { ...DETAIL, name: 'alpha-mod' } });
+    const { root } = mount(); await flush();
+    cardOf(marketCards(root), '甲扩展').click(); await flush();
+    const actions = [...document.querySelectorAll<HTMLButtonElement>('.extension-version-action')];
+    expect(actions.length).toBeGreaterThan(0);
+    expect(actions.every(action => action.disabled)).toBe(true);
   });
 });

@@ -258,7 +258,7 @@ export interface ExtensionPackageDetail {
   /** 这个包第一次发布的时间 */
   created?: string;
   versionCount: number;
-  /** 最近几个版本,新的在前 */
+  /** registry 包文档 versions 里的全部版本,按发布时间新的在前 */
   history: Array<{ version: string; date: string }>;
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;
@@ -1846,7 +1846,9 @@ export class WebApp {
         this.deps.log.warn('扩展已安装(重启后加载)', { target });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
-        res.status(400).json({ error: String(err instanceof Error ? err.message : err) });
+        const error = err instanceof Error ? err.message : String(err);
+        this.deps.log.error('扩展安装失败', { target, error });
+        res.status(400).json({ error });
       }
     }));
 
@@ -1861,7 +1863,9 @@ export class WebApp {
         this.deps.log.warn('扩展已卸载(重启后消失)', { name });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
-        res.status(400).json({ error: String(err instanceof Error ? err.message : err) });
+        const error = err instanceof Error ? err.message : String(err);
+        this.deps.log.error('扩展卸载失败', { name, error });
+        res.status(400).json({ error });
       }
     }));
 
