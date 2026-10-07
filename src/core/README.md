@@ -103,7 +103,8 @@ handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执�
 
 装配层将 World 构造失败限制在该 World。`start()` 抛错时不挂载；`stop()` 失败或超时会记录
 结果并继续卸载。`onOpening`、`onDelivery`、`onBatchEnd`、`onTurnEnded`、`onIdle` 异常记录
-warn；`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
+warn；`mainEndpoint` 抛错或返回不存在、未选模型的端点时记录 warn,这次请求用 `activeProvider`；
+`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
 读取 `console()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 error
 并停止定时器。启动器处理未捕获的进程异常并执行关机流程。
 
