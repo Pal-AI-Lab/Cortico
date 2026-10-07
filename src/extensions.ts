@@ -526,7 +526,7 @@ export interface ExtensionManagerOptions {
 export class ExtensionManager {
   private readonly dir: string;
   private readonly run: PackageManagerRunner;
-  /** 首次查询 registry 时解析,本进程内不再变。 */
+  /** 首次查询 registry 时解析,解析成功后本进程内不再变。 */
   private registryUrl: Promise<string> | null;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
@@ -552,18 +552,30 @@ export class ExtensionManager {
   }
 
   /**
-   * 安装走的 registry:在 extensions/ 里跑 `pnpm config get registry`,读的是 .npmrc 与
-   * `pnpm_config_registry`。pnpm 跑不起来或没给出地址时用 npm 官方 registry。改了配置要重启进程。
+   * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里带 `--ignore-workspace` 跑
+   * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`。
+   * pnpm 跑不起来或没给出地址时这一次用 npm 官方 registry,下次查询再问。改了配置要重启进程。
    */
   private registry(): Promise<string> {
-    this.registryUrl ??= this.run(['config', 'get', 'registry'], existsSync(this.dir) ? this.dir : this.repoRoot).then(
+    const fallback = (): string => { this.registryUrl = null; return NPM_REGISTRY; };
+    this.registryUrl ??= this.run(['config', 'get', 'registry', '--ignore-workspace'], this.prepareDir()).then(
       ({ code, output }) => {
         const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
-        return (url ?? NPM_REGISTRY).replace(/\/$/, '');
+        return url ? url.replace(/\/$/, '') : fallback();
       },
-      () => NPM_REGISTRY,
+      fallback,
     );
     return this.registryUrl;
+  }
+
+  /** extensions/ 和其中的 package.json,pnpm 以它为项目目录;返回目录。 */
+  private prepareDir(): string {
+    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
+    const pkgFile = join(this.dir, 'package.json');
+    if (!existsSync(pkgFile)) {
+      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
+    }
+    return this.dir;
   }
 
   /** 已加载扩展的浏览器端产物。服务端据此把页 id 映到 URL 并只发这几个文件。 */
@@ -783,11 +795,7 @@ export class ExtensionManager {
 
   async install(target: ExtensionInstallTarget): Promise<string> {
     const spec = this.installSpec(target);
-    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
-    const pkgFile = join(this.dir, 'package.json');
-    if (!existsSync(pkgFile)) {
-      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
-    }
+    this.prepareDir();
     const output = await this.exclusive(['add', spec, '--ignore-workspace']);
     return `已安装 ${spec}。重启进程后加载。\n${output}`;
   }
