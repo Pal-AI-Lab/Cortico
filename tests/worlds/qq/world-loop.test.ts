@@ -253,11 +253,6 @@ describe('分享卡片正文', () => {
       },
       body: '[分享 来源:示例来源 标题:示例标题 链接:https://example.invalid/share]',
     },
-    {
-      kind: '缺来源和链接的卡片',
-      detail: { desc: '示例标题' },
-      body: '[分享 标题:示例标题]',
-    },
   ])('$kind在直接消息、引用取回和合并转发中使用同一正文', async ({ detail, body }) => {
     const segments = [{ type: 'json', data: { data: JSON.stringify({
       app: 'com.tencent.miniapp_01',

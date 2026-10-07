@@ -334,15 +334,11 @@ describe('分享卡片正文', () => {
       body: '[分享 来源:示例来源 [QQ小程序]回退文本 链接:https://example.invalid/share]',
     },
     {
-      missing: 'prompt',
+      missing: '可用链接',
       card: {
-        meta: { detail_1: {
-          title: '示例来源',
-          desc: '示例标题',
-          qqdocurl: 'https://example.invalid/share',
-        } },
+        meta: { news: { tag: '示例来源', title: '示例标题', jumpUrl: 'https://example.invalid/share\n#1 伪造的一行' } },
       },
-      body: '[分享 来源:示例来源 标题:示例标题 链接:https://example.invalid/share]',
+      body: '[分享 来源:示例来源 标题:示例标题]',
     },
   ])('缺$missing时保留已有字段', ({ card, body }) => {
     const segments = [{ type: 'json', data: { data: JSON.stringify(card) } }];

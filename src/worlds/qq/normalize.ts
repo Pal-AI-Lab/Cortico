@@ -62,6 +62,11 @@ export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
   if (!parsed || typeof parsed !== 'object') return {};
   const obj = parsed as Record<string, unknown>;
   const prompt = nonEmptyString(obj.prompt);
+  // the card does not show its link: one that is not a single http(s) URL would put text into the body nobody in the chat sees
+  const link = (v: unknown): string | undefined => {
+    const s = nonEmptyString(v);
+    return s && /^https?:\/\/\S+$/.test(s) ? s : undefined;
+  };
 
   let sourceName: string | undefined;
   let title: string | undefined;
@@ -74,12 +79,12 @@ export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
       const card = detail as Record<string, unknown>;
       sourceName = nonEmptyString(card.title);
       title = nonEmptyString(card.desc);
-      targetUrl = nonEmptyString(card.qqdocurl);
+      targetUrl = link(card.qqdocurl);
     } else if (news && typeof news === 'object') {
       const card = news as Record<string, unknown>;
       sourceName = nonEmptyString(card.tag);
       title = nonEmptyString(card.title);
-      targetUrl = nonEmptyString(card.jumpUrl);
+      targetUrl = link(card.jumpUrl);
     }
     for (const v of Object.values(meta as Record<string, unknown>)) {
       if (v && typeof v === 'object') {
