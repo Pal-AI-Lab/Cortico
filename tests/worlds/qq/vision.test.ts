@@ -866,17 +866,25 @@ describe('QQWorld 外挂视觉接线', () => {
     expect(vis.opts?.trigger ?? 'debounce').toBe('debounce');
   });
 
-  it('json卡片:封面图接入外挂视觉——占位含prompt+IMG-N+载入中;VLM闭合后到达qq.vision事件', async () => {
+  it('json卡片:分享字段与封面占位进入正文;识图结果另发qq.vision事件', async () => {
     await startWith({ withVision: true, autoDesc: '游戏宣传图' });
     mock.emitGroupMessage({
       user_id: 1001,
       nickname: '阿明',
-      segments: [jsonCardSeg('[分享]《怪物猎人荒野》宣传片', 'http://img/cover.png')],
+      segments: [{ type: 'json', data: { data: JSON.stringify({
+        prompt: '[QQ小程序]示例标题',
+        meta: { detail_1: {
+          title: '示例来源',
+          desc: '示例标题',
+          qqdocurl: 'https://example.invalid/share',
+          preview: 'http://img/cover.png',
+        } },
+      }) } }],
     });
     await waitUntil(() => host.pushed.length >= 1, '消息入库');
 
     const msgEvent = host.pushed[0].event;
-    expect(msgEvent.text).toContain('[分享:[分享]《怪物猎人荒野》宣传片]');
+    expect(msgEvent.text).toContain('[分享 来源:示例来源 标题:示例标题 链接:https://example.invalid/share]');
     expect(msgEvent.text).toContain('[封面 IMG-1 正在载入VLM理解中...]');
 
     await waitUntil(
