@@ -67,8 +67,6 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 
 ## 浏览器
 
-扩展卡片与详情页的作者来自包的 `author`；缺少作者时显示“未提供”。已安装卡片读取本机元数据，市场卡片复用包详情请求。
-
 `features/providers` 一次编辑一条端点,改动只进浏览器暂存,保存时整条提交。模块面板挂在所选端点
 的作用域里,面板的 `setConfig` 同样进暂存;`llm-settings` 的服务接口保留,旧的 `llm:<kind>` 路由
 转到这一页。`features/providers/drafts.ts` 的暂存按部署分 scope 存进 localStorage,不含 API Key;

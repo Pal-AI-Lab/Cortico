@@ -236,7 +236,7 @@ describe('package authors', () => {
     const { root } = mount(); await flush();
     const card = installedCards(root).querySelector('.extension-card')!;
     expect(card.textContent).toContain(`作者：${expected}`);
-    button(card, '甲扩展').click(); await flush();
+    card.querySelector<HTMLElement>('.extension-card-title')!.click(); await flush();
     expect(detailAuthor()).toBe(expected);
   });
 
