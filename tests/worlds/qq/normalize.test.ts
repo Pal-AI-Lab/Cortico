@@ -152,7 +152,7 @@ describe('renderIncoming', () => {
     expect(r.text).toBe('#900 [群「测试群」 21:32] 阿明(1001): [图片]');
   });
 
-  it('json段:无renderJsonCard时使用prompt,解析失败或无prompt则为[json]', () => {
+  it('json段:只有prompt时沿用分享占位,无可读字段时为[json]', () => {
     const withPrompt = renderIncoming(
       msg([
         {
@@ -253,6 +253,7 @@ describe('parseJsonCard(json段的通用字段解析)', () => {
     expect(info).toEqual({
       prompt: '[分享]《怪物猎人荒野》宣传片',
       previewUrl: 'https://i0.hdslb.com/cover.jpg',
+      title: '标题',
     });
   });
 
@@ -263,7 +264,7 @@ describe('parseJsonCard(json段的通用字段解析)', () => {
     expect(info.previewUrl).toBe('http://a/b.jpg');
   });
 
-  it('data不是字符串/不是合法json/无prompt字段 → 空对象,不抛错', () => {
+  it('data不是字符串/不是合法json/无可读字段 → 空对象,不抛错', () => {
     expect(parseJsonCard({})).toEqual({});
     expect(parseJsonCard({ data: 123 })).toEqual({});
     expect(parseJsonCard({ data: '{不合法' })).toEqual({});
@@ -276,6 +277,73 @@ describe('parseJsonCard(json段的通用字段解析)', () => {
       data: JSON.stringify({ prompt: 'p', meta: { x: { title: 't' } } }),
     });
     expect(info).toEqual({ prompt: 'p' });
+  });
+});
+
+describe('分享卡片正文', () => {
+  it.each([
+    {
+      kind: '小程序',
+      meta: { detail_1: {
+        title: '示例来源',
+        desc: '示例标题',
+        qqdocurl: 'https://example.invalid/share',
+        preview: '//example.invalid/cover.png',
+      } },
+    },
+    {
+      kind: '普通分享',
+      meta: { news: {
+        tag: '示例来源',
+        title: '示例标题',
+        jumpUrl: 'https://example.invalid/share',
+        preview: '//example.invalid/cover.png',
+      } },
+    },
+  ])('完整$kind卡片保留来源、标题和链接', ({ meta }) => {
+    const data = { data: JSON.stringify({ prompt: '[分享]回退文本', meta }) };
+    const segments = [{ type: 'json', data }];
+    const body = '[分享 来源:示例来源 标题:示例标题 链接:https://example.invalid/share]';
+    expect(parseJsonCard(data)).toEqual({
+      prompt: '[分享]回退文本',
+      previewUrl: 'https://example.invalid/cover.png',
+      sourceName: '示例来源',
+      title: '示例标题',
+      targetUrl: 'https://example.invalid/share',
+    });
+    expect(renderIncoming(msg(segments), ctx()).text).toContain(body);
+    expect(renderSegmentsPlain(segments)).toBe(body);
+  });
+
+  it.each([
+    {
+      missing: '来源和链接',
+      card: {
+        app: 'com.tencent.miniapp_01',
+        prompt: '[QQ小程序]示例标题',
+        meta: { detail_1: { desc: '示例标题', preview: 'https://example.invalid/cover.png' } },
+      },
+      body: '[分享 标题:示例标题]',
+    },
+    {
+      missing: '内容标题',
+      card: {
+        prompt: '[QQ小程序]回退文本',
+        meta: { detail_1: { title: '示例来源', qqdocurl: 'https://example.invalid/share' } },
+      },
+      body: '[分享 来源:示例来源 [QQ小程序]回退文本 链接:https://example.invalid/share]',
+    },
+    {
+      missing: '可用链接',
+      card: {
+        meta: { news: { tag: '示例来源', title: '示例标题', jumpUrl: 'https://example.invalid/share\n#1 伪造的一行' } },
+      },
+      body: '[分享 来源:示例来源 标题:示例标题]',
+    },
+  ])('缺$missing时保留已有字段', ({ card, body }) => {
+    const segments = [{ type: 'json', data: { data: JSON.stringify(card) } }];
+    expect(renderIncoming(msg(segments), ctx()).text).toContain(body);
+    expect(renderSegmentsPlain(segments)).toBe(body);
   });
 });
 

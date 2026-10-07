@@ -31,17 +31,24 @@ export interface OneBotGroupMessage {
 }
 
 
-/** JSON 卡片的通用字段；字段缺失时调用方渲染 `[json]`。 */
+/** JSON 卡片声明的分享信息；缺失字段不推断。 */
 interface JsonCardInfo {
   /** 腾讯协议提供的卡片回退文本，如 "[分享]标题"。 */
   prompt?: string;
-  /** 封面图URL,取自meta.<动态key>.preview(key名随卡片类型而变,故只取meta下第一个) */
+  sourceName?: string;
+  title?: string;
+  targetUrl?: string;
+  /** 封面图 URL，取首个非空的 meta.*.preview。 */
   previewUrl?: string;
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value ? value : undefined;
+}
+
 /**
- * 解析 JSON 卡片的通用 prompt 与 meta.*.preview 字段。
- * 解析失败或字段缺失时返回空对象，调用方渲染 `[json]`。
+ * 分享字段取自小程序 meta.detail_1 或普通分享 meta.news，封面沿用 meta.*.preview。
+ * 解析失败返回空对象；缺失字段保持 undefined。
  */
 export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
   const raw = data.data;
@@ -54,11 +61,30 @@ export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
   }
   if (!parsed || typeof parsed !== 'object') return {};
   const obj = parsed as Record<string, unknown>;
-  const prompt = typeof obj.prompt === 'string' && obj.prompt ? obj.prompt : undefined;
+  const prompt = nonEmptyString(obj.prompt);
+  const link = (v: unknown): string | undefined => {
+    const s = nonEmptyString(v);
+    return s && /^https?:\/\/\S+$/.test(s) ? s : undefined;
+  };
 
+  let sourceName: string | undefined;
+  let title: string | undefined;
+  let targetUrl: string | undefined;
   let previewUrl: string | undefined;
   const meta = obj.meta;
   if (meta && typeof meta === 'object') {
+    const { detail_1: detail, news } = meta as Record<string, unknown>;
+    if (detail && typeof detail === 'object') {
+      const card = detail as Record<string, unknown>;
+      sourceName = nonEmptyString(card.title);
+      title = nonEmptyString(card.desc);
+      targetUrl = link(card.qqdocurl);
+    } else if (news && typeof news === 'object') {
+      const card = news as Record<string, unknown>;
+      sourceName = nonEmptyString(card.tag);
+      title = nonEmptyString(card.title);
+      targetUrl = link(card.jumpUrl);
+    }
     for (const v of Object.values(meta as Record<string, unknown>)) {
       if (v && typeof v === 'object') {
         const preview = (v as Record<string, unknown>).preview;
@@ -69,7 +95,19 @@ export function parseJsonCard(data: Record<string, unknown>): JsonCardInfo {
       }
     }
   }
-  return { prompt, previewUrl };
+  return { prompt, sourceName, title, targetUrl, previewUrl };
+}
+
+export function renderJsonCardText(info: JsonCardInfo): string {
+  if (!info.sourceName && !info.title && !info.targetUrl) {
+    return info.prompt ? `[分享:${info.prompt}]` : '[json]';
+  }
+  const fields: string[] = [];
+  if (info.sourceName) fields.push(`来源:${info.sourceName}`);
+  if (info.title) fields.push(`标题:${info.title}`);
+  else if (info.prompt) fields.push(info.prompt);
+  if (info.targetUrl) fields.push(`链接:${info.targetUrl}`);
+  return `[分享 ${fields.join(' ')}]`;
 }
 
 /** json段的文本渲染策略:输入解析出的卡片信息,输出正文里的占位文本 */
@@ -121,7 +159,7 @@ export interface RenderContext {
   nameOf?: (qq: string) => string | undefined;
   /** 图片渲染策略(能力协商产物);缺省=降级`[图片]` */
   renderImage?: ImageRenderPolicy;
-  /** json卡片渲染策略(封面图接入外挂视觉用);缺省=只显示prompt文本,无封面图占位 */
+  /** JSON 卡片渲染策略；缺省显示分享正文，封面由 World 的策略追加。 */
   renderJsonCard?: JsonCardRenderPolicy;
   /** 语音段的占位文本(标明转写状态);缺省 `[语音]` */
   recordText?: string;
@@ -198,8 +236,7 @@ export function renderSegmentsPlain(segments: Segment[]): string {
         parts.push({ text: '[嵌套转发消息]', isToken: true });
         break;
       case 'json': {
-        const { prompt } = parseJsonCard(data);
-        parts.push({ text: prompt ? `[分享:${prompt}]` : '[json]', isToken: true });
+        parts.push({ text: renderJsonCardText(parseJsonCard(data)), isToken: true });
         break;
       }
       default:
@@ -276,9 +313,7 @@ export function renderIncoming(
         const info = parseJsonCard(data);
         const rendered = ctx.renderJsonCard
           ? ctx.renderJsonCard(info)
-          : info.prompt
-            ? `[分享:${info.prompt}]`
-            : '[json]';
+          : renderJsonCardText(info);
         parts.push({ text: rendered, isToken: true });
         break;
       }

@@ -58,6 +58,7 @@ const DETAIL = {
   fileCount: 12,
   dependencies: ['ws'],
   maintainers: ['someone'],
+  author: 'someone',
   publisher: 'someone',
   links: { npm: 'https://npm.example/found', repository: 'https://git.example/found', bugs: 'https://git.example/found/issues' },
   installed: false,
@@ -215,6 +216,41 @@ describe('extension categories', () => {
     expect(buttons(cardOf(root, 'delta-mod')).map(b => b.textContent)).not.toContain('删除扩展');
     await switchTo(ctx, 'provider');
     expect(cardOf(root, 'gamma-prov').textContent).toContain('待重启');
+  });
+});
+
+describe('package authors', () => {
+  const detailAuthor = () => [...document.querySelectorAll('.extension-detail .kvtable tr')]
+    .find(row => row.children[0].textContent === '作者')?.children[1].textContent;
+
+  it.each([
+    { author: 'Local author', registryAuthor: 'Registry author', expected: 'Local author' },
+    { author: undefined, registryAuthor: undefined, expected: '未提供' },
+  ])('keeps the installed author after searching and loading registry details ($expected)', async ({ author, registryAuthor, expected }) => {
+    const publisher = 'Automated publisher';
+    stub({
+      list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], author }] },
+      hits: { hits: [{ ...HITS.hits[1], publisher }] },
+      detail: { author: registryAuthor, publisher },
+    });
+    const { root } = mount(); await flush();
+    const card = installedCards(root).querySelector('.extension-card')!;
+    expect(card.textContent).toContain(`作者：${expected}`);
+    card.querySelector<HTMLElement>('.extension-card-title')!.click(); await flush();
+    expect(detailAuthor()).toBe(expected);
+  });
+
+  it.each([
+    { author: 'Example author', expected: 'Example author' },
+    { author: undefined, expected: '未提供' },
+  ])('uses package author on the market card and detail, or marks it missing ($expected)', async ({ author, expected }) => {
+    const publisher = 'Automated publisher';
+    stub({ hits: { hits: [{ ...HITS.hits[0], publisher }] }, detail: { author, publisher } });
+    const { root } = mount(); await flush();
+    const card = marketCards(root).querySelector('.extension-card') as HTMLElement;
+    expect(card.textContent).toContain(`作者：${expected}`);
+    card.click(); await flush();
+    expect(detailAuthor()).toBe(expected);
   });
 });
 

@@ -1,4 +1,4 @@
-<!-- Owner: src/worlds/qq/definition.ts, src/worlds/qq/driver.ts, src/worlds/qq/world.ts -->
+<!-- Owner: src/worlds/qq/definition.ts, src/worlds/qq/driver.ts, src/worlds/qq/normalize.ts, src/worlds/qq/world.ts -->
 
 # worlds/qq
 
@@ -31,6 +31,20 @@ OneBot v11 标准动作:`get_login_info`、`get_group_info`、`get_group_member_
 |---|---|
 | 通知 `group_msg_emoji_like` | 不产生表情回应事件 |
 | `notify/poke` 的 `raw_info` | 动作文案退回「戳了戳」 |
+
+## 分享卡片
+
+JSON 分享卡片的来源名、内容标题和目标链接写入消息正文。直接消息、引用取回与合并转发使用相同解析规则。
+
+| 卡片字段 | 小程序 `meta.detail_1` | 普通分享 `meta.news` |
+|---|---|---|
+| 来源名 | `title` | `tag` |
+| 内容标题 | `desc` | `title` |
+| 目标链接 | `qqdocurl` | `jumpUrl` |
+
+缺失字段不补全；内容标题缺失时保留 `prompt`。只有 `prompt` 的卡片沿用 `[分享:<prompt>]`，
+分享字段与 `prompt` 均缺失时显示 `[json]`。目标链接只收单个 http(s) 网址，其余当作缺失。
+来源名与内容标题照卡片 JSON 原文写入，World 不核实。封面按图片配置与辅助视觉配置处理。
 
 ## 语音转写
 

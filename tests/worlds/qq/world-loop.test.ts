@@ -242,6 +242,57 @@ describe('图片段按当前主模型渲染', () => {
   });
 });
 
+describe('分享卡片正文', () => {
+  it.each([
+    {
+      kind: '完整卡片',
+      detail: {
+        title: '示例来源',
+        desc: '示例标题',
+        qqdocurl: 'https://example.invalid/share',
+      },
+      body: '[分享 来源:示例来源 标题:示例标题 链接:https://example.invalid/share]',
+    },
+  ])('$kind在直接消息、引用取回和合并转发中使用同一正文', async ({ detail, body }) => {
+    const segments = [{ type: 'json', data: { data: JSON.stringify({
+      app: 'com.tencent.miniapp_01',
+      prompt: '[QQ小程序]示例标题',
+      meta: { detail_1: detail },
+    }) } }];
+    const mid = mock.emitGroupMessage({ user_id: 1001, segments });
+    await waitUntil(
+      () => host.pushed.some(({ event }) => event.meta?.message_id === mid),
+      '分享消息入库',
+    );
+    const direct = host.pushed.find(({ event }) => event.meta?.message_id === mid)!.event;
+    expect(direct.text).toContain(body);
+
+    mock.setMockMsg(999999, {
+      sender: { nickname: '示例用户', user_id: 3003 },
+      message: segments,
+    });
+    mock.setMockForward('share-card', [
+      { sender: { nickname: '示例用户', user_id: 3003 }, content: segments },
+    ]);
+    mock.emitGroupMessage({
+      user_id: 2002,
+      segments: [
+        { type: 'reply', data: { id: '999999' } },
+        { type: 'forward', data: { id: 'share-card' } },
+      ],
+    });
+    await waitUntil(
+      () => ['qq.reply.uncaptured', 'qq.forward'].every(
+        (type) => host.pushed.some(({ event }) => event.type === type),
+      ),
+      '引用与转发原文入库',
+    );
+    for (const type of ['qq.reply.uncaptured', 'qq.forward']) {
+      expect(host.pushed.find(({ event }) => event.type === type)!.event.text).toContain(body);
+    }
+  });
+});
+
 describe('未捕获的引用回复(异步取原文)', () => {
   it('reply指向的消息不在游标映射里 → 立即占位文本,随后追加qq.reply.uncaptured事件带原文', async () => {
     mock.setMockMsg(999999, {

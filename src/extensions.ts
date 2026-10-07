@@ -485,7 +485,8 @@ function urlOf(v: { url?: string } | string | undefined): string | undefined {
 
 /** package.json 的 author,只取名字。 */
 export function packageAuthor(pkg: ExtensionPackageJson): string | undefined {
-  return (typeof pkg.author === 'string' ? pkg.author : pkg.author?.name) || undefined;
+  // the string form is "Name <email> (url)"
+  return (typeof pkg.author === 'string' ? pkg.author.match(/^[^(<]*/)![0].trim() : pkg.author?.name) || undefined;
 }
 
 /** 本机 package.json 里详情页显示的字段,与 npm 包文档同形;不联网就能给出。 */
@@ -493,7 +494,6 @@ export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPac
   const parsed = parseExtensionManifest(pkg);
   const repository = urlOf(pkg.repository);
   const bugs = urlOf(pkg.bugs);
-  const author = packageAuthor(pkg);
   return {
     ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
     ...(pkg.description ? { description: pkg.description } : {}),
@@ -501,7 +501,6 @@ export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPac
     ...(pkg.engines?.node ? { engines: pkg.engines.node } : {}),
     dependencies: Object.keys(pkg.dependencies ?? {}),
     ...(pkg.keywords?.length ? { keywords: pkg.keywords } : {}),
-    ...(author ? { publisher: author } : {}),
     links: {
       ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
       ...(pkg.homepage ? { homepage: pkg.homepage } : {}),
@@ -737,6 +736,7 @@ export class ExtensionManager {
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);
     const bugs = urlOf(v.bugs);
+    const author = packageAuthor(v);
 
     return {
       name,
@@ -759,6 +759,7 @@ export class ExtensionManager {
       ...(v.dist?.fileCount ? { fileCount: v.dist.fileCount } : {}),
       dependencies: Object.keys(v.dependencies ?? {}),
       maintainers: (v.maintainers ?? []).map((m) => m.username ?? m.name ?? '').filter(Boolean),
+      ...(author ? { author } : {}),
       ...(v._npmUser?.name ? { publisher: v._npmUser.name } : {}),
       links: {
         npm: `https://www.npmjs.com/package/${name}`,
