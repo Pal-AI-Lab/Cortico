@@ -32,8 +32,6 @@ import {
   type ExtensionPackageJson,
 } from './extensions/manifest.ts';
 import { registerFrameworkResolver } from './extensions/runtime.ts';
-import { mutateInstallation } from './extensions/install.ts';
-import { newerVersion } from './extensions/versions.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/console-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -362,6 +360,32 @@ const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
  */
 const VERSION_SPEC = /^[0-9a-zA-Z.^~*+-]{1,64}$/;
 
+/** 比较 npm 的标准 SemVer；无法比较时不猜测是否有更新。 */
+function newerVersion(latest: string, installed: string): boolean | null {
+  const parse = (value: string) => /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/.exec(value);
+  const a = parse(latest);
+  const b = parse(installed);
+  if (!a || !b) return null;
+  for (let i = 1; i <= 3; i++) {
+    const left = BigInt(a[i]);
+    const right = BigInt(b[i]);
+    if (left !== right) return left > right;
+  }
+  if (!a[4] && !b[4]) return false;
+  if (!a[4]) return true;
+  if (!b[4]) return false;
+  const left = a[4].split('.');
+  const right = b[4].split('.');
+  for (let i = 0; i < Math.min(left.length, right.length); i++) {
+    if (left[i] === right[i]) continue;
+    const xNumeric = /^(0|[1-9]\d*)$/.test(left[i]);
+    const yNumeric = /^(0|[1-9]\d*)$/.test(right[i]);
+    if (xNumeric && yNumeric) return BigInt(left[i]) > BigInt(right[i]);
+    if (xNumeric !== yNumeric) return !xNumeric;
+    return left[i] > right[i];
+  }
+  return left.length > right.length;
+}
 /**
  * 一次失败的请求:`<主机>: <错误> (<cause 的错误码>: <cause 的说明>)`。undici 的错误文本固定是
  * `fetch failed`,出错的原因(证书不符、连接被拒、超时)只在 cause 里。
@@ -706,13 +730,10 @@ export class ExtensionManager {
     if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
 
     const parsed = parseExtensionManifest(v);
-    const times = Object.keys(doc.versions ?? {}).map(version => [version, doc.time?.[version] ?? ''] as const);
+    const times = Object.keys(doc.versions ?? {}).map((version) => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
-      .map(([version, date]) => {
-        const manifest = parseExtensionManifest(doc.versions![version]);
-        return { version, date, ...(manifest.ok ? { kind: manifest.manifest.kind } : { problems: manifest.reasons }) };
-      });
+      .map(([version, date]) => ({ version, date }));
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);
     const bugs = urlOf(v.bugs);
@@ -774,7 +795,7 @@ export class ExtensionManager {
   async install(target: ExtensionInstallTarget): Promise<string> {
     const spec = this.installSpec(target);
     this.prepareDir();
-    const output = await this.exclusive(['add', spec, '--save-exact', '--ignore-workspace']);
+    const output = await this.exclusive(['add', spec, '--ignore-workspace']);
     return `已安装 ${spec}。重启进程后加载。\n${output}`;
   }
 
@@ -783,26 +804,6 @@ export class ExtensionManager {
     if (!readInstalled(this.dir).some((p) => p.name === name)) throw new Error(`没有安装这个包: ${name}`);
     const output = await this.exclusive(['remove', name, '--ignore-workspace']);
     return `已卸载 ${name}。重启进程后生效。\n${output}`;
-  }
-
-  /** 切换到确切 npm 版本；在共享目录锁内核对原版本并校验安装产物。 */
-  async changeVersion(name: string, version: string, expectedVersion: string | null, kind: ExtensionKind): Promise<string> {
-    name = name.trim(); version = version.trim();
-    const spec = this.installSpec({ name, version });
-    if (newerVersion(version, version) === null) throw new Error('需要确切的发布版本号。');
-    const output = await this.exclusive(['add', spec, '--save-exact', '--ignore-workspace'], async stage => {
-      const dependency = readInstalled(stage).find(item => item.name === name);
-      if (dependency && /^(link:|file:|workspace:)/.test(dependency.spec)) throw new Error('本机链接不能切换 npm 版本。');
-      const current = dependency ? readPackageJson(join(stage, 'node_modules', ...name.split('/'), 'package.json'))?.version ?? null : null;
-      if (current !== expectedVersion || (expectedVersion === null && dependency)) throw new Error('已安装版本已变化，请刷新后重试。');
-      await this.check({ name, version }, kind);
-    }, stage => {
-      const pkg = readPackageJson(join(stage, 'node_modules', ...name.split('/'), 'package.json'));
-      const parsed = pkg ? parseExtensionManifest(pkg) : null;
-      if (pkg?.name !== name || pkg.version !== version || !parsed?.ok || parsed.manifest.kind !== kind) throw new Error('安装产物与请求的包、版本或扩展类别不一致。');
-      if (readInstalled(stage).find(item => item.name === name)?.spec !== version) throw new Error('安装版本未固定。');
-    });
-    return `已安装 ${spec}。重启进程后加载。\n${output}`;
   }
 
   private installSpec(target: ExtensionInstallTarget): string {
@@ -821,19 +822,14 @@ export class ExtensionManager {
     return version ? `${name}@${version}` : name;
   }
 
-  private async exclusive(args: string[], before?: (stage: string) => Promise<void>, verify?: (stage: string) => void): Promise<string> {
+  private async exclusive(args: string[]): Promise<string> {
     if (this.busy) throw new Error('已有一个安装 / 卸载在进行,等它结束。');
     this.busy = true;
     try {
-      const result = await mutateInstallation(this.dir, async stage => {
-        await before?.(stage);
-        const { code, output } = await this.run(args, stage);
-        const tail = output.trim().split('\n').slice(-20).join('\n');
-        if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
-        verify?.(stage);
-        return tail;
-      });
-      return result.value + (result.cleanupWarning ? '\n' + result.cleanupWarning : '');
+      const { code, output } = await this.run(args, this.dir);
+      const tail = output.trim().split('\n').slice(-20).join('\n');
+      if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
+      return tail;
     } finally {
       this.busy = false;
     }

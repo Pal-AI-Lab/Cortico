@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/install.ts, src/web/server.ts, src/web/client/features/extensions/index.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts -->
 
 # 扩展
 
@@ -35,18 +35,7 @@ World 先在 World 页停用。
 
 扩展更新检查在页面打开及清单刷新时执行。发现新版时显示磁盘版本与 `latest` 版本；
 更新会向 `extensions/` 执行 `pnpm add`，重启进程后加载新版，不需要先卸载。
-安装使用确切版本。安装和卸载先在同级临时副本中执行，成功后替换正式依赖与锁文件；
-包管理器失败时正式安装不变，替换失败时恢复原文件。共享目录中的装卸操作互斥。
-临时副本在安装成功或原安装保留、恢复后清理；清理失败时返回目录路径。
-恢复未完成时保留临时副本中的 `.backup` 与正式目录中的 `.install-lock`，错误包含备份路径。
-安装与清理均失败时，两次失败的原因一起返回。
-异常退出留下 `.install-lock` 时，检查同级临时副本与正式安装后再移除锁。
-包详情返回 registry 中仍存在的全部发布版本，按发布时间从新到旧排列。
-控制台的“历史版本”可安装、更新或回退到指定版本；内置扩展不提供版本切换。
-`POST /api/extensions/version` 安装指定版本，要求包名、目标版本、原安装版本与扩展类别。
-本机链接不提供 npm 版本切换。
-版本切换在目录锁内核对原安装版本、扩展类别与契约，并校验下载后的包与确切版本。
-配置、Memory 和部署数据不随包回退；旧包对新版数据的兼容性由扩展自身决定。
+详情的历史版本可安装 registry 中仍存在的任一版本，经 check 后 `pnpm add name@version`，重启后生效；配置与 Memory 不随包回退。
 契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。错误里带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。

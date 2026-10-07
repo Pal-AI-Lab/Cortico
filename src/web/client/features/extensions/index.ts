@@ -1,7 +1,6 @@
 /** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。类别取路由第二段。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
-import { newerVersion } from '../../../../extensions/versions.ts';
 import { icon, brandMark } from '../../ui/icons.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
@@ -74,7 +73,7 @@ export interface PackageDetailView {
   published?: string;
   created?: string;
   versionCount: number;
-  history: Array<{ version: string; date: string; kind?: ExtensionKindView; problems?: string[] }>;
+  history: Array<{ version: string; date: string }>;
   deprecated?: string;
   manifest?: { kind: ExtensionKindView; api: number; consoleClient?: string; consoleStyle?: string };
   problems?: string[];
@@ -330,7 +329,8 @@ export function mountExtensions(ctx: FeatureContext): void {
         event.stopPropagation(); const wasArmed = remove.classList.contains('is-armed'); disarm();
         if (wasArmed) { void operate('delete', { name: item.name }, 'management', owner); return; }
         remove.classList.add('is-armed'); remove.setAttribute('aria-label', S.eraseConfirm);
-        armed = () => { remove.classList.remove('is-armed'); remove.setAttribute('aria-label', S.remove); };
+        const warning = ui.msgline(S.removeBody, true); card.insertBefore(warning, footer);
+        armed = () => { remove.classList.remove('is-armed'); remove.setAttribute('aria-label', S.remove); warning.remove(); };
       }, { signal });
       footer.append(remove);
     }
@@ -451,17 +451,14 @@ export function mountExtensions(ctx: FeatureContext): void {
         releases.append(summary);
         const history = ui.h('div', 'extension-history');
         const current = item ?? installed.find(entry => entry.name === data.name && entry.state !== 'removed');
-        const expectedVersion = current?.installedVersion ?? current?.version ?? null;
+        const linked = /^(link:|file:)/.test(current?.spec ?? '');
         for (const release of data.history) {
           const row = ui.h('div');
-          const same = expectedVersion === release.version;
-          const older = expectedVersion !== null && newerVersion(expectedVersion, release.version) === true;
-          const label = same ? S.currentVersion : expectedVersion === null ? S.installVersion : older ? S.rollback : S.updateAction;
-          const button = ui.button(label, { variant: 'danger', size: 'sm', onClick: () => void changeRelease(box, data, release.version, expectedVersion, label, owner, hit) });
+          const same = (current?.installedVersion ?? current?.version) === release.version;
+          const button = ui.button(same ? S.currentVersion : S.installVersion, { variant: 'danger', size: 'sm', onClick: () => void installRelease(box, data, release.version, owner, hit, item) });
           button.classList.add('extension-version-action');
-          button.disabled = same || !!current?.builtin || /^(link:|file:|workspace:)/.test(current?.spec ?? '') || !!release.problems?.length || !!release.kind && release.kind !== owner || busy.has(data.name)
-            || expectedVersion !== null && newerVersion(expectedVersion, release.version) === null;
-          button.title = current?.builtin ? S.builtinVersionNote : /^(link:|file:|workspace:)/.test(current?.spec ?? '') ? S.localVersionNote : release.problems?.join('\n') ?? (release.kind && release.kind !== owner ? S.wrongVersionKind : '');
+          button.disabled = same || linked || busy.has(data.name);
+          if (linked) button.title = S.localVersionNote;
           row.append(ui.h('code', '', release.version), ui.h('time', 'muted', release.date.slice(0, 10) || '—'), button); history.append(row);
         }
         releases.append(data.history.length ? history : ui.h('p', 'muted extension-history-empty', S.noHistory)); box.append(releases);
@@ -476,35 +473,31 @@ export function mountExtensions(ctx: FeatureContext): void {
       }
       if (actions.hasChildNodes()) box.append(actions);
   }
-  async function changeRelease(box: HTMLElement, data: PackageDetailView, version: string, expectedVersion: string | null, action: string, owner: ExtensionKindView, hit?: SearchHitView) {
-    if (busy.has(data.name)) return;
-    if (!await ui.confirm({ title: S.versionConfirmTitle(action), body: S.versionConfirmBody(data.name, expectedVersion, version), danger: true }) || signal.aborted || !box.isConnected || busy.has(data.name)) return;
-    busy.add(data.name); renderInstalled();
-    const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback')!;
-    feedback.textContent = S.progress(action, data.name); feedback.classList.remove('bad');
-    box.querySelectorAll<HTMLButtonElement>('.extension-version-action, .extension-detail-actions button').forEach(button => { button.disabled = true; });
-    let result = '', failed = false;
-    try {
-      const response = await post<{ result: string }>('/api/extensions/version', { name: data.name, version, expectedVersion, kind: owner }, { signal });
-      result = S.completed(action, data.name) + ' ' + S.restartNeeded;
-      if (response.result.includes('临时文件清理失败')) result += '\n' + response.result;
-      detailsCache.clear();
-      if (!await load()) result += ' ' + S.syncedFailed;
-      await checkUpdates();
-    } catch (error) { result = errorText(error); failed = true; }
-    finally { busy.delete(data.name); if (!signal.aborted) renderInstalled(); }
-    if (signal.aborted || !box.isConnected) return;
+  /** 历史版本走与市场安装相同的 check → install;结果同时写进抽屉。 */
+  async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
     const current = installed.find(entry => entry.name === data.name && entry.state !== 'removed');
-    renderDetail(box, data, owner, hit, current);
-    const note = box.querySelector<HTMLElement>('.extension-operation-feedback')!;
-    note.textContent = result; note.classList.toggle('bad', failed);
+    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), danger: true })) return;
+    if (signal.aborted || busy.has(data.name)) return;
+    const show = (note: { text: string; bad: boolean } | undefined) => {
+      const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback');
+      if (feedback && note) { feedback.textContent = note.text; feedback.classList.toggle('bad', note.bad); }
+    };
+    const done = operate('install', { name: data.name, version }, 'management', owner);
+    box.querySelectorAll<HTMLButtonElement>('.extension-version-action').forEach(button => { button.disabled = true; });
+    show(states[owner].messages.management);
+    await done;
+    const result = states[owner].messages.management;
+    await checkUpdates();
+    if (signal.aborted || !box.isConnected) return;
+    renderDetail(box, data, owner, hit, item && installed.find(entry => entry.name === data.name && entry.state !== 'removed'));
+    show(result);
   }
   function openDetail(hit: SearchHitView, owner: ExtensionKindView) {
     const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail));
     const item = installed.find(item => item.name === hit.name && item.state !== 'removed');
     ui.drawer(item?.metadata?.displayName ?? item?.label ?? hit.name, box);
     void fetchDetail(hit.name, hit.version).then(data => {
-      if (!signal.aborted && box.isConnected) renderDetail(box, data, owner, hit, item);
+      if (!signal.aborted && box.isConnected) renderDetail(box, data, owner, hit);
     }).catch(error => { if (!signal.aborted && box.isConnected) box.replaceChildren(ui.msgline(errorText(error), true)); });
   }
 

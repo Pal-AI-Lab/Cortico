@@ -258,8 +258,8 @@ export interface ExtensionPackageDetail {
   /** 这个包第一次发布的时间 */
   created?: string;
   versionCount: number;
-  /** registry 中仍有包声明的全部版本，按发布时间从新到旧排列。 */
-  history: Array<{ version: string; date: string; kind?: 'world' | 'provider' | 'bot'; problems?: string[] }>;
+  /** registry 包文档 versions 里的全部版本,按发布时间新的在前 */
+  history: Array<{ version: string; date: string }>;
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;
   /** package.json 的 cortico 块解析通过时给出 */
@@ -308,8 +308,6 @@ export interface WebAppExtensionDeps {
   /** 返回一句结果描述(含 pnpm 输出尾部) */
   install(target: ExtensionInstallTarget): Promise<string>;
   uninstall(name: string): Promise<string>;
-  /** 固定版本安装；expectedVersion 为打开详情时的磁盘版本，null 表示尚未安装。 */
-  changeVersion?(name: string, version: string, expectedVersion: string | null, kind: 'world' | 'provider' | 'bot'): Promise<string>;
 }
 
 /** 规范关机 / 重启的账:本地步骤与外部状态分开记。 */
@@ -1842,31 +1840,11 @@ export class WebApp {
       if (!target) { res.status(400).json({ error: '缺少包名或路径' }); return; }
       try {
         const result = await src.install(target);
-        this.deps.log.warn('扩展已安装(重启后加载)', { target, result });
+        this.deps.log.warn('扩展已安装(重启后加载)', { target });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         this.deps.log.error('扩展安装失败', { target, error });
-        res.status(400).json({ error });
-      }
-    }));
-
-    app.post('/api/extensions/version', express.json(), wrap(async (req, res) => {
-      const src = this.deps.extensions;
-      if (!src?.changeVersion) { res.status(503).json({ error: '版本切换不可用' }); return; }
-      const { name, version, expectedVersion, kind } = req.body ?? {};
-      if (typeof name !== 'string' || !name.trim() || typeof version !== 'string' || !version.trim()
-        || !(expectedVersion === null || typeof expectedVersion === 'string' && expectedVersion.length > 0)
-        || !['world', 'provider', 'bot'].includes(kind)) {
-        res.status(400).json({ error: '需要包名、确切版本、原安装版本与扩展类别。' }); return;
-      }
-      try {
-        const result = await src.changeVersion(name.trim(), version.trim(), expectedVersion, kind);
-        this.deps.log.warn('扩展版本已切换(重启后加载)', { name, version, expectedVersion, result });
-        res.json({ ok: true, result, restartRequired: true });
-      } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
-        this.deps.log.error('扩展版本切换失败', { name, version, expectedVersion, error });
         res.status(400).json({ error });
       }
     }));
@@ -1879,7 +1857,7 @@ export class WebApp {
       if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
       try {
         const result = await src.uninstall(name);
-        this.deps.log.warn('扩展已卸载(重启后消失)', { name, result });
+        this.deps.log.warn('扩展已卸载(重启后消失)', { name });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
