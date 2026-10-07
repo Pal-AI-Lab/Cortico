@@ -227,7 +227,7 @@ export interface CortiVOptions extends CorminiOptions {
    * 关掉,下一次请求时 World host 上的句柄就不存在了。不给 = 恒开。
    */
   cognitionEnabled?: () => boolean;
-  /** 端点策略文件的绝对路径，每次交接后的首个请求现读；null 表示不启用。 */
+  /** 端点策略文件的绝对路径，交接后到 afterHandoff.calls 用完前每次请求现读；null 表示不启用。 */
   providerPolicyFile?: () => string | null;
 }
 

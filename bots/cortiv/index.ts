@@ -52,14 +52,13 @@ export const CORTIV_COGNITION_CONFIG_GROUP: ConfigGroup = {
   },
 };
 
-/** 端点策略文件。 */
+/** 交接后主 session 的前若干次请求改用的端点。 */
 export const CORTIV_PROVIDER_POLICY_CONFIG_GROUP: ConfigGroup = {
   id: 'cortiv-provider-policy',
   owner: 'persona',
   schema: {
     type: 'object',
     title: '端点策略',
-    description: '',
     properties: {
       providerPolicyFile: {
         type: 'string',
@@ -67,8 +66,8 @@ export const CORTIV_PROVIDER_POLICY_CONFIG_GROUP: ConfigGroup = {
         'x-hot': true,
         description:
           '相对部署目录的 JSON 文件路径，留空不启用。格式 {"afterHandoff":{"provider":"端点名","calls":5}}：'
-          + '每次交接后主 session 的前 calls 次模型请求用该端点，之后回到当前活跃端点。'
-          + '文件在每次交接后的首个请求时读取；文件或端点不可用时这次交接后都用活跃端点，并记 warn。',
+          + '每次交接后主 session 的前 calls 次模型请求用该端点，重试也计次，之后回到当前活跃端点；这期间每次请求现读文件。'
+          + '文件读不出或形状不对时，这次交接余下的请求用活跃端点；端点不存在或未选模型时，这次请求用活跃端点；两种情况都记 warn。',
       },
     },
   },
