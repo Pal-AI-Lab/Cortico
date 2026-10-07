@@ -42,7 +42,6 @@ export const EXTENSION_PAGE_KIND: Readonly<Record<ExtensionKind, ContributingKin
   provider: 'llm',
   bot: 'persona',
 };
-const NPM_REGISTRY = 'https://registry.npmjs.org';
 
 /** 一个已安装包在本进程启动时的加载结果。 */
 export interface ExtensionRecord {
@@ -553,19 +552,20 @@ export class ExtensionManager {
 
   /**
    * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里带 `--ignore-workspace` 跑
-   * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`。
-   * pnpm 跑不起来或没给出地址时这一次用 npm 官方 registry,下次查询再问。改了配置要重启进程。
+   * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`,没配时是 npm 官方的。
+   * pnpm 失败或没给出地址时抛出它的退出码与输出,下次查询再问。改了配置要重启进程。
    */
   private registry(): Promise<string> {
-    const fallback = (): string => { this.registryUrl = null; return NPM_REGISTRY; };
-    this.registryUrl ??= this.run(['config', 'get', 'registry', '--ignore-workspace'], this.prepareDir()).then(
-      ({ code, output }) => {
-        const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
-        return url ? url.replace(/\/$/, '') : fallback();
-      },
-      fallback,
-    );
-    return this.registryUrl;
+    if (this.registryUrl) return this.registryUrl;
+    const args = ['config', 'get', 'registry', '--ignore-workspace'];
+    const pending = this.run(args, this.prepareDir()).then(({ code, output }) => {
+      const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
+      if (!url) throw new Error(`读不到 pnpm 的 registry 配置(pnpm ${args.join(' ')} 退出码 ${code}):\n${output.trim().split('\n').slice(-20).join('\n')}`);
+      return url.replace(/\/$/, '');
+    });
+    pending.catch(() => { if (this.registryUrl === pending) this.registryUrl = null; });
+    this.registryUrl = pending;
+    return pending;
   }
 
   /** extensions/ 和其中的 package.json,pnpm 以它为项目目录;返回目录。 */
