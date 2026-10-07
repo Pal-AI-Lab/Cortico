@@ -175,6 +175,11 @@ export class Core<C extends CoreConfig = CoreConfig> {
       persona: deps.persona,
       decl: main[0],
       spec: () => this.activeSpec(),
+      endpoint: (name) => {
+        const spec = this.config.providers[name]?.spec;
+        if (!spec) throw new Error(`端点 ${name} 不存在或未选模型`);
+        return { llm: this.providers.bind(name), spec };
+      },
       context: this.contextFacts(),
       blobs: { intern: (inputs) => this.internBlobs(inputs) },
       worlds: {

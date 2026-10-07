@@ -25,6 +25,13 @@ pnpm start cortiv
 
 未安装的扩展 World 显示为不可用。VTS 首次连接授权后可将 `VTS_AUTH_TOKEN` 写入部署 `.env`。
 
+## 端点策略
+
+`providerPolicyFile` 指向部署目录下的 JSON 文件，留空不启用。`{"afterHandoff":{"provider":"<端点名>","calls":N}}`
+表示每次交接后主 session 的前 N 次模型请求用该端点，之后回到 `activeProvider`；重试也计入 N。这期间每次请求
+现读文件。文件读不出或形状不对时，这次交接余下的请求用 `activeProvider`；端点不存在或未选模型时，这次请求用
+`activeProvider`。两种情况都记 warn。
+
 ## 事件投递
 
 默认将外部事件正文放入合成的 `external_event_frame` 工具回执，user 消息用于内部系统文本。

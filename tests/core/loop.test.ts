@@ -17,7 +17,7 @@ import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
 import { INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
-import type { UsageRecord, Persona } from '../../src/core/types.ts';
+import type { UsageRecord, Persona, ModelSpec } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
@@ -53,7 +53,7 @@ interface RigOptions {
   /** 对模型隐藏但仍挂载运行的 World id。 */
   hiddenWorlds?: string[];
   /** 时机钩子,直接装到假Persona上 */
-  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery'>;
+  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery' | 'mainEndpoint'>;
   /** 记录 schedule_wake 对 timers 原语的调用。 */
   onTimerSet?: (atIso: string, payload: Record<string, unknown>) => void;
   /** fork 工具的执行函数。 */
@@ -83,6 +83,8 @@ interface RigOptions {
   resubmit?: ResubmitPolicy;
   /** 软轮数提醒；null 表示不提醒，缺省使用英文文本。 */
   softHint?: string | null;
+  /** 按端点名取客户端(缺省=不接,Persona.mainEndpoint 不生效)。 */
+  endpoint?: (name: string) => { llm: FakeLLM; spec: ModelSpec };
 }
 
 function makeRig(opts: RigOptions = {}) {
@@ -142,6 +144,7 @@ function makeRig(opts: RigOptions = {}) {
     log: opts.log ?? nullLogger(),
     toolLog: opts.toolLog,
     resubmit: opts.resubmit ?? { maxConsecutive: 2, maxPerBatch: 4, backoffMs: [0, 0] },
+    ...(opts.endpoint ? { endpoint: opts.endpoint } : {}),
     ...(opts.transcript ? { transcript: opts.transcript } : {}),
     ...(opts.tracker ? { tracker: opts.tracker } : {}),
   });
@@ -316,6 +319,32 @@ describe('MainLoop standard Response execution', () => {
       expect(rig.session.records.some(entry => entry.context.responseId === 'late')).toBe(false);
       expect(usage[0].attempt).toMatchObject({ outcome: 'discarded', meters: { input: 10, output: 2 } });
     } finally { release(); await rig.cleanup(); }
+  });
+});
+
+describe('Persona.mainEndpoint', () => {
+  it('每次请求按钩子的返回选端点;null、钩子抛错与未知端点都用活跃端点', async () => {
+    const alt = new FakeLLM();
+    const answers: Array<() => string | null> = [() => 'alt', () => null, () => { throw new Error('坏文件'); }, () => 'missing', () => 'alt'];
+    const rig = makeRig({
+      hooks: { mainEndpoint: () => answers.shift()!() },
+      endpoint: (name) => {
+        if (name !== 'alt') throw new Error(`端点 ${name} 不存在`);
+        return { llm: alt, spec: { model: 'alt-model', thinking: false } };
+      },
+    });
+    try {
+      rig.start();
+      for (let i = 0; i < 5; i++) {
+        const total = rig.llm.calls.length + alt.calls.length;
+        rig.pushEvent(`事件${i}`);
+        await until(() => rig.llm.calls.length + alt.calls.length > total);
+      }
+      expect(alt.calls.map((c) => c.spec.model)).toEqual(['alt-model', 'alt-model']);
+      expect(rig.llm.calls).toHaveLength(3);
+    } finally {
+      await rig.cleanup();
+    }
   });
 });
 
