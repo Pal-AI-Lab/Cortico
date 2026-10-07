@@ -84,6 +84,7 @@ export interface PackageDetailView {
   fileCount?: number;
   dependencies: string[];
   maintainers: string[];
+  author?: string;
   publisher?: string;
   links: { npm?: string; repository?: string; homepage?: string; bugs?: string };
   installed: boolean;
@@ -257,7 +258,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const box = ui.h('div', 'extension-detail');
     ui.drawer(item.metadata?.displayName ?? item.label ?? item.name, box);
     const hit = states[kind].hits.find(hit => hit.name === item.name);
-    const local: PackageDetailView = { name: item.name, version: item.installedVersion ?? item.version ?? '—', versionCount: 0, history: [], warnings: [], frameworkApi: item.api ?? 0, dependencies: [], maintainers: [], links: {}, installed: true, ...item.metadata, description: item.description ?? item.metadata?.description, publisher: item.author };
+    const local: PackageDetailView = { name: item.name, version: item.installedVersion ?? item.version ?? '—', versionCount: 0, history: [], warnings: [], frameworkApi: item.api ?? 0, dependencies: [], maintainers: [], links: {}, installed: true, ...item.metadata, description: item.description ?? item.metadata?.description, author: item.author };
     renderDetail(box, local, kind, hit, item);
     if (!item.builtin && !/^(link:|file:)/.test(item.spec) && item.state !== 'removed') {
       void fetchDetail(item.name).then(data => {
@@ -288,7 +289,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const text = item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.kind === 'provider' ? S.alreadyInstalled : item.enabled ? (item.kind === 'bot' ? S.adopted : S.enabled) : stateLabels[item.state];
     const failed = item.state === 'failed';
     const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
-    const author = states[kind].hits.find(hit => hit.name === item.name)?.publisher ?? item.author ?? S.unknownAuthor;
+    const author = item.author ?? S.unknownAuthor;
     card.append(ui.h('div', 'extension-meta', [item.builtin ? S.builtin : '', S.version(item.installedVersion ?? item.version ?? '—'), S.author(author)].filter(Boolean).join(' · ')));
     card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
     if (item.description) card.append(ui.h('p', 'extension-description', item.description));
@@ -340,10 +341,16 @@ export function mountExtensions(ctx: FeatureContext): void {
       const heading = ui.h('div', 'extension-card-heading'); const local = installed.find(item => item.name === hit.name);
       const title = ui.h('span', 'extension-card-title', local?.metadata?.displayName ?? local?.label ?? hit.name); title.title = title.textContent ?? hit.name;
       heading.append(packageAvatar(local?.icon ? iconUrl(local.name, local.installedVersion ?? local.version) : undefined));
-      void fetchDetail(hit.name, hit.version).then(data => { if (!signal.aborted && data.displayName) title.textContent = title.title = data.displayName; }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
       heading.append(title); if (hit.installed) heading.append(ui.pill(S.alreadyInstalled));
       const metadata = ui.h('div', 'extension-card-info');
-      metadata.append(ui.h('div', 'extension-meta', S.labelled(S.packageName, hit.name)), ui.h('div', 'extension-meta', `${S.version(hit.version)}${hit.publisher ? S.metaSeparator + S.author(hit.publisher) : ''}`));
+      // the author is in the package document: until it arrives it is not known, which is not the same as missing
+      const version = ui.h('div', 'extension-meta', S.version(hit.version));
+      metadata.append(ui.h('div', 'extension-meta', S.labelled(S.packageName, hit.name)), version);
+      void fetchDetail(hit.name, hit.version).then(data => {
+        if (signal.aborted) return;
+        if (data.displayName) title.textContent = title.title = data.displayName;
+        version.textContent = `${S.version(hit.version)}${S.metaSeparator}${S.author(data.author ?? S.unknownAuthor)}`;
+      }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
       card.append(heading, metadata, ui.h('p', 'extension-description', hit.description));
       const info = ui.rowbar(); info.classList.add('extension-tags');
       if (hit.license) info.append(ui.pill(hit.license));
@@ -409,7 +416,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       if (data.deprecated) box.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [
         { k: S.packageName, v: data.name },
-        { k: S.authorLabel, v: item?.author ?? data.publisher ?? hit?.publisher ?? S.unknownAuthor },
+        { k: S.authorLabel, v: item?.author ?? data.author ?? S.unknownAuthor },
         ...(item ? [{ k: S.fieldInstalledVersion, v: item.installedVersion ?? item.version ?? '—' }, { k: S.directory, v: item.location ?? directory }] : []),
         { k: item?.builtin ? S.runtime : S.fieldVersion, v: data.version }, { k: S.fieldLicense, v: data.license ?? '—' },
         { k: S.released, v: data.published?.slice(0, 10) ?? '—' },

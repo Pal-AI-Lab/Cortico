@@ -275,6 +275,9 @@ export interface ExtensionPackageDetail {
   fileCount?: number;
   dependencies: string[];
   maintainers: string[];
+  /** package.json 的 author,只取名字。 */
+  author?: string;
+  /** npm registry 的 _npmUser.name。 */
   publisher?: string;
   /** npm 页面只在包文档里有;本机 package.json 给出的详情没有它 */
   links: { npm?: string; repository?: string; homepage?: string; bugs?: string };

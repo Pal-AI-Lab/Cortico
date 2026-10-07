@@ -75,6 +75,7 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 `updates()` 比较磁盘版本与 `latest`。这三处用安装时的 registry:首次查询时在 `extensions/` 里跑
 `pnpm config get registry --ignore-workspace`,成功的结果用到进程结束,pnpm 失败时抛出它的输出;请求失败的错误带主机和
 undici 的 `cause` 错误码。
+`packageInfo()` 的 `author` 取 package.json 的 `author`(字符串只取名字,或 `{ name }`);`publisher` 取 `_npmUser.name`。
 `check(target, kind?)` 装前只读 manifest;`install()` / `uninstall()` 经 `corepack pnpm add|remove --ignore-workspace`
 改 `extensions/`。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
 manifest 里声明的那两个文件。
