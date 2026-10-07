@@ -19,7 +19,7 @@ Provider 适配模型服务的通信协议。仓库内建 `openai-responses-comp
 | `multimodal` | 是否接受图片 |
 | `serviceTier` / `pricing` / `options` | 服务档位、价目、模块自定义项 |
 
-主 session 每次模型调用读取当前 `activeProvider`;fork 在创建时固定端点与模型配置。
+主 session 与 fork 用哪个端点见 [sessions.md](sessions.md)。
 provider 模块不预设任何模型名;端点
 没有 `spec` 就不能被设为 active。新环境端点表为空；已有端点目录与原 activeProvider 引用继续读取。
 

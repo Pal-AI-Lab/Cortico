@@ -20,8 +20,8 @@ Persona 声明,Core 只把 `role` 当分类标签。
 | `outputTap` | 输出流的旁路(演出、字幕) |
 | `tools()` | 这个 session 可用的工具 |
 
-模型由当前端点的 `spec` 配置，Persona 不指定模型。读不到可用的 `spec` 时,主循环记一条 warn
-并结束这一批:本批事件已经进了上下文,只是不发模型调用,配好端点后随下一批一起发出。
+主 session 每次模型请求用当前 `activeProvider` 端点的 `spec`;fork 在创建时固定端点与模型配置。Persona 不指定模型。
+读不到 `activeProvider` 可用的 `spec` 时,主循环记一条 warn 并结束这一批:本批事件已经进了上下文,只是不发模型调用,配好端点后随下一批一起发出。
 
 模型返回的工具调用只有 `status` 为 `completed` 才执行。其余的回执为未执行,主循环记一条 warn
 (工具名、`call_id`、原始 `status`),同一轮排在它后面的调用也不执行。
