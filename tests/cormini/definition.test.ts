@@ -8,6 +8,7 @@ import { loadDeployment } from '../../src/deploy.ts';
 import { withWorlds, type WorldDefinition, type WorldSection } from '../../src/world.ts';
 import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
 import { FakeLLM } from '../core/helpers.ts';
+import type { ConfigGroup } from '../../src/core/types.ts';
 import cormini, { type CorminiConfig } from '../../bots/cormini/index.ts';
 
 /** 与启动器同一条线:仓内全部实现并进定义;多声明一个没有实现的 id,验收灰卡那条路。 */
@@ -71,6 +72,8 @@ beforeAll(async () => {
           path: dormantFile,
           role: 'envPrompt' as const,
         }],
+        // 绕过类型检查交上来的组:没有 id、owner、schema
+        config: [{ key: 'worlds.dormant.call', title: '形状不完整', keys: {} } as unknown as ConfigGroup],
       }),
     }),
   };
@@ -127,6 +130,16 @@ describe('统一入口:框架派生的控制台', () => {
     const { status, body } = await getJ(path);
     expect(status).toBe(200);
     expect(body[key]).toBeDefined();
+  });
+
+  it('World 交来形状不完整的配置组时,其余配置组照常列出和保存', async () => {
+    const listed = await getJ('/api/config');
+    expect(listed.status).toBe(200);
+    const ids = (listed.body.groups as Array<{ group: { id: unknown } }>).map((e) => e.group.id);
+    expect(ids.every((id) => typeof id === 'string')).toBe(true);
+    const saved = await postJ('/api/config', { group: 'core', values: {} });
+    expect(saved.status).toBe(200);
+    expect(saved.body.ok).toBe(true);
   });
 
   it('工具归属按装配事实标注:World 的工具指回 World,其余算Persona自有', async () => {

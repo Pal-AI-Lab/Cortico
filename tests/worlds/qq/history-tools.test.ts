@@ -2,10 +2,12 @@
  * qq_read_history / qq_grep_history:基于FakeStore(内存EventStoreReader stub)。
  * 这里不启动OneBot/WS；协议边界由module-loop和driver测试覆盖。
  */
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { JsonlEventStore } from '../../../src/core/event-store.ts';
 import { nullLogger } from '../../../src/core/util.ts';
-import type { ToolCallContext, ToolDef } from '../../../src/core/types.ts';
+import type { EventStoreReader, ToolCallContext, ToolDef } from '../../../src/core/types.ts';
 import { createHistoryTools } from '../../../src/worlds/qq/history-tools.ts';
+import { makeTmpDir } from '../../core/helpers.ts';
 import { FakeHost } from './helpers.ts';
 
 const GROUP = 424242;
@@ -55,8 +57,13 @@ beforeEach(() => {
     text: '[system/qq] 起草的那条已经发出去了',
   });
 
-  tools = createHistoryTools({ source: 'qq', host: () => host });
+  tools = createHistoryTools({ source: 'qq', host: () => host, messageTs: firstTsOf(host.store) });
 });
+
+/** 与 QQ World 的消息索引同义:首条带这个号的事件的 ts。 */
+function firstTsOf(store: EventStoreReader): (messageId: string) => string | undefined {
+  return (messageId) => store.range({ source: 'qq' }).find((e) => String(e.meta?.message_id) === messageId)?.ts;
+}
 
 function tool(name: string) {
   const t = tools.find((item) => item.name === name);
@@ -281,5 +288,72 @@ describe('conversation 会话过滤', () => {
       toolCtx,
     );
     expect(res).toContain('bad input');
+  });
+});
+
+describe('真实事件库:会话消息分散在多个 run 里', () => {
+  const RUNS = ['r-20260716-120000-aaaa', 'r-20260716-121300-bbbb', 'r-20260716-122500-cccc'];
+  const group = { kind: 'group', id: GROUP };
+  const peer = { kind: 'private', id: 1001 };
+  let tmp: ReturnType<typeof makeTmpDir>;
+  let runTools: ToolDef[];
+
+  const read = async (args: Record<string, unknown>): Promise<string[]> =>
+    ((await runTools.find((t) => t.name === 'qq_read_history')!.handler(args, toolCtx)) as string).split('\n');
+
+  beforeEach(() => {
+    tmp = makeTmpDir();
+    // 每个 run 12 条,第 n 条在 12:n 分;n 是 4 的倍数的落在群里,其余是私聊。
+    // 第二个 run 末尾另有一条给 #30020 贴表情的事件,和那条消息同号。
+    let store!: JsonlEventStore;
+    let n = 0;
+    for (const run of RUNS) {
+      store = new JsonlEventStore({ dataDir: tmp.dir, run });
+      for (let i = 0; i < 12; i++) {
+        n++;
+        const conv = n % 4 === 0 ? group : peer;
+        store.append({
+          type: 'qq.message',
+          ts: `2026-07-16T12:${String(n).padStart(2, '0')}:00+08:00`,
+          source: 'qq',
+          origin: 'external',
+          text: `${conv.kind} ${n}`,
+          senderKey: '1001',
+          meta: { message_id: 30000 + n, conv },
+        });
+      }
+      if (n === 24) {
+        store.append({
+          type: 'qq.emoji',
+          ts: '2026-07-16T12:24:30+08:00',
+          source: 'qq',
+          origin: 'external',
+          text: 'emoji on 20',
+          senderKey: '1001',
+          meta: { message_id: 30020, conv: group },
+        });
+      }
+    }
+    const runHost = Object.assign(new FakeHost(), { store });
+    runTools = createHistoryTools({ source: 'qq', host: () => runHost, messageTs: firstTsOf(store) });
+  });
+  afterEach(() => tmp.cleanup());
+
+  it('按会话读取返回该会话最新的 limit 条,跨 run 按时间升序', async () => {
+    expect(await read({ conversation: `group:${GROUP}`, limit: 4 })).toEqual([
+      'emoji on 20', 'group 28', 'group 32', 'group 36',
+    ]);
+  });
+
+  it('按消息号读邻域:中心是消息本身,前后只数同会话的事件', async () => {
+    expect(await read({ around: '#30020', conversation: `group:${GROUP}`, before: 2, after: 2 })).toEqual([
+      'group 12', 'group 16', 'group 20', 'group 24', 'emoji on 20',
+    ]);
+  });
+
+  it('按时间读邻域:中心是该时刻及之后同会话的第一条', async () => {
+    expect(await read({ around_time: '2026-07-16T12:17:00+08:00', conversation: `group:${GROUP}`, before: 1, after: 1 })).toEqual([
+      'group 16', 'group 20', 'group 24',
+    ]);
   });
 });

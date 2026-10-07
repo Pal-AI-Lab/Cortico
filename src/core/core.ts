@@ -192,8 +192,9 @@ export class Core<C extends CoreConfig = CoreConfig> {
       transcript: this.transcript,
       toolOwner: (name) => this.worlds.find((m) => m.tools().some((t) => t.name === name))?.id,
     });
-    this.bus.setPreemptHandler(() => {
-      this.loop.abortCurrentRound();
+    this.bus.setPreemptHandler((trigger) => {
+      if (trigger === 'interrupt') this.loop.interruptCurrentRound();
+      else this.loop.abortCurrentRound();
     });
   }
 
@@ -255,9 +256,9 @@ export class Core<C extends CoreConfig = CoreConfig> {
   discardPendingEvents(): number {
     const dropped = this.bus.drainPending((item) =>
       item.event !== undefined || item.candidate !== undefined);
-    this.loop.acknowledgeDiscarded(
-      dropped.flatMap((item) => item.event ? [item.event] : []),
-    );
+    const events = dropped.flatMap((item) => item.event ? [item.event] : []);
+    this.loop.acknowledgeDiscarded(events);
+    this.loop.notifySettled(events, 'discarded');
     return dropped.length;
   }
 
@@ -557,6 +558,15 @@ export class Core<C extends CoreConfig = CoreConfig> {
         if (taken.length > 0) this.loop.acknowledgeDiscarded(taken);
         return taken;
       },
+      withdrawPending: async (cursor) => {
+        if (!lease.active) return false;
+        const [taken] = this.bus.drainPending((it) => it.event?.cursor === cursor && it.event.source === mod.id);
+        if (!taken?.event) return false;
+        this.loop.recordWithdrawn(taken.event);
+        return true;
+      },
+      promotePending: async (cursor, trigger) => lease.active
+        && this.bus.promote((it) => it.event?.cursor === cursor && it.event.source === mod.id, trigger),
       modelFacts: this.modelFacts(),
       blob: (handle) => this.resolveBlob(handle),
       reportUsage: (usage, opts) => {

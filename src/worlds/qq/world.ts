@@ -36,7 +36,7 @@ import {
   type ExtensionResult,
   type OneBotEvent,
 } from './driver.ts';
-import { createHistoryTools } from './history-tools.ts';
+import { createHistoryTools, readLatest } from './history-tools.ts';
 import {
   buildOutgoing,
   makeImagePolicy,
@@ -172,10 +172,17 @@ export class QQWorld implements World {
   private watchedPrivates: Set<number>;
 
   /**
-   * 已记录的 QQ 消息:平台 message_id → 所在会话与时间(内存索引,启动时从store重建)。
+   * 已记录的 QQ 消息:平台 message_id → 所在会话与首条带这个号的事件的 ts(内存索引,启动时从store重建)。
    * QQ 消息身份即平台自身的 message_id,不使用 core 事件游标。
    */
   private knownMessages = new Map<string, { conv: Conv; ts: string }>();
+  /**
+   * 事件面板的会话汇总与总条数,覆盖事件库里游标不超过 summarizedCursor 的本 World 事件。
+   * 启动时重建,之后只累加新事件;清空当前 run 的事件不会扣减,下次启动才回到事件库的实际条数。
+   */
+  private convSummary = new Map<string, { kind: Conv['kind']; id: number; count: number; lastTs: string }>();
+  private summarizedTotal = 0;
+  private summarizedCursor = 0;
   /** QQ号 → 最近见到的显示名(撤回/入退群/私聊寻址渲染用;同样从store重建) */
   private nameByUserId = new Map<string, string>();
 
@@ -539,33 +546,14 @@ export class QQWorld implements World {
     const store = this.host?.store;
     if (!store) throw new Error('QQ World 未启动,事件历史不可用');
     const opts = (args[0] ?? {}) as { conv?: unknown; limit?: unknown };
-    const all = store.range({ source: this.id });
-    const convMap = new Map<string, { kind: string; id: number; count: number; lastTs: string }>();
-    for (const e of all) {
-      const c = e.meta?.conv as { kind?: string; id?: number } | undefined;
-      if (!c || (c.kind !== 'group' && c.kind !== 'private') || c.id === undefined) continue;
-      const key = `${c.kind}:${Number(c.id)}`;
-      const cur = convMap.get(key);
-      if (cur) { cur.count++; cur.lastTs = e.ts; }
-      else convMap.set(key, { kind: c.kind, id: Number(c.id), count: 1, lastTs: e.ts });
-    }
-    const conversations = [...convMap.values()].sort((a, b) => (a.lastTs < b.lastTs ? 1 : -1));
+    for (const e of store.range({ source: this.id, fromCursor: this.summarizedCursor + 1 })) this.summarize(e);
+    this.summarizedCursor = store.latestCursor();
+    const conversations = [...this.convSummary.values()].sort((a, b) => (a.lastTs < b.lastTs ? 1 : -1));
 
     const convRaw = typeof opts.conv === 'string' ? opts.conv.trim() : '';
-    let events = all;
-    const m = convRaw ? /^(group|private):(\d+)$/i.exec(convRaw) : null;
-    if (convRaw && !m) {
-      events = [];
-    } else if (m) {
-      const kind = m[1].toLowerCase();
-      const id = Number(m[2]);
-      events = all.filter((e) => {
-        const c = e.meta?.conv as { kind?: string; id?: number } | undefined;
-        return !!c && c.kind === kind && Number(c.id) === id;
-      });
-    }
+    const conv = convRaw ? parseConversationAddress(convRaw) : null;
     const limit = Math.max(1, Math.min(2000, Number(opts.limit) || 300));
-    if (events.length > limit) events = events.slice(events.length - limit);
+    const events = convRaw && !conv ? [] : readLatest(store, { source: this.id }, conv, limit);
     const lean = events.map((e) => ({
       cursor: e.cursor,
       type: e.type,
@@ -575,7 +563,7 @@ export class QQWorld implements World {
       senderName: (e.meta?.sender_name as string | undefined) ?? '',
       conv: e.meta?.conv ?? null,
     }));
-    return { conversations, events: lean, total: all.length };
+    return { conversations, events: lean, total: this.summarizedTotal };
   }
 
 
@@ -1109,10 +1097,15 @@ export class QQWorld implements World {
     const recoveryWindowSeconds = 120;
     const from = Math.min(...timed.map((n) => n.time));
     const to = Math.max(...timed.map((n) => n.time)) + recoveryWindowSeconds;
+    // 事件库按字符串比较 ts。UTC 偏移在 -12:00 到 +14:00 之间,同一时刻在不同偏移下的
+    // 时间串最多差 26 小时;两端各放宽 26 小时只用来圈定要读的事件,时间判断由下面的 Date.parse 做。
+    const offsetSpanMs = 26 * 3600_000;
     return host.store
       .range({
         source: this.id,
         senderKey: String(selfId),
+        fromTs: nowIso(this.timezone, new Date(from * 1000 - offsetSpanMs)),
+        toTs: nowIso(this.timezone, new Date(to * 1000 + offsetSpanMs)),
       })
       .filter(
         (event) =>
@@ -1280,14 +1273,17 @@ export class QQWorld implements World {
     }).catch((e) => host.log.warn('事件投递失败', { err: String(e) }));
   }
 
-  /** 启动时从事件库meta重建 已记录消息索引 与 QQ号→称呼 映射 */
+  /** 启动时从事件库meta重建 已记录消息索引、QQ号→称呼 映射 与 事件面板的会话汇总 */
   private rebuildMaps(): void {
     const host = this.host!;
     const events = host.store.range({ source: this.id });
+    this.convSummary.clear();
+    this.summarizedTotal = 0;
     for (const e of events) {
+      this.summarize(e);
       const mid = e.meta?.message_id;
       const conv = e.meta?.conv as Conv | undefined;
-      if (mid !== undefined && conv && (conv.kind === 'group' || conv.kind === 'private')) {
+      if (mid !== undefined && conv && (conv.kind === 'group' || conv.kind === 'private') && !this.knownMessages.has(String(mid))) {
         this.knownMessages.set(String(mid), {
           conv: { kind: conv.kind, id: Number(conv.id) },
           ts: e.ts,
@@ -1299,10 +1295,21 @@ export class QQWorld implements World {
         this.nameByUserId.set(String(uid), name);
       }
     }
+    this.summarizedCursor = host.store.latestCursor();
     this.log.debug('映射重建完成', {
       messages: this.knownMessages.size,
       names: this.nameByUserId.size,
     });
+  }
+
+  private summarize(e: EventEnvelope): void {
+    this.summarizedTotal++;
+    const c = e.meta?.conv as { kind?: string; id?: number } | undefined;
+    if (!c || (c.kind !== 'group' && c.kind !== 'private') || c.id === undefined) return;
+    const key = `${c.kind}:${Number(c.id)}`;
+    const cur = this.convSummary.get(key);
+    if (cur) { cur.count++; cur.lastTs = e.ts; }
+    else this.convSummary.set(key, { kind: c.kind, id: Number(c.id), count: 1, lastTs: e.ts });
   }
 
 
@@ -1449,7 +1456,11 @@ export class QQWorld implements World {
     const list = [
       this.draftTool(),
       this.confirmTool(),
-      ...createHistoryTools({ source: this.id, host: () => this.host }),
+      ...createHistoryTools({
+        source: this.id,
+        host: () => this.host,
+        messageTs: (mid) => this.knownMessages.get(mid)?.ts,
+      }),
     ];
     // 看图追问依赖 IMG-N(外挂视觉),随视觉出现/消失
     if (this.vision) list.push(this.viewImageTool());

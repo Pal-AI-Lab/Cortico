@@ -27,7 +27,9 @@ import type {
   LLMUsage,
   Logger,
   ModelSpec,
+  OutputTap,
   Persona,
+  RunPhase,
   SessionDecl,
   SessionOpeningReason,
   ToolCallContext,
@@ -37,6 +39,7 @@ import type {
   ToolTag,
   WakeItem,
 } from './types.ts';
+import { defaultExternalizes } from './types.ts';
 import type { WakeBus } from './bus.ts';
 import type { SessionLog } from './session.ts';
 import type { CoreState } from './state.ts';
@@ -47,9 +50,11 @@ import type { Transcript } from './transcript.ts';
 import { setAnchors, withAnchors } from './log-context.ts';
 import { withBlobLines } from './blobs.ts';
 import {
+  INTERRUPTED_WHILE_RUNNING,
   MISSING_RESULT_RESTART,
   NOT_EXECUTED_BARRIER,
   NOT_EXECUTED_INCOMPLETE,
+  NOT_EXECUTED_INTERRUPTED,
   NOT_EXECUTED_LOOP_STOPPED,
   NOT_EXECUTED_STREAM_ABORTED,
   SHUTDOWN_INTERRUPTED,
@@ -168,6 +173,7 @@ export interface LoopStatus {
   lastDeliveredCursor: number;
   /** 水位之后该进上下文却还没投递的外部事件数。 */
   behind: number;
+  phase: RunPhase;
 }
 
 /**
@@ -200,6 +206,9 @@ function eventBlobs(events: readonly EventEnvelope[]): BlobRef[] {
   return events.flatMap((e) => e.blobs ?? []);
 }
 
+/** 撤回记录的事件类型；meta.cursor 指向被撤回的事件。 */
+const WITHDRAWAL_TYPE = 'core.withdrawal';
+
 /** 重启补投的数量上限；仅补投最近事件，更早的事件标记已处理并推进水位。 */
 const MAX_REQUEUE = 200;
 
@@ -226,6 +235,20 @@ interface PreparedCandidateProjection {
   origin: EventEnvelope['origin'];
   event: CandidateProjectionEvent;
   sourceCursors: number[];
+}
+
+/** 主循环的一轮:模型请求与随后的工具执行。 */
+interface Flight {
+  /** 取消模型请求。 */
+  controller: AbortController;
+  /** 合并进 interruptible 工具的 signal。 */
+  interrupt: AbortController;
+  phase: 'model' | 'tools' | 'done';
+  /** 非 reasoning 增量已经外流；此后 preempt 不再取消本轮。 */
+  externalized: boolean;
+  /** 本轮收到 interrupt:尚未开始的工具调用不执行。 */
+  interrupted: boolean;
+  abortReason: 'preempt' | 'interrupt' | 'shutdown' | null;
 }
 
 export class MainLoop {
@@ -292,12 +315,13 @@ export class MainLoop {
   private appliedVisibleWorlds: Set<string> | null = null;
   /** 当前前缀中各可见 World 的工具签名，用于检测工具表漂移。 */
   private appliedWorldTools = new Map<string, string>();
-  /** 当前模型轮；非 reasoning 增量一旦外流，本轮不再接受自动抢占。 */
-  private currentRound: {
-    controller: AbortController;
-    externalized: boolean;
-    abortReason: 'preempt' | 'shutdown' | null;
-  } | null = null;
+  /**
+   * 当前轮，从模型请求到工具全部返回。model 阶段可被 preempt 取消(尚未外化时)或被 interrupt
+   * 取消；tools 阶段只有 interrupt 生效，停止 interruptible 工具并跳过尚未开始的调用。
+   */
+  private currentRound: Flight | null = null;
+  /** preempt 或 interrupt 到达时没有可取消的轮：下一次模型请求前先接收已就绪的事件。 */
+  private takeReadyBeforeRequest = false;
   /** 每次 stop 都使此前捕获的异步 continuation 永久失效。 */
   private generation = 0;
   private stopped = false;
@@ -307,15 +331,69 @@ export class MainLoop {
   private pendingToolCalls = new Set<string>();
   /** stop() 提前结束重试等待，由 active() 决定退出。 */
   private backoffWake: (() => void) | null = null;
-  /**
-   * 工具信号合并关机信号与当前模型调用信号。
-   * 自动抢占仅发生在没有外部输出、尚未执行工具时；工具执行期间仅关机或循环换代会取消。
-   */
+  /** 关机或循环换代时取消全部工具；interruptible 工具另外合并当前轮的 interrupt 信号。 */
   private readonly shutdown = new AbortController();
+  private phase: RunPhase;
+  /** 执行中的工具调用,键为每次调用的登记凭据,按开始顺序。 */
+  private readonly runningTools = new Map<object, string>();
+  private readonly phaseListeners: Array<(phase: RunPhase) => void> = [];
 
   constructor(deps: MainLoopDeps) {
     this.d = deps;
+    this.phase = { state: 'idle', running: [], enteredAt: nowIso(deps.cfg.timezone) };
     deps.session.onReset(() => { this.anchor = null; });
+  }
+
+  /** 控制台订阅 RunPhase 变化;与 World.onRunPhase 同时、同步调用。 */
+  onRunPhase(listener: (phase: RunPhase) => void): void {
+    this.phaseListeners.push(listener);
+  }
+
+  /** state、round 或 retryAt 不变时不通知,enteredAt 保持进入时的时刻。 */
+  private enterPhase(state: RunPhase['state'], detail: { round?: number; retryAt?: string } = {}): void {
+    const cur = this.phase;
+    if (cur.state === state && cur.round === detail.round && cur.retryAt === detail.retryAt) return;
+    this.phase = {
+      state,
+      ...(detail.round !== undefined ? { round: detail.round } : {}),
+      running: [...this.runningTools.values()],
+      ...(detail.retryAt !== undefined ? { retryAt: detail.retryAt } : {}),
+      enteredAt: nowIso(this.d.cfg.timezone),
+    };
+    this.emitPhase();
+  }
+
+  /** 登记一次开始执行的工具调用,返回它结束时调用的函数。 */
+  private readonly toolStarted = (name: string): (() => void) => {
+    const token = {};
+    this.runningTools.set(token, name);
+    this.phase = { ...this.phase, running: [...this.runningTools.values()] };
+    this.emitPhase();
+    return () => {
+      if (!this.runningTools.delete(token)) return;
+      this.phase = { ...this.phase, running: [...this.runningTools.values()] };
+      this.emitPhase();
+    };
+  };
+
+  private emitPhase(): void {
+    if (!this.activeNow()) return;
+    const { phase } = this;
+    for (const world of this.d.worlds.visible()) {
+      if (!world.onRunPhase) continue;
+      try {
+        world.onRunPhase(phase);
+      } catch (e) {
+        this.d.log.warn('World 运行阶段钩子异常', { id: world.id, err: e });
+      }
+    }
+    for (const listener of this.phaseListeners) {
+      try {
+        listener(phase);
+      } catch (e) {
+        this.d.log.warn('运行阶段订阅异常', { err: e });
+      }
+    }
   }
 
   private active(generation: number): boolean {
@@ -326,14 +404,40 @@ export class MainLoop {
     return this.active(this.generation);
   }
 
-  /** 尝试取消尚未输出的当前模型调用；无可取消调用时返回 false。 */
+  /** preempt:取消尚未输出的当前模型调用；无可取消调用时返回 false。 */
   abortCurrentRound(): boolean {
     if (!this.activeNow()) return false;
     const round = this.currentRound;
-    if (!round || round.externalized) return false;
-    round.abortReason = 'preempt';
-    round.controller.abort(new Error('模型轮被新输入抢占'));
-    return true;
+    if (round?.phase === 'model' && !round.externalized) {
+      round.abortReason = 'preempt';
+      round.controller.abort(new Error('模型轮被新输入抢占'));
+      return true;
+    }
+    if (this.processingBatch) this.takeReadyBeforeRequest = true;
+    return false;
+  }
+
+  /**
+   * interrupt:取消当前模型调用(已外化的输出保留)，或停止执行中的 interruptible 工具并跳过
+   * 本轮尚未开始的调用。没有进行中的轮时返回 false。
+   */
+  interruptCurrentRound(): boolean {
+    if (!this.activeNow()) return false;
+    const round = this.currentRound;
+    if (round?.phase === 'model') {
+      round.abortReason = round.externalized ? 'interrupt' : 'preempt';
+      round.interrupted = true;
+      round.interrupt.abort(new Error('被新事件打断'));
+      round.controller.abort(new Error('模型轮被新事件打断'));
+      return true;
+    }
+    if (round?.phase === 'tools' && !round.interrupted) {
+      round.interrupted = true;
+      round.interrupt.abort(new Error('被新事件打断'));
+      return true;
+    }
+    if (this.processingBatch) this.takeReadyBeforeRequest = true;
+    return false;
   }
 
   /**
@@ -486,9 +590,11 @@ export class MainLoop {
    * 候选按 source、origin 和处理函数分组，再按来源项在批次中的顺序生成正文。
    * 正文归档后调用并等待 onDelivery；钩子完成前注入的内部项追加到内部行末尾、外部正文之前。
    * 内部行合成一条 user 消息；外部正文按 eventDelivery 进入合成工具回执或同一条 user 消息。
+   * round 是批内轮间投递时的当前轮序号。
    */
-  private async deliverBatch(batch: WakeItem[], generation: number): Promise<boolean> {
+  private async deliverBatch(batch: WakeItem[], generation: number, round?: number): Promise<boolean> {
     if (!this.active(generation)) return false;
+    this.enterPhase('delivering', { round });
     const { session, persona, store, cfg, log } = this.d;
     const projections = this.prepareCandidateProjections(batch, generation);
     if (!this.active(generation)) return false;
@@ -582,6 +688,7 @@ export class MainLoop {
     }
     if (events.length > 0 && !inUser) this.appendEventFrame(events, generation);
     this.noteHandled(delivered, generation);
+    this.notifySettled(delivered, 'delivered');
     const changed = lines.length > 0 || events.length > 0;
     if (changed) this.batchesHandled++;
     return changed;
@@ -768,15 +875,23 @@ export class MainLoop {
     }
     const after = store.range({ fromCursor: from });
     const referenced = new Set<number>();
+    const withdrawn = new Set<number>();
     for (const event of after) {
+      if (event.source === 'core' && event.type === WITHDRAWAL_TYPE) {
+        const cursor = (event.meta as { cursor?: unknown } | undefined)?.cursor;
+        if (typeof cursor === 'number') withdrawn.add(cursor);
+        continue;
+      }
       if (event.contextDelivery !== 'deliver') continue;
       const cursors = (event.meta as { sourceCursors?: unknown } | undefined)?.sourceCursors;
       if (!Array.isArray(cursors)) continue;
       for (const c of cursors) if (typeof c === 'number') referenced.add(c);
     }
     for (const c of referenced) this.settledArchives.add(c);
+    // 撤回的事件按已了结处理，水位可越过。
+    for (const c of withdrawn) this.deliveredCursors.add(c);
     this.noteHandled([], this.generation);
-    const pending = after.filter((event) => event.origin === 'external'
+    const pending = after.filter((event) => event.origin === 'external' && !withdrawn.has(event.cursor)
       && (event.contextDelivery !== 'archive-only' || !referenced.has(event.cursor)));
     if (pending.length === 0) return;
 
@@ -882,17 +997,21 @@ export class MainLoop {
         await this.maintenanceChain;
         if (!this.active(generation)) break;
         this.processingBatch = true;
+        this.takeReadyBeforeRequest = false;
         try {
           const changed = await this.deliverBatch(batch, generation);
           if (!this.active(generation)) break;
           if (changed) {
             await this.rounds(generation);
             if (!this.active(generation)) break;
+            this.enterPhase('idle');
             // 先执行本批登记的交接请求，再运行批末钩子与容量检查。
             await this.flushRequestedHandoff(generation);
             if (!this.active(generation)) break;
             await this.batchEndCheck(generation);
             if (!this.active(generation)) break;
+          } else {
+            this.enterPhase('idle');
           }
 
           // 延迟渲染和 piggyback 项不阻止进入空闲钩子。
@@ -920,7 +1039,21 @@ export class MainLoop {
 
   /** 本批模型调用共享 sess 关联字段；每轮更新 round、resp 和 call。 */
   private rounds(generation: number): Promise<void> {
-    return withAnchors({ sess: this.d.decl.id }, () => this.roundsInScope(generation));
+    return withAnchors({ sess: this.d.decl.id }, async () => {
+      try {
+        await this.roundsInScope(generation);
+      } finally {
+        this.currentRound = null;
+      }
+    });
+  }
+
+  private tapAbort(tap: OutputTap | undefined, reason: string): void {
+    try {
+      tap?.onAbort?.(reason);
+    } catch (tapErr) {
+      this.d.log.warn('outputTap.onAbort异常', { err: tapErr });
+    }
   }
 
   private async roundsInScope(generation: number): Promise<void> {
@@ -943,6 +1076,14 @@ export class MainLoop {
         log.warn('模型配置不可用', { error: String(error) });
         return;
       }
+      if (this.takeReadyBeforeRequest) {
+        this.takeReadyBeforeRequest = false;
+        const ready = bus.takeIfReady();
+        if (ready) {
+          await this.deliverBatch(ready, generation, round);
+          if (!this.active(generation)) return;
+        }
+      }
       // 后续轮输入超限时结束本批，由批末检查执行交接。
       // 首轮仍处理本批新投递的事件；上一批的容量检查已在批末执行。
       if (round > 1) {
@@ -957,16 +1098,18 @@ export class MainLoop {
       const queuedEvents: EventEnvelope[] = [];
       const roundNo = ++this.roundSeq;
       setAnchors({ round: roundNo, resp: undefined, call: undefined });
-      const flight: NonNullable<MainLoop['currentRound']> = {
-        controller: new AbortController(), externalized: false, abortReason: null,
+      const flight: Flight = {
+        controller: new AbortController(), interrupt: new AbortController(), phase: 'model',
+        externalized: false, interrupted: false, abortReason: null,
       };
       this.currentRound = flight;
+      this.enterPhase('model', { round });
       const ctx: ToolCallContext = {
         role: decl.id,
         log,
         round: roundNo,
-        // 关机或循环换代取消工具；自动抢占不取消工具。
-        signal: AbortSignal.any([flight.controller.signal, this.shutdown.signal]),
+        // interruptible 工具在 runToolHandler 里再合并本轮的 interrupt 信号。
+        signal: this.shutdown.signal,
         queueExternalEvents: (events) => {
           if (this.active(generation)) queuedEvents.push(...events);
         },
@@ -976,10 +1119,29 @@ export class MainLoop {
       const eager = tap
         ? new EagerDispatch(
             () => this.toolDefs, ctx, log, decl.id, this.d.toolLog,
-            () => this.active(generation) && !flight.controller.signal.aborted,
+            () => this.active(generation),
             (name) => this.d.toolOwner?.(name),
+            flight.interrupt.signal,
+            () => (flight.interrupted ? NOT_EXECUTED_INTERRUPTED : null),
+            this.toolStarted,
           )
         : null;
+      /**
+       * preempt 或 interrupt 取消模型轮后，在同一批内接收新事件并开始下一轮；被取消的轮计入轮数。
+       * 没有就绪事件或已到硬上限时结束本次唤醒，就绪事件留给下一批。
+       */
+      const resumeAfterCancel = async (arrivedEarly: EventEnvelope[]): Promise<boolean> => {
+        flight.phase = 'done';
+        const ready = round < caps.hard ? bus.takeIfReady() : null;
+        const arrived: WakeItem[] = [...arrivedEarly.map((event) => ({ event })), ...(ready ?? [])];
+        if (!ready) {
+          for (const item of arrived) bus.push(item, { trigger: 'flush' });
+          this.finishTurn();
+          return false;
+        }
+        await this.deliverBatch(arrived, generation, round);
+        return this.active(generation);
+      };
       // 轮级观测:首个内容事件的延迟、模型往返、工具阻塞,一轮一条 debug 记录(event=round)。
       const roundStart = Date.now();
       let ttftMs: number | null = null;
@@ -995,9 +1157,7 @@ export class MainLoop {
           if (!this.active(generation) || flight.controller.signal.aborted) return;
           if (event.type === 'response.created') setAnchors({ resp: event.response.id });
           if (ttftMs === null && ('delta' in event || event.type === 'response.output_item.added')) ttftMs = Date.now() - roundStart;
-          const tappedEffect = tap.externalizes ? tap.externalizes(event)
-            : event.type === 'response.output_text.delta' || event.type === 'response.refusal.delta'
-              || (event.type === 'response.output_item.added' && event.item?.type === 'function_call');
+          const tappedEffect = tap.externalizes ? tap.externalizes(event) : defaultExternalizes(event);
           if (tappedEffect || (event.type === 'response.output_item.done' && event.item?.type === 'function_call' && event.item.status === 'completed')) flight.externalized = true;
           eager?.onEvent(event);
           try { tap.onEvent(event); } catch (error) { log.warn('outputTap.onEvent异常', { err: error }); }
@@ -1025,13 +1185,25 @@ export class MainLoop {
         assistant = responseRecords(res.response, res.origin);
         setAnchors({ resp: res.response.id });
         if (!this.active(generation) || flight.controller.signal.aborted) {
-          // 关机或换代丢弃已成功返回的结果时，仍记录这次调用的实际用量。
-          this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
-          try {
-            tap?.onAbort?.('core 正在关机');
-          } catch (tapErr) {
-            log.warn('outputTap.onAbort异常', { err: tapErr });
+          if (this.active(generation) && flight.abortReason === 'interrupt') {
+            // 打断与响应完成同时到达：完整响应作为已外化的输出保存，尚未执行的调用不执行。
+            this.mainTrack?.recordAttempts(res.attempts, undefined, { prefixHash });
+            await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
+            if (!this.active(generation)) return;
+            this.tapAbort(tap, '模型轮被新事件打断');
+            noteRound('interrupted');
+            if (await resumeAfterCancel(queuedEvents)) continue;
+            return;
           }
+          // 关机、换代或抢占丢弃已成功返回的结果时，仍记录这次调用的实际用量。
+          this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
+          if (this.active(generation) && flight.abortReason === 'preempt') {
+            this.tapAbort(tap, '模型轮被新输入抢占');
+            noteRound('preempted');
+            if (await resumeAfterCancel([])) continue;
+            return;
+          }
+          this.tapAbort(tap, 'core 正在关机');
           noteRound('discarded');
           this.finishTurn();
           return;
@@ -1044,14 +1216,23 @@ export class MainLoop {
       } catch (e) {
         if (flight.controller.signal.aborted) {
           this.recordFailedUsage(e, prefixHash);
-          try {
-            tap?.onAbort?.(flight.abortReason === 'shutdown' ? 'core 正在关机' : '模型轮被新输入抢占');
-          } catch (tapErr) {
-            log.warn('outputTap.onAbort异常', { err: tapErr });
+          if (!this.active(generation) || flight.abortReason === 'shutdown') {
+            this.tapAbort(tap, 'core 正在关机');
+            log.info('模型轮随关机终止');
+            noteRound('shutdown');
+            this.finishTurn();
+            return;
           }
-          log.info(flight.abortReason === 'shutdown' ? '模型轮随关机终止' : '尚未外化的模型轮已被新输入抢占');
-          noteRound(flight.abortReason === 'shutdown' ? 'shutdown' : 'preempted');
-          this.finishTurn();
+          const interrupted = flight.abortReason === 'interrupt';
+          if (interrupted && e instanceof GenerationError && e.partial) {
+            // 已外化的部分输出保存；提前执行的调用使用真实结果，其余调用不执行。
+            await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation, NOT_EXECUTED_INTERRUPTED);
+            if (!this.active(generation)) return;
+          }
+          this.tapAbort(tap, interrupted ? '模型轮被新事件打断' : '模型轮被新输入抢占');
+          log.info(interrupted ? '模型轮被新事件打断,已外化的输出保留' : '尚未外化的模型轮已被新输入抢占');
+          noteRound(interrupted ? 'interrupted' : 'preempted');
+          if (await resumeAfterCancel(queuedEvents)) continue;
           return;
         }
         this.recordFailedUsage(e, prefixHash);
@@ -1101,12 +1282,13 @@ export class MainLoop {
           const delayMs = resubmit.backoffMs[Math.min(consecutiveFailures, resubmit.backoffMs.length) - 1] ?? 0;
           log.warn('LLM 调用失败，退避后在本批内重试', { ...detail, resubmits, delayMs });
           noteRound('failed', { resubmit: true, delayMs });
+          this.enterPhase('backoff', { round, retryAt: nowIso(this.d.cfg.timezone, new Date(Date.now() + delayMs)) });
           await this.backoff(delayMs);
           if (!this.active(generation)) return;
           // 重试前先投递等待期间已就绪的事件。
           const ready = bus.takeIfReady();
           if (ready) {
-            await this.deliverBatch(ready, generation);
+            await this.deliverBatch(ready, generation, round);
             if (!this.active(generation)) return;
           }
           continue;
@@ -1116,7 +1298,7 @@ export class MainLoop {
         this.finishTurn();
         return;
       } finally {
-        if (this.currentRound === flight) this.currentRound = null;
+        if (flight.phase === 'model') flight.phase = 'tools';
       }
       if (!this.active(generation)) return;
       assistant = this.dropReservedCalls(assistant);
@@ -1141,6 +1323,7 @@ export class MainLoop {
         return;
       }
 
+      this.enterPhase('tools', { round });
       const results: ContextRecord[] = [];
       let barrierHit = false;
       // endsTurn 工具真正执行过(没被屏障跳过、参数合法)才算数
@@ -1157,6 +1340,10 @@ export class MainLoop {
         }
         if (barrierHit) {
           results.push(functionResult(call.call_id, NOT_EXECUTED_BARRIER));
+          continue;
+        }
+        if (flight.interrupted && !eager?.has(call.call_id)) {
+          results.push(functionResult(call.call_id, NOT_EXECUTED_INTERRUPTED));
           continue;
         }
 
@@ -1182,7 +1369,7 @@ export class MainLoop {
             }
             out = await runToolHandler(
               def, args, ctx, call.call_id, decl.id, this.d.toolLog,
-              () => this.active(generation), this.d.toolOwner?.(def.name),
+              () => this.active(generation), this.d.toolOwner?.(def.name), flight.interrupt.signal, this.toolStarted,
             );
             if (!this.active(generation)) return;
           }
@@ -1195,6 +1382,7 @@ export class MainLoop {
         results.push(this.toolResult(call.call_id, out));
       }
       toolMs = Date.now() - toolsStart;
+      flight.phase = 'done';
 
       if (!this.active(generation)) return;
       if (round === caps.soft && results.length > 0) {
@@ -1215,7 +1403,7 @@ export class MainLoop {
           // 不再执行模型请求时，事件退回总线随下一批投递。
           for (const item of arrived) bus.push(item, { trigger: 'flush' });
         } else {
-          await this.deliverBatch(arrived, generation);
+          await this.deliverBatch(arrived, generation, round);
           if (!this.active(generation)) return;
         }
       }
@@ -1253,6 +1441,7 @@ export class MainLoop {
     partial: ContextRecord[],
     eager: EagerDispatch | null,
     generation: number,
+    notExecuted = NOT_EXECUTED_STREAM_ABORTED,
   ): Promise<void> {
     if (!this.active(generation)) return;
     const { session } = this.d;
@@ -1261,9 +1450,10 @@ export class MainLoop {
     const calls = partial.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
     this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
     for (const entry of partial) session.append(entry);
+    if (calls.some((call) => eager?.has(call.call_id))) this.enterPhase('tools', { round: this.phase.round });
     for (const call of calls) {
       const ran = eager?.take(call.call_id);
-      const out = ran !== undefined ? await ran : { text: NOT_EXECUTED_STREAM_ABORTED };
+      const out = ran !== undefined ? await ran : { text: notExecuted };
       if (!this.active(generation)) return;
       session.append(this.toolResult(call.call_id, out));
       this.pendingToolCalls.delete(call.call_id);
@@ -1274,6 +1464,38 @@ export class MainLoop {
   /** 运维显式丢弃的即时事件也结清水位，但不写入 session。 */
   acknowledgeDiscarded(events: readonly EventEnvelope[]): void {
     this.noteHandled(events, this.generation);
+  }
+
+  /**
+   * 事件库追加撤回记录并结清水位；重启补投按记录跳过该事件。事件此时已离开队列，循环停止后
+   * 仍写记录，水位由重启时按记录结清。
+   */
+  recordWithdrawn(event: EventEnvelope): void {
+    const { store, cfg } = this.d;
+    store.append({
+      type: WITHDRAWAL_TYPE,
+      ts: nowIso(cfg.timezone),
+      source: 'core',
+      origin: 'internal',
+      text: `withdrawn #${event.cursor}`,
+      meta: { cursor: event.cursor },
+    });
+    this.noteHandled([event], this.generation);
+  }
+
+  /** 按事件来源通知产生它们的 World;钩子异常记 warn。 */
+  notifySettled(events: readonly EventEnvelope[], outcome: 'delivered' | 'discarded'): void {
+    if (!this.activeNow() || events.length === 0) return;
+    for (const world of this.d.worlds.all()) {
+      if (!world.onEventsSettled) continue;
+      const own = events.filter((e) => e.source === world.id);
+      if (own.length === 0) continue;
+      try {
+        world.onEventsSettled(own, outcome);
+      } catch (e) {
+        this.d.log.warn('World 事件结清钩子异常', { id: world.id, err: e });
+      }
+    }
   }
 
   /** 按请求内容估算，排除不会回传的历史推理。 */
@@ -1335,7 +1557,14 @@ export class MainLoop {
     if (!this.active(generation)) return Promise.resolve();
     if (this.truncatePromise) return this.truncatePromise;
     let tracked: Promise<void>;
-    tracked = this.enqueueMaintenance(() => this.performHandoff(generation), generation).finally(() => {
+    tracked = this.enqueueMaintenance(async () => {
+      this.enterPhase('handoff');
+      try {
+        await this.performHandoff(generation);
+      } finally {
+        this.enterPhase('idle');
+      }
+    }, generation).finally(() => {
       if (this.truncatePromise === tracked) this.truncatePromise = null;
     });
     this.truncatePromise = tracked;
@@ -1741,6 +1970,7 @@ export class MainLoop {
       lastUsage: this.lastUsage,
       lastDeliveredCursor: this.d.state.data.lastDeliveredCursor,
       behind: this.watermarkBacklog().behind,
+      phase: this.phase,
     };
   }
 
@@ -1795,7 +2025,10 @@ function parseToolArgs(raw: string): Record<string, unknown> | null {
   }
 }
 
-/** 普通执行与流式提前执行共用工具处理及日志记录；异常转换为失败回执。 */
+/**
+ * 普通执行与流式提前执行共用工具处理及日志记录；异常转换为失败回执。
+ * started 在 handler 开始时登记调用，返回的函数在回执确定时调用。
+ */
 function runToolHandler(
   def: ToolDef,
   args: Record<string, unknown>,
@@ -1805,15 +2038,27 @@ function runToolHandler(
   toolLog?: ToolCallLog,
   canRecord: () => boolean = () => true,
   mod?: string,
+  interrupt?: AbortSignal,
+  started?: (name: string) => () => void,
 ): Promise<ToolOutcome> {
   const startedAt = Date.now();
+  const signal = def.interruptible && interrupt && ctx.signal ? AbortSignal.any([ctx.signal, interrupt]) : ctx.signal;
+  let finished: (() => void) | undefined;
   return withAnchors({ call: callId }, () => Promise.resolve()
-    .then(() => def.handler(args, { ...ctx, callId }))
+    .then(() => {
+      finished = started?.(def.name);
+      return def.handler(args, { ...ctx, callId, signal });
+    })
     .then((out): ToolOutcome => (typeof out === 'string' ? { text: out } : out))
     .catch((e: unknown): ToolOutcome => ({
       text: toolFailed(e instanceof Error ? e.message : String(e)),
       failed: true,
     }))
+    .finally(() => finished?.())
+    .then((out): ToolOutcome => (def.interruptible && interrupt?.aborted
+      ? { ...out, text: `${out.text}
+${INTERRUPTED_WHILE_RUNNING}` }
+      : out))
     .then((out): ToolOutcome => {
       if (canRecord()) recordToolCall(toolLog, role, def.name, args, startedAt, out, mod);
       return out;
@@ -1839,6 +2084,10 @@ class EagerDispatch {
     private readonly toolLog?: ToolCallLog,
     private readonly active: () => boolean = () => true,
     private readonly owner: (name: string) => string | undefined = () => undefined,
+    private readonly interrupt?: AbortSignal,
+    /** 轮到执行时返回未执行标记则跳过该调用。 */
+    private readonly skip: () => string | null = () => null,
+    private readonly started?: (name: string) => () => void,
   ) {}
 
 
@@ -1857,7 +2106,7 @@ class EagerDispatch {
   }
 
   private dispatch(call: { id: string; name: string; args: string }): void {
-    if (!this.active()) return;
+    if (!this.active() || this.skip() !== null) return;
     if (this.barrierHit) return;
     // 保留帧调用不执行，也不写入 session。
     if (RESERVED_FRAME_NAMES.has(call.name)) return;
@@ -1874,11 +2123,18 @@ class EagerDispatch {
     const args = parseToolArgs(call.args);
     if (args === null) return; // 落回非流式路径的"arguments are not valid JSON"回执
     // handler 按调用顺序串行执行。
-    const run = this.chain.then(() => this.active()
-      ? runToolHandler(def, args, this.ctx, call.id, this.role, this.toolLog, this.active, this.owner(def.name))
-      : { text: NOT_EXECUTED_LOOP_STOPPED });
+    const run = this.chain.then(() => {
+      const skipped = this.active() ? this.skip() : NOT_EXECUTED_LOOP_STOPPED;
+      return skipped === null
+        ? runToolHandler(def, args, this.ctx, call.id, this.role, this.toolLog, this.active, this.owner(def.name), this.interrupt, this.started)
+        : { text: skipped };
+    });
     this.chain = run.then(() => undefined);
     this.results.set(call.id, run);
+  }
+
+  has(callId: string): boolean {
+    return this.results.has(callId);
   }
 
   /** 取走某次调用的执行结果;没提前派发过返回 undefined(一次性,防重复配对) */

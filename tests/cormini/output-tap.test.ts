@@ -43,6 +43,15 @@ describe('outputTap 扇入', () => {
     expect(seen).toEqual(['甲']);
   });
 
+  it('扇入多个接收器时，没声明 externalizes 的接收器按单接收器时的默认规则判定', () => {
+    const persona = new Cormini({
+      memoryDir: dir,
+      worlds: [world('a', () => ({ onEvent: () => {} })), world('b', () => ({ onEvent: () => {} }))],
+    });
+
+    expect(persona.declareSessions()[0].outputTap?.externalizes?.(delta('甲'))).toBe(true);
+  });
+
   it('没有任何 World 给接收器时不声明 tap', () => {
     const persona = new Cormini({
       memoryDir: dir,

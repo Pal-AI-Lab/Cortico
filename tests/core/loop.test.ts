@@ -16,9 +16,10 @@ import { ToolCallLog } from '../../src/core/tool-log.ts';
 import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
+import { INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
-import type { Logger, CandidateProjector, EventEnvelope, World, WorldHost, ToolDef } from '../../src/core/types.ts';
+import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import {
   activeSpec,
@@ -394,6 +395,119 @@ describe('MainLoop preempt', () => {
     await until(() => rig.llm.calls.length >= 2);
     expect(cancelled).toBe(false);
     await rig.cleanup();
+  });
+
+  it('被抢占的轮不结束本次唤醒:不调用 onTurnEnded,新输入在同一批内送入下一次请求', async () => {
+    let turnEnds = 0;
+    const rig = makeRig({ outputTap: { onDelta: () => {} }, hooks: { onTurnEnded: () => { turnEnds++; } } });
+    rig.bus.setPreemptHandler(() => { rig.loop.abortCurrentRound(); });
+    const chat = rig.llm.chat.bind(rig.llm);
+    rig.llm.chat = async (spec, messages, tools, opts) => {
+      if (rig.llm.calls.length === 1) rig.llm.blockUntilAbort = true;
+      return chat(spec, messages, tools, opts);
+    };
+    rig.llm.script(toolReply([{ name: 'noop' }]));
+    try {
+      rig.start();
+      rig.pushEvent('先做事');
+      await until(() => rig.llm.calls.length === 2);
+      const cut = rig.store.append({ type: 'qq.message', ts: '2026-07-17T10:01:00+08:00', source: 'qq', origin: 'external', text: '插一句' });
+      rig.bus.push({ event: cut }, { trigger: 'preempt' });
+      await until(() => rig.llm.calls.length === 3 && rig.loop.getStatus().batchesHandled > 0 && turnEnds > 0);
+      await sleep(30);
+      expect(turnEnds).toBe(1);
+      expect(rig.loop.getStatus().roundsLastBatch).toBe(3);
+      expect(JSON.stringify(rig.llm.calls[2].messages)).toContain('插一句');
+    } finally { await rig.cleanup(); }
+  });
+});
+
+describe('MainLoop interrupt', () => {
+  function wireTriggers(rig: ReturnType<typeof makeRig>): void {
+    rig.bus.setPreemptHandler((trigger) => {
+      if (trigger === 'interrupt') rig.loop.interruptCurrentRound();
+      else rig.loop.abortCurrentRound();
+    });
+  }
+
+  it('停下执行中的 interruptible 工具，同轮尚未开始的调用不执行，新事件接在回执之后', async () => {
+    const ran: string[] = [];
+    const settled: string[] = [];
+    const walk: ToolDef = {
+      ...makeTool('walk', ''),
+      interruptible: true,
+      handler: async (_args, ctx) => {
+        ran.push('walk');
+        await new Promise<void>((resolve) => ctx.signal!.addEventListener('abort', () => resolve(), { once: true }));
+        return '走到一半停下';
+      },
+    };
+    const wave = makeTool('wave', () => { ran.push('wave'); return 'ok'; });
+    const pet: World = {
+      ...makeFakeIO('pet', [walk, wave]),
+      onEventsSettled: (events, outcome) => { settled.push(...events.map((e) => `${outcome}:${e.text}`)); },
+    };
+    const rig = makeRig({ worlds: [pet] });
+    wireTriggers(rig);
+    rig.llm.script(toolReply([{ name: 'walk', id: 'c_walk' }, { name: 'wave', id: 'c_wave' }]));
+    try {
+      rig.start();
+      rig.pushEvent('出发');
+      await until(() => ran.includes('walk'));
+      const stop = rig.store.append({ type: 'pet.message', ts: '2026-07-17T10:01:00+08:00', source: 'pet', origin: 'external', text: '别走了' });
+      rig.bus.push({ event: stop }, { trigger: 'interrupt' });
+      await until(() => rig.llm.calls.length >= 2);
+      const sent = rig.llm.calls[1].messages;
+      const receipt = (id: string) => sent.findIndex((m) => m.role === 'tool' && m.tool_call_id === id);
+      expect(ran).toEqual(['walk']);
+      expect(sent[receipt('c_walk')].content).toBe(`走到一半停下\n${INTERRUPTED_WHILE_RUNNING}`);
+      expect(sent[receipt('c_wave')].content).toBe(NOT_EXECUTED_INTERRUPTED);
+      expect(sent.findIndex((m) => String(m.content ?? '').includes('别走了'))).toBeGreaterThan(receipt('c_wave'));
+      expect(settled).toEqual(['delivered:别走了']);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('取消已外化的模型轮:已输出的正文保留，新事件在同一批内送入下一次请求', async () => {
+    const rig = makeRig({ outputTap: { onDelta: () => {} } });
+    wireTriggers(rig);
+    const chat = rig.llm.chat.bind(rig.llm);
+    rig.llm.chat = async (spec, messages, tools, opts) => {
+      if (rig.llm.calls.length > 0) return chat(spec, messages, tools, opts);
+      rig.llm.calls.push({ spec, messages, tools });
+      opts?.onDelta?.({ type: 'content', text: '我先说一半' });
+      return new Promise((_resolve, reject) => {
+        opts!.signal!.addEventListener('abort', () => reject(opts!.signal!.reason), { once: true });
+      });
+    };
+    try {
+      rig.start();
+      rig.pushEvent('讲个故事');
+      await until(() => rig.llm.calls.length === 1);
+      expect(rig.loop.abortCurrentRound()).toBe(false);
+      const stop = rig.store.append({ type: 'qq.message', ts: '2026-07-17T10:01:00+08:00', source: 'qq', origin: 'external', text: '换个话题' });
+      rig.bus.push({ event: stop }, { trigger: 'interrupt' });
+      await until(() => rig.llm.calls.length >= 2);
+      const sent = rig.llm.calls[1].messages;
+      const partial = sent.findIndex((m) => m.role === 'assistant' && m.content === '我先说一半');
+      expect(partial).toBeGreaterThan(0);
+      expect(sent.findIndex((m) => JSON.stringify(m).includes('换个话题'))).toBeGreaterThan(partial);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('撤回记录让重启补投跳过被撤回的事件，水位越过它', async () => {
+    const rig = makeRig();
+    const withdrawn = rig.store.append({ type: 'qq.message', ts: '2026-07-17T10:00:00+08:00', source: 'qq', origin: 'external', contextDelivery: 'deliver', text: '撤回的话' });
+    rig.store.append({ type: 'qq.message', ts: '2026-07-17T10:00:01+08:00', source: 'qq', origin: 'external', contextDelivery: 'deliver', text: '留下的话' });
+    rig.loop.recordWithdrawn(withdrawn);
+    try {
+      rig.start();
+      rig.pushEvent('新消息');
+      await until(() => rig.llm.calls.length >= 1);
+      const sent = JSON.stringify(rig.llm.calls[0].messages);
+      expect(sent).toContain('留下的话');
+      expect(sent).not.toContain('撤回的话');
+      await until(() => rig.state.data.lastDeliveredCursor === rig.store.latestCursor());
+    } finally { await rig.cleanup(); }
   });
 });
 
@@ -3421,6 +3535,64 @@ describe("MainLoop 重新请求、轮次边界与统计", () => {
     await until(() => rows.some((row) => row.level === 'warn' && row.msg.includes('工具回执过长')));
     await until(() => rig.session.messages.some((m) => m.tool_call_id === 'b1'));
     expect(rig.session.messages.find((m) => m.tool_call_id === 'b1')?.content.length).toBe(9_000);
+  });
+});
+
+describe('MainLoop RunPhase', () => {
+  let rig: ReturnType<typeof makeRig>;
+  afterEach(async () => {
+    if (rig) await rig.cleanup();
+  });
+
+  /** 启动并等开场那一批回到 idle,再清空已记录的通知。 */
+  async function startQuiet(seen: RunPhase[]): Promise<void> {
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1 && seen.at(-1)?.state === 'idle');
+    seen.length = 0;
+  }
+
+  it('带工具调用的一批:可见 World 依次看到投递、模型、工具开始与结束、下一轮模型、空闲;隐藏 World 收不到', async () => {
+    const seen: RunPhase[] = [];
+    let hiddenCalls = 0;
+    const pet: World = { ...makeFakeIO('pet', [makeTool('walk', async () => { await sleep(20); return 'ok'; })]), onRunPhase: (p) => { seen.push(p); } };
+    const hidden: World = { ...makeFakeIO('hidden'), onRunPhase: () => { hiddenCalls++; } };
+    rig = makeRig({ worlds: [pet, hidden], hiddenWorlds: ['hidden'] });
+    await startQuiet(seen);
+    rig.llm.script(toolReply([{ name: 'walk' }]));
+    rig.pushEvent('去散步');
+    await until(() => seen.at(-1)?.state === 'idle');
+    expect(seen.map((p) => [p.state, p.round, p.running])).toEqual([
+      ['delivering', undefined, []],
+      ['model', 1, []],
+      ['tools', 1, []],
+      ['tools', 1, ['walk']],
+      ['tools', 1, []],
+      ['model', 2, []],
+      ['idle', undefined, []],
+    ]);
+    expect(rig.loop.getStatus().phase).toBe(seen.at(-1));
+    expect(hiddenCalls).toBe(0);
+  });
+
+  it('可重试的失败进入 backoff,retryAt 是重新请求的时刻', async () => {
+    const delayMs = 120;
+    const seen: RunPhase[] = [];
+    const pet: World = { ...makeFakeIO('pet'), onRunPhase: (p) => { seen.push(p); } };
+    rig = makeRig({ worlds: [pet], resubmit: { maxConsecutive: 2, maxPerBatch: 4, backoffMs: [delayMs] } });
+    await startQuiet(seen);
+    rig.llm.throwNext = new Error('upstream down');
+    rig.llm.script(textReply('好了'));
+    rig.pushEvent('在吗');
+    await until(() => seen.at(-1)?.state === 'idle');
+    expect(seen.map((p) => [p.state, p.round])).toEqual([
+      ['delivering', undefined], ['model', 1], ['backoff', 1], ['model', 2], ['idle', undefined],
+    ]);
+    const [, , backoff, retry] = seen;
+    const retryInMs = Date.parse(backoff.retryAt!) - Date.parse(backoff.enteredAt);
+    expect(retryInMs).toBeGreaterThan(0);
+    expect(retryInMs).toBeLessThanOrEqual(delayMs);
+    // 定时器按毫秒取整,允许早 1 毫秒。
+    expect(Date.parse(retry.enteredAt)).toBeGreaterThanOrEqual(Date.parse(backoff.retryAt!) - 1);
   });
 });
 

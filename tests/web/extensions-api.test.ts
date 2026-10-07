@@ -235,6 +235,7 @@ it('version changes validate the request and snapshot against the real shared in
   writeFileSync(join(extensions, 'package.json'), JSON.stringify({ dependencies: { example: '2.0.0' } }));
   writeFileSync(join(pkgDir, 'package.json'), JSON.stringify(pkg('2.0.0')));
   const manager = new ExtensionManager(root, { dir: extensions, records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    registry: 'https://registry.example.invalid',
     fetchJson: async () => ({ 'dist-tags': { latest: '2.0.0' }, versions: { '1.0.0': pkg('1.0.0'), '2.0.0': pkg('2.0.0') } }),
     run: async (args, cwd) => {
       const version = args[1].split('@').at(-1)!;

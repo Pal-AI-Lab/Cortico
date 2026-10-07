@@ -59,6 +59,14 @@ export interface ConfigGroup {
   schema: ConfigGroupSchema;
 }
 
+/** 扩展交来的配置组只在编译期受类型约束,运行期由这里判定形状。 */
+export function isConfigGroup(value: unknown): value is ConfigGroup {
+  if (!value || typeof value !== 'object') return false;
+  const g = value as { id?: unknown; owner?: unknown; schema?: { properties?: unknown } | null };
+  return typeof g.id === 'string' && g.id !== '' && typeof g.owner === 'string'
+    && typeof g.schema?.properties === 'object' && g.schema.properties !== null;
+}
+
 export type ConfigValue = number | boolean | string | null | [number, number];
 export type ConfigValues = Record<string, ConfigValue>;
 

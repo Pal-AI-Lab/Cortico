@@ -644,12 +644,18 @@ export class TerminalWorld implements World {
     this.reject(client, t.unknownType(String(msg.type)));
   }
 
-  /** 已保存的终端事件里有没有人说过话。 */
+  /** 已保存的终端事件里有没有人说过话;从最新往前逐页读,读到一条发言即止。 */
   private spokenBefore(): boolean {
     if (!this.host) return false;
-    return this.host.store
-      .range({ source: this.id })
-      .some((e) => e.type === 'terminal.message' || e.type === 'terminal.self');
+    const store = this.host.store;
+    // 每页条数只决定往前读几次,不影响结果
+    const pageSize = 100;
+    for (let toCursor = store.latestCursor(); ;) {
+      const page = store.range({ source: this.id, toCursor, limit: pageSize });
+      if (page.some((e) => e.type === 'terminal.message' || e.type === 'terminal.self')) return true;
+      if (page.length < pageSize) return false;
+      toCursor = page[0].cursor - 1;
+    }
   }
 
   /** hello 后回放最近的对话历史;发言人与正文读本 World 落库时写下的 meta.from/body。 */

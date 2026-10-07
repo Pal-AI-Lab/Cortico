@@ -10,6 +10,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 
@@ -126,6 +128,7 @@ describe('ExtensionManager', () => {
     const mgr = new ExtensionManager(root, set, {
       run: (args, cwd) => {
         runs.push({ args, cwd });
+        if (args[0] === 'config') return Promise.resolve({ code: 0, output: 'https://registry.npmjs.org/\n' });
         if (opts.hang) return new Promise((r) => { release = () => r({ code: 0, output: '' }); });
         return Promise.resolve({ code: opts.code ?? 0, output: 'Progress: resolved 1\n+ pkg 1.0.0\nDone in 1s' });
       },
@@ -305,6 +308,7 @@ describe('ExtensionManager', () => {
     const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
     const mgr = new ExtensionManager(root, set, {
       run: async () => ({ code: 0, output: '' }),
+      registry: 'https://registry.example.invalid',
       // 每页都满:只有条数上限能让它停
       fetchJson: async (url) => { urls.push(url); return full; },
     });
@@ -353,7 +357,7 @@ describe('ExtensionManager', () => {
     expect(Object.fromEntries(mgr.list().extensions.map((p) => [p.name, p.icon ?? false]))).toEqual({ pictured: true, 'missing-file': false });
   });
 
-  it('check:只读 manifest;类别不符、声明不合格与目录缺失各自拒绝,一次 pnpm 都不起', async () => {
+  it('check:只读 manifest;类别不符、声明不合格与目录缺失各自拒绝,pnpm 只读一次 registry 配置', async () => {
     const { mgr, runs } = manager();
     expect(await mgr.check({ name: 'remote-world', version: '1.2.0' }, 'world')).toEqual({ name: 'remote-world', version: '1.2.0', kind: 'world' });
     await expect(mgr.check({ name: 'remote-world' }, 'provider')).rejects.toThrow('world');
@@ -363,7 +367,47 @@ describe('ExtensionManager', () => {
     writeFileSync(join(local, 'package.json'), JSON.stringify({ name: 'local-world', version: '0.1.0' }));
     await expect(mgr.check({ path: local })).rejects.toThrow('cortico');
     await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('目录不存在');
-    expect(runs).toEqual([]);
+    expect(runs.map((r) => r.args)).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
+  });
+
+  it('registry 取 pnpm 配置的那个:搜索与详情都用它,pnpm 只问一次', async () => {
+    const runs: string[][] = [];
+    const urls: string[] = [];
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+      run: async (args) => { runs.push(args); return { code: 0, output: 'WARN some notice\nhttps://mirror.example.invalid/npm/\n' }; },
+      fetchJson: async (url) => {
+        urls.push(url);
+        return url.includes('/-/v1/search') ? { objects: [] } : { 'dist-tags': { latest: '1.0.0' }, versions: { '1.0.0': { name: 'a', version: '1.0.0' } } };
+      },
+    });
+    await mgr.search('world');
+    await mgr.packageInfo('a');
+    expect(urls.map((u) => u.split('?')[0])).toEqual(['https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/a']);
+    expect(runs).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
+  });
+
+  it('pnpm 读不出 registry 时查询报 pnpm 的错误,下次再问', async () => {
+    let calls = 0;
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+      run: async () => (++calls === 1 ? { code: 1, output: 'ERR_PNPM_SOMETHING broken config' } : { code: 0, output: 'https://mirror.example.invalid/' }),
+      fetchJson: async () => ({ objects: [] }),
+    });
+    await expect(mgr.search('world')).rejects.toThrow('ERR_PNPM_SOMETHING broken config');
+    await expect(mgr.search('world')).resolves.toEqual([]);
+    expect(calls).toBe(2);
+  });
+
+  it('请求失败的错误带主机与底层错误码', async () => {
+    installFake('npm-mod');
+    const server = createServer();
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const { port } = server.address() as AddressInfo;
+    await new Promise((done) => server.close(done));
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+    const { errors } = await mgr.updates();
+    expect(errors).toHaveLength(1);
+    expect(errors[0].error).toContain(`127.0.0.1:${port}: fetch failed`);
+    expect(errors[0].error).toContain('ECONNREFUSED');
   });
 
   it('packageInfo:latest 版本的 cortico 块按本机同一套判据解析,已安装的带上版本范围', async () => {
@@ -491,6 +535,7 @@ describe('ExtensionManager.changeVersion', () => {
     const booted = await loadExtensions(root);
     const pkg = (version: string) => ({ name: 'example', version, type: 'module', keywords: ['cortico-world'], cortico: { kind: opts.kind ?? 'world', api: opts.api ?? EXTENSION_API_VERSIONS.world } });
     const mgr = new ExtensionManager(root, booted, {
+      registry: 'https://registry.example.invalid',
       fetchJson: async () => ({ 'dist-tags': { latest: '2.0.0' }, versions: { '1.0.0': pkg('1.0.0'), '2.0.0': pkg('2.0.0') } }),
       run: async (args, stage) => {
         const version = args[1].slice(args[1].lastIndexOf('@') + 1);

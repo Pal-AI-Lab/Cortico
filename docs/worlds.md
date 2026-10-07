@@ -4,6 +4,7 @@
 
 World 通过事件报告外部环境变化,通过工具提供外部操作,并向 system 前缀提供环境描述。
 World 不直接访问 Memory 或调用 Persona 的工具。
+其他架构的 bot 挂载 World 需要的能力分级见 [world-compatibility.md](world-compatibility.md)。
 
 ## 契约
 
@@ -18,6 +19,8 @@ World 不直接访问 Memory 或调用 Persona 的工具。
 | `console?()` | 控制台页声明(见 [console.md](console.md)) |
 | `outputTap?()` | 主 session 输出流的接收器(演出、字幕);这一刻没有接收器时返回 `undefined` |
 | `onHandoffEnded?()`、`onTurnEnded?()` | 交接结束与主循环一轮结束的通知;隐藏的 World 不接收 |
+| `onEventsSettled?(events, outcome)` | 本 World 的事件写入主 session(`delivered`)或被操作者清空队列丢弃(`discarded`) |
+| `onRunPhase?(phase)` | 主循环的 `RunPhase`(`idle`、`delivering`、`model`、`tools`、`backoff`、`handoff`,轮序号,执行中的工具名)改变时同步调用;隐藏的 World 不接收 |
 | `shutdownVerification?()` | 关机前要核对的外部状态,同步只读快照 |
 
 Core 通过 `WorldHost` 向 World 提供以下能力:
@@ -28,17 +31,28 @@ Core 通过 `WorldHost` 向 World 提供以下能力:
 | `pushDeferred(e, { trigger })` | 投递时生成正文;`render` 返回 null、抛错或超时时不存储、不投递 |
 | `pushCandidate?(spec, { trigger })` | 先归档原始事件,在投递时选择内容并生成正文 |
 | `store`、`drainPendingEvents(filter)` | 读事件库;消费待投递事件(一次性) |
+| `withdrawPending?(cursor)` | 撤回本 World 一条未投递的事件;事件库追加撤回记录,重启不补投 |
+| `promotePending?(cursor, trigger)` | 让本 World 一条未投递的事件按 `flush`、`preempt` 或 `interrupt` 立即触发;暂停或闸门挡着时,放行后随整批投递,不打断 |
 | `modelFacts` | 当前端点的模型名、接受的 MIME 与上下文窗口，每次调用按当前端点读取;未选端点或端点未选模型时 `accepts` 为 false |
 | `blob(handle)`、`reportUsage()`、`llmStalls?()` | 附件、用量上报、模型停滞查询 |
 | `cognition?` | 向 Persona 请求后台认知计算;Persona 未提供时该成员不存在 |
 | `log` | 包含 World 区域和调用关联字段的 Logger |
 
-`trigger` 控制投递时机:`preempt` 请求中断当前模型调用并立即投递,已提交不可逆输出时不取消调用;
-`flush` 立即投递并包含积压事件;`debounce` 参与合批;`piggyback` 仅排队,随其他触发产生的批次投递。
+`trigger` 控制投递时机:
+- `preempt`:立即投递,取消尚未产生外部输出的模型调用并丢弃其输出,在同一批内带着新事件重新请求;
+  已有外部输出或正在执行工具时不取消。
+- `interrupt`:立即投递并停止当前轮。模型调用一律取消,已外化的输出保留;执行中的
+  `interruptible` 工具收到 `signal`,回执末尾注明执行期间发出过打断信号;本轮尚未开始的调用不执行。
+- `flush`:立即投递并包含积压事件。
+- `debounce`:参与合批。
+- `piggyback`:仅排队,随其他触发产生的批次投递。
+
+主循环在轮次边界接收新事件:工具全部返回后,或 `preempt`、`interrupt` 取消模型调用后。
 外部事件默认 `debounce`,内部事件默认 `flush`。`deliver: false` 仅存储事件。
 
 被动变化通过事件报告,主动查询通过工具提供。当前状态快照使用 `pushDeferred` 在投递时读取,
-配合 `piggyback` 随其他事件投递。只有需要立即中止当前模型轮的事件使用 `preempt`。
+配合 `piggyback` 随其他事件投递。新信息让还没出口的回答作废时用 `preempt`;用户要求停下正在做的事时
+用 `interrupt`。
 World 应通过事件报告服务器起停、存档切换、连接变化等状态变更。
 
 事件是 `EventEnvelope`:`cursor`、`run`、`type`、`ts`、`source`(World id)、`origin`、`tags`、
@@ -47,6 +61,8 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 外部消息使用 `origin: 'external'`。
 
 工具回执 `ToolOutcome { text, blobs?, failed? }`;handler 抛错由 Core 转成失败回执。
+`interruptible` 的工具在 `interrupt` 到达时停止并返回已完成部分的回执,Core 等它返回;
+未声明的工具执行到结束。
 `endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下。
 工具名在一个 bot 内全局唯一:模型按名字调用,Core 按名字归属与隐藏。用自家短名做前缀
 (`mc_`、`qq_`);工具名与已挂载 World、Persona 工具或 Core 保留帧名冲突时,装配层拒绝挂载并报告原因。

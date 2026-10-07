@@ -122,7 +122,12 @@ export class FakeHost implements WorldHost {
         ? { handle: this.putBlob(b.bytes, b.mime), mime: b.mime, ...(b.name ? { name: b.name } : {}), fallbackText: b.fallbackText }
         : { handle: b.handle, mime: this.blobBytes.get(b.handle)?.mime ?? 'application/octet-stream', fallbackText: b.fallbackText })
       : undefined;
-    const env = this.store.append({ ...rest, text: withBlobLines(e.text, blobs), ...(blobs ? { blobs } : {}) });
+    const env = this.store.append({
+      ...rest,
+      origin: rest.origin ?? 'external',
+      text: withBlobLines(e.text, blobs),
+      ...(blobs ? { blobs } : {}),
+    });
     this.pushed.push({ event: env, opts });
     return env;
   }

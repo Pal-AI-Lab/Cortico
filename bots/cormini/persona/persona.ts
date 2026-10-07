@@ -32,6 +32,7 @@ import type {
   ToolDef,
   ToolTag,
 } from 'cortico/core/types.ts';
+import { defaultExternalizes } from 'cortico/core/types.ts';
 
 /** 默认的存在方式自述源文件;bot 不覆盖 orientation 时读它,控制台可编辑同一份。 */
 /** 前缀装配模板与 World 段模板住在软件包里(跟着代码走),不在人格工作区。 */
@@ -698,7 +699,7 @@ export class Cormini implements Persona {
     if (taps.length === 1) return taps[0];
     return {
       onEvent: (event) => { for (const t of taps) t.onEvent(event); },
-      externalizes: (event) => taps.some((t) => t.externalizes?.(event) ?? false),
+      externalizes: (event) => taps.some((t) => (t.externalizes?.(event) ?? defaultExternalizes(event))),
       onRoundEnd: () => { for (const t of taps) t.onRoundEnd?.(); },
       onAbort: (reason) => { for (const t of taps) t.onAbort?.(reason); },
     };

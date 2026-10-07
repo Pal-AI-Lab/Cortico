@@ -43,7 +43,8 @@ Persona 通过 `CoreApi` 访问：`injectInternal` / `injectDeferred` / `injectE
 
 ## 总线与唤醒
 
-`WakeBus` 提供 `preempt`、`flush`、`debounce`、`piggyback` 四种触发模式。
+`WakeBus` 提供 `preempt`、`interrupt`、`flush`、`debounce`、`piggyback` 五种触发模式。
+`preempt` 与 `interrupt` 投递后通知主循环,取消范围由主循环裁决;`promote` 把排队项改为立即触发。
 debounce 的计划投递时刻为 `min(首件时刻 + maxBatchAgeMs, max(首件时刻 + minBatchAgeMs,
 末件时刻 + quietGapMs))`；计数达到 `maxBatchSize` 时立即投递。
 计数包含外部即时事件与候选，不包含内部事件、延迟渲染项或 piggyback 项。
@@ -53,7 +54,8 @@ piggyback 只入队，随后续唤醒一起投递。
 `nextBatch()` 仅支持一个消费者，每次按 FIFO 顺序取走整批。`batching` 使用共享配置引用，
 更新后的值在下一次入队时参与计算。
 
-投递水位 `lastDeliveredCursor` 持久化，队列不持久化。重启时补投水位之后的外部事件；
+投递水位 `lastDeliveredCursor` 持久化，队列不持久化。重启时补投水位之后的外部事件,跳过有
+`core.withdrawal` 撤回记录的事件；
 已被候选处理结果引用的原始归档不重复投递。内部事件仅在当次运行投递。清空分片或跳过损坏行
 留下的游标空位没有可投递内容，不阻止水位推进。
 
@@ -65,12 +67,22 @@ piggyback 只入队，随后续唤醒一起投递。
 退回总线，进入下一批。控制台的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。
 
+`preempt` 取消尚未外化的模型轮,`interrupt` 取消模型轮(已外化的输出保留)或停止 `interruptible`
+工具、跳过本轮尚未开始的调用。两者取消后在同一批内接收新事件并开始下一轮,被取消的轮计入轮数,
+不调用 `onTurnEnded`;到达时没有可取消的轮,事件在下一次模型请求前送入。
+
 一批正文归档后，Core 调用 `Persona.onDelivery` 并等待它返回的 Promise,不设期限。完成前
 `injectInternal` 的内容排在这批的内部行末尾、外部正文之前;完成后的注入进入总线。
 
 状态 0、429 或 5xx 的模型调用失败，可保留已记录的输出和工具回执，按 `ResubmitPolicy` 重试。
 默认允许连续重试 2 次、每批最多 4 次，退避为 2 秒、10 秒；上下文超限、抢占、关机或轮数
 达到硬上限时不重试。
+
+`MainLoop` 维护 `RunPhase`:`delivering`(写入一批事件,含等待 `onDelivery`)、`model`、`tools`、
+`backoff`(带 `retryAt`)、`handoff`,其余时刻是 `idle`;一批的轮次结束即回到 `idle`,批末钩子在
+`idle` 下运行。`running` 按开始顺序列出执行中的工具,含流式提前执行的调用。state 或 round 改变、
+工具开始或结束时同步通知可见 World 的 `onRunPhase` 与控制台的订阅,异常记 warn;`getStatus().phase`
+返回当前值。暂停与投递闸门不进入 `RunPhase`,由 `paused`、`scheduleBlocked` 报告。
 
 参数不是合法 JSON 时返回 `TOOL_FAILED_BAD_ARGS`，不执行工具；未知工具返回 `UNKNOWN_TOOL`；
 handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执行完整的工具调用，遵守

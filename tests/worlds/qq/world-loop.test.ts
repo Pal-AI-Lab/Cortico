@@ -947,4 +947,55 @@ describe('重启后映射重建', () => {
     await waitUntil(() => host.pushed.length === 2, '撤回入库');
     expect(host.pushed[1].event.text).toContain(`阿明(1001) 撤回了一条消息(#${mid})`);
   });
+
+  it('重启后按消息号读邻域,中心是消息本身,不是后来同号的表情回应', async () => {
+    const mid = mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', text: '老消息' });
+    await waitUntil(() => host.pushed.length === 1, '消息入库');
+    mock.emitEmojiLike({ message_id: mid, user_id: 1001, emoji_id: '128077' });
+    await waitUntil(() => host.pushed.length === 2, '表情回应入库');
+    await mod.stop();
+
+    mod = new QQWorld({
+      wsUrl: `ws://127.0.0.1:${mock.port}`,
+      groups: [GROUP],
+      privates: [],
+      token: '',
+    });
+    await mod.start(host);
+    await mod.waitReady();
+
+    const res = await tool('qq_read_history').handler({ around: mid, before: 0, after: 0 }, toolCtx);
+    expect(res).toBe(host.pushed[0].event.text);
+  });
+});
+
+describe('事件面板', () => {
+  type EventList = {
+    conversations: Array<{ kind: string; id: number; count: number }>;
+    events: Array<{ text: string }>;
+    total: number;
+  };
+  const list = (conv: string): Promise<EventList> =>
+    mod.console().invoke!('events', 'list', [{ conv, limit: 100 }]) as Promise<EventList>;
+
+  it('会话计数与总条数包含启动后新落库的事件,选中会话只列该会话的事件', async () => {
+    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', text: '群里第一句' });
+    await waitUntil(() => host.pushed.length === 1, '群消息入库');
+    expect((await list('')).conversations).toEqual([
+      expect.objectContaining({ kind: 'group', id: GROUP, count: 1 }),
+    ]);
+
+    mod.setWatched([GROUP], [1001]);
+    mock.emitPrivateMessage({ user_id: 1001, text: '在忙吗', nickname: '老王' });
+    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', text: '群里第二句' });
+    await waitUntil(() => host.pushed.length === 4, '监听通知+私聊+群消息入库');
+
+    const view = await list(`group:${GROUP}`);
+    expect(view.total).toBe(4);
+    expect(view.conversations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'group', id: GROUP, count: 2 }),
+      expect.objectContaining({ kind: 'private', id: 1001, count: 2 }),
+    ]));
+    expect(view.events.map((e) => e.text)).toEqual([host.pushed[0].event.text, host.pushed[3].event.text]);
+  });
 });
