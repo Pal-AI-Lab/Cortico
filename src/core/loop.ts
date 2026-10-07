@@ -1652,7 +1652,8 @@ export class MainLoop {
       name = persona.mainEndpoint();
       return name === null ? { llm, spec } : endpoint(name);
     } catch (error) {
-      log.warn('Persona 指定的端点不可用,这次请求用活跃端点', { provider: name, error: String(error) });
+      if (name === null) log.warn('mainEndpoint 钩子抛错,这次请求用活跃端点', { error: String(error) });
+      else log.warn('mainEndpoint 返回的端点不存在或未选模型,这次请求用活跃端点', { provider: name, error: String(error) });
       return { llm, spec };
     }
   }
