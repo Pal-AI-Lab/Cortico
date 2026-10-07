@@ -42,7 +42,6 @@ export const EXTENSION_PAGE_KIND: Readonly<Record<ExtensionKind, ContributingKin
   provider: 'llm',
   bot: 'persona',
 };
-const NPM_REGISTRY = 'https://registry.npmjs.org';
 
 /** 一个已安装包在本进程启动时的加载结果。 */
 export interface ExtensionRecord {
@@ -387,6 +386,18 @@ function newerVersion(latest: string, installed: string): boolean | null {
   }
   return left.length > right.length;
 }
+/**
+ * 一次失败的请求:`<主机>: <错误> (<cause 的错误码>: <cause 的说明>)`。undici 的错误文本固定是
+ * `fetch failed`,出错的原因(证书不符、连接被拒、超时)只在 cause 里。
+ */
+function fetchFailure(url: string, err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  const cause = err instanceof Error ? err.cause : undefined;
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  const detail = cause instanceof Error ? [typeof code === 'string' ? code : '', cause.message].filter(Boolean).join(': ') : '';
+  return `${new URL(url).host}: ${message}${detail ? ` (${detail})` : ''}`;
+}
+
 /** 本地目录。排除 `%` `!` `"` 与重定向符,其余交给引号。 */
 const LOCAL_PATH = /^[A-Za-z0-9_.\-/:\\ ~]{1,512}$/;
 
@@ -501,6 +512,7 @@ export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPac
 
 export interface ExtensionManagerOptions {
   run?: PackageManagerRunner;
+  /** 搜索、详情与检查更新用的 registry;缺省取 pnpm 安装时用的那个(`pnpm config get registry`)。 */
   registry?: string;
   fetchJson?: (url: string) => Promise<unknown>;
   /** 随框架提供的 World 与 provider,与已装的包列在一起;不能卸载。 */
@@ -513,7 +525,8 @@ export interface ExtensionManagerOptions {
 export class ExtensionManager {
   private readonly dir: string;
   private readonly run: PackageManagerRunner;
-  private readonly registry: string;
+  /** 首次查询 registry 时解析,解析成功后本进程内不再变。 */
+  private registryUrl: Promise<string> | null;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
   private readonly builtins?: (language: Language) => ExtensionInfo[];
@@ -528,12 +541,41 @@ export class ExtensionManager {
     this.run = opts.run ?? runPnpm;
     this.builtins = opts.builtins;
     this.decorate = opts.decorate;
-    this.registry = (opts.registry ?? NPM_REGISTRY).replace(/\/$/, '');
+    this.registryUrl = opts.registry ? Promise.resolve(opts.registry.replace(/\/$/, '')) : null;
     this.fetchJson = opts.fetchJson ?? (async (url) => {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+      let res: Response;
+      try { res = await fetch(url); } catch (err) { throw new Error(fetchFailure(url, err)); }
+      if (!res.ok) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);
       return res.json();
     });
+  }
+
+  /**
+   * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里带 `--ignore-workspace` 跑
+   * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`,没配时是 npm 官方的。
+   * pnpm 失败或没给出地址时抛出它的退出码与输出,下次查询再问。改了配置要重启进程。
+   */
+  private registry(): Promise<string> {
+    if (this.registryUrl) return this.registryUrl;
+    const args = ['config', 'get', 'registry', '--ignore-workspace'];
+    const pending = this.run(args, this.prepareDir()).then(({ code, output }) => {
+      const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
+      if (!url) throw new Error(`读不到 pnpm 的 registry 配置(pnpm ${args.join(' ')} 退出码 ${code}):\n${output.trim().split('\n').slice(-20).join('\n')}`);
+      return url.replace(/\/$/, '');
+    });
+    pending.catch(() => { if (this.registryUrl === pending) this.registryUrl = null; });
+    this.registryUrl = pending;
+    return pending;
+  }
+
+  /** extensions/ 和其中的 package.json,pnpm 以它为项目目录;返回目录。 */
+  private prepareDir(): string {
+    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
+    const pkgFile = join(this.dir, 'package.json');
+    if (!existsSync(pkgFile)) {
+      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
+    }
+    return this.dir;
   }
 
   /** 已加载扩展的浏览器端产物。服务端据此把页 id 映到 URL 并只发这几个文件。 */
@@ -638,9 +680,10 @@ export class ExtensionManager {
     const installed = new Set(readInstalled(this.dir).map((p) => p.name));
     const hits: ExtensionSearchHit[] = [];
     const seen = new Set<string>();
+    const registry = await this.registry();
     for (let from = 0; from < SEARCH_MAX_HITS; from += SEARCH_PAGE_SIZE) {
       const text = encodeURIComponent(`keywords:${keyword}`);
-      const url = `${this.registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
+      const url = `${registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
       const data = (await this.fetchJson(url)) as RegistrySearchResponse;
       const objects = data.objects ?? [];
       for (const obj of objects) {
@@ -681,7 +724,7 @@ export class ExtensionManager {
    */
   async packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail> {
     if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
-    const doc = (await this.fetchJson(`${this.registry}/${name.replace('/', '%2F')}`)) as RegistryPackument;
+    const doc = (await this.fetchJson(`${await this.registry()}/${name.replace('/', '%2F')}`)) as RegistryPackument;
     const latest = version ? doc['dist-tags']?.[version] ?? version : doc['dist-tags']?.latest;
     const v = latest ? doc.versions?.[latest] : undefined;
     if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
@@ -754,11 +797,7 @@ export class ExtensionManager {
 
   async install(target: ExtensionInstallTarget): Promise<string> {
     const spec = this.installSpec(target);
-    if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
-    const pkgFile = join(this.dir, 'package.json');
-    if (!existsSync(pkgFile)) {
-      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
-    }
+    this.prepareDir();
     const output = await this.exclusive(['add', spec, '--ignore-workspace']);
     return `已安装 ${spec}。重启进程后加载。\n${output}`;
   }

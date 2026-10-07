@@ -72,7 +72,10 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 (`loaded` / `failed` / `pending-restart` / `removed` / `idle`),带上本机 package.json 的 `metadata` 与 `author`,
 末尾接 `builtins` 给的随框架条目,每条再经 `decorate` 补上本进程的 `enabled` / `hidden`。
 `search()` 按关键字查 npm registry,翻到上限时 `searchPartial()` 为真;`packageInfo(name, version?)` 取一个版本的包文档;
-包元数据的 `author` 来自 package.json.author，支持字符串或 `{ name }`；registry 详情的 `publisher` 来自 `_npmUser.name`。
+`updates()` 比较磁盘版本与 `latest`。这三处用安装时的 registry:首次查询时在 `extensions/` 里跑
+`pnpm config get registry --ignore-workspace`,成功的结果用到进程结束,pnpm 失败时抛出它的输出;请求失败的错误带主机和
+undici 的 `cause` 错误码。
+`packageInfo()` 的 `author` 取 package.json 的 `author`(字符串只取名字,或 `{ name }`);`publisher` 取 `_npmUser.name`。
 `check(target, kind?)` 装前只读 manifest;`install()` / `uninstall()` 经 `corepack pnpm add|remove --ignore-workspace`
 改 `extensions/`。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
 manifest 里声明的那两个文件。

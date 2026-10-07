@@ -126,7 +126,7 @@ describe('bot 包', () => {
     installFixture(root, 'bot-ok');
     const booted = await loadExtensions(root);
     const urls: string[] = [];
-    const mgr = new ExtensionManager(root, booted, { fetchJson: async (url) => { urls.push(url); return { objects: [] }; } });
+    const mgr = new ExtensionManager(root, booted, { registry: 'https://registry.example.invalid', fetchJson: async (url) => { urls.push(url); return { objects: [] }; } });
     expect(mgr.list().extensions.map((e) => e.state)).toEqual(['idle']);
     await mgr.search('bot');
     expect(decodeURIComponent(urls[0])).toContain('keywords:cortico-bot');
