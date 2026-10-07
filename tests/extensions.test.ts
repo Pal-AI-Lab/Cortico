@@ -236,7 +236,7 @@ describe('ExtensionManager', () => {
 
   it.each(['string', 'object'])('list:本机作者与包元数据随条目给出,启动后新装的包也有 (%s)', async (shape) => {
     const meta = {
-      author: shape === 'string' ? 'Example author' : { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
+      author: shape === 'string' ? 'Example author <author@example.test> (https://example.test)' : { name: 'Example author' }, license: 'MIT', homepage: 'https://example.test/home',
       repository: { url: 'git+https://example.test/org/repo.git' }, bugs: 'https://example.test/issues',
       cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: '示例 World' },
     };
@@ -247,11 +247,12 @@ describe('ExtensionManager', () => {
     for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)).toMatchObject({
       author: 'Example author',
       metadata: {
-        displayName: '示例 World', license: 'MIT', author: 'Example author',
+        displayName: '示例 World', license: 'MIT',
         links: { repository: 'https://example.test/org/repo', homepage: 'https://example.test/home', bugs: 'https://example.test/issues' },
       },
     });
     for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)?.metadata).not.toHaveProperty('publisher');
+    for (const name of ['described', 'fresh']) expect(listed.find((p) => p.name === name)?.metadata).not.toHaveProperty('author');
   });
 
   it('list:随框架提供的条目排在已装包之后;decorate 作用在每一条上', async () => {
@@ -403,7 +404,7 @@ describe('ExtensionManager', () => {
   });
 
   it.each([
-    { shape: 'string', author: 'Example author', expected: 'Example author' },
+    { shape: 'string', author: 'Example author <author@example.test> (https://example.test)', expected: 'Example author' },
     { shape: 'object', author: { name: 'Example author' }, expected: 'Example author' },
     { shape: 'missing', author: undefined, expected: undefined },
   ])('packageInfo:作者与发布者分别返回 ($shape)', async ({ author, expected }) => {

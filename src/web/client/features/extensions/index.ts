@@ -258,7 +258,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const box = ui.h('div', 'extension-detail');
     ui.drawer(item.metadata?.displayName ?? item.label ?? item.name, box);
     const hit = states[kind].hits.find(hit => hit.name === item.name);
-    const local: PackageDetailView = { name: item.name, version: item.installedVersion ?? item.version ?? '—', versionCount: 0, history: [], warnings: [], frameworkApi: item.api ?? 0, dependencies: [], maintainers: [], links: {}, installed: true, ...item.metadata, description: item.description ?? item.metadata?.description, author: item.author ?? item.metadata?.author };
+    const local: PackageDetailView = { name: item.name, version: item.installedVersion ?? item.version ?? '—', versionCount: 0, history: [], warnings: [], frameworkApi: item.api ?? 0, dependencies: [], maintainers: [], links: {}, installed: true, ...item.metadata, description: item.description ?? item.metadata?.description, author: item.author };
     renderDetail(box, local, kind, hit, item);
     if (!item.builtin && !/^(link:|file:)/.test(item.spec) && item.state !== 'removed') {
       void fetchDetail(item.name).then(data => {
@@ -289,7 +289,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const text = item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.kind === 'provider' ? S.alreadyInstalled : item.enabled ? (item.kind === 'bot' ? S.adopted : S.enabled) : stateLabels[item.state];
     const failed = item.state === 'failed';
     const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
-    const author = item.author ?? item.metadata?.author ?? S.unknownAuthor;
+    const author = item.author ?? S.unknownAuthor;
     card.append(ui.h('div', 'extension-meta', [item.builtin ? S.builtin : '', S.version(item.installedVersion ?? item.version ?? '—'), S.author(author)].filter(Boolean).join(' · ')));
     card.append(ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`));
     if (item.description) card.append(ui.h('p', 'extension-description', item.description));
@@ -343,7 +343,8 @@ export function mountExtensions(ctx: FeatureContext): void {
       heading.append(packageAvatar(local?.icon ? iconUrl(local.name, local.installedVersion ?? local.version) : undefined));
       heading.append(title); if (hit.installed) heading.append(ui.pill(S.alreadyInstalled));
       const metadata = ui.h('div', 'extension-card-info');
-      const version = ui.h('div', 'extension-meta', `${S.version(hit.version)}${S.metaSeparator}${S.author(S.unknownAuthor)}`);
+      // the author is in the package document: until it arrives it is not known, which is not the same as missing
+      const version = ui.h('div', 'extension-meta', S.version(hit.version));
       metadata.append(ui.h('div', 'extension-meta', S.labelled(S.packageName, hit.name)), version);
       void fetchDetail(hit.name, hit.version).then(data => {
         if (signal.aborted) return;
