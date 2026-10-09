@@ -172,7 +172,3 @@ bot **6**。版本不符的扩展不能加载,页面显示「需要升级」。
 - `cortico-provider-grok`:xAI Grok 端点与设备码授权。
 
 这些包独立于本仓库发布。声卡原生模块、Python 推理环境、VTS 等运行时依赖由相应扩展说明。
-
-内建的 minecraft、qq、bilibili、websearch 也由 `pnpm publish:worlds` 生成同名扩展包 `cortico-world-<id>`,
-与框架同版本发布,给裁掉这些 World 的发行版安装。包内源码 import 框架内部模块,宿主的 Cortico 版本要与包版本相同;
-完整 Cortico 装上它们会因 id 冲突不加载。
