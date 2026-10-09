@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { Core } from "./fixture-core.ts";
 import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
 import { DeadlineError, withDeadline } from '../../src/core/util.ts';
+import { HOST_LIFECYCLE_ENDED } from '../../src/core/markers.ts';
 import { createBot, type BotDefinition } from '../../src/bot.ts';
 import type {
   CoreConfig,
@@ -167,14 +168,14 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
 
       await expect(host.pushEvent({
         type: 'late.event', ts: new Date().toISOString(), source: 'lease', text: '迟到事件',
-      })).rejects.toThrow();
+      })).rejects.toThrow(HOST_LIFECYCLE_ENDED);
       host.pushDeferred({ type: 'late.deferred', render: () => '迟到延迟事件' });
       host.reportUsage({ promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 });
 
       expect(core.store.latestCursor()).toBe(cursor);
       expect(usage).not.toHaveBeenCalled();
       expect(host.cognition).toBeUndefined();
-      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: expect.any(String) });
+      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: HOST_LIFECYCLE_ENDED });
       expect(cognitionRequest).not.toHaveBeenCalled();
     } finally {
       env.cleanup();
@@ -197,7 +198,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
       expect(await stopping).toEqual([expect.objectContaining({ worldId: 'lease-timeout' })]);
       await expect(probe.host!.pushEvent({
         type: 'late.timeout', ts: new Date().toISOString(), source: 'lease-timeout', text: '超时后事件',
-      })).rejects.toThrow();
+      })).rejects.toThrow(HOST_LIFECYCLE_ENDED);
     } finally {
       vi.useRealTimers();
       env.cleanup();

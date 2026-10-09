@@ -43,6 +43,7 @@ import { openRun, writeRunJson, type RunInfo } from './run.ts';
 import { currentAnchors } from './log-context.ts';
 import { MainLoop, type ContextFacts } from './loop.ts';
 import type { ResponseClient } from './generation.ts';
+import { HOST_LIFECYCLE_ENDED } from './markers.ts';
 
 /** 单个 World 的停止期限；失败或超时写入结果，其他停止操作继续。 */
 const MODULE_STOP_MS = 20_000;
@@ -355,7 +356,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const log = this.runlog.logger(`worlds.${mod.id}`);
     return {
       request: async (req: CognitionRequest): Promise<CognitionResult> => {
-        if (!active()) return { error: 'host lifecycle ended' };
+        if (!active()) return { error: HOST_LIFECYCLE_ENDED };
         const brief = typeof req?.brief === 'string' ? req.brief.trim() : '';
         if (!brief) return { error: 'cognition request has no brief: the World must state what to think about' };
         const own = new Set(mod.tools().map((t) => t.name));
@@ -492,7 +493,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         e: Omit<EventEnvelope, 'cursor' | 'origin' | 'contextDelivery'> & { origin?: EventOrigin },
         opts?: PushOptions,
       ): Promise<EventEnvelope> => {
-        if (!lease.active) throw new Error(`World ${mod.id}: host lifecycle ended`);
+        if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
         const deliver = opts?.deliver !== false && this.isWorldVisible(mod.id);
         const blobs = this.internBlobs(e.blobs);
         const envelope = this.store.append({
@@ -522,7 +523,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         );
       },
       pushCandidate: async (spec, opts) => {
-        if (!lease.active) throw new Error(`World ${mod.id}: host lifecycle ended`);
+        if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
         if (spec.sourceEvents.length === 0) throw new Error('候选票据至少需要一条原始事件');
         const origin = spec.origin ?? 'external';
         const sourceEvents = spec.sourceEvents.map((event) => this.store.append({
