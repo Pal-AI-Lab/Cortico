@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: '刪除供應商', duplicate: '複製供應商', cancel: '放棄變更', save: '儲存', saved: '已儲存',
   draftNote: '變更暫存在此瀏覽器，儲存後才寫入設定。API Key 不進暫存。',
   chooseModule: '請選擇供應商類型。', invalidNumber: '請輸入有效範圍內的數值。',
+  contextAboveOutput: '上下文上限必須大於最大輸出 token。',
   required: '此項必填。', jsonObject: '請輸入有效的 JSON 物件。', jsonArray: '請輸入有效的 JSON 陣列。',
   unsaved: '已暫存；儲存後寫入設定。',
   deleteConfirm: '刪除供應商及其目錄中的全部檔案？', referenced: '此供應商正在被以下 Bot 使用，不能刪除：', reload: '重新載入',

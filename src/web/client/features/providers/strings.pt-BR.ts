@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: 'Excluir conexão', duplicate: 'Duplicar conexão', cancel: 'Descartar alterações', save: 'Salvar', saved: 'Salvo',
   draftNote: 'As edições ficam neste navegador e são gravadas na configuração ao salvar. API Keys nunca ficam guardadas.',
   chooseModule: 'Escolha um tipo de conexão.', invalidNumber: 'Digite um número dentro do intervalo permitido.',
+  contextAboveOutput: 'O limite de contexto deve ser maior que o máximo de tokens de saída.',
   required: 'Obrigatório.', jsonObject: 'Digite um objeto JSON válido.', jsonArray: 'Digite um array JSON válido.',
   unsaved: 'Guardado como rascunho; gravado ao salvar.',
   deleteConfirm: 'Excluir esta conexão e todos os arquivos do diretório dela?', referenced: 'Esta conexão é usada por estes bots e não pode ser excluída: ', reload: 'Recarregar',

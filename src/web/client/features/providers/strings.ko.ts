@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: '연결 삭제', duplicate: '연결 복제', cancel: '변경 취소', save: '저장', saved: '저장했습니다',
   draftNote: '편집 내용은 이 브라우저에 임시 저장되며 저장할 때 설정에 기록됩니다. API Key는 임시 저장하지 않습니다.',
   chooseModule: '연결 유형을 선택하세요.', invalidNumber: '허용 범위 안의 숫자를 입력하세요.',
+  contextAboveOutput: '컨텍스트 한도는 최대 출력 token보다 커야 합니다.',
   required: '필수 항목입니다.', jsonObject: '올바른 JSON 객체를 입력하세요.', jsonArray: '올바른 JSON 배열을 입력하세요.',
   unsaved: '초안으로 보관 중이며 저장할 때 기록됩니다.',
   deleteConfirm: '이 연결과 디렉터리 안의 모든 파일을 삭제하시겠습니까?', referenced: '이 연결은 다음 봇에서 사용 중이라 삭제할 수 없습니다: ', reload: '다시 불러오기',

@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: 'Supprimer la connexion', duplicate: 'Dupliquer la connexion', cancel: 'Annuler les modifications', save: 'Enregistrer', saved: 'Enregistré',
   draftNote: "Les modifications sont conservées dans ce navigateur et écrites dans la configuration à l'enregistrement. Les API Keys ne sont jamais conservées.",
   chooseModule: 'Choisissez un type de connexion.', invalidNumber: 'Saisissez un nombre dans la plage autorisée.',
+  contextAboveOutput: 'La limite de contexte doit être supérieure aux tokens de sortie max.',
   required: 'Obligatoire.', jsonObject: 'Saisissez un objet JSON valide.', jsonArray: 'Saisissez un tableau JSON valide.',
   unsaved: "Conservé comme brouillon ; écrit à l'enregistrement.",
   deleteConfirm: 'Supprimer cette connexion et tous les fichiers de son répertoire ?', referenced: 'Cette connexion est utilisée par ces bots et ne peut pas être supprimée : ', reload: 'Recharger',

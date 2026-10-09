@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: 'Elimina connessione', duplicate: 'Duplica connessione', cancel: 'Annulla modifiche', save: 'Salva', saved: 'Salvato',
   draftNote: 'Le modifiche restano in questo browser e vengono scritte nella configurazione al salvataggio. Le API Key non vengono mai conservate.',
   chooseModule: 'Scegli un tipo di connessione.', invalidNumber: "Inserisci un numero nell'intervallo consentito.",
+  contextAboveOutput: 'Il limite di contesto deve essere maggiore dei token massimi in uscita.',
   required: 'Obbligatorio.', jsonObject: 'Inserisci un oggetto JSON valido.', jsonArray: 'Inserisci un array JSON valido.',
   unsaved: 'Conservato come bozza; scritto al salvataggio.',
   deleteConfirm: 'Eliminare questa connessione e tutti i file nella sua directory?', referenced: 'Questa connessione è usata da questi bot e non può essere eliminata: ', reload: 'Ricarica',

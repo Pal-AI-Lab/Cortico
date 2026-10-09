@@ -161,7 +161,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     };
     modelInput.addEventListener('change', () => {
       const listed = listedModels.find(item => item.id === modelInput.value);
-      if (listed?.contextWindow && contextInput) { spec.contextWindow = listed.contextWindow; contextInput.value = String(listed.contextWindow); delete editing.raw.contextWindow; }
+      if (listed?.contextWindow && contextInput) { spec.contextWindow = listed.contextWindow; contextInput.value = String(listed.contextWindow); delete editing.raw.contextWindow; errors.get('contextWindow')?.(); }
       if (listed?.inputImages !== undefined) { editing.entry.multimodal = listed.inputImages; images.checked = listed.inputImages; }
       change();
       noteCatalog();
@@ -194,9 +194,17 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     for (const [name, label] of [['temperature', S.temperature], ['maxTokens', S.maxTokens], ['contextWindow', S.context]] as const) {
       const input = field(body, name, label, editing.raw[name] ?? String(spec[name] ?? ''), value => {
         editing.raw[name] = value; if (!value) delete spec[name]; else spec[name] = Number(value);
-      }, value => !value || Number.isFinite(Number(value)) && (name === 'temperature' ? Number(value) >= 0 && Number(value) <= 2 : Number.isInteger(Number(value)) && Number(value) > 0) ? null : S.invalidNumber, 'number');
+      }, value => {
+        if (!value) return null;
+        const number = Number(value);
+        if (!Number.isFinite(number) || !(name === 'temperature' ? number >= 0 && number <= 2 : Number.isInteger(number) && number > 0)) return S.invalidNumber;
+        return name === 'contextWindow' && spec.maxTokens !== undefined && number <= spec.maxTokens ? S.contextAboveOutput : null;
+      }, 'number');
       if (name === 'contextWindow') contextInput = input;
-      if (name === 'maxTokens') body.append(outputNote);
+      if (name === 'maxTokens') {
+        body.append(outputNote);
+        input.addEventListener('input', () => { errors.get('contextWindow')?.(); change(); }, opts);
+      }
     }
     body.append(windowNote);
     if (module.serviceTiers.length) {
@@ -207,7 +215,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     images.setAttribute('role', 'switch'); images.classList.add('connection-switch');
     images.addEventListener('change', () => { editing.entry.multimodal = images.checked; change(); }, opts);
     const imagesField = ui.field(S.images, images); imagesField.classList.add('connection-toggle'); body.append(imagesField);
-    syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); noteCatalog(); };
+    syncSpec = () => { modelInput.value = spec.model; errors.get('model')?.(); if (contextInput && spec.contextWindow !== undefined) contextInput.value = String(spec.contextWindow); errors.get('contextWindow')?.(); noteCatalog(); };
   }
   function pricingBlock(box: HTMLElement, section: Section) {
     const body = block(box, section, true);
