@@ -1,7 +1,6 @@
 /**
  * mineflayer-pathfinder 2.4.5 与 prismarine-windows 2.10.0 的源码补丁:包一层 CommonJS 的
  * `Module.prototype._compile`,编译 `index.js` 前改写源码。要改的状态在闭包里,运行时替换函数够不着。
- * tsx 自己读文件编译 CommonJS,不经 `module.registerHooks` 的 load 钩子;两条加载路径都经过 `_compile`。
  * 补丁随 World 的源码走:World 作为扩展装进别的实例时,宿主的 pnpm 不会替它打包补丁。
  *
  * 引擎子进程以 `--import` 加载本模块;测试先 import 本模块再加载依赖。
