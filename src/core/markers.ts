@@ -45,7 +45,10 @@ export const ABORT_PREEMPTED = 'model round preempted by new input';
 export const ABORT_INTERRUPTED = 'model round interrupted by a new event';
 /** interruptible 工具收到的 interrupt 信号的原因。 */
 export const ABORT_TOOL_INTERRUPTED = 'interrupted by a new event';
+/** 主循环停止时的取消原因：中止在途轮次与关机信号，并传给 OutputTap.onAbort。 */
 export const ABORT_SHUTDOWN = 'core is shutting down';
+/** World 停止或卸载后，旧宿主的 pushEvent / pushCandidate 抛错时带这段文本，认知请求以它作为 error。 */
+export const HOST_LIFECYCLE_ENDED = 'host lifecycle ended';
 
 /** 工具失败的模型可见标记；结构化失败状态使用 ToolOutcome.failed。 */
 export const toolFailed = (detail: string): string => `[tool failed] ${detail}`;

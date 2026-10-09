@@ -12,6 +12,7 @@ const PROBE_TEMPLATE_DIR = mkdtempSync(join(tmpdir(), 'bot-probe-tpl-'));
 import { Core } from "./fixture-core.ts";
 import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
 import type { CoreConfig, World, WorldHost } from '../../src/core/types.ts';
+import { HOST_LIFECYCLE_ENDED } from '../../src/core/markers.ts';
 import { FakeLLM, makeCfg, makeFakePersona, sleep } from './helpers.ts';
 
 class ProbeWorld implements World {
@@ -224,7 +225,7 @@ describe('运行中挂载与卸载', () => {
     expect(systemPrefix()).not.toContain('[extra 的环境提示词]');
     expect(toolNames()).not.toContain('send_extra');
     // 旧实例的宿主已经失效:再推事件被拒
-    await expect(extra.emit('卸载后')).rejects.toThrow();
+    await expect(extra.emit('卸载后')).rejects.toThrow(HOST_LIFECYCLE_ENDED);
     const again = new ProbeWorld('extra');
     await core.mountWorld(again);
     expect(toolNames()).toContain('send_extra');
