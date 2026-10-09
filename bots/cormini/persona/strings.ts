@@ -13,8 +13,8 @@ import { consoleText as consoleRu, panelText as panelRu } from './strings.ru.ts'
 const consoleZh = {
   orientation: 'Persona的存在方式与元认知说明。',
   constitution: 'Persona 的长期原则。重载系统前缀或开始新上下文后生效。',
-  memoryNote: '记忆约定:她的档案怎么存、什么时候会自动浮现。',
-  workspaceLabel: '工作区(她自己写的记忆文件)',
+  memoryNote: '记忆约定:bot 的档案怎么存、什么时候会自动浮现。',
+  workspaceLabel: '工作区(bot 自己写的记忆文件)',
   workspaceNote: '宪法之外的全部工作区文件不可恢复地删除;宪法与人格检查点不动',
   workspaceStat: (n: number) => `${n}个文件(宪法之外)`,
   workspaceCleared: (n: number) => `已删除 ${n} 个工作区文件;宪法未动`,
@@ -28,8 +28,8 @@ const consoleZh = {
 export const consoleEn: typeof consoleZh = {
   orientation: 'How the Persona exists and its metacognition notes.',
   constitution: 'The Persona\'s long-term principles. Changes take effect after a system prefix reload or when a new context starts.',
-  memoryNote: 'Memory conventions: how her files are stored and when they surface on their own.',
-  workspaceLabel: 'Workspace (memory files she wrote herself)',
+  memoryNote: 'Memory conventions: how the bot\'s files are stored and when they surface on their own.',
+  workspaceLabel: 'Workspace (memory files the bot wrote itself)',
   workspaceNote: 'Every workspace file except the constitution is deleted irrecoverably; the constitution and persona checkpoints are untouched',
   workspaceStat: (n: number) => `${n} file${n === 1 ? '' : 's'} (besides the constitution)`,
   workspaceCleared: (n: number) => `Deleted ${n} workspace file${n === 1 ? '' : 's'}; the constitution is untouched`,

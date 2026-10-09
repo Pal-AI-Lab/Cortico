@@ -3,8 +3,8 @@ import type { consoleEn, panelEn } from './strings.ts';
 export const consoleText: Partial<typeof consoleEn> = {
   orientation: "Mode d'existence de la Persona et notes de métacognition.",
   constitution: "Principes à long terme de la Persona. Les modifications prennent effet après un rechargement du préfixe système ou au début d'un nouveau contexte.",
-  memoryNote: "Conventions de Memory : comment ses fichiers sont stockés et quand ils remontent d'eux-mêmes.",
-  workspaceLabel: "Espace de travail (fichiers de mémoire qu'elle a écrits elle-même)",
+  memoryNote: "Conventions de Memory : comment les fichiers du bot sont stockés et quand ils remontent d'eux-mêmes.",
+  workspaceLabel: "Espace de travail (fichiers de mémoire écrits par le bot lui-même)",
   workspaceNote: "Tous les fichiers de l'espace de travail sauf la constitution sont supprimés de façon irréversible ; la constitution et les points de contrôle de la Persona sont conservés",
   workspaceStat: (n: number) => `${n} fichier${n <= 1 ? '' : 's'} (hors constitution)`,
   workspaceCleared: (n: number) => `${n} fichier${n <= 1 ? '' : 's'} de l'espace de travail supprimé${n <= 1 ? '' : 's'} ; la constitution est conservée`,

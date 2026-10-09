@@ -3,8 +3,8 @@ import type { consoleEn, panelEn } from './strings.ts';
 export const consoleText: Partial<typeof consoleEn> = {
   orientation: 'Persona の在り方とメタ認知についての説明。',
   constitution: 'Persona の長期的な原則。システムプレフィックスを再読み込みするか、新しいコンテキストを始めると反映されます。',
-  memoryNote: '記憶の約束事：Persona のファイルがどう保存され、いつ自動で浮かび上がるか。',
-  workspaceLabel: 'ワークスペース（Persona 自身が書いた記憶ファイル）',
+  memoryNote: '記憶の約束事：ボットのファイルがどう保存され、いつ自動で浮かび上がるか。',
+  workspaceLabel: 'ワークスペース（ボット自身が書いた記憶ファイル）',
   workspaceNote: '憲法以外のワークスペースのファイルをすべて削除します。元に戻せません。憲法と人格のチェックポイントは変更しません',
   workspaceStat: (n: number) => `${n} 個のファイル（憲法以外）`,
   workspaceCleared: (n: number) => `ワークスペースのファイルを ${n} 個削除しました。憲法は変更していません`,

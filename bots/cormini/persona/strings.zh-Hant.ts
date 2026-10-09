@@ -3,8 +3,8 @@ import type { consoleEn, panelEn } from './strings.ts';
 export const consoleText: Partial<typeof consoleEn> = {
   orientation: 'Persona的存在方式與後設認知說明。',
   constitution: 'Persona 的長期原則。重新載入系統前綴或開始新上下文後生效。',
-  memoryNote: '記憶約定:她的檔案怎麼存、什麼時候會自動浮現。',
-  workspaceLabel: '工作區(她自己寫的記憶檔案)',
+  memoryNote: '記憶約定:bot 的檔案怎麼存、什麼時候會自動浮現。',
+  workspaceLabel: '工作區(bot 自己寫的記憶檔案)',
   workspaceNote: '憲法之外的全部工作區檔案不可復原地刪除;憲法與人格檢查點不動',
   workspaceStat: (n: number) => `${n}個檔案(憲法之外)`,
   workspaceCleared: (n: number) => `已刪除 ${n} 個工作區檔案;憲法未動`,

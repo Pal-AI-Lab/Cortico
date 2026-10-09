@@ -3,8 +3,8 @@ import type { consoleEn, panelEn } from './strings.ts';
 export const consoleText: Partial<typeof consoleEn> = {
   orientation: 'Come esiste la Persona e note sulla sua metacognizione.',
   constitution: 'I principi a lungo termine della Persona. Le modifiche hanno effetto dopo il ricaricamento del prefisso di sistema o quando inizia un nuovo contesto.',
-  memoryNote: 'Convenzioni di Memory: come sono archiviati i suoi file e quando riemergono da soli.',
-  workspaceLabel: 'Area di lavoro (file di memoria scritti da lei)',
+  memoryNote: 'Convenzioni di Memory: come sono archiviati i file del bot e quando riemergono da soli.',
+  workspaceLabel: 'Area di lavoro (file di memoria scritti dal bot stesso)',
   workspaceNote: "Tutti i file dell'area di lavoro tranne la costituzione vengono eliminati in modo irreversibile; la costituzione e i checkpoint della Persona restano invariati",
   workspaceStat: (n: number) => `${n} file (esclusa la costituzione)`,
   workspaceCleared: (n: number) => `${n} file dell'area di lavoro ${n === 1 ? 'eliminato' : 'eliminati'}; la costituzione resta invariata`,

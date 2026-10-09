@@ -3,8 +3,8 @@ import type { consoleEn, panelEn } from './strings.ts';
 export const consoleText: Partial<typeof consoleEn> = {
   orientation: 'Persona의 존재 방식과 메타인지에 대한 설명.',
   constitution: 'Persona의 장기 원칙. 시스템 프리픽스를 다시 불러오거나 새 컨텍스트를 시작하면 적용됩니다.',
-  memoryNote: '기억 규칙: Persona의 파일이 어떻게 저장되고 언제 저절로 떠오르는지.',
-  workspaceLabel: '작업 공간(Persona가 직접 쓴 기억 파일)',
+  memoryNote: '기억 규칙: 봇의 파일이 어떻게 저장되고 언제 저절로 떠오르는지.',
+  workspaceLabel: '작업 공간(봇이 직접 쓴 기억 파일)',
   workspaceNote: '헌법을 제외한 모든 작업 공간 파일을 되돌릴 수 없게 삭제합니다. 헌법과 인격 체크포인트는 건드리지 않습니다',
   workspaceStat: (n: number) => `파일 ${n}개(헌법 제외)`,
   workspaceCleared: (n: number) => `작업 공간 파일 ${n}개를 삭제했습니다. 헌법은 건드리지 않았습니다`,
