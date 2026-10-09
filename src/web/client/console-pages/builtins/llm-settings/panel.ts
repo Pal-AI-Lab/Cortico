@@ -12,6 +12,7 @@ import type {
   Disposable,
 } from '../../../../shared/client-panel.ts';
 import { pricingEditor, type ModelQuote } from './pricing-panel.ts';
+import { pick } from '../../../../../core/language.ts';
 import { panel } from './strings.ts';
 import { configField, type ConfigGroupEntry } from '../../../features/config/view.ts';
 
@@ -154,7 +155,7 @@ export function probeCard(ui: ConsoleUi, S: typeof panel.zh, result: ProbeResult
 export const llmSettingsPanel: ConsolePanel = {
   mount: async (ctx: ConsolePanelContext) => {
     const { ui, root } = ctx;
-    const S = ctx.language === 'en' ? panel.en : panel.zh;
+    const S = pick(ctx.language, panel);
     // `<datalist>` 靠全局 id 绑定;每次挂载一个前缀,同页两份面板互不串。
     const uid = `llm-${Math.random().toString(36).slice(2, 8)}`;
     let selected = '';

@@ -1,5 +1,5 @@
 import type { ConsoleUi } from '../../../../shared/client-panel.ts';
-import type { Language } from '../../../core/language.ts';
+import { pick, type Language } from '../../../../../core/language.ts';
 import { panel } from './strings.ts';
 
 interface Rule {
@@ -69,10 +69,10 @@ export function pricingEditor(
   saved: unknown[],
   quotes: ModelQuote[],
   commit: (pricing: unknown[]) => void,
-  language?: Language,
+  language: Language,
   draft?: { raw?: string; onRaw(value: string): void },
 ) {
-  const S = language === 'en' ? panel.en : panel.zh;
+  const S = pick(language, panel);
   const card = ui.sheet({
     title: S.pricingTitle,
     desc: S.pricingDescription,
