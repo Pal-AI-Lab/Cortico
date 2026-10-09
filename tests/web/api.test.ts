@@ -317,6 +317,25 @@ describe('/api/prompts 与 session 前缀重载', () => {
     expect(r.status).toBe(200);
     expect(prefixReloads).toBe(1);
   });
+
+  it('async 路由的拒绝回 500 并带上错误', async () => {
+    const app2 = new WebApp({
+      store, memoryDir, dataDir,
+      getStatus: () => ({}), log: nullLogger(),
+      prompts: {
+        list: async () => { throw new TypeError('fetch failed'); },
+        write: () => '已保存',
+      },
+    });
+    const p2 = await app2.start(0);
+    try {
+      const r = await fetch(`http://127.0.0.1:${p2}/api/prompts`);
+      expect(r.status).toBe(500);
+      expect(((await r.json()) as { error: string }).error).toContain('fetch failed');
+    } finally {
+      await app2.stop();
+    }
+  });
 });
 
 describe('/api/tool-schemas', () => {
