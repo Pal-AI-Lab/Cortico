@@ -1393,12 +1393,16 @@ export class WebApp {
       res.status(403).json({ error: '跨站请求被拒绝' });
     });
 
-    const wrap = (h: (req: Request, res: Response) => void) => (req: Request, res: Response) => {
-      try {
-        h(req, res);
-      } catch (err) {
+    // Express 4 不接 handler 返回的 promise;async handler 的拒绝与同步异常一样记日志、回 500。
+    const wrap = (h: (req: Request, res: Response) => void | Promise<void>) => (req: Request, res: Response) => {
+      const fail = (err: unknown) => {
         this.deps.log.error(`API错误 ${req.path}`, { error: String(err) });
         if (!res.headersSent) res.status(500).json({ error: String(err) });
+      };
+      try {
+        void Promise.resolve(h(req, res)).catch(fail);
+      } catch (err) {
+        fail(err);
       }
     };
     // 登录、登出与状态三条路由在闸前;其余路由连同各自的 body 解析都在闸后。
