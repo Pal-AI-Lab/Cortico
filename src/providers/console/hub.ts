@@ -16,6 +16,7 @@ import { quotePrices } from '../pricebook.ts';
 import { connectionGroup } from './config.ts';
 import { instanceIsRunning } from '../../core/instance-lock.ts';
 import { CORE_DEFAULTS } from '../../core/config.ts';
+import { text } from './strings.ts';
 
 export class ProviderHubError extends Error {
   constructor(message: string, readonly status = 400) { super(message); }
@@ -76,11 +77,12 @@ export class ProviderHub {
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
     const module = this.modules.find(m => m.id === entry.kind);
-    if (!module) return { state: 'module-missing', reason: language === 'zh' ? '供应商模块不可用。' : 'Provider module is unavailable.' };
+    const S = text(language);
+    if (!module) return { state: 'module-missing', reason: S.moduleMissing };
     try { validateEntry(module, entry, language); }
     catch (error) { return { state: 'invalid', reason: String(error) }; }
     if (!entry.spec?.model || (entry.secret && this.settings.secretStatus(name, entry) === 'none'))
-      return { state: 'needs-setup', reason: !entry.spec?.model ? (language === 'zh' ? '请选择模型。' : 'Model is required.') : (language === 'zh' ? '请配置 API Key。' : 'API Key is required.') };
+      return { state: 'needs-setup', reason: !entry.spec?.model ? S.modelMissing : S.apiKeyMissing };
     const available = module.availability?.(name, entry, language);
     if (available && !available.ready) return { state: 'runtime-unavailable', reason: available.reason };
     return { state: 'ready' };

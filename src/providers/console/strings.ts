@@ -42,6 +42,9 @@ const zh = {
   probeNoResponses: "请求返回 404；请检查供应地址、端点路径及服务支持的 API。",
   probeAuth: '鉴权失败:检查密钥变量名与密钥值',
   probeUnreachable: "连接或响应流失败；请检查网络、供应地址与代理。",
+  moduleMissing: '供应商模块不可用。',
+  modelMissing: '请选择模型。',
+  apiKeyMissing: '请配置 API Key。',
 };
 const en: typeof zh = {
   connectionDescription: 'Requests bind at start; changes apply from the next request.',
@@ -84,5 +87,8 @@ const en: typeof zh = {
   probeNoResponses: "The request returned 404; check the provider URL, endpoint path and supported APIs.",
   probeAuth: 'Authentication failed: check the secret variable name and the key value',
   probeUnreachable: "The connection or response stream failed; check the network, provider URL and proxy.",
+  moduleMissing: 'Provider module is unavailable.',
+  modelMissing: 'Model is required.',
+  apiKeyMissing: 'API Key is required.',
 };
 export const text = (language: Language) => pick(language, { zh, en });
