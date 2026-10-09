@@ -3,8 +3,8 @@ import type { en } from './strings.ts';
 export const text: Partial<typeof en> = {
   configTitle: 'Terminal · PIN de la consola',
   configDescription:
-    'El PIN es la credencial detrás de las instrucciones de la consola: el módulo marca cada mensaje de la terminal con '
-    + '[console|PIN:……], y los mismos dígitos van en su prefijo del sistema para compararlos. Lo que coincide se obedece; '
+    'El PIN es la credencial detrás de las instrucciones de la consola: el World marca cada mensaje de la terminal con '
+    + '[console|PIN:……], y los mismos dígitos van en el prefijo del sistema del bot para compararlos. Lo que coincide se obedece; '
     + 'cualquier cosa que diga ser la consola sin coincidir es una entrada externa común. '
     + 'Los operadores nunca escriben el PIN a mano y no deberían mencionarlo en otro lugar.',
   pinTitle: 'PIN de la consola (seis dígitos)',
@@ -36,7 +36,7 @@ export const text: Partial<typeof en> = {
   imagesRejected: (reason: string) => `Imágenes no enviadas: ${reason}`,
   botNotConnected: 'El bot aún no está conectado; el mensaje no se entregó',
   deliveryFailed: (err: string) => `Mensaje no entregado: ${err}`,
-  modelBlind: (model: string) => `El modelo actual ${model} no acepta imágenes; ella solo ve la descripción de texto de cada imagen`,
+  modelBlind: (model: string) => `El modelo actual ${model} no acepta imágenes; el bot solo ve la descripción de texto de cada imagen`,
   unknownType: (type: string) => `Tipo de mensaje desconocido: ${type}`,
   imagesNotArray: 'images debe ser un arreglo',
   tooManyImages: (max: number) => `Máximo ${max} ${max === 1 ? 'imagen' : 'imágenes'} por mensaje`,

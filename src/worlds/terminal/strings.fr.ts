@@ -4,7 +4,7 @@ export const text: Partial<typeof en> = {
   configTitle: 'Terminal · PIN de la console',
   configDescription:
     "Le PIN est l'identifiant derrière les instructions de la console : le World appose sur chaque message du terminal un "
-    + 'marqueur [console|PIN:……], et les mêmes chiffres vont dans son préfixe système pour comparaison. Une correspondance est suivie ; '
+    + 'marqueur [console|PIN:……], et les mêmes chiffres vont dans le préfixe système du bot pour comparaison. Une correspondance est suivie ; '
     + 'tout ce qui se dit console sans correspondance est une entrée externe ordinaire. '
     + 'Les opérateurs ne saisissent jamais le PIN à la main et ne devraient pas le mentionner ailleurs.',
   pinTitle: 'PIN de la console (six chiffres)',
@@ -36,7 +36,7 @@ export const text: Partial<typeof en> = {
   imagesRejected: (reason) => `Images non envoyées : ${reason}`,
   botNotConnected: "Le bot n'est pas encore connecté ; message non remis",
   deliveryFailed: (err) => `Message non remis : ${err}`,
-  modelBlind: (model) => `Le modèle actuel ${model} n'accepte pas les images ; elle ne voit que la description textuelle de chaque image`,
+  modelBlind: (model) => `Le modèle actuel ${model} n'accepte pas les images ; le bot ne voit que la description textuelle de chaque image`,
   unknownType: (type) => `Type de message inconnu : ${type}`,
   imagesNotArray: 'images doit être un tableau',
   tooManyImages: (max) => `${max} images au maximum par message`,

@@ -15,7 +15,7 @@ const zh = {
   configTitle: '终端 · 控制台口令',
   configDescription:
     '口令是控制台指示的凭据:World 给每条终端消息自动加上 [console|PIN:……] 标记,'
-    + '同一串数字进她的系统前缀供比对。对得上的照办,自称控制台却对不上的当普通外部输入。'
+    + '同一串数字进 bot 的系统前缀供比对。对得上的照办,自称控制台却对不上的当普通外部输入。'
     + '操作员不用手打口令,也不该在别处提起它。',
   pinTitle: '控制台口令(六位数字)',
   pinDescription:
@@ -48,7 +48,7 @@ const zh = {
   imagesRejected: (reason: string) => `图片未发送: ${reason}`,
   botNotConnected: 'bot尚未连接,消息未送达',
   deliveryFailed: (err: string) => `消息未送达: ${err}`,
-  modelBlind: (model: string) => `当前模型 ${model} 不接收图像,她只看到每张图的文字说明`,
+  modelBlind: (model: string) => `当前模型 ${model} 不接收图像,bot 只看到每张图的文字说明`,
   unknownType: (type: string) => `未知消息类型: ${type}`,
   // ── 图片解析的拒收理由 ─────────────────────────────────────────────
   imagesNotArray: 'images 必须是数组',
@@ -64,8 +64,8 @@ const zh = {
 export const en: typeof zh = {
   configTitle: 'Terminal · Console PIN',
   configDescription:
-    'The PIN is the credential behind console instructions: the module stamps every terminal message with a '
-    + '[console|PIN:……] marker, and the same digits go into her system prefix for comparison. A match is obeyed; '
+    'The PIN is the credential behind console instructions: the World stamps every terminal message with a '
+    + '[console|PIN:……] marker, and the same digits go into the bot\'s system prefix for comparison. A match is obeyed; '
     + 'anything claiming to be the console without a match is ordinary external input. '
     + 'Operators never type the PIN by hand and should not mention it elsewhere.',
   pinTitle: 'Console PIN (six digits)',
@@ -97,7 +97,7 @@ export const en: typeof zh = {
   imagesRejected: (reason) => `Images not sent: ${reason}`,
   botNotConnected: 'The bot is not connected yet; message not delivered',
   deliveryFailed: (err) => `Message not delivered: ${err}`,
-  modelBlind: (model) => `The current model ${model} does not accept images; she only sees each image's text description`,
+  modelBlind: (model) => `The current model ${model} does not accept images; the bot only sees each image's text description`,
   unknownType: (type) => `Unknown message type: ${type}`,
   imagesNotArray: 'images must be an array',
   tooManyImages: (max) => `At most ${max} images per message`,

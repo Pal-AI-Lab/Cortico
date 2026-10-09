@@ -4,7 +4,7 @@ export const text: Partial<typeof en> = {
   configTitle: 'Terminal · Konsolen-PIN',
   configDescription:
     'Die PIN ist der Nachweis hinter Konsolenanweisungen: Die World versieht jede Terminalnachricht mit einer '
-    + 'Markierung [console|PIN:……], und dieselben Ziffern stehen zum Abgleich in ihrem Systempräfix. Bei Übereinstimmung wird gehorcht; '
+    + 'Markierung [console|PIN:……], und dieselben Ziffern stehen zum Abgleich im Systempräfix des Bots. Bei Übereinstimmung wird gehorcht; '
     + 'was sich ohne Übereinstimmung als Konsole ausgibt, ist gewöhnliche externe Eingabe. '
     + 'Operatoren tippen die PIN nie von Hand und sollten sie nirgendwo sonst erwähnen.',
   pinTitle: 'Konsolen-PIN (sechs Ziffern)',
@@ -36,7 +36,7 @@ export const text: Partial<typeof en> = {
   imagesRejected: (reason) => `Bilder nicht gesendet: ${reason}`,
   botNotConnected: 'Der Bot ist noch nicht verbunden; Nachricht nicht zugestellt',
   deliveryFailed: (err) => `Nachricht nicht zugestellt: ${err}`,
-  modelBlind: (model) => `Das aktuelle Modell ${model} akzeptiert keine Bilder; sie sieht nur die Textbeschreibung jedes Bildes`,
+  modelBlind: (model) => `Das aktuelle Modell ${model} akzeptiert keine Bilder; der Bot sieht nur die Textbeschreibung jedes Bildes`,
   unknownType: (type) => `Unbekannter Nachrichtentyp: ${type}`,
   imagesNotArray: 'images muss ein Array sein',
   tooManyImages: (max) => `Höchstens ${max} Bilder pro Nachricht`,

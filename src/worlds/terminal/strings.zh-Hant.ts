@@ -4,7 +4,7 @@ export const text: Partial<typeof en> = {
   configTitle: '終端 · 控制台口令',
   configDescription:
     '口令是控制台指示的憑證:World 給每則終端訊息自動加上 [console|PIN:……] 標記,'
-    + '同一串數字進她的系統前綴供比對。對得上的照辦,自稱控制台卻對不上的當一般外部輸入。'
+    + '同一串數字進 bot 的系統前綴供比對。對得上的照辦,自稱控制台卻對不上的當一般外部輸入。'
     + '操作員不用手打口令,也不該在別處提起它。',
   pinTitle: '控制台口令(六位數字)',
   pinDescription:
@@ -35,7 +35,7 @@ export const text: Partial<typeof en> = {
   imagesRejected: (reason: string) => `圖片未傳送: ${reason}`,
   botNotConnected: 'bot尚未連線,訊息未送達',
   deliveryFailed: (err: string) => `訊息未送達: ${err}`,
-  modelBlind: (model: string) => `目前模型 ${model} 不接收影像,她只看到每張圖的文字說明`,
+  modelBlind: (model: string) => `目前模型 ${model} 不接收影像,bot 只看到每張圖的文字說明`,
   unknownType: (type: string) => `未知訊息類型: ${type}`,
   imagesNotArray: 'images 必須是陣列',
   tooManyImages: (max: number) => `一則訊息最多 ${max} 張圖`,
