@@ -1,3 +1,37 @@
 import type { en } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
+export const text: Partial<typeof en> = {
+  profileObject: 'La configuración del modelo debe ser un objeto',
+  modelRequired: 'El nombre del modelo no puede estar vacío',
+  thinkingBoolean: 'El interruptor de razonamiento debe ser un booleano',
+  tierUnsupported: (title: string) => `${title} no admite este nivel de razonamiento`,
+  effortString: 'El esfuerzo de razonamiento debe ser una cadena no vacía',
+  effortWithoutThinking: 'No se puede definir el esfuerzo de razonamiento con el razonamiento desactivado',
+  temperatureRange: 'temperature debe estar entre 0 y 2',
+  positiveInteger: (field: string) => `${field} debe ser un entero positivo`,
+  optionsObject: 'Las opciones nativas deben ser un objeto',
+  kindChange: 'Una instancia no puede cambiar su tipo de módulo de proveedor',
+  baseUrlFormat: 'La URL del proveedor debe ser una URL HTTP(S) sin credenciales',
+  secretName: 'La referencia al secreto debe ser un nombre de variable de entorno',
+  multimodalBoolean: 'El interruptor multimodal debe ser un booleano',
+  serviceTierString: 'El nivel de servicio debe ser una cadena',
+  serviceTierUnsupported: (title: string, tier: string) =>
+    `${title} no admite el nivel de servicio ${tier}`,
+  pricingArray: 'Los precios deben ser un arreglo',
+  rulesArray: 'Las reglas de precios deben ser un arreglo',
+  ruleShape: 'Una regla de precios necesita un medidor y una tarifa no negativa',
+  unitRequired: 'La unidad no puede estar vacía',
+  tokenUnit: 'Los medidores estándar de token deben usar la unidad token',
+  bandsArray: 'Los tramos de entrada deben ser un arreglo',
+  bandsIncreasing: 'Los umbrales de los tramos de entrada deben ser estrictamente crecientes y mayores que 0',
+  modelsRequired: 'Una cotización necesita nombres de modelo explícitos o *',
+  currencyRequired: 'La moneda de la cotización no puede estar vacía',
+  basisValue: 'La base de la cotización debe ser marginal o equivalent',
+  sourceRequired: 'Una cotización necesita una fuente',
+  tiersObject: 'Los precios por nivel de servicio deben ser un objeto',
+  tierNameRequired: 'El nombre del nivel de servicio no puede estar vacío',
+  tierRules: 'Los precios por nivel de servicio necesitan un objeto de reglas',
+  timeWindowsUnsupported: 'Los precios por franja horaria los declara una extensión de proveedor en la cotización de su módulo; los precios del endpoint no aceptan timeWindows',
+  noModel: 'Ningún modelo seleccionado',
+  noSecret: (name: string) => `Falta el secreto ${name}`,
+};
