@@ -1,3 +1,50 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  // index.ts
+  groupPersonas: 'Persona y Memory',
+  groupWorlds: 'World',
+  moduleInstancesAria: 'Instancias de World',
+  navAria: 'Navegación de la consola',
+  runResume: 'Reanudar',
+  runPause: 'Pausar',
+  runUnavailable: 'Control de ejecución no disponible',
+  shutdownAria: 'Apagar',
+  settingsAria: 'Configuración',
+  settingsTitle: 'Configuración',
+  finishing: 'Apagando…',
+  shutdownTitle: 'Apagar',
+  shutdownBody: 'El proceso se cerrará y la consola se desconectará.',
+  confirmShutdownTitle: '⚠ Apagar',
+  confirmShutdownAgainTitle: '⚠⚠ ¿Confirmar apagado?',
+  confirmShutdownAgainBody: '¿Detener la ejecución y salir del proceso?',
+  finishingToast: 'Apagando…',
+  stepIncomplete: 'incompleto',
+  doneShutdown: 'Apagado',
+  resultLocalIncomplete: 'Pasos de apagado local incompletos',
+  resultExternalUnverified: 'Apagado localmente; estado externo sin verificar',
+  resultUnverified: 'Pasos de apagado ejecutados; estado sin verificar',
+  resultDefault: 'Pasos de apagado ejecutados.',
+  noReceipt: (msg: string) =>
+    `No se recibió el resultado del apagado (${msg}); es posible que el proceso haya terminado. Consulta los registros de shutdown en data/runs/<run>/log.jsonl de la ejecución actual.`,
+  docTitle: (name: string) => `Consola · ${name}`,
+  renameTitle: 'Haz clic para cambiar el nombre',
+  renameSaved: 'Nombre visible guardado',
+  renameFailed: (msg: string) => `No se guardó el nombre visible: ${msg}`,
+  releaseUpdate: (latest: string, current: string) => `Se publicó Cortico ${latest} (en ejecución: ${current})`,
+  // avatar.ts
+  changeAvatar: 'Cambiar avatar del bot',
+  uploadAvatar: 'Subir y recortar el avatar del bot',
+  unreadable: 'No se pudo leer esta imagen',
+  cropPreview: 'Vista previa del recorte del avatar',
+  zoomAria: 'Zoom del avatar',
+  zoom: 'Zoom',
+  note: 'Arrastra la imagen para reubicarla; usa la rueda del mouse o el control deslizante para hacer zoom. Al guardar se escribe avatar.png en el directorio raíz del bot.',
+  cancel: 'Cancelar',
+  save: 'Guardar avatar',
+  cropTitle: 'Recortar avatar',
+  noCanvas: 'El navegador no pudo crear un lienzo de imagen',
+  saved: 'Avatar guardado',
+  // ../main.ts
+  featureLoadFailed: (label: string) => `No se pudo cargar “${label}”`,
+};
