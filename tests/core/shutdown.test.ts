@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 import { Core } from "./fixture-core.ts";
 import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
-import { withDeadline } from '../../src/core/util.ts';
+import { DeadlineError, withDeadline } from '../../src/core/util.ts';
 import { createBot, type BotDefinition } from '../../src/bot.ts';
 import type {
   CoreConfig,
@@ -97,15 +97,17 @@ describe('withDeadline', () => {
     await expect(withDeadline(Promise.resolve('ok'), 1000)).resolves.toBe('ok');
   });
 
-  it('不肯回来就抛,而且错误里说得出是哪一步', async () => {
+  it('不肯回来就以 DeadlineError 拒绝,带着步骤名和期限', async () => {
     vi.useFakeTimers();
     try {
       const never = new Promise<void>(() => { /* 永不 resolve */ });
       const p = withDeadline(never, 5_000, 'World 收尾');
-      const caught = p.catch((e: Error) => e.message);
+      const caught = p.catch((e: unknown) => e);
       await vi.advanceTimersByTimeAsync(5_100);
-      expect(await caught).toContain('World 收尾');
-      expect(await caught).toContain('5s');
+      const err = await caught;
+      expect(err).toBeInstanceOf(DeadlineError);
+      expect(err).toMatchObject({ what: 'World 收尾', ms: 5_000 });
+      expect((err as DeadlineError).message).toContain('World 收尾');
     } finally {
       vi.useRealTimers();
     }
