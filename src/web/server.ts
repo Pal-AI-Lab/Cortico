@@ -27,37 +27,8 @@ import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
-import { isLanguage, languageTag, pick, systemLanguage, type Language } from '../core/language.ts';
-
-/** 服务端直接回给操作者的几句话:运行控制回执与关机账的总结行,按请求的界面语言。API 协议错误不在此列。 */
-const SERVER_TEXT = {
-  zh: {
-    paused: '已暂停:事件照常落库排队,不投递唤醒',
-    resumed: '已继续:积压事件一次性投递',
-    exitSupervised: '进程即将退出,启动器随即重新拉起',
-    exitSupervisedPaused: '进程即将退出,启动器随即重新拉起;回来时事件投递是暂停的,要在运行状态里按继续',
-    exitUnsupervised: '进程即将退出;没有检测到启动器循环,需要手动重新启动',
-    shutdownSkipped: (n: number, labels: string[]) => `本地关机完成,但有 ${n} 步没走完:${labels.join('、')}`,
-    shutdownComplete: (n: number) => `本地关机完成(${n} 步全部走完)`,
-    externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
-    externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-      `${label}=${status}（${detail}）。人工动作:${manualAction}`,
-    externalVerified: '；外部状态检查均已验证结束',
-  },
-  en: {
-    paused: 'Paused: events are still stored and queued, no wake is delivered',
-    resumed: 'Resumed: the backlog is delivered in one batch',
-    exitSupervised: 'The process is about to exit; the launcher will start it again',
-    exitSupervisedPaused: 'The process is about to exit; the launcher will start it again with event delivery paused, so resume it in the run status',
-    exitUnsupervised: 'The process is about to exit; no launcher loop was detected, so it must be started again by hand',
-    shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step(s) did not complete: ${labels.join(', ')}`,
-    shutdownComplete: (n: number) => `Local shutdown finished (all ${n} steps completed)`,
-    externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
-    externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-      `${label}=${status} (${detail}). Manual action: ${manualAction}`,
-    externalVerified: '; every external state check verified ended',
-  },
-};
+import { isLanguage, languageTag, systemLanguage, type Language } from '../core/language.ts';
+import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
 import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
 import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
@@ -968,7 +939,7 @@ export class WebApp {
       const localComplete = report.localComplete ?? skipped.length === 0;
       const externalChecks = report.externalChecks ?? [];
       const unverified = externalChecks.filter((check) => check.status !== 'verified-ended');
-      const t = pick(language, SERVER_TEXT);
+      const t = serverText(language);
       const localResult = !localComplete
         ? t.shutdownSkipped(skipped.length, skipped.map((s) => s.label))
         : t.shutdownComplete(report.steps.length);
@@ -1661,7 +1632,7 @@ export class WebApp {
       run.pause();
       this.deps.log.warn('运行已暂停(人工操作)');
       this.debugBroadcast({ t: 'status', status: this.safeStatus() });
-      res.json({ ok: true, paused: true, result: pick(this.languageOf(req), SERVER_TEXT).paused });
+      res.json({ ok: true, paused: true, result: serverText(this.languageOf(req)).paused });
     }));
 
     app.post('/api/run/resume', wrap((req, res) => {
@@ -1670,7 +1641,7 @@ export class WebApp {
       run.resume();
       this.deps.log.warn('运行已继续(人工操作)');
       this.debugBroadcast({ t: 'status', status: this.safeStatus() });
-      res.json({ ok: true, paused: false, result: pick(this.languageOf(req), SERVER_TEXT).resumed });
+      res.json({ ok: true, paused: false, result: serverText(this.languageOf(req)).resumed });
     }));
 
     /** 将关机请求转交装配层，等待完成后返回各步骤结果。 */
@@ -1684,7 +1655,7 @@ export class WebApp {
     app.post('/api/run/restart', (req: Request, res: Response) => {
       const supervised = this.deps.run?.supervised === true;
       const language = this.languageOf(req);
-      const text = pick(language, SERVER_TEXT);
+      const text = serverText(language);
       void this.respondPowerAction(
         res, language, this.deps.run?.restart, '重启控制不可用', '收到重启请求(人工操作)',
         !supervised ? text.exitUnsupervised

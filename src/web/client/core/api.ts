@@ -18,17 +18,8 @@ import {
   type PathPickerOptions,
   type PathPickerResponse,
 } from '../../shared/path-picker.ts';
-import { languageHeaders, pick } from './language.ts';
-
-const zh = {
-  httpStatus: (status: number, snippet: string) => `HTTP ${status}：${snippet}`,
-  notJson: (status: number, snippet: string) => `响应不是合法 JSON（HTTP ${status}）：${snippet}`,
-};
-const en: typeof zh = {
-  httpStatus: (status: number, snippet: string) => `HTTP ${status}: ${snippet}`,
-  notJson: (status: number, snippet: string) => `Response is not valid JSON (HTTP ${status}): ${snippet}`,
-};
-const S = pick({ zh, en });
+import { languageHeaders } from './language.ts';
+import { S } from './strings.ts';
 
 /** 所有请求都接受一个取消信号；面板一律传 `ctx.signal`。 */
 export interface RequestOptions {

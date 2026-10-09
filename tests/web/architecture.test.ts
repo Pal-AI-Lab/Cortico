@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 const REPO = resolve(import.meta.dirname, '../..');
 const WEB_CORE_ROOTS = ['src/web/client', 'src/web/shared'];
-const WEB_CORE_FILES = ['src/web/server.ts', 'src/web/console-pages.ts', 'src/web/files.ts'];
+const WEB_CORE_FILES = ['src/web/server.ts', 'src/web/strings.ts', 'src/web/console-pages.ts', 'src/web/files.ts'];
 
 const toPosix = (p: string): string => p.replaceAll('\\', '/');
 

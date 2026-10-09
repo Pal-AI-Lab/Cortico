@@ -10,6 +10,7 @@ import { S as it } from './strings.it.ts';
 import { S as ru } from './strings.ru.ts';
 
 const zh = {
+  // index.ts
   groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World 实例',
@@ -40,9 +41,25 @@ const zh = {
   renameSaved: '展示名已保存',
   renameFailed: (msg: string) => `展示名没保存成:${msg}`,
   releaseUpdate: (latest: string, current: string) => `Cortico ${latest} 已发布(当前 ${current})`,
+  // avatar.ts
+  changeAvatar: '更换 bot 头像',
+  uploadAvatar: '上传并裁剪 bot 头像',
+  unreadable: '无法读取这张图片',
+  cropPreview: '头像裁剪预览',
+  zoomAria: '头像缩放',
+  zoom: '缩放',
+  note: '拖动图片调整位置，滚动鼠标滚轮或使用滑杆缩放；保存后写入 bot 根目录的 avatar.png。',
+  cancel: '取消',
+  save: '保存头像',
+  cropTitle: '裁剪头像',
+  noCanvas: '浏览器无法创建图片画布',
+  saved: '头像已保存',
+  // ../main.ts
+  featureLoadFailed: (label: string) => `「${label}」没能加载`,
 };
 
 export const en: typeof zh = {
+  // index.ts
   groupPersonas: 'Persona & Memory',
   groupWorlds: 'World',
   moduleInstancesAria: 'World instances',
@@ -73,6 +90,21 @@ export const en: typeof zh = {
   renameSaved: 'Display name saved',
   renameFailed: (msg: string) => `Display name not saved: ${msg}`,
   releaseUpdate: (latest: string, current: string) => `Cortico ${latest} released (running ${current})`,
+  // avatar.ts
+  changeAvatar: 'Change bot avatar',
+  uploadAvatar: 'Upload and crop the bot avatar',
+  unreadable: 'Could not read this image',
+  cropPreview: 'Avatar crop preview',
+  zoomAria: 'Avatar zoom',
+  zoom: 'Zoom',
+  note: 'Drag the image to reposition; use the mouse wheel or the slider to zoom. Saving writes avatar.png to the bot root directory.',
+  cancel: 'Cancel',
+  save: 'Save avatar',
+  cropTitle: 'Crop avatar',
+  noCanvas: 'The browser could not create an image canvas',
+  saved: 'Avatar saved',
+  // ../main.ts
+  featureLoadFailed: (label: string) => `"${label}" failed to load`,
 };
 
 export const S = pick({
