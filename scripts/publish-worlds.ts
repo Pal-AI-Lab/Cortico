@@ -67,8 +67,6 @@ export const packageNameOf = (id: string): string => `cortico-world-${id}`;
 
 /** `from '…'`、`import '…'`、`import('…')` 与 `new URL('…', import.meta.url)` 里的相对路径。 */
 const RELATIVE_RE = /(\bfrom\s*|\bimport\s*|\bimport\(\s*|new URL\(\s*)(['"])(\.\.?\/[^'"\s]*)\2/g;
-/** 只导入类型的语句,运行时不加载,不算依赖。 */
-const TYPE_IMPORT_RE = /\b(?:import|export)\s+type\b[^;]*?\bfrom\s*['"][^'"]+['"]/g;
 const BARE_RE = /(?:\bfrom\s*|\bimport\s*|\bimport\(\s*)['"]([^'"./\s][^'"\s]*)['"]/g;
 
 export interface WorldPackagePlan {
@@ -116,7 +114,7 @@ export function planWorldPackage(id: string): WorldPackagePlan {
       if (!existsSync(target)) problems.push(`${rel}: ${spec} 指向的文件不存在`);
       return `${head}${quote}${FRAMEWORK_SPECIFIER}/${posix(relative(SRC_DIR, target))}${quote}`;
     });
-    for (const m of text.replace(TYPE_IMPORT_RE, '').matchAll(BARE_RE)) {
+    for (const m of text.matchAll(BARE_RE)) {
       const spec = m[1] as string;
       if (spec.startsWith('node:') || spec.startsWith(`${FRAMEWORK_SPECIFIER}/`)) continue;
       externals.add(packageOf(spec));
