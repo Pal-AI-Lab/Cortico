@@ -3,7 +3,9 @@
  * 服务端形状见 ../persona/consoleSurface.ts。
  */
 
+import type { Language } from 'cortico/core/language.ts';
 import type { ConsolePanelContext } from 'cortico/web/shared/client-panel.ts';
+import { workspaceText } from './strings.ts';
 
 export interface WorkspaceNode {
   name: string;
@@ -101,10 +103,11 @@ export function stamp(iso: string | null | undefined): string {
   return iso.slice(0, 19).replace('T', ' ');
 }
 
-export function gitLine(st: MediumStatus): string {
-  if (!st.available) return 'git 不可用';
-  if (!st.repo) return '还没有建仓';
-  return `git ${st.head ?? '—'} · ${st.dirty ? '有未提交改动' : '干净'} · ${st.tags.length} 个存档点`;
+export function gitLine(st: MediumStatus, language: Language = 'zh'): string {
+  const T = workspaceText(language);
+  if (!st.available) return T.gitUnavailable;
+  if (!st.repo) return T.noRepo;
+  return T.gitLine(st.head ?? '—', st.dirty, st.tags.length);
 }
 
 export function colorDiff(ctx: ConsolePanelContext, text: string): HTMLElement {

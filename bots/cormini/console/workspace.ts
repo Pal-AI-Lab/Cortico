@@ -14,6 +14,9 @@ import {
   type Commit, type WorkspaceFile, type WorkspaceNode, type WorkspaceTree,
   type WorkspaceWriteResult,
 } from './shared.ts';
+import { workspaceText } from './strings.ts';
+
+type Text = ReturnType<typeof workspaceText>;
 
 /** `body` 缺省 = 空文件。 */
 export interface NewFileTemplate {
@@ -29,17 +32,20 @@ export interface WorkspacePanelOptions {
   defaultDir?: string;
 }
 
-const DEFAULT_TEMPLATES: readonly NewFileTemplate[] = [
-  { value: 'blank', label: '空白' },
-  { value: 'note', label: '笔记', body: (title) => `# ${title}\n\n` },
-];
+function defaultTemplates(T: Text): readonly NewFileTemplate[] {
+  return [
+    { value: 'blank', label: T.templateBlank },
+    { value: 'note', label: T.templateNote, body: (title) => `# ${title}\n\n` },
+  ];
+}
 
 function templateText(
   templates: readonly NewFileTemplate[],
   type: string,
   name: string,
+  untitled: string,
 ): string {
-  const title = String(name || '新档案').replace(/\.[^.]+$/, '');
+  const title = String(name || untitled).replace(/\.[^.]+$/, '');
   return templates.find((t) => t.value === type)?.body?.(title) ?? '';
 }
 
@@ -89,9 +95,10 @@ function markdownPreview(ctx: ConsolePanelContext, source: string): string {
 export function createWorkspacePanel(options: WorkspacePanelOptions = {}): ConsolePanel {
   return {
     mount(ctx: ConsolePanelContext) {
+      const T = workspaceText(ctx.language);
       autoload<WorkspaceTree>(ctx, {
-        loading: '读取工作区目录树…',
-        failed: '工作区不可用',
+        loading: T.treeLoading,
+        failed: T.workspaceFailed,
         load: () => ctx.invoke<WorkspaceTree>('tree'),
         // 刷新目录树时保留编辑器及未保存修改。
         render: (tree) => [new WorkspaceView(ctx, tree, options).el],
@@ -104,6 +111,7 @@ class WorkspaceView {
   readonly el: HTMLElement;
 
   private readonly ctx: ConsolePanelContext;
+  private readonly T: Text;
 
   private nodes: WorkspaceNode[];
   private filter = '';
@@ -138,28 +146,30 @@ class WorkspaceView {
 
   constructor(ctx: ConsolePanelContext, tree: WorkspaceTree, options: WorkspacePanelOptions) {
     this.ctx = ctx;
+    const T = workspaceText(ctx.language);
+    this.T = T;
     this.nodes = tree.nodes;
     this.root = rootName(tree.root);
-    this.templates = options.templates ?? DEFAULT_TEMPLATES;
+    this.templates = options.templates ?? defaultTemplates(T);
     this.defaultDir = options.defaultDir ?? '';
     const { ui } = ctx;
 
     const card = ui.sheet({
-      title: '工作区',
+      title: T.workspaceTitle,
       en: `${this.root}/`,
-      desc: '保存时以 operator 署名提交到工作区的 Git 仓库。',
+      desc: T.workspaceDesc,
     });
 
     const filterInput = ui.input({
       type: 'search',
-      placeholder: '过滤档案名…',
+      placeholder: T.filterFiles,
       onInput: (v) => { this.filter = v.trim(); this.renderTree(); },
     });
     filterInput.classList.add('ct-filter');
     const top = ui.rowbar();
     top.append(
-      ui.button('新建', { size: 'sm', variant: 'primary', onClick: () => this.openNewDialog() }),
-      ui.button('刷新', { size: 'sm', onClick: () => { void this.refreshTree(); } }),
+      ui.button(T.newFile, { size: 'sm', variant: 'primary', onClick: () => this.openNewDialog() }),
+      ui.button(T.refresh, { size: 'sm', onClick: () => { void this.refreshTree(); } }),
       filterInput,
       ui.h('span', 'grow'),
     );
@@ -169,21 +179,21 @@ class WorkspaceView {
     this.treePane = ui.h('div', 'ct-tree');
     this.pane = ui.h('div', 'ct-pane');
 
-    this.pathLabel = ui.h('div', 'ct-path', '还没有打开档案');
+    this.pathLabel = ui.h('div', 'ct-path', T.noFileOpen);
     this.metaLabel = ui.h('span', 'ct-dim');
     this.stateLabel = ui.h('span', 'ct-dim');
     this.msg = ui.msgline('');
 
-    this.saveBtn = ui.button('保存', { size: 'sm', variant: 'primary', onClick: () => { void this.save(); } });
-    const reloadBtn = ui.button('还原', { size: 'sm', onClick: () => { void this.revert(); } });
-    const findBtn = ui.button('查找', { size: 'sm', onClick: () => this.toggleFind(true) });
-    const histBtn = ui.button('历史', { size: 'sm', onClick: () => { void this.showHistory(); } });
-    const renameBtn = ui.button('改名', { size: 'sm', onClick: () => this.openRenameDialog() });
-    const delBtn = ui.button('删除', { size: 'sm', variant: 'danger', onClick: () => { void this.remove(); } });
+    this.saveBtn = ui.button(T.save, { size: 'sm', variant: 'primary', onClick: () => { void this.save(); } });
+    const reloadBtn = ui.button(T.revert, { size: 'sm', onClick: () => { void this.revert(); } });
+    const findBtn = ui.button(T.find, { size: 'sm', onClick: () => this.toggleFind(true) });
+    const histBtn = ui.button(T.history, { size: 'sm', onClick: () => { void this.showHistory(); } });
+    const renameBtn = ui.button(T.rename, { size: 'sm', onClick: () => this.openRenameDialog() });
+    const delBtn = ui.button(T.remove, { size: 'sm', variant: 'danger', onClick: () => { void this.remove(); } });
     this.fileBtns = [this.saveBtn, reloadBtn, findBtn, histBtn, renameBtn, delBtn];
 
     const mode = ui.segmented(
-      [{ value: 'edit', label: '编辑' }, { value: 'split', label: '分栏' }, { value: 'preview', label: '预览' }],
+      [{ value: 'edit', label: T.modeEdit }, { value: 'split', label: T.modeSplit }, { value: 'preview', label: T.modePreview }],
       {
         size: 'sm',
         value: ctx.memo.get<string>('ws.mode', 'edit'),
@@ -196,24 +206,24 @@ class WorkspaceView {
 
     // ---- 查找栏 ----
     this.findInput = ui.input({
-      placeholder: '查找',
+      placeholder: T.find,
       onInput: () => this.updateFindCount(),
       onCommit: () => this.jumpFind(1),
     });
-    this.replaceInput = ui.input({ placeholder: '替换为' });
-    this.findCount = ui.h('span', 'ct-dim', '无匹配');
+    this.replaceInput = ui.input({ placeholder: T.replaceWith });
+    this.findCount = ui.h('span', 'ct-dim', T.noMatches);
     this.findBar = ui.rowbar();
     this.findBar.classList.add('ct-findbar', 'ct-hidden');
     this.findBar.append(
       this.findInput,
-      ui.button('上一个', { size: 'sm', onClick: () => this.jumpFind(-1) }),
-      ui.button('下一个', { size: 'sm', onClick: () => this.jumpFind(1) }),
+      ui.button(T.previous, { size: 'sm', onClick: () => this.jumpFind(-1) }),
+      ui.button(T.next, { size: 'sm', onClick: () => this.jumpFind(1) }),
       this.findCount,
       this.replaceInput,
-      ui.button('替换', { size: 'sm', onClick: () => this.replaceOne() }),
-      ui.button('全部替换', { size: 'sm', onClick: () => this.replaceAll() }),
+      ui.button(T.replace, { size: 'sm', onClick: () => this.replaceOne() }),
+      ui.button(T.replaceAll, { size: 'sm', onClick: () => this.replaceAll() }),
       ui.h('span', 'grow'),
-      ui.button('关闭', { size: 'sm', onClick: () => this.toggleFind(false) }),
+      ui.button(T.close, { size: 'sm', onClick: () => this.toggleFind(false) }),
     );
 
     // ---- 编辑器本体 ----
@@ -253,7 +263,7 @@ class WorkspaceView {
     /**
      * 离开拦截：返回提示文本时请求用户确认，返回 null 时放行。面板卸载时框架自动解除。
      */
-    ctx.guardLeave(() => (this.dirty() ? '工作区里有未保存的改动,离开会丢弃它们。' : null));
+    ctx.guardLeave(() => (this.dirty() ? T.leaveGuard : null));
 
     this.setMode(mode.value || 'edit');
     this.renderTree();
@@ -298,7 +308,7 @@ class WorkspaceView {
     const nodes = this.filtered(this.nodes);
     this.treePane.replaceChildren();
     if (!nodes.length) {
-      this.treePane.appendChild(ui.placeholder(this.filter ? '没有匹配的档案' : `${this.root}/ 是空的`));
+      this.treePane.appendChild(ui.placeholder(this.filter ? this.T.noMatchingFiles : this.T.emptyRoot(this.root)));
       return;
     }
     this.renderRows(nodes, this.treePane, 0, !!this.filter);
@@ -379,8 +389,8 @@ class WorkspaceView {
   private async canLeaveCurrent(): Promise<boolean> {
     if (!this.dirty()) return true;
     return this.ctx.ui.confirm({
-      title: '放弃未保存的改动?',
-      body: `${this.root}/${this.cur?.path} 改过还没保存。打开别的档案会丢掉这些改动。`,
+      title: this.T.discardTitle,
+      body: this.T.discardBody(`${this.root}/${this.cur?.path}`),
       danger: true,
     });
   }
@@ -389,7 +399,7 @@ class WorkspaceView {
     const path = node.path;
     if (!force && this.cur && this.cur.path !== path && !(await this.canLeaveCurrent())) return;
     const seq = ++this.openSeq;
-    this.pathLabel.textContent = `正在展开 ${this.root}/${path}…`;
+    this.pathLabel.textContent = this.T.opening(`${this.root}/${path}`);
     try {
       const file = await this.ctx.invoke<WorkspaceFile>('read', [path]);
       if (seq !== this.openSeq || this.ctx.signal.aborted) return;
@@ -410,8 +420,8 @@ class WorkspaceView {
       this.updateFindCount();
     } catch (err) {
       if (seq !== this.openSeq || this.ctx.signal.aborted) return;
-      this.pathLabel.textContent = '读取失败';
-      setMsg(this.msg, `读取失败: ${errText(err)}`, true);
+      this.pathLabel.textContent = this.T.readFailed;
+      setMsg(this.msg, this.T.readFailedDetail(errText(err)), true);
     }
   }
 
@@ -419,7 +429,7 @@ class WorkspaceView {
     if (!this.cur || !this.dirty()) return;
     const content = this.editor.value;
     const busy = this.ctx.ui.disable(...this.fileBtns);
-    setMsg(this.msg, '保存中…');
+    setMsg(this.msg, this.T.saving);
     try {
       const out = await this.ctx.invoke<WorkspaceWriteResult>(
         'write',
@@ -434,7 +444,7 @@ class WorkspaceView {
       setMsg(this.msg, out.result);
       void this.refreshTree();
     } catch (err) {
-      setMsg(this.msg, `保存失败: ${errText(err)}`, true);
+      setMsg(this.msg, this.T.saveFailed(errText(err)), true);
     } finally {
       busy.dispose();
       this.syncMeta();
@@ -443,10 +453,10 @@ class WorkspaceView {
 
   private async revert(): Promise<void> {
     if (!this.cur || !this.dirty()) return;
-    const ok = await this.ctx.ui.confirm({ title: '放弃当前未保存的修改?' });
+    const ok = await this.ctx.ui.confirm({ title: this.T.revertTitle });
     if (!ok || !this.cur) return;
     this.editor.value = this.cur.content;
-    setMsg(this.msg, '已恢复到最近保存的版本');
+    setMsg(this.msg, this.T.reverted);
     this.syncMeta();
   }
 
@@ -454,8 +464,8 @@ class WorkspaceView {
     if (!this.cur) return;
     const path = this.cur.path;
     const ok = await this.ctx.ui.confirm({
-      title: `删除 ${this.root}/${path}?`,
-      body: '未保存的修改将丢失。已提交的版本可从「版本历史」恢复。',
+      title: this.T.removeTitle(`${this.root}/${path}`),
+      body: this.T.removeBody,
       danger: true,
     });
     if (!ok || !this.cur) return;
@@ -464,12 +474,12 @@ class WorkspaceView {
       if (!out.ok) { setMsg(this.msg, out.error, true); return; }
       this.cur = null;
       this.editor.value = '';
-      this.pathLabel.textContent = '档案已删除';
+      this.pathLabel.textContent = this.T.removed;
       this.setPane('empty');
       setMsg(this.msg, out.result);
       void this.refreshTree();
     } catch (err) {
-      setMsg(this.msg, `删除失败: ${errText(err)}`, true);
+      setMsg(this.msg, this.T.removeFailed(errText(err)), true);
     }
   }
 
@@ -479,11 +489,12 @@ class WorkspaceView {
 
   private openNewDialog(): void {
     const { ui } = this.ctx;
+    const T = this.T;
     const dirOf = this.cur?.path.includes('/')
       ? this.cur.path.slice(0, this.cur.path.lastIndexOf('/'))
       : this.defaultDir;
     const dir = ui.input({ value: dirOf, placeholder: this.defaultDir });
-    const name = ui.input({ placeholder: '文件名.md' });
+    const name = ui.input({ placeholder: T.fileNamePlaceholder });
     const tpl = ui.select({ options: this.templates.map((t) => ({ value: t.value, label: t.label })) });
     const body = ui.textarea({ rows: 8, cls: 'mono' });
     const path = ui.h('div', 'ct-dim');
@@ -496,17 +507,17 @@ class WorkspaceView {
       el.addEventListener('input', sync, { signal: this.ctx.signal });
     }
     tpl.addEventListener('change', () => {
-      body.value = templateText(this.templates, tpl.value, name.value);
+      body.value = templateText(this.templates, tpl.value, name.value, T.untitled);
     }, { signal: this.ctx.signal });
     sync();
 
-    const create = ui.button('创建', {
+    const create = ui.button(T.create, {
       variant: 'primary',
       onClick: () => {
         const p = fullPath();
-        if (!p || !name.value.trim()) { setMsg(msg, '请填写文件名', true); return; }
+        if (!p || !name.value.trim()) { setMsg(msg, T.needFileName, true); return; }
         const busy = ui.disable(create);
-        setMsg(msg, '创建中…');
+        setMsg(msg, T.creating);
         // createOnly 在同名文件已存在时拒绝写入。
         void this.ctx.invoke<WorkspaceWriteResult>('write', [p, body.value, null, true])
           .then(
@@ -516,7 +527,7 @@ class WorkspaceView {
               void this.refreshTree();
               void this.openFile({ path: p }, true);
             },
-            (err: unknown) => { setMsg(msg, `创建失败: ${errText(err)}`, true); },
+            (err: unknown) => { setMsg(msg, T.createFailed(errText(err)), true); },
           )
           .finally(() => { busy.dispose(); });
       },
@@ -524,28 +535,29 @@ class WorkspaceView {
 
     const form = ui.h('div', 'ct-form');
     form.append(
-      ui.field('目录', dir),
-      ui.field('文件名', name),
-      ui.field('模板', tpl),
-      ui.field('正文', body),
+      ui.field(T.fieldDir, dir),
+      ui.field(T.fieldName, name),
+      ui.field(T.fieldTemplate, tpl),
+      ui.field(T.fieldBody, body),
       path,
       (() => { const r = ui.actions(); r.append(msg, ui.h('span', 'grow'), create); return r; })(),
     );
-    const drawer = ui.drawer('新建档案', form);
+    const drawer = ui.drawer(T.newFileTitle, form);
   }
 
   private openRenameDialog(): void {
     if (!this.cur) return;
     const { ui } = this.ctx;
-    if (this.dirty()) { setMsg(this.msg, '请先保存或放弃修改,再重命名', true); return; }
+    const T = this.T;
+    if (this.dirty()) { setMsg(this.msg, T.saveBeforeRename, true); return; }
     const from = this.cur.path;
     const to = ui.input({ value: from, cls: 'mono' });
     const msg = ui.msgline('');
-    const apply = ui.button('改名', {
+    const apply = ui.button(T.rename, {
       variant: 'primary',
       onClick: () => {
         const target = to.value.trim();
-        if (!target || target === from) { setMsg(msg, '请输入不同的新路径', true); return; }
+        if (!target || target === from) { setMsg(msg, T.needNewPath, true); return; }
         const busy = ui.disable(apply);
         void this.ctx.invoke<WorkspaceWriteResult>('rename', [from, target, this.cur?.revision ?? null])
           .then(
@@ -556,18 +568,18 @@ class WorkspaceView {
               void this.refreshTree();
               void this.openFile({ path: target }, true);
             },
-            (err: unknown) => { setMsg(msg, `改名失败: ${errText(err)}`, true); },
+            (err: unknown) => { setMsg(msg, T.renameFailed(errText(err)), true); },
           )
           .finally(() => { busy.dispose(); });
       },
     });
     const form = ui.h('div', 'ct-form');
     form.append(
-      dimLine(this.ctx, `当前:${this.root}/${from}`),
-      ui.field(`新路径(相对 ${this.root}/)`, to),
+      dimLine(this.ctx, T.currentPath(`${this.root}/${from}`)),
+      ui.field(T.newPath(this.root), to),
       (() => { const r = ui.actions(); r.append(msg, ui.h('span', 'grow'), apply); return r; })(),
     );
-    const drawer = ui.drawer('改名 / 移动', form);
+    const drawer = ui.drawer(T.renameTitle, form);
   }
 
   // -------------------------------------------------------------------------
@@ -579,25 +591,25 @@ class WorkspaceView {
     const { ui } = this.ctx;
     const path = this.cur.path;
     this.setPane('hist');
-    this.histWrap.replaceChildren(ui.placeholder('加载历史…'));
+    this.histWrap.replaceChildren(ui.placeholder(this.T.fileHistoryLoading));
     let commits: Commit[] = [];
     try {
       commits = (await this.ctx.invoke<{ commits: Commit[] }>('history', [path])).commits;
     } catch (err) {
       if (this.ctx.signal.aborted) return;
-      this.histWrap.replaceChildren(ui.placeholder(`历史加载失败: ${errText(err)}`));
+      this.histWrap.replaceChildren(ui.placeholder(this.T.fileHistoryFailed(errText(err))));
       return;
     }
     if (this.ctx.signal.aborted) return;
     const back = ui.rowbar();
     back.append(
-      ui.button('← 返回编辑器', { size: 'sm', onClick: () => this.setPane('edit') }),
+      ui.button(this.T.backToEditor, { size: 'sm', onClick: () => this.setPane('edit') }),
       ui.h('span', 'grow'),
       ui.h('span', 'ct-dim', `${this.root}/${path}`),
     );
     this.histWrap.replaceChildren(back);
     if (!commits.length) {
-      this.histWrap.appendChild(ui.placeholder('这个档案还没有提交历史'));
+      this.histWrap.appendChild(ui.placeholder(this.T.noFileHistory));
       return;
     }
     for (const c of commits) this.histWrap.append(...this.commitRow(c, path));
@@ -618,7 +630,7 @@ class WorkspaceView {
     row.addEventListener('click', () => {
       if (open) { detail.replaceChildren(); open = false; return; }
       open = true;
-      detail.replaceChildren(ui.placeholder('加载 diff…'));
+      detail.replaceChildren(ui.placeholder(this.T.loadingDiff));
       void Promise.all([
         this.ctx.invoke<{ diff: string }>('diff', [c.fullHash, path]),
         this.ctx.invoke<{ content: string }>('at', [c.fullHash, path]),
@@ -627,26 +639,26 @@ class WorkspaceView {
           if (this.ctx.signal.aborted) return;
           const bar = ui.rowbar();
           bar.append(
-            ui.button('查看全文', {
+            ui.button(this.T.viewFull, {
               size: 'sm',
               onClick: () => { ui.drawer(`${this.root}/${path} @ ${c.hash}`, f.content); },
             }),
-            ui.button('恢复为当前草稿', {
+            ui.button(this.T.restoreDraft, {
               size: 'sm',
               onClick: () => {
                 this.setPane('edit');
                 this.editor.value = f.content;
                 this.syncMeta();
-                setMsg(this.msg, '已载入旧版本，保存后生效');
+                setMsg(this.msg, this.T.restored);
               },
             }),
-            ui.copyButton(() => f.content, { label: '复制全文' }),
+            ui.copyButton(() => f.content, { label: this.T.copyFull }),
           );
           detail.replaceChildren(colorDiff(this.ctx, d.diff), bar);
         },
         (err: unknown) => {
           if (this.ctx.signal.aborted) return;
-          detail.replaceChildren(ui.placeholder(`diff 失败: ${errText(err)}`));
+          detail.replaceChildren(ui.placeholder(this.T.diffFailed(errText(err))));
         },
       );
     }, { signal: this.ctx.signal });
@@ -670,7 +682,7 @@ class WorkspaceView {
     this.findBar.classList.toggle('ct-hidden', kind !== 'edit' || this.findBar.dataset.open !== '1');
     for (const b of this.fileBtns) b.disabled = kind === 'empty';
     if (kind === 'empty') {
-      this.pathLabel.textContent = '还没有打开档案';
+      this.pathLabel.textContent = this.T.noFileOpen;
       this.metaLabel.textContent = '';
       this.stateLabel.textContent = '';
     }
@@ -683,7 +695,7 @@ class WorkspaceView {
     const col = before.length - before.lastIndexOf('\n');
     const dirty = this.dirty();
     this.stateLabel.textContent = this.cur
-      ? `第 ${line} 行 第 ${col} 列 · ${text.split('\n').length} 行 ${text.length} 字 · ${dirty ? '● 未保存' : '✓ 已保存'}`
+      ? this.T.cursor(line, col, text.split('\n').length, text.length, dirty)
       : '';
     this.saveBtn.disabled = !dirty;
     if (!this.editWrap.classList.contains('ct-mode-edit')) {
@@ -719,7 +731,7 @@ class WorkspaceView {
 
   private updateFindCount(): void {
     const n = this.matches().length;
-    this.findCount.textContent = n ? `${n} 处` : '无匹配';
+    this.findCount.textContent = n ? this.T.matches(n) : this.T.noMatches;
   }
 
   private jumpFind(dir: 1 | -1): void {

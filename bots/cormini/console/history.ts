@@ -10,6 +10,9 @@ import {
   autoload, colorDiff, dimLine, errText, gitLine, stamp,
   type Commit, type MediumStatus,
 } from './shared.ts';
+import { workspaceText } from './strings.ts';
+
+type Text = ReturnType<typeof workspaceText>;
 
 interface HistoryState {
   status: MediumStatus;
@@ -19,35 +22,36 @@ interface HistoryState {
 
 export const historyPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
+    const T = workspaceText(ctx.language);
     let path = '';
     autoload<HistoryState>(ctx, {
-      loading: '读取提交历史…',
-      failed: '版本历史不可用',
+      loading: T.historyLoading,
+      failed: T.historyFailed,
       load: () => ctx.invoke<HistoryState>('state', [path]),
       render: (st, reload) => [
-        statusCard(ctx, st),
-        commitsCard(ctx, st, (next) => { path = next; reload(); }),
+        statusCard(ctx, T, st),
+        commitsCard(ctx, T, st, (next) => { path = next; reload(); }),
       ],
     });
   },
 };
 
-function statusCard(ctx: ConsolePanelContext, st: HistoryState): HTMLElement {
+function statusCard(ctx: ConsolePanelContext, T: Text, st: HistoryState): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: '介质状态',
+    title: T.mediumTitle,
     en: '.git',
-    desc: '工作区自己是一个 git 仓(与项目仓无关)。控制台的编辑立即提交(署名 operator)。',
+    desc: T.mediumDesc,
   });
   const rows: Array<{ k: string; v: string | HTMLElement }> = [
-    { k: '状态', v: ui.pill(gitLine(st.status), st.status.repo ? 'on' : 'off') },
+    { k: T.rowStatus, v: ui.pill(gitLine(st.status, ctx.language), st.status.repo ? 'on' : 'off') },
     { k: 'HEAD', v: st.status.head ?? '—' },
-    { k: '工作区', v: st.status.dirty ? '有未提交改动' : '干净' },
-    { k: '存档点', v: st.status.tags.length ? st.status.tags.join('、') : '(还没有)' },
+    { k: T.rowWorkspace, v: st.status.dirty ? T.dirty : T.clean },
+    { k: T.rowCheckpoints, v: st.status.tags.length ? T.names(st.status.tags) : T.noCheckpoints },
   ];
   const last = st.status.lastCommit;
   if (last) {
-    rows.push({ k: '最近提交', v: `${last.hash} · ${last.author} · ${stamp(last.date)} · ${last.message}` });
+    rows.push({ k: T.rowLastCommit, v: `${last.hash} · ${last.author} · ${stamp(last.date)} · ${last.message}` });
   }
   card.body.appendChild(ui.kv(rows));
   return card.el;
@@ -55,34 +59,35 @@ function statusCard(ctx: ConsolePanelContext, st: HistoryState): HTMLElement {
 
 function commitsCard(
   ctx: ConsolePanelContext,
+  T: Text,
   st: HistoryState,
   setPath: (path: string) => void,
 ): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: '提交流水',
+    title: T.logTitle,
     en: 'git log',
-    desc: '点一条展开它引入的 diff。最多 100 条;填路径可只看某个档案。',
+    desc: T.logDesc,
   });
 
   const filter = ui.input({
     value: st.path,
     cls: 'mono',
-    placeholder: '只看某个路径,如 CONSTITUTION.md',
+    placeholder: T.pathFilter,
     // 敲完再问一次服务端:逐次击键去发 git log 是白烧 CPU。
     onCommit: (v) => setPath(v.trim()),
   });
   const bar = ui.rowbar();
-  bar.append(filter, ui.button('过滤', { size: 'sm', onClick: () => setPath(filter.value.trim()) }));
+  bar.append(filter, ui.button(T.filter, { size: 'sm', onClick: () => setPath(filter.value.trim()) }));
   if (st.path) {
-    bar.append(ui.button('清除', { size: 'sm', onClick: () => setPath('') }));
+    bar.append(ui.button(T.clear, { size: 'sm', onClick: () => setPath('') }));
   }
-  bar.append(ui.h('span', 'grow'), ui.chip(`${st.commits.length} 条`));
+  bar.append(ui.h('span', 'grow'), ui.chip(T.commitCount(st.commits.length)));
   card.body.appendChild(bar);
 
   if (!st.commits.length) {
     card.body.appendChild(ui.placeholder(
-      st.status.repo ? '这个范围里还没有提交' : '工作区还没有建仓',
+      st.status.repo ? T.noCommitsInRange : T.noRepoYet,
     ));
     return card.el;
   }
@@ -101,13 +106,13 @@ function commitsCard(
     row.addEventListener('click', () => {
       if (open) { detail.replaceChildren(); open = false; return; }
       open = true;
-      detail.replaceChildren(ui.placeholder('加载 diff…'));
+      detail.replaceChildren(ui.placeholder(T.loadingDiff));
       void ctx.invoke<{ diff: string }>('diff', [c.fullHash, st.path]).then(
         (d) => {
           if (ctx.signal.aborted) return;
           const tools = ui.rowbar();
           tools.append(
-            ui.copyButton(() => d.diff, { label: '复制 diff' }),
+            ui.copyButton(() => d.diff, { label: T.copyDiff }),
             ui.h('span', 'grow'),
             ui.h('span', 'ct-dim', c.fullHash),
           );
@@ -115,12 +120,12 @@ function commitsCard(
         },
         (err: unknown) => {
           if (ctx.signal.aborted) return;
-          detail.replaceChildren(ui.placeholder(`diff 失败: ${errText(err)}`));
+          detail.replaceChildren(ui.placeholder(T.diffFailed(errText(err))));
         },
       );
     }, { signal: ctx.signal });
     card.body.append(row, detail);
   }
-  card.body.appendChild(dimLine(ctx, '想看某个版本的全文,去「工作区」打开那份档案再按「历史」。'));
+  card.body.appendChild(dimLine(ctx, T.fullTextHint));
   return card.el;
 }
