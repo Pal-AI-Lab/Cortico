@@ -37,6 +37,9 @@
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
 | `language` | 系统区域 | 控制台默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [console.md](console.md)) |
 
+`language` 与环境变量 `CORTICO_LANGUAGE` 须与 `LANGUAGES` 中的代码完全一致(区分大小写,如 `pt-BR`、`zh-Hant`),
+其他值当作未设置:`language` 落到 `CORTICO_LANGUAGE`,再落到系统区域。
+
 Persona 自己的段(如 CortiV 的 `context.maxTokens`、`context.firstTurn`、`rounds`、`cognition`、`tick`)由各 bot 的
 `index.ts` 定义。
 
