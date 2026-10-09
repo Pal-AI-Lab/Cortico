@@ -47,8 +47,11 @@ manifest 的 `CONSOLE_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 
 ## 服务端
 
+经 `server.ts` 里 `wrap` 注册的路由，handler 抛错或返回的 promise 被拒绝时，服务端记一条 `API错误 <路径>` 的 error 日志并回 500,
+body 为 `{ error }`;已开始回应的请求只记日志。
+
 `GET /api/framework/release` 返回 `package.json` 的版本；GitHub 最新正式 Release 更高时带上它的版本与链接，
-查询失败返回错误。
+查询失败回 500。
 
 `WebApp` 默认监听 `127.0.0.1`，支持由依赖配置指定监听地址。从首选端口起最多尝试五个端口；
 端口为 0 时仅申请一次系统分配。WebSocket 使用 `noServer` 分派 `/ws/debug`、`/ws/sessions` 和面板流。
