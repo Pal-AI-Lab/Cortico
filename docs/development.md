@@ -77,7 +77,7 @@ gh release create v0.1.4 --target main --notes-file notes.md
 
 release 发布后 `.github/workflows/publish.yml` 在 `npm` 环境里排队,维护者在 Actions 页批准后开跑:
 tag 与 `package.json` 版本不一致即失败,然后跑类型检查和测试,最后执行
-`pnpm run publish:package --publish`。npm 端用 trusted publishing 认这个 workflow 文件和 `npm` 环境,
+`pnpm run publish:package --publish` 与 `pnpm run publish:worlds --publish`。npm 端每个包都用 trusted publishing 认这个 workflow 文件和 `npm` 环境,
 仓库里不存 npm token,发布的包带 provenance。发布失败时修好后在 Actions 里重跑这个任务。
 
 ## 文档

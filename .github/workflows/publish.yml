@@ -54,5 +54,9 @@ jobs:
       - name: Tests
         run: pnpm test
 
+      # 已发出的 World 包会跳过,放在框架之前,框架那一步失败后整个任务可以重跑
+      - name: Publish built-in World packages
+        run: pnpm run publish:worlds --publish
+
       - name: Publish
         run: pnpm run publish:package --publish
