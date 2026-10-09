@@ -1044,7 +1044,13 @@ export function createBot<C extends CoreConfig>(
         toolSchemas: () => core.loop.getToolSchemas(),
         activeEndpoint: () => {
           const entry = cfg.providers[cfg.activeProvider];
-          return entry ? { name: cfg.activeProvider, kind: entry.kind, spec: entry.spec ?? null } : null;
+          if (!entry) return null;
+          const spec = entry.spec;
+          // 只取 ModelSpec 的已知字段;值为 undefined 的键写出 JSON 时省略。
+          return { name: cfg.activeProvider, kind: entry.kind, spec: spec ? {
+            model: spec.model, thinking: spec.thinking, reasoningEffort: spec.reasoningEffort,
+            temperature: spec.temperature, maxTokens: spec.maxTokens, contextWindow: spec.contextWindow,
+          } : null };
         },
       },
       toolSchemas: {
