@@ -735,7 +735,7 @@ export class ExtensionManager {
 
   /**
    * 向 npm 下载统计问每个包的近 7 天、近 30 天与累计下载量。不带 scope 的合批问,带 scope 的逐个问。
-   * 累计按 365 天一段往前加,一个包在一整段里没有下载就当那时它还没发布,不再往前问。
+   * 累计按 365 天一段往前加,一个包某段为 0 就不再往前问;中间有整年无下载的包因此少计更早的下载。
    * 某次请求失败,涉及的包就缺那一项;统计接口整个不可达时返回空表,列表照常出。
    */
   private async downloadStats(names: string[]): Promise<Map<string, Partial<ExtensionSearchHit['downloads']>>> {

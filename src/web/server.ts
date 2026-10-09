@@ -229,7 +229,7 @@ export interface ExtensionSearchHit {
   license?: string;
   keywords?: string[];
   /**
-   * npm 的下载量,所有版本合计。`month` 是近 30 天,`week` 是近 7 天,`total` 是自发布以来。
+   * npm 的下载量,所有版本合计。`month` 是近 30 天,`week` 是近 7 天,`total` 是往前逐年累加到某年为 0 为止。
    * npm 下载统计接口没答上来时只有搜索端点给的 `month`。
    */
   downloads: { total?: number; month: number; week?: number };
