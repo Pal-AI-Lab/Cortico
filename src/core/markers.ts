@@ -40,6 +40,13 @@ export const NOT_EXECUTED_LOOP_STOPPED = '[not executed: main loop stopped]';
 /** 关机打断了这一轮,回执取不回来了 */
 export const SHUTDOWN_INTERRUPTED = '[tool result unavailable: shutdown interrupted the round]';
 
+/** 取消原因：作为在途调用的 AbortSignal.reason，并传给 OutputTap.onAbort；工具抛出它时进入失败回执。 */
+export const ABORT_PREEMPTED = 'model round preempted by new input';
+export const ABORT_INTERRUPTED = 'model round interrupted by a new event';
+/** interruptible 工具收到的 interrupt 信号的原因。 */
+export const ABORT_TOOL_INTERRUPTED = 'interrupted by a new event';
+export const ABORT_SHUTDOWN = 'core is shutting down';
+
 /** 工具失败的模型可见标记；结构化失败状态使用 ToolOutcome.failed。 */
 export const toolFailed = (detail: string): string => `[tool failed] ${detail}`;
 /** 参数不是合法 JSON:不进 handler,就地失败 */

@@ -27,10 +27,10 @@ export function prefixFingerprint(messages: readonly ContextRecord[], count = PR
 export const PREFIX_FINGERPRINT_MESSAGES = 8;
 
 
-/** 超时后拒绝返回的 Promise；不会取消仍在运行的底层 Promise。 */
-export function withDeadline<T>(work: Promise<T>, ms: number, what = '这一步'): Promise<T> {
+/** 超时后拒绝返回的 Promise；不会取消仍在运行的底层 Promise。错误文本可能进入工具回执，因此用英文。 */
+export function withDeadline<T>(work: Promise<T>, ms: number, what = 'this step'): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${what}超时(${Math.round(ms / 1000)}秒)`)), ms);
+    const timer = setTimeout(() => reject(new Error(`${what} timed out after ${Math.round(ms / 1000)}s`)), ms);
     work.then(
       (v) => { clearTimeout(timer); resolve(v); },
       (e) => { clearTimeout(timer); reject(e as Error); },

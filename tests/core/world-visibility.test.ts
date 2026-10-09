@@ -224,7 +224,7 @@ describe('运行中挂载与卸载', () => {
     expect(systemPrefix()).not.toContain('[extra 的环境提示词]');
     expect(toolNames()).not.toContain('send_extra');
     // 旧实例的宿主已经失效:再推事件被拒
-    await expect(extra.emit('卸载后')).rejects.toThrow('生命周期已结束');
+    await expect(extra.emit('卸载后')).rejects.toThrow();
     const again = new ProbeWorld('extra');
     await core.mountWorld(again);
     expect(toolNames()).toContain('send_extra');

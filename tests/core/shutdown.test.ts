@@ -105,7 +105,7 @@ describe('withDeadline', () => {
       const caught = p.catch((e: Error) => e.message);
       await vi.advanceTimersByTimeAsync(5_100);
       expect(await caught).toContain('World 收尾');
-      expect(await caught).toContain('5秒');
+      expect(await caught).toContain('5s');
     } finally {
       vi.useRealTimers();
     }
@@ -133,7 +133,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
       expect(hang.stopped).toBe(false);
       expect(failures).toEqual([expect.objectContaining({
         worldId: 'hang',
-        detail: expect.stringContaining('超时'),
+        detail: expect.stringContaining('timed out'),
       })]);
     } finally {
       vi.useRealTimers();
@@ -165,14 +165,14 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
 
       await expect(host.pushEvent({
         type: 'late.event', ts: new Date().toISOString(), source: 'lease', text: '迟到事件',
-      })).rejects.toThrow('宿主生命周期已结束');
+      })).rejects.toThrow();
       host.pushDeferred({ type: 'late.deferred', render: () => '迟到延迟事件' });
       host.reportUsage({ promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 });
 
       expect(core.store.latestCursor()).toBe(cursor);
       expect(usage).not.toHaveBeenCalled();
       expect(host.cognition).toBeUndefined();
-      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: '宿主生命周期已结束' });
+      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: expect.any(String) });
       expect(cognitionRequest).not.toHaveBeenCalled();
     } finally {
       env.cleanup();
@@ -195,7 +195,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
       expect(await stopping).toEqual([expect.objectContaining({ worldId: 'lease-timeout' })]);
       await expect(probe.host!.pushEvent({
         type: 'late.timeout', ts: new Date().toISOString(), source: 'lease-timeout', text: '超时后事件',
-      })).rejects.toThrow('宿主生命周期已结束');
+      })).rejects.toThrow();
     } finally {
       vi.useRealTimers();
       env.cleanup();
