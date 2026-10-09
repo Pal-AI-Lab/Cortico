@@ -11,6 +11,7 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import { WebApp } from '../../src/web/server.ts';
 import { TerminalWorld } from '../../src/worlds/terminal/world.ts';
+import { text as terminalText } from '../../src/worlds/terminal/strings.ts';
 import { ioPageContribution } from '../../src/bot.ts';
 import {
   CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY, panelStreamRoute,
@@ -105,8 +106,8 @@ describe('每个请求自带界面语言', () => {
   it('WebSocket 握手的查询串选语言,那条流上的系统提示按它给', async () => {
     expect(await firstFrame('')).toContain('报上名字');
     expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=en`)).toContain('introduce yourself');
-    // 没有译文的语言读英文表;不认识的值当没带
-    expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=fr`)).toContain('introduce yourself');
+    // 其他语言读它自己的表;不认识的值当没带
+    expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=fr`)).toContain(terminalText('fr').greeting);
     expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=xx`)).toContain('报上名字');
   });
 });
