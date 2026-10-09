@@ -1598,7 +1598,7 @@ describe('MainLoop user事件协议', () => {
     expect(warnings.some((w) => w.includes('越过模型上下文上限'))).toBe(true);
   });
 
-  it('上下文窗口不大于最大输出:交接后仍越限,Core 报一次错,此后的批不再强制交接', async () => {
+  it('上下文窗口不大于最大输出:强制交接一次后计数仍越限,Core 报一次错,此后的批不再强制交接', async () => {
     // 交接钩子注入醒来项,会唤起下一批;每批末都强制交接就是自激循环。只注入前三次,回归时测试失败而不卡死。
     const errors: string[] = [];
     let handoffs = 0;
@@ -1612,13 +1612,39 @@ describe('MainLoop user事件协议', () => {
       },
     });
     rig.start();
-    await until(() => handoffs >= 1);
-    const callsAfterHandoff = rig.llm.calls.length;
+    await until(() => errors.length >= 1);
+    const callsAfterGuard = rig.llm.calls.length;
     rig.pushEvent('[10:05] 阿明: 在吗');
-    await until(() => rig.llm.calls.length > callsAfterHandoff);
+    await until(() => rig.llm.calls.length > callsAfterGuard);
     await sleep(100);
     expect(handoffs).toBe(1);
-    expect(errors.filter((msg) => msg.includes('交接后计数仍越过模型上下文上限'))).toHaveLength(1);
+    expect(errors.filter((msg) => msg.includes('仍越过模型上下文上限'))).toHaveLength(1);
+  });
+
+  it('本地估算的前缀在上限内、上游计数越过上限:强制交接一次后不再强制交接,Core 报一次错', async () => {
+    // 交接后的本地估算回到上限内,上游报的输入量仍越过上限;按交接后估算判断时每批都会强制交接。
+    const errors: string[] = [];
+    let handoffs = 0;
+    rig = makeRig({
+      cfgPatch: (cfg) => { Object.assign(activeSpec(cfg), { contextWindow: 5000, maxTokens: 1000 }); },
+      log: { ...nullLogger(), error: (msg: string) => errors.push(msg) },
+      onHandoff: async () => {
+        handoffs++;
+        if (handoffs <= 3) rig.loop.injectInternal('[system] 交接完了。', 'handoff');
+        return { tail: null };
+      },
+    });
+    const hard = 5000 - 1000;
+    rig.llm.usage = { promptTokens: hard + 1000, completionTokens: 10, cacheHitTokens: 0, cacheMissTokens: hard + 1000 };
+    rig.start();
+    await until(() => errors.length >= 1);
+    const callsAfterGuard = rig.llm.calls.length;
+    rig.pushEvent('[10:05] 阿明: 在吗');
+    await until(() => rig.llm.calls.length > callsAfterGuard);
+    await sleep(100);
+    expect(estimateMessagesTokens(rig.loop.outboundMessages())).toBeLessThan(hard);
+    expect(handoffs).toBe(1);
+    expect(errors.filter((msg) => msg.includes('仍越过模型上下文上限'))).toHaveLength(1);
   });
 
   it('交接收尾通知可见 World onHandoffEnded:此刻 session 已换新前缀,钩子里推的项落在新 session 第一批;隐藏 World 不通知', async () => {
