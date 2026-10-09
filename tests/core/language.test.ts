@@ -74,7 +74,9 @@ describe('pick 与串表', () => {
     expect(pick('ja', { zh, en })).toBe(en);
     const ja: Partial<typeof en> = { a: 'ア' };
     const hant: Partial<typeof zh> = { b: '乙(繁)', nested: { x: '子(繁)' } };
-    expect(pick('ja', { zh, en, ja })).toEqual({ a: 'ア', b: 'B', nested: { x: 'X' } });
+    // 标注完整类型:部分译文不能把 pick 的返回类型推成 Partial。
+    const merged: typeof en = pick('ja', { zh, en, ja });
+    expect(merged).toEqual({ a: 'ア', b: 'B', nested: { x: 'X' } });
     expect(pick('zh-Hant', { zh, en, 'zh-Hant': hant })).toEqual({ a: '甲', b: '乙(繁)', nested: { x: '子(繁)' } });
     expect(pick('ja', { zh: '中', en: 'E', ja: 'J' })).toBe('J');
     expect(pick('ko', { zh: '中', en: 'E', ja: 'J' })).toBe('E');

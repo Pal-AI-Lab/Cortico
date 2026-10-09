@@ -111,7 +111,7 @@ export type Translation<T> = T extends (...args: never[]) => unknown ? T
 /** One value per language: zh and en are required, every other language is optional. */
 export type LanguageTable<T> =
   & { readonly [L in BaseLanguage]: T }
-  & { readonly [L in OptionalLanguage]?: Translation<T> };
+  & { readonly [L in OptionalLanguage]?: Translation<NoInfer<T>> };
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null) return false;
