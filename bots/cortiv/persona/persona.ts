@@ -347,13 +347,13 @@ export class CortiV extends Cormini {
     const others = core.sessionInfo(COGNITION).running > 0;
     if (mine || others) return { error: '上一件后台思考还没结束,排队没开,稍后再请' };
 
+    const deadline = Date.now() + COGNITION_TIMEOUT_MS;
     try {
       const info = core.sessionInfo(MAIN);
       const messages: ContextRecord[] = [
         ...balancedSnapshot(info.snapshot ?? []),
         message('user', this.cognitionFrame(req, ctx)),
       ];
-      const deadline = Date.now() + COGNITION_TIMEOUT_MS;
       let timedOut = false;
       const text = await withDeadline(
         core.spawnFork({
@@ -379,7 +379,7 @@ export class CortiV extends Cormini {
       return { text: out };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      if (/超时/.test(msg)) return { error: '后台思考超时(15 分钟),已放弃' };
+      if (Date.now() >= deadline) return { error: '后台思考超时(15 分钟),已放弃' };
       this.core?.log.warn('认知外包受理出错', { worldId: ctx.worldId, err: msg });
       return { error: `后台思考没跑起来:${msg}` };
     }
