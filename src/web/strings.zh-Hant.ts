@@ -9,7 +9,7 @@ export const serverText: Partial<typeof en> = {
   exitSupervisedPaused: '處理程序即將結束,啟動器隨即重新啟動;回來時事件投遞是暫停的,要在執行狀態裡按繼續',
   exitUnsupervised: '處理程序即將結束;沒有偵測到啟動器迴圈,需要手動重新啟動',
   shutdownSkipped: (n: number, labels: string[]) => `本機關機完成,但有 ${n} 步沒走完:${labels.join('、')}`,
-  shutdownComplete: (n: number) => `本機關機完成(${n} 步全部走完)`,
+  shutdownComplete: (n: number) => `本機關機完成(${n === 1 ? '1 步已走完' : `${n} 步全部走完`})`,
   externalUnverified: (items: string[]) => `。[P0] ${items.join('')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status}（${detail}）。人工處理:${manualAction}`, '。'),

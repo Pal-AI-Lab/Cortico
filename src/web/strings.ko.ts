@@ -9,7 +9,7 @@ export const serverText: Partial<typeof en> = {
   exitSupervisedPaused: '프로세스가 곧 종료되며 런처가 바로 다시 시작합니다. 다시 시작한 뒤에는 이벤트 전달이 일시 중지되어 있으니 실행 상태에서 재개하세요',
   exitUnsupervised: '프로세스가 곧 종료됩니다. 런처 루프가 감지되지 않았으므로 직접 다시 시작해야 합니다',
   shutdownSkipped: (n: number, labels: string[]) => `로컬 종료는 끝났지만 ${n}개 단계가 완료되지 않았습니다: ${labels.join(', ')}`,
-  shutdownComplete: (n: number) => `로컬 종료 완료(${n}개 단계 모두 완료)`,
+  shutdownComplete: (n: number) => `로컬 종료 완료(${n === 1 ? '1개 단계 완료' : `${n}개 단계 모두 완료`})`,
   externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status}(${detail}). 수동 조치: ${manualAction}`, '.'),

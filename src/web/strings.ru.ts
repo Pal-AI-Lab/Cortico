@@ -16,7 +16,7 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'Процесс сейчас завершится; цикл лаунчера не обнаружен, поэтому его нужно запустить снова вручную',
   shutdownSkipped: (n: number, labels: string[]) =>
     `Локальное выключение завершено, но ${n} ${plural(n, 'шаг не выполнен', 'шага не выполнены', 'шагов не выполнено')}: ${labels.join(', ')}`,
-  shutdownComplete: (n: number) => `Локальное выключение завершено (выполнены все шаги: ${n})`,
+  shutdownComplete: (n: number) => `Локальное выключение завершено (${n === 1 ? 'выполнен 1 шаг' : `выполнены все ${n} ${plural(n, 'шаг', 'шага', 'шагов')}`})`,
   externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status} (${detail}). Ручное действие: ${manualAction}`, '.'),

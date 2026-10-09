@@ -111,9 +111,10 @@ describe('每个请求自带界面语言', () => {
   it('关机回执的整句与接口报错按请求语言', async () => {
     const zh = await postJson<{ result: string }>('/api/run/shutdown');
     const en = await postJson<{ result: string }>('/api/run/shutdown', 'en');
-    expect(zh.result).toBe('本地关机完成(1 步全部走完)，进程即将退出');
-    expect(en.result).toBe('Local shutdown finished (all 1 steps completed). The process is about to exit');
-    expect((await getJson<{ error: string }>('/api/extensions', 'en')).error).toBe('Extension management is unavailable');
+    const receipt = (t: ReturnType<typeof serverText>) => t.powerReceipt(t.shutdownComplete(1), '', t.exitShutdown);
+    expect(zh.result).toBe(receipt(serverText('zh')));
+    expect(en.result).toBe(receipt(serverText('en')));
+    expect((await getJson<{ error: string }>('/api/extensions', 'en')).error).toBe(serverText('en').extensionsUnavailable);
   });
 
   it('关机回执在每种语言里不叠用句末标点,人工动作自带或不带句号都一样', () => {

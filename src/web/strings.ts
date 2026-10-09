@@ -18,7 +18,7 @@ const zh = {
   exitSupervisedPaused: '进程即将退出,启动器随即重新拉起;回来时事件投递是暂停的,要在运行状态里按继续',
   exitUnsupervised: '进程即将退出;没有检测到启动器循环,需要手动重新启动',
   shutdownSkipped: (n: number, labels: string[]) => `本地关机完成,但有 ${n} 步没走完:${labels.join('、')}`,
-  shutdownComplete: (n: number) => `本地关机完成(${n} 步全部走完)`,
+  shutdownComplete: (n: number) => `本地关机完成(${n === 1 ? '1 步已走完' : `${n} 步全部走完`})`,
   externalUnverified: (items: string[]) => `。[P0] ${items.join('')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status}（${detail}）。人工动作:${manualAction}`, '。'),
@@ -103,8 +103,8 @@ export const en: typeof zh = {
   exitSupervised: 'The process is about to exit; the launcher will start it again',
   exitSupervisedPaused: 'The process is about to exit; the launcher will start it again with event delivery paused, so resume it in the run status',
   exitUnsupervised: 'The process is about to exit; no launcher loop was detected, so it must be started again by hand',
-  shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step(s) did not complete: ${labels.join(', ')}`,
-  shutdownComplete: (n: number) => `Local shutdown finished (all ${n} steps completed)`,
+  shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step${n === 1 ? '' : 's'} did not complete: ${labels.join(', ')}`,
+  shutdownComplete: (n: number) => `Local shutdown finished (${n === 1 ? '1 step completed' : `all ${n} steps completed`})`,
   externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status} (${detail}). Manual action: ${manualAction}`, '.'),

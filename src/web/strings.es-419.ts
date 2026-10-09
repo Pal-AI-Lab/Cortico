@@ -10,7 +10,7 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'El proceso está por salir; no se detectó un ciclo de lanzador, así que hay que volver a iniciarlo manualmente',
   shutdownSkipped: (n: number, labels: string[]) =>
     `El apagado local terminó, pero ${n === 1 ? '1 paso no se completó' : `${n} pasos no se completaron`}: ${labels.join(', ')}`,
-  shutdownComplete: (n: number) => `Apagado local terminado (se completaron los ${n} pasos)`,
+  shutdownComplete: (n: number) => `Apagado local terminado (${n === 1 ? 'se completó 1 paso' : `se completaron los ${n} pasos`})`,
   externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     punctuate(`${label}=${status} (${detail}). Acción manual: ${manualAction}`, '.'),
