@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Arrêter les World',
     core: 'Arrêter la Persona',
     modulesTimedOut: "Délai d'arrêt des World dépassé",
+    stepTimedOut: (seconds: number) => `Délai dépassé après ${seconds} s`,
     externalState: (worldId: string) => `État externe de ${worldId}`,
     stopIncomplete: (detail: string) => `Arrêt des World incomplet, la vérification externe en cache ne peut donc pas être utilisée : ${detail}`,
     cacheReadFailed: (detail: string) => `Échec de la lecture de la vérification d'arrêt en cache : ${detail}`,

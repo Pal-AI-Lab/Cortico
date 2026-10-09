@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'World 중지',
     core: 'Persona 중지',
     modulesTimedOut: 'World 중지 시간 초과',
+    stepTimedOut: (seconds: number) => `${seconds}초 후 시간 초과`,
     externalState: (worldId: string) => `${worldId} 외부 상태`,
     stopIncomplete: (detail: string) => `World 중지가 완료되지 않아 캐시된 외부 검증 결과를 쓸 수 없습니다: ${detail}`,
     cacheReadFailed: (detail: string) => `캐시된 종료 검증 결과를 읽지 못했습니다: ${detail}`,

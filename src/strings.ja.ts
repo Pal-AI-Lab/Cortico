@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'World を停止',
     core: 'Persona を停止',
     modulesTimedOut: 'World の停止がタイムアウトしました',
+    stepTimedOut: (seconds: number) => `${seconds} 秒でタイムアウトしました`,
     externalState: (worldId: string) => `${worldId} の外部状態`,
     stopIncomplete: (detail: string) => `World の停止が完了していないため、キャッシュされた外部検証の結果は使えません：${detail}`,
     cacheReadFailed: (detail: string) => `キャッシュされたシャットダウン検証の結果を読み込めませんでした：${detail}`,

@@ -30,7 +30,7 @@ import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
 import { aggregateUsage } from './core/cost.ts';
-import { nowIso, withDeadline } from './core/util.ts';
+import { DeadlineError, nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/console/hub.ts';
 import { ProviderSettings } from './providers/console/settings.ts';
@@ -1149,7 +1149,8 @@ async function runShutdown<C extends CoreConfig>(ctx: {
       steps.push({ key, label, ok: true, elapsedMs: Date.now() - t0 });
       ctx.log.info(`关机 ✓ ${label}`, { elapsedMs: Date.now() - t0 });
     } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
+      const detail = err instanceof DeadlineError ? t.stepTimedOut(Math.round(err.ms / 1000))
+        : err instanceof Error ? err.message : String(err);
       steps.push({ key, label, ok: false, elapsedMs: Date.now() - t0, detail });
       ctx.log.warn(`关机步骤失败: ${label}`, { detail });
     }

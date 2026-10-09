@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Worlds stoppen',
     core: 'Persona stoppen',
     modulesTimedOut: 'Zeitüberschreitung beim Stoppen der Worlds',
+    stepTimedOut: (seconds: number) => `Zeitüberschreitung nach ${seconds} s`,
     externalState: (worldId: string) => `Externer Zustand von ${worldId}`,
     stopIncomplete: (detail: string) => `Stoppen der Worlds unvollständig, daher kann die zwischengespeicherte externe Prüfung nicht verwendet werden: ${detail}`,
     cacheReadFailed: (detail: string) => `Lesen der zwischengespeicherten Prüfung des Herunterfahrens fehlgeschlagen: ${detail}`,

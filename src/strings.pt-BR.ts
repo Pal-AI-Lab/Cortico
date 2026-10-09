@@ -90,6 +90,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Parar os Worlds',
     core: 'Parar a Persona',
     modulesTimedOut: 'Tempo esgotado ao parar os Worlds',
+    stepTimedOut: (seconds: number) => `Tempo esgotado após ${seconds} s`,
     externalState: (worldId: string) => `Estado externo de ${worldId}`,
     stopIncomplete: (detail: string) => `A parada do World não terminou, então a verificação externa em cache não pode ser usada: ${detail}`,
     cacheReadFailed: (detail: string) => `Falha ao ler a verificação de desligamento em cache: ${detail}`,

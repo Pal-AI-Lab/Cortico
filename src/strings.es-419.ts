@@ -90,6 +90,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Detener los Worlds',
     core: 'Detener la Persona',
     modulesTimedOut: 'Se agotó el tiempo al detener los Worlds',
+    stepTimedOut: (seconds: number) => `Se agotó el tiempo tras ${seconds} s`,
     externalState: (worldId: string) => `Estado externo de ${worldId}`,
     stopIncomplete: (detail: string) => `La detención del World no terminó, así que no se puede usar la verificación externa en caché: ${detail}`,
     cacheReadFailed: (detail: string) => `No se pudo leer la verificación de apagado en caché: ${detail}`,

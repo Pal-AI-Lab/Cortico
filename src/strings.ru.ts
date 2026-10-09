@@ -94,6 +94,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Остановить World',
     core: 'Остановить Persona',
     modulesTimedOut: 'Истекло время остановки World',
+    stepTimedOut: (seconds: number) => `Истекло время ожидания (${seconds} с)`,
     externalState: (worldId: string) => `Внешнее состояние ${worldId}`,
     stopIncomplete: (detail: string) => `Остановка World не завершена, поэтому кэшированную внешнюю проверку использовать нельзя: ${detail}`,
     cacheReadFailed: (detail: string) => `Не удалось прочитать кэшированную проверку выключения: ${detail}`,

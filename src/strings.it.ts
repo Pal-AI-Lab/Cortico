@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: 'Arresta i World',
     core: 'Arresta la Persona',
     modulesTimedOut: "Timeout nell'arresto dei World",
+    stepTimedOut: (seconds: number) => `Timeout dopo ${seconds} s`,
     externalState: (worldId: string) => `Stato esterno di ${worldId}`,
     stopIncomplete: (detail: string) => `Arresto dei World incompleto, quindi la verifica esterna in cache non può essere usata: ${detail}`,
     cacheReadFailed: (detail: string) => `Lettura della verifica di arresto in cache non riuscita: ${detail}`,

@@ -88,6 +88,7 @@ export const botText: Partial<typeof botEn> = {
     worlds: '停止 World',
     core: '停止 Persona',
     modulesTimedOut: 'World 停止逾時',
+    stepTimedOut: (seconds: number) => `逾時(${seconds} 秒)`,
     externalState: (worldId: string) => `${worldId} 外部狀態`,
     stopIncomplete: (detail: string) => `World 停止未完成，不能採用外部核驗快取:${detail}`,
     cacheReadFailed: (detail: string) => `讀取已快取的關機驗證結果失敗:${detail}`,
