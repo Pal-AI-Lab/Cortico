@@ -75,6 +75,10 @@
     --section-gap: 28px;
     --text-detail: 13px;
   }
+  /* --sans 以简体中文字体打头;日文、繁体中文、韩文换成各自的字体,汉字字形才对 */
+  :root:lang(ja) { --sans: -apple-system, "Segoe UI", "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, "Noto Sans CJK JP", sans-serif; }
+  :root:lang(zh-Hant) { --sans: -apple-system, "Segoe UI", "PingFang TC", "Microsoft JhengHei", "Noto Sans CJK TC", sans-serif; }
+  :root:lang(ko) { --sans: -apple-system, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans CJK KR", sans-serif; }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
   body {
