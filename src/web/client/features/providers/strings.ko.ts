@@ -1,3 +1,29 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  pageTitle: '모델 연결', navLabel: '모델 연결', navGroup: 'Core', create: '+ 새 연결 인스턴스', newName: '이름 없는 인스턴스',
+  createHint: '인스턴스는 공급자 설정 한 세트를 카드로 저장한 것입니다.',
+  empty: '아직 모델 연결이 없습니다', emptyHint: '모델 연결을 추가해야 추론할 수 있습니다.',
+  eraseConfirm: '삭제 확인',
+  connect: '연결', activate: '현재 연결로 설정', active: '현재 모델', missing: '현재 모델 연결이 없습니다. 설정에서 참조: ',
+  inUse: (names: string) => `사용 중: ${names}`, selectedBy: (names: string) => `${names}에서 선택함(실행 안 됨)`,
+  readiness: { ready: '연결 가능', 'needs-setup': '설정 필요', 'runtime-unavailable': '실행 환경 준비 안 됨', invalid: '잘못된 설정', 'module-missing': '모듈을 사용할 수 없음', draft: '초안' },
+  basic: '기본 정보', connection: '연결', modelSection: '모델 및 생성', moduleSection: '모듈 설정', pricing: '가격', advanced: '고급 프로토콜',
+  name: '연결 이름', module: '연결 유형', url: 'API URL', key: 'API Key', model: '모델',
+  nameHint: '영문자, 숫자, - 또는 _를 쓰고 영문자나 숫자로 시작하세요. 공백과 시스템 예약 이름은 쓸 수 없습니다.',
+  fixedModule: '연결 유형은 저장한 뒤 바꿀 수 없습니다. 다른 유형을 쓰려면 새 연결을 만드세요.',
+  test: '연결 테스트', testOk: '테스트 성공', testFailed: '테스트 실패',
+  keyEmpty: 'API Key 입력', fetchModels: '모델 목록 가져오기', modelList: '모델 목록', modelsFetched: (count: number) => `모델 ${count}개를 가져왔습니다.`,
+  reasoning: '추론 강도', thinking: '추론 사용', temperature: '온도', maxTokens: '최대 출력 token', context: '컨텍스트 한도', tier: '서비스 등급', images: '이미지 허용',
+  catalogNoWindow: '모델 목록에 이 모델의 컨텍스트 한도가 없습니다. 공급자 문서를 보고 직접 입력하세요.',
+  catalogMaxOutput: (tokens: number) => `모델 목록에 나온 최대 출력은 ${tokens} token입니다.`,
+  advancedHint: '사용자 지정 API 게이트웨이나 호환 서비스를 쓸 때만 조정하세요.', secret: '자격 증명 환경 변수 이름',
+  extraHeaders: '추가 요청 헤더(JSON 객체)', extraBody: '추가 요청 본문(JSON 객체)', priceRules: '전체 가격 규칙(JSON 배열)',
+  shared: '공유 설정: 여러 봇이 이 연결을 사용할 수 있습니다. 변경하면 이 공유 설정이 바뀝니다. 다른 설정이 필요하면 새 연결을 만드세요.',
+  remove: '연결 삭제', duplicate: '연결 복제', cancel: '변경 취소', save: '저장', saved: '저장했습니다',
+  draftNote: '편집 내용은 이 브라우저에 임시 저장되며 저장할 때 설정에 기록됩니다. API Key는 임시 저장하지 않습니다.',
+  chooseModule: '연결 유형을 선택하세요.', invalidNumber: '허용 범위 안의 숫자를 입력하세요.',
+  required: '필수 항목입니다.', jsonObject: '올바른 JSON 객체를 입력하세요.', jsonArray: '올바른 JSON 배열을 입력하세요.',
+  unsaved: '초안으로 보관 중이며 저장할 때 기록됩니다.',
+  deleteConfirm: '이 연결과 디렉터리 안의 모든 파일을 삭제하시겠습니까?', referenced: '이 연결은 다음 봇에서 사용 중이라 삭제할 수 없습니다: ', reload: '다시 불러오기',
+};

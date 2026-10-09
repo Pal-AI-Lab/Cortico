@@ -1,3 +1,34 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  copy: 'コピー',
+  copyNothing: 'コピーする内容がありません',
+  copied: 'コピーしました',
+  copyFailed: 'コピーに失敗しました。テキストを展開したので手動で選択してください',
+  imageReadFailed: '画像を読み込めませんでした',
+  canvasUnsupported: 'このブラウザーは canvas に対応していないため、画像を縮小できません',
+  imageEncodeFailed: '画像の再エンコードに失敗しました',
+  fileFallback: 'ファイル',
+  imageFallback: '画像',
+  notImage: (name: string) => `${name} は対応していない画像形式です（JPEG / PNG / WebP / GIF）`,
+  undecodable: (name: string) => `${name} をデコードできません`,
+  stillTooLarge: (name: string, mb: number) => `${name} は縮小後も ${mb}MB を超えています`,
+  lamp: {
+    online: '正常',
+    loading: '起動中',
+    error: 'エラー',
+    offline: '無効',
+  },
+  cancel: 'キャンセル',
+  proceedAnyway: 'このまま続行',
+  confirm: '確認',
+  close: '✕ 閉じる (Esc)',
+  tooManyImages: (max: number) => `1 件のメッセージに添付できる画像は最大 ${max} 枚です`,
+  messageInput: 'メッセージ入力',
+  typeMessage: 'メッセージを入力…',
+  processingImages: (count: number) => `${count} 枚の画像を処理中…`,
+  sendMessage: 'メッセージを送信',
+  addImage: '画像を追加',
+  addImageHint: '画像を追加（貼り付けやドロップでも追加できます）',
+  removeImage: (name: string) => `${name} を削除`,
+};

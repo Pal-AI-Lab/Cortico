@@ -1,3 +1,37 @@
 import type { en } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
+export const text: Partial<typeof en> = {
+  profileObject: '모델 설정은 객체여야 합니다',
+  modelRequired: '모델 이름은 비워 둘 수 없습니다',
+  thinkingBoolean: '추론 사용 여부는 불리언이어야 합니다',
+  tierUnsupported: (title: string) => `${title}은(는) 이 추론 등급을 지원하지 않습니다`,
+  effortString: '추론 강도는 비어 있지 않은 문자열이어야 합니다',
+  effortWithoutThinking: '추론이 꺼져 있을 때는 추론 강도를 지정할 수 없습니다',
+  temperatureRange: 'temperature는 0–2 사이여야 합니다',
+  positiveInteger: (field: string) => `${field}은(는) 양의 정수여야 합니다`,
+  optionsObject: '네이티브 옵션은 객체여야 합니다',
+  kindChange: '인스턴스의 공급자 모듈 유형은 바꿀 수 없습니다',
+  baseUrlFormat: '공급자 URL은 자격 증명이 없는 HTTP(S) URL이어야 합니다',
+  secretName: '비밀 값 참조는 환경 변수 이름이어야 합니다',
+  multimodalBoolean: '멀티모달 사용 여부는 불리언이어야 합니다',
+  serviceTierString: '서비스 등급은 문자열이어야 합니다',
+  serviceTierUnsupported: (title: string, tier: string) =>
+    `${title}은(는) 서비스 등급 ${tier}을(를) 지원하지 않습니다`,
+  pricingArray: '가격은 배열이어야 합니다',
+  rulesArray: '가격 규칙은 배열이어야 합니다',
+  ruleShape: '가격 규칙에는 계량 항목과 0 이상의 단가가 필요합니다',
+  unitRequired: '계량 단위는 비워 둘 수 없습니다',
+  tokenUnit: '표준 token 계량은 token 단위를 써야 합니다',
+  bandsArray: '입력 구간 요금은 배열이어야 합니다',
+  bandsIncreasing: '입력 구간 임계값은 0보다 크고 엄격하게 증가해야 합니다',
+  modelsRequired: '가격에는 명시적인 모델 이름이나 *가 필요합니다',
+  currencyRequired: '가격 통화는 비워 둘 수 없습니다',
+  basisValue: '가격 기준은 marginal 또는 equivalent여야 합니다',
+  sourceRequired: '가격에는 출처가 필요합니다',
+  tiersObject: '서비스 등급 가격은 객체여야 합니다',
+  tierNameRequired: '서비스 등급 이름은 비워 둘 수 없습니다',
+  tierRules: '서비스 등급 가격에는 규칙 객체가 필요합니다',
+  timeWindowsUnsupported: '시간대별 가격은 공급자 확장이 모듈 가격표에서 선언하며, 엔드포인트 가격은 timeWindows를 받지 않습니다',
+  noModel: '선택된 모델 없음',
+  noSecret: (name: string) => `비밀 값 ${name}이(가) 없습니다`,
+};

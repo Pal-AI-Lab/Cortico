@@ -1,3 +1,50 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  // index.ts
+  groupPersonas: 'Persona & Memory',
+  groupWorlds: 'World',
+  moduleInstancesAria: 'World 實例',
+  navAria: '控制台導覽',
+  runResume: '繼續執行',
+  runPause: '暫停執行',
+  runUnavailable: '執行控制無法使用',
+  shutdownAria: '關機',
+  settingsAria: '設定',
+  settingsTitle: '設定',
+  finishing: '正在關閉…',
+  shutdownTitle: '關機',
+  shutdownBody: '處理程序將結束，控制台連線將中斷。',
+  confirmShutdownTitle: '⚠ 關機',
+  confirmShutdownAgainTitle: '⚠⚠ 確認關機?',
+  confirmShutdownAgainBody: '停止執行並結束處理程序？',
+  finishingToast: '正在關閉…',
+  stepIncomplete: '未完成',
+  doneShutdown: '已關機',
+  resultLocalIncomplete: '本機關閉步驟未全部完成',
+  resultExternalUnverified: '本機已關機,外部狀態未確認',
+  resultUnverified: '關閉步驟已執行，狀態未確認',
+  resultDefault: '關閉步驟已執行。',
+  noReceipt: (msg: string) =>
+    `未收到關閉結果（${msg}）；處理程序可能已結束。詳情見目前執行的 data/runs/<run>/log.jsonl 中的 shutdown 記錄。`,
+  docTitle: (name: string) => `控制台 · ${name}`,
+  renameTitle: '點擊重新命名',
+  renameSaved: '顯示名稱已儲存',
+  renameFailed: (msg: string) => `顯示名稱未能儲存:${msg}`,
+  releaseUpdate: (latest: string, current: string) => `Cortico ${latest} 已發布(目前 ${current})`,
+  // avatar.ts
+  changeAvatar: '更換 bot 頭像',
+  uploadAvatar: '上傳並裁剪 bot 頭像',
+  unreadable: '無法讀取這張圖片',
+  cropPreview: '頭像裁剪預覽',
+  zoomAria: '頭像縮放',
+  zoom: '縮放',
+  note: '拖曳圖片調整位置，捲動滑鼠滾輪或使用滑桿縮放；儲存後寫入 bot 根目錄的 avatar.png。',
+  cancel: '取消',
+  save: '儲存頭像',
+  cropTitle: '裁剪頭像',
+  noCanvas: '瀏覽器無法建立圖片畫布',
+  saved: '頭像已儲存',
+  // ../main.ts
+  featureLoadFailed: (label: string) => `「${label}」未能載入`,
+};

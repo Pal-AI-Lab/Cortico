@@ -1,4 +1,23 @@
 import type { consoleEn, panelEn } from './strings.ts';
 
-export const consoleText: Partial<typeof consoleEn> = {};
-export const panelText: Partial<typeof panelEn> = {};
+export const consoleText: Partial<typeof consoleEn> = {
+  orientation: 'Persona の在り方とメタ認知についての説明。',
+  constitution: 'Persona の長期的な原則。システムプレフィックスを再読み込みするか、新しいコンテキストを始めると反映されます。',
+  memoryNote: '記憶の約束事：Persona のファイルがどう保存され、いつ自動で浮かび上がるか。',
+  workspaceLabel: 'ワークスペース（Persona 自身が書いた記憶ファイル）',
+  workspaceNote: '憲法以外のワークスペースのファイルをすべて削除します。元に戻せません。憲法と人格のチェックポイントは変更しません',
+  workspaceStat: (n: number) => `${n} 個のファイル（憲法以外）`,
+  workspaceCleared: (n: number) => `ワークスペースのファイルを ${n} 個削除しました。憲法は変更していません`,
+  firstTurnUser: '最初のターン · ユーザー入力',
+  firstTurnUserDesc: '合成する最初のターンの user メッセージ。これと返答のどちらかが空の場合、ターン全体を注入しません。',
+  firstTurnThinking: '最初のターン · 思考',
+  firstTurnThinkingDesc: '合成する最初の assistant ターンの思考（reasoning_content）。空の場合、そのターンに思考は含まれません。openai-responses-compat 方言は思考を返送しないため、この種のエンドポイントではこの部分は送信されません。',
+  firstTurnReply: '最初のターン · 返答',
+  firstTurnReplyDesc: '合成する最初のターンの assistant の返答本文。',
+};
+
+export const panelText: Partial<typeof panelEn> = {
+  workspace: 'ワークスペース',
+  workspaceDesc: '保存すると operator の名義でワークスペースの Git リポジトリにコミットされます。',
+  history: 'バージョン履歴',
+};
