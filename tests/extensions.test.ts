@@ -284,15 +284,15 @@ describe('ExtensionManager', () => {
     const { mgr, urls } = manager();
     expect(await mgr.search()).toEqual([{
       name: 'a-mod', version: '1.0.0', description: 'A', publisher: 'me', license: 'MIT',
-      downloads: 12, dependents: 7, keywords: ['cortico-world'], kind: 'world',
+      downloads: { month: 12 }, dependents: 7, keywords: ['cortico-world'], kind: 'world',
       // git+https 的仓库地址收成能点的 https
       links: { npm: 'https://npm/a', repository: 'https://github.com/me/a' }, installed: true,
     }]);
     expect(await mgr.search('provider')).toEqual([{
-      name: 'a-prov', version: '3.0.0', description: 'P', downloads: 3, dependents: 0, kind: 'provider',
+      name: 'a-prov', version: '3.0.0', description: 'P', downloads: { month: 3 }, dependents: 0, kind: 'provider',
       keywords: ['cortico-provider'], links: {}, installed: false,
     }]);
-    expect(urls.map((u) => decodeURIComponent(u).match(/keywords:[a-z-]+/)?.[0])).toEqual([
+    expect(urls.filter((u) => u.includes('/-/v1/search')).map((u) => decodeURIComponent(u).match(/keywords:[a-z-]+/)?.[0])).toEqual([
       'keywords:cortico-world', 'keywords:cortico-provider',
     ]);
     // 一页没取满就不翻下一页
@@ -315,11 +315,53 @@ describe('ExtensionManager', () => {
       fetchJson: async (url) => { urls.push(url); return full; },
     });
     return mgr.search().then((hits) => {
-      expect(urls.map((u) => u.match(/from=\d+/)?.[0])).toEqual(['from=0', 'from=250', 'from=500', 'from=750']);
+      expect(urls.filter((u) => u.includes('/-/v1/search')).map((u) => u.match(/from=\d+/)?.[0])).toEqual(['from=0', 'from=250', 'from=500', 'from=750']);
       // 每页是同一批名字:去重之后只剩一页
       expect(hits).toHaveLength(250);
       expect(mgr.searchPartial()).toBe(true);
     });
+  });
+
+  it('search:下载量问 npm 下载统计,带 scope 的逐个问,累计往前加到一整段没下载为止', async () => {
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+    // 每个包按时间倒序各段的下载量,没列出的段是 0;c-mod 统计里查不到
+    const windows: Record<string, number[]> = { 'a-mod': [10, 5], '@s/b-mod': [4] };
+    const asked: Record<string, number> = {};
+    const urls: string[] = [];
+    const prefix = 'https://api.npmjs.org/downloads/point/';
+    const mgr = new ExtensionManager(root, set, {
+      run: async () => ({ code: 0, output: '' }),
+      registry: 'https://registry.example.invalid',
+      fetchJson: async (url) => {
+        if (url.includes('/-/v1/search')) {
+          return { objects: ['a-mod', '@s/b-mod', 'c-mod'].map((name) => ({ package: { name, version: '1.0.0', keywords: ['cortico-world'] }, downloads: { monthly: 99 } })) };
+        }
+        urls.push(url);
+        const rest = url.slice(prefix.length);
+        const period = rest.slice(0, rest.indexOf('/'));
+        const names = rest.slice(rest.indexOf('/') + 1).split(',');
+        const entry = (name: string) => {
+          if (!(name in windows)) return null;
+          if (period === 'last-week') return { downloads: 1 };
+          if (period === 'last-month') return { downloads: 3 };
+          const i = asked[name] = (asked[name] ?? -1) + 1;
+          return { downloads: windows[name]![i] ?? 0 };
+        };
+        if (names.length === 1) { const e = entry(names[0]!); if (!e) throw new Error('404'); return e; }
+        return Object.fromEntries(names.map((name) => [name, entry(name)]));
+      },
+    });
+    const hits = await mgr.search();
+    expect(Object.fromEntries(hits.map((h) => [h.name, h.downloads]))).toEqual({
+      'a-mod': { total: 15, month: 3, week: 1 },
+      '@s/b-mod': { total: 4, month: 3, week: 1 },
+      // 统计里查不到:只剩搜索端点的月数
+      'c-mod': { month: 99 },
+    });
+    // 不带 scope 的合批问;a-mod 问到第三段是 0 才停,b-mod 第二段就停
+    expect(urls.filter((u) => u.endsWith('/a-mod,c-mod'))).toHaveLength(3);
+    expect(urls.filter((u) => u.endsWith('/a-mod'))).toHaveLength(2);
+    expect(urls.filter((u) => u.endsWith('/@s/b-mod'))).toHaveLength(4);
   });
 
   it('search:最后一页没取满就不算结果不全', async () => {

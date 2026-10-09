@@ -55,7 +55,7 @@ export interface SearchHitView {
   publisher?: string;
   license?: string;
   keywords?: string[];
-  downloads: number;
+  downloads: { total?: number; month: number; week?: number };
   dependents: number;
   links: { npm?: string; repository?: string; homepage?: string };
   installed: boolean;
@@ -122,7 +122,7 @@ export function arrangeHits(
   });
   matched.sort((a, b) => {
     switch (opts.sort) {
-      case 'downloads': return b.downloads - a.downloads || a.name.localeCompare(b.name);
+      case 'downloads': return b.downloads.month - a.downloads.month || a.name.localeCompare(b.name);
       // 发布时间是 ISO 串,按串比就是按时间比;没有日期的排在最后
       case 'date': return (b.date ?? '').localeCompare(a.date ?? '') || a.name.localeCompare(b.name);
       default: return a.name.localeCompare(b.name);
@@ -276,6 +276,10 @@ export function mountExtensions(ctx: FeatureContext): void {
       });
     }
   }
+  /** 累计、近 30 天、近 7 天;npm 下载统计没答上来的项显示「—」。 */
+  function downloadsText(hit: SearchHitView) {
+    return S.downloads(ui.fmt.count(hit.downloads.total), ui.fmt.count(hit.downloads.month), ui.fmt.count(hit.downloads.week));
+  }
   /** 包声明了图标就显示图标;没有或取不到时显示 Cortico 标志。 */
   function packageAvatar(src?: string) {
     const avatar = ui.h('span', 'extension-avatar');
@@ -373,7 +377,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       const info = ui.rowbar(); info.classList.add('extension-tags');
       if (hit.license) info.append(ui.pill(hit.license));
       if (hit.date) info.append(ui.pill(hit.date.slice(0, 10)));
-      info.append(ui.pill(S.downloadsPerMonth(ui.fmt.count(hit.downloads)))); card.append(info); return card;
+      info.append(ui.pill(downloadsText(hit))); card.append(info); return card;
     }));
     stabilizeGrid(marketGrid, result.matched, pageSize('market'));
     if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : S.noPackages : S.searching));
@@ -445,7 +449,7 @@ export function mountExtensions(ctx: FeatureContext): void {
         { k: S.fieldMaintainers, v: data.maintainers.join(S.listSeparator) || '—' },
         { k: S.fieldNode, v: data.engines ?? '—' }, { k: S.fieldDeps, v: data.dependencies.join(S.listSeparator) || S.none },
         { k: S.fieldKeywords, v: data.keywords?.join(S.listSeparator) || '—' },
-        { k: S.fieldDownloads, v: hit ? S.downloadsPerMonth(ui.fmt.count(hit.downloads)) : '—' }, { k: S.fieldDependents, v: hit ? String(hit.dependents) : '—' },
+        { k: S.fieldDownloads, v: hit ? downloadsText(hit) : '—' }, { k: S.fieldDependents, v: hit ? String(hit.dependents) : '—' },
       ];
       box.append(ui.kv(rows));
       {
