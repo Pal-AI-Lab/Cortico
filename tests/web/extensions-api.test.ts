@@ -45,7 +45,7 @@ beforeAll(async () => {
       }),
       search: async (kind) => {
         searched.push({ ...(kind ? { kind } : {}) });
-        return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: 1, dependents: 0, links: {}, installed: false, ...(kind ? { kind } : {}) }];
+        return [{ name: 'hit', version: '1.0.0', description: 'd', downloads: { month: 1 }, dependents: 0, links: {}, installed: false, ...(kind ? { kind } : {}) }];
       },
       updates: async () => ({ updates: [{ name: 'a', installedVersion: '1.0.0', latestVersion: '1.1.0', problems: [] }], errors: [] }),
       searchPartial: (kind) => kind === 'bot',

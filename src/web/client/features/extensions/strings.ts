@@ -65,7 +65,7 @@ const zh = {
   filterPlaceholder: '筛选：包名、描述、关键字',
   installedFilter: '筛选：名称、类型、描述',
   sortLabel: {
-    downloads: '按月下载量',
+    downloads: '按近 30 天下载量',
     date: '按最近发布',
     name: '按名字',
   },
@@ -130,7 +130,7 @@ const zh = {
 
   version: (v: string) => `版本：${v}`,
   author: (v: string) => `作者：${v}`,
-  downloadsPerMonth: (v: string) => `下载量：${v}/月`,
+  downloads: (total: string, month: string, week: string) => `累计 ${total} · 30 天 ${month} · 7 天 ${week}`,
   labelled: (label: string, value: string) => `${label}：${value}`,
   metaSeparator: '　',
   listSeparator: '、',
@@ -201,7 +201,7 @@ const en: typeof zh = {
   filterPlaceholder: 'Filter: name, description, keywords',
   installedFilter: 'Filter: name, type, description',
   sortLabel: {
-    downloads: 'Monthly downloads',
+    downloads: 'Downloads (30 days)',
     date: 'Recently published',
     name: 'Name',
   },
@@ -266,7 +266,7 @@ const en: typeof zh = {
 
   version: (v: string) => `Version: ${v}`,
   author: (v: string) => `Author: ${v}`,
-  downloadsPerMonth: (v: string) => `Downloads: ${v}/month`,
+  downloads: (total: string, month: string, week: string) => `Total ${total} · 30d ${month} · 7d ${week}`,
   labelled: (label: string, value: string) => `${label}: ${value}`,
   metaSeparator: ' · ',
   listSeparator: ', ',

@@ -466,6 +466,21 @@ const SEARCH_PAGE_SIZE = 250;
 const SEARCH_MAX_HITS = 1000;
 
 /**
+ * npm 官方的下载统计。镜像 registry 没有这套数,不论安装走哪个 registry 都问这里。
+ * 合批查询一次至多 128 个包、区间至多 365 天,且不收带 scope 的包名;单包查询的区间超过 18 个月会被截短。
+ */
+const DOWNLOADS_API = 'https://api.npmjs.org/downloads/point';
+const DOWNLOADS_BULK_MAX = 128;
+const DOWNLOADS_WINDOW_DAYS = 365;
+/**
+ * 搜索列表要等下载统计回来才出。实测一次统计请求 0.2–0.3 秒;连不上 api.npmjs.org 的机器
+ * (registry 走镜像、npm 主站被挡)会卡到系统的连接超时,三秒没回就不要这一项。
+ */
+const DOWNLOADS_TIMEOUT_MS = 3000;
+/** npm 下载统计的第一天,更早没有数据。 */
+const DOWNLOADS_EPOCH = '2015-01-10';
+
+/**
  * registry 给的仓库地址是 npm 规范化过的 `git+https://….git`:浏览器不认这个 scheme。
  * 收成可点的 https；认不出形状就原样返回，让操作员自己看。
  */
@@ -700,7 +715,7 @@ export class ExtensionManager {
           ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
           ...(p.license ? { license: p.license } : {}),
           ...(p.keywords?.length ? { keywords: p.keywords } : {}),
-          downloads: obj.downloads?.monthly ?? 0,
+          downloads: { month: obj.downloads?.monthly ?? 0 },
           dependents: Number(obj.dependents) || 0,
           links: {
             ...(p.links?.npm ? { npm: p.links.npm } : {}),
@@ -713,7 +728,61 @@ export class ExtensionManager {
       if (objects.length < SEARCH_PAGE_SIZE) break;
       if (from + SEARCH_PAGE_SIZE >= SEARCH_MAX_HITS) this.partialSearch.set(kind, true);
     }
+    const stats = await this.downloadStats(hits.map((hit) => hit.name));
+    for (const hit of hits) Object.assign(hit.downloads, stats.get(hit.name));
     return hits;
+  }
+
+  /**
+   * 向 npm 下载统计问每个包的近 7 天、近 30 天与累计下载量。不带 scope 的合批问,带 scope 的逐个问。
+   * 累计按 365 天一段往前加,一个包某段为 0 就不再往前问;中间有整年无下载的包因此少计更早的下载。
+   * 某次请求失败,涉及的包就缺那一项;统计接口整个不可达时返回空表,列表照常出。
+   */
+  private async downloadStats(names: string[]): Promise<Map<string, Partial<ExtensionSearchHit['downloads']>>> {
+    const point = async (period: string, batch: string[]): Promise<Map<string, number>> => {
+      const plain = batch.filter((name) => !name.startsWith('@'));
+      const groups = [
+        ...Array.from({ length: Math.ceil(plain.length / DOWNLOADS_BULK_MAX) }, (_, i) => plain.slice(i * DOWNLOADS_BULK_MAX, (i + 1) * DOWNLOADS_BULK_MAX)),
+        ...batch.filter((name) => name.startsWith('@')).map((name) => [name]),
+      ];
+      const counts = new Map<string, number>();
+      await Promise.all(groups.map(async (group) => {
+        let data: unknown;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), DOWNLOADS_TIMEOUT_MS); });
+        try { data = await Promise.race([this.fetchJson(`${DOWNLOADS_API}/${period}/${group.join(',')}`), late]); } catch { return; } finally { clearTimeout(timer); }
+        // 只问一个包时回的是那个包本身,问多个时按包名分开回,没有数据的包是 null
+        const entries = group.length === 1 ? { [group[0]!]: data } : (data ?? {}) as Record<string, unknown>;
+        for (const name of group) {
+          const n = (entries[name] as { downloads?: unknown } | null | undefined)?.downloads;
+          if (typeof n === 'number') counts.set(name, n);
+        }
+      }));
+      return counts;
+    };
+    const day = (date: Date) => date.toISOString().slice(0, 10);
+    const [week, month, total] = await Promise.all([point('last-week', names), point('last-month', names), (async () => {
+      const sums = new Map<string, number>();
+      let pending = names;
+      for (let end = new Date(); pending.length && day(end) >= DOWNLOADS_EPOCH;) {
+        const start = new Date(end.getTime() - (DOWNLOADS_WINDOW_DAYS - 1) * 86_400_000);
+        const from = day(start) < DOWNLOADS_EPOCH ? DOWNLOADS_EPOCH : day(start);
+        const counts = await point(`${from}:${day(end)}`, pending);
+        // 有一段没问到,这个包的累计就不完整,整项不报
+        for (const name of pending) {
+          const n = counts.get(name);
+          if (n === undefined) sums.delete(name); else sums.set(name, (sums.get(name) ?? 0) + n);
+        }
+        pending = pending.filter((name) => (counts.get(name) ?? 0) > 0);
+        end = new Date(start.getTime() - 86_400_000);
+      }
+      return sums;
+    })()]);
+    return new Map(names.map((name) => [name, {
+      ...(week.has(name) ? { week: week.get(name) } : {}),
+      ...(month.has(name) ? { month: month.get(name) } : {}),
+      ...(total.has(name) ? { total: total.get(name) } : {}),
+    }]));
   }
 
   /**

@@ -31,10 +31,10 @@ const LIST = {
 
 const HITS = {
   hits: [
-    { name: 'found-mod', version: '3.1.0', description: '搜到的', downloads: 42, dependents: 2, publisher: 'someone', license: 'MIT', date: '2026-09-18T00:00:00.000Z', keywords: ['cortico-world', 'chat'], links: { npm: 'https://npm.example/found', repository: 'https://git.example/found' }, installed: false, kind: 'world' },
-    { name: 'alpha-mod', version: '1.0.0', description: '已经装了', downloads: 7, dependents: 0, date: '2026-01-02T00:00:00.000Z', links: {}, installed: true, kind: 'world' },
+    { name: 'found-mod', version: '3.1.0', description: '搜到的', downloads: { total: 130, month: 42, week: 9 }, dependents: 2, publisher: 'someone', license: 'MIT', date: '2026-09-18T00:00:00.000Z', keywords: ['cortico-world', 'chat'], links: { npm: 'https://npm.example/found', repository: 'https://git.example/found' }, installed: false, kind: 'world' },
+    { name: 'alpha-mod', version: '1.0.0', description: '已经装了', downloads: { month: 7 }, dependents: 0, date: '2026-01-02T00:00:00.000Z', links: {}, installed: true, kind: 'world' },
     ...Array.from({ length: 11 }, (_, i) => ({
-      name: `filler-${i}`, version: '0.1.0', description: '凑数的', downloads: 100 + i, dependents: 0,
+      name: `filler-${i}`, version: '0.1.0', description: '凑数的', downloads: { month: 100 + i }, dependents: 0,
       date: `2026-02-${String(i + 1).padStart(2, '0')}T00:00:00.000Z`, links: {}, installed: false, kind: 'world',
     })),
   ],
@@ -356,7 +356,7 @@ describe('npm input', () => {
 });
 
 describe('arrangeHits', () => {
-  const hit = (over: Any): Any => ({ name: 'x', version: '1.0.0', description: '', downloads: 0, dependents: 0, links: {}, installed: false, ...over });
+  const hit = (over: Any): Any => ({ name: 'x', version: '1.0.0', description: '', downloads: { month: 0 }, dependents: 0, links: {}, installed: false, ...over });
   const opts = (over: Any): Any => ({ filter: '', hideInstalled: false, sort: 'downloads', page: 0, pageSize: 2, ...over });
 
   it('筛选看名字、描述与关键字;隐藏已安装是另一道', () => {
@@ -373,9 +373,9 @@ describe('arrangeHits', () => {
 
   it('三种排序各自的口径;并列时按名字', () => {
     const hits = [
-      hit({ name: 'b', downloads: 5, dependents: 1, date: '2026-01-01T00:00:00.000Z' }),
-      hit({ name: 'a', downloads: 5, dependents: 9, date: '2026-05-05T00:00:00.000Z' }),
-      hit({ name: 'c', downloads: 90, dependents: 0 }),
+      hit({ name: 'b', downloads: { month: 5 }, dependents: 1, date: '2026-01-01T00:00:00.000Z' }),
+      hit({ name: 'a', downloads: { month: 5 }, dependents: 9, date: '2026-05-05T00:00:00.000Z' }),
+      hit({ name: 'c', downloads: { month: 90 }, dependents: 0 }),
     ];
     const names = (sort: string): string[] => arrangeHits(hits, opts({ sort, pageSize: 10 })).shown.map((h: Any) => h.name);
     expect(names('downloads')).toEqual(['c', 'a', 'b']);
@@ -468,7 +468,7 @@ describe('extension review interactions', () => {
     expect(detail.querySelector('details')?.open).toBe(false);
     expect(detail.querySelector('summary')?.textContent).toBe('历史版本');
     expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
-    expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('下载量：42/月');
+    expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('累计 130 · 30 天 42 · 7 天 9');
   });
   it('keeps installed metadata available when registry details fail', async () => {
     stub({ detailStatus: 503, list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], metadata: { license: 'MIT', dependencies: ['example-dependency'], links: { repository: 'https://git.example/module' } } }] } });

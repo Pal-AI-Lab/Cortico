@@ -1074,7 +1074,8 @@ const devExtensions: ExtensionInfo[] = [
 
 /**
  * 扩展搜索的假命中表。条数超过一页,下载量、发布时间、许可证、发布者各不相同:
- * 筛选、排序、分页在这张表上能各自看出效果。
+ * 筛选、排序、分页在这张表上能各自看出效果。下载量的数是近 30 天,累计与近 7 天由它推出;
+ * 契约版本对不上的那个包装作 npm 下载统计没答上来,只有近 30 天。
  */
 const devSearchHits: ExtensionSearchHit[] = [
   ['@acme/cortico-world-discord', '0.3.2', 'Discord 频道接入', 'acme', 412, 3, 'MIT', '2026-08-30', ['chat']],
@@ -1096,7 +1097,9 @@ const devSearchHits: ExtensionSearchHit[] = [
   version: version as string,
   description: `${description as string} (dev 假数据)`,
   publisher: publisher as string,
-  downloads: downloads as number,
+  downloads: name === 'cortico-world-broken'
+    ? { month: downloads as number }
+    : { total: (downloads as number) * 3 + 17, month: downloads as number, week: Math.floor((downloads as number) / 4) },
   dependents: dependents as number,
   license: license as string,
   date: `${date as string}T09:00:00.000Z`,
@@ -1125,8 +1128,8 @@ const devBuiltins: ExtensionInfo[] = [
   })),
 ];
 devSearchHits.push(
-  { name: 'cortico-provider-example', version: '1.0.3', description: '示例模型通信协议 (dev 假数据)', publisher: 'someone', downloads: 88, dependents: 0, license: 'MIT', date: '2026-09-10T09:00:00.000Z', keywords: ['cortico-provider'], kind: 'provider', links: { npm: 'https://www.npmjs.com/package/cortico-provider-example' }, installed: false },
-  { name: 'cortico-bot-example', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', publisher: 'someone', downloads: 20, dependents: 0, license: 'MIT', date: '2026-09-12T09:00:00.000Z', keywords: ['cortico-bot'], kind: 'bot', links: { npm: 'https://www.npmjs.com/package/cortico-bot-example' }, installed: false },
+  { name: 'cortico-provider-example', version: '1.0.3', description: '示例模型通信协议 (dev 假数据)', publisher: 'someone', downloads: { total: 301, month: 88, week: 19 }, dependents: 0, license: 'MIT', date: '2026-09-10T09:00:00.000Z', keywords: ['cortico-provider'], kind: 'provider', links: { npm: 'https://www.npmjs.com/package/cortico-provider-example' }, installed: false },
+  { name: 'cortico-bot-example', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', publisher: 'someone', downloads: { total: 20, month: 20, week: 20 }, dependents: 0, license: 'MIT', date: '2026-09-12T09:00:00.000Z', keywords: ['cortico-bot'], kind: 'bot', links: { npm: 'https://www.npmjs.com/package/cortico-bot-example' }, installed: false },
 );
 
 const app = new WebApp({
