@@ -1,4 +1,116 @@
 import type { botEn, assemblyEn } from './strings.ts';
 
-export const botText: Partial<typeof botEn> = {};
-export const assemblyText: Partial<typeof assemblyEn> = {};
+export const botText: Partial<typeof botEn> = {
+  noFile: '(keine Datei)',
+  storage: {
+    events: {
+      label: 'Ereignisspeicher (Teil dieses Laufs)',
+      note: 'Löscht die Ereignisse dieses Laufs und behält frühere Läufe; der Cursor springt nicht zurück',
+      stat: (count: number, cursor: number, size: string) => `${count} ${count === 1 ? 'Eintrag' : 'Einträge'} (Cursor bei ${cursor}) / ${size}`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'Ereignis' : 'Ereignisse'} dieses Laufs gelöscht`,
+    },
+    session: {
+      label: 'Haupt-Session (aktueller Gesprächskontext)',
+      note: 'Leert das Gespräch und öffnet die Session neu; Memory und Ereignisspeicher bleiben. Läuft gerade ein Batch, erst nach dessen Ende',
+      stat: (records: number, ktok: number, size: string) => `${records} ${records === 1 ? 'Eintrag' : 'Einträge'} / ~${ktok}k tok / ${size}`,
+      cleared: 'Session geleert und neu geöffnet (Systempräfix + Eröffnungsnachricht)',
+    },
+    runlog: {
+      label: 'Laufprotokoll (dieser Lauf)',
+      note: 'Löscht die Protokolle dieses Laufs und behält frühere Läufe. Laufprotokolle gehören nicht zum Modellkontext',
+      cleared: 'Laufprotokoll geleert',
+    },
+    usage: {
+      label: 'Token-Verbrauchsjournal (Quelle der Kostenseite)',
+      note: 'Löscht alle Verbrauchs- und Kosteneinträge der Modelle; die Summen beginnen mit danach geschriebenen Einträgen neu. Diese Einträge gehören nicht zum Modellkontext',
+      stat: (n: number, size: string) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'} / ${size}`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'Verbrauchseintrag' : 'Verbrauchseinträge'} gelöscht`,
+    },
+    toolcalls: {
+      label: 'Tool-Aufruf-Journal (Tool-Name / Rohargumente / Ergebnis)',
+      note: 'Löscht die Tool-Aufruf-Protokolle dieses Laufs, ohne Tool-Ergebnisse im Modellkontext zu ändern',
+      cleared: 'Tool-Aufruf-Journal geleert',
+    },
+    state: {
+      label: 'Core-Zustand',
+      note: 'Löscht Persona-Zustand, Übergabezeit und aufeinanderfolgende Modellfehler; behält den Zustellungs-Cursor und die World-Sichtbarkeit',
+      stat: (n: number, lastHandoff: string) => `${n} Persona-${n === 1 ? 'Zustandseintrag' : 'Zustandseinträge'} / letzte Übergabe ${lastHandoff}`,
+      never: 'keine',
+      cleared: 'Core-Zustand auf Standard zurückgesetzt',
+    },
+    wakes: {
+      label: 'Persistente Timer',
+      note: 'Bricht alle Timer ab (ohne Benachrichtigungen)',
+      stat: (n: number) => `${n} ausstehend`,
+      cleared: (n: number) => `${n} Timer abgebrochen`,
+    },
+    tracker: {
+      label: 'Session-Statistik (Verbrauch / Cache-Treffer)',
+      note: 'Setzt die Statistik zurück und behält Einträge aktiver Sessions',
+      stat: (n: number) => `${n} ${n === 1 ? 'Session' : 'Sessions'}`,
+      cleared: 'Session-Statistik zurückgesetzt',
+    },
+    pending: {
+      label: 'Ausstehende Ereignisse',
+      note:
+        'Verwirft ausstehende Ereignisse und behält archivierte Einträge. Verzögert gerenderte Einträge bleiben in der Warteschlange; verworfene Einträge werden nach einem Neustart nicht nachgeliefert',
+      stat: (n: number) => `${n} ausstehend`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'ausstehendes Ereignis' : 'ausstehende Ereignisse'} verworfen`,
+    },
+    media: {
+      label: 'Anhangsspeicher (Bilder und Audio aus Ereignissen und Tool-Ergebnissen)',
+      note: 'Löscht alle Anhangsdateien und behält die Ereignisse und Session-Einträge, die darauf verweisen; von einem gelöschten Anhang bleibt im Kontext nur seine Textbeschreibung',
+      stat: (n: number, size: string) => `${n} ${n === 1 ? 'Datei' : 'Dateien'} / ${size}`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'Anhang' : 'Anhänge'} gelöscht`,
+    },
+  },
+  config: {
+    unknownGroup: (id: string) => `Keine solche Konfigurationsgruppe: ${id}`,
+    updated: (title: string, file: string) => `${title} aktualisiert und in ${file} zurückgeschrieben`,
+  },
+  prompts: {
+    unknown: (key: string) => `Unbekannte Prompt-Vorlage: ${key}`,
+    packageReadOnly: (title: string) => `${title} ist eine schreibgeschützte Vorlage eines Erweiterungspakets`,
+    conflict: (title: string) => `${title} wurde anderswo geändert; lade neu, bevor du speicherst`,
+    saved: (title: string) => `${title} gespeichert`,
+    savedOverride: (title: string) => `Deployment-Überschreibung für ${title} gespeichert`,
+    notEnvPrompt: (title: string) => `${title} hat keine Standardvorlage zum Wiederherstellen`,
+    alreadyDefault: (title: string) => `${title} nutzt bereits den World-Standard`,
+    reset: (title: string) => `Deployment-Überschreibung für ${title} entfernt`,
+  },
+  visibility: {
+    shown: (id: string) => `${id} ist für den Agenten wieder sichtbar. Die Ereigniszustellung läuft wieder; Präfixabschnitt und Tools kehren nach dem Neuladen des Präfixes zurück.`,
+    hidden: (id: string) => `${id} ist jetzt vor dem Agenten verborgen. Neue Ereignisse wecken den Agenten nicht mehr (sie werden weiter gespeichert); Präfixabschnitt und Tools werden nach dem Neuladen des Präfixes entfernt.`,
+    prefixReloaded: (kept: number) => `Systempräfix und Tool-Tabelle neu geladen; ${kept} ${kept === 1 ? 'bestehende Nachricht' : 'bestehende Nachrichten'} der aktuellen Session behalten`,
+  },
+  shutdown: {
+    pause: 'Ereigniszustellung pausieren',
+    worlds: 'Worlds stoppen',
+    core: 'Persona stoppen',
+    modulesTimedOut: 'Zeitüberschreitung beim Stoppen der Worlds',
+    externalState: (worldId: string) => `Externer Zustand von ${worldId}`,
+    stopIncomplete: (detail: string) => `Stoppen der Worlds unvollständig, daher kann die zwischengespeicherte externe Prüfung nicht verwendet werden: ${detail}`,
+    cacheReadFailed: (detail: string) => `Lesen der zwischengespeicherten Prüfung des Herunterfahrens fehlgeschlagen: ${detail}`,
+    manualCheck: 'Prüfe, ob der zugehörige externe Dienst gestoppt ist.',
+    llm: 'Anbieter-Instanzen stoppen',
+    flush: 'Core-Zustand speichern',
+    web: 'Konsole schließen',
+    summarySkipped: 'Lokale Schritte zum Herunterfahren unvollständig',
+    summaryComplete: 'Lokales Herunterfahren beendet: alle Schritte erledigt',
+    summaryUnverified: (items: string[]) => `Lokales Herunterfahren beendet, aber das Ende des externen Zustands ist nicht bestätigt: ${items.join(', ')} (manuelle Bestätigung nötig)`,
+  },
+};
+export const assemblyText: Partial<typeof assemblyEn> = {
+  constructFailed: (detail: string) => `Erstellung fehlgeschlagen: ${detail}`,
+  notImplemented: 'Lokal wurde keine Implementierung dieser World gefunden.',
+  unknownWorld: (id: string) => `Unbekannte World: ${id}`,
+  alreadyRunning: (label: string) => `${label} ist bereits aktiviert`,
+  prebuilt: (label: string) => `${label} ist eine vorgefertigte Instanz und wird nicht über die Assemblierungsschicht aktiviert`,
+  activated: (label: string, id: string) => `${label} (${id}) aktiviert`,
+  deactivated: (label: string, id: string) => `${label} (${id}) deaktiviert`,
+  notActive: (label: string) => `${label} ist nicht aktiv, daher gibt es keine Instanz zum Neustarten`,
+  restarted: (label: string) => `${label} neu gestartet`,
+  toolClash: (other: string, names: string[]) => `Tool-Namen kollidieren mit ${other}, Einhängen abgelehnt: ${names.join(', ')}`,
+  toolReserved: (names: string[]) => `Tool-Namen sind von Core oder Persona belegt, Einhängen abgelehnt: ${names.join(', ')}`,
+  unbound: 'Die Assemblierungsschicht ist noch an keinen Core gebunden',
+};

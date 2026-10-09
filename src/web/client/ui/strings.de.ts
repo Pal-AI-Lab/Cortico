@@ -1,3 +1,34 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  copy: 'Kopieren',
+  copyNothing: 'Nichts zu kopieren',
+  copied: 'Kopiert',
+  copyFailed: 'Kopieren fehlgeschlagen; Text zum manuellen Markieren aufgeklappt',
+  imageReadFailed: 'Bild konnte nicht gelesen werden',
+  canvasUnsupported: 'Dieser Browser unterstützt kein canvas; Bild kann nicht skaliert werden',
+  imageEncodeFailed: 'Neukodierung des Bildes fehlgeschlagen',
+  fileFallback: 'Datei',
+  imageFallback: 'Bild',
+  notImage: (name: string) => `${name} ist kein unterstütztes Bildformat (JPEG / PNG / WebP / GIF)`,
+  undecodable: (name: string) => `${name} konnte nicht dekodiert werden`,
+  stillTooLarge: (name: string, mb: number) => `${name} überschreitet nach dem Skalieren immer noch ${mb} MB`,
+  lamp: {
+    online: 'aktiv',
+    loading: 'startet',
+    error: 'Fehler',
+    offline: 'deaktiviert',
+  },
+  cancel: 'Abbrechen',
+  proceedAnyway: 'Trotzdem fortfahren',
+  confirm: 'Bestätigen',
+  close: '✕ Schließen (Esc)',
+  tooManyImages: (max: number) => `Höchstens ${max} Bilder pro Nachricht`,
+  messageInput: 'Nachrichteneingabe',
+  typeMessage: 'Nachricht eingeben…',
+  processingImages: (count: number) => `${count} ${count === 1 ? 'Bild wird' : 'Bilder werden'} verarbeitet…`,
+  sendMessage: 'Nachricht senden',
+  addImage: 'Bild hinzufügen',
+  addImageHint: 'Bild hinzufügen (Einfügen oder Hineinziehen geht auch)',
+  removeImage: (name: string) => `${name} entfernen`,
+};

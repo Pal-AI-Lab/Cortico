@@ -1,3 +1,37 @@
 import type { en } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
+export const text: Partial<typeof en> = {
+  profileObject: 'Die Modellkonfiguration muss ein Objekt sein',
+  modelRequired: 'Der Modellname darf nicht leer sein',
+  thinkingBoolean: 'Der Denkprozess-Schalter muss ein Boolean sein',
+  tierUnsupported: (title: string) => `${title} unterstützt diese Denkstufe nicht`,
+  effortString: 'Der Denkaufwand muss ein nicht leerer String sein',
+  effortWithoutThinking: 'Ein Denkaufwand ist nicht möglich, solange der Denkprozess aus ist',
+  temperatureRange: 'temperature muss zwischen 0 und 2 liegen',
+  positiveInteger: (field: string) => `${field} muss eine positive ganze Zahl sein`,
+  optionsObject: 'Native Optionen müssen ein Objekt sein',
+  kindChange: 'Eine Instanz kann ihren Anbieter-Modultyp nicht ändern',
+  baseUrlFormat: 'Die Anbieter-URL muss eine HTTP(S)-URL ohne Zugangsdaten sein',
+  secretName: 'Die Secret-Referenz muss ein Name einer Umgebungsvariable sein',
+  multimodalBoolean: 'Der Multimodal-Schalter muss ein Boolean sein',
+  serviceTierString: 'Die Servicestufe muss ein String sein',
+  serviceTierUnsupported: (title: string, tier: string) =>
+    `${title} unterstützt die Servicestufe ${tier} nicht`,
+  pricingArray: 'Preise müssen ein Array sein',
+  rulesArray: 'Preisregeln müssen ein Array sein',
+  ruleShape: 'Eine Preisregel braucht eine Messgröße und einen nicht negativen Preis',
+  unitRequired: 'Die Einheit darf nicht leer sein',
+  tokenUnit: 'Standard-Token-Messgrößen müssen die Einheit token verwenden',
+  bandsArray: 'Eingabestufen müssen ein Array sein',
+  bandsIncreasing: 'Die Schwellen der Eingabestufen müssen streng steigend und größer als 0 sein',
+  modelsRequired: 'Eine Preisangabe braucht explizite Modellnamen oder *',
+  currencyRequired: 'Die Währung der Preisangabe darf nicht leer sein',
+  basisValue: 'Die Basis der Preisangabe muss marginal oder equivalent sein',
+  sourceRequired: 'Eine Preisangabe braucht eine Quelle',
+  tiersObject: 'Preise je Servicestufe müssen ein Objekt sein',
+  tierNameRequired: 'Der Name der Servicestufe darf nicht leer sein',
+  tierRules: 'Preise je Servicestufe brauchen ein Regelobjekt',
+  timeWindowsUnsupported: 'Tageszeitabhängige Preise deklariert eine Anbieter-Erweiterung in der Preisangabe ihres Moduls; Endpunktpreise akzeptieren kein timeWindows',
+  noModel: 'Kein Modell ausgewählt',
+  noSecret: (name: string) => `Secret ${name} fehlt`,
+};
