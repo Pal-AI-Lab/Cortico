@@ -100,12 +100,14 @@ export function resolveLanguage(configured: unknown): Language {
 }
 
 /**
- * An optional language's entry. A plain-object value may leave out top-level keys, which then
- * come from the base language; objects nested inside it are given whole, as are other values.
+ * An optional language's entry. A value typed as an object literal (assignable to
+ * `Record<string, unknown>`) may leave out top-level keys, which then come from the base
+ * language; objects nested inside it are given whole. Any other value (function, array, Map,
+ * class instance, interface-typed object, primitive) is given whole.
  */
 export type Translation<T> = T extends (...args: never[]) => unknown ? T
   : T extends readonly unknown[] ? T
-  : T extends object ? Partial<T>
+  : T extends Record<string, unknown> ? Partial<T>
   : T;
 
 /** One value per language: zh and en are required, every other language is optional. */

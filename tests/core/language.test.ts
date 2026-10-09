@@ -77,6 +77,13 @@ describe('pick 与串表', () => {
     // 标注完整类型:部分译文不能把 pick 的返回类型推成 Partial。
     const merged: typeof en = pick('ja', { zh, en, ja });
     expect(merged).toEqual({ a: 'ア', b: 'B', nested: { x: 'X' } });
+    // Map 不是普通对象,pick 不按键补齐:可选语言只能给完整的 Map。
+    const zhMap = new Map([['a', '甲']]);
+    const enMap = new Map([['a', 'A']]);
+    const jaMap = new Map([['a', 'ア']]);
+    expect(pick('ja', { zh: zhMap, en: enMap, ja: jaMap })).toBe(jaMap);
+    // @ts-expect-error 部分译文的类型不能是 Partial<Map>
+    pick('ja', { zh: zhMap, en: enMap, ja: {} });
     expect(pick('zh-Hant', { zh, en, 'zh-Hant': hant })).toEqual({ a: '甲', b: '乙(繁)', nested: { x: '子(繁)' } });
     expect(pick('ja', { zh: '中', en: 'E', ja: 'J' })).toBe('J');
     expect(pick('ko', { zh: '中', en: 'E', ja: 'J' })).toBe('E');
