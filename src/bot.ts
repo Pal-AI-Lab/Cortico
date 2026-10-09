@@ -1149,7 +1149,7 @@ async function runShutdown<C extends CoreConfig>(ctx: {
       steps.push({ key, label, ok: true, elapsedMs: Date.now() - t0 });
       ctx.log.info(`关机 ✓ ${label}`, { elapsedMs: Date.now() - t0 });
     } catch (err) {
-      const detail = err instanceof DeadlineError ? t.stepTimedOut(Math.round(err.ms / 1000))
+      const detail = err instanceof DeadlineError && err.what === label ? t.stepTimedOut(Math.round(err.ms / 1000))
         : err instanceof Error ? err.message : String(err);
       steps.push({ key, label, ok: false, elapsedMs: Date.now() - t0, detail });
       ctx.log.warn(`关机步骤失败: ${label}`, { detail });
