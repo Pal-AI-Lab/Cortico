@@ -1,3 +1,50 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  // index.ts
+  groupPersonas: 'Persona и Memory',
+  groupWorlds: 'World',
+  moduleInstancesAria: 'Экземпляры World',
+  navAria: 'Навигация консоли',
+  runResume: 'Продолжить',
+  runPause: 'Приостановить',
+  runUnavailable: 'Управление запуском недоступно',
+  shutdownAria: 'Выключить',
+  settingsAria: 'Настройки',
+  settingsTitle: 'Настройки',
+  finishing: 'Выключение…',
+  shutdownTitle: 'Выключение',
+  shutdownBody: 'Процесс завершится, и консоль отключится.',
+  confirmShutdownTitle: '⚠ Выключение',
+  confirmShutdownAgainTitle: '⚠⚠ Подтвердить выключение?',
+  confirmShutdownAgainBody: 'Остановить работу и завершить процесс?',
+  finishingToast: 'Выключение…',
+  stepIncomplete: 'не выполнен',
+  doneShutdown: 'Выключено',
+  resultLocalIncomplete: 'Локальные шаги выключения выполнены не полностью',
+  resultExternalUnverified: 'Локально выключено; внешнее состояние не проверено',
+  resultUnverified: 'Шаги выключения выполнены; состояние не проверено',
+  resultDefault: 'Шаги выключения выполнены.',
+  noReceipt: (msg: string) =>
+    `Результат выключения не получен (${msg}); возможно, процесс уже завершился. См. записи shutdown в data/runs/<run>/log.jsonl текущего запуска.`,
+  docTitle: (name: string) => `Консоль · ${name}`,
+  renameTitle: 'Нажмите, чтобы переименовать',
+  renameSaved: 'Отображаемое имя сохранено',
+  renameFailed: (msg: string) => `Отображаемое имя не сохранено: ${msg}`,
+  releaseUpdate: (latest: string, current: string) => `Вышел Cortico ${latest} (запущен ${current})`,
+  // avatar.ts
+  changeAvatar: 'Сменить аватар бота',
+  uploadAvatar: 'Загрузить и обрезать аватар бота',
+  unreadable: 'Не удалось прочитать это изображение',
+  cropPreview: 'Предпросмотр обрезки аватара',
+  zoomAria: 'Масштаб аватара',
+  zoom: 'Масштаб',
+  note: 'Перетащите изображение, чтобы сдвинуть его; масштабируйте колесом мыши или ползунком. При сохранении avatar.png записывается в корневую папку бота.',
+  cancel: 'Отмена',
+  save: 'Сохранить аватар',
+  cropTitle: 'Обрезка аватара',
+  noCanvas: 'Браузеру не удалось создать холст для изображения',
+  saved: 'Аватар сохранён',
+  // ../main.ts
+  featureLoadFailed: (label: string) => `Не удалось загрузить «${label}»`,
+};

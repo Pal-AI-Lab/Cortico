@@ -1,3 +1,34 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  copy: 'Копировать',
+  copyNothing: 'Нечего копировать',
+  copied: 'Скопировано',
+  copyFailed: 'Не удалось скопировать; текст развёрнут для ручного выделения',
+  imageReadFailed: 'Не удалось прочитать изображение',
+  canvasUnsupported: 'Браузер не поддерживает canvas; изменить размер изображения нельзя',
+  imageEncodeFailed: 'Не удалось перекодировать изображение',
+  fileFallback: 'Файл',
+  imageFallback: 'Изображение',
+  notImage: (name: string) => `${name}: неподдерживаемый формат изображения (JPEG / PNG / WebP / GIF)`,
+  undecodable: (name: string) => `Не удалось декодировать ${name}`,
+  stillTooLarge: (name: string, mb: number) => `${name} после уменьшения всё ещё больше ${mb} МБ`,
+  lamp: {
+    online: 'работает',
+    loading: 'запуск',
+    error: 'ошибка',
+    offline: 'отключено',
+  },
+  cancel: 'Отмена',
+  proceedAnyway: 'Всё равно продолжить',
+  confirm: 'Подтвердить',
+  close: '✕ Закрыть (Esc)',
+  tooManyImages: (max: number) => `Максимум изображений в одном сообщении: ${max}`,
+  messageInput: 'Ввод сообщения',
+  typeMessage: 'Введите сообщение…',
+  processingImages: (count: number) => `Обработка изображений: ${count}…`,
+  sendMessage: 'Отправить сообщение',
+  addImage: 'Добавить изображение',
+  addImageHint: 'Добавить изображение (можно также вставить или перетащить)',
+  removeImage: (name: string) => `Удалить ${name}`,
+};

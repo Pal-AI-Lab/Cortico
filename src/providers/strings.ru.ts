@@ -1,3 +1,37 @@
 import type { en } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
+export const text: Partial<typeof en> = {
+  profileObject: 'Конфигурация модели должна быть объектом',
+  modelRequired: 'Имя модели не может быть пустым',
+  thinkingBoolean: 'Переключатель рассуждения должен быть логическим значением',
+  tierUnsupported: (title: string) => `${title} не поддерживает этот уровень рассуждения`,
+  effortString: 'Глубина рассуждения должна быть непустой строкой',
+  effortWithoutThinking: 'Нельзя задать глубину рассуждения, когда рассуждение выключено',
+  temperatureRange: 'temperature должна быть в диапазоне от 0 до 2',
+  positiveInteger: (field: string) => `${field}: должно быть положительным целым числом`,
+  optionsObject: 'Нативные параметры должны быть объектом',
+  kindChange: 'Экземпляр не может сменить тип модуля провайдера',
+  baseUrlFormat: 'URL провайдера должен быть HTTP(S) URL без учётных данных',
+  secretName: 'Ссылка на секрет должна быть именем переменной окружения',
+  multimodalBoolean: 'Переключатель мультимодальности должен быть логическим значением',
+  serviceTierString: 'Уровень обслуживания должен быть строкой',
+  serviceTierUnsupported: (title: string, tier: string) =>
+    `${title} не поддерживает уровень обслуживания ${tier}`,
+  pricingArray: 'Цены должны быть массивом',
+  rulesArray: 'Правила тарификации должны быть массивом',
+  ruleShape: 'Правилу тарификации нужны счётчик и неотрицательная ставка',
+  unitRequired: 'Единица не может быть пустой',
+  tokenUnit: 'Стандартные счётчики token должны использовать единицу token',
+  bandsArray: 'Входные диапазоны должны быть массивом',
+  bandsIncreasing: 'Пороги входных диапазонов должны строго возрастать и быть больше 0',
+  modelsRequired: 'В расценке нужно явно указать имена моделей или *',
+  currencyRequired: 'Валюта расценки не может быть пустой',
+  basisValue: 'Основа расценки должна быть marginal или equivalent',
+  sourceRequired: 'Для расценки нужен источник',
+  tiersObject: 'Цены по уровням обслуживания должны быть объектом',
+  tierNameRequired: 'Имя уровня обслуживания не может быть пустым',
+  tierRules: 'Ценам по уровню обслуживания нужен объект правил',
+  timeWindowsUnsupported: 'Цены по времени суток объявляет расширение провайдера в расценке своего модуля; цены эндпоинта не принимают timeWindows',
+  noModel: 'Модель не выбрана',
+  noSecret: (name: string) => `Отсутствует секрет ${name}`,
+};
