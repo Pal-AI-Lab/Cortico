@@ -1,4 +1,41 @@
 import type { en, panelEn } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
-export const panel: Partial<typeof panelEn> = {};
+export const text: Partial<typeof en> = {
+  description: 'Connessione a servizi di modelli compatibili con Responses.',
+  extraHeaders: 'Header aggiuntivi (oggetto JSON)',
+  extraBody: 'Corpo della richiesta aggiuntivo (oggetto JSON)',
+  endpointPath: "Percorso dell'endpoint Responses",
+  endpointPathDescription: "Relativo all'URL del provider; predefinito /responses.",
+  endpointPathSlash: "Il percorso dell'endpoint deve iniziare con /",
+  extraHeadersObject: 'Gli header aggiuntivi devono essere un oggetto di stringhe',
+  extraBodyObject: 'I campi aggiuntivi del corpo devono essere un oggetto',
+  reasoningReplay: 'Reinvio del ragionamento',
+  reasoningReplayDescription: "Crittografato rimanda il blocco firmato, Testo in chiaro il testo del ragionamento; quale accettare lo decide l'endpoint, nel dubbio fai un test.",
+  reasoningReplayValue: 'Il reinvio del ragionamento deve essere encrypted o plaintext',
+  syntheticReasoningText: 'Testo di ragionamento sintetico',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `Nel reinvio in chiaro, il ragionamento inviato prima di una chiamata a strumento senza origine registrata; il modello lo legge. Vuoto usa il predefinito «${fallback}»; gli endpoint rifiutano una stringa vuota o di soli spazi.`,
+  syntheticReasoningTextValue: "Il testo di ragionamento sintetico non può essere vuoto o di soli spazi: l'endpoint rifiuta l'intera richiesta",
+  reasoningPanel: 'Ragionamento',
+  reasoningPanelDescription: "La forma in cui il ragionamento viene rimandato all'endpoint.",
+  bodyRequired: 'Corpo della richiesta obbligatorio',
+  instanceNameRequired: "Nome dell'endpoint obbligatorio",
+  unknownPanel: 'Pannello sconosciuto',
+  unknownMethod: 'Metodo sconosciuto',
+  modelRequired: 'Scegli prima un modello',
+  thinkingOff: 'Il ragionamento è disattivato su questo endpoint; la forma di reinvio non si applica',
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Ragionamento',
+  encrypted: 'Crittografato',
+  plaintext: 'Testo in chiaro',
+  detect: 'Non so, prova',
+  detecting: 'Test in corso',
+  saved: 'Salvato',
+  accepted: 'accettato',
+  rejected: (status: number | null, error: string) => `rifiutato${status ? ` ${status}` : ''}: ${error}`,
+  skipped: 'non testato',
+  outcome: (bare: string, withReasoning: string) => `Chiamata sintetica senza ragionamento: ${bare}; con ragionamento in chiaro: ${withReasoning}`,
+  applied: (label: string) => `Impostato su ${label}`,
+  undetermined: 'Non determinabile; impostazione invariata',
+};
