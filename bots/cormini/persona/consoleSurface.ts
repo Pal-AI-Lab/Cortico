@@ -7,31 +7,19 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { pick, type Language } from 'cortico/core/language.ts';
+import type { Language } from 'cortico/core/language.ts';
 import type { WorldPanelDecl } from 'cortico/core/types.ts';
 import type { GitWorkspaceMemory } from './memory.ts';
 import { AUTHOR_OPERATOR } from './workspaceGit.ts';
-
-const PANEL_TEXT = {
-  zh: {
-    workspace: '工作区',
-    workspaceDesc: '保存时以 operator 署名提交到工作区的 Git 仓库。',
-    history: '版本历史',
-  },
-  en: {
-    workspace: 'Workspace',
-    workspaceDesc: 'Saving commits to the workspace Git repository, authored as operator.',
-    history: 'Version history',
-  },
-};
+import { panelText } from './strings.ts';
 
 export function workspacePanelDecl(language: Language = 'zh'): WorldPanelDecl {
-  const t = pick(language, PANEL_TEXT);
+  const t = panelText(language);
   return { id: 'workspace', title: t.workspace, description: t.workspaceDesc };
 }
 
 export function historyPanelDecl(language: Language = 'zh'): WorldPanelDecl {
-  return { id: 'history', title: pick(language, PANEL_TEXT).history };
+  return { id: 'history', title: panelText(language).history };
 }
 
 const FILE_MAX_BYTES = 1024 * 1024;
