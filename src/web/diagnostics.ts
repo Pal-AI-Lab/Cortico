@@ -1,6 +1,6 @@
 /**
  * 诊断包:一次导出把排查一场跑要看的记录收进一个 JSON —— 运行指纹、状态快照、常驻 session
- * 的上下文、事件、运行日志、工具调用、交接边界、用量与脱敏配置。
+ * 的上下文、事件、运行日志、工具调用、交接边界、用量、当前端点的模型配置与脱敏配置。
  *
  * 每段各有条数上限,取到上限的段名列在 `truncated` 里;配置里键名含 secret / token / key /
  * password 的值在写出前抹掉。缺席的接缝(未挂载调试通道、未挂载用量)那一段为空。
@@ -9,7 +9,7 @@
 import { dirname, join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
-import type { EventEnvelope, LogRecord } from '../core/types.ts';
+import type { EventEnvelope, LogRecord, ModelSpec } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import { redactSecrets } from '../core/util.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere, type RunIndexRow } from './files.ts';
@@ -24,6 +24,13 @@ export interface DiagnosticsToolSchema {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
+}
+
+/** 当前端点:名字、Provider 模块与模型配置。端点的地址、密钥与原生参数不在其中。 */
+export interface DiagnosticsEndpoint {
+  name: string;
+  kind: string;
+  spec: ModelSpec | null;
 }
 
 /** 活数据由 WebApp 现取交进来;落盘记录由本模块按 `dataDir` 与 `runId` 自己读。 */
@@ -41,6 +48,8 @@ export interface DiagnosticsSources {
   worlds: readonly unknown[];
   /** `/api/usage` 那份聚合;没挂用量时为 null。 */
   usage: unknown;
+  /** 没有活跃端点或没挂调试通道时为 null。 */
+  endpoint: DiagnosticsEndpoint | null;
 }
 
 export interface DiagnosticsBundle {
@@ -60,6 +69,8 @@ export interface DiagnosticsBundle {
   /** transcript 里的 handoff / clear / prefix-reload 记号。 */
   transcriptBoundaries: unknown[];
   usage: { aggregate: unknown; rows: unknown[] };
+  /** 不经脱敏:`maxTokens` 的键名会被当成密钥抹掉。 */
+  endpoint: DiagnosticsEndpoint | null;
   config: unknown;
   truncated: string[];
 }
@@ -127,6 +138,7 @@ export function buildDiagnostics(sources: DiagnosticsSources): DiagnosticsBundle
     toolcalls,
     transcriptBoundaries: boundaries,
     usage: { aggregate: sources.usage, rows: usageRows },
+    endpoint: sources.endpoint,
     config: redactSecrets(readJson(join(dirname(dataDir), 'config.json'))),
     truncated,
   };

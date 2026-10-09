@@ -1042,6 +1042,10 @@ export function createBot<C extends CoreConfig>(
         onRunPhase: (cb) => core.loop.onRunPhase(cb),
         runId: () => core.run.id,
         toolSchemas: () => core.loop.getToolSchemas(),
+        activeEndpoint: () => {
+          const entry = cfg.providers[cfg.activeProvider];
+          return entry ? { name: cfg.activeProvider, kind: entry.kind, spec: entry.spec ?? null } : null;
+        },
       },
       toolSchemas: {
         list: () => {
