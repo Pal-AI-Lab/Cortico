@@ -45,7 +45,7 @@ export const en: typeof zh = {
   extraHeadersObject: 'Extra headers must be an object of strings',
   extraBodyObject: 'Extra body fields must be an object',
   reasoningReplay: 'Reasoning replay',
-  reasoningReplayDescription: 'Encrypted sends the signed block back, plaintext the reasoning text; which one the endpoint accepts is the endpoint\'s, probe when unsure.',
+  reasoningReplayDescription: 'Encrypted sends back the signed block; plaintext sends back the reasoning text. Which one is accepted depends on the endpoint; test it when unsure.',
   reasoningReplayValue: 'Reasoning replay must be encrypted or plaintext',
   syntheticReasoningText: 'Synthetic reasoning text',
   syntheticReasoningTextDescription: (fallback: string) =>

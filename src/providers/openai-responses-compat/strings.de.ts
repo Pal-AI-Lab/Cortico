@@ -10,7 +10,7 @@ export const text: Partial<typeof en> = {
   extraHeadersObject: 'Zusätzliche Header müssen ein Objekt aus Strings sein',
   extraBodyObject: 'Zusätzliche Body-Felder müssen ein Objekt sein',
   reasoningReplay: 'Denkprozess-Rückgabe',
-  reasoningReplayDescription: 'Verschlüsselt sendet den signierten Block zurück, Klartext den Denktext; welche Form der Endpunkt akzeptiert, liegt bei ihm, teste im Zweifel.',
+  reasoningReplayDescription: 'Verschlüsselt sendet den signierten Block zurück, Klartext den Denktext. Welche Form akzeptiert wird, hängt vom Endpunkt ab; teste im Zweifel.',
   reasoningReplayValue: 'Die Denkprozess-Rückgabe muss encrypted oder plaintext sein',
   syntheticReasoningText: 'Synthetischer Denktext',
   syntheticReasoningTextDescription: (fallback: string) =>
