@@ -10,8 +10,9 @@
  * `resetPath('no_scaffolding_blocks')` 先清掉 `placing`。台架的包里放土。
  *
  * `placing` 与 `placingBlock` 都在 `inject` 闭包里,bot 面上取不到,只能改包:
- * patches/mineflayer-pathfinder@2.4.5.patch。台架装真 `inject`,只换 `getPathTo`。
+ * src/worlds/minecraft/dependency-patches.ts。台架装真 `inject`,只换 `getPathTo`。
  */
+import '../../../src/worlds/minecraft/dependency-patches.ts';
 import { describe, expect, it } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';

@@ -6,9 +6,10 @@
  * `monitorMovement` 每刻先朝回位点走,没回到(水平 0.2 格内)就 return,不算路、不垫块。
  * 换目标或停下时回位点作废;判到达只比水平距离,人在回位格上方浮着也算回到位。
  *
- * `returningPos` 在 `inject` 闭包里,只能改包:patches/mineflayer-pathfinder@2.4.5.patch。
+ * `returningPos` 在 `inject` 闭包里,只能改包:src/worlds/minecraft/dependency-patches.ts。
  * 台架装真 `inject`,只换 `getPathTo`。
  */
+import '../../../src/worlds/minecraft/dependency-patches.ts';
 import { describe, expect, it } from 'vitest';
 import { EventEmitter } from 'node:events';
 import { createRequire } from 'node:module';

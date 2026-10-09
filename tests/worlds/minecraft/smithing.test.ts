@@ -1,8 +1,9 @@
 /**
  * 下界合金装备走锻造台:合成配方表里没有它们,1.20 起锻造台多一个模板槽。
  *
- * 窗口布局在 prismarine-windows 里,只能改包:patches/prismarine-windows@2.10.0.patch。
+ * 窗口布局在 prismarine-windows 里,只能改包:src/worlds/minecraft/dependency-patches.ts。
  */
+import '../../../src/worlds/minecraft/dependency-patches.ts';
 import { describe, expect, it } from 'vitest';
 import { createRequire } from 'node:module';
 import { skillCraft } from '../../../src/worlds/minecraft/skills-craft.ts';
