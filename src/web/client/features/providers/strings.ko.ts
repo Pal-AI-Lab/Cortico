@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: '삭제 확인',
   connect: '연결', activate: '현재 연결로 설정', active: '현재 모델', missing: '현재 모델 연결이 없습니다. 설정에서 참조: ',
   inUse: (names: string) => `사용 중: ${names}`, selectedBy: (names: string) => `${names}에서 선택함(실행 안 됨)`,
+  names: (list: string[]) => list.join(', '),
   readiness: { ready: '연결 가능', 'needs-setup': '설정 필요', 'runtime-unavailable': '실행 환경 준비 안 됨', invalid: '잘못된 설정', 'module-missing': '모듈을 사용할 수 없음', draft: '초안' },
   basic: '기본 정보', connection: '연결', modelSection: '모델 및 생성', moduleSection: '모듈 설정', pricing: '가격', advanced: '고급 프로토콜',
   name: '연결 이름', module: '연결 유형', url: 'API URL', key: 'API Key', model: '모델',

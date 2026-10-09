@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: 'Confirmar eliminación',
   connect: 'Conectar', activate: 'Usar como conexión actual', active: 'Modelo actual', missing: 'Falta la conexión de modelo actual: ',
   inUse: (names: string) => `En uso por: ${names}`, selectedBy: (names: string) => `Seleccionada por ${names} (sin ejecutar)`,
+  names: (list: string[]) => list.join(', '),
   readiness: { ready: 'Lista para conectar', 'needs-setup': 'Requiere configuración', 'runtime-unavailable': 'Entorno de ejecución no disponible', invalid: 'Configuración no válida', 'module-missing': 'Módulo no disponible', draft: 'Borrador' },
   basic: 'Información básica', connection: 'Conexión', modelSection: 'Modelo y generación', moduleSection: 'Ajustes del módulo', pricing: 'Precios', advanced: 'Protocolo avanzado',
   name: 'Nombre de la conexión', module: 'Tipo de conexión', url: 'URL de la API', key: 'API Key', model: 'Modelo',

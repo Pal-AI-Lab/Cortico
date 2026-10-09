@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: '削除を確定',
   connect: '接続', activate: '現在の接続に設定', active: '現在のモデル', missing: '現在のモデル接続が存在しません。設定での参照：',
   inUse: (names: string) => `使用中：${names}`, selectedBy: (names: string) => `${names} が選択中（未実行）`,
+  names: (list: string[]) => list.join('、'),
   readiness: { ready: '接続可能', 'needs-setup': '設定が必要', 'runtime-unavailable': '実行環境が未準備', invalid: '設定エラー', 'module-missing': 'モジュールを利用できません', draft: '下書き' },
   basic: '基本情報', connection: '接続', modelSection: 'モデルと生成', moduleSection: 'モジュール設定', pricing: '料金', advanced: '高度なプロトコル',
   name: '接続名', module: '接続の種類', url: 'API URL', key: 'API Key', model: 'モデル',

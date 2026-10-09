@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: 'Conferma eliminazione',
   connect: 'Connetti', activate: 'Imposta come connessione attuale', active: 'Modello attuale', missing: 'Connessione al modello attuale mancante: ',
   inUse: (names: string) => `In uso da: ${names}`, selectedBy: (names: string) => `Selezionata da ${names} (non in esecuzione)`,
+  names: (list: string[]) => list.join(', '),
   readiness: { ready: 'Pronta per la connessione', 'needs-setup': 'Da configurare', 'runtime-unavailable': 'Runtime non disponibile', invalid: 'Configurazione non valida', 'module-missing': 'Modulo non disponibile', draft: 'Bozza' },
   basic: 'Informazioni di base', connection: 'Connessione', modelSection: 'Modello e generazione', moduleSection: 'Impostazioni del modulo', pricing: 'Prezzi', advanced: 'Protocollo avanzato',
   name: 'Nome della connessione', module: 'Tipo di connessione', url: 'URL API', key: 'API Key', model: 'Modello',

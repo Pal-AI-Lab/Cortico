@@ -373,9 +373,9 @@
   .kv-合成 { --kv-line: color-mix(in srgb, var(--warn) 75%, transparent); }
   .turn { background: var(--agent-surface); border-left: 3px solid var(--ink-blue); }
   .turnhead { width: 100%; }
-  /* 一段里没有任何可画的 Item(空 reasoning、空正文):组头后面标个「空」,原始 Item 里仍看得到它们 */
+  /* 一段里没有任何可画的 Item(空 reasoning、空正文):组头后面标出 data-empty 的字样,原始 Item 里仍看得到它们 */
   .turn.empty .turnstatus:empty { display: inline; }
-  .turn.empty .turnstatus:empty::after { content: '（空）'; color: var(--ink-dim); font: 11px var(--sans); }
+  .turn.empty .turnstatus:empty::after { content: attr(data-empty); color: var(--ink-dim); font: 11px var(--sans); }
   .turnhead .badge { color: var(--ink-blue); border-color: color-mix(in srgb, var(--ink-blue) 42%, transparent); }
   .turnhead .grow { flex: 1; }
   .turnhead .turnstatus:empty { display: none; }

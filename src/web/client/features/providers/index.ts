@@ -87,12 +87,12 @@ export async function mountProviders(ctx: FeatureContext): Promise<void> {
       const stopped = users.filter(user => !user.running).map(user => user.name);
       const tone = active || running.length ? 'active' : readiness === 'draft' ? 'draft' : readiness === 'ready' ? 'ready' : 'error';
       node.status.dataset.tone = tone;
-      node.status.textContent = `${{ active: '●', ready: '✓', error: '!', draft: '✎' }[tone]} ${active ? S.active : running.length ? S.inUse(running.join('、')) : S.readiness[readiness]}`;
+      node.status.textContent = `${{ active: '●', ready: '✓', error: '!', draft: '✎' }[tone]} ${active ? S.active : running.length ? S.inUse(S.names(running)) : S.readiness[readiness]}`;
       const notes: string[] = [];
       if ((active || running.length) && readiness !== 'ready') notes.push('! ' + S.readiness[readiness]);
       if (identity !== NEW_DRAFT_ID && drafts.has(identity)) notes.push('✎ ' + S.readiness.draft);
-      if (active && running.length) notes.push(S.inUse(running.join('、')));
-      if (stopped.length) notes.push(S.selectedBy(stopped.join('、')));
+      if (active && running.length) notes.push(S.inUse(S.names(running)));
+      if (stopped.length) notes.push(S.selectedBy(S.names(stopped)));
       node.secondary.textContent = notes.join(' · ');
       node.secondary.dataset.tone = (active || running.length) && readiness !== 'ready' ? 'error' : 'draft';
       node.activate.parentElement!.hidden = active || identity === NEW_DRAFT_ID || readiness !== 'ready' || running.length > 0;

@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: 'Подтвердить удаление',
   connect: 'Подключить', activate: 'Сделать текущим подключением', active: 'Текущая модель', missing: 'Текущее подключение к модели отсутствует: ',
   inUse: (names: string) => `Используется: ${names}`, selectedBy: (names: string) => `Выбрано: ${names} (не запущено)`,
+  names: (list: string[]) => list.join(', '),
   readiness: { ready: 'Готово к подключению', 'needs-setup': 'Требуется настройка', 'runtime-unavailable': 'Среда выполнения недоступна', invalid: 'Неверная конфигурация', 'module-missing': 'Модуль недоступен', draft: 'Черновик' },
   basic: 'Основные сведения', connection: 'Подключение', modelSection: 'Модель и генерация', moduleSection: 'Настройки модуля', pricing: 'Цены', advanced: 'Расширенный протокол',
   name: 'Имя подключения', module: 'Тип подключения', url: 'URL API', key: 'API Key', model: 'Модель',

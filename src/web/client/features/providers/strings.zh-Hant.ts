@@ -7,6 +7,7 @@ export const S: Partial<typeof en> = {
   eraseConfirm: '確認刪除',
   connect: '連線', activate: '設為目前供應商', active: '目前模型', missing: '目前模型供應商不存在，設定中引用：',
   inUse: (names: string) => `其他實例使用中：${names}`, selectedBy: (names: string) => `已被 ${names} 選用（未執行）`,
+  names: (list: string[]) => list.join('、'),
   readiness: { ready: '可連線', 'needs-setup': '需要完善設定', 'runtime-unavailable': '執行環境未就緒', invalid: '設定錯誤', 'module-missing': '模組無法使用', draft: '草稿' },
   basic: '基本資訊', connection: '連線', modelSection: '模型與生成', moduleSection: '模組設定', pricing: '成本與計價', advanced: '進階協定',
   name: '供應商名稱', module: '供應商類型', url: 'API 位址', key: 'API Key', model: '模型',
