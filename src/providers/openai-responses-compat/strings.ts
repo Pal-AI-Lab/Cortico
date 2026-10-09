@@ -1,7 +1,10 @@
 import { pick, type Language } from '../../core/language.ts';
 
-/** Server side: ConfigGroup titles, panel titles and validation errors. */
+/** Server side: module description, ConfigGroup titles, panel titles and validation errors. */
 const zh = {
+  description: '连接兼容 Responses API 的模型服务。',
+  extraHeaders: '附加请求头（JSON object）',
+  extraBody: '附加请求体（JSON object）',
   endpointPath: 'Responses 端点路径',
   endpointPathDescription: '相对供应地址;默认 /responses。',
   endpointPathSlash: '端点路径必须以 / 开头',
@@ -24,6 +27,9 @@ const zh = {
   thinkingOff: '这条端点关着思维链,回传形态无关',
 };
 const en: typeof zh = {
+  description: 'Connect to Responses-compatible model services.',
+  extraHeaders: 'Extra headers (JSON object)',
+  extraBody: 'Extra request body (JSON object)',
   endpointPath: 'Responses endpoint path',
   endpointPathDescription: 'Relative to the provider URL; default /responses.',
   endpointPathSlash: 'The endpoint path must start with /',

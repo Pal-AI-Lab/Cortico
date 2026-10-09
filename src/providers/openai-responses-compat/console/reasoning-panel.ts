@@ -5,12 +5,13 @@
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
 import { configField } from '../../../web/client/features/config/view.ts';
 import type { DetectResult, ProbeOutcome, ReasoningPanelState } from './server.ts';
+import { pick } from '../../../core/language.ts';
 import { panel } from '../strings.ts';
 
 export const reasoningPanel: ConsolePanel = {
   mount: async (ctx: ConsolePanelContext) => {
     const { ui, root } = ctx;
-    const S = ctx.language === 'en' ? panel.en : panel.zh;
+    const S = pick(ctx.language, panel);
     const name = ctx.scope.instance;
     const path = `providers.${name}.options.reasoningReplay`;
     const textPath = `providers.${name}.options.syntheticReasoningText`;
