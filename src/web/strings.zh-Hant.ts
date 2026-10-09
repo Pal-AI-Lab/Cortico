@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: '處理程序即將結束;沒有偵測到啟動器迴圈,需要手動重新啟動',
   shutdownSkipped: (n: number, labels: string[]) => `本機關機完成,但有 ${n} 步沒走完:${labels.join('、')}`,
   shutdownComplete: (n: number) => `本機關機完成(${n} 步全部走完)`,
-  externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
+  externalUnverified: (items: string[]) => `。[P0] ${items.join('')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status}（${detail}）。人工處理:${manualAction}`,
+    punctuate(`${label}=${status}（${detail}）。人工處理:${manualAction}`, '。'),
   externalVerified: '；外部狀態均已確認結束',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}，${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '，')}${exit}`,
   runUnavailable: '執行控制無法使用',
   shutdownUnavailable: '關機控制無法使用',
   restartUnavailable: '重新啟動控制無法使用',

@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'Il processo sta per terminare; nessun ciclo del launcher rilevato, quindi va riavviato a mano',
   shutdownSkipped: (n: number, labels: string[]) => `Arresto locale terminato, ma ${n} ${n === 1 ? 'passaggio non è stato completato' : 'passaggi non sono stati completati'}: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Arresto locale terminato (${n === 1 ? '1 passaggio completato' : `tutti i ${n} passaggi completati`})`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Azione manuale: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Azione manuale: ${manualAction}`, '.'),
   externalVerified: '; tutti i controlli dello stato esterno hanno confermato la fine',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: "Il controllo dell'esecuzione non è disponibile",
   shutdownUnavailable: "Il controllo dell'arresto non è disponibile",
   restartUnavailable: 'Il controllo del riavvio non è disponibile',

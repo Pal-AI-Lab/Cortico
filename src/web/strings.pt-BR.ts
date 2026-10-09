@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -10,11 +11,11 @@ export const serverText: Partial<typeof en> = {
   shutdownSkipped: (n: number, labels: string[]) =>
     `O desligamento local terminou, mas ${n === 1 ? '1 etapa não foi concluída' : `${n} etapas não foram concluídas`}: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Desligamento local concluído (todas as ${n} etapas concluídas)`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Ação manual: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Ação manual: ${manualAction}`, '.'),
   externalVerified: '; todas as verificações de estado externo confirmaram o encerramento',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: 'O controle de execução está indisponível',
   shutdownUnavailable: 'O controle de desligamento está indisponível',
   restartUnavailable: 'O controle de reinício está indisponível',

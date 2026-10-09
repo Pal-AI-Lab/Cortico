@@ -18,7 +18,9 @@ import {
   type ConsoleManifest,
 } from '../../src/web/shared/console-protocol.ts';
 import { nullLogger } from '../../src/core/util.ts';
-import type { Language } from '../../src/core/language.ts';
+import { LANGUAGES, type Language } from '../../src/core/language.ts';
+import { serverText } from '../../src/web/strings.ts';
+import { botText } from '../../src/strings.ts';
 import { FakeHost } from './fakes.ts';
 
 let app: WebApp;
@@ -112,6 +114,16 @@ describe('每个请求自带界面语言', () => {
     expect(zh.result).toBe('本地关机完成(1 步全部走完)，进程即将退出');
     expect(en.result).toBe('Local shutdown finished (all 1 steps completed). The process is about to exit');
     expect((await getJson<{ error: string }>('/api/extensions', 'en')).error).toBe('Extension management is unavailable');
+  });
+
+  it('关机回执在每种语言里不叠用句末标点,人工动作自带或不带句号都一样', () => {
+    for (const language of LANGUAGES) {
+      const t = serverText(language);
+      const items = [botText(language).shutdown.manualCheck, 'x']
+        .map((manual) => t.externalItem('w', 'unknown', 'd', manual));
+      const receipt = t.powerReceipt(t.shutdownComplete(2), t.externalUnverified(items), t.exitShutdown);
+      expect(receipt, language).not.toMatch(/[.。][.。,，;；]/u);
+    }
   });
 
   it('WebSocket 握手的查询串选语言,那条流上的系统提示按它给', async () => {

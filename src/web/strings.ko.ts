@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: '프로세스가 곧 종료됩니다. 런처 루프가 감지되지 않았으므로 직접 다시 시작해야 합니다',
   shutdownSkipped: (n: number, labels: string[]) => `로컬 종료는 끝났지만 ${n}개 단계가 완료되지 않았습니다: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `로컬 종료 완료(${n}개 단계 모두 완료)`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status}(${detail}). 수동 조치: ${manualAction}`,
+    punctuate(`${label}=${status}(${detail}). 수동 조치: ${manualAction}`, '.'),
   externalVerified: '; 외부 상태 점검에서 모두 종료가 확인되었습니다',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: '실행 제어를 사용할 수 없습니다',
   shutdownUnavailable: '종료 제어를 사용할 수 없습니다',
   restartUnavailable: '재시작 제어를 사용할 수 없습니다',

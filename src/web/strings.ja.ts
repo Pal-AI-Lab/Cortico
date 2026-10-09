@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'プロセスはまもなく終了します。ランチャーのループが検出されなかったため、手動で再起動する必要があります',
   shutdownSkipped: (n: number, labels: string[]) => `ローカルのシャットダウンは完了しましたが、${n} 個の手順が完了していません：${labels.join('、')}`,
   shutdownComplete: (n: number) => `ローカルのシャットダウンが完了しました（全 ${n} 手順が完了）`,
-  externalUnverified: (items: string[]) => `。[P0] ${items.join('。')}`,
+  externalUnverified: (items: string[]) => `。[P0] ${items.join('')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status}（${detail}）。手動対応：${manualAction}`,
+    punctuate(`${label}=${status}（${detail}）。手動対応：${manualAction}`, '。'),
   externalVerified: '。外部状態のチェックではすべて終了を確認しました',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}。${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '。')}${exit}`,
   runUnavailable: '実行制御を利用できません',
   shutdownUnavailable: 'シャットダウン制御を利用できません',
   restartUnavailable: '再起動制御を利用できません',

@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'Der Prozess wird gleich beendet; keine Launcher-Schleife erkannt, daher muss er manuell neu gestartet werden',
   shutdownSkipped: (n: number, labels: string[]) => `Lokales Herunterfahren beendet, aber ${n} ${n === 1 ? 'Schritt wurde' : 'Schritte wurden'} nicht abgeschlossen: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Lokales Herunterfahren beendet (${n === 1 ? '1 Schritt' : `alle ${n} Schritte`} abgeschlossen)`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Manuelle Aktion: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Manuelle Aktion: ${manualAction}`, '.'),
   externalVerified: '; alle externen Zustandsprüfungen haben das Ende bestätigt',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: 'Laufsteuerung nicht verfügbar',
   shutdownUnavailable: 'Steuerung zum Herunterfahren nicht verfügbar',
   restartUnavailable: 'Neustart-Steuerung nicht verfügbar',

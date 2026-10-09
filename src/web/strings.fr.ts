@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -9,11 +10,11 @@ export const serverText: Partial<typeof en> = {
   exitUnsupervised: 'Le processus va se terminer ; aucune boucle de lanceur détectée, il faut le redémarrer à la main',
   shutdownSkipped: (n: number, labels: string[]) => `Arrêt local terminé, mais ${n} étape${n > 1 ? 's' : ''} non terminée${n > 1 ? 's' : ''} : ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Arrêt local terminé (${n} étape${n > 1 ? 's' : ''} sur ${n} terminée${n > 1 ? 's' : ''})`,
-  externalUnverified: (items: string[]) => ` ; [P0] ${items.join(' ; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Action manuelle : ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Action manuelle : ${manualAction}`, '.'),
   externalVerified: " ; chaque contrôle d'état externe a confirmé l'arrêt",
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: "Le contrôle d'exécution est indisponible",
   shutdownUnavailable: "Le contrôle d'arrêt est indisponible",
   restartUnavailable: 'Le contrôle de redémarrage est indisponible',

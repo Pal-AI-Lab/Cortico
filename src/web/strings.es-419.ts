@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 export const serverText: Partial<typeof en> = {
@@ -10,11 +11,11 @@ export const serverText: Partial<typeof en> = {
   shutdownSkipped: (n: number, labels: string[]) =>
     `El apagado local terminó, pero ${n === 1 ? '1 paso no se completó' : `${n} pasos no se completaron`}: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Apagado local terminado (se completaron los ${n} pasos)`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Acción manual: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Acción manual: ${manualAction}`, '.'),
   externalVerified: '; todas las comprobaciones de estado externo confirmaron el cierre',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: 'El control de ejecución no está disponible',
   shutdownUnavailable: 'El control de apagado no está disponible',
   restartUnavailable: 'El control de reinicio no está disponible',

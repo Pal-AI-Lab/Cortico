@@ -1,4 +1,4 @@
-import { pick, type Language } from '../core/language.ts';
+import { pick, punctuate, type Language } from '../core/language.ts';
 import { serverText as zhHant } from './strings.zh-Hant.ts';
 import { serverText as ja } from './strings.ja.ts';
 import { serverText as ko } from './strings.ko.ts';
@@ -19,12 +19,12 @@ const zh = {
   exitUnsupervised: '进程即将退出;没有检测到启动器循环,需要手动重新启动',
   shutdownSkipped: (n: number, labels: string[]) => `本地关机完成,但有 ${n} 步没走完:${labels.join('、')}`,
   shutdownComplete: (n: number) => `本地关机完成(${n} 步全部走完)`,
-  externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
+  externalUnverified: (items: string[]) => `。[P0] ${items.join('')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status}（${detail}）。人工动作:${manualAction}`,
+    punctuate(`${label}=${status}（${detail}）。人工动作:${manualAction}`, '。'),
   externalVerified: '；外部状态均已确认结束',
   /** 关机账的整句:本地结果、外部状态与退出说明。 */
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}，${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '，')}${exit}`,
   runUnavailable: '运行控制不可用',
   shutdownUnavailable: '关机控制不可用',
   restartUnavailable: '重启控制不可用',
@@ -105,11 +105,11 @@ export const en: typeof zh = {
   exitUnsupervised: 'The process is about to exit; no launcher loop was detected, so it must be started again by hand',
   shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step(s) did not complete: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Local shutdown finished (all ${n} steps completed)`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Manual action: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Manual action: ${manualAction}`, '.'),
   externalVerified: '; every external state is confirmed ended',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: 'Run control is unavailable',
   shutdownUnavailable: 'Shutdown control is unavailable',
   restartUnavailable: 'Restart control is unavailable',

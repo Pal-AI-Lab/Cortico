@@ -1,3 +1,4 @@
+import { punctuate } from '../core/language.ts';
 import type { en } from './strings.ts';
 
 const pluralRules = new Intl.PluralRules('ru');
@@ -16,11 +17,11 @@ export const serverText: Partial<typeof en> = {
   shutdownSkipped: (n: number, labels: string[]) =>
     `Локальное выключение завершено, но ${n} ${plural(n, 'шаг не выполнен', 'шага не выполнены', 'шагов не выполнено')}: ${labels.join(', ')}`,
   shutdownComplete: (n: number) => `Локальное выключение завершено (выполнены все шаги: ${n})`,
-  externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
+  externalUnverified: (items: string[]) => `. [P0] ${items.join(' ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-    `${label}=${status} (${detail}). Ручное действие: ${manualAction}`,
+    punctuate(`${label}=${status} (${detail}). Ручное действие: ${manualAction}`, '.'),
   externalVerified: '; все проверки внешнего состояния подтвердили завершение',
-  powerReceipt: (local: string, external: string, exit: string) => `${local}${external}. ${exit}`,
+  powerReceipt: (local: string, external: string, exit: string) => `${punctuate(local + external, '.')} ${exit}`,
   runUnavailable: 'Управление запуском недоступно',
   shutdownUnavailable: 'Управление выключением недоступно',
   restartUnavailable: 'Управление перезапуском недоступно',
