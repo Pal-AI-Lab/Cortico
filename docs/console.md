@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # 控制台
 
@@ -112,14 +112,19 @@ password 的配置值写出前抹成 `***`。未挂载的接缝那一段为空�
 
 ## 语言
 
-界面语言由浏览器选择,支持 `zh` / `en`。默认值在进程启动时读取:`config.json` 的 `language` >
-`CORTICO_LANGUAGE` > 系统区域(中文区域使用中文,其他区域使用英文;区域不可用时回退到中文),写进 `<html lang>`。设置 → 通用的「简体中文 /
-English」把选择存在当前浏览器里,刷新页面生效,不重启 bot。
+界面语言由浏览器选择,可选值是 `src/core/language.ts` 的 `LANGUAGES`:`zh`(简体中文)、`zh-Hant`、
+`en`、`ja`、`ko`、`fr`、`de`、`es-419`、`pt-BR`、`it`、`ru`。默认值在进程启动时读取:
+`config.json` 的 `language` > `CORTICO_LANGUAGE` > 系统区域(`zh-Hant` 及 TW、HK、MO 地区归 `zh-Hant`,
+其他中文归 `zh`,西班牙语归 `es-419`,葡萄牙语归 `pt-BR`,列表外的语言归 `en`;区域不可用时回退到 `zh`),
+写进 `<html lang>`(`zh` 写作 `zh-CN`)。设置 → 通用里的选择存在当前浏览器里,刷新页面生效,不重启 bot。
 
 之后每个请求自带语言(HTTP 头 `x-cortico-language`,WebSocket 握手查询串 `language`),服务端给
 控制台的文案都按它现取:`World.console(language)`、`Persona.console(language)`、provider 的配置组、
-回执、校验报错、关机结果。面板通过 `ctx.language` 读取相同值。模块自行提供语言版本,
-未提供所选语言时回退到中文。
+回执、校验报错、关机结果。面板通过 `ctx.language` 读取相同值。
+
+文案用 `pick(language, table)` 选取。表必须有 `zh` 和 `en`,其余语言可缺;缺的语言 `zh-Hant` 读 `zh`,
+其余读 `en`。值为普通对象时,某语言的译文可以只给部分顶层键,缺的键取回退语言的值。译文放在 `strings.ts`
+旁的 `strings.<语言代码>.ts`,默认导出 `Partial<typeof en>`,由 `strings.ts` 导入并放进传给 `pick` 的表。
 
 界面语言不改变模型输入。World 的环境提示词模板、工具回执和事件正文使用其实现指定的语言,
 Persona 的文本使用作者选择的语言。

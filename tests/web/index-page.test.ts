@@ -46,6 +46,7 @@ describe('首页注入', () => {
   it('开标签只带语言', async () => {
     expect((await serve({ language: 'en' })).openTag).toBe('<html lang="en">');
     expect((await serve({ language: 'zh' })).openTag).toBe('<html lang="zh-CN">');
+    expect((await serve({ language: 'ja' })).openTag).toBe('<html lang="ja">');
   });
 
   it('部署还没保存过配色：默认方案照发,记录是 null', async () => {

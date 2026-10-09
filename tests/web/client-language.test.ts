@@ -1,6 +1,7 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readLanguage, saveLanguage, withLanguage } from '../../src/web/client/core/language.ts';
+import { LANGUAGES, languageTag } from '../../src/core/language.ts';
 
 beforeEach(() => {
   localStorage.clear();
@@ -13,17 +14,21 @@ describe('console language preference', () => {
     expect(readLanguage(document)).toBe('en');
     document.documentElement.lang = 'zh-CN';
     expect(readLanguage(document)).toBe('zh');
+    document.documentElement.lang = 'zh-Hant';
+    expect(readLanguage(document)).toBe('zh-Hant');
+    document.documentElement.lang = 'ja';
+    expect(readLanguage(document)).toBe('ja');
   });
 
-  it.each(['zh', 'en'] as const)('retains %s across a new page load', (language) => {
+  it.each(LANGUAGES)('retains %s across a new page load', (language) => {
     saveLanguage(language, localStorage);
-    document.documentElement.lang = language === 'zh' ? 'en' : 'zh-CN';
+    document.documentElement.lang = language === 'en' ? 'zh-CN' : 'en';
     expect(readLanguage(document)).toBe(language);
-    expect(document.documentElement.lang).toBe(language === 'zh' ? 'zh-CN' : 'en');
+    expect(document.documentElement.lang).toBe(languageTag(language));
   });
 
   it('ignores an invalid stored preference', () => {
-    localStorage.setItem('cortico.console.language', 'fr');
+    localStorage.setItem('cortico.console.language', 'xx');
     expect(readLanguage(document)).toBe('en');
   });
 

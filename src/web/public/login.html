@@ -33,11 +33,12 @@
 </form>
 <script>
 (() => {
-  const en = document.documentElement.lang === 'en';
-  const T = en
-    ? { title: 'Cortico console', hint: 'This console is protected by an access password.', label: 'Password', submit: 'Sign in', wrong: 'Wrong password.', failed: 'Sign-in failed: ' }
-    : { title: 'Cortico 控制台', hint: '这个控制台设置了访问密码。', label: '密码', submit: '登录', wrong: '密码不对。', failed: '登录失败:' };
-  document.title = (en ? 'Sign in' : '登录') + ' · Cortico';
+  // Chinese tags (zh-CN, zh-Hant) read the Chinese text; every other language reads English.
+  const zh = document.documentElement.lang.toLowerCase().startsWith('zh');
+  const T = zh
+    ? { title: 'Cortico 控制台', hint: '这个控制台设置了访问密码。', label: '密码', submit: '登录', wrong: '密码不对。', failed: '登录失败:' }
+    : { title: 'Cortico console', hint: 'This console is protected by an access password.', label: 'Password', submit: 'Sign in', wrong: 'Wrong password.', failed: 'Sign-in failed: ' };
+  document.title = (zh ? '登录' : 'Sign in') + ' · Cortico';
   for (const el of document.querySelectorAll('[data-t]')) el.textContent = T[el.dataset.t];
   const form = document.getElementById('login');
   const input = document.getElementById('password');

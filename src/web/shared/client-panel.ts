@@ -42,8 +42,9 @@ export interface ConsolePanelContext {
   /** 本页内的局部 id，如 `gate` */
   readonly panelId: string;
   /**
-   * 这个浏览器的界面语言(`zh` / `en`):部署默认,或操作员在设置里改过的那种。扩展自己
-   * 决定要不要带第二套文案;没有这一语言的就给中文,宿主不翻译、不告警。
+   * 这个浏览器的界面语言(`LANGUAGES` 之一):部署默认,或操作员在设置里改过的那种。扩展自己
+   * 决定带哪些语言的文案,用 `pick(ctx.language, table)` 选表:缺的语言 zh-Hant 读中文、其余读英文;
+   * 宿主不翻译、不告警。
    */
   readonly language: Language;
 

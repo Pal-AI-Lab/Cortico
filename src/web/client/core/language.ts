@@ -5,7 +5,9 @@
  * carries the value back (`languageHeaders` / `withLanguage`), and the server renders its own
  * console text in it.
  */
-import type { Language } from '../../../core/language.ts';
+import {
+  isLanguage, languageOfLocale, languageTag, pick as pickFor, type Language, type LanguageTable,
+} from '../../../core/language.ts';
 import { CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY } from '../../shared/console-protocol.ts';
 
 export type { Language };
@@ -23,10 +25,8 @@ export function readLanguage(doc: Document): Language {
   } catch {
     // Storage may be unavailable in private browsing; retain the server default.
   }
-  const language = preference === 'zh' || preference === 'en'
-    ? preference
-    : doc.documentElement.lang.toLowerCase().startsWith('en') ? 'en' : 'zh';
-  doc.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+  const language = isLanguage(preference) ? preference : languageOfLocale(doc.documentElement.lang) ?? 'zh';
+  doc.documentElement.lang = languageTag(language);
   return language;
 }
 
@@ -40,9 +40,9 @@ function readStamp(): Language {
 
 export const LANGUAGE: Language = readStamp();
 
-/** Select one language's table; declare tables as `zh` plus `en: typeof zh`. */
-export function pick<T>(table: { readonly zh: T; readonly en: T }): T {
-  return LANGUAGE === 'en' ? table.en : table.zh;
+/** Select this page's language from a table declared as `zh`, `en: typeof zh` and optional translations. */
+export function pick<T>(table: LanguageTable<T>): T {
+  return pickFor(LANGUAGE, table);
 }
 
 /** The header every HTTP request carries. */
