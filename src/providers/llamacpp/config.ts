@@ -1,12 +1,12 @@
 import type { ConfigGroup, ConfigProperty } from '../../core/config-schema.ts';
-import type { Language } from '../../core/language.ts';
+import { pick, type Language } from '../../core/language.ts';
 import type { LLMProviderEntry } from '../../core/types.ts';
 import { backendChoices, llamacppOptions } from './options.ts';
 import { panel } from './strings.ts';
 
 export function runtimeConfig(name: string, entry: LLMProviderEntry, language: Language): ConfigGroup[] {
   if (!llamacppOptions(entry).runtime) return [];
-  const S = panel[language];
+  const S = pick(language, panel);
   const group = (
     id: string, title: string, description: string, properties: Record<string, ConfigProperty>,
   ): ConfigGroup => ({

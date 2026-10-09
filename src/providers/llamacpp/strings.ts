@@ -42,6 +42,9 @@ const zh = {
   downloadFailed: (file: string, message: string) => `下载 ${file} 失败: ${message}`,
   extractFailed: (file: string, message: string) => `解压 ${file} 失败: ${message}`,
   installBusy: '正在安装另一份运行时',
+  description: '连接或托管本地 llama.cpp 模型。',
+  saveBeforeRuntime: '请先保存配置，再执行运行时操作。',
+  saveBeforeModels: '请先保存配置，再操作模型。',
 };
 const en: typeof zh = {
   tierOff: 'Off',
@@ -84,11 +87,14 @@ const en: typeof zh = {
   downloadFailed: (file: string, message: string) => `Download of ${file} failed: ${message}`,
   extractFailed: (file: string, message: string) => `Extraction of ${file} failed: ${message}`,
   installBusy: 'Another runtime is being installed',
+  description: 'Connect to or manage local llama.cpp models.',
+  saveBeforeRuntime: 'Save configuration before runtime operations.',
+  saveBeforeModels: 'Save configuration before model operations.',
 };
 export type Text = typeof zh;
 export const text = (language: Language) => pick(language, { zh, en });
 
-/** Browser side: the two panels pick by `ctx.language`. */
+/** Browser side: the two panels and the runtime config groups pick by the request language. */
 const panelZh = {
   runtimeTitle: '运行时',
   modelsTitle: '模型',

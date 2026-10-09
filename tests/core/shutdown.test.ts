@@ -9,7 +9,8 @@ import { join } from 'node:path';
 
 import { Core } from "./fixture-core.ts";
 import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
-import { withDeadline } from '../../src/core/util.ts';
+import { DeadlineError, withDeadline } from '../../src/core/util.ts';
+import { HOST_LIFECYCLE_ENDED } from '../../src/core/markers.ts';
 import { createBot, type BotDefinition } from '../../src/bot.ts';
 import type {
   CoreConfig,
@@ -97,15 +98,17 @@ describe('withDeadline', () => {
     await expect(withDeadline(Promise.resolve('ok'), 1000)).resolves.toBe('ok');
   });
 
-  it('不肯回来就抛,而且错误里说得出是哪一步', async () => {
+  it('不肯回来就以 DeadlineError 拒绝,带着步骤名和期限', async () => {
     vi.useFakeTimers();
     try {
       const never = new Promise<void>(() => { /* 永不 resolve */ });
       const p = withDeadline(never, 5_000, 'World 收尾');
-      const caught = p.catch((e: Error) => e.message);
+      const caught = p.catch((e: unknown) => e);
       await vi.advanceTimersByTimeAsync(5_100);
-      expect(await caught).toContain('World 收尾');
-      expect(await caught).toContain('5秒');
+      const err = await caught;
+      expect(err).toBeInstanceOf(DeadlineError);
+      expect(err).toMatchObject({ what: 'World 收尾', ms: 5_000 });
+      expect((err as DeadlineError).message).toContain('World 收尾');
     } finally {
       vi.useRealTimers();
     }
@@ -133,7 +136,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
       expect(hang.stopped).toBe(false);
       expect(failures).toEqual([expect.objectContaining({
         worldId: 'hang',
-        detail: expect.stringContaining('超时'),
+        detail: expect.stringContaining('timed out'),
       })]);
     } finally {
       vi.useRealTimers();
@@ -165,14 +168,14 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
 
       await expect(host.pushEvent({
         type: 'late.event', ts: new Date().toISOString(), source: 'lease', text: '迟到事件',
-      })).rejects.toThrow('宿主生命周期已结束');
+      })).rejects.toThrow(HOST_LIFECYCLE_ENDED);
       host.pushDeferred({ type: 'late.deferred', render: () => '迟到延迟事件' });
       host.reportUsage({ promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 });
 
       expect(core.store.latestCursor()).toBe(cursor);
       expect(usage).not.toHaveBeenCalled();
       expect(host.cognition).toBeUndefined();
-      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: '宿主生命周期已结束' });
+      expect(await cachedCognition.request({ brief: '迟到请求' })).toEqual({ error: HOST_LIFECYCLE_ENDED });
       expect(cognitionRequest).not.toHaveBeenCalled();
     } finally {
       env.cleanup();
@@ -195,7 +198,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
       expect(await stopping).toEqual([expect.objectContaining({ worldId: 'lease-timeout' })]);
       await expect(probe.host!.pushEvent({
         type: 'late.timeout', ts: new Date().toISOString(), source: 'lease-timeout', text: '超时后事件',
-      })).rejects.toThrow('宿主生命周期已结束');
+      })).rejects.toThrow(HOST_LIFECYCLE_ENDED);
     } finally {
       vi.useRealTimers();
       env.cleanup();

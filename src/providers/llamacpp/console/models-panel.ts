@@ -6,6 +6,7 @@
 import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/client-panel.ts';
 import type { HfFile, HfRepo } from '../huggingface.ts';
 import type { ModelsState } from './server.ts';
+import { pick } from '../../../core/language.ts';
 import { panel } from '../strings.ts';
 import { HITS_PER_PAGE } from '../../../web/client/features/extensions/index.ts';
 
@@ -20,7 +21,7 @@ function bytes(n: number): string {
 export const modelsPanel: ConsolePanel = {
   mount: async (ctx: ConsolePanelContext) => {
     const { ui, root } = ctx;
-    const S = ctx.language === 'en' ? panel.en : panel.zh;
+    const S = pick(ctx.language, panel);
     const name = ctx.scope.instance;
     const card = ui.sheet({ title: S.modelsTitle });
     const message = ui.msgline();

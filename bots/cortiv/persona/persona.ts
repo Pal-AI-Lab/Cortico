@@ -41,7 +41,7 @@ import type {
   ToolDef,
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
-import { estimateTokens, withDeadline } from 'cortico/core/util.ts';
+import { DeadlineError, estimateTokens, withDeadline } from 'cortico/core/util.ts';
 import { Cormini, HANDOFF_DIR, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
 import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceGit.ts';
 import { personaConsoleDecl } from './consoleSurface.ts';
@@ -347,24 +347,21 @@ export class CortiV extends Cormini {
     const others = core.sessionInfo(COGNITION).running > 0;
     if (mine || others) return { error: '上一件后台思考还没结束,排队没开,稍后再请' };
 
+    // withDeadline 不取消 fork;到期后 fork 在下一个轮次边界收线。
+    let timedOut = false;
     try {
       const info = core.sessionInfo(MAIN);
       const messages: ContextRecord[] = [
         ...balancedSnapshot(info.snapshot ?? []),
         message('user', this.cognitionFrame(req, ctx)),
       ];
-      const deadline = Date.now() + COGNITION_TIMEOUT_MS;
-      let timedOut = false;
       const text = await withDeadline(
         core.spawnFork({
           id: COGNITION,
           messages,
           // World 点名的那几把在前(这次的正事),她自己的文件工具在后(顺手存分区)
           tools: [...ctx.tools, ...this.tools()],
-          stopWhen: () => {
-            if (Date.now() >= deadline) timedOut = true;
-            return timedOut;
-          },
+          stopWhen: () => timedOut,
           capNote:
             `(没想完:这件事用满了 ${COGNITION_ROUNDS.hard} 轮工具循环被收线,` +
             '上面这段是半截话不是结论;已经落盘/已经交出去的部分照样有效。)',
@@ -373,13 +370,15 @@ export class CortiV extends Cormini {
         COGNITION_TIMEOUT_MS,
         '后台思考',
       );
-      if (timedOut) return { error: '后台思考超时(15 分钟),已放弃' };
       const out = text.trim();
       if (!out) return { error: '后台思考跑完了,但最后一轮一句话都没说,没有可以交回去的结论' };
       return { text: out };
     } catch (e) {
+      if (e instanceof DeadlineError) {
+        timedOut = true;
+        return { error: '后台思考超时(15 分钟),已放弃' };
+      }
       const msg = e instanceof Error ? e.message : String(e);
-      if (/超时/.test(msg)) return { error: '后台思考超时(15 分钟),已放弃' };
       this.core?.log.warn('认知外包受理出错', { worldId: ctx.worldId, err: msg });
       return { error: `后台思考没跑起来:${msg}` };
     }

@@ -50,6 +50,10 @@ import type { Transcript } from './transcript.ts';
 import { setAnchors, withAnchors } from './log-context.ts';
 import { withBlobLines } from './blobs.ts';
 import {
+  ABORT_INTERRUPTED,
+  ABORT_PREEMPTED,
+  ABORT_SHUTDOWN,
+  ABORT_TOOL_INTERRUPTED,
   INTERRUPTED_WHILE_RUNNING,
   MISSING_RESULT_RESTART,
   NOT_EXECUTED_BARRIER,
@@ -410,7 +414,7 @@ export class MainLoop {
     const round = this.currentRound;
     if (round?.phase === 'model' && !round.externalized) {
       round.abortReason = 'preempt';
-      round.controller.abort(new Error('模型轮被新输入抢占'));
+      round.controller.abort(new Error(ABORT_PREEMPTED));
       return true;
     }
     if (this.processingBatch) this.takeReadyBeforeRequest = true;
@@ -427,13 +431,13 @@ export class MainLoop {
     if (round?.phase === 'model') {
       round.abortReason = round.externalized ? 'interrupt' : 'preempt';
       round.interrupted = true;
-      round.interrupt.abort(new Error('被新事件打断'));
-      round.controller.abort(new Error('模型轮被新事件打断'));
+      round.interrupt.abort(new Error(ABORT_TOOL_INTERRUPTED));
+      round.controller.abort(new Error(ABORT_INTERRUPTED));
       return true;
     }
     if (round?.phase === 'tools' && !round.interrupted) {
       round.interrupted = true;
-      round.interrupt.abort(new Error('被新事件打断'));
+      round.interrupt.abort(new Error(ABORT_TOOL_INTERRUPTED));
       return true;
     }
     if (this.processingBatch) this.takeReadyBeforeRequest = true;
@@ -1190,7 +1194,7 @@ export class MainLoop {
             this.mainTrack?.recordAttempts(res.attempts, undefined, { prefixHash });
             await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
-            this.tapAbort(tap, '模型轮被新事件打断');
+            this.tapAbort(tap, ABORT_INTERRUPTED);
             noteRound('interrupted');
             if (await resumeAfterCancel(queuedEvents)) continue;
             return;
@@ -1198,12 +1202,12 @@ export class MainLoop {
           // 关机、换代或抢占丢弃已成功返回的结果时，仍记录这次调用的实际用量。
           this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
           if (this.active(generation) && flight.abortReason === 'preempt') {
-            this.tapAbort(tap, '模型轮被新输入抢占');
+            this.tapAbort(tap, ABORT_PREEMPTED);
             noteRound('preempted');
             if (await resumeAfterCancel([])) continue;
             return;
           }
-          this.tapAbort(tap, 'core 正在关机');
+          this.tapAbort(tap, ABORT_SHUTDOWN);
           noteRound('discarded');
           this.finishTurn();
           return;
@@ -1217,7 +1221,7 @@ export class MainLoop {
         if (flight.controller.signal.aborted) {
           this.recordFailedUsage(e, prefixHash);
           if (!this.active(generation) || flight.abortReason === 'shutdown') {
-            this.tapAbort(tap, 'core 正在关机');
+            this.tapAbort(tap, ABORT_SHUTDOWN);
             log.info('模型轮随关机终止');
             noteRound('shutdown');
             this.finishTurn();
@@ -1229,7 +1233,7 @@ export class MainLoop {
             await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
           }
-          this.tapAbort(tap, interrupted ? '模型轮被新事件打断' : '模型轮被新输入抢占');
+          this.tapAbort(tap, interrupted ? ABORT_INTERRUPTED : ABORT_PREEMPTED);
           log.info(interrupted ? '模型轮被新事件打断,已外化的输出保留' : '尚未外化的模型轮已被新输入抢占');
           noteRound(interrupted ? 'interrupted' : 'preempted');
           if (await resumeAfterCancel(queuedEvents)) continue;
@@ -1241,7 +1245,7 @@ export class MainLoop {
           await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation);
           if (!this.active(generation)) {
             try {
-              tap.onAbort?.('core 正在关机');
+              tap.onAbort?.(ABORT_SHUTDOWN);
             } catch (tapErr) {
               log.warn('outputTap.onAbort异常', { err: tapErr });
             }
@@ -1983,14 +1987,14 @@ export class MainLoop {
     this.watermarkAudit = null;
     this.completePendingToolCallsForShutdown();
     this.backoffWake?.();
-    if (!this.shutdown.signal.aborted) this.shutdown.abort(new Error('core 正在关机'));
+    if (!this.shutdown.signal.aborted) this.shutdown.abort(new Error(ABORT_SHUTDOWN));
     this.handoffRequested = false;
     this.releaseBoundary();
     this.stopFn?.();
     const round = this.currentRound;
     if (round && !round.controller.signal.aborted) {
       round.abortReason = 'shutdown';
-      round.controller.abort(new Error('core 正在关机'));
+      round.controller.abort(new Error(ABORT_SHUTDOWN));
     }
   }
 

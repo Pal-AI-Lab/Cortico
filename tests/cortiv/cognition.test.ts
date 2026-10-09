@@ -244,7 +244,7 @@ describe('认知外包受理 · 四条路的返回', () => {
     expect(r.forks).toHaveLength(0);
   });
 
-  it('超时:15 分钟到点先让工具循环收线,再认超时', async () => {
+  it('超时:15 分钟到点报超时,工具循环在下一个轮次边界收线', async () => {
     vi.useFakeTimers();
     const r = rig();
     // 永不返回的 fork:模拟一次卡住的构思

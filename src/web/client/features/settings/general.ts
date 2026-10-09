@@ -1,3 +1,4 @@
+import { LANGUAGES, LANGUAGE_NAMES, languageTag } from '../../../../core/language.ts';
 import { LANGUAGE, saveLanguage, type Language } from '../../core/language.ts';
 import { post } from '../../core/api.ts';
 import type { FeatureContext } from '../feature.ts';
@@ -13,9 +14,10 @@ export function mountGeneral(ctx: FeatureContext): void {
   group.setAttribute('aria-label', S.language);
   sheet.body.appendChild(group);
   root.append(sheet.el);
-  for (const [language, label] of [['zh', '简体中文'], ['en', 'English']] as const) {
-    const button = ui.h('button', 'btn', label);
+  for (const language of LANGUAGES) {
+    const button = ui.h('button', 'btn', LANGUAGE_NAMES[language]);
     button.type = 'button';
+    button.lang = languageTag(language);
     button.setAttribute('aria-pressed', String(language === LANGUAGE));
     button.disabled = language === LANGUAGE;
     button.addEventListener('click', () => { void changeLanguage(language).catch(ctx.onError); }, { signal });

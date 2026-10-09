@@ -16,7 +16,7 @@ import { ToolCallLog } from '../../src/core/tool-log.ts';
 import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
-import { INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
+import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
@@ -373,7 +373,7 @@ describe('MainLoop preempt', () => {
     const replay = JSON.stringify(rig.llm.calls[1].messages);
     expect(replay).toContain('前半句');
     expect(replay).toContain('后半句');
-    expect(aborts).toEqual(['模型轮被新输入抢占']);
+    expect(aborts).toEqual([ABORT_PREEMPTED]);
     await rig.cleanup();
   });
 
@@ -864,7 +864,7 @@ describe('MainLoop shutdown generation', () => {
       await sleep(50);
       expect(JSON.stringify(rig.session.messages)).toBe(sessionAfterStop);
       expect(existsSync(toolFile) ? readFileSync(toolFile, 'utf8').trim() : '').toBe('');
-      expect(aborts).toEqual(['core 正在关机']);
+      expect(aborts).toEqual([ABORT_SHUTDOWN]);
       assertPairing(rig.session.messages);
     } finally {
       releaseHandler();

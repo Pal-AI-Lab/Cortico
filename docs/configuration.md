@@ -35,7 +35,10 @@
 | `context` | `keepPastThinking true` | 发给模型前的处理;阶段预算与首轮对话开关归 Persona 的段 |
 | `logging` | `file debug`、`console info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
-| `language` | 系统区域 | 控制台默认语言 `zh` / `en`,浏览器可改(见 [console.md](console.md)) |
+| `language` | 系统区域 | 控制台默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [console.md](console.md)) |
+
+`language` 与环境变量 `CORTICO_LANGUAGE` 须与 `LANGUAGES` 中的代码完全一致(区分大小写,如 `pt-BR`、`zh-Hant`),
+其他值当作未设置:`language` 落到 `CORTICO_LANGUAGE`,再落到系统区域。
 
 Persona 自己的段(如 CortiV 的 `context.maxTokens`、`context.firstTurn`、`rounds`、`cognition`、`tick`)由各 bot 的
 `index.ts` 定义。

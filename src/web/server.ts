@@ -27,7 +27,7 @@ import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
-import { isLanguage, pick, systemLanguage, type Language } from '../core/language.ts';
+import { isLanguage, languageTag, pick, systemLanguage, type Language } from '../core/language.ts';
 
 /** 服务端直接回给操作者的几句话:运行控制回执与关机账的总结行,按请求的界面语言。API 协议错误不在此列。 */
 const SERVER_TEXT = {
@@ -1089,7 +1089,7 @@ export class WebApp {
   private serveLogin(res: Response): void {
     const file = fileURLToPath(new URL('./public/login.html', import.meta.url));
     let html = readFileSync(file, 'utf8');
-    if (this.language === 'en') html = html.replace('<html lang="zh-CN">', '<html lang="en">');
+    html = html.replace('<html lang="zh-CN">', `<html lang="${languageTag(this.language)}">`);
     res.setHeader('Cache-Control', 'no-store');
     res.type('html').send(html);
   }
@@ -2169,8 +2169,7 @@ export class WebApp {
         return;
       }
       /** 语言盖在 `<html lang>` 上:内核在 import 期就读它,框架页面能在模块顶层选串表。 */
-      const lang = this.language === 'en' ? 'en' : 'zh-CN';
-      html = html.replace('<html lang="zh-CN">', `<html lang="${lang}">`);
+      html = html.replace('<html lang="zh-CN">', `<html lang="${languageTag(this.language)}">`);
       /**
        * 部署默认方案与已保存的记录随首页发出,首次渲染前就读得到;没有记录时发 null,
        * 浏览器据此把本机旧记录交上来。转义 `<` 之后正文不可能提前闭合这个 script。

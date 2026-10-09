@@ -31,7 +31,7 @@ export default {
   console: llamacppConsole,
   config: runtimeConfig,
   reasoningTiers: reasoningTiers('zh'),
-  localize: (language) => ({ description: language === 'zh' ? '连接或托管本地 llama.cpp 模型。' : 'Connect to or manage local llama.cpp models.', reasoningTiers: reasoningTiers(language) }),
+  localize: (language) => ({ description: text(language).description, reasoningTiers: reasoningTiers(language) }),
   serviceTiers: [],
   validateEntry: (entry, language) => {
     const S = text(language);
