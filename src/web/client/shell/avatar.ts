@@ -1,40 +1,10 @@
 import type { ConsoleUi } from '../../shared/client-panel.ts';
 import { postBlob } from '../core/api.ts';
-import { pick } from '../core/language.ts';
 import { icon } from '../ui/icons.ts';
+import { S } from './strings.ts';
 
 const EDITOR_SIZE = 300;
 const OUTPUT_SIZE = 512;
-
-const zh = {
-  changeAvatar: '更换 bot 头像',
-  uploadAvatar: '上传并裁剪 bot 头像',
-  unreadable: '无法读取这张图片',
-  cropPreview: '头像裁剪预览',
-  zoomAria: '头像缩放',
-  zoom: '缩放',
-  note: '拖动图片调整位置，滚动鼠标滚轮或使用滑杆缩放；保存后写入 bot 根目录的 avatar.png。',
-  cancel: '取消',
-  save: '保存头像',
-  cropTitle: '裁剪头像',
-  noCanvas: '浏览器无法创建图片画布',
-  saved: '头像已保存',
-};
-const en: typeof zh = {
-  changeAvatar: 'Change bot avatar',
-  uploadAvatar: 'Upload and crop the bot avatar',
-  unreadable: 'Could not read this image',
-  cropPreview: 'Avatar crop preview',
-  zoomAria: 'Avatar zoom',
-  zoom: 'Zoom',
-  note: 'Drag the image to reposition; use the mouse wheel or the slider to zoom. Saving writes avatar.png to the bot root directory.',
-  cancel: 'Cancel',
-  save: 'Save avatar',
-  cropTitle: 'Crop avatar',
-  noCanvas: 'The browser could not create an image canvas',
-  saved: 'Avatar saved',
-};
-const S = pick({ zh, en });
 
 export interface AvatarControl {
   readonly el: HTMLDivElement;

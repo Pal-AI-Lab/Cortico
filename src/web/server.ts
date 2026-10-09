@@ -27,37 +27,8 @@ import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
-import { isLanguage, languageTag, pick, systemLanguage, type Language } from '../core/language.ts';
-
-/** 服务端直接回给操作者的几句话:运行控制回执与关机账的总结行,按请求的界面语言。API 协议错误不在此列。 */
-const SERVER_TEXT = {
-  zh: {
-    paused: '已暂停:事件照常落库排队,不投递唤醒',
-    resumed: '已继续:积压事件一次性投递',
-    exitSupervised: '进程即将退出,启动器随即重新拉起',
-    exitSupervisedPaused: '进程即将退出,启动器随即重新拉起;回来时事件投递是暂停的,要在运行状态里按继续',
-    exitUnsupervised: '进程即将退出;没有检测到启动器循环,需要手动重新启动',
-    shutdownSkipped: (n: number, labels: string[]) => `本地关机完成,但有 ${n} 步没走完:${labels.join('、')}`,
-    shutdownComplete: (n: number) => `本地关机完成(${n} 步全部走完)`,
-    externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
-    externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-      `${label}=${status}（${detail}）。人工动作:${manualAction}`,
-    externalVerified: '；外部状态检查均已验证结束',
-  },
-  en: {
-    paused: 'Paused: events are still stored and queued, no wake is delivered',
-    resumed: 'Resumed: the backlog is delivered in one batch',
-    exitSupervised: 'The process is about to exit; the launcher will start it again',
-    exitSupervisedPaused: 'The process is about to exit; the launcher will start it again with event delivery paused, so resume it in the run status',
-    exitUnsupervised: 'The process is about to exit; no launcher loop was detected, so it must be started again by hand',
-    shutdownSkipped: (n: number, labels: string[]) => `Local shutdown finished, but ${n} step(s) did not complete: ${labels.join(', ')}`,
-    shutdownComplete: (n: number) => `Local shutdown finished (all ${n} steps completed)`,
-    externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
-    externalItem: (label: string, status: string, detail: string, manualAction: string) =>
-      `${label}=${status} (${detail}). Manual action: ${manualAction}`,
-    externalVerified: '; every external state check verified ended',
-  },
-};
+import { isLanguage, languageTag, systemLanguage, type Language } from '../core/language.ts';
+import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
 import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
 import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
@@ -629,15 +600,15 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 /** GET 形式的面板调用把 args 编码成 query 里的 JSON 数组。 */
-function parseQueryArgs(raw: unknown): { args: unknown[] } | { error: string } {
+function parseQueryArgs(raw: unknown, t: ReturnType<typeof serverText>): { args: unknown[] } | { error: string } {
   if (typeof raw !== 'string' || raw.trim() === '') return { args: [] };
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch {
-    return { error: 'args 不是合法 JSON' };
+    return { error: t.argsNotJson };
   }
-  return Array.isArray(parsed) ? { args: parsed } : { error: 'args 必须是 JSON 数组' };
+  return Array.isArray(parsed) ? { args: parsed } : { error: t.argsNotArray };
 }
 
 const hasPort = (h: string): boolean => /:\d+$/.test(h);
@@ -968,7 +939,7 @@ export class WebApp {
       const localComplete = report.localComplete ?? skipped.length === 0;
       const externalChecks = report.externalChecks ?? [];
       const unverified = externalChecks.filter((check) => check.status !== 'verified-ended');
-      const t = pick(language, SERVER_TEXT);
+      const t = serverText(language);
       const localResult = !localComplete
         ? t.shutdownSkipped(skipped.length, skipped.map((s) => s.label))
         : t.shutdownComplete(report.steps.length);
@@ -984,7 +955,7 @@ export class WebApp {
         complete: report.complete,
         steps: report.steps,
         externalChecks,
-        result: `${localResult}${externalResult}，${trailer}`,
+        result: t.powerReceipt(localResult, externalResult, trailer),
       });
     } catch (err) {
       this.deps.log.error('关机编排失败', { error: String(err) });
@@ -997,6 +968,7 @@ export class WebApp {
    * 流式发送，其余按 JSON。语义不解释，形状归那一页。
    */
   private async sendInvokeResult(req: Request, res: Response, value: unknown): Promise<void> {
+    const t = serverText(this.languageOf(req));
     if (isBinaryResult(value)) {
       const { mime, base64 } = value.$binary;
       res.setHeader('Content-Type', typeof mime === 'string' ? mime : 'application/octet-stream');
@@ -1005,10 +977,10 @@ export class WebApp {
     }
     if (isFileResult(value)) {
       if (!isAbsolute(value.$file.path)) {
-        res.status(500).json({ error: 'provider 返回了非绝对文件路径' });
+        res.status(500).json({ error: t.fileNotAbsolute });
         return;
       }
-      await this.sendVerifiedFile(req, res, value.$file);
+      await this.sendVerifiedFile(req, res, value.$file, t);
       return;
     }
     if (
@@ -1016,7 +988,7 @@ export class WebApp {
       && value !== null
       && Object.prototype.hasOwnProperty.call(value, '$file')
     ) {
-      res.status(500).json({ error: 'provider 返回了无效文件描述' });
+      res.status(500).json({ error: t.fileInvalid });
       return;
     }
     res.json(value ?? null);
@@ -1026,12 +998,13 @@ export class WebApp {
     req: Request,
     res: Response,
     file: ConsoleFileResult['$file'],
+    t: ReturnType<typeof serverText>,
   ): Promise<void> {
     const handle = await openFile(file.path, 'r');
     try {
       const stat = await handle.stat();
       if (!stat.isFile() || stat.size !== file.bytes) {
-        throw new Error('provider 文件大小与声明不匹配');
+        throw new Error(t.fileSizeMismatch);
       }
 
       const hash = createHash('sha256');
@@ -1044,12 +1017,12 @@ export class WebApp {
           Math.min(chunk.byteLength, file.bytes - offset),
           offset,
         );
-        if (bytesRead === 0) throw new Error('provider 文件在校验期间被截断');
+        if (bytesRead === 0) throw new Error(t.fileTruncated);
         hash.update(chunk.subarray(0, bytesRead));
         offset += bytesRead;
       }
       if (hash.digest('hex') !== file.sha256) {
-        throw new Error('provider 文件 hash 与声明不匹配');
+        throw new Error(t.fileHashMismatch);
       }
 
       res.type(file.mime);
@@ -1121,10 +1094,10 @@ export class WebApp {
   }
 
   /** /ws/sessions 新连接:发全量列表,之后变化实时推 */
-  private handleSessionsConnection(ws: WebSocket): void {
+  private handleSessionsConnection(ws: WebSocket, language: Language): void {
     const src = this.deps.sessions;
     if (!src) {
-      try { ws.send(JSON.stringify({ t: 'sys', text: 'session观察不可用' })); } catch { /* ignore */ }
+      try { ws.send(JSON.stringify({ t: 'sys', text: serverText(language).sessionsUnavailable })); } catch { /* ignore */ }
       ws.close(1013, 'sessions deps not mounted');
       return;
     }
@@ -1161,17 +1134,17 @@ export class WebApp {
         } catch (err) {
           // 那一页的 stream() 抛错只关这一条连接:一个面板炸了不该带走控制台
           this.deps.log.error(`provider 流式面抛错 ${pageId}/${panelId}`, { error: String(err) });
-          this.closeStreamWith(ws, `流式面出错: ${String(err)}`, 1011, 'stream error');
+          this.closeStreamWith(ws, serverText(language).streamFailed(String(err)), 1011, 'stream error');
         }
       },
       (err) => {
         this.deps.log.error(`provider 流解析失败 ${pageId}/${panelId}`, { error: String(err) });
-        this.closeStreamWith(ws, `流解析失败: ${String(err)}`, 1011, 'resolve error');
+        this.closeStreamWith(ws, serverText(language).streamResolveFailed(String(err)), 1011, 'resolve error');
       },
     );
   }
 
-  /** 发一帧说明再关。reason 走 ASCII 短句(帧里才是给人看的中文,reason 有 123 字节上限)。 */
+  /** 发一帧说明再关。reason 走 ASCII 短句(帧里才是给人看的说明,reason 有 123 字节上限)。 */
   private closeStreamWith(ws: WebSocket, text: string, code: number, reason: string): void {
     try { ws.send(JSON.stringify({ t: 'sys', text })); } catch { /* ignore */ }
     try { ws.close(code, reason); } catch { try { ws.terminate(); } catch { /* ignore */ } }
@@ -1198,10 +1171,10 @@ export class WebApp {
   }
 
   /** /ws/debug 新连接:发hello全量快照,之后实时帧由构造时注册的监听器广播 */
-  private handleDebugConnection(ws: WebSocket): void {
+  private handleDebugConnection(ws: WebSocket, language: Language): void {
     const dbg = this.deps.debug;
     if (!dbg) {
-      try { ws.send(JSON.stringify({ t: 'sys', text: '调试通道不可用' })); } catch { /* ignore */ }
+      try { ws.send(JSON.stringify({ t: 'sys', text: serverText(language).debugUnavailable })); } catch { /* ignore */ }
       ws.close(1013, 'debug deps not mounted');
       return;
     }
@@ -1267,15 +1240,16 @@ export class WebApp {
           return;
         }
         wss.handleUpgrade(req, socket, head, (ws) => {
+          const language = this.languageOf(req);
           if (stream) {
-            this.handleConsolePageStream(ws, stream.pageId, stream.panelId, this.languageOf(req));
+            this.handleConsolePageStream(ws, stream.pageId, stream.panelId, language);
             return;
           }
           if (pathname === '/ws/debug') {
-            this.handleDebugConnection(ws);
+            this.handleDebugConnection(ws, language);
             return;
           }
-          this.handleSessionsConnection(ws);
+          this.handleSessionsConnection(ws, language);
         });
       });
     };
@@ -1377,7 +1351,7 @@ export class WebApp {
         return;
       }
       this.deps.log.warn('拒绝 Host 不在白名单的请求', { path: req.path, host: String(req.headers.host) });
-      res.status(421).json({ error: 'Host 不被接受' });
+      res.status(421).json({ error: serverText(this.languageOf(req)).hostRejected });
     });
 
     // 写操作的同源闸门:控制台的每个 POST 都是真副作用(改配置、删存储、回滚人格),
@@ -1393,7 +1367,7 @@ export class WebApp {
         return;
       }
       this.deps.log.warn('拒绝跨站写请求', { path: req.path, origin: String(req.headers.origin) });
-      res.status(403).json({ error: '跨站请求被拒绝' });
+      res.status(403).json({ error: serverText(this.languageOf(req)).crossSiteRejected });
     });
 
     // Express 4 不接 handler 返回的 promise;async handler 的拒绝与同步异常一样记日志、回 500。
@@ -1421,7 +1395,7 @@ export class WebApp {
         const candidate = (req.body as { password?: unknown } | undefined)?.password;
         if (typeof candidate !== 'string' || !(await this.auth.login(candidate))) {
           this.deps.log.warn('控制台登录失败', { from: req.socket.remoteAddress });
-          res.status(401).json({ error: '密码不对' });
+          res.status(401).json({ error: serverText(this.languageOf(req)).wrongPassword });
           return;
         }
         res.setHeader('Set-Cookie', this.sessionCookie(this.auth.issue(), SESSION_COOKIE_MAX_AGE_SEC, req));
@@ -1439,7 +1413,7 @@ export class WebApp {
       if (this.authorized(req)) { next(); return; }
       if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) { this.serveLogin(res); return; }
       res.setHeader(CONSOLE_AUTH_HEADER, 'required');
-      res.status(401).json({ error: '需要登录' });
+      res.status(401).json({ error: serverText(this.languageOf(req)).loginRequired });
     });
 
     const providerRoute = (handler: (hub: ProviderHub, req: Request) => unknown) => wrap(async (req, res) => {
@@ -1482,10 +1456,10 @@ export class WebApp {
 
     app.post('/api/avatar', express.raw({ type: 'image/png', limit: AVATAR_MAX_BYTES }), wrap((req, res) => {
       const dir = this.deps.botDir;
-      if (!dir) { res.status(503).json({ error: '头像存储不可用' }); return; }
+      if (!dir) { res.status(503).json({ error: serverText(this.languageOf(req)).avatarUnavailable }); return; }
       const body = req.body;
       if (!Buffer.isBuffer(body) || body.length <= PNG_SIGNATURE.length || !body.subarray(0, 8).equals(PNG_SIGNATURE)) {
-        res.status(400).json({ error: '头像必须是有效的 PNG 图片' });
+        res.status(400).json({ error: serverText(this.languageOf(req)).avatarNotPng });
         return;
       }
       const file = join(dir, AVATAR_FILE);
@@ -1497,15 +1471,15 @@ export class WebApp {
       res.json({ ok: true, file: AVATAR_FILE });
     }));
 
-    app.get('/api/theme', wrap((_req, res) => {
+    app.get('/api/theme', wrap((req, res) => {
       const dir = this.deps.botDir;
-      if (!dir) { res.status(503).json({ error: '主题记录不可用' }); return; }
+      if (!dir) { res.status(503).json({ error: serverText(this.languageOf(req)).themeUnavailable }); return; }
       res.json({ defaultScheme: this.deps.defaultScheme ?? '', theme: this.readTheme(dir) });
     }));
 
     app.post('/api/theme', express.json({ limit: THEME_MAX_BYTES }), wrap((req, res) => {
       const dir = this.deps.botDir;
-      if (!dir) { res.status(503).json({ error: '主题记录不可用' }); return; }
+      if (!dir) { res.status(503).json({ error: serverText(this.languageOf(req)).themeUnavailable }); return; }
       const theme = writeDeploymentTheme(dir, req.body);
       this.deps.log.info('控制台配色已更新', { scheme: theme.selectedId, mode: theme.mode });
       res.json({ ok: true, theme });
@@ -1590,18 +1564,20 @@ export class WebApp {
     // 某个session的当前消息流(fork含继承的主session前缀,可能较大)
     app.get('/api/sessions/messages', wrap((req, res) => {
       const src = this.deps.sessions;
-      if (!src) { res.status(503).json({ error: 'session观察不可用' }); return; }
+      const t = serverText(this.languageOf(req));
+      if (!src) { res.status(503).json({ error: t.sessionsUnavailable }); return; }
       const id = strParam(req.query.id);
-      if (!id) { res.status(400).json({ error: '缺少id参数' }); return; }
+      if (!id) { res.status(400).json({ error: t.missingField('id') }); return; }
       const messages = src.messages(id);
-      if (messages === null) { res.status(404).json({ error: `没有这个session: ${id}` }); return; }
+      if (messages === null) { res.status(404).json({ error: t.noSession(id) }); return; }
       res.json({ id, messages, estTokens: estimateMessagesTokens(messages) });
     }));
 
     app.get('/api/storage', wrap((req, res) => {
-      const parts = (this.deps.storage?.(this.languageOf(req)) ?? []).map((p) => {
+      const language = this.languageOf(req);
+      const parts = (this.deps.storage?.(language) ?? []).map((p) => {
         let stat = '';
-        try { stat = p.stat(); } catch (err) { stat = `统计失败: ${String(err)}`; }
+        try { stat = p.stat(); } catch (err) { stat = serverText(language).statFailed(String(err)); }
         return {
           key: p.key, label: p.label, kind: p.kind, owner: p.owner,
           location: p.location, danger: !!p.danger, note: p.note, stat,
@@ -1613,10 +1589,11 @@ export class WebApp {
     // 清除某个存储部分(运维动作;POST,key走query免body解析)
     app.post('/api/storage/clear', (req: Request, res: Response) => {
       void (async () => {
+        const language = this.languageOf(req);
         const key = strParam(req.query.key);
-        if (!key) { res.status(400).json({ error: '缺少key参数' }); return; }
-        const part = (this.deps.storage?.(this.languageOf(req)) ?? []).find((p) => p.key === key);
-        if (!part) { res.status(404).json({ error: `没有这个存储部分: ${key}` }); return; }
+        if (!key) { res.status(400).json({ error: serverText(language).missingField('key') }); return; }
+        const part = (this.deps.storage?.(language) ?? []).find((p) => p.key === key);
+        if (!part) { res.status(404).json({ error: serverText(language).noStoragePart(key) }); return; }
         try {
           const result = await part.clear();
           this.deps.log.warn(`存储部分已清除: ${key}`, { result });
@@ -1631,8 +1608,9 @@ export class WebApp {
     // 一键清空:按order升序清除全部存储部分(session最后);逐项结果返回
     app.post('/api/storage/clear-all', (req: Request, res: Response) => {
       void (async () => {
-        const parts = [...(this.deps.storage?.(this.languageOf(req)) ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-        if (!parts.length) { res.status(404).json({ error: '服务端未挂载存储清单' }); return; }
+        const language = this.languageOf(req);
+        const parts = [...(this.deps.storage?.(language) ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+        if (!parts.length) { res.status(404).json({ error: serverText(language).noStorageParts }); return; }
         const results: Array<{ key: string; ok: boolean; result: string }> = [];
         for (const part of parts) {
           try {
@@ -1647,9 +1625,9 @@ export class WebApp {
     });
 
     // 开场引导只出现一次:控制台在操作员开口或按下那颗按钮时销掉标记。
-    app.post('/api/onboarding/dismiss', wrap((_req, res) => {
+    app.post('/api/onboarding/dismiss', wrap((req, res) => {
       const src = this.deps.onboarding;
-      if (!src) { res.status(503).json({ error: '开场引导标记不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).onboardingUnavailable }); return; }
       src.dismiss();
       res.json({ ok: true });
     }));
@@ -1657,26 +1635,28 @@ export class WebApp {
     // 暂停/继续:暂停=事件照常落库排队但不投递唤醒;继续=积压一次性投递
     app.post('/api/run/pause', wrap((req, res) => {
       const run = this.deps.run;
-      if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
+      if (!run) { res.status(503).json({ error: serverText(this.languageOf(req)).runUnavailable }); return; }
       run.pause();
       this.deps.log.warn('运行已暂停(人工操作)');
       this.debugBroadcast({ t: 'status', status: this.safeStatus() });
-      res.json({ ok: true, paused: true, result: pick(this.languageOf(req), SERVER_TEXT).paused });
+      res.json({ ok: true, paused: true, result: serverText(this.languageOf(req)).paused });
     }));
 
     app.post('/api/run/resume', wrap((req, res) => {
       const run = this.deps.run;
-      if (!run) { res.status(503).json({ error: '运行控制不可用' }); return; }
+      if (!run) { res.status(503).json({ error: serverText(this.languageOf(req)).runUnavailable }); return; }
       run.resume();
       this.deps.log.warn('运行已继续(人工操作)');
       this.debugBroadcast({ t: 'status', status: this.safeStatus() });
-      res.json({ ok: true, paused: false, result: pick(this.languageOf(req), SERVER_TEXT).resumed });
+      res.json({ ok: true, paused: false, result: serverText(this.languageOf(req)).resumed });
     }));
 
     /** 将关机请求转交装配层，等待完成后返回各步骤结果。 */
     app.post('/api/run/shutdown', (req: Request, res: Response) => {
+      const language = this.languageOf(req);
+      const text = serverText(language);
       void this.respondPowerAction(
-        res, this.languageOf(req), this.deps.run?.shutdown, '关机控制不可用', '收到关机请求(人工操作)', '进程即将退出',
+        res, language, this.deps.run?.shutdown, text.shutdownUnavailable, '收到关机请求(人工操作)', text.exitShutdown,
       );
     });
 
@@ -1684,9 +1664,9 @@ export class WebApp {
     app.post('/api/run/restart', (req: Request, res: Response) => {
       const supervised = this.deps.run?.supervised === true;
       const language = this.languageOf(req);
-      const text = pick(language, SERVER_TEXT);
+      const text = serverText(language);
       void this.respondPowerAction(
-        res, language, this.deps.run?.restart, '重启控制不可用', '收到重启请求(人工操作)',
+        res, language, this.deps.run?.restart, text.restartUnavailable, '收到重启请求(人工操作)',
         !supervised ? text.exitUnsupervised
           : this.deps.run?.startsPaused ? text.exitSupervisedPaused
           : text.exitSupervised,
@@ -1710,11 +1690,12 @@ export class WebApp {
     // 可见性开关仅撤下 agent 表面； World 继续运行，前缀段与工具在重载后更新。
     app.post('/api/worlds/visibility', express.json(), wrap((req, res) => {
       const src = this.deps.worldVisibility;
-      if (!src) { res.status(503).json({ error: 'World 可见性开关不可用' }); return; }
+      const t = serverText(this.languageOf(req));
+      if (!src) { res.status(503).json({ error: t.worldVisibilityUnavailable }); return; }
       const body = (req.body ?? {}) as { id?: unknown; visible?: unknown };
       const id = typeof body.id === 'string' ? body.id : '';
-      if (!id) { res.status(400).json({ error: '缺少 World id' }); return; }
-      if (typeof body.visible !== 'boolean') { res.status(400).json({ error: 'visible 必须是布尔' }); return; }
+      if (!id) { res.status(400).json({ error: t.missingField('World id') }); return; }
+      if (typeof body.visible !== 'boolean') { res.status(400).json({ error: t.notBoolean('visible') }); return; }
       try {
         const result = src.set(id, body.visible, this.languageOf(req));
         res.json({ ok: true, result, ...src.state() });
@@ -1727,11 +1708,12 @@ export class WebApp {
     // 激活独立于可见性;未激活 World 不在当前 core 里。
     app.post('/api/worlds/activation', express.json(), wrap(async (req, res) => {
       const src = this.deps.worldActivation;
-      if (!src) { res.status(503).json({ error: 'World 激活开关不可用' }); return; }
+      const t = serverText(this.languageOf(req));
+      if (!src) { res.status(503).json({ error: t.worldActivationUnavailable }); return; }
       const body = (req.body ?? {}) as { id?: unknown; enabled?: unknown };
       const id = typeof body.id === 'string' ? body.id : '';
-      if (!id) { res.status(400).json({ error: '缺少 Worldid' }); return; }
-      if (typeof body.enabled !== 'boolean') { res.status(400).json({ error: 'enabled 必须是布尔' }); return; }
+      if (!id) { res.status(400).json({ error: t.missingField('World id') }); return; }
+      if (typeof body.enabled !== 'boolean') { res.status(400).json({ error: t.notBoolean('enabled') }); return; }
       try {
         const result = await src.set(id, body.enabled, this.languageOf(req));
         this.deps.log.warn('World 激活状态已改', { id, enabled: body.enabled });
@@ -1744,10 +1726,11 @@ export class WebApp {
     // World 重启:停下当前实例、按定义重建、重新启动。构造时读走的参数(端口、地址、路径)由此生效。
     app.post('/api/worlds/restart', express.json(), wrap(async (req, res) => {
       const src = this.deps.worldActivation;
-      if (!src) { res.status(503).json({ error: 'World 重启不可用' }); return; }
+      const t = serverText(this.languageOf(req));
+      if (!src) { res.status(503).json({ error: t.worldRestartUnavailable }); return; }
       const body = (req.body ?? {}) as { id?: unknown };
       const id = typeof body.id === 'string' ? body.id : '';
-      if (!id) { res.status(400).json({ error: '缺少 Worldid' }); return; }
+      if (!id) { res.status(400).json({ error: t.missingField('World id') }); return; }
       try {
         const result = await src.restart(id, this.languageOf(req));
         this.deps.log.warn('World 已重启', { id });
@@ -1765,37 +1748,37 @@ export class WebApp {
     // 扩展:磁盘上的包对照启动时的加载结果。装卸只改磁盘,加载要重启进程。
     app.get('/api/extensions', wrap((req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       res.json(src.list(this.languageOf(req)));
     }));
 
-    app.get('/api/extensions/updates', wrap(async (_req, res) => {
+    app.get('/api/extensions/updates', wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       res.json(await src.updates());
     }));
 
     app.get('/api/extensions/search', wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       const kind = strParam(req.query.kind);
       if (kind !== undefined && kind !== 'world' && kind !== 'provider' && kind !== 'bot') {
-        res.status(400).json({ error: `kind 只能是 world、provider 或 bot,现在是 ${kind}` });
+        res.status(400).json({ error: serverText(this.languageOf(req)).badKind(kind) });
         return;
       }
       try {
         const hits = await src.search(kind);
         res.json({ hits, partial: src.searchPartial?.(kind) ?? false });
       } catch (err) {
-        res.status(502).json({ error: `npm 搜索失败: ${String(err)}` });
+        res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(String(err)) });
       }
     }));
 
     app.get('/api/extensions/package', wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       const name = strParam(req.query.name)?.trim();
-      if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
+      if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       try {
         res.json(await src.packageInfo(name, strParam(req.query.version)?.trim() || undefined));
       } catch (err) {
@@ -1808,9 +1791,9 @@ export class WebApp {
     // 图标只经 <img> 显示;SVG 另加 CSP,单独打开时也不执行脚本、不取外部资源。
     app.get('/api/extensions/icon', wrap((req, res) => {
       const src = this.deps.extensions;
-      if (!src?.icon) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src?.icon) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       const name = strParam(req.query.name)?.trim();
-      if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
+      if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       const icon = src.icon(name);
       if (!icon) { res.status(404).end(); return; }
       res.setHeader('Cache-Control', 'no-cache');
@@ -1821,7 +1804,7 @@ export class WebApp {
 
     app.post('/api/extensions/check', express.json(), wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src?.check) { res.status(503).json({ error: '扩展检查不可用' }); return; }
+      if (!src?.check) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionCheckUnavailable }); return; }
       const body = (req.body ?? {}) as { target?: { name?: unknown; version?: unknown; path?: unknown }; kind?: unknown };
       const target: ExtensionInstallTarget | null = typeof body.target?.path === 'string' && body.target.path.trim()
         ? { path: body.target.path }
@@ -1829,8 +1812,8 @@ export class WebApp {
           ? { name: body.target.name, ...(typeof body.target.version === 'string' && body.target.version.trim() ? { version: body.target.version } : {}) }
           : null;
       const kind = body.kind;
-      if (!target) { res.status(400).json({ error: '缺少包名或路径' }); return; }
-      if (kind !== undefined && kind !== 'world' && kind !== 'provider' && kind !== 'bot') { res.status(400).json({ error: `kind 只能是 world、provider 或 bot,现在是 ${String(kind)}` }); return; }
+      if (!target) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackageOrPath }); return; }
+      if (kind !== undefined && kind !== 'world' && kind !== 'provider' && kind !== 'bot') { res.status(400).json({ error: serverText(this.languageOf(req)).badKind(String(kind)) }); return; }
       try {
         res.json(await src.check(target, kind));
       } catch (err) {
@@ -1840,14 +1823,14 @@ export class WebApp {
 
     app.post('/api/extensions/install', express.json(), wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       const body = (req.body ?? {}) as { name?: unknown; version?: unknown; path?: unknown };
       const target: ExtensionInstallTarget | null = typeof body.path === 'string' && body.path.trim()
         ? { path: body.path }
         : typeof body.name === 'string' && body.name.trim()
           ? { name: body.name, ...(typeof body.version === 'string' && body.version.trim() ? { version: body.version } : {}) }
           : null;
-      if (!target) { res.status(400).json({ error: '缺少包名或路径' }); return; }
+      if (!target) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackageOrPath }); return; }
       try {
         const result = await src.install(target);
         this.deps.log.warn('扩展已安装(重启后加载)', { target });
@@ -1861,10 +1844,10 @@ export class WebApp {
 
     app.post('/api/extensions/uninstall', express.json(), wrap(async (req, res) => {
       const src = this.deps.extensions;
-      if (!src) { res.status(503).json({ error: '扩展管理不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
       const body = (req.body ?? {}) as { name?: unknown };
       const name = typeof body.name === 'string' ? body.name.trim() : '';
-      if (!name) { res.status(400).json({ error: '缺少包名' }); return; }
+      if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       try {
         const result = await src.uninstall(name);
         this.deps.log.warn('扩展已卸载(重启后消失)', { name });
@@ -1878,26 +1861,26 @@ export class WebApp {
 
     app.get('/api/prompts', wrap(async (req, res) => {
       const src = this.deps.prompts;
-      if (!src) { res.status(503).json({ error: '提示词模板编辑不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).promptsUnavailable }); return; }
       res.json({ prompts: await src.list(this.languageOf(req)) });
     }));
 
     /** 整条前缀的分段视图。现拼,不依赖活 session(见 WebAppPromptDeps.prefix)。 */
-    app.get('/api/prompts/prefix', wrap(async (_req, res) => {
+    app.get('/api/prompts/prefix', wrap(async (req, res) => {
       const src = this.deps.prompts;
-      if (!src?.prefix) { res.status(503).json({ error: '前缀预览不可用' }); return; }
+      if (!src?.prefix) { res.status(503).json({ error: serverText(this.languageOf(req)).prefixPreviewUnavailable }); return; }
       res.json({ segments: await src.prefix() });
     }));
 
     app.post('/api/prompts', express.json({ limit: '2mb' }), (req: Request, res: Response) => {
       const src = this.deps.prompts;
-      if (!src) { res.status(503).json({ error: '提示词模板编辑不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).promptsUnavailable }); return; }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const key = typeof body.key === 'string' ? body.key.trim() : '';
-      if (!key) { res.status(400).json({ error: '缺少 key' }); return; }
-      if (typeof body.content !== 'string') { res.status(400).json({ error: 'content 必须是字符串' }); return; }
+      if (!key) { res.status(400).json({ error: serverText(this.languageOf(req)).missingField('key') }); return; }
+      if (typeof body.content !== 'string') { res.status(400).json({ error: serverText(this.languageOf(req)).notString('content') }); return; }
       if (Buffer.byteLength(body.content, 'utf8') > FILE_MAX_BYTES) {
-        res.status(413).json({ error: '提示词超过1MB，拒绝保存' });
+        res.status(413).json({ error: serverText(this.languageOf(req)).promptTooLarge });
         return;
       }
       try {
@@ -1920,10 +1903,10 @@ export class WebApp {
 
     app.post('/api/prompts/reset', express.json(), (req: Request, res: Response) => {
       const src = this.deps.prompts;
-      if (!src?.reset) { res.status(503).json({ error: '提示词模板编辑不可用' }); return; }
+      if (!src?.reset) { res.status(503).json({ error: serverText(this.languageOf(req)).promptsUnavailable }); return; }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const key = typeof body.key === 'string' ? body.key.trim() : '';
-      if (!key) { res.status(400).json({ error: '缺少 key' }); return; }
+      if (!key) { res.status(400).json({ error: serverText(this.languageOf(req)).missingField('key') }); return; }
       try {
         const result = src.reset(key, this.languageOf(req));
         this.deps.log.warn('固定提示词部署覆盖已移除', { key });
@@ -1933,16 +1916,16 @@ export class WebApp {
       }
     });
 
-    app.get('/api/tool-schemas', wrap((_req, res) => {
+    app.get('/api/tool-schemas', wrap((req, res) => {
       const src = this.deps.toolSchemas;
-      if (!src) { res.status(503).json({ error: '工具 schema 不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).toolSchemasUnavailable }); return; }
       res.json({ tools: src.list() });
     }));
 
     app.post('/api/session/reload-prefix', (req: Request, res: Response) => {
       void (async () => {
         const src = this.deps.sessionControl;
-        if (!src) { res.status(503).json({ error: 'session前缀重载不可用' }); return; }
+        if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).prefixReloadUnavailable }); return; }
         try {
           const result = await src.reloadPrefix(this.languageOf(req));
           this.deps.log.warn('当前session系统前缀已重载(人工)');
@@ -2030,7 +2013,7 @@ export class WebApp {
 
     // GET:轮询读 + <audio src> 这类只能带 URL 的场合。args 经 query 传 JSON 数组。
     app.get('/api/console/providers/:provider/panels/:panel/:method', wrap((req, res) => {
-      const args = parseQueryArgs(req.query.args);
+      const args = parseQueryArgs(req.query.args, serverText(this.languageOf(req)));
       if ('error' in args) { res.status(400).json({ error: args.error }); return; }
       invokeConsolePagePanel(req, res, args.args);
     }));
@@ -2042,7 +2025,7 @@ export class WebApp {
       wrap((req, res) => {
         const body = (req.body ?? {}) as { args?: unknown };
         if (body.args !== undefined && !Array.isArray(body.args)) {
-          res.status(400).json({ error: 'args 必须是数组' });
+          res.status(400).json({ error: serverText(this.languageOf(req)).argsNotArray });
           return;
         }
         invokeConsolePagePanel(req, res, (body.args as unknown[] | undefined) ?? []);
@@ -2071,28 +2054,29 @@ export class WebApp {
 
     app.get('/api/config', wrap((req, res) => {
       const src = this.deps.config;
-      if (!src) { res.status(503).json({ error: '配置项声明不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).configUnavailable }); return; }
       res.json({ groups: src.groups(this.languageOf(req)) });
     }));
 
     app.get('/api/config/options/:kind', wrap((req, res) => {
       const src = this.deps.config;
-      if (!src) { res.status(503).json({ error: '配置项声明不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).configUnavailable }); return; }
       const kind = typeof req.params.kind === 'string' ? req.params.kind : '';
       res.json({ options: src.options?.(kind, this.languageOf(req)) ?? [] });
     }));
 
     app.post(PATH_PICKER_ROUTE, express.json({ limit: '16kb' }), (req: Request, res: Response) => {
+      const language = this.languageOf(req);
       let options;
       try {
-        options = parsePathPickerOptions(req.body);
+        options = parsePathPickerOptions(req.body, language);
       } catch (err) {
         res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
         return;
       }
       const picker = this.deps.pathPicker ?? nativePathPicker;
-      void picker.pick(options)
-        .then((selected) => validatePickedPath(selected, options))
+      void picker.pick(options, language)
+        .then((selected) => validatePickedPath(selected, options, language))
         .then((path) => res.json({ path }))
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : String(err);
@@ -2111,12 +2095,12 @@ export class WebApp {
 
     app.post('/api/config', express.json(), wrap((req, res) => {
       const src = this.deps.config;
-      if (!src) { res.status(503).json({ error: '配置项声明不可用' }); return; }
+      if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).configUnavailable }); return; }
       const body = (req.body ?? {}) as Record<string, unknown>;
       const groupId = typeof body.group === 'string' ? body.group : '';
       const language = this.languageOf(req);
       const entry = src.groups(language).find((g) => g.group.id === groupId);
-      if (!entry) { res.status(400).json({ error: `未知配置组: ${groupId}` }); return; }
+      if (!entry) { res.status(400).json({ error: serverText(language).unknownConfigGroup(groupId) }); return; }
       const values = (body.values ?? {}) as Record<string, unknown>;
       // 校验完全按声明走:schema 里没声明的键一律忽略,控制台不能靠猜往配置里塞东西
       const parsed = coerceGroupValues(entry.group, values, language);

@@ -1,0 +1,42 @@
+import type { en, panelEn } from './strings.ts';
+
+export const text: Partial<typeof en> = {
+  description: 'Подключение к сервисам моделей, совместимым с Responses.',
+  extraHeaders: 'Дополнительные заголовки (объект JSON)',
+  extraBody: 'Дополнительное тело запроса (объект JSON)',
+  endpointPath: 'Путь эндпоинта Responses',
+  endpointPathDescription: 'Относительно URL провайдера; по умолчанию /responses.',
+  endpointPathSlash: 'Путь эндпоинта должен начинаться с /',
+  extraHeadersObject: 'Дополнительные заголовки должны быть объектом строк',
+  extraBodyObject: 'Дополнительные поля тела должны быть объектом',
+  reasoningReplay: 'Передача рассуждений',
+  reasoningReplayDescription: 'В режиме «Зашифрованный» обратно отправляется подписанный блок, в режиме «Открытый текст» отправляется текст рассуждения. Какой режим принимается, зависит от эндпоинта; если не уверены, проверьте.',
+  reasoningReplayValue: 'Передача рассуждений должна быть encrypted или plaintext',
+  syntheticReasoningText: 'Синтетический текст рассуждения',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `При передаче открытым текстом это рассуждение отправляется перед вызовом инструмента без записанного источника; модель его читает. Если пусто, используется значение по умолчанию «${fallback}»; эндпоинты отклоняют пустую строку или строку из пробелов.`,
+  syntheticReasoningTextValue: 'Синтетический текст рассуждения не может быть пустым или состоять из пробелов: эндпоинт отклоняет весь запрос',
+  reasoningPanel: 'Рассуждение',
+  reasoningPanelDescription: 'Форма, в которой рассуждения отправляются обратно на эндпоинт.',
+  bodyRequired: 'Требуется тело запроса',
+  instanceNameRequired: 'Требуется имя эндпоинта',
+  unknownPanel: 'Неизвестная панель',
+  unknownMethod: 'Неизвестный метод',
+  modelRequired: 'Сначала выберите модель',
+  thinkingOff: 'На этом эндпоинте рассуждение выключено; форма передачи не применяется',
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Рассуждение',
+  encrypted: 'Зашифрованный',
+  plaintext: 'Открытый текст',
+  detect: 'Не знаю, проверить',
+  detecting: 'Проверка',
+  saved: 'Сохранено',
+  accepted: 'принято',
+  rejected: (status: number | null, error: string) => `отклонено${status ? ` ${status}` : ''}: ${error}`,
+  skipped: 'не проверено',
+  outcome: (bare: string, withReasoning: string) => `Синтетический вызов без рассуждения: ${bare}; с рассуждением открытым текстом: ${withReasoning}`,
+  applied: (label: string) => `Установлено: ${label}`,
+  undetermined: 'Определить не удалось; настройка не изменена',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
+};

@@ -129,7 +129,7 @@ export function personaConsoleDecl(
   language: Language = 'zh',
 ): PersonaConsoleDecl {
   const ws = deps.memory;
-  const workspace = workspaceInvoke(ws);
+  const workspace = workspaceInvoke(ws, language);
   return {
     panels: personaPanels(language),
     invoke: async (panel: string, method: string, args: unknown[]): Promise<unknown> => {

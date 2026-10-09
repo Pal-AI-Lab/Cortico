@@ -33,6 +33,8 @@
 
 Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、持续运行、混合实时输入场景的智能体开发，适用于人格 Bot、AI 主播、角色扮演、聊天陪伴等多种下游任务。Cortico Bot 远不只是聊天 Bot：得益于围绕事件流设计的 Agent 系统，Cortico 可以帮助构建长期持续存在、适用于复杂输入的 AI 智能体，它支持自由的外部扩展，能够同时观察和操作多个外部环境，包括聊天平台、实时游戏、甚至现实环境。Cortico 的目标是：把你的 AI 带到这个世界！（Bring your AI to the world！）
 
+**语言**：Web 控制台有简体中文、繁體中文、English、日本語、한국어、Français、Deutsch、Español (Latinoamérica)、Português (Brasil)、Italiano、Русский 11 种语言。控制台语言不改变模型读到的内容；Core 写进模型上下文的文本是英文。
+
 ## 特性
 
 1. 🆓 免费开源！
@@ -60,6 +62,8 @@ Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、�
 3. 不需要写代码的经验或者知识也可以轻松使用！
 4. 完成扩展之后，可以发布到 npm 以共享给其他人~
 
+npm 上带 `cortico-world`、`cortico-provider` 或 `cortico-bot` 关键字的包会列在控制台的「扩展」页，显示 npm 统计的累计、近 30 天、近 7 天下载量。
+
 <sub>Cortina 基于 Pal AI Lab 提出的 [TINA（There Is No App）Spec](https://github.com/Pal-AI-Lab/ThereIsNoApp) 设计。这里没有 APP：语言即代码，Agent 即 Runtime。</sub>
 
 ## 快速开始
@@ -77,6 +81,8 @@ pnpm start
 **`http://127.0.0.1:7788/`**
 
 在控制台的终端页面中，开场引导将协助你完成三项基础配置：配置语言模型端点、查看已挂载的 World、调整系统提示词。配置好可用端点后，点击「打个招呼」即可让 Bot 主动开口交流。模型端点、API 密钥与运行参数均可在控制台中可视化修改，保存后下一次请求生效；托管运行时的启动参数在它下一次启动时生效。
+
+控制台的初始语言依次取 `config.json` 的 `language`、`CORTICO_LANGUAGE`、系统区域（读不到区域时用简体中文）。在「设置 → 通用」里切换，只对当前浏览器生效，不用重启 bot。
 
 ### 2. 多部署管理
 每个部署对应 `deployments/` 下的一个独立子目录（详见 [deployment.md](docs/deployment.md)）。再建一份：
@@ -134,6 +140,8 @@ Cortico 采用严格解耦的四层架构设计：
 | Minecraft | `minecraft` | 基于 Mineflayer 接入 Minecraft 原版服务器，实现文字环境观察与高层动作执行 |
 | 网页搜索 | `websearch` | 集成 Brave Search API 的实时网络信息检索能力 |
 
+每次发版还把 `minecraft`、`qq`、`bilibili`、`websearch` 以 `cortico-world-<id>` 发到 npm，版本与框架相同，供不内建这些 World 的应用安装。框架里已有同 id 的 World 时，装上的包不加载。
+
 ## 模型端点
 
 | Provider | 适配模型服务 / 说明 |
@@ -156,6 +164,7 @@ Cortico 采用严格解耦的四层架构设计：
 
 * 提交前请查阅 [CONTRIBUTING.md](CONTRIBUTING.md)（了解仓库边界与扩展开发规范）以及 [AGENTS.md](AGENTS.md)（代码审查清单）。
 * 欢迎使用 AI 编码助手辅助开发，但贡献者必须能够清晰解释提交的所有代码逻辑。
+* 控制台文案放在 `strings.ts`（`zh`、`en` 两版是全的），其余语言各写在旁边的 `strings.<语言代码>.ts`；译文缺的键，`zh-Hant` 读 `zh`，其余读 `en`。详见 [console.md](docs/console.md#语言) 的「语言」一节。
 * 提交 PR 前请确保自动化校验通过：
 
 ```bash

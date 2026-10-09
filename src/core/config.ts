@@ -1,96 +1,12 @@
 /** Core 默认配置与深合并工具。Persona 和 World 参数由各自声明，部署合并顺序见 src/deploy.ts。 */
 import type { CoreConfig } from './types.ts';
 import type { ConfigGroup } from './config-schema.ts';
-import { pick, type Language } from './language.ts';
+import type { Language } from './language.ts';
+import { coreGroupText } from './strings.ts';
 
-const CORE_GROUP_TEXT = {
-  zh: {
-    title: "事件合批、推理与日志",
-    description: "",
-    displayName: {
-      title: '展示名',
-      description: '控制台标题与 bot 发出的消息用这个名字。控制台立刻跟上;已经挂载的 World 在自己重启后才跟上。',
-    },
-    quietGap: {
-      title: '安静窗口',
-      description: "参与合批的事件在最后一项到达后等待此时长；达到批次时限或数量上限时提前投递。",
-    },
-    minBatchAge: {
-      title: "最短合批时间",
-      description: "参与合批的事件从第一项到达起至少等待此时长；批次时限和数量上限优先。",
-    },
-    maxBatchAge: {
-      title: "最长合批时间",
-      description: "从第一项到达起，合批等待不超过此时长。",
-    },
-    maxBatchSize: {
-      title: '单批上限',
-      suffix: '条',
-      description: "外部事件和候选达到此数量时立即投递；不计延迟渲染项和 piggyback 项。",
-    },
-    keepPastThinking: {
-      title: '保留历史思维链',
-      description: "启用后，provider 可回传兼容的历史推理；关闭后请求不含历史推理。已保存的 session 不变。",
-    },
-    logFile: {
-      title: '日志落盘门槛',
-      description: "低于此级别的记录不写入 data/runs/<run>/log.jsonl。",
-    },
-    logConsole: {
-      title: '日志打印门槛',
-      description: '低于这一级的记录不打到控制台窗口。',
-    },
-    logAreas: {
-      title: '按区域覆盖落盘门槛',
-      description: "以逗号分隔 `区域=级别`，例如 `core.loop=trace,console=warn`；支持 `.*`。最长匹配前缀优先，未匹配的区域使用默认门槛。",
-    },
-  },
-  en: {
-    title: "Event batching, reasoning and logging",
-    description: "",
-    displayName: {
-      title: 'Display name',
-      description: 'Used for the console title and as the sender name on messages the bot sends. The console picks it up at once; a mounted World does so when that World restarts.',
-    },
-    quietGap: {
-      title: 'Quiet window',
-      description: "Wait this long after the last batched item arrives; the batch time and size limits can trigger earlier delivery.",
-    },
-    minBatchAge: {
-      title: 'Minimum batch age',
-      description: "Wait at least this long after the first batched item arrives; the batch time and size limits take precedence.",
-    },
-    maxBatchAge: {
-      title: "Maximum batch age",
-      description: "Limit batching delay to this duration from the first item.",
-    },
-    maxBatchSize: {
-      title: 'Batch size limit',
-      suffix: 'items',
-      description: "Deliver when external events and candidates reach this count; deferred rendering and piggyback items are excluded.",
-    },
-    keepPastThinking: {
-      title: 'Keep past reasoning',
-      description: "Allow the provider to replay compatible past reasoning. When disabled, requests omit past reasoning. Saved sessions are unchanged.",
-    },
-    logFile: {
-      title: 'Log file threshold',
-      description: "Records below this level are not written to data/runs/<run>/log.jsonl.",
-    },
-    logConsole: {
-      title: 'Log print threshold',
-      description: 'Records below this level are not printed to the console window.',
-    },
-    logAreas: {
-      title: 'Per-area file threshold overrides',
-      description: "Comma-separated `area=level`, such as `core.loop=trace,console=warn`; `.*` is supported. The longest matching prefix applies. Unmatched areas use the default threshold.",
-    },
-  },
-};
-
-/** 按请求语言生成配置文案；两种语言使用相同的结构与取值范围。 */
+/** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
 export function coreConfigGroup(language: Language): ConfigGroup {
-  const t = pick(language, CORE_GROUP_TEXT);
+  const t = coreGroupText(language);
   return {
     id: 'core',
     owner: 'core',

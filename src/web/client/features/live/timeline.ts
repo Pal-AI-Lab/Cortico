@@ -471,6 +471,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     if (responseId) grp.setAttribute('data-response-id', responseId);
     const head = ui.h('div', 'ghead turnhead');
     const status = ui.h('span', 'meta turnstatus');
+    status.setAttribute('data-empty', S.empty);
     head.appendChild(ui.h('span', 'badge', 'ASSISTANT'));
     const ord = ordinal(index);
     if (ord) head.appendChild(ord);

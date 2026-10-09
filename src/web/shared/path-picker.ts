@@ -1,3 +1,5 @@
+import type { Language } from '../../core/language.ts';
+
 /** 浏览器控制台发起的一次主机原生路径选择。 */
 export interface PathPickerOptions {
   kind: 'file' | 'directory';
@@ -12,8 +14,8 @@ export interface PathPickerOptions {
 }
 
 export interface PathPicker {
-  /** 返回主机绝对路径；用户取消时返回 null。 */
-  pick(options: PathPickerOptions): Promise<string | null>;
+  /** 返回主机绝对路径；用户取消时返回 null。缺省标题、文件类型标签与报错按 `language`。 */
+  pick(options: PathPickerOptions, language: Language): Promise<string | null>;
 }
 
 export interface PathPickerResponse {

@@ -1,0 +1,42 @@
+import type { en, panelEn } from './strings.ts';
+
+export const text: Partial<typeof en> = {
+  description: 'Conecte-se a serviços de modelos compatíveis com Responses.',
+  extraHeaders: 'Cabeçalhos extras (objeto JSON)',
+  extraBody: 'Corpo de requisição extra (objeto JSON)',
+  endpointPath: 'Caminho do endpoint de Responses',
+  endpointPathDescription: 'Relativo à URL do provedor; padrão /responses.',
+  endpointPathSlash: 'O caminho do endpoint deve começar com /',
+  extraHeadersObject: 'Os cabeçalhos extras devem ser um objeto de strings',
+  extraBodyObject: 'Os campos extras do corpo devem ser um objeto',
+  reasoningReplay: 'Reenvio do raciocínio',
+  reasoningReplayDescription: 'Criptografado devolve o bloco assinado; Texto simples, o texto do raciocínio. Qual é aceito depende do endpoint; na dúvida, teste.',
+  reasoningReplayValue: 'O reenvio do raciocínio deve ser encrypted ou plaintext',
+  syntheticReasoningText: 'Texto de raciocínio sintético',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `No reenvio em texto simples, é o raciocínio enviado antes de uma chamada de ferramenta sem origem registrada; o modelo o lê. Vazio usa o padrão “${fallback}”; os endpoints rejeitam uma string vazia ou em branco.`,
+  syntheticReasoningTextValue: 'O texto de raciocínio sintético não pode ficar vazio nem em branco: o endpoint rejeita a requisição inteira',
+  reasoningPanel: 'Raciocínio',
+  reasoningPanelDescription: 'A forma como o raciocínio é reenviado ao endpoint.',
+  bodyRequired: 'Corpo da requisição obrigatório',
+  instanceNameRequired: 'Nome do endpoint obrigatório',
+  unknownPanel: 'Painel desconhecido',
+  unknownMethod: 'Método desconhecido',
+  modelRequired: 'Escolha um modelo primeiro',
+  thinkingOff: 'O raciocínio está desativado neste endpoint; a forma de reenvio não se aplica',
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Raciocínio',
+  encrypted: 'Criptografado',
+  plaintext: 'Texto simples',
+  detect: 'Não sei, teste',
+  detecting: 'Testando',
+  saved: 'Salvo',
+  accepted: 'aceito',
+  rejected: (status: number | null, error: string) => `rejeitado${status ? ` ${status}` : ''}: ${error}`,
+  skipped: 'não testado',
+  outcome: (bare: string, withReasoning: string) => `Chamada sintética sem raciocínio: ${bare}; com raciocínio em texto simples: ${withReasoning}`,
+  applied: (label: string) => `Definido como ${label}`,
+  undetermined: 'Não foi possível determinar; a configuração não mudou',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
+};

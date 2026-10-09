@@ -7,8 +7,9 @@ import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
-import { pick, type Language } from 'cortico/core/language.ts';
+import type { Language } from 'cortico/core/language.ts';
 import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './consoleSurface.ts';
+import { consoleText } from './strings.ts';
 import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
 import { saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
@@ -147,40 +148,6 @@ export interface CorminiOptions {
   blobsDir?: string;
 }
 
-/** 控制台文案,两种语言各一张表;`en: typeof zh` 由 tsc 保证键集一致。 */
-const CONSOLE_TEXT = {
-  zh: {
-    orientation: 'Persona的存在方式与元认知说明。',
-    constitution: 'Persona 的长期原则。重载系统前缀或开始新上下文后生效。',
-    memoryNote: '记忆约定:她的档案怎么存、什么时候会自动浮现。',
-    workspaceLabel: '工作区(她自己写的记忆文件)',
-    workspaceNote: '宪法之外的全部工作区文件不可恢复地删除;宪法与人格检查点不动',
-    workspaceStat: (n: number) => `${n}个文件(宪法之外)`,
-    workspaceCleared: (n: number) => `已删除 ${n} 个工作区文件;宪法未动`,
-    firstTurnUser: '首轮·用户输入',
-    firstTurnUserDesc: '合成首轮对话的 user 消息。与回复任一为空则整轮不注入。',
-    firstTurnThinking: '首轮·思维链',
-    firstTurnThinkingDesc: '合成首轮 assistant 的思维链(reasoning_content);为空则该轮不带。注:openai-responses-compat 方言不回传思维链,这段在该类端点上不出线。',
-    firstTurnReply: '首轮·回复',
-    firstTurnReplyDesc: '合成首轮对话的 assistant 回复正文。',
-  },
-  en: {
-    orientation: 'How the Persona exists and its metacognition notes.',
-    constitution: 'The Persona\'s long-term principles. Changes take effect after a system prefix reload or when a new context starts.',
-    memoryNote: 'Memory conventions: how her files are stored and when they surface on their own.',
-    workspaceLabel: 'Workspace (memory files she wrote herself)',
-    workspaceNote: 'Every workspace file except the constitution is deleted irrecoverably; the constitution and persona checkpoints are untouched',
-    workspaceStat: (n: number) => `${n} file${n === 1 ? '' : 's'} (besides the constitution)`,
-    workspaceCleared: (n: number) => `Deleted ${n} workspace file${n === 1 ? '' : 's'}; the constitution is untouched`,
-    firstTurnUser: 'First turn · user input',
-    firstTurnUserDesc: 'The user message of the synthesized first turn. When either this or the reply is empty, the whole turn is not injected.',
-    firstTurnThinking: 'First turn · reasoning',
-    firstTurnThinkingDesc: 'The reasoning (reasoning_content) of the synthesized first assistant turn; empty = the turn carries none. The openai-responses-compat dialect does not return reasoning, so this part never goes on the wire for such endpoints.',
-    firstTurnReply: 'First turn · reply',
-    firstTurnReplyDesc: 'The assistant reply text of the synthesized first turn.',
-  },
-};
-
 export class Cormini implements Persona {
   readonly memoryDir: string;
   protected readonly caps: { soft: number; hard: number };
@@ -257,7 +224,7 @@ export class Cormini implements Persona {
 
   /** 按界面语言声明控制台文案；源 key、路径与清除动作保持一致。 */
   console(language: Language = 'zh'): PersonaConsoleDecl {
-    const t = pick(language, CONSOLE_TEXT);
+    const t = consoleText(language);
     return {
       promptDocs: [
         {
@@ -303,7 +270,7 @@ export class Cormini implements Persona {
           },
         ],
       },
-      invoke: workspaceInvoke(this.memory),
+      invoke: workspaceInvoke(this.memory, language),
     };
   }
 
@@ -459,7 +426,7 @@ export class Cormini implements Persona {
   protected firstTurnDocs(language: Language = 'zh'): PromptDocDecl[] {
     const dir = this.firstTurnDir;
     if (!dir) return [];
-    const t = pick(language, CONSOLE_TEXT);
+    const t = consoleText(language);
     return [
       {
         key: 'firstTurn.user',

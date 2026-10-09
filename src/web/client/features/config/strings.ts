@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 
 const zh = {
   loading: '加载中…',
@@ -19,7 +28,7 @@ const zh = {
   loadFailed: (err: string) => '配置项加载失败: ' + err,
 };
 
-const en: typeof zh = {
+export const en: typeof zh = {
   loading: 'Loading…',
   optionCurrent: '(current)',
   ownerPersona: 'Persona',
@@ -38,4 +47,6 @@ const en: typeof zh = {
   loadFailed: (err: string) => 'Failed to load config: ' + err,
 };
 
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

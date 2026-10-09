@@ -1,0 +1,42 @@
+import type { en, panelEn } from './strings.ts';
+
+export const text: Partial<typeof en> = {
+  description: 'Conéctate a servicios de modelos compatibles con Responses.',
+  extraHeaders: 'Encabezados adicionales (objeto JSON)',
+  extraBody: 'Cuerpo de solicitud adicional (objeto JSON)',
+  endpointPath: 'Ruta del endpoint de Responses',
+  endpointPathDescription: 'Relativa a la URL del proveedor; predeterminada /responses.',
+  endpointPathSlash: 'La ruta del endpoint debe empezar con /',
+  extraHeadersObject: 'Los encabezados adicionales deben ser un objeto de cadenas',
+  extraBodyObject: 'Los campos adicionales del cuerpo deben ser un objeto',
+  reasoningReplay: 'Reenvío del razonamiento',
+  reasoningReplayDescription: 'Cifrado devuelve el bloque firmado; Texto plano, el texto del razonamiento. Cuál acepta lo decide el endpoint; si no estás seguro, pruébalo.',
+  reasoningReplayValue: 'El reenvío del razonamiento debe ser encrypted o plaintext',
+  syntheticReasoningText: 'Texto de razonamiento sintético',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `En el reenvío en texto plano, es el razonamiento que se envía antes de una llamada a herramienta sin origen registrado; el modelo lo lee. Si está vacío, se usa el predeterminado “${fallback}”; los endpoints rechazan una cadena vacía o en blanco.`,
+  syntheticReasoningTextValue: 'El texto de razonamiento sintético no puede estar vacío ni en blanco: el endpoint rechaza la solicitud completa',
+  reasoningPanel: 'Razonamiento',
+  reasoningPanelDescription: 'La forma en que el razonamiento se reenvía al endpoint.',
+  bodyRequired: 'Se requiere el cuerpo de la solicitud',
+  instanceNameRequired: 'Se requiere el nombre del endpoint',
+  unknownPanel: 'Panel desconocido',
+  unknownMethod: 'Método desconocido',
+  modelRequired: 'Primero elige un modelo',
+  thinkingOff: 'El razonamiento está desactivado en este endpoint; la forma de reenvío no aplica',
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Razonamiento',
+  encrypted: 'Cifrado',
+  plaintext: 'Texto plano',
+  detect: 'No estoy seguro, pruébalo',
+  detecting: 'Probando',
+  saved: 'Guardado',
+  accepted: 'aceptado',
+  rejected: (status: number | null, error: string) => `rechazado${status ? ` ${status}` : ''}: ${error}`,
+  skipped: 'sin probar',
+  outcome: (bare: string, withReasoning: string) => `Llamada sintética sin razonamiento: ${bare}; con razonamiento en texto plano: ${withReasoning}`,
+  applied: (label: string) => `Configurado como ${label}`,
+  undetermined: 'No se pudo determinar; la configuración no cambió',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
+};

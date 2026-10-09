@@ -1,0 +1,117 @@
+import type { botEn, assemblyEn } from './strings.ts';
+
+export const botText: Partial<typeof botEn> = {
+  noFile: '(nessun file)',
+  storage: {
+    events: {
+      label: 'Archivio eventi (frammento di questa esecuzione)',
+      note: 'Cancella gli eventi di questa esecuzione e conserva le esecuzioni precedenti; il cursore non torna indietro',
+      stat: (count: number, cursor: number, size: string) => `${count} record (cursore a ${cursor}) / ${size}`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'evento' : 'eventi'} di questa esecuzione ${n === 1 ? 'cancellato' : 'cancellati'}`,
+    },
+    session: {
+      label: 'Sessione principale (contesto della conversazione attuale)',
+      note: "Cancella la conversazione e riapre la sessione, conservando Memory e l'archivio eventi. Se un batch è in corso, viene eseguito al suo termine",
+      stat: (records: number, ktok: number, size: string) => `${records} record / ~${ktok}k tok / ${size}`,
+      cleared: 'Sessione cancellata e riaperta (prefisso di sistema + messaggio di apertura)',
+    },
+    runlog: {
+      label: 'Log di esecuzione (questa esecuzione)',
+      note: 'Cancella i log di questa esecuzione e conserva quelli precedenti. I log di esecuzione non entrano nel contesto del modello',
+      cleared: 'Log di esecuzione cancellato',
+    },
+    usage: {
+      label: 'Registro uso token (fonte della pagina costi)',
+      note: 'Cancella tutti i record di uso e costo dei modelli; i totali ripartono dai record scritti in seguito. Questi record non entrano nel contesto del modello',
+      stat: (n: number, size: string) => `${n} record / ${size}`,
+      cleared: (n: number) => `${n} record di uso ${n === 1 ? 'cancellato' : 'cancellati'}`,
+    },
+    toolcalls: {
+      label: 'Registro chiamate strumenti (nome strumento / argomenti grezzi / esito)',
+      note: 'Cancella i log delle chiamate agli strumenti di questa esecuzione senza modificare gli esiti degli strumenti nel contesto del modello',
+      cleared: 'Registro chiamate strumenti cancellato',
+    },
+    state: {
+      label: 'Stato del Core',
+      note: "Cancella lo stato della Persona, l'ora del passaggio di consegne e gli errori consecutivi del modello; conserva il cursore di consegna e la visibilità dei World",
+      stat: (n: number, lastHandoff: string) => `${n} ${n === 1 ? 'voce' : 'voci'} di stato della Persona / ultimo passaggio ${lastHandoff}`,
+      never: 'nessuno',
+      cleared: 'Stato del Core ripristinato ai valori predefiniti',
+    },
+    wakes: {
+      label: 'Timer persistenti',
+      note: 'Annulla tutti i timer (senza notifiche)',
+      stat: (n: number) => `${n} in attesa`,
+      cleared: (n: number) => `${n} timer ${n === 1 ? 'annullato' : 'annullati'}`,
+    },
+    tracker: {
+      label: 'Statistiche sessioni (uso / hit della cache)',
+      note: 'Azzera le statistiche e conserva le voci delle sessioni attive',
+      stat: (n: number) => `${n} ${n === 1 ? 'sessione' : 'sessioni'}`,
+      cleared: 'Statistiche sessioni azzerate',
+    },
+    pending: {
+      label: 'Eventi in attesa',
+      note:
+        'Scarta gli eventi in attesa e conserva i record archiviati. Gli elementi a rendering differito restano in coda; gli elementi scartati non vengono riproposti dopo il riavvio',
+      stat: (n: number) => `${n} in attesa`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'evento in attesa scartato' : 'eventi in attesa scartati'}`,
+    },
+    media: {
+      label: 'Archivio allegati (immagini e audio da eventi ed esiti degli strumenti)',
+      note: 'Elimina tutti i file allegati e conserva gli eventi e i record di sessione che vi fanno riferimento; di un allegato eliminato resta nel contesto solo la descrizione testuale',
+      stat: (n: number, size: string) => `${n} file / ${size}`,
+      cleared: (n: number) => `${n} ${n === 1 ? 'allegato eliminato' : 'allegati eliminati'}`,
+    },
+  },
+  config: {
+    unknownGroup: (id: string) => `Gruppo di configurazione inesistente: ${id}`,
+    updated: (title: string, file: string) => `${title} aggiornato e riscritto in ${file}`,
+  },
+  prompts: {
+    unknown: (key: string) => `Template di prompt sconosciuto: ${key}`,
+    packageReadOnly: (title: string) => `${title} è un template di pacchetto di estensione in sola lettura`,
+    conflict: (title: string) => `${title} è stato modificato altrove; ricarica prima di salvare`,
+    saved: (title: string) => `${title} salvato`,
+    savedOverride: (title: string) => `Override di deployment per ${title} salvato`,
+    notEnvPrompt: (title: string) => `${title} non ha un template predefinito da ripristinare`,
+    alreadyDefault: (title: string) => `${title} usa già il predefinito del World`,
+    reset: (title: string) => `Override di deployment per ${title} rimosso`,
+  },
+  visibility: {
+    shown: (id: string) => `${id} è di nuovo visibile all'agente. La consegna degli eventi è ripresa; il suo segmento del prefisso e i suoi strumenti tornano al ricaricamento del prefisso.`,
+    hidden: (id: string) => `${id} è ora nascosto all'agente. I nuovi eventi non svegliano più l'agente (vengono comunque archiviati); il suo segmento del prefisso e i suoi strumenti vengono rimossi al ricaricamento del prefisso.`,
+    prefixReloaded: (kept: number) => `Prefisso di sistema e tabella strumenti ricaricati; ${kept} ${kept === 1 ? 'messaggio esistente' : 'messaggi esistenti'} della sessione attuale ${kept === 1 ? 'conservato' : 'conservati'}`,
+  },
+  shutdown: {
+    pause: 'Sospendi la consegna degli eventi',
+    worlds: 'Arresta i World',
+    core: 'Arresta la Persona',
+    modulesTimedOut: "Timeout nell'arresto dei World",
+    stepTimedOut: (seconds: number) => `Timeout dopo ${seconds} s`,
+    externalState: (worldId: string) => `Stato esterno di ${worldId}`,
+    stopIncomplete: (detail: string) => `Arresto dei World incompleto, quindi la verifica esterna in cache non può essere usata: ${detail}`,
+    cacheReadFailed: (detail: string) => `Lettura della verifica di arresto in cache non riuscita: ${detail}`,
+    manualCheck: 'Controlla se il servizio esterno corrispondente si è arrestato.',
+    llm: 'Arresta le istanze del provider',
+    flush: 'Salva lo stato del Core',
+    web: 'Chiudi la console',
+    summarySkipped: 'Passaggi di arresto locale incompleti',
+    summaryComplete: 'Arresto locale terminato: tutti i passaggi completati',
+    summaryUnverified: (items: string[]) => `Arresto locale terminato, ma la fine dello stato esterno non è confermata: ${items.join(', ')} (serve conferma manuale)`,
+  },
+};
+export const assemblyText: Partial<typeof assemblyEn> = {
+  constructFailed: (detail: string) => `Costruzione non riuscita: ${detail}`,
+  notImplemented: 'Nessuna implementazione di questo World trovata in locale.',
+  unknownWorld: (id: string) => `World sconosciuto: ${id}`,
+  alreadyRunning: (label: string) => `${label} è già attivato`,
+  prebuilt: (label: string) => `${label} è un'istanza precostruita e non viene attivato tramite il livello di assemblaggio`,
+  activated: (label: string, id: string) => `${label} (${id}) attivato`,
+  deactivated: (label: string, id: string) => `${label} (${id}) disattivato`,
+  notActive: (label: string) => `${label} non è attivo, quindi non c'è alcuna istanza da riavviare`,
+  restarted: (label: string) => `${label} riavviato`,
+  toolClash: (other: string, names: string[]) => `I nomi degli strumenti sono in conflitto con ${other}, montaggio rifiutato: ${names.join(', ')}`,
+  toolReserved: (names: string[]) => `Nomi di strumenti già occupati dal Core o dalla Persona, montaggio rifiutato: ${names.join(', ')}`,
+  unbound: 'Il livello di assemblaggio non è ancora collegato a un Core',
+};

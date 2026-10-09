@@ -1,4 +1,13 @@
 import { pick, type Language } from '../../core/language.ts';
+import { text as zhHant, panel as panelZhHant } from './strings.zh-Hant.ts';
+import { text as ja, panel as panelJa } from './strings.ja.ts';
+import { text as ko, panel as panelKo } from './strings.ko.ts';
+import { text as fr, panel as panelFr } from './strings.fr.ts';
+import { text as de, panel as panelDe } from './strings.de.ts';
+import { text as es419, panel as panelEs419 } from './strings.es-419.ts';
+import { text as ptBR, panel as panelPtBR } from './strings.pt-BR.ts';
+import { text as it, panel as panelIt } from './strings.it.ts';
+import { text as ru, panel as panelRu } from './strings.ru.ts';
 
 /** Server side: module description, ConfigGroup titles, panel titles and validation errors. */
 const zh = {
@@ -26,7 +35,7 @@ const zh = {
   modelRequired: '先选模型',
   thinkingOff: '这条端点关着思维链,回传形态无关',
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   description: 'Connect to Responses-compatible model services.',
   extraHeaders: 'Extra headers (JSON object)',
   extraBody: 'Extra request body (JSON object)',
@@ -36,7 +45,7 @@ const en: typeof zh = {
   extraHeadersObject: 'Extra headers must be an object of strings',
   extraBodyObject: 'Extra body fields must be an object',
   reasoningReplay: 'Reasoning replay',
-  reasoningReplayDescription: 'Encrypted sends the signed block back, plaintext the reasoning text; which one the endpoint accepts is the endpoint\'s, probe when unsure.',
+  reasoningReplayDescription: 'Encrypted sends back the signed block; plaintext sends back the reasoning text. Which one is accepted depends on the endpoint; test it when unsure.',
   reasoningReplayValue: 'Reasoning replay must be encrypted or plaintext',
   syntheticReasoningText: 'Synthetic reasoning text',
   syntheticReasoningTextDescription: (fallback: string) =>
@@ -52,7 +61,9 @@ const en: typeof zh = {
   thinkingOff: 'Reasoning is off on this endpoint; the replay form does not apply',
 };
 export type Text = typeof zh;
-export const text = (language: Language) => pick(language, { zh, en });
+export const text = (language: Language) => pick(language, {
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});
 
 /** Client side: the reasoning section of the endpoint page. */
 const panelZh = {
@@ -68,8 +79,9 @@ const panelZh = {
   outcome: (bare: string, withReasoning: string) => `不带思维链的合成调用:${bare};带明文思维链:${withReasoning}`,
   applied: (label: string) => `已设为${label}`,
   undetermined: '判断不出,设置未改',
+  detected: (outcome: string, conclusion: string) => `${outcome}。${conclusion}`,
 };
-const panelEn: typeof panelZh = {
+export const panelEn: typeof panelZh = {
   title: 'Reasoning',
   encrypted: 'Encrypted',
   plaintext: 'Plaintext',
@@ -82,5 +94,9 @@ const panelEn: typeof panelZh = {
   outcome: (bare: string, withReasoning: string) => `Synthetic call without reasoning: ${bare}; with plaintext reasoning: ${withReasoning}`,
   applied: (label: string) => `Set to ${label}`,
   undetermined: 'Undetermined; the setting is unchanged',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };
-export const panel = { zh: panelZh, en: panelEn };
+export const panel = {
+  zh: panelZh, en: panelEn, 'zh-Hant': panelZhHant, ja: panelJa, ko: panelKo, fr: panelFr,
+  de: panelDe, 'es-419': panelEs419, 'pt-BR': panelPtBR, it: panelIt, ru: panelRu,
+};

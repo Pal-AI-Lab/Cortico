@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 
 const zh = {
   ioGroup: (name: string | undefined) => `IO 工具 · ${name}`,
@@ -23,7 +32,7 @@ const zh = {
   loadFailed: (msg: string) => `工具表接口不可用：${msg}`,
 };
 
-const en: typeof zh = {
+export const en: typeof zh = {
   ioGroup: (name: string | undefined) => `IO tools · ${name}`,
   groupCore: 'Native actions · core',
   groupPersona: 'Memory / file tools · Persona',
@@ -46,4 +55,6 @@ const en: typeof zh = {
   loadFailed: (msg: string) => `Tool table endpoint unavailable: ${msg}`,
 };
 
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

@@ -198,7 +198,7 @@ export function personaConsoleDecl(
   language: Language = 'zh',
 ): PersonaConsoleDecl {
   const ws = deps.memory;
-  const workspace = workspaceInvoke(ws);
+  const workspace = workspaceInvoke(ws, language);
   const text = (name: string): { path: string; deploymentPath?: string } => deps.texts
     ? { path: deps.texts.path(name), deploymentPath: deps.texts.writePath(name) }
     : { path: join(CORE_DIR, name) };

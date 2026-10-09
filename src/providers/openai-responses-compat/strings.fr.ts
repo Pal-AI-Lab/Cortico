@@ -1,0 +1,42 @@
+import type { en, panelEn } from './strings.ts';
+
+export const text: Partial<typeof en> = {
+  description: 'Connexion aux services de modèles compatibles Responses.',
+  extraHeaders: 'En-têtes supplémentaires (objet JSON)',
+  extraBody: 'Corps de requête supplémentaire (objet JSON)',
+  endpointPath: "Chemin de l'endpoint Responses",
+  endpointPathDescription: "Relatif à l'URL du fournisseur ; par défaut /responses.",
+  endpointPathSlash: "Le chemin de l'endpoint doit commencer par /",
+  extraHeadersObject: 'Les en-têtes supplémentaires doivent être un objet de chaînes',
+  extraBodyObject: 'Les champs de corps supplémentaires doivent être un objet',
+  reasoningReplay: 'Renvoi du raisonnement',
+  reasoningReplayDescription: "Chiffré renvoie le bloc signé, Texte clair le texte du raisonnement ; l'endpoint décide lequel il accepte, testez en cas de doute.",
+  reasoningReplayValue: 'Le renvoi du raisonnement doit être encrypted ou plaintext',
+  syntheticReasoningText: 'Texte de raisonnement synthétique',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `En renvoi en clair, le raisonnement envoyé avant un appel d'outil sans origine enregistrée ; le modèle le lit. Vide = valeur par défaut « ${fallback} » ; les endpoints rejettent une chaîne vide ou composée d'espaces.`,
+  syntheticReasoningTextValue: "Le texte de raisonnement synthétique ne peut pas être vide ou composé d'espaces : l'endpoint rejette toute la requête",
+  reasoningPanel: 'Raisonnement',
+  reasoningPanelDescription: "Forme sous laquelle le raisonnement est renvoyé à l'endpoint.",
+  bodyRequired: 'Corps de requête requis',
+  instanceNameRequired: "Nom d'endpoint requis",
+  unknownPanel: 'Panneau inconnu',
+  unknownMethod: 'Méthode inconnue',
+  modelRequired: "Choisissez d'abord un modèle",
+  thinkingOff: "Le raisonnement est désactivé sur cet endpoint ; la forme de renvoi ne s'applique pas",
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Raisonnement',
+  encrypted: 'Chiffré',
+  plaintext: 'Texte clair',
+  detect: 'Je ne sais pas, tester',
+  detecting: 'Test en cours',
+  saved: 'Enregistré',
+  accepted: 'accepté',
+  rejected: (status: number | null, error: string) => `rejeté${status ? ` ${status}` : ''} : ${error}`,
+  skipped: 'non testé',
+  outcome: (bare: string, withReasoning: string) => `Appel synthétique sans raisonnement : ${bare} ; avec raisonnement en clair : ${withReasoning}`,
+  applied: (label: string) => `Défini sur ${label}`,
+  undetermined: 'Indéterminé ; le réglage est inchangé',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
+};

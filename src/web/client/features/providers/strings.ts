@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 const zh = {
   pageTitle: '模型供应商', navLabel: '模型供应商', navGroup: 'Core', create: '+ 新建供应商实例', newName: '未命名实例',
   createHint: '实例 = 填一组供应商配置保存成卡片',
@@ -6,6 +15,7 @@ const zh = {
   eraseConfirm: '确认删除',
   connect: '连接', activate: '设为当前供应商', active: '当前模型', missing: '当前模型供应商不存在，配置中引用：',
   inUse: (names: string) => `其他实例使用中：${names}`, selectedBy: (names: string) => `已被 ${names} 选用（未运行）`,
+  names: (list: string[]) => list.join('、'),
   readiness: { ready: '可连接', 'needs-setup': '需要完善配置', 'runtime-unavailable': '运行环境未就绪', invalid: '配置错误', 'module-missing': '模块不可用', draft: '草稿' } as Record<string, string>,
   basic: '基本信息', connection: '连接', modelSection: '模型与生成', moduleSection: '模块设置', pricing: '成本与计价', advanced: '高级协议',
   name: '供应商名称', module: '供应商类型', url: 'API 地址', key: 'API Key', model: '模型',
@@ -26,13 +36,14 @@ const zh = {
   unsaved: '已暂存；保存后写入配置。',
   deleteConfirm: '删除供应商及其目录中的全部文件？', referenced: '此供应商正在被以下 Bot 使用，不能删除：', reload: '重新加载',
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   pageTitle: 'Model connections', navLabel: 'Model connections', navGroup: 'Core', create: '+ New connection instance', newName: 'Unnamed instance',
   createHint: 'An instance is one set of provider settings saved as a card.',
   empty: 'No model connections yet', emptyHint: 'Add a model connection to enable inference.',
   eraseConfirm: 'Confirm delete',
   connect: 'Connect', activate: 'Set current connection', active: 'Current model', missing: 'Current model connection is missing: ',
   inUse: (names: string) => `In use by: ${names}`, selectedBy: (names: string) => `Selected by ${names} (not running)`,
+  names: (list: string[]) => list.join(', '),
   readiness: { ready: 'Ready to connect', 'needs-setup': 'Needs setup', 'runtime-unavailable': 'Runtime unavailable', invalid: 'Invalid configuration', 'module-missing': 'Module unavailable', draft: 'Draft' },
   basic: 'Basic information', connection: 'Connection', modelSection: 'Model and generation', moduleSection: 'Module settings', pricing: 'Pricing', advanced: 'Advanced protocol',
   name: 'Connection name', module: 'Connection type', url: 'API URL', key: 'API Key', model: 'Model',
@@ -53,4 +64,6 @@ const en: typeof zh = {
   unsaved: 'Kept as a draft; written on save.',
   deleteConfirm: 'Delete this connection and all files in its directory?', referenced: 'This connection is used by these bots and cannot be deleted: ', reload: 'Reload',
 };
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

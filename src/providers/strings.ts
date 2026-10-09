@@ -1,4 +1,13 @@
 import { pick, type Language } from '../core/language.ts';
+import { text as zhHant } from './strings.zh-Hant.ts';
+import { text as ja } from './strings.ja.ts';
+import { text as ko } from './strings.ko.ts';
+import { text as fr } from './strings.fr.ts';
+import { text as de } from './strings.de.ts';
+import { text as es419 } from './strings.es-419.ts';
+import { text as ptBR } from './strings.pt-BR.ts';
+import { text as it } from './strings.it.ts';
+import { text as ru } from './strings.ru.ts';
 
 /** Validation errors that reach the console as `{ error }` from the provider settings. */
 const zh = {
@@ -35,7 +44,7 @@ const zh = {
   noModel: '未选模型',
   noSecret: (name: string) => `缺少密钥 ${name}`,
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   profileObject: 'Model configuration must be an object',
   modelRequired: 'Model name cannot be empty',
   thinkingBoolean: 'Reasoning switch must be a boolean',
@@ -70,4 +79,6 @@ const en: typeof zh = {
   noModel: 'No model selected',
   noSecret: (name: string) => `Missing secret ${name}`,
 };
-export const text = (language: Language) => pick(language, { zh, en });
+export const text = (language: Language) => pick(language, {
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

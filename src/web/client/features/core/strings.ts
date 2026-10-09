@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 
 const zh = {
   // index.ts
@@ -53,7 +62,7 @@ const zh = {
   unitMsgs: '条',
   unitPeople: '人',
   runPaused: '暂停',
-  runBlocked: '闹钟阻断',
+  runBlocked: '投递扣留',
   runRunning: '进行',
 
   // runlog.ts
@@ -87,7 +96,7 @@ const zh = {
   ended: '已结束',
 };
 
-const en: typeof zh = {
+export const en: typeof zh = {
   // index.ts
   navLabel: 'Diagnostics',
   navGroup: 'Core',
@@ -140,7 +149,7 @@ const en: typeof zh = {
   unitMsgs: 'msgs',
   unitPeople: 'users',
   runPaused: 'paused',
-  runBlocked: 'schedule blocked',
+  runBlocked: 'delivery held',
   runRunning: 'running',
 
   // runlog.ts
@@ -174,4 +183,6 @@ const en: typeof zh = {
   ended: 'ended',
 };
 
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

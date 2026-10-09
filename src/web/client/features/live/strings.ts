@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 
 const zh = {
   // index.ts
@@ -36,7 +45,7 @@ const zh = {
   chipBatchesPost: ' 批',
   chipPaused: '⏸ 已暂停',
   chipBehind: (n: number) => `待投递 ${n}`,
-  chipScheduleBlocked: '◷ 闹钟阻断',
+  chipScheduleBlocked: '◷ 投递扣留中',
   chipTruncating: '截断中',
   chipOnline: '在线 ',
   phaseDelivering: '正在把事件写入上下文',
@@ -138,7 +147,7 @@ const zh = {
   obStart: '打个招呼？',
 };
 
-const en: typeof zh = {
+export const en: typeof zh = {
   // index.ts
   navLabel: 'Terminal',
   currentProvider: 'Current model provider',
@@ -155,7 +164,7 @@ const en: typeof zh = {
   exportConfirmTitle: 'Export diagnostics',
   exportConfirmBody: 'The bundle contains conversations, prompts, events, tool calls, usage and run logs. Secrets in the config are redacted; everything else is written as is. Check it for private information before sharing.',
   composerFork: 'Viewing a background session; messages sent here still go to the main session',
-  composerNoProvider: 'No usable provider. Set one up on the LLM Provider page.',
+  composerNoProvider: 'No usable provider. Set one up on the Model connections page.',
   composerQueued: 'Terminal channel is reconnecting; message queued',
   emptyConnecting: 'Connecting to the debug channel…',
   ctxTitle: (total: string, max: string | null) =>
@@ -174,7 +183,7 @@ const en: typeof zh = {
   chipBatchesPost: ' batches',
   chipPaused: '⏸ Paused',
   chipBehind: (n: number) => `${n} pending delivery`,
-  chipScheduleBlocked: '◷ Schedule blocked',
+  chipScheduleBlocked: '◷ Delivery held',
   chipTruncating: 'Truncating',
   chipOnline: 'online ',
   phaseDelivering: 'Writing events into context',
@@ -224,7 +233,7 @@ const en: typeof zh = {
   refusal: 'Refusal',
   synthetic: 'synthetic',
   encryptedPayload: (n: number) => `Encrypted payload ${n} chars`,
-  rawItems: 'Raw Items',
+  rawItems: 'Raw items',
   headStart: 'Session head · not persisted',
   headEnd: 'Session head · end',
   sessionEmpty: 'session is empty',
@@ -277,4 +286,6 @@ const en: typeof zh = {
   obStart: 'Say hello?',
 };
 
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

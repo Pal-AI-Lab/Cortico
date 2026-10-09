@@ -23,7 +23,10 @@ export const reasoningPanel: ConsolePanel = {
     const outcome = (probe: ProbeOutcome | undefined): string =>
       !probe ? S.skipped : probe.ok ? S.accepted : S.rejected(probe.status, probe.error);
     const describe = (result: DetectResult): string =>
-      `${S.outcome(outcome(result.bare), outcome(result.withReasoning))}。${result.verdict ? S.applied(labels[result.verdict]) : S.undetermined}`;
+      S.detected(
+        S.outcome(outcome(result.bare), outcome(result.withReasoning)),
+        result.verdict ? S.applied(labels[result.verdict]) : S.undetermined,
+      );
 
     async function save(groupId: string, key: string, value: string): Promise<void> {
       message.classList.remove('bad');

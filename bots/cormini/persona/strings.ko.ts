@@ -1,0 +1,43 @@
+import type { consoleEn, panelEn } from './strings.ts';
+
+export const consoleText: Partial<typeof consoleEn> = {
+  orientation: 'Persona의 존재 방식과 메타인지에 대한 설명.',
+  constitution: 'Persona의 장기 원칙. 시스템 프리픽스를 다시 불러오거나 새 컨텍스트를 시작하면 적용됩니다.',
+  memoryNote: '기억 규칙: 봇의 파일이 어떻게 저장되고 언제 저절로 떠오르는지.',
+  workspaceLabel: '작업 공간(봇이 직접 쓴 기억 파일)',
+  workspaceNote: '헌법을 제외한 모든 작업 공간 파일을 되돌릴 수 없게 삭제합니다. 헌법과 인격 체크포인트는 건드리지 않습니다',
+  workspaceStat: (n: number) => `파일 ${n}개(헌법 제외)`,
+  workspaceCleared: (n: number) => `작업 공간 파일 ${n}개를 삭제했습니다. 헌법은 건드리지 않았습니다`,
+  firstTurnUser: '첫 턴 · 사용자 입력',
+  firstTurnUserDesc: '합성한 첫 턴의 user 메시지입니다. 이것과 응답 중 하나라도 비어 있으면 턴 전체를 넣지 않습니다.',
+  firstTurnThinking: '첫 턴 · 추론',
+  firstTurnThinkingDesc: '합성한 첫 assistant 턴의 추론(reasoning_content)입니다. 비어 있으면 그 턴에 추론이 없습니다. openai-responses-compat 방언은 추론을 회신하지 않으므로 이런 엔드포인트에서는 이 부분이 전송되지 않습니다.',
+  firstTurnReply: '첫 턴 · 응답',
+  firstTurnReplyDesc: '합성한 첫 턴의 assistant 응답 본문입니다.',
+};
+
+export const panelText: Partial<typeof panelEn> = {
+  workspace: '작업 공간',
+  workspaceDesc: '저장하면 operator 이름으로 작업 공간 Git 저장소에 커밋됩니다.',
+  history: '버전 기록',
+  saved: '저장',
+  removed: '삭제',
+  renamed: '이름 변경',
+  committed: (done: string, hash: string) => `${done} 후 커밋했습니다(${hash})`,
+  notCommitted: (done: string) => `${done} 완료(git에 커밋하지 않음: 변경 사항이 없거나 git을 사용할 수 없음)`,
+  missingArg: (what: string) => `${what}이(가) 없습니다`,
+  movedOrDeleted: '파일이 이동되었거나 삭제되었습니다',
+  changedBeforeSave: '파일이 다른 곳에서 수정되었습니다. 다시 불러온 뒤 저장하세요',
+  changedBeforeRemove: '파일이 다른 곳에서 수정되었습니다. 다시 불러온 뒤 삭제하세요',
+  changedBeforeRename: '파일이 다른 곳에서 수정되었습니다. 다시 불러온 뒤 이름을 바꾸세요',
+  fileMissing: (path: string) => `파일이 없습니다: ${path}`,
+  isDirectory: (path: string) => `${path}은(는) 파일이 아니라 폴더입니다`,
+  tooLargeToPreview: '파일이 1MB를 넘어 미리 보기를 하지 않습니다',
+  binaryFile: '바이너리 파일이라 미리 보기를 하지 않습니다',
+  contentNotString: 'content는 문자열이어야 합니다',
+  nulInText: '텍스트에 NUL 문자를 넣을 수 없습니다',
+  tooLargeToSave: '파일이 1MB를 넘어 저장하지 않았습니다',
+  nameTaken: '같은 이름의 파일이 이미 있습니다',
+  unknownMethod: (panel: string, method: string) => `알 수 없는 패널 메서드: ${panel}.${method}`,
+  unknownPanel: (panel: string) => `알 수 없는 패널: ${panel}`,
+};

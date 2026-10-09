@@ -1,4 +1,14 @@
 /** 端点表面板与报价编辑器的文案。按 `ctx.language` 选表——面板的语言跟着调用它的那一页走。 */
+import { panel as zhHant } from './strings.zh-Hant.ts';
+import { panel as ja } from './strings.ja.ts';
+import { panel as ko } from './strings.ko.ts';
+import { panel as fr } from './strings.fr.ts';
+import { panel as de } from './strings.de.ts';
+import { panel as es419 } from './strings.es-419.ts';
+import { panel as ptBR } from './strings.pt-BR.ts';
+import { panel as it } from './strings.it.ts';
+import { panel as ru } from './strings.ru.ts';
+
 const zh = {
   saved: '已保存，下一次请求生效。',
   instancesTitle: '供应实例',
@@ -102,7 +112,7 @@ const zh = {
     '空数组恢复模块默认报价；rules 为空数组表示明确免费。完整规则支持输入阶梯、服务档及额外计量单位。',
   viewSnapshot: '查看当前生效报价快照',
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   saved: 'Saved; applies from the next request.',
   instancesTitle: 'Provider instances',
   instancesDescription:
@@ -118,7 +128,7 @@ const en: typeof zh = {
   baseUrl: 'Provider URL',
   secretName: 'Key variable name',
   secretNamePlaceholder: 'Environment variable name; empty = no auth',
-  secretStatus: 'API key',
+  secretStatus: 'API Key',
   secretSource: { env: 'process env', file: 'endpoint .env', none: 'not set' },
   secretValue: 'Key value',
   secretValuePlaceholder: 'Written to the endpoint .env only; never shown',
@@ -130,7 +140,7 @@ const en: typeof zh = {
   extraHeaders: 'Extra headers (JSON object)',
   extraBody: 'Extra body (JSON object)',
   jsonObjectRequired: (label: string) => `${label} must be a JSON object`,
-  advancedProtocolTitle: 'Protocol & Request Overrides',
+  advancedProtocolTitle: 'Protocol and request overrides',
   advancedProtocolDescription: 'Advanced options for OpenAI Responses compatible endpoints (custom path and extra JSON fields).',
   modelFieldLabel: 'Model identifier',
   effortFieldLabel: 'Reasoning effort',
@@ -205,9 +215,11 @@ const en: typeof zh = {
     'Base rates apply to all models; input bands and service tiers go in the full rules below.',
   costFormOverridden:
     'The saved pricing is not a shape the three-rate form can express; the full rules below apply. Editing the form replaces them.',
-  editFull: 'Advanced Pricing Rules (JSON)',
+  editFull: 'Advanced pricing rules (JSON)',
   fullNote:
     'An empty array restores the module default quote; an empty rules array means explicitly free. Full rules support input bands, service tiers and extra meters.',
   viewSnapshot: 'View active pricing snapshot',
 };
-export const panel = { zh, en };
+export const panel = {
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+};

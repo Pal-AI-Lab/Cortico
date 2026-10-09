@@ -1,4 +1,13 @@
 import { pick, type Language } from '../../core/language.ts';
+import { text as zhHant } from './strings.zh-Hant.ts';
+import { text as ja } from './strings.ja.ts';
+import { text as ko } from './strings.ko.ts';
+import { text as fr } from './strings.fr.ts';
+import { text as de } from './strings.de.ts';
+import { text as es419 } from './strings.es-419.ts';
+import { text as ptBR } from './strings.pt-BR.ts';
+import { text as it } from './strings.it.ts';
+import { text as ru } from './strings.ru.ts';
 
 /** Server side: ConfigGroups, manifest labels and receipts built by `ProviderSettings`. */
 const zh = {
@@ -46,7 +55,7 @@ const zh = {
   modelMissing: '请选择模型。',
   apiKeyMissing: '请配置 API Key。',
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   connectionDescription: 'Requests bind at start; changes apply from the next request.',
   baseUrl: 'Provider URL',
   secret: 'Secret environment variable',
@@ -91,4 +100,6 @@ const en: typeof zh = {
   modelMissing: 'Model is required.',
   apiKeyMissing: 'API Key is required.',
 };
-export const text = (language: Language) => pick(language, { zh, en });
+export const text = (language: Language) => pick(language, {
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});

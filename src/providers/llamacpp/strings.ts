@@ -1,4 +1,13 @@
 import { pick, type Language } from '../../core/language.ts';
+import { text as zhHant, panel as panelZhHant } from './strings.zh-Hant.ts';
+import { text as ja, panel as panelJa } from './strings.ja.ts';
+import { text as ko, panel as panelKo } from './strings.ko.ts';
+import { text as fr, panel as panelFr } from './strings.fr.ts';
+import { text as de, panel as panelDe } from './strings.de.ts';
+import { text as es419, panel as panelEs419 } from './strings.es-419.ts';
+import { text as ptBR, panel as panelPtBR } from './strings.pt-BR.ts';
+import { text as it, panel as panelIt } from './strings.it.ts';
+import { text as ru, panel as panelRu } from './strings.ru.ts';
 
 /** Server side: ConfigGroup titles, validation errors, runtime and server state details. */
 const zh = {
@@ -46,7 +55,7 @@ const zh = {
   saveBeforeRuntime: '请先保存配置，再执行运行时操作。',
   saveBeforeModels: '请先保存配置，再操作模型。',
 };
-const en: typeof zh = {
+export const en: typeof zh = {
   tierOff: 'Off',
   tierOn: 'On',
   releaseRequired: 'The release tag cannot be empty',
@@ -92,7 +101,9 @@ const en: typeof zh = {
   saveBeforeModels: 'Save configuration before model operations.',
 };
 export type Text = typeof zh;
-export const text = (language: Language) => pick(language, { zh, en });
+export const text = (language: Language) => pick(language, {
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});
 
 /** Browser side: the two panels and the runtime config groups pick by the request language. */
 const panelZh = {
@@ -185,7 +196,7 @@ const panelZh = {
   } as Record<string, string>,
   serverDown: "llama-server 不可达；请检查端点地址与服务状态。",
 };
-const panelEn: typeof panelZh = {
+export const panelEn: typeof panelZh = {
   runtimeTitle: 'Runtime',
   modelsTitle: 'Models',
   managedOff: "This endpoint is externally managed. Enable hosting to manage its llama-server process through Cortico.",
@@ -206,9 +217,9 @@ const panelEn: typeof panelZh = {
     "Windows Smart App Control is in enforced mode. " +
     'If startup fails, check Windows Security for a block record. If a block is confirmed, use a runtime that meets the trust requirements.',
   server: 'Server',
-  serverSection: 'Server Process & Endpoint',
+  serverSection: 'Server process and endpoint',
   serverSectionDesc: 'llama-server local process and listening status.',
-  runtimeSection: 'Binary Runtime Environment',
+  runtimeSection: 'Binary runtime environment',
   runtimeSectionDesc: 'Official llama.cpp binary and dependencies.',
   releaseHint: 'Upstream release tag, such as b10930; changing it downloads another build.',
   backendHint: 'Official builds for this platform; CUDA builds are paired with the upstream cudart package.',
@@ -246,7 +257,7 @@ const panelEn: typeof panelZh = {
   pull: 'Pull',
   pullPlaceholder: 'HuggingFace repo, e.g. ggml-org/Qwen2.5-Coder-7B-Instruct-GGUF',
   use: 'Use',
-  useTitle: 'Put this model into the model section',
+  useTitle: 'Put this model into the Model and generation section',
   search: 'Search',
   searchPlaceholder: 'Search GGUF repositories on HuggingFace, e.g. qwen3',
   searchFailed: (reason: string) => `Search failed: ${reason}`,
@@ -275,4 +286,7 @@ const panelEn: typeof panelZh = {
   } as Record<string, string>,
   serverDown: "llama-server is unreachable; check the endpoint URL and server status.",
 };
-export const panel = { zh: panelZh, en: panelEn };
+export const panel = {
+  zh: panelZh, en: panelEn, 'zh-Hant': panelZhHant, ja: panelJa, ko: panelKo, fr: panelFr,
+  de: panelDe, 'es-419': panelEs419, 'pt-BR': panelPtBR, it: panelIt, ru: panelRu,
+};

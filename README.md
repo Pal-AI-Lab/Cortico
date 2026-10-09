@@ -33,6 +33,8 @@
 
 Cortico is an agent harness designed around an event stream, built for autonomous, continuously running agents with mixed real-time input. It suits persona bots, AI streamers, roleplay, companionship, and many other downstream tasks. A Cortico bot is far more than a chat bot: with an extensible agent system designed around the event stream, Cortico helps you build persistent AI agents capable of handling complex inputs. It supports flexible external extensions, allowing a single bot to simultaneously observe and act across multiple environments—including chat platforms, live games, and even physical environments. Cortico's goal: bring your AI to the world!
 
+**Languages**: the web console is in 简体中文, 繁體中文, English, 日本語, 한국어, Français, Deutsch, Español (Latinoamérica), Português (Brasil), Italiano and Русский. The console language does not change what the model reads; text Core adds to the model context is in English.
+
 ## Features
 
 1. 🆓 Free and open source!
@@ -60,6 +62,8 @@ How to use: first, clone the repository from [https://github.com/Pal-AI-Lab/Cort
 3. No coding experience or knowledge needed.
 4. Once the extension is finished, publish it to npm to share it with everyone~
 
+npm packages with the `cortico-world`, `cortico-provider` or `cortico-bot` keyword are listed on the console's Extensions page with their total, 30-day and 7-day downloads from npm.
+
 <sub>Cortina is designed on the [TINA (There Is No App) Spec](https://github.com/Pal-AI-Lab/ThereIsNoApp) proposed by Pal AI Lab. There is no app here: language is the code, the agent is the runtime.</sub>
 
 ## Quick Start
@@ -77,6 +81,8 @@ On your first launch with an empty deployment directory, Cortico automatically i
 **`http://127.0.0.1:7788/`**
 
 The terminal page opens with three onboarding steps: configure a model endpoint, inspect active Worlds, and adjust the system prompt. Once an endpoint is configured, click **Say hello** to let the bot initiate conversation. All endpoints, credentials, and runtime parameters can be adjusted directly from the console; saved changes apply to the next request, and a managed runtime's launch parameters apply on its next start.
+
+The console starts in `language` from `config.json`, else `CORTICO_LANGUAGE`, else the system locale (Simplified Chinese when no locale is available). Settings → General switches it for the current browser without restarting the bot.
 
 ### 2. Managing Deployments
 Each deployment is an isolated configuration directory inside `deployments/` (see [deployment.md](docs/deployment.md)). To add another one:
@@ -134,6 +140,8 @@ Cortico strictly separates concerns across four distinct layers:
 | Minecraft | `minecraft` | Mineflayer client for vanilla servers: game state observations and high-level autonomous action dispatch |
 | Web Search | `websearch` | Real-time web search integration powered by Brave Search API |
 
+Each release also publishes `minecraft`, `qq`, `bilibili` and `websearch` to npm as `cortico-world-<id>` at the framework's version, for apps built on Cortico that do not bundle them. Where the framework already has a World with the same id, the installed package is not loaded.
+
 ## Model Providers
 
 | Provider | Supported Services |
@@ -157,6 +165,7 @@ We welcome issues and pull requests!
 * Please read [CONTRIBUTING.md](CONTRIBUTING.md) for architectural guidelines and code separation rules.
 * Refer to [AGENTS.md](AGENTS.md) for our engineering conventions and code review checklist.
 * AI-assisted contributions are welcome, provided the author thoroughly understands and can explain all submitted logic.
+* Console text lives in `strings.ts` (complete in `zh` and `en`) with each other language in `strings.<lang>.ts` beside it; a key a translation leaves out falls back to `zh` for `zh-Hant` and to `en` for the rest. See the language section of [console.md](docs/console.md#语言).
 
 Run automated verifications before submitting:
 
