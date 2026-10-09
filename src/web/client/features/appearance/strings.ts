@@ -1,4 +1,13 @@
 import { pick } from '../../core/language.ts';
+import { S as zhHant } from './strings.zh-Hant.ts';
+import { S as ja } from './strings.ja.ts';
+import { S as ko } from './strings.ko.ts';
+import { S as fr } from './strings.fr.ts';
+import { S as de } from './strings.de.ts';
+import { S as es419 } from './strings.es-419.ts';
+import { S as ptBR } from './strings.pt-BR.ts';
+import { S as it } from './strings.it.ts';
+import { S as ru } from './strings.ru.ts';
 
 const zh = {
   pageTitle: '外观',
@@ -42,7 +51,7 @@ const zh = {
   navLabel: '外观',
 };
 
-const en: typeof zh = {
+export const en: typeof zh = {
   pageTitle: 'Appearance',
   deleteScheme: 'Delete scheme',
   schemeSheetTitle: 'Color scheme',
@@ -84,4 +93,6 @@ const en: typeof zh = {
   navLabel: 'Appearance',
 };
 
-export const S = pick({ zh, en });
+export const S = pick({
+  zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
+});
