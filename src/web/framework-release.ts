@@ -39,10 +39,10 @@ export async function checkFrameworkRelease(
   if (!response.ok) throw new Error(`GitHub Releases: HTTP ${response.status}`);
   const release = await response.json() as { tag_name?: unknown; html_url?: unknown };
   if (typeof release.tag_name !== 'string' || typeof release.html_url !== 'string') {
-    throw new Error('GitHub Releases: 响应缺少版本或链接');
+    throw new Error('GitHub Releases: the response lacks a version or link');
   }
   const url = new URL(release.html_url);
-  if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('GitHub Releases: 链接无效');
+  if (url.protocol !== 'https:' || url.hostname !== 'github.com') throw new Error('GitHub Releases: invalid link');
   return {
     currentVersion: version,
     ...(isNewer(release.tag_name, version)

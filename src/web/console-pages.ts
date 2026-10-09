@@ -5,6 +5,7 @@ import { basename, join } from 'node:path';
 import type { Logger } from '../core/types.ts';
 import { extensionAssetUrl, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
 import type { Language } from '../core/language.ts';
+import { serverText } from './strings.ts';
 import {
   CONSOLE_PROTOCOL_VERSION,
   assetKeyForPage,
@@ -290,13 +291,13 @@ export class ConsolePageRegistry {
   > {
     const c = await this.find(pageId, language);
     if (!c) {
-      return { ok: false, failure: { kind: 'no-provider', message: `没有这个 provider: ${pageId}` } };
+      return { ok: false, failure: { kind: 'no-provider', message: serverText(language).noPage(pageId) } };
     }
     const panel = (c.panels ?? []).find((p) => p.id === panelId);
     if (!panel) {
       return {
         ok: false,
-        failure: { kind: 'no-panel', message: `provider ${pageId} 没有声明面板: ${panelId}` },
+        failure: { kind: 'no-panel', message: serverText(language).noPanel(pageId, panelId) },
       };
     }
     return { ok: true, contribution: c, panel };
@@ -322,14 +323,14 @@ export class ConsolePageRegistry {
     if (transport === 'get' && !(found.panel.getMethods ?? []).includes(method)) {
       return {
         ok: false,
-        failure: { kind: 'method-not-allowed', message: `面板 ${panelId} 的方法 ${method} 只允许 POST` },
+        failure: { kind: 'method-not-allowed', message: serverText(language).postOnly(panelId, method) },
       };
     }
     const c = found.contribution;
     if (!c.invoke) {
       return {
         ok: false,
-        failure: { kind: 'no-surface', message: `provider ${pageId} 没有面板数据面` },
+        failure: { kind: 'no-surface', message: serverText(language).noPanelSurface(pageId) },
       };
     }
     return { ok: true, value: await c.invoke(panelId, method, args) };
@@ -353,13 +354,13 @@ export class ConsolePageRegistry {
     // 通道名与面板 id 同一个命名空间,但不要求声明过同名面板:没有面板的页也能有流。
     const c = await this.find(pageId, language);
     if (!c) {
-      return { ok: false, failure: { kind: 'no-provider', message: `没有这个 provider: ${pageId}` } };
+      return { ok: false, failure: { kind: 'no-provider', message: serverText(language).noPage(pageId) } };
     }
     const stream = c.stream;
     if (!stream) {
       return {
         ok: false,
-        failure: { kind: 'no-surface', message: `provider ${pageId} 没有流式面` },
+        failure: { kind: 'no-surface', message: serverText(language).noStreamSurface(pageId) },
       };
     }
     return { ok: true, open: (socket) => stream.call(c, panelId, socket) };

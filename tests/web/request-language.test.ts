@@ -57,7 +57,10 @@ beforeAll(async () => {
     dataDir: dir,
     language: 'zh',
     getStatus: () => ({}),
-    run: { pause: () => {}, resume: () => {}, isPaused: () => false },
+    run: {
+      pause: () => {}, resume: () => {}, isPaused: () => false,
+      shutdown: async () => ({ complete: true, steps: [{ label: 'flush', ok: true, elapsedMs: 1 }] }),
+    },
     storage: (language) => [{
       key: 'demo', owner: 'core', kind: 'memory', label: language === 'en' ? 'Demo' : '演示',
       stat: () => '', clear: () => (language === 'en' ? 'cleared' : '已清'),
@@ -101,6 +104,14 @@ describe('每个请求自带界面语言', () => {
     expect(en.parts[0].label).toBe('Demo');
     const cleared = await postJson<{ result: string }>('/api/storage/clear?key=demo', 'en');
     expect(cleared.result).toBe('cleared');
+  });
+
+  it('关机回执的整句与接口报错按请求语言', async () => {
+    const zh = await postJson<{ result: string }>('/api/run/shutdown');
+    const en = await postJson<{ result: string }>('/api/run/shutdown', 'en');
+    expect(zh.result).toBe('本地关机完成(1 步全部走完)，进程即将退出');
+    expect(en.result).toBe('Local shutdown finished (all 1 steps completed). The process is about to exit');
+    expect((await getJson<{ error: string }>('/api/extensions', 'en')).error).toBe('Extension management is unavailable');
   });
 
   it('WebSocket 握手的查询串选语言,那条流上的系统提示按它给', async () => {
