@@ -87,12 +87,14 @@ function buildTree(absDir: string, rel: string): WorkspaceNode[] {
   return nodes;
 }
 
-function commitNote(hash: string | null, ok: string): string {
-  return hash ? `${ok}并提交(${hash})` : `${ok}(git 未提交:无改动或不可用)`;
+type Text = ReturnType<typeof panelText>;
+
+function commitNote(t: Text, hash: string | null, done: string): string {
+  return hash ? t.committed(done, hash) : t.notCommitted(done);
 }
 
-function str(v: unknown, what: string): string {
-  if (typeof v !== 'string' || v.trim() === '') throw new Error(`缺少 ${what}`);
+function str(t: Text, v: unknown, what: string): string {
+  if (typeof v !== 'string' || v.trim() === '') throw new Error(t.missingArg(what));
   return v.trim();
 }
 
@@ -107,34 +109,35 @@ const conflict = (error: string, currentRevision?: string): WorkspaceWriteResult
     : { ok: false, conflict: true, error, currentRevision };
 
 function checkBase(
+  t: Text,
   ws: GitWorkspaceMemory,
   path: string,
   baseRevision: string | null,
-  verb: '保存' | '删除' | '改名',
+  action: 'save' | 'remove' | 'rename',
 ): WorkspaceWriteResult | null {
   if (baseRevision === null) return null;
   const abs = ws.resolveSafe(path);
   if (!existsSync(abs) || statSync(abs).isDirectory()) {
-    return conflict('文件已被移动或删除');
+    return conflict(t.movedOrDeleted);
   }
   const current = revisionOf(readFileSync(abs));
   if (current !== baseRevision) {
-    return verb === '保存'
-      ? conflict(`文件已在别处被修改，请重新载入后再${verb}`, current)
-      : conflict(`文件已在别处被修改，请重新载入后再${verb}`);
+    return action === 'save'
+      ? conflict(t.changedBeforeSave, current)
+      : conflict(action === 'remove' ? t.changedBeforeRemove : t.changedBeforeRename);
   }
   return null;
 }
 
-function readFilePanel(ws: GitWorkspaceMemory, rel: string): WorkspaceFile {
+function readFilePanel(t: Text, ws: GitWorkspaceMemory, rel: string): WorkspaceFile {
   const path = ws.normalize(rel);
   const abs = ws.resolveSafe(path);
-  if (!existsSync(abs)) throw new Error(`文件不存在:${path}`);
+  if (!existsSync(abs)) throw new Error(t.fileMissing(path));
   const st = statSync(abs);
-  if (st.isDirectory()) throw new Error(`${path} 是目录,不是文件`);
-  if (st.size > FILE_MAX_BYTES) throw new Error('文件超过1MB,拒绝预览');
+  if (st.isDirectory()) throw new Error(t.isDirectory(path));
+  if (st.size > FILE_MAX_BYTES) throw new Error(t.tooLargeToPreview);
   const buf = readFileSync(abs);
-  if (buf.includes(0)) throw new Error('二进制文件,拒绝预览');
+  if (buf.includes(0)) throw new Error(t.binaryFile);
   return {
     path,
     content: buf.toString('utf8'),
@@ -144,73 +147,75 @@ function readFilePanel(ws: GitWorkspaceMemory, rel: string): WorkspaceFile {
   };
 }
 
-function writeFilePanel(ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
+function writeFilePanel(t: Text, ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
   const [rawPath, content, base, createOnly] = args;
-  const path = str(rawPath, 'path');
-  if (typeof content !== 'string') throw new Error('content 必须是字符串');
-  if (content.includes('\0')) throw new Error('文本不能包含 NUL 字符');
+  const path = str(t, rawPath, 'path');
+  if (typeof content !== 'string') throw new Error(t.contentNotString);
+  if (content.includes('\0')) throw new Error(t.nulInText);
   if (Buffer.byteLength(content, 'utf8') > FILE_MAX_BYTES) {
-    throw new Error('文件超过1MB，拒绝保存');
+    throw new Error(t.tooLargeToSave);
   }
   if (createOnly === true && ws.exists(path)) {
-    return conflict('同名文件已经存在');
+    return conflict(t.nameTaken);
   }
-  const blocked = checkBase(ws, path, optRevision(base), '保存');
+  const blocked = checkBase(t, ws, path, optRevision(base), 'save');
   if (blocked) return blocked;
   ws.writeFileAtomic(path, content);
   const hash = ws.git.commitAll(`控制台编辑 ${ws.normalize(path)}`, AUTHOR_OPERATOR);
-  return { ok: true, result: commitNote(hash, '已保存'), revision: revisionOf(content) };
+  return { ok: true, result: commitNote(t, hash, t.saved), revision: revisionOf(content) };
 }
 
-function removeFilePanel(ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
-  const path = str(args[0], 'path');
-  const blocked = checkBase(ws, path, optRevision(args[1]), '删除');
+function removeFilePanel(t: Text, ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
+  const path = str(t, args[0], 'path');
+  const blocked = checkBase(t, ws, path, optRevision(args[1]), 'remove');
   if (blocked) return blocked;
   ws.deleteFile(path);
   const hash = ws.git.commitAll(`控制台删除 ${ws.normalize(path)}`, AUTHOR_OPERATOR);
-  return { ok: true, result: commitNote(hash, '已删除'), revision: '' };
+  return { ok: true, result: commitNote(t, hash, t.removed), revision: '' };
 }
 
-function renameFilePanel(ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
-  const from = str(args[0], 'from');
-  const to = str(args[1], 'to');
-  const blocked = checkBase(ws, from, optRevision(args[2]), '改名');
+function renameFilePanel(t: Text, ws: GitWorkspaceMemory, args: unknown[]): WorkspaceWriteResult {
+  const from = str(t, args[0], 'from');
+  const to = str(t, args[1], 'to');
+  const blocked = checkBase(t, ws, from, optRevision(args[2]), 'rename');
   if (blocked) return blocked;
   ws.renameFile(from, to);
   const hash = ws.git.commitAll(
     `控制台改名 ${ws.normalize(from)} → ${ws.normalize(to)}`,
     AUTHOR_OPERATOR,
   );
-  return { ok: true, result: commitNote(hash, '已改名'), revision: '' };
+  return { ok: true, result: commitNote(t, hash, t.renamed), revision: '' };
 }
 
-/** `workspace` 与 `history` 两块面板的方法分派;变体先处理自己那块,其余交给它。 */
+/** `workspace` 与 `history` 两块面板的方法分派;变体先处理自己那块,其余交给它。回执与报错按 `language`。 */
 export function workspaceInvoke(
   memory: GitWorkspaceMemory,
+  language: Language = 'zh',
 ): (panel: string, method: string, args: unknown[]) => Promise<unknown> {
   const ws = memory;
   const git = ws.git;
+  const t = panelText(language);
   return async (panel: string, method: string, args: unknown[]): Promise<unknown> => {
     if (panel === 'workspace') {
       switch (method) {
         case 'tree':
           return { nodes: buildTree(ws.memoryDir, ''), root: ws.memoryDir };
         case 'read':
-          return readFilePanel(ws, str(args[0], 'path'));
+          return readFilePanel(t, ws, str(t, args[0], 'path'));
         case 'write':
-          return writeFilePanel(ws, args);
+          return writeFilePanel(t, ws, args);
         case 'remove':
-          return removeFilePanel(ws, args);
+          return removeFilePanel(t, ws, args);
         case 'rename':
-          return renameFilePanel(ws, args);
+          return renameFilePanel(t, ws, args);
         case 'history':
-          return { commits: git.log({ path: str(args[0], 'path'), limit: 100 }) };
+          return { commits: git.log({ path: str(t, args[0], 'path'), limit: 100 }) };
         case 'diff':
-          return { diff: git.diff(str(args[0], 'hash'), { path: str(args[1], 'path') }) };
+          return { diff: git.diff(str(t, args[0], 'hash'), { path: str(t, args[1], 'path') }) };
         case 'at':
-          return { content: git.fileAt(str(args[0], 'hash'), str(args[1], 'path')) };
+          return { content: git.fileAt(str(t, args[0], 'hash'), str(t, args[1], 'path')) };
         default:
-          throw new Error(`未知面板方法: ${panel}.${method}`);
+          throw new Error(t.unknownMethod(panel, method));
       }
     }
     if (panel === 'history') {
@@ -225,14 +230,14 @@ export function workspaceInvoke(
         }
         case 'diff': {
           const path = typeof args[1] === 'string' && args[1].trim() ? args[1].trim() : undefined;
-          return { diff: git.diff(str(args[0], 'hash'), path ? { path } : undefined) };
+          return { diff: git.diff(str(t, args[0], 'hash'), path ? { path } : undefined) };
         }
         case 'at':
-          return { content: git.fileAt(str(args[0], 'hash'), str(args[1], 'path')) };
+          return { content: git.fileAt(str(t, args[0], 'hash'), str(t, args[1], 'path')) };
         default:
-          throw new Error(`未知面板方法: ${panel}.${method}`);
+          throw new Error(t.unknownMethod(panel, method));
       }
     }
-    throw new Error(`未知面板: ${panel}`);
+    throw new Error(t.unknownPanel(panel));
   };
 }

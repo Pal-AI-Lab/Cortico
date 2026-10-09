@@ -58,6 +58,14 @@ describe('面板声明', () => {
     await expect(call('nope', 'state')).rejects.toThrow('未知面板');
     await expect(call('workspace', 'nope')).rejects.toThrow('未知面板方法');
   });
+
+  it('读写回执与报错随界面语言走', async () => {
+    const en = workspaceInvoke(new GitWorkspaceMemory({ memoryDir: dir, warn: () => {} }), 'en');
+    const out = await en('workspace', 'write', ['note/a.md', 'x', sha('stale')]) as WorkspaceWriteResult;
+    expect(out.ok).toBe(false);
+    if (!out.ok) expect(out.error).toBe('The file was changed elsewhere; reload it before saving');
+    await expect(en('nope', 'state', [])).rejects.toThrow('Unknown panel: nope');
+  });
 });
 
 describe('工作区:目录树与读取', () => {

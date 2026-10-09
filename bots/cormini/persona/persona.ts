@@ -270,7 +270,7 @@ export class Cormini implements Persona {
           },
         ],
       },
-      invoke: workspaceInvoke(this.memory),
+      invoke: workspaceInvoke(this.memory, language),
     };
   }
 
