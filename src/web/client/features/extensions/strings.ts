@@ -266,7 +266,7 @@ const en: typeof zh = {
 
   version: (v: string) => `Version: ${v}`,
   author: (v: string) => `Author: ${v}`,
-  downloads: (total: string, month: string, week: string) => `${total} total · ${month} / 30d · ${week} / 7d`,
+  downloads: (total: string, month: string, week: string) => `Total ${total} · 30d ${month} · 7d ${week}`,
   labelled: (label: string, value: string) => `${label}: ${value}`,
   metaSeparator: ' · ',
   listSeparator: ', ',

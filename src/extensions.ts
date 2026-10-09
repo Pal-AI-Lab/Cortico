@@ -472,6 +472,11 @@ const SEARCH_MAX_HITS = 1000;
 const DOWNLOADS_API = 'https://api.npmjs.org/downloads/point';
 const DOWNLOADS_BULK_MAX = 128;
 const DOWNLOADS_WINDOW_DAYS = 365;
+/**
+ * 搜索列表要等下载统计回来才出。实测一次统计请求 0.2–0.3 秒;连不上 api.npmjs.org 的机器
+ * (registry 走镜像、npm 主站被挡)会卡到系统的连接超时,三秒没回就不要这一项。
+ */
+const DOWNLOADS_TIMEOUT_MS = 3000;
 /** npm 下载统计的第一天,更早没有数据。 */
 const DOWNLOADS_EPOCH = '2015-01-10';
 
@@ -743,7 +748,9 @@ export class ExtensionManager {
       const counts = new Map<string, number>();
       await Promise.all(groups.map(async (group) => {
         let data: unknown;
-        try { data = await this.fetchJson(`${DOWNLOADS_API}/${period}/${group.join(',')}`); } catch { return; }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), DOWNLOADS_TIMEOUT_MS); });
+        try { data = await Promise.race([this.fetchJson(`${DOWNLOADS_API}/${period}/${group.join(',')}`), late]); } catch { return; } finally { clearTimeout(timer); }
         // 只问一个包时回的是那个包本身,问多个时按包名分开回,没有数据的包是 null
         const entries = group.length === 1 ? { [group[0]!]: data } : (data ?? {}) as Record<string, unknown>;
         for (const name of group) {

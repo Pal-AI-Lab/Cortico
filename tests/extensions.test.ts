@@ -6,7 +6,7 @@
  * 按 kind 分派、契约版本、provider 形状与浏览器端产物在 tests/extensions-manifest.test.ts;
  * 扩展 import 框架的那条解析线在 tests/extensions-runtime.test.ts。
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -362,6 +362,25 @@ describe('ExtensionManager', () => {
     expect(urls.filter((u) => u.endsWith('/a-mod,c-mod'))).toHaveLength(3);
     expect(urls.filter((u) => u.endsWith('/a-mod'))).toHaveLength(2);
     expect(urls.filter((u) => u.endsWith('/@s/b-mod'))).toHaveLength(4);
+  });
+
+  it('search:下载统计迟迟不回,列表照样出,只有搜索端点的月数', async () => {
+    vi.useFakeTimers();
+    try {
+      const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+      const mgr = new ExtensionManager(root, set, {
+        run: async () => ({ code: 0, output: '' }),
+        registry: 'https://registry.example.invalid',
+        fetchJson: (url) => url.includes('/-/v1/search')
+          ? Promise.resolve({ objects: [{ package: { name: 'a-mod', version: '1.0.0', keywords: ['cortico-world'] }, downloads: { monthly: 5 } }] })
+          : new Promise(() => {}),
+      });
+      const pending = mgr.search();
+      await vi.advanceTimersByTimeAsync(3000);
+      expect((await pending).map((h) => h.downloads)).toEqual([{ month: 5 }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('search:最后一页没取满就不算结果不全', async () => {
