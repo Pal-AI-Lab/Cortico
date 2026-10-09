@@ -9,7 +9,8 @@
  * x-path：选择本机路径；x-download：该路径对应的浏览器下载链接。
  */
 import type { CoreConfig } from './types.ts';
-import { pick, type Language } from './language.ts';
+import type { Language } from './language.ts';
+import { validationText } from './strings.ts';
 
 export interface ConfigProperty {
   type: 'integer' | 'number' | 'boolean' | 'string' | 'array' | 'object';
@@ -110,33 +111,6 @@ export function readGroupValues(cfg: CoreConfig, group: ConfigGroup, read?: (pat
   return out;
 }
 
-
-/** 校验回执的措辞。`label` 是声明方给的 title,已经是当前语言。 */
-const VALIDATION_TEXT = {
-  zh: {
-    notNumber: (label: string) => `${label} 必须是数值`,
-    below: (label: string, min: number) => `${label} 不能小于 ${min}`,
-    above: (label: string, max: number) => `${label} 不能大于 ${max}`,
-    notInEnum: (label: string, options: string) => `${label} 只能是 ${options}`,
-    needsPair: (label: string) => `${label} 需要两个数`,
-    first: (label: string) => `${label} 第一项`,
-    second: (label: string) => `${label} 第二项`,
-    pairOrder: (label: string) => `${label} 的第一项不能大于第二项`,
-    empty: (label: string) => `${label} 不能为空`,
-  },
-  en: {
-    notNumber: (label: string) => `${label} must be a number`,
-    below: (label: string, min: number) => `${label} cannot be less than ${min}`,
-    above: (label: string, max: number) => `${label} cannot be greater than ${max}`,
-    notInEnum: (label: string, options: string) => `${label} must be one of ${options}`,
-    needsPair: (label: string) => `${label} needs two numbers`,
-    first: (label: string) => `${label} (first)`,
-    second: (label: string) => `${label} (second)`,
-    pairOrder: (label: string) => `${label}: the first value cannot exceed the second`,
-    empty: (label: string) => `${label} cannot be empty`,
-  },
-};
-const validationText = (language: Language) => pick(language, VALIDATION_TEXT);
 type ValidationText = ReturnType<typeof validationText>;
 
 const numberIn = (

@@ -9,40 +9,8 @@ import type { CoreConfig, World, WorldLifecycleEvent } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
 import type { BotDefinition } from './bot.ts';
 import { updateJsonObject } from './config-file.ts';
-import { pick, type Language } from './core/language.ts';
-
-/** 装配层给控制台的回执与拒绝理由,按发起请求的界面语言取。 */
-const ASSEMBLY_TEXT = {
-  zh: {
-    constructFailed: (detail: string) => `构造失败: ${detail}`,
-    notImplemented: '本地没有找到这个 World 的实现。',
-    unknownWorld: (id: string) => `未知 World: ${id}`,
-    alreadyRunning: (label: string) => `${label} 已启用`,
-    prebuilt: (label: string) => `${label} 是预建实例,不经装配层激活`,
-    activated: (label: string, id: string) => `${label}（${id}）已启用`,
-    deactivated: (label: string, id: string) => `${label}（${id}）已停用`,
-    notActive: (label: string) => `${label} 未激活,没有可重启的实例`,
-    restarted: (label: string) => `${label} 已重启`,
-    toolClash: (other: string, names: string[]) => `工具名与 ${other} 撞名,拒绝挂载: ${names.join(', ')}`,
-    toolReserved: (names: string[]) => `工具名已被 Core 或 Persona 占用,拒绝挂载: ${names.join(', ')}`,
-    unbound: '装配层尚未绑定 core',
-  },
-  en: {
-    constructFailed: (detail: string) => `Construction failed: ${detail}`,
-    notImplemented: 'No implementation of this World was found locally.',
-    unknownWorld: (id: string) => `Unknown World: ${id}`,
-    alreadyRunning: (label: string) => `${label} is already enabled`,
-    prebuilt: (label: string) => `${label} is a prebuilt instance and is not activated through assembly`,
-    activated: (label: string, id: string) => `${label} (${id}) enabled`,
-    deactivated: (label: string, id: string) => `${label} (${id}) disabled`,
-    notActive: (label: string) => `${label} is not active, so there is no instance to restart`,
-    restarted: (label: string) => `${label} restarted`,
-    toolClash: (other: string, names: string[]) => `Tool names clash with ${other}, refusing to mount: ${names.join(', ')}`,
-    toolReserved: (names: string[]) => `Tool names are taken by Core or the Persona, refusing to mount: ${names.join(', ')}`,
-    unbound: 'The assembly layer is not bound to a core yet',
-  },
-};
-const text = (language: Language) => pick(language, ASSEMBLY_TEXT);
+import type { Language } from './core/language.ts';
+import { assemblyText as text } from './strings.ts';
 
 /** 每个 World 配置段的最小形状。 */
 export interface WorldSection {
