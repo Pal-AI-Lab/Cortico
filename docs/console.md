@@ -124,7 +124,8 @@ password 的配置值写出前抹成 `***`。未挂载的接缝那一段为空�
 
 文案用 `pick(language, table)` 选取。表必须有 `zh` 和 `en`,其余语言可缺;缺的语言 `zh-Hant` 读 `zh`,
 其余读 `en`。值为普通对象时,某语言的译文可以只给部分顶层键,缺的键取回退语言的值。译文放在 `strings.ts`
-旁的 `strings.<语言代码>.ts`,默认导出 `Partial<typeof en>`,由 `strings.ts` 导入并放进传给 `pick` 的表。
+旁的 `strings.<语言代码>.ts`,默认导出 `Partial<typeof en>`(`strings.ts` 导出 `en`,译文文件用
+`import type` 取类型),由 `strings.ts` 导入并放进传给 `pick` 的表。
 
 界面语言不改变模型输入。World 的环境提示词模板、工具回执和事件正文使用其实现指定的语言,
 Persona 的文本使用作者选择的语言。
