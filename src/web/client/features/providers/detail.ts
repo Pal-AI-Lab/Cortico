@@ -206,6 +206,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         input.addEventListener('input', () => { errors.get('contextWindow')?.(); change(); }, opts);
       }
     }
+    errors.get('contextWindow')?.();
     body.append(windowNote);
     if (module.serviceTiers.length) {
       const select = ui.select({ value: editing.entry.serviceTier ?? '', options: [{ value: '', label: '—' }, ...module.serviceTiers.map(tier => ({ value: tier.id, label: tier.label }))], onChange: value => { editing.entry.serviceTier = value; change(); } });
