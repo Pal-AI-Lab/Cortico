@@ -18,7 +18,7 @@
  *
  * 三把锁都是 `inject` 闭包里的 `new Lock()`,bot 面上没有任何出口(`isBuilding()`
  * 读得到 `placing`,读不到锁),所以 mineflayer-fixes 那一层从外面补不了,只能改包。
- * 补丁是 src/worlds/minecraft/dependency-patches.ts 的加载钩子。
+ * 补丁在 src/worlds/minecraft/dependency-patches.ts,编译前改写源码。
  *
  * 这一组不 stub pathfinder:装的是真 `inject`,喂真 minecraft-data 的方块与物品,
  * 只把"这一步给什么路"(`getPathTo`)和"equip 成不成"换成台架。断言落在**行为**上——

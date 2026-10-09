@@ -23,7 +23,7 @@ proxy.ts / engine-child.ts / engine-ipc.ts  主进程代理、引擎子进程与
 bridge.ts        mineflayer 连接/断线重连/prismarine-viewer 拉起
 mineflayer-fixes.ts  把 mineflayer 里靠客户端预测的合成与放置换成等服务端回话的版本
 pathfinder-perf.ts   寻路器的代价与门开关补丁
-dependency-patches.ts  mineflayer-pathfinder 与 prismarine-windows 的源码补丁(加载钩子,引擎子进程 --import)
+dependency-patches.ts  mineflayer-pathfinder 与 prismarine-windows 的源码补丁(编译前改写源码,引擎子进程 --import)
 pathfinder-lib.d.ts  寻路器没带的类型声明
 server.ts / server-config.ts  本地服务端一键启停;server.properties 与 ops.json 读写、
                  存档目录枚举(存档与玩法/权限与作弊面板)

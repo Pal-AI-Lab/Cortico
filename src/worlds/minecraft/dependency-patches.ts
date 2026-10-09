@@ -109,7 +109,7 @@ const PATCHES: readonly SourcePatch[] = [
 ];
 
 /** 对一个文件的源码套用补丁;原文缺失或不唯一时抛错。 */
-export function applySourcePatch(patch: SourcePatch, source: string): string {
+function applySourcePatch(patch: SourcePatch, source: string): string {
   let out = source;
   for (const { find, replace } of patch.edits) {
     const at = out.indexOf(find);
@@ -131,7 +131,7 @@ type Compile = (this: unknown, content: string, filename: string, ...rest: unkno
 const FLAG = Symbol.for('cortico.minecraft.dependencyPatches');
 
 /** 重复调用无效。 */
-export function installDependencyPatches(): void {
+function installDependencyPatches(): void {
   const g = globalThis as unknown as Record<symbol, unknown>;
   if (g[FLAG]) return;
   g[FLAG] = true;
