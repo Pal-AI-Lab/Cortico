@@ -8,7 +8,7 @@ import type { Language } from '../../core/language.ts';
 import { readJsonObject, updateJsonObject } from '../../config-file.ts';
 import { readTextFile } from '../../core/util.ts';
 import type { ProviderModule } from '../base.ts';
-import { validateEntry } from '../configuration.ts';
+import { validateEntry, withContextWindows } from '../configuration.ts';
 import { validateProviderName, defaultSecretName } from '../name.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
@@ -294,7 +294,7 @@ export class ProviderHub {
     if (action === 'models') {
       const instance = registry.resolve(name);
       if (!instance.listModels) throw new ProviderHubError('This module does not list models.');
-      return { models: await instance.listModels() };
+      return { models: withContextWindows(instance, await instance.listModels()) };
     }
     if (!entry.spec) throw new ProviderHubError('Model is required.');
     return this.settings.probeClient(registry.bind(name), entry.spec, language);

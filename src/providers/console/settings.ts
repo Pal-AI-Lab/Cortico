@@ -19,7 +19,7 @@ import { isConnectionEditorBlock, type ConsoleLamp, type ConsolePageContribution
 import type { ConsolePageSource } from '../../web/console-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
-import { endpointAvailability, validateEntry } from '../configuration.ts';
+import { endpointAvailability, validateEntry, withContextWindows } from '../configuration.ts';
 import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
 import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
@@ -432,7 +432,7 @@ export class ProviderSettings {
         } else if (method === 'models') {
           const instance = this.registry.resolve(name);
           if (!instance.listModels) throw new Error(S.modelsUnsupported);
-          return { models: await instance.listModels() };
+          return { models: withContextWindows(instance, await instance.listModels()) };
         } else if (method === 'probe') {
           return this.probe(name, language);
         } else if (method === 'extras') {

@@ -9,6 +9,8 @@ export const text: Partial<typeof en> = {
   effortWithoutThinking: 'No se puede definir el esfuerzo de razonamiento con el razonamiento desactivado',
   temperatureRange: 'temperature debe estar entre 0 y 2',
   positiveInteger: (field: string) => `${field} debe ser un entero positivo`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow debe ser mayor que maxTokens (ahora ${window} ≤ ${output})`,
   optionsObject: 'Las opciones nativas deben ser un objeto',
   kindChange: 'Una instancia no puede cambiar su tipo de módulo de proveedor',
   baseUrlFormat: 'La URL del proveedor debe ser una URL HTTP(S) sin credenciales',

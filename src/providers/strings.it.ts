@@ -9,6 +9,8 @@ export const text: Partial<typeof en> = {
   effortWithoutThinking: 'Lo sforzo di ragionamento non può essere impostato con il ragionamento disattivato',
   temperatureRange: 'temperature deve essere compresa tra 0 e 2',
   positiveInteger: (field: string) => `${field} deve essere un intero positivo`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow deve essere maggiore di maxTokens (attualmente ${window} ≤ ${output})`,
   optionsObject: 'Le opzioni native devono essere un oggetto',
   kindChange: "Un'istanza non può cambiare il tipo di modulo del provider",
   baseUrlFormat: "L'URL del provider deve essere un URL HTTP(S) senza credenziali",

@@ -9,6 +9,8 @@ export const text: Partial<typeof en> = {
   effortWithoutThinking: 'Ein Denkaufwand ist nicht möglich, solange der Denkprozess aus ist',
   temperatureRange: 'temperature muss zwischen 0 und 2 liegen',
   positiveInteger: (field: string) => `${field} muss eine positive ganze Zahl sein`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow muss größer als maxTokens sein (derzeit ${window} ≤ ${output})`,
   optionsObject: 'Native Optionen müssen ein Objekt sein',
   kindChange: 'Eine Instanz kann ihren Anbieter-Modultyp nicht ändern',
   baseUrlFormat: 'Die Anbieter-URL muss eine HTTP(S)-URL ohne Zugangsdaten sein',

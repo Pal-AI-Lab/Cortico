@@ -9,6 +9,8 @@ export const text: Partial<typeof en> = {
   effortWithoutThinking: '推論がオフのときは推論の強さを指定できません',
   temperatureRange: 'temperature は 0〜2 の範囲である必要があります',
   positiveInteger: (field: string) => `${field} は正の整数である必要があります`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow は maxTokens より大きい必要があります(現在 ${window} ≤ ${output})`,
   optionsObject: 'ネイティブオプションはオブジェクトである必要があります',
   kindChange: 'インスタンスのプロバイダーモジュールの種類は変更できません',
   baseUrlFormat: 'プロバイダー URL は認証情報を含まない HTTP(S) URL である必要があります',

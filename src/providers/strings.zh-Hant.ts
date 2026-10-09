@@ -9,6 +9,8 @@ export const text: Partial<typeof en> = {
   effortWithoutThinking: '思維鏈關閉時不能帶推理強度',
   temperatureRange: 'temperature 必須在 0–2 之間',
   positiveInteger: (field: string) => `${field} 必須為正整數`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow 必須大於 maxTokens(目前 ${window} ≤ ${output})`,
   optionsObject: '原生參數必須是物件',
   kindChange: '實例不能改變 Provider 模組類型',
   baseUrlFormat: '供應位址需要不含憑證的 HTTP(S) URL',

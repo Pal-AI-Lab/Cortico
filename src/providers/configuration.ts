@@ -1,6 +1,6 @@
 import type { LLMProviderEntry, ModelSpec } from '../core/types.ts';
 import type { Language } from '../core/language.ts';
-import type { ProviderAvailability, ProviderModule } from './base.ts';
+import type { ListedModel, ProviderAvailability, ProviderInstance, ProviderModule } from './base.ts';
 import { validatePrices } from './pricebook.ts';
 import { text } from './strings.ts';
 
@@ -38,6 +38,8 @@ export function validateSpec(
     if (spec[field] !== undefined && (!Number.isInteger(spec[field]) || spec[field]! <= 0))
       throw new Error(S.positiveInteger(field));
   }
+  if (spec.contextWindow !== undefined && spec.maxTokens !== undefined && spec.contextWindow <= spec.maxTokens)
+    throw new Error(S.contextWindowAboveOutput(spec.contextWindow, spec.maxTokens));
   module.validateModel?.(entry, spec);
   return structuredClone({
     ...spec,
@@ -61,6 +63,14 @@ export function endpointAvailability(
   if (!entry.spec?.model) return { ready: false, reason: S.noModel };
   if (entry.secret && !secretConfigured) return { ready: false, reason: S.noSecret(entry.secret) };
   return module.availability?.(name, entry, language) ?? { ready: true };
+}
+
+/** A listed model without a context window takes the window the instance reports for it, when it reports one. */
+export function withContextWindows(instance: ProviderInstance, models: ListedModel[]): ListedModel[] {
+  return models.map((model) => {
+    const contextWindow = model.contextWindow ?? instance.contextWindow?.(model.id);
+    return contextWindow === undefined ? model : { ...model, contextWindow };
+  });
 }
 
 export function validateEntry(
