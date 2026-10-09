@@ -1,4 +1,116 @@
 import type { botEn, assemblyEn } from './strings.ts';
 
-export const botText: Partial<typeof botEn> = {};
-export const assemblyText: Partial<typeof assemblyEn> = {};
+export const botText: Partial<typeof botEn> = {
+  noFile: '(aucun fichier)',
+  storage: {
+    events: {
+      label: "Base d'événements (fragment de cette exécution)",
+      note: 'Efface les événements de cette exécution et conserve les exécutions précédentes ; le curseur ne recule pas',
+      stat: (count: number, cursor: number, size: string) => `${count} enregistrement${count > 1 ? 's' : ''} (curseur à ${cursor}) / ${size}`,
+      cleared: (n: number) => `${n} événement${n > 1 ? 's' : ''} de cette exécution effacé${n > 1 ? 's' : ''}`,
+    },
+    session: {
+      label: 'Session principale (contexte de conversation actuel)',
+      note: "Efface la conversation et rouvre la session, en conservant Memory et la base d'événements. Si un lot est en cours, s'exécute après sa fin",
+      stat: (records: number, ktok: number, size: string) => `${records} enregistrement${records > 1 ? 's' : ''} / ~${ktok}k tok / ${size}`,
+      cleared: "Session effacée et rouverte (préfixe système + message d'ouverture)",
+    },
+    runlog: {
+      label: "Journal d'exécution (cette exécution)",
+      note: "Efface les journaux de cette exécution et conserve ceux des exécutions précédentes. Les journaux d'exécution ne font pas partie du contexte du modèle",
+      cleared: "Journal d'exécution effacé",
+    },
+    usage: {
+      label: "Registre d'utilisation des tokens (source de la page des coûts)",
+      note: "Efface tous les enregistrements d'utilisation et de coût des modèles ; les totaux repartent des enregistrements écrits ensuite. Ces enregistrements ne font pas partie du contexte du modèle",
+      stat: (n: number, size: string) => `${n} enregistrement${n > 1 ? 's' : ''} / ${size}`,
+      cleared: (n: number) => `${n} enregistrement${n > 1 ? 's' : ''} d'utilisation effacé${n > 1 ? 's' : ''}`,
+    },
+    toolcalls: {
+      label: "Registre des appels d'outils (nom de l'outil / arguments bruts / résultat)",
+      note: "Efface les journaux d'appels d'outils de cette exécution sans modifier les résultats d'outils dans le contexte du modèle",
+      cleared: "Registre des appels d'outils effacé",
+    },
+    state: {
+      label: 'État du Core',
+      note: "Efface l'état de la Persona, l'heure de passation et les échecs consécutifs du modèle ; conserve le curseur de livraison et la visibilité des World",
+      stat: (n: number, lastHandoff: string) => `${n} entrée${n > 1 ? 's' : ''} d'état de la Persona / dernière passation ${lastHandoff}`,
+      never: 'aucune',
+      cleared: 'État du Core réinitialisé aux valeurs par défaut',
+    },
+    wakes: {
+      label: 'Minuteurs persistants',
+      note: 'Annule tous les minuteurs (aucune notification produite)',
+      stat: (n: number) => `${n} en attente`,
+      cleared: (n: number) => `${n} minuteur${n > 1 ? 's' : ''} annulé${n > 1 ? 's' : ''}`,
+    },
+    tracker: {
+      label: 'Statistiques de session (utilisation / succès de cache)',
+      note: 'Remet les statistiques à zéro et conserve les entrées des sessions actives',
+      stat: (n: number) => `${n} session${n > 1 ? 's' : ''}`,
+      cleared: 'Statistiques de session remises à zéro',
+    },
+    pending: {
+      label: 'Événements en attente',
+      note:
+        'Rejette les événements en attente et conserve les enregistrements archivés. Les éléments à rendu différé restent en file ; les éléments rejetés ne sont pas rejoués après un redémarrage',
+      stat: (n: number) => `${n} en attente`,
+      cleared: (n: number) => `${n} événement${n > 1 ? 's' : ''} en attente rejeté${n > 1 ? 's' : ''}`,
+    },
+    media: {
+      label: "Pièces jointes (images et audio des événements et résultats d'outils)",
+      note: 'Supprime tous les fichiers joints et conserve les événements et enregistrements de session qui y font référence ; une pièce jointe supprimée ne laisse que sa description textuelle dans le contexte',
+      stat: (n: number, size: string) => `${n} fichier${n > 1 ? 's' : ''} / ${size}`,
+      cleared: (n: number) => `${n} pièce${n > 1 ? 's' : ''} jointe${n > 1 ? 's' : ''} supprimée${n > 1 ? 's' : ''}`,
+    },
+  },
+  config: {
+    unknownGroup: (id: string) => `Groupe de configuration inexistant : ${id}`,
+    updated: (title: string, file: string) => `${title} mis à jour et réécrit dans ${file}`,
+  },
+  prompts: {
+    unknown: (key: string) => `Modèle de prompt inconnu : ${key}`,
+    packageReadOnly: (title: string) => `${title} est un modèle de paquet d'extension en lecture seule`,
+    conflict: (title: string) => `${title} a été modifié ailleurs ; rechargez avant d'enregistrer`,
+    saved: (title: string) => `${title} enregistré`,
+    savedOverride: (title: string) => `Surcharge de déploiement de ${title} enregistrée`,
+    notEnvPrompt: (title: string) => `${title} n'a pas de modèle par défaut à restaurer`,
+    alreadyDefault: (title: string) => `${title} utilise déjà le modèle par défaut du World`,
+    reset: (title: string) => `Surcharge de déploiement de ${title} supprimée`,
+  },
+  visibility: {
+    shown: (id: string) => `${id} est de nouveau visible pour l'agent. La livraison des événements a repris ; son segment de préfixe et ses outils reviennent au rechargement du préfixe.`,
+    hidden: (id: string) => `${id} est désormais masqué pour l'agent. Les nouveaux événements ne réveillent plus l'agent (ils sont toujours stockés) ; son segment de préfixe et ses outils sont retirés au rechargement du préfixe.`,
+    prefixReloaded: (kept: number) => `Préfixe système et table des outils rechargés ; ${kept} message${kept > 1 ? 's' : ''} existant${kept > 1 ? 's' : ''} de la session actuelle conservé${kept > 1 ? 's' : ''}`,
+  },
+  shutdown: {
+    pause: 'Suspendre la livraison des événements',
+    worlds: 'Arrêter les World',
+    core: 'Arrêter la Persona',
+    modulesTimedOut: "Délai d'arrêt des World dépassé",
+    externalState: (worldId: string) => `État externe de ${worldId}`,
+    stopIncomplete: (detail: string) => `Arrêt des World incomplet, la vérification externe en cache ne peut donc pas être utilisée : ${detail}`,
+    cacheReadFailed: (detail: string) => `Échec de la lecture de la vérification d'arrêt en cache : ${detail}`,
+    manualCheck: "Vérifiez si le service externe correspondant s'est arrêté.",
+    llm: 'Arrêter les instances de fournisseur',
+    flush: "Enregistrer l'état du Core",
+    web: 'Fermer la console',
+    summarySkipped: "Étapes d'arrêt local incomplètes",
+    summaryComplete: 'Arrêt local terminé : toutes les étapes sont faites',
+    summaryUnverified: (items: string[]) => `Arrêt local terminé, mais la fin de l'état externe n'est pas confirmée : ${items.join(', ')} (confirmation manuelle requise)`,
+  },
+};
+export const assemblyText: Partial<typeof assemblyEn> = {
+  constructFailed: (detail: string) => `Échec de la construction : ${detail}`,
+  notImplemented: "Aucune implémentation de ce World n'a été trouvée localement.",
+  unknownWorld: (id: string) => `World inconnu : ${id}`,
+  alreadyRunning: (label: string) => `${label} est déjà activé`,
+  prebuilt: (label: string) => `${label} est une instance préconstruite, non activée par la couche d'assemblage`,
+  activated: (label: string, id: string) => `${label} (${id}) activé`,
+  deactivated: (label: string, id: string) => `${label} (${id}) désactivé`,
+  notActive: (label: string) => `${label} n'est pas actif, il n'y a donc aucune instance à redémarrer`,
+  restarted: (label: string) => `${label} redémarré`,
+  toolClash: (other: string, names: string[]) => `Conflit de noms d'outils avec ${other}, montage refusé : ${names.join(', ')}`,
+  toolReserved: (names: string[]) => `Noms d'outils déjà pris par le Core ou la Persona, montage refusé : ${names.join(', ')}`,
+  unbound: "La couche d'assemblage n'est pas encore liée à un Core",
+};

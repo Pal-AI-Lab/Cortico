@@ -1,3 +1,29 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  pageTitle: 'Connessioni ai modelli', navLabel: 'Connessioni ai modelli', navGroup: 'Core', create: '+ Nuova istanza di connessione', newName: 'Istanza senza nome',
+  createHint: "Un'istanza è un insieme di impostazioni del provider salvato come scheda.",
+  empty: 'Ancora nessuna connessione ai modelli', emptyHint: "Aggiungi una connessione a un modello per abilitare l'inferenza.",
+  eraseConfirm: 'Conferma eliminazione',
+  connect: 'Connetti', activate: 'Imposta come connessione attuale', active: 'Modello attuale', missing: 'Connessione al modello attuale mancante: ',
+  inUse: (names: string) => `In uso da: ${names}`, selectedBy: (names: string) => `Selezionata da ${names} (non in esecuzione)`,
+  readiness: { ready: 'Pronta per la connessione', 'needs-setup': 'Da configurare', 'runtime-unavailable': 'Runtime non disponibile', invalid: 'Configurazione non valida', 'module-missing': 'Modulo non disponibile', draft: 'Bozza' },
+  basic: 'Informazioni di base', connection: 'Connessione', modelSection: 'Modello e generazione', moduleSection: 'Impostazioni del modulo', pricing: 'Prezzi', advanced: 'Protocollo avanzato',
+  name: 'Nome della connessione', module: 'Tipo di connessione', url: 'URL API', key: 'API Key', model: 'Modello',
+  nameHint: 'Lettere inglesi, cifre, - o _; inizia con una lettera o una cifra. Niente spazi né nomi di sistema riservati.',
+  fixedModule: 'Il tipo di connessione non può cambiare dopo il salvataggio. Crea una connessione per usare un altro tipo.',
+  test: 'Testa connessione', testOk: 'Test riuscito', testFailed: 'Test non riuscito',
+  keyEmpty: 'Inserisci la API Key', fetchModels: 'Recupera elenco modelli', modelList: 'Elenco modelli', modelsFetched: (count: number) => `${count} ${count === 1 ? 'modello recuperato' : 'modelli recuperati'}.`,
+  reasoning: 'Sforzo di ragionamento', thinking: 'Abilita ragionamento', temperature: 'Temperatura', maxTokens: 'Token massimi in uscita', context: 'Limite di contesto', tier: 'Livello di servizio', images: 'Accetta immagini',
+  catalogNoWindow: "L'elenco dei modelli non indica una finestra di contesto per questo modello; inseriscila dalla documentazione del provider.",
+  catalogMaxOutput: (tokens: number) => `L'elenco dei modelli indica un output massimo di ${tokens} token.`,
+  advancedHint: 'Modifica solo per gateway API personalizzati o servizi compatibili.', secret: 'Variabile di ambiente delle credenziali',
+  extraHeaders: 'Header aggiuntivi (oggetto JSON)', extraBody: 'Corpo della richiesta aggiuntivo (oggetto JSON)', priceRules: 'Regole di prezzo complete (array JSON)',
+  shared: "Configurazione condivisa: più bot possono usare questa connessione. Le modifiche aggiornano questa configurazione condivisa; crea un'altra connessione se ti servono impostazioni diverse.",
+  remove: 'Elimina connessione', duplicate: 'Duplica connessione', cancel: 'Annulla modifiche', save: 'Salva', saved: 'Salvato',
+  draftNote: 'Le modifiche restano in questo browser e vengono scritte nella configurazione al salvataggio. Le API Key non vengono mai conservate.',
+  chooseModule: 'Scegli un tipo di connessione.', invalidNumber: "Inserisci un numero nell'intervallo consentito.",
+  required: 'Obbligatorio.', jsonObject: 'Inserisci un oggetto JSON valido.', jsonArray: 'Inserisci un array JSON valido.',
+  unsaved: 'Conservato come bozza; scritto al salvataggio.',
+  deleteConfirm: 'Eliminare questa connessione e tutti i file nella sua directory?', referenced: 'Questa connessione è usata da questi bot e non può essere eliminata: ', reload: 'Ricarica',
+};

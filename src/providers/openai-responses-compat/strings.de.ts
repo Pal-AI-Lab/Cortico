@@ -1,4 +1,41 @@
 import type { en, panelEn } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
-export const panel: Partial<typeof panelEn> = {};
+export const text: Partial<typeof en> = {
+  description: 'Verbindung zu Responses-kompatiblen Modelldiensten.',
+  extraHeaders: 'Zusätzliche Header (JSON-Objekt)',
+  extraBody: 'Zusätzlicher Anfrage-Body (JSON-Objekt)',
+  endpointPath: 'Responses-Endpunktpfad',
+  endpointPathDescription: 'Relativ zur Anbieter-URL; Standard /responses.',
+  endpointPathSlash: 'Der Endpunktpfad muss mit / beginnen',
+  extraHeadersObject: 'Zusätzliche Header müssen ein Objekt aus Strings sein',
+  extraBodyObject: 'Zusätzliche Body-Felder müssen ein Objekt sein',
+  reasoningReplay: 'Denkprozess-Rückgabe',
+  reasoningReplayDescription: 'Verschlüsselt sendet den signierten Block zurück, Klartext den Denktext; welche Form der Endpunkt akzeptiert, liegt bei ihm, teste im Zweifel.',
+  reasoningReplayValue: 'Die Denkprozess-Rückgabe muss encrypted oder plaintext sein',
+  syntheticReasoningText: 'Synthetischer Denktext',
+  syntheticReasoningTextDescription: (fallback: string) =>
+    `Bei Klartext-Rückgabe der Denktext vor einem Tool-Aufruf ohne erfasste Herkunft; das Modell liest ihn. Leer nutzt den Standard „${fallback}“; Endpunkte lehnen leere oder nur aus Leerzeichen bestehende Strings ab.`,
+  syntheticReasoningTextValue: 'Der synthetische Denktext darf nicht leer sein oder nur aus Leerzeichen bestehen: Der Endpunkt lehnt die ganze Anfrage ab',
+  reasoningPanel: 'Denkprozess',
+  reasoningPanelDescription: 'Die Form, in der der Denkprozess an den Endpunkt zurückgesendet wird.',
+  bodyRequired: 'Anfrage-Body erforderlich',
+  instanceNameRequired: 'Endpunktname erforderlich',
+  unknownPanel: 'Unbekanntes Panel',
+  unknownMethod: 'Unbekannte Methode',
+  modelRequired: 'Wähle zuerst ein Modell',
+  thinkingOff: 'Der Denkprozess ist an diesem Endpunkt aus; die Rückgabeform spielt keine Rolle',
+};
+export const panel: Partial<typeof panelEn> = {
+  title: 'Denkprozess',
+  encrypted: 'Verschlüsselt',
+  plaintext: 'Klartext',
+  detect: 'Unsicher, testen',
+  detecting: 'Wird getestet',
+  saved: 'Gespeichert',
+  accepted: 'akzeptiert',
+  rejected: (status: number | null, error: string) => `abgelehnt${status ? ` ${status}` : ''}: ${error}`,
+  skipped: 'nicht getestet',
+  outcome: (bare: string, withReasoning: string) => `Synthetischer Aufruf ohne Denkprozess: ${bare}; mit Klartext-Denkprozess: ${withReasoning}`,
+  applied: (label: string) => `Auf ${label} gesetzt`,
+  undetermined: 'Nicht bestimmbar; Einstellung unverändert',
+};

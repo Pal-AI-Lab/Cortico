@@ -1,3 +1,29 @@
 import type { en } from './strings.ts';
 
-export const S: Partial<typeof en> = {};
+export const S: Partial<typeof en> = {
+  pageTitle: 'Modellverbindungen', navLabel: 'Modellverbindungen', navGroup: 'Core', create: '+ Neue Verbindungsinstanz', newName: 'Unbenannte Instanz',
+  createHint: 'Eine Instanz ist ein Satz Anbieter-Einstellungen, gespeichert als Karte.',
+  empty: 'Noch keine Modellverbindungen', emptyHint: 'Füge eine Modellverbindung hinzu, um Inferenz zu ermöglichen.',
+  eraseConfirm: 'Löschen bestätigen',
+  connect: 'Verbinden', activate: 'Als aktuelle Verbindung festlegen', active: 'Aktuelles Modell', missing: 'Aktuelle Modellverbindung fehlt: ',
+  inUse: (names: string) => `Verwendet von: ${names}`, selectedBy: (names: string) => `Ausgewählt von ${names} (läuft nicht)`,
+  readiness: { ready: 'Verbindungsbereit', 'needs-setup': 'Einrichtung nötig', 'runtime-unavailable': 'Laufzeitumgebung nicht verfügbar', invalid: 'Ungültige Konfiguration', 'module-missing': 'Modul nicht verfügbar', draft: 'Entwurf' },
+  basic: 'Grundinformationen', connection: 'Verbindung', modelSection: 'Modell und Generierung', moduleSection: 'Moduleinstellungen', pricing: 'Preise', advanced: 'Erweitertes Protokoll',
+  name: 'Verbindungsname', module: 'Verbindungstyp', url: 'API-URL', key: 'API Key', model: 'Modell',
+  nameHint: 'Englische Buchstaben, Ziffern, - oder _; beginnt mit Buchstabe oder Ziffer. Keine Leerzeichen oder reservierten Systemnamen.',
+  fixedModule: 'Der Verbindungstyp lässt sich nach dem Speichern nicht mehr ändern. Lege für einen anderen Typ eine neue Verbindung an.',
+  test: 'Verbindung testen', testOk: 'Test erfolgreich', testFailed: 'Test fehlgeschlagen',
+  keyEmpty: 'API Key eingeben', fetchModels: 'Modellliste abrufen', modelList: 'Modellliste', modelsFetched: (count: number) => `${count} ${count === 1 ? 'Modell' : 'Modelle'} abgerufen.`,
+  reasoning: 'Denkaufwand', thinking: 'Denkprozess aktivieren', temperature: 'Temperatur', maxTokens: 'Max. Ausgabe-Tokens', context: 'Kontextlimit', tier: 'Servicestufe', images: 'Bilder akzeptieren',
+  catalogNoWindow: 'Die Modellliste nennt kein Kontextfenster für dieses Modell; trage es laut Dokumentation des Anbieters ein.',
+  catalogMaxOutput: (tokens: number) => `Die Modellliste nennt eine maximale Ausgabe von ${tokens} Tokens.`,
+  advancedHint: 'Nur für eigene API-Gateways oder kompatible Dienste anpassen.', secret: 'Umgebungsvariable für Zugangsdaten',
+  extraHeaders: 'Zusätzliche Header (JSON-Objekt)', extraBody: 'Zusätzlicher Anfrage-Body (JSON-Objekt)', priceRules: 'Vollständige Preisregeln (JSON-Array)',
+  shared: 'Geteilte Konfiguration: Mehrere Bots können diese Verbindung nutzen. Änderungen aktualisieren diese geteilte Konfiguration; lege eine weitere Verbindung an, wenn du andere Einstellungen brauchst.',
+  remove: 'Verbindung löschen', duplicate: 'Verbindung duplizieren', cancel: 'Änderungen verwerfen', save: 'Speichern', saved: 'Gespeichert',
+  draftNote: 'Änderungen bleiben in diesem Browser und werden beim Speichern in die Konfiguration geschrieben. API Keys werden nie zwischengespeichert.',
+  chooseModule: 'Wähle einen Verbindungstyp.', invalidNumber: 'Gib eine Zahl im erlaubten Bereich ein.',
+  required: 'Pflichtfeld.', jsonObject: 'Gib ein gültiges JSON-Objekt ein.', jsonArray: 'Gib ein gültiges JSON-Array ein.',
+  unsaved: 'Als Entwurf behalten; wird beim Speichern geschrieben.',
+  deleteConfirm: 'Diese Verbindung und alle Dateien in ihrem Verzeichnis löschen?', referenced: 'Diese Verbindung wird von diesen Bots verwendet und kann nicht gelöscht werden: ', reload: 'Neu laden',
+};

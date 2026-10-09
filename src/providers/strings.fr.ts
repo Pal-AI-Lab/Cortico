@@ -1,3 +1,37 @@
 import type { en } from './strings.ts';
 
-export const text: Partial<typeof en> = {};
+export const text: Partial<typeof en> = {
+  profileObject: 'La configuration du modèle doit être un objet',
+  modelRequired: 'Le nom du modèle ne peut pas être vide',
+  thinkingBoolean: "L'interrupteur de raisonnement doit être un booléen",
+  tierUnsupported: (title: string) => `${title} ne prend pas en charge ce niveau de raisonnement`,
+  effortString: "L'effort de raisonnement doit être une chaîne non vide",
+  effortWithoutThinking: "L'effort de raisonnement ne peut pas être défini quand le raisonnement est désactivé",
+  temperatureRange: 'temperature doit être comprise entre 0 et 2',
+  positiveInteger: (field: string) => `${field} doit être un entier positif`,
+  optionsObject: 'Les options natives doivent être un objet',
+  kindChange: 'Une instance ne peut pas changer son type de module de fournisseur',
+  baseUrlFormat: "L'URL du fournisseur doit être une URL HTTP(S) sans identifiants",
+  secretName: "La référence du secret doit être un nom de variable d'environnement",
+  multimodalBoolean: "L'interrupteur multimodal doit être un booléen",
+  serviceTierString: 'Le niveau de service doit être une chaîne',
+  serviceTierUnsupported: (title: string, tier: string) =>
+    `${title} ne prend pas en charge le niveau de service ${tier}`,
+  pricingArray: 'La tarification doit être un tableau',
+  rulesArray: 'Les règles de tarification doivent être un tableau',
+  ruleShape: 'Une règle de tarification nécessite une métrique et un prix unitaire non négatif',
+  unitRequired: "L'unité ne peut pas être vide",
+  tokenUnit: "Les métriques token standard doivent utiliser l'unité token",
+  bandsArray: "Les paliers d'entrée doivent être un tableau",
+  bandsIncreasing: "Les seuils des paliers d'entrée doivent être strictement croissants et supérieurs à 0",
+  modelsRequired: 'Un tarif nécessite des noms de modèles explicites ou *',
+  currencyRequired: 'La devise du tarif ne peut pas être vide',
+  basisValue: 'La base du tarif doit être marginal ou equivalent',
+  sourceRequired: 'Un tarif nécessite une source',
+  tiersObject: 'La tarification par niveau de service doit être un objet',
+  tierNameRequired: 'Le nom du niveau de service ne peut pas être vide',
+  tierRules: 'La tarification par niveau de service nécessite un objet de règles',
+  timeWindowsUnsupported: "La tarification par plage horaire est déclarée par une extension de fournisseur dans le tarif de son module ; la tarification d'un endpoint n'accepte pas timeWindows",
+  noModel: 'Aucun modèle sélectionné',
+  noSecret: (name: string) => `Secret ${name} manquant`,
+};
