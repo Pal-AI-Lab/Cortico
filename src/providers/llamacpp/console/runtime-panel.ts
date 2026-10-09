@@ -6,6 +6,7 @@ import type { ConsolePanel, ConsolePanelContext } from '../../../web/shared/clie
 import type { ConfigValues } from '../../../core/config-schema.ts';
 import { configField } from '../../../web/client/features/config/view.ts';
 import type { RuntimePanelState } from './server.ts';
+import { pick } from '../../../core/language.ts';
 import { panel } from '../strings.ts';
 
 type Row = RuntimePanelState;
@@ -21,7 +22,7 @@ function bytes(n: number): string {
 export const runtimePanel: ConsolePanel = {
   mount: async (ctx: ConsolePanelContext) => {
     const { ui, root } = ctx;
-    const S = ctx.language === 'en' ? panel.en : panel.zh;
+    const S = pick(ctx.language, panel);
     const name = ctx.scope.instance;
     const card = ui.sheet({ title: S.runtimeTitle });
     const heading = ui.h('div', 'connection-step-heading');
