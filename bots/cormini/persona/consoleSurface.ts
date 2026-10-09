@@ -190,7 +190,7 @@ function renameFilePanel(t: Text, ws: GitWorkspaceMemory, args: unknown[]): Work
 /** `workspace` 与 `history` 两块面板的方法分派;变体先处理自己那块,其余交给它。回执与报错按 `language`。 */
 export function workspaceInvoke(
   memory: GitWorkspaceMemory,
-  language: Language = 'zh',
+  language: Language,
 ): (panel: string, method: string, args: unknown[]) => Promise<unknown> {
   const ws = memory;
   const git = ws.git;

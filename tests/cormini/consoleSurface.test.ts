@@ -17,6 +17,7 @@ import {
   type WorkspaceWriteResult,
 } from '../../bots/cormini/persona/consoleSurface.ts';
 import { GitWorkspaceMemory } from '../../bots/cormini/persona/memory.ts';
+import { panelText } from '../../bots/cormini/persona/strings.ts';
 import type { WorkspaceGit } from '../../bots/cormini/persona/workspaceGit.ts';
 
 const gitAvailable = new GitWorkspaceMemory({ memoryDir: process.cwd() }).git.available();
@@ -39,7 +40,7 @@ beforeEach(() => {
   writeFileSync(join(dir, 'log', 'today.md'), '今天\n', 'utf8');
   git = memory.git;
   git.init();
-  invoke = workspaceInvoke(memory);
+  invoke = workspaceInvoke(memory, 'zh');
 });
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
@@ -63,8 +64,8 @@ describe('面板声明', () => {
     const en = workspaceInvoke(new GitWorkspaceMemory({ memoryDir: dir, warn: () => {} }), 'en');
     const out = await en('workspace', 'write', ['note/a.md', 'x', sha('stale')]) as WorkspaceWriteResult;
     expect(out.ok).toBe(false);
-    if (!out.ok) expect(out.error).toBe('The file was changed elsewhere; reload it before saving');
-    await expect(en('nope', 'state', [])).rejects.toThrow('Unknown panel: nope');
+    if (!out.ok) expect(out.error).toBe(panelText('en').changedBeforeSave);
+    await expect(en('nope', 'state', [])).rejects.toThrow(panelText('en').unknownPanel('nope'));
   });
 });
 
