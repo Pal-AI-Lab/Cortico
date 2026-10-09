@@ -53,7 +53,7 @@ export const S: Partial<typeof en> = {
   unitMsgs: 'mensagens',
   unitPeople: 'usuários',
   runPaused: 'pausado',
-  runBlocked: 'agendamento bloqueado',
+  runBlocked: 'entrega retida',
   runRunning: 'em execução',
 
   // runlog.ts

@@ -36,7 +36,7 @@ export const S: Partial<typeof en> = {
   chipBatchesPost: '',
   chipPaused: '⏸ En pausa',
   chipBehind: (n: number) => `${n} ${n === 1 ? 'pendiente' : 'pendientes'} de entrega`,
-  chipScheduleBlocked: '◷ Programación bloqueada',
+  chipScheduleBlocked: '◷ Entrega retenida',
   chipTruncating: 'Truncando',
   chipOnline: 'en línea: ',
   phaseDelivering: 'Escribiendo eventos en el contexto',

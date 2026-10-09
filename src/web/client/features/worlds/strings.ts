@@ -69,7 +69,7 @@ const zh = {
 };
 
 export const en: typeof zh = {
-  navLabel: 'World Overview',
+  navLabel: 'World overview',
   introTitle: 'Worlds',
   sheetTitle: 'Assembly status',
   reloadPrefixBtn: '↻ Reload system prefix',

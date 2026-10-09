@@ -128,7 +128,7 @@ export const en: typeof zh = {
   baseUrl: 'Provider URL',
   secretName: 'Key variable name',
   secretNamePlaceholder: 'Environment variable name; empty = no auth',
-  secretStatus: 'API key',
+  secretStatus: 'API Key',
   secretSource: { env: 'process env', file: 'endpoint .env', none: 'not set' },
   secretValue: 'Key value',
   secretValuePlaceholder: 'Written to the endpoint .env only; never shown',
@@ -140,7 +140,7 @@ export const en: typeof zh = {
   extraHeaders: 'Extra headers (JSON object)',
   extraBody: 'Extra body (JSON object)',
   jsonObjectRequired: (label: string) => `${label} must be a JSON object`,
-  advancedProtocolTitle: 'Protocol & Request Overrides',
+  advancedProtocolTitle: 'Protocol and request overrides',
   advancedProtocolDescription: 'Advanced options for OpenAI Responses compatible endpoints (custom path and extra JSON fields).',
   modelFieldLabel: 'Model identifier',
   effortFieldLabel: 'Reasoning effort',
@@ -215,7 +215,7 @@ export const en: typeof zh = {
     'Base rates apply to all models; input bands and service tiers go in the full rules below.',
   costFormOverridden:
     'The saved pricing is not a shape the three-rate form can express; the full rules below apply. Editing the form replaces them.',
-  editFull: 'Advanced Pricing Rules (JSON)',
+  editFull: 'Advanced pricing rules (JSON)',
   fullNote:
     'An empty array restores the module default quote; an empty rules array means explicitly free. Full rules support input bands, service tiers and extra meters.',
   viewSnapshot: 'View active pricing snapshot',

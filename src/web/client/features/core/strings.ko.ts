@@ -53,7 +53,7 @@ export const S: Partial<typeof en> = {
   unitMsgs: '개',
   unitPeople: '명',
   runPaused: '일시 중지',
-  runBlocked: '알람 대기',
+  runBlocked: '전달 보류',
   runRunning: '실행 중',
 
   // runlog.ts

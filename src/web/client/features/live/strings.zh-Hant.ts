@@ -36,7 +36,7 @@ export const S: Partial<typeof en> = {
   chipBatchesPost: ' 批',
   chipPaused: '⏸ 已暫停',
   chipBehind: (n: number) => `待投遞 ${n}`,
-  chipScheduleBlocked: '◷ 鬧鐘阻斷',
+  chipScheduleBlocked: '◷ 投遞扣留中',
   chipTruncating: '截斷中',
   chipOnline: '在線 ',
   phaseDelivering: '正在把事件寫入上下文',

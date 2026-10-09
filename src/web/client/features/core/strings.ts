@@ -62,7 +62,7 @@ const zh = {
   unitMsgs: '条',
   unitPeople: '人',
   runPaused: '暂停',
-  runBlocked: '闹钟阻断',
+  runBlocked: '投递扣留',
   runRunning: '进行',
 
   // runlog.ts
@@ -149,7 +149,7 @@ export const en: typeof zh = {
   unitMsgs: 'msgs',
   unitPeople: 'users',
   runPaused: 'paused',
-  runBlocked: 'schedule blocked',
+  runBlocked: 'delivery held',
   runRunning: 'running',
 
   // runlog.ts

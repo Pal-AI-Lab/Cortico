@@ -11,5 +11,5 @@ export const serverText: Partial<typeof en> = {
   externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     `${label}=${status}（${detail}）。人工處理:${manualAction}`,
-  externalVerified: '；外部狀態檢查均已驗證結束',
+  externalVerified: '；外部狀態均已確認結束',
 };

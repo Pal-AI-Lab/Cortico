@@ -21,7 +21,7 @@ const zh = {
   externalUnverified: (items: string[]) => `；[P0] ${items.join('；')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     `${label}=${status}（${detail}）。人工动作:${manualAction}`,
-  externalVerified: '；外部状态检查均已验证结束',
+  externalVerified: '；外部状态均已确认结束',
 };
 export const en: typeof zh = {
   paused: 'Paused: events are still stored and queued, no wake is delivered',
@@ -34,7 +34,7 @@ export const en: typeof zh = {
   externalUnverified: (items: string[]) => `; [P0] ${items.join('; ')}`,
   externalItem: (label: string, status: string, detail: string, manualAction: string) =>
     `${label}=${status} (${detail}). Manual action: ${manualAction}`,
-  externalVerified: '; every external state check verified ended',
+  externalVerified: '; every external state is confirmed ended',
 };
 export const serverText = (language: Language) => pick(language, {
   zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,

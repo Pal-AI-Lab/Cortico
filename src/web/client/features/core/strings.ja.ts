@@ -53,7 +53,7 @@ export const S: Partial<typeof en> = {
   unitMsgs: '件',
   unitPeople: '人',
   runPaused: '一時停止',
-  runBlocked: 'アラーム待ち',
+  runBlocked: '配信保留',
   runRunning: '実行中',
 
   // runlog.ts

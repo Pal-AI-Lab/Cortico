@@ -36,7 +36,7 @@ export const S: Partial<typeof en> = {
   chipBatchesPost: ' バッチ',
   chipPaused: '⏸ 一時停止中',
   chipBehind: (n: number) => `配信待ち ${n}`,
-  chipScheduleBlocked: '◷ アラーム待ち',
+  chipScheduleBlocked: '◷ 配信保留中',
   chipTruncating: '切り詰め中',
   chipOnline: '接続中 ',
   phaseDelivering: 'イベントをコンテキストに書き込み中',

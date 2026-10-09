@@ -53,7 +53,7 @@ export const S: Partial<typeof en> = {
   unitMsgs: 'сообщ.',
   unitPeople: 'польз.',
   runPaused: 'приостановлен',
-  runBlocked: 'расписание заблокировано',
+  runBlocked: 'доставка удерживается',
   runRunning: 'работает',
 
   // runlog.ts
