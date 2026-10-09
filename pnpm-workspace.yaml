@@ -6,7 +6,3 @@ allowBuilds:
 # 所有 prismarine 依赖必须解析到同一 vec3 版本,否则同名 Vec3 类型互不兼容。
 overrides:
   vec3: ^0.2.0
-
-patchedDependencies:
-  mineflayer-pathfinder@2.4.5: patches/mineflayer-pathfinder@2.4.5.patch
-  prismarine-windows@2.10.0: patches/prismarine-windows@2.10.0.patch

@@ -19,6 +19,7 @@ Node 22+,pnpm 11(版本由 `package.json` 的 `packageManager` 指定)。规则�
 | `pnpm check:extension <目录>` | 校验一个扩展包 |
 | `pnpm audit:release` | 发布审计:部署资源、明文凭证、异常大文件 |
 | `pnpm publish:package` | 生成 npm 发布包 `dist/package`;`--pack` 出 tarball;`--publish` 发布,只由发布 workflow 执行 |
+| `pnpm publish:worlds [id…]` | 把内建 World 生成扩展包 `dist/worlds/cortico-world-<id>`,版本同框架;`--pack` / `--publish` 同上 |
 
 提交前必须通过 `pnpm test` 与 `pnpm run typecheck`;修改浏览器代码还需通过
 `pnpm typecheck:web` 与 `pnpm build:web`。bot 运行期间禁止构建其正在使用的控制台文件。
@@ -62,7 +63,7 @@ Node 侧与浏览器侧分别配置类型库:`tsconfig.json` 排掉 `src/web/cli
 | `src/extensions/`、`src/extensions.ts` | 扩展装载 |
 | `src/worlds/<id>/` | 内建 World |
 | `bots/<名>/` | bot 包 |
-| `scripts/` | `build-web`、`dev-console`、`logq`、`extension-check`、`release-audit`、`publish-package`、`migrate-rename`、`generate-open-responses` |
+| `scripts/` | `build-web`、`dev-console`、`logq`、`extension-check`、`release-audit`、`publish-package`、`publish-worlds`、`migrate-rename`、`generate-open-responses` |
 | `templates/extension/<kind>/` | World、Provider、bot 三类扩展的可安装模板 |
 | `scratch/`、`deprecated/`、`deployments/`、`extensions/` | 都不进版本控制 |
 
@@ -76,7 +77,7 @@ gh release create v0.1.4 --target main --notes-file notes.md
 
 release 发布后 `.github/workflows/publish.yml` 在 `npm` 环境里排队,维护者在 Actions 页批准后开跑:
 tag 与 `package.json` 版本不一致即失败,然后跑类型检查和测试,最后执行
-`pnpm run publish:package --publish`。npm 端用 trusted publishing 认这个 workflow 文件和 `npm` 环境,
+`pnpm run publish:package --publish` 与 `pnpm run publish:worlds --publish`。npm 端每个包都用 trusted publishing 认这个 workflow 文件和 `npm` 环境,
 仓库里不存 npm token,发布的包带 provenance。发布失败时修好后在 Actions 里重跑这个任务。
 
 ## 文档

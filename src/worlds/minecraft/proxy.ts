@@ -2,6 +2,7 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { nowIso } from '../../core/util.ts';
 import { emitLogNote, logChildStdio } from '../../core/ipc-logger.ts';
+import { childExecArgv } from '../../extensions/runtime.ts';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +33,8 @@ import { worldEnvLine, worldIdentityOf } from './server-config.ts';
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.meta.url));
 const CHILD_ENTRY = fileURLToPath(new URL('./engine-child.ts', import.meta.url));
+/** 引擎子进程 `--import` 它,依赖的源码补丁在 mineflayer 加载前装好 */
+const DEPENDENCY_PATCHES_URL = new URL('./dependency-patches.ts', import.meta.url).href;
 
 const CONFIG_SAMPLE_MS = 1000;
 const RESTART_DELAY_MS = 3000;
@@ -246,7 +249,7 @@ export class MinecraftWorldProxy implements World {
 
   private async spawn(): Promise<void> {
     const child = fork(CHILD_ENTRY, [], {
-      execArgv: ['--import', 'tsx'],
+      execArgv: [...childExecArgv(), '--import', DEPENDENCY_PATCHES_URL],
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     this.child = child;
