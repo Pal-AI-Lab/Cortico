@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: 'Verbindung löschen', duplicate: 'Verbindung duplizieren', cancel: 'Änderungen verwerfen', save: 'Speichern', saved: 'Gespeichert',
   draftNote: 'Änderungen bleiben in diesem Browser und werden beim Speichern in die Konfiguration geschrieben. API Keys werden nie zwischengespeichert.',
   chooseModule: 'Wähle einen Verbindungstyp.', invalidNumber: 'Gib eine Zahl im erlaubten Bereich ein.',
+  contextAboveOutput: 'Das Kontextlimit muss größer als die max. Ausgabe-Tokens sein.',
   required: 'Pflichtfeld.', jsonObject: 'Gib ein gültiges JSON-Objekt ein.', jsonArray: 'Gib ein gültiges JSON-Array ein.',
   unsaved: 'Als Entwurf behalten; wird beim Speichern geschrieben.',
   deleteConfirm: 'Diese Verbindung und alle Dateien in ihrem Verzeichnis löschen?', referenced: 'Diese Verbindung wird von diesen Bots verwendet und kann nicht gelöscht werden: ', reload: 'Neu laden',

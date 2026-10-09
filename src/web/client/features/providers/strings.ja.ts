@@ -24,6 +24,7 @@ export const S: Partial<typeof en> = {
   remove: '接続を削除', duplicate: '接続を複製', cancel: '変更を破棄', save: '保存', saved: '保存しました',
   draftNote: '編集内容はこのブラウザーに一時保存され、保存時に設定へ書き込まれます。API Key は一時保存されません。',
   chooseModule: '接続の種類を選択してください。', invalidNumber: '許容範囲内の数値を入力してください。',
+  contextAboveOutput: 'コンテキスト上限は最大出力 token 数より大きくしてください。',
   required: '必須項目です。', jsonObject: '有効な JSON オブジェクトを入力してください。', jsonArray: '有効な JSON 配列を入力してください。',
   unsaved: '下書きとして保持中です。保存時に書き込まれます。',
   deleteConfirm: 'この接続と、そのディレクトリ内のすべてのファイルを削除しますか？', referenced: 'この接続は次のボットで使用中のため削除できません：', reload: '再読み込み',

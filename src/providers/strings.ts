@@ -19,6 +19,8 @@ const zh = {
   effortWithoutThinking: '思维链关闭时不能带推理强度',
   temperatureRange: 'temperature 必须在 0–2 之间',
   positiveInteger: (field: string) => `${field} 必须为正整数`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow 必须大于 maxTokens(当前 ${window} ≤ ${output})`,
   optionsObject: '原生参数必须是对象',
   kindChange: '实例不能改变 Provider 模块类型',
   baseUrlFormat: '供应地址需要不含凭据的 HTTP(S) URL',
@@ -53,6 +55,8 @@ export const en: typeof zh = {
   effortWithoutThinking: 'Reasoning effort cannot be set while reasoning is off',
   temperatureRange: 'temperature must be between 0 and 2',
   positiveInteger: (field: string) => `${field} must be a positive integer`,
+  contextWindowAboveOutput: (window: number, output: number) =>
+    `contextWindow must be greater than maxTokens (now ${window} ≤ ${output})`,
   optionsObject: 'Native options must be an object',
   kindChange: 'An instance cannot change its provider module type',
   baseUrlFormat: 'Provider URL must be an HTTP(S) URL without credentials',

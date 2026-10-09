@@ -31,7 +31,7 @@ import { isLanguage, languageTag, systemLanguage, type Language } from '../core/
 import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
 import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
-import { buildDiagnostics, DIAGNOSTICS_TAIL } from './diagnostics.ts';
+import { buildDiagnostics, DIAGNOSTICS_TAIL, type DiagnosticsEndpoint } from './diagnostics.ts';
 import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
 import { checkFrameworkRelease } from './framework-release.ts';
@@ -78,6 +78,8 @@ export interface WebAppDebugDeps {
   runId?(): string;
   /** 主循环当前工具表schema(run()前为空数组) */
   toolSchemas(): Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
+  /** 当前活跃端点;没有时为 null。诊断包收它。 */
+  activeEndpoint?(): DiagnosticsEndpoint | null;
 }
 
 /** session观察注册表的窄接口(core/sessions.ts的SessionTracker天然满足) */
@@ -1549,6 +1551,7 @@ export class WebApp {
         latestCursor: this.deps.store.latestCursor(),
         worlds: (await this.deps.worlds?.(this.languageOf(req))) ?? [],
         usage: this.deps.usage?.aggregate({ bucket: 'day' }) ?? null,
+        endpoint: dbg?.activeEndpoint?.() ?? null,
       }));
     }));
 

@@ -278,6 +278,13 @@ export class MainLoop {
   /** 当前正在处理一个事件批；手动交接必须等到该批自然结束，不能重置半轮session。 */
   private processingBatch = false;
   private handoffRequested = false;
+  /** 上一批以计数触发的强制交接结束时的 hardTokens；之后一次计数检查看到计数在上限内即清空。 */
+  private forcedHandoffHard: number | null = null;
+  /**
+   * 按计数强制交接后，其间没有一批回到上限内、计数又越过的 hardTokens。上限仍是这个值时
+   * 不再按计数收束或强制交接；计数检查看到计数回到上限内，或上限改变后恢复。
+   */
+  private hardLimitUnreachable: number | null = null;
   /** onDelivery 执行期间（含其 Promise 完成前），injectInternal 的即时项加入当前批，不经过总线。 */
   private deliveryCollector: EventEnvelope[] | null = null;
   /** 已投递但前面仍有外部缺口的游标；水位只越过连续前缀。 */
@@ -1091,8 +1098,8 @@ export class MainLoop {
       // 后续轮输入超限时结束本批，由批末检查执行交接。
       // 首轮仍处理本批新投递的事件；上一批的容量检查已在批末执行。
       if (round > 1) {
-        const hard = this.d.context.hardTokens();
-        if (hard !== null && this.estTokens() > hard) {
+        const hard = this.exceededHardLimit();
+        if (hard !== null) {
           log.warn('计数越过模型上下文上限,本批在轮边界收束,批末交接', { round, estTokens: this.estTokens(), hardTokens: hard });
           this.finishTurn();
           return;
@@ -1545,11 +1552,35 @@ export class MainLoop {
     }
     if (await this.flushRequestedHandoff(generation)) return;
     if (!this.active(generation)) return;
-    const hard = this.d.context.hardTokens();
-    if (hard !== null && this.estTokens() > hard) {
+    const hard = this.exceededHardLimit();
+    if (hard !== null) {
       log.warn('计数越过模型上下文上限,强制交接', { estTokens: this.estTokens(), hardTokens: hard, model: this.d.spec().model });
+      this.forcedHandoffHard = hard;
       await this.handoffContext();
     }
+  }
+
+  /**
+   * 计数检查：越过 hardTokens 且应按计数收束或强制交接时返回该上限，否则返回 null。
+   * 计数在上限内时清空连续记录与不可达标记。上一批已按计数强制交接、计数仍越过同一上限时，
+   * 记该上限不可达并报一次错，不再交接；服务拒绝超长输入与手动交接不经过这里，不改变两项记录。
+   */
+  private exceededHardLimit(): number | null {
+    const hard = this.d.context.hardTokens();
+    if (hard === null) return null;
+    const estTokens = this.estTokens();
+    if (estTokens <= hard) {
+      this.forcedHandoffHard = null;
+      this.hardLimitUnreachable = null;
+      return null;
+    }
+    if (hard === this.hardLimitUnreachable) return null;
+    if (hard !== this.forcedHandoffHard) return hard;
+    this.hardLimitUnreachable = hard;
+    this.d.log.error('上一批按计数强制交接后,计数仍越过模型上下文上限,这个上限下不再按计数收束或强制交接;计数回到上限内或上限改变后恢复', {
+      hardTokens: hard, estTokens, model: this.d.spec().model,
+    });
+    return null;
   }
 
   /**

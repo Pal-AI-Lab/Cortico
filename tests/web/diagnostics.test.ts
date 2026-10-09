@@ -33,6 +33,7 @@ function sources(over: Partial<DiagnosticsSources> = {}): DiagnosticsSources {
     latestCursor: 2,
     worlds: [{ id: 'terminal', status: 'active' }],
     usage: { currency: 'USD', totals: null },
+    endpoint: null,
     ...over,
   };
 }

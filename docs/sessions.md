@@ -38,6 +38,9 @@ Core 的输入上限为 `hardTokens = max(0, 生效窗口 − (spec.maxTokens ??
 `contextWindow` 中的较小者；两者都缺失时不设置此上限。超过上限或服务拒绝超长输入时，
 Core 调用 `Persona.onHandoff(snapshot, { hardTokens })`。Persona 决定保留的上下文和交接笔记，
 Core 重建 system 前缀、按容量截断保留内容并重置 session。
+上一批已按计数强制交接、其间没有一次计数检查回到上限内,计数又越过同一上限时(窗口不大于最大输出,或交接后的
+前缀仍超限),Core 不交接,记一条 error,在这个上限下不再按计数收束或强制交接;计数检查看到计数回到上限内,
+或端点配置改变上限时恢复。服务拒绝超长输入与手动交接照常进行,不计入也不清除这条连续记录。
 
 阶段预算(`context.maxTokens`、`softRatio`、`keepRatio`)是 Persona 自己的配置,不在 Core 里。
 Cormini 一系的默认:64000 / 0.85 / 1/3;终端页上下文圈的分母与黄线读的是这几个数。
