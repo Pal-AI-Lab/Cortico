@@ -38,4 +38,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `Chiamata sintetica senza ragionamento: ${bare}; con ragionamento in chiaro: ${withReasoning}`,
   applied: (label: string) => `Impostato su ${label}`,
   undetermined: 'Non determinabile; impostazione invariata',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };

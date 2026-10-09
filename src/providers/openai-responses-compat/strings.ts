@@ -79,6 +79,7 @@ const panelZh = {
   outcome: (bare: string, withReasoning: string) => `不带思维链的合成调用:${bare};带明文思维链:${withReasoning}`,
   applied: (label: string) => `已设为${label}`,
   undetermined: '判断不出,设置未改',
+  detected: (outcome: string, conclusion: string) => `${outcome}。${conclusion}`,
 };
 export const panelEn: typeof panelZh = {
   title: 'Reasoning',
@@ -93,6 +94,7 @@ export const panelEn: typeof panelZh = {
   outcome: (bare: string, withReasoning: string) => `Synthetic call without reasoning: ${bare}; with plaintext reasoning: ${withReasoning}`,
   applied: (label: string) => `Set to ${label}`,
   undetermined: 'Undetermined; the setting is unchanged',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };
 export const panel = {
   zh: panelZh, en: panelEn, 'zh-Hant': panelZhHant, ja: panelJa, ko: panelKo, fr: panelFr,

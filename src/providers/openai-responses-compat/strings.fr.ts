@@ -38,4 +38,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `Appel synthétique sans raisonnement : ${bare} ; avec raisonnement en clair : ${withReasoning}`,
   applied: (label: string) => `Défini sur ${label}`,
   undetermined: 'Indéterminé ; le réglage est inchangé',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };

@@ -39,4 +39,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `不帶思維鏈的合成呼叫:${bare};帶明文思維鏈:${withReasoning}`,
   applied: (label: string) => `已設為${label}`,
   undetermined: '判斷不出,設定未改',
+  detected: (outcome: string, conclusion: string) => `${outcome}。${conclusion}`,
 };

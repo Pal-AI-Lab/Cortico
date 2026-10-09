@@ -38,4 +38,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `Chamada sintética sem raciocínio: ${bare}; com raciocínio em texto simples: ${withReasoning}`,
   applied: (label: string) => `Definido como ${label}`,
   undetermined: 'Não foi possível determinar; a configuração não mudou',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };

@@ -38,4 +38,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `Synthetischer Aufruf ohne Denkprozess: ${bare}; mit Klartext-Denkprozess: ${withReasoning}`,
   applied: (label: string) => `Auf ${label} gesetzt`,
   undetermined: 'Nicht bestimmbar; Einstellung unverändert',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };

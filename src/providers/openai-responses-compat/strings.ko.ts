@@ -39,4 +39,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `추론 없는 합성 호출: ${bare}; 평문 추론 포함: ${withReasoning}`,
   applied: (label: string) => `${label}(으)로 설정했습니다`,
   undetermined: '판단할 수 없어 설정을 바꾸지 않았습니다',
+  detected: (outcome: string, conclusion: string) => `${outcome}. ${conclusion}`,
 };

@@ -39,4 +39,5 @@ export const panel: Partial<typeof panelEn> = {
   outcome: (bare: string, withReasoning: string) => `思考なしの合成呼び出し：${bare}。平文の思考あり：${withReasoning}`,
   applied: (label: string) => `${label}に設定しました`,
   undetermined: '判定できなかったため、設定は変更していません',
+  detected: (outcome: string, conclusion: string) => `${outcome}。${conclusion}`,
 };
