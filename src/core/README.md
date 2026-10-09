@@ -93,6 +93,7 @@ handler 异常转为失败回执。流式生成时 `EagerDispatch` 可提前执�
 `hardTokens = max(0, contextWindowOf(spec) − (spec.maxTokens ?? 0))`。
 `contextWindowOf` 取 provider 探测值与手动 `contextWindow` 的较小者；两者均未知时不按窗口裁剪。
 超过上限时，主循环在轮次边界结束本批，并在批末强制交接；上游报告输入超限时也请求交接。
+交接后计数仍越过上限时记一条 error,这个上限下不再按计数收束或强制交接,上限改变或之后一次交接回到上限以内时恢复。
 
 `Persona.onHandoff(snapshot, { hardTokens })` 返回 `{ tail, trim? }`。Core 重建 system 前缀，
 按 `hardTokens − estimate(prefix)` 限制保留上下文，其中 prefix 包括 system 前缀和 Persona 的合成

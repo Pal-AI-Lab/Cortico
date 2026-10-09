@@ -46,7 +46,7 @@ provider 模块不预设任何模型名;端点
 记住,所有端点共用。`connectionBlocks` 里计价与协议默认收起。
 面板的 `setConfig` 同样只进暂存;运行时启停、安装与拉取模型要求端点已保存。「测试连接」与
 「获取模型列表」按编辑页当前内容(含刚输入的 API Key)发请求,不写盘,不参与可用性判断。
-取到的模型(`ProviderInstance.listModels()` 的返回项)进入模型选单,标签取 `displayName`,缺省用 id;
+取到的模型(`ProviderInstance.listModels()` 的返回项;没带 `contextWindow` 的项用 `ProviderInstance.contextWindow(id)` 补上)进入模型选单,标签取 `displayName`,缺省用 id;
 选一项等同手填它的 id:该项的 `contextWindow` 填进上下文上限,`inputImages` 设定图像开关,
 `maxOutputTokens` 只显示,不改最大输出。列表外的 id 照样可以手填。
 
@@ -80,6 +80,7 @@ provider 模块不预设任何模型名;端点
 `top_provider.max_completion_tokens`、`architecture.input_modalities` 时,分别成为列表项的
 `displayName`、`contextWindow`、`maxOutputTokens` 与 `inputImages`(模态含 `image`)。
 
+`spec` 同时填了 `contextWindow` 与 `maxTokens` 时,`contextWindow` 必须大于 `maxTokens`,否则保存与设为当前都被拒绝。
 模型上下文上限取服务探测值与配置的 `contextWindow` 中的较小者；Core 根据该上限限制请求
 容量，阶段预算由 Persona 决定（见 [sessions.md](sessions.md)）。
 
