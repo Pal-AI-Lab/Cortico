@@ -294,7 +294,9 @@ export class ProviderHub {
     if (action === 'models') {
       const instance = registry.resolve(name);
       if (!instance.listModels) throw new ProviderHubError('This module does not list models.');
-      return { models: withContextWindows(instance, await instance.listModels()) };
+      const models = await instance.listModels();
+      // llamacpp 的 contextWindow(id) 按模型向服务发 /props 探测;它的列表已带探测过的窗口。
+      return { models: entry.kind === 'llamacpp' ? models : withContextWindows(instance, models) };
     }
     if (!entry.spec) throw new ProviderHubError('Model is required.');
     return this.settings.probeClient(registry.bind(name), entry.spec, language);
