@@ -1170,7 +1170,7 @@ export interface CoreConfig {
    * 进程启动时确定的控制台默认语言；缺省按环境变量或系统区域选择。
    * 浏览器可单独保存语言选择，不影响模型文本。
    */
-  language?: 'zh' | 'en';
+  language?: Language;
   /** 以端点名为键的共享模型服务配置。 */
   providers: Record<string, LLMProviderEntry>;
   /** providers 中的端点名；新模型调用读取当前值。 */

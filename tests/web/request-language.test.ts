@@ -105,7 +105,8 @@ describe('每个请求自带界面语言', () => {
   it('WebSocket 握手的查询串选语言,那条流上的系统提示按它给', async () => {
     expect(await firstFrame('')).toContain('报上名字');
     expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=en`)).toContain('introduce yourself');
-    // 不认识的值当没带
-    expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=fr`)).toContain('报上名字');
+    // 没有译文的语言读英文表;不认识的值当没带
+    expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=fr`)).toContain('introduce yourself');
+    expect(await firstFrame(`?${CONSOLE_LANGUAGE_QUERY}=xx`)).toContain('报上名字');
   });
 });
