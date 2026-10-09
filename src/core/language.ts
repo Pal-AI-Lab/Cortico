@@ -138,3 +138,11 @@ export function pick<T>(language: Language, table: LanguageTable<T>): T {
   }
   return merged as T;
 }
+
+/**
+ * `text` followed by `mark`, unless `text` already ends with sentence-final punctuation
+ * (`. ! ? 。 ！ ？`). Joins text whose last piece may or may not close its own sentence.
+ */
+export function punctuate(text: string, mark: string): string {
+  return /[.!?。！？]$/u.test(text) ? text : text + mark;
+}
