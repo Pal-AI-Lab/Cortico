@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `Taux du rapport d'utilisation : ${code}`,
-    description: "Valeur de 1 USD dans cette devise. Quand « Utilisation et coûts » affiche cette devise, les appels sans prix dans cette devise sont convertis à ce taux ; 0 désactive la conversion.",
+    description: "Taux auquel le rapport d'utilisation convertit entre l'USD et cette devise : valeur de 1 USD dans cette devise, au départ le cours médian du 2026-10-10. 0 exclut cette devise de la conversion.",
   },
 };
 export const validationText: Partial<typeof validationEn> = {

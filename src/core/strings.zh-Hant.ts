@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `用量報告匯率 ${code}`,
-    description: '1 美元可兌換多少該貨幣。「用量與成本」頁選擇這種貨幣時，沒有原價的呼叫按此換算；0 表示不換算。',
+    description: '用量報告在 USD 與該貨幣之間換算時用這個匯率：1 美元可兌換多少該貨幣，初始值取 2026-10-10 的中間價。0 表示該貨幣不參與換算。',
   },
 };
 

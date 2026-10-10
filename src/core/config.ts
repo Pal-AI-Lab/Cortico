@@ -5,12 +5,18 @@ import type { Language } from './language.ts';
 import { coreGroupText } from './strings.ts';
 import { SYSTEM_TIMEZONE } from './util.ts';
 
-/** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
-/** 用量报告可换算的币种与初始汇率:1 USD 合多少该币种，取 2026-10-10 的中间价。部署里可改。 */
+/** 用量报告可换算的币种与初始汇率:1 USD 合多少该币种，取 2026-10-10 的中间价。部署里可改，只认这几种。 */
 export const USAGE_RATES: Readonly<Record<string, number>> = {
   CNY: 6.69, EUR: 0.892, JPY: 158.3, KRW: 1341, TWD: 31.9, BRL: 4.99, RUB: 85.4,
 };
 
+/** 部署配置里已声明币种的汇率;没声明的币种不参与换算。 */
+export function usageRates(config: { usage?: { rates?: Record<string, number> } }): Record<string, number> {
+  const rates = config.usage?.rates ?? {};
+  return Object.fromEntries(Object.keys(USAGE_RATES).filter((code) => typeof rates[code] === 'number').map((code) => [code, rates[code]!]));
+}
+
+/** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
 export function coreConfigGroup(language: Language): ConfigGroup {
   const t = coreGroupText(language);
   const rates = Object.fromEntries(Object.keys(USAGE_RATES).map((code) => [`usage.rates.${code}`, {

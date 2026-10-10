@@ -51,6 +51,20 @@ describe('分时段聚合 aggregateUsage', () => {
     expect(aggregateUsage(recs, { from: '2026-07-18', to: '2026-07-19', bucket: 'day', currency: 'EUR', rates: { EUR: 0 } }).totals.pricedCalls).toBe(0);
   });
 
+  it('原价币种之间按各自的 1 USD 汇率换算，混合币种的合计相加', () => {
+    const cnyPriced = (r: UsageRecord): UsageRecord => {
+      const quote = snapshotPrice({ models: [r.model], currency: 'CNY', basis: 'marginal', source: 'test contract', rules: [{ meter: 'output', perMillion: 14 }] }, { startedAt: r.ts, requestedServiceTier: null });
+      return { ...r, version: 2, charges: priceUsage({ ...unknownMeters(), input: r.promptTokens, output: r.completionTokens, cachedInput: r.cacheHitTokens, uncachedInput: r.cacheMissTokens }, [quote]) };
+    };
+    const cny = cnyPriced({ ts: '2026-07-18T10:00:00+08:00', sessionId: 'main', role: 'main', label: 'main', model: 'local', promptTokens: 0, completionTokens: 1_000_000, cacheHitTokens: 0, cacheMissTokens: 0, reasoningTokens: 0 });
+    const rates = { CNY: 7, EUR: 0.9 };
+    const range = { from: '2026-07-18', to: '2026-07-18', bucket: 'day' as const, rates };
+    expect(aggregateUsage([cny], { ...range, currency: 'EUR' }).totals.cost).toBeCloseTo(14 * 0.9 / 7, 6);
+    const usdOnly = aggregateUsage(recs, { ...range, currency: 'USD' }).totals.cost;
+    expect(aggregateUsage([...recs, cny], { ...range, currency: 'USD' }).totals.cost).toBeCloseTo(usdOnly + 14 / 7, 6);
+    expect(aggregateUsage([...recs, cny], { ...range, currency: 'CNY' }).totals.cost).toBeCloseTo(usdOnly * 7 + 14, 6);
+  });
+
   it('按小时桶:同一天不同小时分开', () => {
     const a = aggregateUsage(recs, { from: '2026-07-18', to: '2026-07-18', bucket: 'hour' });
     expect(a.series).toHaveLength(24);

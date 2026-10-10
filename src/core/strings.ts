@@ -52,7 +52,7 @@ const coreGroupZh = {
   },
   usageRate: {
     title: (code: string) => `用量报告汇率 ${code}`,
-    description: '1 美元合多少该货币。「用量与成本」页选择这种货币时，没有原价的调用按它换算；0 表示不换算。',
+    description: '用量报告在 USD 与该货币之间换算时用这个汇率：1 美元合多少该货币，初始值取 2026-10-10 的中间价。0 表示该货币不参与换算。',
   },
 };
 export const coreGroupEn: typeof coreGroupZh = {
@@ -97,7 +97,7 @@ export const coreGroupEn: typeof coreGroupZh = {
   },
   usageRate: {
     title: (code: string) => `Usage report rate: ${code}`,
-    description: 'How much of this currency 1 USD is worth. When Usage & cost shows this currency, calls not priced in it are converted at this rate; 0 turns conversion off.',
+    description: 'The rate the usage report converts between USD and this currency at: how much of it 1 USD is worth, initially the mid-market rate of 2026-10-10. 0 keeps this currency out of conversion.',
   },
 };
 export const coreGroupText = (language: Language) => pick(language, {

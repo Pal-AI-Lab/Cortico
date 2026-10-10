@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `Cambio del report di utilizzo: ${code}`,
-    description: "Quanto vale 1 USD in questa valuta. Quando «Uso e costi» mostra questa valuta, le chiamate senza prezzo in essa sono convertite a questo cambio; 0 disattiva la conversione.",
+    description: 'Cambio con cui il report di utilizzo converte tra USD e questa valuta: quanto vale 1 USD in essa, all’inizio il cambio medio del 2026-10-10. 0 esclude questa valuta dalla conversione.',
   },
 };
 export const validationText: Partial<typeof validationEn> = {

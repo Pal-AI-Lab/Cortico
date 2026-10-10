@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `使用量レポートの為替レート：${code}`,
-    description: '1 米ドルがこの通貨でいくらかを指定します。「使用量とコスト」でこの通貨を選ぶと、この通貨の価格がない呼び出しをこのレートで換算します。0 で換算しません。',
+    description: '使用量レポートで米ドルとこの通貨を換算するときのレートです。1 米ドルがこの通貨でいくらかを指定し、初期値は 2026-10-10 の仲値です。0 にするとこの通貨は換算しません。',
   },
 };
 

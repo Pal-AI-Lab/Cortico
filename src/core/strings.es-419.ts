@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `Tipo de cambio del informe de uso: ${code}`,
-    description: 'Cuánto vale 1 USD en esta moneda. Cuando «Uso y costo» muestra esta moneda, las llamadas sin precio en ella se convierten a este tipo; 0 desactiva la conversión.',
+    description: 'Tipo con el que el informe de uso convierte entre USD y esta moneda: cuánto vale 1 USD en ella, al inicio el tipo medio del 2026-10-10. 0 deja esta moneda fuera de la conversión.',
   },
 };
 

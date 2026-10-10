@@ -15,7 +15,7 @@ import type {
   ToolSchema,
 } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
-import { coreConfigGroup } from './core/config.ts';
+import { coreConfigGroup, usageRates } from './core/config.ts';
 import { resolveLanguage, type Language } from './core/language.ts';
 import { botText } from './strings.ts';
 import { updateJsonObject } from './config-file.ts';
@@ -957,7 +957,7 @@ export function createBot<C extends CoreConfig>(
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: consoleStorage,
-      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates: core.config.usage?.rates ?? {} }), status: () => core.usageLog.status() },
+      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates: usageRates(core.config) }), status: () => core.usageLog.status() },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
         set: (groupId: string, values: ConfigValues, language) => {

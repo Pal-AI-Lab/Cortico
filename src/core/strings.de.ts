@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `Umrechnungskurs im Verbrauchsbericht: ${code}`,
-    description: 'Wie viel 1 USD in dieser Währung wert ist. Zeigt „Verbrauch & Kosten“ diese Währung, werden Aufrufe ohne Preis in ihr zu diesem Kurs umgerechnet; 0 schaltet die Umrechnung aus.',
+    description: 'Kurs, zu dem der Verbrauchsbericht zwischen USD und dieser Währung umrechnet: wie viel 1 USD in ihr wert ist, anfangs der Mittelkurs vom 2026-10-10. 0 nimmt diese Währung von der Umrechnung aus.',
   },
 };
 export const validationText: Partial<typeof validationEn> = {

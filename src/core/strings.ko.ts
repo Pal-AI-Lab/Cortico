@@ -42,7 +42,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   },
   usageRate: {
     title: (code: string) => `사용량 보고 환율: ${code}`,
-    description: '1 USD가 이 통화로 얼마인지 지정합니다. 「사용량 및 비용」에서 이 통화를 선택하면 이 통화 가격이 없는 호출을 이 환율로 환산합니다. 0이면 환산하지 않습니다.',
+    description: '사용량 보고에서 USD와 이 통화를 환산할 때 쓰는 환율입니다. 1 USD가 이 통화로 얼마인지이며, 초깃값은 2026-10-10 중간 환율입니다. 0이면 이 통화는 환산하지 않습니다.',
   },
 };
 
