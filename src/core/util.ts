@@ -208,7 +208,7 @@ export class Runlog {
   constructor(file: string | null, opts: RunlogOptions = {}) {
     this.file = file;
     this.run = opts.run ?? 'r-none';
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.levels = opts.levels ?? (() => DEFAULT_LEVELS);
     this.incidentsDir = opts.incidentsDir ?? null;
     this.echo = opts.console ?? true;
