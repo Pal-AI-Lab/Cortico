@@ -49,6 +49,8 @@ import { PERSONA_CONFIG_GROUP } from '../bots/corti-soulmate/persona/config.ts';
 import { readGroupValues, setByPath, type ConfigGroup } from '../src/core/config-schema.ts';
 import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR } from '../bots/cormini/persona/workspaceGit.ts';
 import { aggregateUsage } from '../src/core/cost.ts';
+import { priceUsage, unknownMeters } from '../src/core/generation.ts';
+import { snapshotPrice } from '../src/providers/pricebook.ts';
 import { nullLogger } from '../src/core/util.ts';
 import type {
   World, WorldConsoleDecl, ToolSchema, ToolTag, UsageRecord,
@@ -115,6 +117,10 @@ function genUsage(): UsageRecord[] {
       sessionId: role === 'main' ? 'main' : `${role}-${recs.length}`, role, label, model,
       promptTokens: prompt, completionTokens: comp, cacheHitTokens: hit, cacheMissTokens: prompt - hit,
       reasoningTokens: Math.floor(comp * 0.4),
+      charges: priceUsage({ ...unknownMeters(), input: prompt, output: comp, cachedInput: hit, uncachedInput: prompt - hit }, [snapshotPrice({
+        models: [model], currency: 'USD', basis: 'marginal', source: 'dev fake price',
+        rules: [{ meter: 'cachedInput', perMillion: 0.02 }, { meter: 'uncachedInput', perMillion: 0.27 }, { meter: 'output', perMillion: 1.1 }],
+      }, { startedAt: `${day}T${p2(hh)}:${p2(mm)}:00+08:00`, requestedServiceTier: null })]),
     });
   };
 // 日期按今天的 +08:00 日历日生成,覆盖分钟、周、月等聚合粒度。
@@ -1153,7 +1159,7 @@ const app = new WebApp({
   }),
   sessions: { list: () => sessionsList, messages: (id) => (id === 'main' ? session : sessionsList.some((s) => s.id === id) ? session.slice(0, 4) : null), onChange: () => {} },
   storage: () => storage,
-  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ }) },
+  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ, rates: devCfg.usage?.rates ?? {} }) },
 
   config: {
     groups: () => [...devConfigGroups,...devProviders.groups()].map((group) => ({ group, values: group.owner.startsWith('provider:') ? devProviders.values(group.id) : readGroupValues(devCfg, group) })),
