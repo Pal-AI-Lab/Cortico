@@ -22,7 +22,7 @@ import type {
 } from '../../core/types.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nowIso, shortTime, nullLogger } from '../../core/util.ts';
+import { nowIso, shortTime, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
   eventInConversation,
   parseConversationAddress,
@@ -205,7 +205,7 @@ export class QQWorld implements World {
 
   constructor(cfg: QQWorldConfig, deps?: QQWorldDeps) {
     this.cfg = cfg;
-    this.timezone = cfg.timezone ?? 'Asia/Shanghai';
+    this.timezone = cfg.timezone ?? SYSTEM_TIMEZONE;
     this.vision = deps?.vision;
     this.imageCapture = deps?.imageCapture ?? VISION_DEFAULTS;
     this.gate = deps?.gate;

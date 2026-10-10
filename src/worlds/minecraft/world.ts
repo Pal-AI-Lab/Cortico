@@ -18,7 +18,7 @@ import { selfDamageText, takeSelfDamage } from './damage-source.ts';
 import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import { Bridge } from './bridge.ts';
 import {
   REPEATED_QUERY_RECEIPT, RoundOnceGate, roundTokenOf,
@@ -2546,7 +2546,7 @@ export class MinecraftWorld implements World {
 
   constructor(opts: MinecraftWorldOptions) {
     this.cfg = opts.cfg;
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.botName = opts.botName ?? 'bot';
     this.bodyLease = new BodyLeaseArbiter({
       connectionGeneration: 0,

@@ -6,7 +6,6 @@
 import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
-import { nowIso } from '../../core/util.ts';
 import {
   Aborted, SkillBlocked, checkAbort, sleep, type RouteProbe, type SkillContext, type TargetDiag,
 } from './skill-context.ts';
@@ -126,14 +125,6 @@ export const ROUTE_PROGRESS_MIN = 16;
 export const PROBE_LABEL: Record<RouteProbe['profile'], string> = {
   style: '按当前风格', dig: '只挖不垫', walk: '只靠走',
 };
-
-/**
- * 闸门拒绝理由里的回读时刻(HH:MM:SS)。技能层拿不到执行器的时区配置,用默认那档;
- * 它与执行器的 `clock()` 同一口径。
- */
-export function readStamp(): string {
-  return nowIso('Asia/Shanghai').slice(11, 19);
-}
 
 /** 与判决同口径的距离文案:2.4 显示 2.4,别四舍五入成"2 格却不放行"的自相矛盾 */
 export function fmtDist(d: number): string {

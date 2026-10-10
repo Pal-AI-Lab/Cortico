@@ -13,7 +13,7 @@ import type { Bot } from 'mineflayer';
 import pathfinderPkg from 'mineflayer-pathfinder';
 import { Vec3 } from 'vec3';
 import type { Logger } from '../../core/types.ts';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import type { MinecraftLog } from './log.ts';
 import {
   BLOCK_FACES, cellOnFace, rasterize, resolveAnchors,
@@ -130,7 +130,7 @@ import { dimensionOf } from './cell-facts.ts';
 import { fmtDur } from './receipt.ts';
 import {
   FLEE_DEADLINE_MS, clearEscapeGoalOwner, digBackoffScene, digBlock, dropGoal, escapeIntent,
-  findEntity, fmtDist, gotoGoal, holdTreadWater, levelTravelGoal, matchBlockIds, onEscapeGoal, readStamp, releaseBody,
+  findEntity, fmtDist, gotoGoal, holdTreadWater, levelTravelGoal, matchBlockIds, onEscapeGoal, releaseBody,
   renderRouteMenu, routeNote, setOwnedGoal, type DistanceMetric, withRouteScene,
 } from './travel.ts';
 import {
@@ -1365,7 +1365,7 @@ interface ExecutorOptions {
   log: Logger;
   /** 任务号发号器 */
   nextId: () => number;
-  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按东八区(与世界快照的现实时间同一默认) */
+  /** 回执里 HH:MM:SS 按哪个时区渲染;不给按本机时区(与世界快照的现实时间同一默认) */
   timezone?: string;
   /** 战斗中生命跌破此值就收手撤退(与反射的脱战血线同源);不给 = 不撤 */
   fleeHealth?: () => number;
@@ -1543,7 +1543,7 @@ export class Executor {
 
   /** 挂钟时刻 HH:MM:SS。一场就是一天,不带日期 */
   private clock(ms: number): string {
-    return nowIso(this.opts.timezone ?? 'Asia/Shanghai', new Date(ms)).slice(11, 19);
+    return nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE, new Date(ms)).slice(11, 19);
   }
 
   /**

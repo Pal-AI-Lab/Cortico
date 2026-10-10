@@ -6,6 +6,7 @@ import {
   timePhrase, villagerNote, wetNote, worldDelta,
   type BlockReader, type ItemStack, type WorldSnapshot,
 } from '../../../src/worlds/minecraft/terrain.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../../src/core/util.ts';
 
 function snap(over: Partial<WorldSnapshot> = {}): WorldSnapshot {
   return {
@@ -208,8 +209,8 @@ describe('snapshotFromBot 的现实时刻', () => {
     players: {},
   });
 
-  it('不指定时区就按东八区报', () => {
-    expect(snapshotFromBot(bareBot()).realTime).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}\+08:00$/);
+  it('不指定时区就按本机时区报', () => {
+    expect(snapshotFromBot(bareBot()).realTime.slice(-6)).toBe(nowIso(SYSTEM_TIMEZONE).slice(-6));
   });
 
   it('指定了就按指定的那个时区报', () => {
