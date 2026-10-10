@@ -129,13 +129,13 @@ console/         控制台面板两侧:服务器、存档、权限、客户端�
 }
 ```
 
-也可以在控制台的 Minecraft 配置里填同样的项，再在「挂载」面板选「外部服务器」并点「连接」。
+也可以在控制台的 Minecraft 配置里填写同样的项，再在「挂载」面板选择「外部服务器」并点击「连接」。
 
 - **版本**：`version` 必须与服务器的协议版本一致。不一致时服务器在登录阶段断开，失败原因标「版本」，原文带服务器要求的版本号。
 - **认证**：bot 以离线账号登录（mineflayer `auth: 'offline'`），服务器须设 `online-mode=false`，或经允许离线账号的代理进入。开着正版验证时失败原因标「认证」（`multiplayer.disconnect.unverified_username`）。
-- **白名单与封禁**：服务器开着白名单时，`username` 要先加进名单；被拒时失败原因标「白名单」或「封禁」。`username` 与已在线的玩家同名时标「同名在线」。
-- **服务器权限**：外部服务器没有控制台 stdin，World 要下的指令（观察者附身的 `gamemode`/`spectate`、玩家传送的 `tp`、逃生传送）都由 bot 在聊天里发出，需要服务器管理员给 bot 的账号 op 权限；没有权限时这些指令被服务器拒绝，连接本身不受影响。存档、难度和 ops 名单由那台服务器的管理员管理，「存档与玩法」「权限与作弊」面板不可用。
-- **观察者与玩家客户端**：可选，连同一个地址和端口，账号名同样要满足离线登录、白名单与 op 的要求。
+- **白名单与封禁**：服务器开着白名单时，`username` 要先加入名单；被拒时失败原因标「白名单」或「封禁」。`username` 与已在线的玩家同名时标「同名在线」。
+- **服务器权限**：外部服务器没有控制台 stdin，World 需要发送的指令（观察者附身的 `gamemode`/`spectate`、玩家传送的 `tp`、逃生传送）都由 bot 在聊天里发出，需要服务器管理员给 bot 的账号 op 权限；没有权限时这些指令被服务器拒绝，连接本身不受影响。存档、难度和 ops 名单由那台服务器的管理员管理，「存档与玩法」「权限与作弊」面板不可用。
+- **观察者与玩家客户端**：可选，连接同一个地址和端口，账号名同样要满足离线登录、白名单与 op 的要求。
 
 ## 画面:viewer 还是主视角
 
@@ -190,8 +190,8 @@ export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载
 挂载接口分别管理服务器、观察者和玩家客户端，方法名使用对应前缀，例如
 `server.state`、`client.start` 与 `player.teleport`。
 
-- **连接方式**：`worlds.minecraft.serverMode` 取 `local`、`external` 或 `auto`（默认，填了 `local.serverDir` 按 `local`，否则按 `external`；受管进程运行中按它锁定的目录推定）。面板顶部的「连接方式」写这个键。连接方式一变，bot 断开当前连接、旧连接上的任务结束、托管着的服务器停止，`wanted` 置假，等操作员重新启动或连接。
-- **游戏服务器（本地托管）**：`worlds.minecraft.local.serverDir` 指定含 `server.jar` 的目录，`local.javaPath` 指定 Java。启动与停止同时决定 bot 是否连接这台服务器：启动后起服并连接，停止后断开 bot、取消重连并关服。`local.startWithWorld=true` 时 World 启动即起服；默认关。停止时通过 stdin 发送 `stop` 保存存档，15 秒后仍未退出则强制终止。
+- **连接方式**：`worlds.minecraft.serverMode` 取 `local`、`external` 或 `auto`（默认，填写了 `local.serverDir` 按 `local`，否则按 `external`；受管进程运行中按它锁定的目录推定）。面板顶部的「连接方式」写入这个键。连接方式一变，bot 断开当前连接、旧连接上的任务结束、托管着的服务器停止，`wanted` 置假，等操作员重新启动或连接。
+- **游戏服务器（本地托管）**：`worlds.minecraft.local.serverDir` 指定含 `server.jar` 的目录，`local.javaPath` 指定 Java。启动与停止同时决定 bot 是否连接这台服务器：启动后起服并连接，停止后断开 bot、取消重连并关服。`local.startWithWorld=true` 时 World 启动即起服；默认关。停止时通过 stdin 发送 `stop` 保存存档，15 秒后仍未退出则强制终止。本地托管时 bot 同样连接 `host:port`；`host` 不是本机地址时，「启动」在本机启动服务器，bot 却连接那个远程地址，需要把 `host` 修改为 `127.0.0.1`。
 - **外部服务器**：`start`/`stop`/`reconnect` 只开关 bot 的连接，不启停对方的服务器，也不读本地服务器目录。World 启动即连接；断开后不再自动重连，直到再次连接。`reconnect` 结束当前连接上的任务后按配置里的目标重新连接。
 - **连接目标**：host、port、username、version 在连接开启时锁定，自动重连沿用同一目标；配置改动在下一次连接（断开后连接、`reconnect`，或本地托管停止后重新启动）时采用，之前 `server.state` 的 `pending` 给出待采用的目标。观察者与玩家客户端连同一个目标。
 - **状态**：`server.state` 里 `reachable` 只表示端口能建立 TCP 连接；bot 是否进入世界看 `link.phase`（`stopped`/`connecting`/`online`/`retrying`），`online` 只在 spawn 之后出现。`link.failure` 转述最近一次失败：服务器的断开理由原文（JSON 文本或 NBT 组件取出的文字、翻译键），能从翻译键或原版英文措辞认出时标出白名单、认证、版本、封禁、同名在线类别；或网络错误原文。
