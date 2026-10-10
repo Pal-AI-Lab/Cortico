@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Seuils fichier par zone',
     description: "`zone=niveau` séparés par des virgules, par exemple `core.loop=trace,console=warn` ; `.*` est pris en charge. Le préfixe correspondant le plus long s'applique. Les zones sans correspondance utilisent le seuil par défaut.",
   },
+  usageRate: {
+    title: (code: string) => `Taux du rapport d'utilisation : ${code}`,
+    description: "Valeur de 1 USD dans cette devise. Quand « Utilisation et coûts » affiche cette devise, les appels sans prix dans cette devise sont convertis à ce taux ; 0 désactive la conversion.",
+  },
 };
 export const validationText: Partial<typeof validationEn> = {
   notNumber: (label: string) => `${label} doit être un nombre`,

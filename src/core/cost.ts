@@ -1,6 +1,7 @@
 /** Aggregate observed consumption and immutable Provider charges. */
 import type { UsageRecord } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
+import type { Charge } from './generation.ts';
 import { getTimezoneOffsetMinutes, nowIso } from './util.ts';
 
 /** 已解析的具体时间粒度(桶宽) */
@@ -53,6 +54,10 @@ export interface UsageGroupStat extends UsageAccum {
 
 export interface UsageAggregate {
   currency: string;
+  /** 这个计价基础下能显示的币种：有原价的，加上能从它们换算到的。 */
+  currencies: string[];
+  /** 1 USD 合多少该币种；所选币种没有原价的调用按它换算。 */
+  rates: Record<string, number>;
   basis: 'marginal' | 'equivalent';
   balances: BillingBalance[];
   successful: UsageAccum;
@@ -85,6 +90,27 @@ function zero(): UsageAccum {
 }
 
 type MeasuredCost = { cacheHit: number; cacheMiss: number; output: number; total: number; priced: boolean };
+
+/** 1 USD 合多少 code;USD 恒为 1,没有正数汇率的币种为 null。 */
+function usdRate(code: string, rates: Readonly<Record<string, number>>): number | null {
+  if (code === 'USD') return 1;
+  const rate = rates[code];
+  return typeof rate === 'number' && rate > 0 ? rate : null;
+}
+
+/** 记录在 currency 下的费用：有原价用原价，否则取同一计价基础下第一笔能换算的费用，金额乘 factor。 */
+function chargeIn(charges: readonly Charge[], currency: string, basis: string, rates: Readonly<Record<string, number>>): { charge: Charge; factor: number } | null {
+  const native = charges.find(charge => charge.quote.currency === currency && charge.quote.basis === basis);
+  if (native) return { charge: native, factor: 1 };
+  const to = usdRate(currency, rates);
+  if (to === null) return null;
+  for (const charge of charges) {
+    if (charge.quote.basis !== basis) continue;
+    const from = usdRate(charge.quote.currency, rates);
+    if (from !== null) return { charge, factor: to / from };
+  }
+  return null;
+}
 
 function add(a: UsageAccum, r: UsageRecord, c: MeasuredCost): void {
   a.calls += 1;
@@ -222,6 +248,8 @@ export interface UsageAggregateOptions {
   bucket: UsageBucketOption;
   currency?: string;
   basis?: 'marginal' | 'equivalent';
+  /** 1 USD 合多少该币种;0 或缺项的币种不参与换算。 */
+  rates?: Readonly<Record<string, number>>;
   /**
    * 日期范围与时间桶按这个时区的墙钟算,并按它解析 days、不为当前时刻之后补空桶。
    * 不给时用记录 ts 自带的墙钟。
@@ -259,14 +287,22 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const balances = billingBalances(selected);
   const basis = opts.basis ?? 'marginal';
   const currency = opts.currency ?? balances.find(balance => balance.basis === basis)?.currency ?? 'USD';
+  const rates = { ...(opts.rates ?? {}) };
+  const native = [...new Set(balances.filter(balance => balance.basis === basis).map(balance => balance.currency))];
+  const convertible = native.some(code => usdRate(code, rates) !== null)
+    ? ['USD', ...Object.keys(rates).filter(code => usdRate(code, rates) !== null)]
+    : [];
+  const currencies = [...new Set([...native, ...convertible])];
 
   for (const { r, at } of keyed) {
-    const charge = recordCharges(r).find(charge => charge.quote.currency === currency && charge.quote.basis === basis);
-    const cost: MeasuredCost = { cacheHit: 0, cacheMiss: 0, output: 0, total: charge?.knownAmount ?? 0, priced: charge?.amount != null };
+    const found = chargeIn(recordCharges(r), currency, basis, rates);
+    const charge = found?.charge;
+    const factor = found?.factor ?? 1;
+    const cost: MeasuredCost = { cacheHit: 0, cacheMiss: 0, output: 0, total: (charge?.knownAmount ?? 0) * factor, priced: charge?.amount != null };
     for (const line of charge?.lines ?? []) {
-      if (line.meter === 'cachedInput') cost.cacheHit += line.amount ?? 0;
-      if (line.meter === 'uncachedInput' || line.meter === 'input') cost.cacheMiss += line.amount ?? 0;
-      if (line.meter === 'output') cost.output += line.amount ?? 0;
+      if (line.meter === 'cachedInput') cost.cacheHit += (line.amount ?? 0) * factor;
+      if (line.meter === 'uncachedInput' || line.meter === 'input') cost.cacheMiss += (line.amount ?? 0) * factor;
+      if (line.meter === 'output') cost.output += (line.amount ?? 0) * factor;
     }
     const outcome = r.attempt?.outcome;
     if (r.outcome !== undefined || (outcome !== undefined && outcome !== 'completed' && outcome !== 'incomplete')) add(failed, r, cost);
@@ -311,7 +347,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
 
   return {
-    currency, basis, balances, successful, byInstance: groupOut(instances),
+    currency, currencies, rates, basis, balances, successful, byInstance: groupOut(instances),
     bucket: unit,
     from,
     to,

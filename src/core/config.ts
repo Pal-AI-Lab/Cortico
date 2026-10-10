@@ -6,8 +6,20 @@ import { coreGroupText } from './strings.ts';
 import { SYSTEM_TIMEZONE } from './util.ts';
 
 /** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
+/** 用量报告可换算的币种与初始汇率:1 USD 合多少该币种，取 2026-10-10 的中间价。部署里可改。 */
+export const USAGE_RATES: Readonly<Record<string, number>> = {
+  CNY: 6.69, EUR: 0.892, JPY: 158.3, KRW: 1341, TWD: 31.9, BRL: 4.99, RUB: 85.4,
+};
+
 export function coreConfigGroup(language: Language): ConfigGroup {
   const t = coreGroupText(language);
+  const rates = Object.fromEntries(Object.keys(USAGE_RATES).map((code) => [`usage.rates.${code}`, {
+    type: 'number' as const,
+    title: t.usageRate.title(code),
+    minimum: 0,
+    'x-hot': true,
+    description: t.usageRate.description,
+  }]));
   return {
     id: 'core',
     owner: 'core',
@@ -90,6 +102,7 @@ export function coreConfigGroup(language: Language): ConfigGroup {
           'x-hot': true,
           description: t.logAreas.description,
         },
+        ...rates,
       },
     },
   };
@@ -109,6 +122,7 @@ export const CORE_DEFAULTS = {
   batching: { quietGapMs: 2500, minBatchAgeMs: 0, maxBatchAgeMs: 15000, maxBatchSize: 100 },
   context: { keepPastThinking: true },
   logging: { file: 'debug' as const, console: 'info' as const, areas: '' },
+  usage: { rates: USAGE_RATES },
 } as const;
 
 

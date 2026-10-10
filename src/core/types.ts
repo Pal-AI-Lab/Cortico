@@ -1214,6 +1214,10 @@ export interface CoreConfig {
 
     data: string;
   };
+  usage?: {
+    /** 1 USD 合多少该币种(ISO 代码为键)。用量报告选的币种没有原价时，按它从别的币种换算;0 表示不换算。 */
+    rates?: Record<string, number>;
+  };
   logging: {
     /** 低于此级别的记录不写入 log.jsonl。 */
     file: LogLevel;

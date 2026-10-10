@@ -50,6 +50,10 @@ const coreGroupZh = {
     title: '按区域覆盖落盘门槛',
     description: "以逗号分隔 `区域=级别`，例如 `core.loop=trace,console=warn`；支持 `.*`。最长匹配前缀优先，未匹配的区域使用默认门槛。",
   },
+  usageRate: {
+    title: (code: string) => `用量报告汇率 ${code}`,
+    description: '1 美元合多少该货币。「用量与成本」页选择这种货币时，没有原价的调用按它换算；0 表示不换算。',
+  },
 };
 export const coreGroupEn: typeof coreGroupZh = {
   title: "Event batching, reasoning and logging",
@@ -90,6 +94,10 @@ export const coreGroupEn: typeof coreGroupZh = {
   logAreas: {
     title: 'Per-area file threshold overrides',
     description: "Comma-separated `area=level`, such as `core.loop=trace,console=warn`; `.*` is supported. The longest matching prefix applies. Unmatched areas use the default threshold.",
+  },
+  usageRate: {
+    title: (code: string) => `Usage report rate: ${code}`,
+    description: 'How much of this currency 1 USD is worth. When Usage & cost shows this currency, calls not priced in it are converted at this rate; 0 turns conversion off.',
   },
 };
 export const coreGroupText = (language: Language) => pick(language, {

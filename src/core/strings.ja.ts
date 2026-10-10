@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: '領域ごとのファイル出力しきい値の上書き',
     description: 'カンマ区切りの `領域=レベル` で指定します（例：`core.loop=trace,console=warn`）。`.*` に対応しています。最も長く一致したプレフィックスが優先され、一致しない領域は既定のしきい値を使います。',
   },
+  usageRate: {
+    title: (code: string) => `使用量レポートの為替レート：${code}`,
+    description: '1 米ドルがこの通貨でいくらかを指定します。「使用量とコスト」でこの通貨を選ぶと、この通貨の価格がない呼び出しをこのレートで換算します。0 で換算しません。',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {

@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: '依區域覆蓋寫入磁碟門檻',
     description: '以逗號分隔 `區域=層級`，例如 `core.loop=trace,console=warn`；支援 `.*`。最長符合前綴優先，未符合的區域使用預設門檻。',
   },
+  usageRate: {
+    title: (code: string) => `用量報告匯率 ${code}`,
+    description: '1 美元可兌換多少該貨幣。「用量與成本」頁選擇這種貨幣時，沒有原價的呼叫按此換算；0 表示不換算。',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {
