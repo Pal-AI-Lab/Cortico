@@ -37,6 +37,14 @@ describe('连接错误', () => {
     expect(errorFailure(err, 'socketClosed')).toBe('网络:connect ECONNREFUSED 203.0.113.5:25570');
   });
 
+  it('多地址目标的 AggregateError 自身没有原文,取各地址的错误', () => {
+    const err = Object.assign(new AggregateError([
+      Object.assign(new Error('connect ECONNREFUSED ::1:25570'), { code: 'ECONNREFUSED' }),
+      Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:25570'), { code: 'ECONNREFUSED' }),
+    ]), { code: 'ECONNREFUSED' });
+    expect(errorFailure(err)).toBe('网络:connect ECONNREFUSED ::1:25570; connect ECONNREFUSED 127.0.0.1:25570');
+  });
+
   it('没有错误时报连接关闭的理由', () => {
     expect(errorFailure(null, 'socketClosed')).toBe('连接关闭:socketClosed');
   });

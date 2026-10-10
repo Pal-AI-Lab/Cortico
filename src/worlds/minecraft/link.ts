@@ -134,7 +134,20 @@ export function kickFailure(reason: unknown): string {
 export function errorFailure(err: Error | null, end?: string): string {
   if (!err) return `连接关闭:${end ?? '原因不明'}`;
   const code = (err as NodeJS.ErrnoException).code ?? '';
-  if (NETWORK_CODES.has(code) || [...NETWORK_CODES].some((c) => err.message.includes(c))) return `网络:${err.message}`;
-  if (VERSION_ERROR.test(err.message)) return `版本:${err.message}`;
-  return err.message;
+  const message = errorText(err);
+  if (NETWORK_CODES.has(code) || [...NETWORK_CODES].some((c) => message.includes(c))) return `网络:${message}`;
+  if (VERSION_ERROR.test(message)) return `版本:${message}`;
+  return message;
+}
+
+/**
+ * 错误原文。主机名解析出多个地址时 Node 抛 AggregateError,自身 message 为空,
+ * 原文在各地址的子错误里。
+ */
+function errorText(err: Error): string {
+  if (err.message) return err.message;
+  const inner = err instanceof AggregateError
+    ? err.errors.map((e: unknown) => (e instanceof Error ? e.message : String(e))).filter(Boolean)
+    : [];
+  return inner.length ? inner.join('; ') : (err as NodeJS.ErrnoException).code ?? err.name;
 }

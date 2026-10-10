@@ -238,13 +238,13 @@ export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
   schema: {
     type: 'object',
     title: 'Minecraft · 连接',
-    description: '地址、端口、用户名和版本在下次连接时采用：外部服务器在挂载面板点「重连」，'
+    description: '地址、端口、用户名和版本在下次连接时采用：外部服务器在挂载面板点击「重连」，'
       + '本地托管停止并重新启动服务器。服务器路径在下次启动服务器时采用。',
     properties: {
       'worlds.minecraft.serverMode': {
         type: 'string', title: '连接方式', enum: [...MINECRAFT_SERVER_MODES], 'x-hot': true,
         description: 'local = 本 World 启停本地服务器目录里的服务器；external = 只连接下面的地址和端口，'
-          + '不使用本地服务器目录；auto = 填了本地服务器目录按 local，否则按 external。'
+          + '不使用本地服务器目录；auto = 填写了本地服务器目录按 local，否则按 external。'
           + '改动后 bot 断开当前连接，在挂载面板里重新启动或连接。',
       },
       'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': true },

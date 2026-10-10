@@ -20,8 +20,8 @@ import {
 const DESC =
   '本地托管:本 World 启停服务器目录里的 server.jar,bot 随之连接。'
   + '外部服务器:只连接、断开 bot,不启停对方的服务器。'
-  + '观察者客户端与玩家客户端可选,连同一个地址和端口:观察者客户端以观察者模式跟着 bot,'
-  + '画面(含光影/模组)换成它;玩家客户端以普通玩家身份进服,进服时传送到 bot 旁边。';
+  + '观察者客户端与玩家客户端可选,连接同一个地址和端口:观察者客户端以观察者模式跟随 bot,'
+  + '画面(含光影/模组)切换为它;玩家客户端以普通玩家身份进服,进服时传送到 bot 旁边。';
 
 /** 世界生成 / 权重加载 / 客户端起窗口要几十秒到几分钟,轮到不再是 starting 为止。 */
 const READY_TICKS = 90;
@@ -54,8 +54,9 @@ function settle(lane: Lane, name: string, st: LaneState): string | null {
   const srv = st as MinecraftServerState;
   if (lane === 'server' && srv.mode === 'external') {
     if (srv.link.phase === 'online') return 'bot 已进入世界';
-    if (srv.link.failure) return `[失败] ${srv.link.failure}`;
-    if (srv.link.phase === 'stopped') return '[失败] 连接没有开启';
+    // 新一次尝试开始后上一次的原因还留着,只有等待重连时它才是这一次的结果
+    if (srv.link.phase === 'retrying' && srv.link.failure) return `[失败] ${srv.link.failure}`;
+    if (srv.link.phase === 'stopped') return '[失败] 连接未开启';
     return null;
   }
   if (st.phase === 'starting') return null;
@@ -158,7 +159,7 @@ function linkRows(ctx: ConsolePanelContext, st: MinecraftServerState): ConsoleKv
   if (external) {
     rows.push(
       { k: '目标', v: `${link.username}@${link.target}(${link.version})` },
-      { k: '端口', v: ui.pill(st.reachable ? '可连接' : '连不上', st.reachable ? 'on' : 'off') },
+      { k: '端口', v: ui.pill(st.reachable ? '可连接' : '无法连接', st.reachable ? 'on' : 'off') },
     );
   }
   const word = link.phase === 'retrying' && link.attempt > 0
@@ -169,7 +170,7 @@ function linkRows(ctx: ConsolePanelContext, st: MinecraftServerState): ConsoleKv
   if (st.pending) {
     rows.push({
       k: '待采用',
-      v: `${st.pending};${external ? '点「重连」后采用' : '停止并重新启动服务器后采用'}`,
+      v: `${st.pending};${external ? '点击「重连」后采用' : '停止并重新启动服务器后采用'}`,
     });
   }
   return rows;
@@ -236,7 +237,7 @@ export const mountPanel: ConsolePanel = {
       const l = st.link;
       const tone: Tone = !st.wanted ? 'off' : l.phase === 'online' ? 'on' : l.phase === 'stopped' ? 'plain' : 'warn';
       const word = !st.wanted ? '已断开' : l.phase === 'stopped' ? '未启动' : LINK_WORDS[l.phase] ?? l.phase;
-      srv.row.set(tone, word, `${l.username}@${l.target}`);
+      srv.row.set(tone, word, null);
       extStart.disabled = st.wanted && l.phase !== 'stopped';
       extStop.disabled = !st.wanted;
       extRelink.disabled = false;
@@ -248,7 +249,7 @@ export const mountPanel: ConsolePanel = {
       const external = st?.mode === 'external';
       showFor(external);
       if (st) modeSeg.setValue(st.mode);
-      modeNote.textContent = st?.modeInferred ? '按是否填了本地服务器目录推定' : '';
+      modeNote.textContent = st?.modeInferred ? '按是否填写了本地服务器目录推定' : '';
       linkBox.replaceChildren(...(st ? [ui.kv(linkRows(ctx, st))] : []));
       if (st && external) { renderExternal(st); return; }
       if (st && !st.configured && st.phase === 'stopped' && !st.reachable) {
@@ -533,7 +534,7 @@ async function mountAll(
 
     const srv = await ctx.invoke<MinecraftServerState>('server.state');
     if (srv.mode === 'external') {
-      jobs.push(bring('server', '外部服务器', srv.link.phase === 'online' ? 'bot 已在世界里' : null));
+      jobs.push(bring('server', '外部服务器', srv.link.phase === 'online' ? 'bot 已进入世界' : null));
     } else {
       jobs.push(bring('server', '服务器', srv.reachable && srv.wanted ? '服务器已在运行' : null));
     }

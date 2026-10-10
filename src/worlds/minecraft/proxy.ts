@@ -75,6 +75,8 @@ export class MinecraftWorldProxy implements World {
   private nextReqId = 1;
   private readonly pending = new Map<number, PendingRpc>();
   private declCache: Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'> = {};
+  /** 子进程按当前连接目标算的世界身份行;子进程没起时按配置算 */
+  private worldLineCache: string | null = null;
   private storageCache: StorageStat[] = [];
   private lastConfigJson = '';
   private lastCaps: boolean | null = null;
@@ -84,14 +86,14 @@ export class MinecraftWorldProxy implements World {
   constructor(private readonly opts: MinecraftWorldOptions) {}
 
   /**
-   * 前缀从子进程持有的落盘文件读取探索摘要与常驻规则，并从 server.properties 读取世界身份。
-   * 快照锚点由子进程设置。
+   * 前缀从子进程持有的落盘文件读取探索摘要与常驻规则。世界身份取子进程按当前连接目标算的
+   * 那一行;子进程还没报状态时按配置算。快照锚点由子进程设置。
    */
   envPromptVars(): Record<string, string> {
     const { cfg } = this.opts;
     const local = serverModeOf(cfg.serverMode, cfg.local.serverDir) === 'local';
     return {
-      'minecraft.world': worldEnvLine(worldIdentityOf(local ? cfg.local.serverDir : '', `${cfg.host}:${cfg.port}`)),
+      'minecraft.world': this.worldLineCache ?? worldEnvLine(worldIdentityOf(local ? cfg.local.serverDir : '', `${cfg.host}:${cfg.port}`)),
       'minecraft.explored': renderExploredLedger(loadExplored(this.storageFileOf('minecraft-explored'))),
       'minecraft.policy': renderPolicyEnv(loadPolicy(this.storageFileOf('minecraft-policy'))),
       'minecraft.camera': this.opts.cfg.client.enabled
@@ -279,6 +281,7 @@ export class MinecraftWorldProxy implements World {
     this.child = null;
     this.ready = false;
     this.declCache = {};
+    this.worldLineCache = null;
     this.storageCache = [];
     for (const [, p] of this.pending) {
       clearTimeout(p.timer);
@@ -402,6 +405,7 @@ export class MinecraftWorldProxy implements World {
       }
       case 'status':
         this.declCache = note.decl;
+        this.worldLineCache = note.worldLine;
         this.storageCache = note.storage;
         return;
     }
