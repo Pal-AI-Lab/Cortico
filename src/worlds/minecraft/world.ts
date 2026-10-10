@@ -2748,8 +2748,7 @@ export class MinecraftWorld implements World {
   serverConsole(): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerConsoleState>> {
     const report = async (state?: MinecraftServerState): Promise<MinecraftServerConsoleState> =>
       this.serverConsoleState(state ?? await this.mcServer.state());
-    // 配置里改了连接方式时,先在这里让切换落地(断开旧连接排进队列),再处理这一次操作;
-    // 否则下一拍心跳会把刚设的 serverWanted 当成旧方式的状态撤掉
+    // 每次操作前先让配置里的连接方式落地(断开旧连接排进队列),这次操作的 serverWanted 按新方式设
     const reconcile = (): void => {
       if (this.serverLifecycleActive) void this.syncManagedServerLifecycle();
     };
