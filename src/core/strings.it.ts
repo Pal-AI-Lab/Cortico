@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Soglie file per area',
     description: "`area=livello` separati da virgole, ad esempio `core.loop=trace,console=warn`; `.*` è supportato. Si applica il prefisso corrispondente più lungo. Le aree senza corrispondenza usano la soglia predefinita.",
   },
+  usageRate: {
+    title: (code: string) => `Cambio del report di utilizzo: ${code}`,
+    description: 'Cambio con cui il report di utilizzo converte tra USD e questa valuta: quanto vale 1 USD in essa, all’inizio il cambio medio del 2026-10-10. 0 esclude questa valuta dalla conversione.',
+  },
 };
 export const validationText: Partial<typeof validationEn> = {
   notNumber: (label: string) => `${label} deve essere un numero`,

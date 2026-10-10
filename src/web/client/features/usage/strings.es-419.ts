@@ -25,6 +25,8 @@ export const S: Partial<typeof en> = {
   refresh: 'Actualizar',
   granularity: 'Granularidad',
   autoCurrency: 'Moneda automática',
+  rateHint: 'Se guarda en la configuración de Core (usage.rates); el informe vuelve a convertir al instante',
+  rateSaveFailed: (why: string) => `No se guardó el tipo de cambio: ${why}`,
   basisMarginal: 'Costo marginal',
   basisEquivalent: 'Costo equivalente de API',
   ledger: 'Libro',

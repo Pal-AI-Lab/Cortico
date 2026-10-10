@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Пороги записи в файл по областям',
     description: '`область=уровень` через запятую, например `core.loop=trace,console=warn`; поддерживается `.*`. Применяется самый длинный совпадающий префикс. Для остальных областей действует порог по умолчанию.',
   },
+  usageRate: {
+    title: (code: string) => `Курс в отчёте о расходе: ${code}`,
+    description: 'Курс, по которому отчёт о расходе пересчитывает между USD и этой валютой: сколько стоит в ней 1 USD, исходно средний курс на 2026-10-10. 0 исключает эту валюту из пересчёта.',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {

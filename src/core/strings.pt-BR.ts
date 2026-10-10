@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Limites de arquivo por área',
     description: '`área=nível` separados por vírgula, por exemplo `core.loop=trace,console=warn`; `.*` é aceito. Vale o prefixo correspondente mais longo. Áreas sem correspondência usam o limite padrão.',
   },
+  usageRate: {
+    title: (code: string) => `Câmbio do relatório de uso: ${code}`,
+    description: 'Câmbio com que o relatório de uso converte entre USD e esta moeda: quanto vale 1 USD nela, de início a cotação média de 2026-10-10. 0 deixa esta moeda fora da conversão.',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {

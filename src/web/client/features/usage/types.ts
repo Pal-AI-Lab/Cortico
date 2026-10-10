@@ -53,6 +53,10 @@ export type UsageBucketOption = UsageBucketUnit | 'auto';
 export interface UsageAggregate {
   ledger?: { pending: number; error: string | null };
   currency?: string;
+  /** 这个计价基础下能显示的币种：有原价的，加上能换算到的。 */
+  currencies?: string[];
+  /** 1 USD 合多少该币种，来自 Core 配置 `usage.rates`。 */
+  rates?: Record<string, number>;
   basis?: 'marginal' | 'equivalent';
   balances?: Array<{ currency: string; basis: 'marginal' | 'equivalent'; knownAmount: number; pricedCalls: number; partialCalls: number }>;
   successful?: UsageAccum;

@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: '영역별 파일 기록 기준 재정의',
     description: '쉼표로 구분한 `영역=수준` 형식입니다. 예: `core.loop=trace,console=warn`. `.*`를 지원합니다. 가장 길게 일치하는 접두사가 우선하며, 일치하지 않는 영역은 기본 기준을 씁니다.',
   },
+  usageRate: {
+    title: (code: string) => `사용량 보고 환율: ${code}`,
+    description: '사용량 보고에서 USD와 이 통화를 환산할 때 쓰는 환율입니다. 1 USD가 이 통화로 얼마인지이며, 초깃값은 2026-10-10 중간 환율입니다. 0이면 이 통화는 환산하지 않습니다.',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {

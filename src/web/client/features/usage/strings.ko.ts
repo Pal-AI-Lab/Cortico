@@ -23,6 +23,8 @@ export const S: Partial<typeof en> = {
   refresh: '새로 고침',
   granularity: '단위',
   autoCurrency: '통화 자동',
+  rateHint: 'Core 설정 usage.rates에 저장하고 바로 다시 환산합니다',
+  rateSaveFailed: (why: string) => `환율을 저장하지 못했습니다: ${why}`,
   basisMarginal: '한계 비용',
   basisEquivalent: 'API 환산 비용',
   ledger: '원장',

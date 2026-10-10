@@ -23,6 +23,8 @@ export const S: Partial<typeof en> = {
   refresh: 'Обновить',
   granularity: 'Детализация',
   autoCurrency: 'Валюта автоматически',
+  rateHint: 'Сохраняется в конфигурации Core (usage.rates); отчёт сразу пересчитывается',
+  rateSaveFailed: (why: string) => `Курс не сохранён: ${why}`,
   basisMarginal: 'Предельная стоимость',
   basisEquivalent: 'Эквивалентная стоимость API',
   ledger: 'Журнал',

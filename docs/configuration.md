@@ -34,6 +34,7 @@
 | `batching` | `quietGapMs 2500`、`minBatchAgeMs 0`、`maxBatchAgeMs 15000`、`maxBatchSize 100` | 事件合批投递 |
 | `context` | `keepPastThinking true` | 发给模型前的处理;阶段预算与首轮对话开关归 Persona 的段 |
 | `logging` | `file debug`、`console info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
+| `usage.rates.<币种>` | CNY、EUR、JPY、KRW、TWD、BRL、RUB 各取 2026-10-10 的中间价 | 1 USD 合多少该币种;用量报告在 USD 与该币种之间换算都用它,0 表示该币种不参与换算。只认这七种,热改 |
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
 | `language` | 系统区域 | 控制台默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [console.md](console.md)) |
 

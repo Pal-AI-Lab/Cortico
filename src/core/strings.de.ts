@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Dateischwellen je Bereich',
     description: 'Kommagetrennt `Bereich=Stufe`, etwa `core.loop=trace,console=warn`; `.*` wird unterstützt. Das längste passende Präfix gilt. Bereiche ohne Treffer nutzen die Standardschwelle.',
   },
+  usageRate: {
+    title: (code: string) => `Umrechnungskurs im Verbrauchsbericht: ${code}`,
+    description: 'Kurs, zu dem der Verbrauchsbericht zwischen USD und dieser Währung umrechnet: wie viel 1 USD in ihr wert ist, anfangs der Mittelkurs vom 2026-10-10. 0 nimmt diese Währung von der Umrechnung aus.',
+  },
 };
 export const validationText: Partial<typeof validationEn> = {
   notNumber: (label: string) => `${label} muss eine Zahl sein`,

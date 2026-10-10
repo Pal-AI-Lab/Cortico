@@ -23,6 +23,8 @@ export const S: Partial<typeof en> = {
   refresh: '更新',
   granularity: '粒度',
   autoCurrency: '通貨を自動選択',
+  rateHint: 'Core 設定の usage.rates に保存し、すぐに再換算します',
+  rateSaveFailed: (why: string) => `為替レートを保存できませんでした：${why}`,
   basisMarginal: '限界費用',
   basisEquivalent: 'API 換算コスト',
   ledger: '台帳',

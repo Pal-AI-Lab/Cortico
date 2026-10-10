@@ -40,6 +40,10 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Umbrales de archivo por área',
     description: '`área=nivel` separados por comas, por ejemplo `core.loop=trace,console=warn`; se admite `.*`. Se aplica el prefijo coincidente más largo. Las áreas sin coincidencia usan el umbral predeterminado.',
   },
+  usageRate: {
+    title: (code: string) => `Tipo de cambio del informe de uso: ${code}`,
+    description: 'Tipo con el que el informe de uso convierte entre USD y esta moneda: cuánto vale 1 USD en ella, al inicio el tipo medio del 2026-10-10. 0 deja esta moneda fuera de la conversión.',
+  },
 };
 
 export const validationText: Partial<typeof validationEn> = {

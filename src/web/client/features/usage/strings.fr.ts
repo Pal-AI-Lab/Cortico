@@ -23,6 +23,8 @@ export const S: Partial<typeof en> = {
   refresh: 'Actualiser',
   granularity: 'Granularité',
   autoCurrency: 'Devise auto',
+  rateHint: 'Enregistré dans la configuration Core (usage.rates) ; le rapport reconvertit aussitôt',
+  rateSaveFailed: (why: string) => `Taux non enregistré : ${why}`,
   basisMarginal: 'Coût marginal',
   basisEquivalent: 'Coût API équivalent',
   ledger: 'Registre',
