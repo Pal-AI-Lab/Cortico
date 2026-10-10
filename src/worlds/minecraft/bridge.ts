@@ -22,12 +22,9 @@ import { trackWindowProps } from './containers.ts';
 import { installTreadWater } from './travel.ts';
 import { trackMaps } from './map-view.ts';
 import { trackDamageSources } from './damage-source.ts';
+import { errorFailure, kickFailure, type LinkState, type LinkTarget } from './link.ts';
 
-interface BridgeOptions {
-  host: string;
-  port: number;
-  username: string;
-  version: string;
+interface BridgeOptions extends LinkTarget {
   /** prismarine-viewer 网页端口;0=不开 viewer */
   viewerPort: number;
   log: Logger;
@@ -57,6 +54,8 @@ interface BridgeOptions {
   onDisconnect: (reason: string, willReconnect: boolean, attempt: number) => void;
   /** 连接告警通过 World 事件通道投递。 */
   onAlarm?: (text: string) => void;
+  /** 目标是本 World 托管的服务器;拒连告警据此指向挂载面板。缺省为否。 */
+  managedServer?: () => boolean;
   /** 停止期间不创建连接或安排重连。 */
   shuttingDown?: () => boolean;
 }
@@ -76,15 +75,11 @@ interface DigBackoffCell extends Cell {
   since: number;
 }
 
-/** 本机端口连续拒连达到此次数时，提示检查服务器是否已启动。 */
+/** 端口连续拒连达到此次数时，提示检查服务器是否已启动。 */
 const REFUSED_ALARM_AT = 5;
 const REFUSED_ALARM_EVERY = 10;
 /** 连续连接被拒绝达到阈值后的重试间隔。 */
 const REFUSED_DELAY_MS = 120_000;
-
-function isLocalHost(host: string): boolean {
-  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '0.0.0.0';
-}
 
 /** 路线试算的总超时与单次迭代预算；partial 时继续原搜索。 */
 const PROBE_TIMEOUT_MS = 400;
@@ -197,6 +192,12 @@ export class Bridge {
   private scaffoldComplained = '';
   private refusedStreak = 0;
   private liveMovements: Movements | null = null;
+  private target: LinkTarget;
+  /** 当前这代连接已 spawn */
+  private spawned = false;
+  /** 当前这代连接收到的最后一个错误;断开时与断开理由一起成为失败原因 */
+  private lastError: Error | null = null;
+  private failure: string | null = null;
 
   /**
    * 挖掘失败按格坐标记账；连续失败 DIG_BACKOFF_TRIES 次进入退避，
@@ -204,7 +205,26 @@ export class Bridge {
    */
   private digFails = new Map<string, { tries: number; lastAt: number; since: number | null; cell: Cell }>();
 
-  constructor(private readonly opts: BridgeOptions) {}
+  constructor(private readonly opts: BridgeOptions) {
+    this.target = { host: opts.host, port: opts.port, username: opts.username, version: opts.version };
+  }
+
+  /** 连接状态。重连沿用同一目标,换目标只经 `retarget`。 */
+  get link(): LinkState {
+    const phase = !this.started
+      ? 'stopped'
+      : this.spawned && this._bot !== null
+        ? 'online'
+        : this.reconnectTimer !== null
+          ? 'retrying'
+          : 'connecting';
+    return { phase, target: { ...this.target }, attempt: this.reconnectAttempt, failure: this.failure };
+  }
+
+  /** 换连接目标,在下一次 `start` 时采用;只在 stop 之后调用。 */
+  retarget(target: LinkTarget): void {
+    this.target = { ...target };
+  }
 
   /** 当前连接的 bot;未连接或重连中为 null。 */
   get bot(): mineflayer.Bot | null {
@@ -263,6 +283,7 @@ export class Bridge {
     if (this.started) return;
     this.started = true;
     this.stopped = false;
+    this.failure = null;
     this.connect();
   }
 
@@ -275,6 +296,9 @@ export class Bridge {
     }
     const bot = this._bot;
     this._bot = null;
+    this.spawned = false;
+    this.lastError = null;
+    this.failure = null;
     this._invSynced = false;
     this.liveMovements = null;
     this.digFails.clear();
@@ -311,18 +335,22 @@ export class Bridge {
 
   private connect(): void {
     if (this.stopped || this.opts.shuttingDown?.()) return;
-    const { host, port, username, version, log } = this.opts;
+    const { log } = this.opts;
+    const { host, port, username, version } = this.target;
     const gen = ++this.generation;
     for (const old of [...this.bags.keys()]) {
       if (old < gen) void this.disposeGeneration(old);
     }
     this.bagFor(gen);
+    this.spawned = false;
+    this.lastError = null;
     log.info(`minecraft 连接 ${host}:${port} as ${username} (${version})`);
     let bot: mineflayer.Bot;
     try {
       bot = mineflayer.createBot({ host, port, username, version, auth: 'offline' });
     } catch (err) {
       log.warn(`createBot 失败: ${(err as Error).message}`);
+      this.failure = errorFailure(err as Error);
       this.scheduleReconnect(String((err as Error).message));
       return;
     }
@@ -347,6 +375,8 @@ export class Bridge {
       if (this.stopped || this._bot !== bot || this.generation !== gen) return;
       this.reconnectAttempt = 0;
       this.refusedStreak = 0;
+      this.spawned = true;
+      this.failure = null;
       this.installSpawnGear(bot, gen);
       this.opts.onSpawn();
       /** spawn 在死亡重生时也触发，连接装配使用 once；持续监听处理同连接重生。 */
@@ -357,9 +387,11 @@ export class Bridge {
       });
     });
 
-    const onGone = (reason: string) => {
+    const onGone = (reason: string, failure: string) => {
       if (this._bot !== bot || this.generation !== gen) return;
       this._bot = null;
+      this.spawned = false;
+      this.failure = failure;
       this._invSynced = false;
       this.viewer = null;
       void this.disposeGeneration(gen);
@@ -369,10 +401,11 @@ export class Bridge {
       this.opts.onDisconnect(reason, willReconnect, this.reconnectAttempt);
       if (willReconnect) this.scheduleReconnect(reason);
     };
-    bot.once('end', (reason) => onGone(String(reason)));
-    bot.once('kicked', (reason) => onGone(`kicked: ${JSON.stringify(reason)}`));
+    bot.once('end', (reason) => onGone(String(reason), errorFailure(this.lastError, String(reason))));
+    bot.once('kicked', (reason) => onGone(`kicked: ${JSON.stringify(reason)}`, kickFailure(reason)));
     bot.on('error', (err) => {
       log.warn(`minecraft 连接错误: ${err.message}`);
+      if (this._bot === bot && this.generation === gen) this.lastError = err;
       this.noteConnectError(err);
     });
   }
@@ -387,10 +420,10 @@ export class Bridge {
     this.refusedStreak += 1;
     const n = this.refusedStreak;
     if (n < REFUSED_ALARM_AT || (n - REFUSED_ALARM_AT) % REFUSED_ALARM_EVERY !== 0) return;
-    const where = `${this.opts.host}:${this.opts.port}`;
+    const where = `${this.target.host}:${this.target.port}`;
     this.opts.log.error(`minecraft 连续 ${n} 次被 ${where} 拒连:连接被拒绝`);
     this.opts.onAlarm?.(
-      isLocalHost(this.opts.host)
+      this.opts.managedServer?.()
         ? `连着 ${n} 次连不上 ${where},端口上根本没有进程在听 —— MC 服务器没在跑,去控制台的 Minecraft 面板把它启动起来;` +
           '在那之前我进不了游戏,做不了任何事。'
         : `连着 ${n} 次连不上 ${where},对面端口没有进程在听 —— 那台服务器没在跑。`,

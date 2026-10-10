@@ -15,7 +15,7 @@ import type {
   ToolOutcome,
 } from '../../core/types.ts';
 import { COGNITION_ABSENT, MINECRAFT_PANEL_DECLS, MINECRAFT_STORAGE_DECLS, MINECRAFT_TOOL_DECLS, type MinecraftWorldOptions } from './world.ts';
-import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP } from './config.ts';
+import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, serverModeOf } from './config.ts';
 import type {
   ChildToMain,
   EngineCast,
@@ -88,11 +88,10 @@ export class MinecraftWorldProxy implements World {
    * 快照锚点由子进程设置。
    */
   envPromptVars(): Record<string, string> {
+    const { cfg } = this.opts;
+    const local = serverModeOf(cfg.serverMode, cfg.local.serverDir) === 'local';
     return {
-      'minecraft.world': worldEnvLine(worldIdentityOf(
-        this.opts.cfg.local.serverDir,
-        `${this.opts.cfg.host}:${this.opts.cfg.port}`,
-      )),
+      'minecraft.world': worldEnvLine(worldIdentityOf(local ? cfg.local.serverDir : '', `${cfg.host}:${cfg.port}`)),
       'minecraft.explored': renderExploredLedger(loadExplored(this.storageFileOf('minecraft-explored'))),
       'minecraft.policy': renderPolicyEnv(loadPolicy(this.storageFileOf('minecraft-policy'))),
       'minecraft.camera': this.opts.cfg.client.enabled

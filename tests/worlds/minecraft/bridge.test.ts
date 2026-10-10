@@ -16,6 +16,7 @@ import { installPathfinderPerf, type SiteZone } from '../../../src/worlds/minecr
 import { MinecraftLog } from '../../../src/worlds/minecraft/log.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 import { mapStateOf } from '../../../src/worlds/minecraft/map-view.ts';
+import { kickServer, type KickServer } from './kick-server.ts';
 
 // 禁垫区判在补丁装上的 getNeighbors 里;bridge 真跑时由 connect() 装
 installPathfinderPerf();
@@ -402,22 +403,23 @@ describe('bridge 断连告警', () => {
   const refused = (): Error =>
     Object.assign(new Error('connect ECONNREFUSED 127.0.0.1:25565'), { code: 'ECONNREFUSED' });
 
-  function alarmBridge(host: string, alarms: string[]): Bridge {
+  function alarmBridge(host: string, alarms: string[], managed = false): Bridge {
     return new Bridge({
       host, port: 25565, username: 'tester', version: '1.20.6', viewerPort: 0,
       log: nullLogger(),
       onSpawn: () => {},
       onDisconnect: () => {},
       onAlarm: (text) => void alarms.push(text),
+      managedServer: () => managed,
     });
   }
 
   const note = (b: Bridge, err: Error): void =>
     (b as unknown as { noteConnectError(e: Error): void }).noteConnectError(err);
 
-  it('连续 5 次拒连才推告警,措辞点名「服务器没在跑」和该去哪儿启动', () => {
+  it('受管服务器连续 5 次拒连才推告警,措辞点名「服务器没在跑」和该去哪儿启动', () => {
     const alarms: string[] = [];
-    const bridge = alarmBridge('127.0.0.1', alarms);
+    const bridge = alarmBridge('127.0.0.1', alarms, true);
     for (let i = 0; i < 4; i++) note(bridge, refused());
     expect(alarms).toEqual([]);
     note(bridge, refused());
@@ -440,9 +442,9 @@ describe('bridge 断连告警', () => {
     expect(alarms).toEqual([]);
   });
 
-  it('远端服务器连接被拒绝时不提示使用本地面板', () => {
+  it('外部服务器连接被拒绝时不提示使用本地面板,目标是本机地址也一样', () => {
     const alarms: string[] = [];
-    const bridge = alarmBridge('mc.example.com', alarms);
+    const bridge = alarmBridge('127.0.0.1', alarms);
     for (let i = 0; i < 5; i++) note(bridge, refused());
     expect(alarms).toHaveLength(1);
     expect(alarms[0]).not.toContain('面板');
@@ -1139,5 +1141,68 @@ describe('bridge 水路代价', () => {
     const r = maxDrop(bot, m, [0, 70, -2], [0, 64, 12]);
     expect(r.status).toBe('success');
     expect(r.drop).toBeLessThanOrEqual(m.maxDropDown);
+  });
+});
+
+describe('bridge 连接状态:端口可达不等于进了世界', () => {
+  const servers: KickServer[] = [];
+  const bridges: Bridge[] = [];
+
+  afterEach(async () => {
+    for (const b of bridges.splice(0)) await b.stop();
+    for (const s of servers.splice(0)) s.close();
+  });
+
+  async function connectTo(port: number): Promise<Bridge> {
+    const bridge = new Bridge({
+      host: '127.0.0.1', port, username: 'tester', version: '1.20.6', viewerPort: 0,
+      log: nullLogger(),
+      onSpawn: () => {},
+      onDisconnect: () => {},
+    });
+    bridges.push(bridge);
+    bridge.start();
+    await vi.waitFor(() => expect(bridge.link.failure).not.toBeNull(), { timeout: 15_000, interval: 50 });
+    return bridge;
+  }
+
+  it('登录阶段被白名单拒绝:等下一次重连,失败原因是服务器给的翻译键', async () => {
+    const server = await kickServer('login', { translate: 'multiplayer.disconnect.not_whitelisted' });
+    servers.push(server);
+    const bridge = await connectTo(server.port);
+    expect(bridge.link).toMatchObject({
+      phase: 'retrying',
+      target: { host: '127.0.0.1', port: server.port },
+      failure: '被服务器断开(白名单):multiplayer.disconnect.not_whitelisted',
+    });
+    expect(bridge.connected).toBe(false);
+  });
+
+  it('登录后被踢:NBT 理由取出原文', async () => {
+    const server = await kickServer('play', { text: 'You are not white-listed on this server!' });
+    servers.push(server);
+    const bridge = await connectTo(server.port);
+    expect(bridge.link.phase).toBe('retrying');
+    expect(bridge.link.failure).toBe('被服务器断开(白名单):You are not white-listed on this server!');
+  });
+
+  it('端口上没人听:失败原因是网络错误原文', async () => {
+    const probe = createNetServer();
+    await new Promise<void>((resolve) => probe.listen(0, '127.0.0.1', resolve));
+    const { port } = probe.address() as AddressInfo;
+    await new Promise<void>((resolve) => probe.close(() => resolve()));
+    const bridge = await connectTo(port);
+    expect(bridge.link.phase).toBe('retrying');
+    expect(bridge.link.failure).toMatch(/^网络:.*ECONNREFUSED/);
+  });
+
+  it('retarget 在下一次 start 时采用,stop 清掉失败原因', async () => {
+    const server = await kickServer('login', { translate: 'multiplayer.disconnect.not_whitelisted' });
+    servers.push(server);
+    const bridge = await connectTo(server.port);
+    await bridge.stop();
+    expect(bridge.link).toMatchObject({ phase: 'stopped', failure: null });
+    bridge.retarget({ host: '127.0.0.1', port: server.port + 1, username: 'tester', version: '1.20.6' });
+    expect(bridge.link.target.port).toBe(server.port + 1);
   });
 });
