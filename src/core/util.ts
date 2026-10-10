@@ -67,11 +67,18 @@ export function nowIso(timezone: string, d: Date = new Date()): string {
   return `${parts}${sign}${hh}:${mm}`;
 }
 
-/** 目标时区相对UTC的偏移(分钟, UTC-本地=负东区),内部用 */
-function getTimezoneOffsetMinutes(timezone: string, d: Date): number {
-  const utc = new Date(d.toLocaleString('en-US', { timeZone: 'UTC' }));
-  const loc = new Date(d.toLocaleString('en-US', { timeZone: timezone }));
-  return (utc.getTime() - loc.getTime()) / 60000;
+/**
+ * 目标时区相对UTC的偏移(分钟, UTC-本地=负东区)。墙钟各字段按 UTC 拼回时刻再相减,
+ * 结果与进程自身的时区无关。
+ */
+export function getTimezoneOffsetMinutes(timezone: string, d: Date): number {
+  const parts: Record<string, number> = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone, hourCycle: 'h23',
+    year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric',
+  }).formatToParts(d)) parts[p.type] = Number(p.value);
+  const wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return (Math.floor(d.getTime() / 1000) * 1000 - wall) / 60000;
 }
 
 /** 渲染"[HH:MM]"短时间(消息行用) */
