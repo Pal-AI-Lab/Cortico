@@ -585,6 +585,9 @@
   .urange { display: inline-flex; align-items: center; gap: 6px; font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); }
   .urange.hidden { display: none; }
   .ulabel { font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); }
+  .urate { display: inline-flex; align-items: center; gap: 6px; }
+  .urate[hidden] { display: none; }
+  .urate > input { width: 96px; }
   .ubkhint, .urangehint { font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); }
   .segwrap.sm .seg { padding: 4px 10px; font-size: var(--text-detail); }
   .usagecards { margin-bottom: 16px; }

@@ -25,6 +25,7 @@ export const S: Partial<typeof en> = {
   refresh: 'Actualizar',
   granularity: 'Granularidad',
   autoCurrency: 'Moneda automática',
+  rateHint: 'Tipo de cambio que ingresas: cuánto vale 1 USD en esta moneda; el informe vuelve a convertir en cuanto cambia',
   basisMarginal: 'Costo marginal',
   basisEquivalent: 'Costo equivalente de API',
   ledger: 'Libro',

@@ -23,6 +23,7 @@ export const S: Partial<typeof en> = {
   refresh: '重新整理',
   granularity: '粒度',
   autoCurrency: '自動幣別',
+  rateHint: '手動填寫的匯率：1 美元可兌換多少該貨幣，修改後立即重新換算',
   basisMarginal: '邊際費用',
   basisEquivalent: '等價 API 成本',
   ledger: '帳本',

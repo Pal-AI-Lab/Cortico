@@ -4,7 +4,7 @@
  */
 
 import type { ConsoleUi, Disposable } from '../../../shared/client-panel.ts';
-import { get } from '../../core/api.ts';
+import { get, setConfig } from '../../core/api.ts';
 import { consoleFormat } from '../../ui/format.ts';
 import { pageIntro } from '../../ui/page.ts';
 import { getThemeStudio } from '../../theme/studio.ts';
@@ -121,7 +121,26 @@ export function mountUsage(ctx: FeatureContext): void {
   let currency = '';
   const currencySelect = ui.select({ options: [{value:'',label:S.autoCurrency}], onChange: value => { currency = value; void load(); } });
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
-  bar2.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, ui.h('span', 'grow'), rangeHint);
+  // the rate of a currency the report converts into, saved to the Core config
+  const rateInput = ui.input({ type: 'number' });
+  rateInput.min = '0';
+  rateInput.step = 'any';
+  rateInput.title = S.rateHint;
+  rateInput.setAttribute('aria-label', S.rateHint);
+  const rateCode = ui.h('span', 'ulabel');
+  const rateBox = ui.h('span', 'urate');
+  rateBox.append(ui.h('span', 'ulabel', '1 USD ='), rateInput, rateCode);
+  rateBox.hidden = true;
+  rateInput.addEventListener('change', () => {
+    const code = rateCode.textContent ?? '';
+    const value = Number(rateInput.value);
+    if (!code || !(value > 0)) { rateInput.value = rateInput.dataset.saved ?? ''; return; }
+    void setConfig('core', { [`usage.rates.${code}`]: value }, { signal: ctx.signal }).then(() => load(), (err) => {
+      if (isAbort(err) || ctx.signal.aborted) return;
+      billingHint.textContent = S.loadFailed(errText(err));
+    });
+  }, { signal: ctx.signal });
+  bar2.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, rateBox, ui.h('span', 'grow'), rangeHint);
   const billingHint = ui.h('p', 'muted');
   const controls = ui.h('div', 'usagecontrols');
   controls.append(bar1, bar2, billingHint);
@@ -345,7 +364,7 @@ export function mountUsage(ctx: FeatureContext): void {
   }
 
   function renderAll(d: UsageAggregate): void {
-    const currencies = [...new Set((d.balances ?? []).filter(balance => balance.basis === basis).map(balance => balance.currency))];
+    const currencies = d.currencies ?? [...new Set((d.balances ?? []).filter(balance => balance.basis === basis).map(balance => balance.currency))];
     currencySelect.replaceChildren(...['', ...currencies].map(value => {
       const option = doc.createElement('option');
       option.value = value;
@@ -353,6 +372,14 @@ export function mountUsage(ctx: FeatureContext): void {
       return option;
     }));
     currencySelect.value = currency;
+    const shown = d.currency || 'USD';
+    const rate = shown === 'USD' ? undefined : d.rates?.[shown];
+    rateBox.hidden = rate === undefined;
+    rateCode.textContent = shown;
+    if (rate !== undefined && doc.activeElement !== rateInput) {
+      rateInput.value = String(rate);
+      rateInput.dataset.saved = rateInput.value;
+    }
     billingHint.textContent = S.billingHint +
       (d.totals?.unknownUsageCalls ? S.unknownUsage(d.totals.unknownUsageCalls) : '');
     if (d.ledger?.error) billingHint.textContent += S.ledgerError(d.ledger.pending, d.ledger.error);

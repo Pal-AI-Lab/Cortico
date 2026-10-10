@@ -23,6 +23,7 @@ export const S: Partial<typeof en> = {
   refresh: 'Обновить',
   granularity: 'Детализация',
   autoCurrency: 'Валюта автоматически',
+  rateHint: 'Курс, заданный вручную: сколько стоит 1 USD в этой валюте; отчёт пересчитывается сразу после изменения',
   basisMarginal: 'Предельная стоимость',
   basisEquivalent: 'Эквивалентная стоимость API',
   ledger: 'Журнал',

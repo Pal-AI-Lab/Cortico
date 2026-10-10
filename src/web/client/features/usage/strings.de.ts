@@ -23,6 +23,7 @@ export const S: Partial<typeof en> = {
   refresh: 'Aktualisieren',
   granularity: 'Granularität',
   autoCurrency: 'Währung automatisch',
+  rateHint: 'Eingegebener Kurs: wie viel 1 USD in dieser Währung wert ist; der Bericht rechnet bei jeder Änderung neu um',
   basisMarginal: 'Grenzkosten',
   basisEquivalent: 'Äquivalente API-Kosten',
   ledger: 'Journal',

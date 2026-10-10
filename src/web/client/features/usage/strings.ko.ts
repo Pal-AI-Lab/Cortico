@@ -23,6 +23,7 @@ export const S: Partial<typeof en> = {
   refresh: '새로 고침',
   granularity: '단위',
   autoCurrency: '통화 자동',
+  rateHint: '직접 입력한 환율: 1 USD가 이 통화로 얼마인지. 바꾸면 바로 다시 환산합니다',
   basisMarginal: '한계 비용',
   basisEquivalent: 'API 환산 비용',
   ledger: '원장',
