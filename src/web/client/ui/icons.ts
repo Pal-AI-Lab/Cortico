@@ -12,6 +12,7 @@ export type ConsoleIconName =
   | 'pause'
   | 'power'
   | 'image'
+  | 'shirt'
   | 'folder-open'
   | 'download'
   | 'cpu'
@@ -68,6 +69,7 @@ const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
     ['circle', { cx: '9', cy: '10', r: '2' }],
     ['path', { d: 'm21 15-4-4L5 20' }],
   ],
+  shirt: [['path', { d: 'M8.5 3.5 4 6l-1.5 4.5L6 12v8.5h12V12l3.5-1.5L20 6l-4.5-2.5a3.5 3.5 0 0 1-7 0Z' }]],
   'folder-open': [
     ['path', { d: 'M3 6h6l2 2h10' }],
     ['path', { d: 'M3 6v13h15l3-8H6l-3 8' }],
