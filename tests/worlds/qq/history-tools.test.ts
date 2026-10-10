@@ -57,7 +57,7 @@ beforeEach(() => {
     text: '[system/qq] 起草的那条已经发出去了',
   });
 
-  tools = createHistoryTools({ source: 'qq', host: () => host, messageTs: firstTsOf(host.store) });
+  tools = createHistoryTools({ source: 'qq', host: () => host, messageTs: firstTsOf(host.store), timezone: 'Asia/Shanghai' });
 });
 
 /** 与 QQ World 的消息索引同义:首条带这个号的事件的 ts。 */
@@ -335,7 +335,7 @@ describe('真实事件库:会话消息分散在多个 run 里', () => {
       }
     }
     const runHost = Object.assign(new FakeHost(), { store });
-    runTools = createHistoryTools({ source: 'qq', host: () => runHost, messageTs: firstTsOf(store) });
+    runTools = createHistoryTools({ source: 'qq', host: () => runHost, messageTs: firstTsOf(store), timezone: 'Asia/Shanghai' });
   });
   afterEach(() => tmp.cleanup());
 

@@ -6,7 +6,7 @@ import type {
   WorldHost,
   ToolDef,
 } from '../../core/types.ts';
-import { renderEventLines } from '../../core/util.ts';
+import { nowIso, parseTimeIn, renderEventLines } from '../../core/util.ts';
 import {
   eventInConversation,
   parseConversationAddress,
@@ -18,10 +18,36 @@ interface HistoryToolDeps {
   host: () => WorldHost | undefined;
   /** 首条带这个平台 message_id 的事件的 ts;没记录过时为 undefined。 */
   messageTs: (messageId: string) => string | undefined;
+  /** 不带偏移的时间参数按这个时区的墙钟读 */
+  timezone: string;
 }
 
 const NOT_STARTED = '[tool failed] QQ module not started';
 const TARGET_FORMAT = '"group:<id>" or "private:<id>"';
+
+/** 时间参数换成带偏移的 ISO 时刻;没给时为 undefined。 */
+function timeArg(raw: unknown, name: string, timezone: string): string | { error: string } | undefined {
+  if (typeof raw !== 'string' || !raw.trim()) return undefined;
+  const ms = parseTimeIn(timezone, raw);
+  return Number.isNaN(ms) ? { error: `${name} "${raw}" is not an ISO 8601 time` } : nowIso(timezone, new Date(ms));
+}
+
+/** from_time / to_time 写进 query;参数读不出时返回错误文本。 */
+function applyTimeRange(
+  query: EventRangeQuery | EventGrepQuery,
+  args: Record<string, unknown>,
+  timezone: string,
+): string | null {
+  for (const [name, key] of [['from_time', 'fromTs'], ['to_time', 'toTs']] as const) {
+    const time = timeArg(args[name], name, timezone);
+    if (typeof time === 'object') return time.error;
+    if (time !== undefined) query[key] = time;
+  }
+  return null;
+}
+
+const laterOf = (a: string | undefined, b: string): string => (a !== undefined && Date.parse(a) > Date.parse(b) ? a : b);
+const earlierOf = (a: string | undefined, b: string): string => (a !== undefined && Date.parse(a) < Date.parse(b) ? a : b);
 
 function parseConversationFilter(raw: unknown): Conv | { error: string } | null {
   if (typeof raw !== 'string' || !raw.trim()) return null;
@@ -65,6 +91,7 @@ function readAround(
   store: EventStoreReader,
   query: EventRangeQuery,
   args: Record<string, unknown>,
+  aroundTime: string | undefined,
   conversation: Conv | null,
   messageTs: HistoryToolDeps['messageTs'],
 ): EventEnvelope[] {
@@ -76,16 +103,11 @@ function readAround(
     const ts = messageTs(mid);
     if (ts === undefined) return [];
     center = store
-      .range({
-        ...query,
-        fromTs: query.fromTs !== undefined && query.fromTs > ts ? query.fromTs : ts,
-        toTs: query.toTs !== undefined && query.toTs < ts ? query.toTs : ts,
-      })
+      .range({ ...query, fromTs: laterOf(query.fromTs, ts), toTs: earlierOf(query.toTs, ts) })
       .find((event) => String(event.meta?.message_id ?? '') === mid && inConversation(event));
-  } else if (typeof args.around_time === 'string' && args.around_time) {
-    const at = args.around_time;
+  } else if (aroundTime !== undefined) {
     center = store
-      .range({ ...query, fromTs: query.fromTs !== undefined && query.fromTs > at ? query.fromTs : at })
+      .range({ ...query, fromTs: laterOf(query.fromTs, aroundTime) })
       .find(inConversation);
     // 给的时刻晚于全部记录时,以最后一条为中心
     center ??= readLatest(store, query, conversation, 1)[0];
@@ -138,15 +160,17 @@ function createReadHistoryTool(deps: HistoryToolDeps): ToolDef {
       const conversation = filter || null;
       const limit = args.limit !== undefined ? Number(args.limit) : 50;
 
+      const aroundTime = timeArg(args.around_time, 'around_time', deps.timezone);
+      if (typeof aroundTime === 'object') return `[bad input] ${aroundTime.error}`;
       const hasAround =
         (args.around !== undefined && args.around !== null && String(args.around) !== '') ||
-        (typeof args.around_time === 'string' && args.around_time !== '');
+        aroundTime !== undefined;
       const query: EventRangeQuery = { source: deps.source, origin: 'external' };
-      if (typeof args.from_time === 'string') query.fromTs = args.from_time;
-      if (typeof args.to_time === 'string') query.toTs = args.to_time;
+      const rangeError = applyTimeRange(query, args, deps.timezone);
+      if (rangeError) return `[bad input] ${rangeError}`;
       if (typeof args.sender === 'string') query.senderKey = args.sender;
       const events = hasAround
-        ? readAround(host.store, query, args, conversation, deps.messageTs)
+        ? readAround(host.store, query, args, aroundTime, conversation, deps.messageTs)
         : readLatest(host.store, query, conversation, limit);
 
       return events.length ? renderEventLines(events) : '(no matching messages)';
@@ -193,8 +217,8 @@ function createGrepHistoryTool(deps: HistoryToolDeps): ToolDef {
         limit: conversation ? undefined : limit,
       };
       if (typeof args.sender === 'string') query.senderKey = args.sender;
-      if (typeof args.from_time === 'string') query.fromTs = args.from_time;
-      if (typeof args.to_time === 'string') query.toTs = args.to_time;
+      const rangeError = applyTimeRange(query, args, deps.timezone);
+      if (rangeError) return `[bad input] ${rangeError}`;
 
       let hits = host.store.grep(query);
       if (conversation) {
