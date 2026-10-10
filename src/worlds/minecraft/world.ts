@@ -363,7 +363,7 @@ const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.
  * ——面板 id 两边一旦不同,浏览器插件那几个键就只在其中一条路上对得上。
  */
 export const MINECRAFT_PANEL_DECLS: readonly WorldPanelDecl[] = [
-  { id: 'mount', title: '挂载', description: '游戏服务器 / 观察者客户端 / 玩家客户端的启停。' },
+  { id: 'mount', title: '挂载', description: '连接方式;本地服务器的启停或外部服务器的连接;观察者客户端与玩家客户端的启停。' },
   { id: 'skin', title: '皮肤', description: '她和玩家各穿哪一张皮肤:选一张 PNG,由客户端读(离线服自己没有材质)。' },
   { id: 'world', title: '存档与玩法', description: '换存档、开新世界、调难度与游戏模式。' },
   { id: 'access', title: '权限与作弊', description: '谁有作弊权限(ops.json),以及命令方块、正版验证这类服务器项。' },
@@ -2749,7 +2749,11 @@ export class MinecraftWorld implements World {
     const report = async (state?: MinecraftServerState): Promise<MinecraftServerConsoleState> =>
       this.serverConsoleState(state ?? await this.mcServer.state());
     return {
-      state: () => report(),
+      state: () => {
+        // 配置里改了连接方式时,查询这一刻就让切换生效,不等下一拍心跳
+        if (this.serverLifecycleActive) void this.syncManagedServerLifecycle();
+        return report();
+      },
       start: async () => {
         this.serverWanted = true;
         if (this.serverLifecycleActive) {
