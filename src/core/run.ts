@@ -35,7 +35,10 @@ export function runsDirOf(dataDir: string): string {
   return join(dataDir, 'runs');
 }
 
-/** 已存在的 run id,按时间升序(id 自带时间戳,字典序即时间序)。 */
+/**
+ * 已存在的 run id,按字典序。id 里是写入时区的墙钟时间,换过时区或跨夏令时后
+ * 字典序不等于时间序;要时间序看 index.jsonl 的行序或事件游标。
+ */
 export function listRuns(dataDir: string): string[] {
   const dir = runsDirOf(dataDir);
   if (!existsSync(dir)) return [];
@@ -62,17 +65,33 @@ function gitSha(repoRoot: string | undefined): string | null {
   return null;
 }
 
+/** index.jsonl 按开机、关机的先后追加,最后一行属于最近一次 run。 */
+function lastIndexedRun(runsDir: string): string | null {
+  const file = join(runsDir, 'index.jsonl');
+  if (!existsSync(file)) return null;
+  const lines = readFileSync(file, 'utf8').split('\n');
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (!lines[i].trim()) continue;
+    try {
+      const row = JSON.parse(lines[i]) as { run?: unknown };
+      if (typeof row.run === 'string') return row.run;
+    } catch {
+      // 进程在追加中途结束会留下半行
+    }
+  }
+  return null;
+}
+
 /** 生成 run id、建目录、在 index.jsonl 记一行开机。 */
 export function openRun(dataDir: string, meta: RunOpenMeta): RunInfo {
   const runsDir = runsDirOf(dataDir);
   mkdirSync(runsDir, { recursive: true });
-  const previous = listRuns(dataDir);
+  const previousRun = lastIndexedRun(runsDir) ?? listRuns(dataDir).at(-1) ?? null;
   const startedAt = nowIso(meta.timezone);
   const stamp = startedAt.slice(0, 19).replace(/[-:T]/g, '');
   const id = `r-${stamp.slice(0, 8)}-${stamp.slice(8, 14)}-${randomBytes(2).toString('hex')}`;
   const dir = join(runsDir, id);
   mkdirSync(dir, { recursive: true });
-  const previousRun = previous.length ? previous[previous.length - 1] : null;
   appendFileSync(join(runsDir, 'index.jsonl'), JSON.stringify({
     run: id,
     startedAt,

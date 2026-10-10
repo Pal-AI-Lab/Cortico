@@ -1,7 +1,7 @@
 /** Aggregate observed consumption and immutable Provider charges. */
 import type { UsageRecord } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
-import { nowIso } from './util.ts';
+import { getTimezoneOffsetMinutes, nowIso } from './util.ts';
 
 /** 已解析的具体时间粒度(桶宽) */
 export type UsageBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
@@ -136,7 +136,28 @@ function weekStart(day: string): string {
   return dt.toISOString().slice(0, 10);
 }
 
-/** 取某条记录在给定粒度下的桶键(本地时区 ISO 前缀直接切,周单独算) */
+const QUARTER_HOUR_MS = 15 * 60_000;
+
+/**
+ * 记录 ts 在 timezone 墙钟上的 `YYYY-MM-DDTHH:MM`。ts 带写入时的偏移,换过时区的记录要重算。
+ * 偏移按 15 分钟一档缓存:现行时区的偏移都是 15 分钟的整数倍,切换时刻因此落在 UTC 的 15 分钟整点上。
+ */
+function wallClockIn(timezone: string): (ts: string) => string {
+  const offsets = new Map<number, number>();
+  return (ts) => {
+    const ms = Date.parse(ts);
+    if (Number.isNaN(ms)) return ts.slice(0, 16);
+    const slot = Math.floor(ms / QUARTER_HOUR_MS);
+    let offset = offsets.get(slot);
+    if (offset === undefined) {
+      offset = getTimezoneOffsetMinutes(timezone, new Date(ms));
+      offsets.set(slot, offset);
+    }
+    return new Date(ms - offset * 60_000).toISOString().slice(0, 16);
+  };
+}
+
+/** 取某条记录在给定粒度下的桶键(墙钟 ISO 前缀直接切,周单独算) */
 function bucketKeyOf(ts: string, unit: UsageBucketUnit): string {
   switch (unit) {
     case 'minute': return ts.slice(0, 16); // YYYY-MM-DDTHH:MM
@@ -201,7 +222,10 @@ export interface UsageAggregateOptions {
   bucket: UsageBucketOption;
   currency?: string;
   basis?: 'marginal' | 'equivalent';
-  /** 记录 ts 所用的时区。给了才按它解析 days,并且不为当前时刻之后补空桶。 */
+  /**
+   * 日期范围与时间桶按这个时区的墙钟算,并按它解析 days、不为当前时刻之后补空桶。
+   * 不给时用记录 ts 自带的墙钟。
+   */
   timezone?: string;
   now?: Date;
 }
@@ -226,12 +250,17 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const failed = zero();
   const successful = zero();
   const instances = new Map<string, UsageAccum>();
-  const selected = records.filter(r => r && typeof r.ts === 'string' && (!from || r.ts.slice(0,10) >= from) && (!to || r.ts.slice(0,10) <= to));
+  const wall = opts.timezone ? wallClockIn(opts.timezone) : (ts: string) => ts.slice(0, 16);
+  const keyed = records
+    .filter(r => r && typeof r.ts === 'string')
+    .map(r => ({ r, at: wall(r.ts) }))
+    .filter(({ at }) => (!from || at.slice(0, 10) >= from) && (!to || at.slice(0, 10) <= to));
+  const selected = keyed.map(({ r }) => r);
   const balances = billingBalances(selected);
   const basis = opts.basis ?? 'marginal';
   const currency = opts.currency ?? balances.find(balance => balance.basis === basis)?.currency ?? 'USD';
 
-  for (const r of selected) {
+  for (const { r, at } of keyed) {
     const charge = recordCharges(r).find(charge => charge.quote.currency === currency && charge.quote.basis === basis);
     const cost: MeasuredCost = { cacheHit: 0, cacheMiss: 0, output: 0, total: charge?.knownAmount ?? 0, priced: charge?.amount != null };
     for (const line of charge?.lines ?? []) {
@@ -245,7 +274,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     upsert(instances, r.attempt?.origin.instance ?? 'unknown', r, cost);
     const role = r.role ?? 'unknown';
     const model = r.model || 'unknown';
-    const bk = bucketKeyOf(r.ts, unit);
+    const bk = bucketKeyOf(at, unit);
     let bucketAcc = series.get(bk);
     if (!bucketAcc) { bucketAcc = { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map() }; series.set(bk, bucketAcc); }
     add(bucketAcc.total, r, cost);

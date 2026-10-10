@@ -50,6 +50,9 @@ export function withDeadline<T>(work: Promise<T>, ms: number, what = 'this step'
   });
 }
 
+/** 本机时区的 IANA 名;部署没配 timezone 时用它。 */
+export const SYSTEM_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 /** 当前时刻ISO 8601(带时区偏移,毫秒),按配置时区渲染 */
 export function nowIso(timezone: string, d: Date = new Date()): string {
   const fmt = new Intl.DateTimeFormat('sv-SE', {
@@ -79,6 +82,19 @@ export function getTimezoneOffsetMinutes(timezone: string, d: Date): number {
   }).formatToParts(d)) parts[p.type] = Number(p.value);
   const wall = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
   return (Math.floor(d.getTime() / 1000) * 1000 - wall) / 60000;
+}
+
+const ISO_OFFSET = /(?:[zZ]|[+-]\d{2}:?\d{2})$/;
+
+/** ISO 8601 文本对应的毫秒时刻;不带偏移的日期或时刻按 timezone 的墙钟读。读不出时为 NaN。 */
+export function parseTimeIn(timezone: string, text: string): number {
+  const s = text.trim();
+  if (ISO_OFFSET.test(s)) return Date.parse(s);
+  const wall = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(s) ? `${s}T00:00:00Z` : `${s}Z`);
+  if (Number.isNaN(wall)) return NaN;
+  // 偏移取在目标时刻上;第二次用第一次的结果重取,夏令时切换前后才能落对
+  const guess = wall + getTimezoneOffsetMinutes(timezone, new Date(wall)) * 60_000;
+  return wall + getTimezoneOffsetMinutes(timezone, new Date(guess)) * 60_000;
 }
 
 /** 渲染"[HH:MM]"短时间(消息行用) */
