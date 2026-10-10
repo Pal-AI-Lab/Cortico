@@ -134,7 +134,7 @@ export interface RunRow {
   reason?: string;
 }
 
-/** index.jsonl 按 run 合并开机行与关机行,升序 */
+/** index.jsonl 按 run 合并开机行与关机行,按开机先后 */
 export function readRunsIndex(dataDir: string): RunRow[] {
   const file = join(dataDir, 'runs', 'index.jsonl');
   if (!existsSync(file)) return [];
@@ -146,15 +146,16 @@ export function readRunsIndex(dataDir: string): RunRow[] {
     if (typeof row.run !== 'string') continue;
     byRun.set(row.run, { ...byRun.get(row.run), ...row });
   }
-  return [...byRun.values()].sort((a, b) => a.run.localeCompare(b.run));
+  return [...byRun.values()];
 }
 
-/** index.jsonl 与目录清单的并集;id 自带时间戳,字典序即时间序 */
+/** index.jsonl 与目录清单的并集,按开机先后;index.jsonl 里没有的目录按 id 排在最前 */
 export function listRunIds(dataDir: string): string[] {
-  const ids = new Set(readRunsIndex(dataDir).map((r) => r.run));
+  const indexed = readRunsIndex(dataDir).map((r) => r.run);
+  const known = new Set(indexed);
   const runsDir = join(dataDir, 'runs');
-  if (existsSync(runsDir)) for (const n of readdirSync(runsDir)) if (RUN_ID.test(n)) ids.add(n);
-  return [...ids].sort();
+  const loose = existsSync(runsDir) ? readdirSync(runsDir).filter((n) => RUN_ID.test(n) && !known.has(n)).sort() : [];
+  return [...loose, ...indexed];
 }
 
 export function resolveRunId(dataDir: string, spec = 'latest'): string {
@@ -420,10 +421,8 @@ function textTable(rows: string[][]): string[] {
 }
 
 export function runsTable(dataDir: string): string[] {
-  const rows = readRunsIndex(dataDir);
-  const known = new Set(rows.map((r) => r.run));
-  for (const id of listRunIds(dataDir)) if (!known.has(id)) rows.push({ run: id });
-  rows.sort((a, b) => a.run.localeCompare(b.run));
+  const indexed = new Map(readRunsIndex(dataDir).map((r) => [r.run, r]));
+  const rows = listRunIds(dataDir).map((id) => indexed.get(id) ?? { run: id });
   const cells = rows.map((r) => [
     r.run,
     r.startedAt ?? '',
