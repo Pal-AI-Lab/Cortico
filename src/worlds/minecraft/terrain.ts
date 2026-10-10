@@ -7,7 +7,7 @@
  * 渲染出口是 `narrateWorld`:一律中文、写成话,进世界快照事件与其余事件正文。
  */
 import { Vec3 } from 'vec3';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
   type Durability, type ItemEnchant, type ItemLike, readDurability, readEnchants, readPotionName,
 } from './item-facts.ts';
@@ -1599,7 +1599,7 @@ export function snapshotFromBot(
     maxEntities?: number;
     invSynced?: boolean;
     scanBlocks?: boolean;
-    /** 现实时刻按哪个时区报;缺省东八区 */
+    /** 现实时刻按哪个时区报;缺省本机时区 */
     timezone?: string;
     chestOf?: (dimension: string, p: { x: number; y: number; z: number }) => { items: ItemStack[] } | undefined;
   },
@@ -1741,7 +1741,7 @@ export function snapshotFromBot(
     inWater,
     invSynced: opts?.invSynced ?? true,
     timeOfDay,
-    realTime: nowIso(opts?.timezone ?? 'Asia/Shanghai'),
+    realTime: nowIso(opts?.timezone ?? SYSTEM_TIMEZONE),
     light: sampleLight(bot, isNight(timeOfDay)),
     raining: isRaining(bot),
     biome,

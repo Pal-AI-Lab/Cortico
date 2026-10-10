@@ -22,7 +22,7 @@
 | 键 | 默认 | 含义 |
 |---|---|---|
 | `displayName` | `Cortico Bot` | 控制台标题与终端消息的 bot 名称 |
-| `timezone` | `Asia/Shanghai` | 时间戳与时刻表用的时区 |
+| `timezone` | 本机时区 | 时间戳与时刻表用的时区(IANA 名,如 `Asia/Shanghai`) |
 | `providers` | 空表 | 共享端点配置,从部署根 `providers/` 读取(见 [providers.md](providers.md)) |
 | `activeProvider` | 空字符串 | 当前端点 |
 | `web.port` | `7777` | 控制台端口;三个参考 bot 各自改成 7777 / 7788 / 7789 |

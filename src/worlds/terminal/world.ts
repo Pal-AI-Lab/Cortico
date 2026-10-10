@@ -50,7 +50,7 @@ import { fileURLToPath } from 'node:url';
 import type { BlobInput, EventEnvelope, World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
 import type { ConfigGroup } from '../../core/config-schema.ts';
 import type { ConsoleStream } from '../../web/shared/console-protocol.ts';
-import { nowIso, shortTime } from '../../core/util.ts';
+import { nowIso, shortTime, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import type { Language } from '../../core/language.ts';
 import { TERMINAL_DEFAULTS, type TerminalConfigSection } from './config.ts';
 import { text } from './strings.ts';
@@ -142,7 +142,7 @@ interface ChatClient {
 
 
 interface TerminalWorldOptions {
-  /** 渲染[HH:MM]用的时区,默认Asia/Shanghai */
+  /** 渲染[HH:MM]用的时区,默认本机时区 */
   timezone?: string;
   /** 出方消息的 from 字段;取部署配置的 displayName */
   botName?: string;
@@ -216,7 +216,7 @@ export class TerminalWorld implements World {
   private operatorMessagesAtLastSend = 0;
 
   constructor(opts: TerminalWorldOptions = {}) {
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.botName = opts.botName ?? 'bot';
     this.cfg = opts.cfg ?? { ...TERMINAL_DEFAULTS };
   }

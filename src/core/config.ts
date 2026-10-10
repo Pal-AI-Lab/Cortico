@@ -3,6 +3,7 @@ import type { CoreConfig } from './types.ts';
 import type { ConfigGroup } from './config-schema.ts';
 import type { Language } from './language.ts';
 import { coreGroupText } from './strings.ts';
+import { SYSTEM_TIMEZONE } from './util.ts';
 
 /** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
 export function coreConfigGroup(language: Language): ConfigGroup {
@@ -100,7 +101,7 @@ export const CORE_CONFIG_GROUP: ConfigGroup = coreConfigGroup('zh');
 export const CORE_DEFAULTS = {
   /** 用于控制台标题和终端消息的发送方名称。 */
   displayName: 'Cortico Bot',
-  timezone: 'Asia/Shanghai',
+  timezone: SYSTEM_TIMEZONE,
   providers: {} as Record<string, import('./types.ts').LLMProviderEntry>,
   activeProvider: '',
   web: { port: 7777, theme: 'mint' },

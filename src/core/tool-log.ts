@@ -6,7 +6,7 @@
 import { appendFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { currentAnchors } from './log-context.ts';
-import { nowIso } from './util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from './util.ts';
 
 /** 回执正文进流水的上限;全长另记在 chars,全文在 transcript 里 */
 const RECEIPT_CHARS = 600;
@@ -52,7 +52,7 @@ export class ToolCallLog {
   private readonly run: string;
 
   constructor(private readonly file: string | null, opts: ToolCallLogOptions = {}) {
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.run = opts.run ?? 'r-none';
   }
 

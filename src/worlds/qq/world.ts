@@ -22,7 +22,7 @@ import type {
 } from '../../core/types.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { nowIso, shortTime, nullLogger } from '../../core/util.ts';
+import { nowIso, shortTime, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
   eventInConversation,
   parseConversationAddress,
@@ -205,7 +205,7 @@ export class QQWorld implements World {
 
   constructor(cfg: QQWorldConfig, deps?: QQWorldDeps) {
     this.cfg = cfg;
-    this.timezone = cfg.timezone ?? 'Asia/Shanghai';
+    this.timezone = cfg.timezone ?? SYSTEM_TIMEZONE;
     this.vision = deps?.vision;
     this.imageCapture = deps?.imageCapture ?? VISION_DEFAULTS;
     this.gate = deps?.gate;
@@ -549,7 +549,7 @@ export class QQWorld implements World {
     const opts = (args[0] ?? {}) as { conv?: unknown; limit?: unknown };
     for (const e of store.range({ source: this.id, fromCursor: this.summarizedCursor + 1 })) this.summarize(e);
     this.summarizedCursor = store.latestCursor();
-    const conversations = [...this.convSummary.values()].sort((a, b) => (a.lastTs < b.lastTs ? 1 : -1));
+    const conversations = [...this.convSummary.values()].sort((a, b) => Date.parse(b.lastTs) - Date.parse(a.lastTs));
 
     const convRaw = typeof opts.conv === 'string' ? opts.conv.trim() : '';
     const conv = convRaw ? parseConversationAddress(convRaw) : null;
@@ -1461,6 +1461,7 @@ export class QQWorld implements World {
         source: this.id,
         host: () => this.host,
         messageTs: (mid) => this.knownMessages.get(mid)?.ts,
+        timezone: this.timezone,
       }),
     ];
     // 看图追问依赖 IMG-N(外挂视觉),随视觉出现/消失

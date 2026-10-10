@@ -1,6 +1,6 @@
 /** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、控制台及存储请求，并每秒推送配置。 */
 import { fork, type ChildProcess } from 'node:child_process';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import { emitLogNote, logChildStdio } from '../../core/ipc-logger.ts';
 import { childExecArgv } from '../../extensions/runtime.ts';
 import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
@@ -262,7 +262,7 @@ export class MinecraftWorldProxy implements World {
       {
         kind: 'init',
         init: {
-          timezone: this.opts.timezone ?? 'Asia/Shanghai',
+          timezone: this.opts.timezone ?? SYSTEM_TIMEZONE,
           botName: this.opts.botName ?? 'bot',
           dataDir: this.opts.dataDir ?? null,
           cfg: JSON.parse(this.lastConfigJson) as MinecraftWorldOptions['cfg'],
@@ -301,7 +301,7 @@ export class MinecraftWorldProxy implements World {
     this.host?.log.error(`Minecraft 引擎子进程意外退出(code=${code}),${RESTART_DELAY_MS / 1000}s 后重启`);
     this.host?.pushEvent(
       {
-        ts: nowIso(this.opts.timezone ?? 'Asia/Shanghai'),
+        ts: nowIso(this.opts.timezone ?? SYSTEM_TIMEZONE),
         source: this.id,
         type: 'minecraft.event',
         text: '[Minecraft] 游戏引擎崩了,正在自动重启;重新连上之前,游戏里的动作都不会生效。',
@@ -372,7 +372,7 @@ export class MinecraftWorldProxy implements World {
     if (!host) return;
     switch (note.kind) {
       case 'log':
-        emitLogNote(host.log, note, this.opts.timezone ?? 'Asia/Shanghai');
+        emitLogNote(host.log, note, this.opts.timezone ?? SYSTEM_TIMEZONE);
         return;
       case 'usage':
         host.reportUsage(note.usage, note.opts);

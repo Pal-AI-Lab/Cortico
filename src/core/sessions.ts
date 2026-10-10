@@ -194,7 +194,7 @@ export class SessionTracker {
       const ra = a.endedAt === null ? 0 : 1;
       const rb = b.endedAt === null ? 0 : 1;
       if (ra !== rb) return ra - rb;
-      return b.startedAt.localeCompare(a.startedAt);
+      return Date.parse(b.startedAt) - Date.parse(a.startedAt);
     });
   }
 
@@ -244,7 +244,7 @@ export class SessionTracker {
   private pruneClosed(): void {
     const closed = [...this.entries.values()]
       .filter((e) => e.stats.endedAt !== null && !e.pinned)
-      .sort((a, b) => (b.stats.endedAt ?? '').localeCompare(a.stats.endedAt ?? ''));
+      .sort((a, b) => Date.parse(b.stats.endedAt!) - Date.parse(a.stats.endedAt!));
     for (const e of closed.slice(CLOSED_KEEP)) {
       this.entries.delete(e.stats.id);
     }

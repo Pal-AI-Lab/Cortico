@@ -7,7 +7,7 @@ import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import { currentAnchors } from './log-context.ts';
-import { nowIso } from './util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from './util.ts';
 
 export type TranscriptBoundary = 'handoff' | 'clear' | 'prefix-reload' | 'ephemeral-drop';
 
@@ -47,7 +47,7 @@ export class Transcript {
 
   constructor(private readonly file: string | null, opts: TranscriptOptions = {}) {
     this.run = opts.run ?? 'r-none';
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
   }
 
   item(record: ContextRecord, index: number): void {

@@ -3,7 +3,7 @@
  * 引擎子进程的日志上下文补充轮次和工具调用 ID；环形缓冲供控制台按 seq 增量读取。
  */
 import type { Logger, LogLevel } from '../../core/types.ts';
-import { nowIso, nullLogger } from '../../core/util.ts';
+import { nowIso, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
 
 type MinecraftLane =
   | 'tool'
@@ -102,7 +102,7 @@ export class MinecraftLog {
 
   constructor(opts: MinecraftLogOptions = {}) {
     this.log = opts.log ?? nullLogger();
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.capacity = opts.ring ?? 2_000;
   }
 

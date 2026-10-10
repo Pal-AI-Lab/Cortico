@@ -38,8 +38,8 @@ export class FakeStore implements EventStore {
       (e) =>
         (q.fromCursor === undefined || e.cursor >= q.fromCursor) &&
         (q.toCursor === undefined || e.cursor <= q.toCursor) &&
-        (q.fromTs === undefined || e.ts >= q.fromTs) &&
-        (q.toTs === undefined || e.ts <= q.toTs) &&
+        (q.fromTs === undefined || Date.parse(e.ts) >= Date.parse(q.fromTs)) &&
+        (q.toTs === undefined || Date.parse(e.ts) <= Date.parse(q.toTs)) &&
         (q.senderKey === undefined || e.senderKey === q.senderKey) &&
         (q.source === undefined || e.source === q.source) &&
         (q.origin === undefined || e.origin === q.origin),
@@ -63,8 +63,8 @@ export class FakeStore implements EventStore {
       if (!e.text.includes(q.keyword)) continue;
       if (q.senderKey !== undefined && e.senderKey !== q.senderKey) continue;
       if (q.source !== undefined && e.source !== q.source) continue;
-      if (q.fromTs !== undefined && e.ts < q.fromTs) continue;
-      if (q.toTs !== undefined && e.ts > q.toTs) continue;
+      if (q.fromTs !== undefined && Date.parse(e.ts) < Date.parse(q.fromTs)) continue;
+      if (q.toTs !== undefined && Date.parse(e.ts) > Date.parse(q.toTs)) continue;
       hits.push({
         hitCursor: e.cursor,
         events: this.events.slice(

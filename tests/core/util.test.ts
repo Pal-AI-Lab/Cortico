@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readTextFile } from '../../src/core/util.ts';
+import { nowIso, parseTimeIn, readTextFile } from '../../src/core/util.ts';
 
 const dirs: string[] = [];
 
@@ -47,5 +47,28 @@ describe('readTextFile', () => {
     const file = join(tempDir(), 'c.txt');
     writeUtf8Bom(file, '{ "bot": "cormini" }');
     expect(readTextFile(file)).toBe('{ "bot": "cormini" }');
+  });
+});
+
+describe('nowIso / parseTimeIn', () => {
+  const processTz = process.env.TZ;
+  afterEach(() => {
+    if (processTz === undefined) delete process.env.TZ;
+    else process.env.TZ = processTz;
+  });
+
+  it('偏移与进程所在时区无关,夏令时切换前后也对', () => {
+    // 进程处在有夏令时的时区时,UTC 墙钟落进它跳过或重复的那一小时
+    process.env.TZ = 'America/Chicago';
+    expect(nowIso('Asia/Shanghai', new Date('2026-03-08T02:30:00Z'))).toBe('2026-03-08T10:30:00.000+08:00');
+    expect(nowIso('America/Chicago', new Date('2026-03-08T07:30:00Z'))).toBe('2026-03-08T01:30:00.000-06:00');
+    expect(nowIso('America/Chicago', new Date('2026-11-01T06:30:00Z'))).toBe('2026-11-01T01:30:00.000-05:00');
+  });
+
+  it('不带偏移的时刻按给定时区的墙钟读', () => {
+    expect(parseTimeIn('Asia/Shanghai', '2026-07-16T12:10')).toBe(Date.parse('2026-07-16T12:10:00+08:00'));
+    expect(parseTimeIn('America/Chicago', '2026-03-08T03:30')).toBe(Date.parse('2026-03-08T03:30:00-05:00'));
+    expect(parseTimeIn('Asia/Shanghai', '2026-07-16T12:10:00Z')).toBe(Date.parse('2026-07-16T12:10:00Z'));
+    expect(parseTimeIn('Asia/Shanghai', 'yesterday')).toBeNaN();
   });
 });

@@ -49,7 +49,7 @@ function seed(store: JsonlEventStore, n: number, offset = 0): void {
 
 describe('JsonlEventStore', () => {
   let tmp: ReturnType<typeof makeTmpDir>;
-  const open = (run = RUN_A, log = nullLogger()) => new JsonlEventStore({ dataDir: tmp.dir, run, log });
+  const open = (run = RUN_A, log = nullLogger()) => new JsonlEventStore({ dataDir: tmp.dir, run, log, timezone: 'Asia/Shanghai' });
   const fileOf = (run: string) => join(tmp.dir, 'runs', run, 'events.jsonl');
   beforeEach(() => (tmp = makeTmpDir(), fsHooks.reads.length = 0));
   afterEach(() => tmp.cleanup());
@@ -215,6 +215,17 @@ describe('JsonlEventStore', () => {
     expect(b.grep({ keyword: 'msg-1', context: 0 }).map((h) => h.hitCursor)).toEqual([1]);
     // 只按 ts 切时,早于区间的分片不装载也不参与
     expect(b.range({ fromTs: '2026-07-17T10:04:00' }).map((e) => e.cursor)).toEqual([4, 5]);
+  });
+
+  it('换过时区的历史分片按游标排,时间区间按时刻比较', () => {
+    // A 按 +08:00 写,B 晚 5 分钟按 -05:00 写:两者的 run id 与 ts 字典序都与时间序相反
+    const a = open('r-20260718-020000-aaaa');
+    a.append({ type: 'qq.message', ts: '2026-07-18T02:00:00.000+08:00', source: 'qq', origin: 'external', text: 'A' });
+    const b = open('r-20260717-130500-bbbb');
+    b.append({ type: 'qq.message', ts: '2026-07-17T13:05:00.000-05:00', source: 'qq', origin: 'external', text: 'B' });
+    const c = open(RUN_C);
+    expect(c.range({ limit: 1 }).map((e) => e.text)).toEqual(['B']);
+    expect(c.range({ fromTs: '2026-07-17T18:03:00Z' }).map((e) => e.text)).toEqual(['B']);
   });
 
   it('分片里乱序或重复的 cursor 行按损坏跳过', () => {

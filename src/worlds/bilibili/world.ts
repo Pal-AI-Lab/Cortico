@@ -13,7 +13,7 @@ import type {
   ShutdownExternalCheck,
   ToolDef,
 } from '../../core/types.ts';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
   AudienceAdmission,
   type AudienceAdmissionCandidate,
@@ -243,7 +243,7 @@ export class BilibiliWorld implements World {
       tuning: this.audienceTuning(),
       onPersistError: (error) => this.host?.log.warn('B站观众准入账本落盘失败', { err: error.message }),
     });
-    this.timezone = opts.timezone ?? 'Asia/Shanghai';
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
 
     this.rawSampleFile = opts.rawSampleFile
       ?? (opts.audienceLedgerFile

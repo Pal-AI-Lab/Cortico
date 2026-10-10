@@ -92,7 +92,7 @@ export interface RunIndexRow {
   reason?: string;
 }
 
-/** runs/index.jsonl 按 run 合并开机行与关机行,升序。 */
+/** runs/index.jsonl 按 run 合并开机行与关机行,按开机先后。 */
 export function readRunsIndex(file: string): RunIndexRow[] {
   if (!existsSync(file)) return [];
   const byRun = new Map<string, RunIndexRow>();
@@ -103,5 +103,5 @@ export function readRunsIndex(file: string): RunIndexRow[] {
     if (typeof row.run !== 'string') continue;
     byRun.set(row.run, { ...byRun.get(row.run), ...row });
   }
-  return [...byRun.values()].sort((a, b) => a.run.localeCompare(b.run));
+  return [...byRun.values()];
 }

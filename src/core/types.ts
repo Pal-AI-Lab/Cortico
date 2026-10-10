@@ -134,7 +134,7 @@ export interface EventRangeQuery {
   /** 游标区间(含端点) */
   fromCursor?: number;
   toCursor?: number;
-  /** ISO时间区间(含端点) */
+  /** 带偏移的 ISO 8601 时刻区间(含端点),按时刻比较 */
   fromTs?: string;
   toTs?: string;
   senderKey?: string;
