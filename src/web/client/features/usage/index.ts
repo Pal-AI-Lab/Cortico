@@ -121,7 +121,7 @@ export function mountUsage(ctx: FeatureContext): void {
   let currency = '';
   const currencySelect = ui.select({ options: [{value:'',label:S.autoCurrency}], onChange: value => { currency = value; void load(); } });
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
-  // the rate of a currency the report converts into, saved to the Core config
+  // 换算币种的汇率：写回 Core 配置
   const rateInput = ui.input({ type: 'number' });
   rateInput.min = '0';
   rateInput.step = 'any';
@@ -135,9 +135,13 @@ export function mountUsage(ctx: FeatureContext): void {
     const code = rateCode.textContent ?? '';
     const value = Number(rateInput.value);
     if (!code || !(value > 0)) { rateInput.value = rateInput.dataset.saved ?? ''; return; }
-    void setConfig('core', { [`usage.rates.${code}`]: value }, { signal: ctx.signal }).then(() => load(), (err) => {
+    void setConfig('core', { [`usage.rates.${code}`]: value }, { signal: ctx.signal }).then(() => {
+      rateInput.dataset.saved = String(value);
+      return load();
+    }, (err) => {
       if (isAbort(err) || ctx.signal.aborted) return;
-      billingHint.textContent = S.loadFailed(errText(err));
+      rateInput.value = rateInput.dataset.saved ?? '';
+      billingHint.textContent = S.rateSaveFailed(errText(err));
     });
   }, { signal: ctx.signal });
   bar2.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, rateBox, ui.h('span', 'grow'), rangeHint);
@@ -364,7 +368,7 @@ export function mountUsage(ctx: FeatureContext): void {
   }
 
   function renderAll(d: UsageAggregate): void {
-    const currencies = d.currencies ?? [...new Set((d.balances ?? []).filter(balance => balance.basis === basis).map(balance => balance.currency))];
+    const currencies = d.currencies ?? [];
     currencySelect.replaceChildren(...['', ...currencies].map(value => {
       const option = doc.createElement('option');
       option.value = value;
