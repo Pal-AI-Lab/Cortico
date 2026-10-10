@@ -170,6 +170,7 @@ function pushStatus(): void {
   const note = {
     kind: 'status' as const,
     decl: { lamps: decl.lamps, badges: decl.badges, links: decl.links },
+    worldLine: mod.worldLine(),
     storage: storageStats(decl.storage ?? []),
   };
   const key = JSON.stringify(note);

@@ -9,9 +9,12 @@ import { ACTION_BAR_SHOW_MS, MinecraftWorld, MINECRAFT_TOOL_DECLS, PwsrTables, G
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../../../src/worlds/minecraft/config.ts';
 import { acceptBlueprint } from '../../../src/worlds/minecraft/blueprint-plan.ts';
 import { parseGoalPlan, recordGoalJudgment } from '../../../src/worlds/minecraft/goal-plan.ts';
-import { SET_SPAWN_TRANSLATE } from '../../../src/worlds/minecraft/escape.ts';
+import { SET_SPAWN_TRANSLATE, playerDatPath } from '../../../src/worlds/minecraft/escape.ts';
+import { offlineUuid } from '../../../src/worlds/minecraft/client-launch.ts';
 import { renderQueue } from '../../../src/worlds/minecraft/executor.ts';
 import { Bridge } from '../../../src/worlds/minecraft/bridge.ts';
+import mineflayer from 'mineflayer';
+import { kickServer } from './kick-server.ts';
 import { MinecraftServerManager, type MinecraftServerState } from '../../../src/worlds/minecraft/server.ts';
 import { FakeHost } from '../../helpers/fake-host.ts';
 
@@ -793,6 +796,230 @@ describe('MinecraftWorld 受管服务器启停', () => {
       vi.restoreAllMocks();
       vi.useRealTimers();
     }
+  });
+});
+
+describe('MinecraftWorld 外部服务器连接', () => {
+  /** 已有目录:explicit external 下它不得把连接方式拉回本地托管 */
+  const serverDir = mkdtempSync(join(tmpdir(), 'mc-ext-dir-'));
+
+  /** 假 mineflayer bot:只到「已发起连接」,不 spawn;按创建顺序记下连的目标与它发出的聊天 */
+  function fakeBots(): { targets: string[]; bots: EventEmitter[]; chats: string[] } {
+    const targets: string[] = [];
+    const bots: EventEmitter[] = [];
+    const chats: string[] = [];
+    vi.spyOn(mineflayer, 'createBot').mockImplementation((opts) => {
+      targets.push(`${opts.host}:${opts.port}`);
+      const bot = Object.assign(new EventEmitter(), {
+        _client: new EventEmitter(),
+        loadPlugin: () => {},
+        quit: () => {},
+        chat: (line: string) => void chats.push(line),
+      });
+      bots.push(bot);
+      return bot as never;
+    });
+    return { targets, bots, chats };
+  }
+
+  /** 环境冻结让 mc_do 排进来的任务停在队里不开跑,断开时它的取消回执才有内容 */
+  async function queueTask(m: MinecraftWorld): Promise<number> {
+    (m as unknown as { executor: { pauseForEnvironment(reason: string): unknown } }).executor
+      .pauseForEnvironment('测试冻结队列');
+    const mcDo = m.tools().find((t) => t.name === 'mc_do')!;
+    const receipt = await mcDo.handler(
+      { steps: [{ skill: 'collect', block: 'stone', count: 1 }] },
+      { role: 'main', log: console } as never,
+    ) as string;
+    return Number(/任务#(\d+)/.exec(receipt)?.[1]);
+  }
+
+  const cancelReceipt = (host: FakeHost, id: number): string | undefined =>
+    host.events.map((e) => e.text).find((t) => t.includes(`任务#${id}没做完`));
+
+  it('无本地目录、非默认端口:连接走真端口,登录被拒时端口可达但 bot 不算进了世界', async () => {
+    const server = await kickServer('login', { translate: 'multiplayer.disconnect.not_whitelisted' });
+    const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start');
+    const m = new MinecraftWorld({ cfg: cfg({
+      serverMode: 'external',
+      host: '127.0.0.1',
+      port: server.port,
+      local: { ...MINECRAFT_DEFAULTS.local, serverDir: '' },
+    }) });
+    try {
+      await m.start(new FakeHost() as never);
+      await vi.waitFor(async () => {
+        expect((await m.serverConsole().state()).link.failure).not.toBeNull();
+      }, { timeout: 15_000, interval: 100 });
+      const st = await m.serverConsole().state();
+      expect(st).toMatchObject({
+        mode: 'external',
+        modeInferred: false,
+        wanted: true,
+        reachable: true,
+        configured: false,
+        pid: null,
+        link: {
+          target: `127.0.0.1:${server.port}`,
+          failure: '被服务器断开(白名单):multiplayer.disconnect.not_whitelisted',
+        },
+      });
+      expect(st.link.phase).not.toBe('online');
+      const lamp = m.console().lamps?.find((l) => l.label === '服务器');
+      expect(lamp?.state).not.toBe('online');
+      expect(m.console().badges?.[0]).toMatchObject({ value: '未连接', tone: 'off' });
+      expect(serverStart).not.toHaveBeenCalled();
+      // 存档与权限面板不读本地目录,也不叫人去配 server.jar
+      const access = await m.accessConsole().state();
+      expect(access.configured).toBe(false);
+      expect(access.detail).toContain('外部服务器');
+    } finally {
+      await m.stop();
+      server.close();
+      vi.restoreAllMocks();
+    }
+  });
+
+  it('断开后不再自动重连;断开时与重连时都结束旧连接上排着的任务;本地目录不改变所选方式', async () => {
+    vi.useFakeTimers();
+    const { targets, bots } = fakeBots();
+    const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start');
+    const serverStop = vi.spyOn(MinecraftServerManager.prototype, 'stop');
+    vi.spyOn(MinecraftServerManager.prototype, 'probe').mockResolvedValue(true);
+    const runtimeCfg = cfg({
+      serverMode: 'external',
+      host: '127.0.0.1',
+      port: 25570,
+      local: { ...MINECRAFT_DEFAULTS.local, serverDir, startWithWorld: true },
+    });
+    const host = new FakeHost();
+    const m = new MinecraftWorld({ cfg: runtimeCfg });
+    try {
+      await m.start(host as never);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(targets).toEqual(['127.0.0.1:25570']);
+      expect(serverStart).not.toHaveBeenCalled();
+      expect((await m.serverConsole().state())).toMatchObject({
+        mode: 'external', wanted: true, link: { phase: 'connecting' }, pending: null,
+      });
+
+      const first = await queueTask(m);
+      const off = await m.serverConsole().stop();
+      expect(off).toMatchObject({ wanted: false, link: { phase: 'stopped' } });
+      expect(cancelReceipt(host, first)).toContain('被控制台断开了连接');
+      expect(host.events.at(-1)?.text).toContain('控制台断开了与 127.0.0.1:25570 的连接');
+      expect(m.console().lamps?.find((l) => l.label === '服务器')).toMatchObject({ state: 'offline', hint: '已断开' });
+      // 旧 bot 迟到的断线与十分钟的心跳都不会把连接带回来
+      bots[0].emit('end', 'socketClosed');
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(targets).toHaveLength(1);
+      expect(serverStop).not.toHaveBeenCalled();
+
+      // 连接关着时改端口:面板、端口探测与下一次连接都按新端口,没有待采用
+      runtimeCfg.port = 25571;
+      expect(await m.serverConsole().state()).toMatchObject({
+        address: '127.0.0.1:25571', link: { target: '127.0.0.1:25571' }, pending: null,
+      });
+      await m.serverConsole().start();
+      expect(targets.at(-1)).toBe('127.0.0.1:25571');
+
+      // 连接开着时改端口:目标不动,自动重连仍回原地址,面板给出待采用
+      runtimeCfg.port = 25572;
+      const changed = await m.serverConsole().state();
+      expect(changed.link.target).toBe('127.0.0.1:25571');
+      expect(changed.pending).toContain('127.0.0.1:25572');
+      bots.at(-1)!.emit('end', 'socketClosed');
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(targets.at(-1)).toBe('127.0.0.1:25571');
+
+      const second = await queueTask(m);
+      const relinked = await m.serverConsole().reconnect();
+      expect(cancelReceipt(host, second)).toContain('被控制台重新连接');
+      expect(targets.at(-1)).toBe('127.0.0.1:25572');
+      expect(relinked).toMatchObject({ link: { target: '127.0.0.1:25572' }, pending: null });
+    } finally {
+      await m.stop();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it('改了用户名还没重连时,游戏里的名字仍是连接用的那个:传送指令点的是它', async () => {
+    vi.useFakeTimers();
+    const { chats } = fakeBots();
+    vi.spyOn(MinecraftServerManager.prototype, 'probe').mockResolvedValue(true);
+    const runtimeCfg = cfg({ serverMode: 'external', username: 'corti' });
+    const m = new MinecraftWorld({ cfg: runtimeCfg });
+    try {
+      await m.start(new FakeHost() as never);
+      await vi.advanceTimersByTimeAsync(0);
+      runtimeCfg.username = 'corti2';
+      expect((await m.serverConsole().state()).pending).toContain('corti2');
+      await m.playerConsole().teleport();
+      expect(chats.at(-1)).toBe(`/tp ${MINECRAFT_DEFAULTS.player.username} corti`);
+    } finally {
+      await m.stop();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it('改了连接方式紧接着点启动:旧连接断开、新方式启动,下一拍心跳不撤销', async () => {
+    vi.useFakeTimers();
+    const { bots } = fakeBots();
+    const quits: string[] = [];
+    vi.spyOn(MinecraftServerManager.prototype, 'probe').mockResolvedValue(true);
+    const serverStart = vi.spyOn(MinecraftServerManager.prototype, 'start')
+      .mockImplementation(async function (this: MinecraftServerManager) {
+        return { ...(await this.state()), phase: 'starting' };
+      });
+    vi.spyOn(MinecraftServerManager.prototype, 'stop')
+      .mockImplementation(async function (this: MinecraftServerManager) {
+        return this.state();
+      });
+    const runtimeCfg = cfg({
+      serverMode: 'external',
+      local: { ...MINECRAFT_DEFAULTS.local, serverDir, cheats: false },
+    });
+    const m = new MinecraftWorld({ cfg: runtimeCfg });
+    try {
+      await m.start(new FakeHost() as never);
+      await vi.advanceTimersByTimeAsync(0);
+      (bots[0] as unknown as { quit(): void }).quit = () => void quits.push('external');
+      runtimeCfg.serverMode = 'local';
+      await m.serverConsole().start();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(quits).toEqual(['external']);
+      expect(serverStart).toHaveBeenCalledOnce();
+      expect(await m.serverConsole().state()).toMatchObject({ mode: 'local', wanted: true });
+    } finally {
+      await m.stop();
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
+  it('外部服务器时不从本地存档读个人重生点', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-ext-spawn-'));
+    const file = playerDatPath(dir, 'world', offlineUuid(MINECRAFT_DEFAULTS.username));
+    mkdirSync(join(dir, 'world', 'playerdata'), { recursive: true });
+    const nbt = createRequire(createRequire(import.meta.url).resolve('mineflayer/package.json'))('prismarine-nbt');
+    writeFileSync(file, nbt.writeUncompressed({
+      type: 'compound', name: '',
+      value: { SpawnX: { type: 'int', value: 3 }, SpawnY: { type: 'int', value: 64 }, SpawnZ: { type: 'int', value: 5 } },
+    }));
+    const spawnOf = (serverMode: MinecraftConfigSection['serverMode']): unknown => {
+      const m = new MinecraftWorld({ cfg: cfg({ serverMode, local: { ...MINECRAFT_DEFAULTS.local, serverDir: dir } }) });
+      (m as unknown as { hydratePersonalSpawn(): void }).hydratePersonalSpawn();
+      return (m as unknown as { personalSpawn: unknown }).personalSpawn;
+    };
+    expect(spawnOf('local')).toMatchObject({ x: 3, y: 64, z: 5 });
+    expect(spawnOf('external')).toBeNull();
+  });
+
+  it('本地托管时重连按钮不可用', async () => {
+    const m = new MinecraftWorld({ cfg: cfg({ serverMode: 'local' }) });
+    await expect(m.serverConsole().reconnect()).rejects.toThrow('本地托管');
   });
 });
 
@@ -2221,8 +2448,8 @@ describe('权限与作弊面板(服务器停着)', () => {
   it('没配服务器目录时说清楚,不假装写成功了', async () => {
     const panel = new MinecraftWorld({ cfg: cfg({ port: 1 }) }).accessConsole();
     expect((await panel.state()).detail).toContain('worlds.minecraft.local.serverDir');
-    expect((await panel.setOp('CortiV', true)).detail).toContain('改不了');
-    expect((await panel.apply({ whiteList: true })).detail).toContain('改不了');
+    expect((await panel.setOp('CortiV', true)).detail).toContain('无法在这里修改');
+    expect((await panel.apply({ whiteList: true })).detail).toContain('无法在这里修改');
   });
 });
 

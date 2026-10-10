@@ -239,6 +239,11 @@ export class MinecraftServerManager {
     return `${this.opts.host()}:${this.opts.port()}`;
   }
 
+  /** 有托管进程,或正在为启动它探端口 */
+  get hosting(): boolean {
+    return this.proc !== null || this.startingGeneration !== null;
+  }
+
   directory(): string {
     return this.activeServerDir ?? this.opts.serverDir();
   }

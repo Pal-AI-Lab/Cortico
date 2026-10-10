@@ -3,6 +3,8 @@ import type { ConfigGroup } from '../../core/types.ts';
 export const MINECRAFT_DEFAULTS = {
   // enabled 由Persona的装配层显式开启。
   enabled: false,
+  /** 连接方式;auto 按 local.serverDir 是否填写推定,见 serverModeOf */
+  serverMode: 'auto' as MinecraftServerModeSetting,
   /** 服务器地址(私服 dry-run 默认本机) */
   host: '127.0.0.1',
   port: 25565,
@@ -157,8 +159,26 @@ export const MINECRAFT_DEFAULTS = {
   },
 } as const;
 
+/**
+ * 实际生效的连接方式。local:World 启停 `local.serverDir` 里的服务器,bot 随之连接;
+ * external:只控制 bot 到 host:port 的连接,本地服务器目录不参与。
+ */
+export type MinecraftServerMode = 'local' | 'external';
+export type MinecraftServerModeSetting = MinecraftServerMode | 'auto';
+export const MINECRAFT_SERVER_MODES: readonly MinecraftServerModeSetting[] = ['auto', 'local', 'external'];
+
+/**
+ * auto 时服务器目录非空即本地托管。调用方传受管进程锁定的目录,运行中清空配置不会把
+ * 已启动的进程当成外部服务器。
+ */
+export function serverModeOf(setting: MinecraftServerModeSetting, serverDir: string): MinecraftServerMode {
+  if (setting === 'local' || setting === 'external') return setting;
+  return serverDir.trim() !== '' ? 'local' : 'external';
+}
+
 export interface MinecraftConfigSection {
   enabled: boolean;
+  serverMode: MinecraftServerModeSetting;
   host: string;
   port: number;
   username: string;
@@ -211,20 +231,30 @@ const JAVA_PATH_PICKER = process.platform === 'win32'
   ? { kind: 'file' as const, extensions: ['.exe'] }
   : { kind: 'file' as const };
 
-/** 连接与本地服务器:重启生效的那些 */
+/** 连接方式、连接目标与本地服务器 */
 export const MINECRAFT_CONFIG_GROUP: ConfigGroup = {
   id: 'world:minecraft',
   owner: 'world:minecraft',
   schema: {
     type: 'object',
     title: 'Minecraft · 连接',
-    description: '连接项要重启 World 才生效；服务器路径在下次启动服务器时采用。',
+    description: '地址、端口、用户名和版本在下次连接时采用：外部服务器在挂载面板点击「重连」，'
+      + '本地托管停止并重新启动服务器。服务器路径在下次启动服务器时采用。',
     properties: {
-      'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': false },
-      'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': false },
-      'worlds.minecraft.username': { type: 'string', title: '游戏内用户名', 'x-hot': false },
+      'worlds.minecraft.serverMode': {
+        type: 'string', title: '连接方式', enum: [...MINECRAFT_SERVER_MODES], 'x-hot': true,
+        description: 'local = 本 World 启停本地服务器目录里的服务器；external = 只连接下面的地址和端口，'
+          + '不使用本地服务器目录；auto = 填写了本地服务器目录按 local，否则按 external。'
+          + '改动后 bot 断开当前连接，在挂载面板里重新启动或连接。',
+      },
+      'worlds.minecraft.host': { type: 'string', title: '服务器地址', 'x-hot': true },
+      'worlds.minecraft.port': { type: 'integer', title: '端口', minimum: 1, maximum: 65535, 'x-hot': true },
+      'worlds.minecraft.username': {
+        type: 'string', title: '游戏内用户名', 'x-hot': true,
+        description: 'bot 以离线账号登录；服务器须关闭正版验证（online-mode=false）。',
+      },
       'worlds.minecraft.version': {
-        type: 'string', title: '协议版本', 'x-hot': false,
+        type: 'string', title: '协议版本', 'x-hot': true,
         description: 'mineflayer 按此版本连接,要与服务器一致。',
       },
       'worlds.minecraft.viewerPort': {

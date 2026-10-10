@@ -44,15 +44,34 @@ interface MinecraftLaneCommon {
   pid: number | null;
 }
 
-/** `mount.server.*` */
+/**
+ * `mount.server.*`。`phase`/`pid` 是本地托管进程的;bot 是否进入世界只看 `link.phase`,
+ * `reachable` 只说端口能建立 TCP 连接。
+ */
 export interface MinecraftServerState extends MinecraftLaneCommon {
   address: string;
   /** 端口当下可连(外部自己起的服务器也算) */
   reachable: boolean;
   serverDir: string;
   configured: boolean;
-  /** bot 是否以这台服务器为连接目标:启动按钮置真,停止按钮置假;远程服务器恒为真 */
+  /** bot 要不要连着:启动/连接置真,停止/断开置假 */
   wanted: boolean;
+  /** `local` 本地托管 / `external` 外部服务器 */
+  mode: 'local' | 'external';
+  /** 连接方式是按 local.serverDir 推定的(serverMode=auto) */
+  modeInferred: boolean;
+  link: {
+    /** `stopped` / `connecting` / `online`(已进入世界) / `retrying`(等下一次重连) */
+    phase: string;
+    /** host:port */
+    target: string;
+    username: string;
+    version: string;
+    attempt: number;
+    failure: string | null;
+  };
+  /** 配置里已改、还没用于当前连接的目标 */
+  pending: string | null;
 }
 
 /** `mount.client.*`。客户端没有可探的端口,判据是"窗口出来了没"。 */

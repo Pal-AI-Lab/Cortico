@@ -125,7 +125,8 @@ import {
   ESCAPE_TP_MS, SET_SPAWN_TRANSLATE, normalizeDimension, playerDatPath, readPlayerDatFile, runEscape,
   spawnAt, type SpawnTarget, type Vec3like,
 } from './escape.ts';
-import { MINECRAFT_DEFAULTS, MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, type MinecraftConfigSection } from './config.ts';
+import { MINECRAFT_DEFAULTS, MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, type MinecraftConfigSection, type MinecraftServerMode, serverModeOf } from './config.ts';
+import { sameTarget, targetAddress, type LinkPhase, type LinkTarget } from './link.ts';
 
 /** 死亡掉落的消失时限；回执注明剩余时间，到期后撤回仍在原地的提示。 */
 const DROP_DESPAWN_MS = 5 * 60 * 1000;
@@ -254,6 +255,29 @@ interface WorldGenChoice {
   generateStructures?: boolean;
 }
 
+/**
+ * 挂载面板「服务器」一行的状态。`reachable` 只说端口能否建立 TCP 连接;bot 是否登录并
+ * 进入世界只看 `link.phase`。
+ */
+export interface MinecraftServerConsoleState extends MinecraftServerState {
+  /** bot 要不要连着:启动/连接置真,停止/断开置假 */
+  wanted: boolean;
+  mode: MinecraftServerMode;
+  /** 连接方式由 serverMode=auto 推定 */
+  modeInferred: boolean;
+  link: {
+    phase: LinkPhase;
+    /** host:port */
+    target: string;
+    username: string;
+    version: string;
+    attempt: number;
+    failure: string | null;
+  };
+  /** 配置里已改、还没用于当前连接的目标;连接没开或与配置一致时为 null */
+  pending: string | null;
+}
+
 /** 「存档与玩法」面板的一份状态 */
 export interface MinecraftWorldState {
   /** 服务器目录配好了没 */
@@ -339,7 +363,7 @@ const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.
  * ——面板 id 两边一旦不同,浏览器插件那几个键就只在其中一条路上对得上。
  */
 export const MINECRAFT_PANEL_DECLS: readonly WorldPanelDecl[] = [
-  { id: 'mount', title: '挂载', description: '游戏服务器 / 观察者客户端 / 玩家客户端的启停。' },
+  { id: 'mount', title: '挂载', description: '连接方式;本地服务器的启停或外部服务器的连接;观察者客户端与玩家客户端的启停。' },
   { id: 'skin', title: '皮肤', description: '她和玩家各穿哪一张皮肤:选一张 PNG,由客户端读(离线服自己没有材质)。' },
   { id: 'world', title: '存档与玩法', description: '换存档、开新世界、调难度与游戏模式。' },
   { id: 'access', title: '权限与作弊', description: '谁有作弊权限(ops.json),以及命令方块、正版验证这类服务器项。' },
@@ -2451,12 +2475,20 @@ export class MinecraftWorld implements World {
   private readonly activeEffects = new Set<string>();
   private hookedBots = new WeakSet<object>();
   private readonly mcServer: MinecraftServerManager;
-  /** 受管服务器要不要开着:挂载面板的启停按钮设置,World 启动时取 local.startWithWorld。 */
+  /**
+   * bot 要不要连着(本地托管时连同受管服务器要不要开着):挂载面板的启动/连接置真、
+   * 停止/断开置假。World 启动时本地托管取 local.startWithWorld,外部服务器为真;
+   * 连接方式变了置假。
+   */
   private serverWanted = false;
   /** 受管服务器启停串行化；连续反转时，后一个状态总在前一个收尾之后落地。 */
   private serverLifecycleQueue: Promise<void> = Promise.resolve();
   private serverLifecycleTarget: string | null = null;
   private serverLifecycleActive = false;
+  /** 生命周期上次见到的连接方式;与当前推定不同即为切换 */
+  private lifecycleMode: MinecraftServerMode | null = null;
+  /** Bridge 用着的连接目标;World 没启动时为 null,按配置算 */
+  private appliedTarget: LinkTarget | null = null;
   private readonly client: GameClient;
   /** 人自己进服那一份;与摄像机是两份进程 */
   private readonly playerClient: GameClient;
@@ -2601,8 +2633,8 @@ export class MinecraftWorld implements World {
       serverDir: () => this.cfg.local.serverDir,
       javaPath: () => this.cfg.local.javaPath,
       jvmArgs: () => this.cfg.local.jvmArgs,
-      host: () => this.cfg.host,
-      port: () => this.cfg.port,
+      host: () => this.linkTarget().host,
+      port: () => this.linkTarget().port,
       log: fwd,
       onPhase: (phase, detail) => this.onServerPhase(phase, detail),
       onDifficulty: (fact) => this.onServerDifficulty(fact),
@@ -2621,7 +2653,7 @@ export class MinecraftWorld implements World {
       width: () => this.cfg.client.width,
       height: () => this.cfg.client.height,
       autoJoin: () => this.cfg.client.autoJoin,
-      server: () => ({ host: this.cfg.host, port: this.cfg.port }),
+      server: () => this.linkTarget(),
       noPauseOnLostFocus: () => this.cfg.client.noPauseOnLostFocus,
       syncGui: () => this.cfg.client.syncGui,
       // 摄像机的聊天可见性归人:画面要不要挂聊天是舞台选择
@@ -2647,7 +2679,7 @@ export class MinecraftWorld implements World {
       width: () => this.cfg.player.width,
       height: () => this.cfg.player.height,
       autoJoin: () => this.cfg.player.autoJoin,
-      server: () => ({ host: this.cfg.host, port: this.cfg.port }),
+      server: () => this.linkTarget(),
       // 这是人自己玩的那份客户端:他的设置不归 World 改。唯一的例外是共用摄像机那个
       // 游戏目录时——摄像机关掉的聊天连命令行一起关,那已经不是"他自己的设置"了。
       noPauseOnLostFocus: () => false,
@@ -2709,61 +2741,187 @@ export class MinecraftWorld implements World {
       : '已铺好,下次启动客户端生效';
   }
 
-  serverConsole(): Record<'state' | 'start' | 'stop', () => Promise<MinecraftServerState & { wanted: boolean }>> {
-    const withTarget = async (state: MinecraftServerState) =>
-      ({ ...state, wanted: !this.managedLocalServer() || this.serverWanted });
+  /**
+   * 挂载面板「服务器」那一行。本地托管时启动/停止管受管服务器与 bot 连接;外部服务器时
+   * 启动/停止/重连只管 bot 的连接,不碰对方的服务器进程。
+   */
+  serverConsole(): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerConsoleState>> {
+    const report = async (state?: MinecraftServerState): Promise<MinecraftServerConsoleState> =>
+      this.serverConsoleState(state ?? await this.mcServer.state());
+    // 每次操作前先让配置里的连接方式落地(断开旧连接排进队列),这次操作的 serverWanted 按新方式设
+    const reconcile = (): void => {
+      if (this.serverLifecycleActive) void this.syncManagedServerLifecycle();
+    };
     return {
-      state: async () => withTarget(await this.mcServer.state()),
+      state: () => {
+        reconcile();
+        return report();
+      },
       start: async () => {
+        reconcile();
         this.serverWanted = true;
+        if (this.serverLifecycleActive) {
+          await this.syncManagedServerLifecycle(true);
+          return report();
+        }
+        if (this.serverMode() === 'external') return report();
         // 名单必须先于服务端启动写入；服务端只在启动时读取 ops.json。
         this.ensureCheatOps();
-        if (!this.serverLifecycleActive) return withTarget(await this.mcServer.start());
-        await this.syncManagedServerLifecycle(true);
-        return withTarget(await this.mcServer.state());
+        return report(await this.mcServer.start());
       },
       stop: async () => {
+        reconcile();
         this.serverWanted = false;
-        if (!this.serverLifecycleActive) return withTarget(await this.mcServer.stop());
-        await this.syncManagedServerLifecycle(true);
-        return withTarget(await this.mcServer.state());
+        if (this.serverLifecycleActive) {
+          await this.syncManagedServerLifecycle(true);
+          return report();
+        }
+        return report(this.serverMode() === 'local' ? await this.mcServer.stop() : undefined);
+      },
+      reconnect: async () => {
+        reconcile();
+        if (this.serverMode() !== 'external') throw new Error('本地托管时使用「停止」与「启动」重新连接');
+        this.serverWanted = true;
+        if (this.serverLifecycleActive) await this.relink();
+        return report();
       },
     };
   }
 
-  private managedLocalServer(): boolean {
-    // 运行中以 manager 锁定的目录为准；热改 serverDir 不得把已启动的进程误当远程服务。
-    return this.mcServer.directory().trim() !== '';
+  private serverConsoleState(state: MinecraftServerState): MinecraftServerConsoleState {
+    const link = this.bridge?.link;
+    const target = this.linkTarget();
+    const configured = this.configuredTarget();
+    return {
+      ...state,
+      wanted: this.serverWanted,
+      mode: this.serverMode(),
+      modeInferred: this.cfg.serverMode !== 'local' && this.cfg.serverMode !== 'external',
+      link: {
+        phase: link?.phase ?? 'stopped',
+        target: targetAddress(target),
+        username: target.username,
+        version: target.version,
+        attempt: link?.attempt ?? 0,
+        failure: link?.failure ?? null,
+      },
+      pending: this.bridge?.active && !sameTarget(target, configured)
+        ? `${targetAddress(configured)}(${configured.username},${configured.version})`
+        : null,
+    };
   }
 
-  /** serverWanted 是受管服务器与 Bridge 的共同目标；远程连接不经过它。 */
+  /**
+   * 当前的连接方式。auto 按受管进程锁定的目录推定,运行中热改 serverDir 不会把已启动的
+   * 进程当成外部服务器。
+   */
+  private serverMode(): MinecraftServerMode {
+    return serverModeOf(this.cfg.serverMode, this.mcServer.directory());
+  }
+
+  private managedLocalServer(): boolean {
+    return this.serverMode() === 'local';
+  }
+
+  /** 本地托管时受管服务器的目录;外部服务器时为空,存档身份、地图、存档与权限面板都不读本地目录。 */
+  private hostedServerDir(): string {
+    return this.managedLocalServer() ? this.mcServer.directory() : '';
+  }
+
+  /** 存档与权限面板没有本地目录可读时的说明 */
+  private noServerDirNote(): string {
+    return this.managedLocalServer()
+      ? '先在本 World 配置里填 worlds.minecraft.local.serverDir'
+      : '连接外部服务器时，存档与权限由那台服务器管理；本地托管（worlds.minecraft.local.serverDir）才能在这里修改';
+  }
+
+  private noServerDirRefusal(): string {
+    return this.managedLocalServer() ? '没配服务器目录,改不了' : '外部服务器的设置无法在这里修改';
+  }
+
+  private configuredTarget(): LinkTarget {
+    return {
+      host: this.cfg.host,
+      port: this.cfg.port,
+      username: this.cfg.username || this.botName,
+      version: this.cfg.version,
+    };
+  }
+
+  /** 连接开着时是它锁定的目标,不随配置变化;连接关着时是下一次连接要用的配置目标。 */
+  private linkTarget(): LinkTarget {
+    return this.bridge?.active && this.appliedTarget ? this.appliedTarget : this.configuredTarget();
+  }
+
+  /** 连接关着时换成配置里的目标;开着时保持,改配置要重连才采用。 */
+  private applyConfiguredTarget(): void {
+    if (!this.bridge || this.bridge.active) return;
+    this.appliedTarget = this.configuredTarget();
+    this.bridge.retarget(this.appliedTarget);
+  }
+
+  /**
+   * Bridge.stop 主动清掉 bot 后会抑制旧 bot 的 end 回调；断开边界必须在这里显式终结
+   * 旧连接上的任务，重开后不能被 frozen/busyWith 卡住，也不会把动作送到新连接上。
+   */
+  private endConnection(reason: string): void {
+    this.detachItemBreak();
+    this.detachRanged();
+    this.executor?.onConnectionLost(reason);
+    this.combat?.onConnectionLost();
+  }
+
+  private enqueueLifecycle(job: () => Promise<void>): Promise<void> {
+    this.serverLifecycleQueue = this.serverLifecycleQueue.then(job).catch((error: unknown) => {
+      // 外部边界失败后留出下一次心跳重试，不把未落地的目标当成已完成。
+      this.serverLifecycleTarget = null;
+      this.fallbackLog.error(`服务器连接启停失败: ${error instanceof Error ? error.message : String(error)}`);
+    });
+    return this.serverLifecycleQueue;
+  }
+
+  /**
+   * serverWanted 是受管服务器与 Bridge 的共同目标。连接方式一变就置假:旧目标上的
+   * 连接与任务结束,新方式等操作员在挂载面板里启动或连接。
+   */
   private syncManagedServerLifecycle(force = false): Promise<void> {
-    const managed = this.managedLocalServer();
-    const enabled = !managed || this.serverWanted;
-    const target = `${managed ? 'managed' : 'external'}:${enabled}`;
+    const mode = this.serverMode();
+    if (this.serverLifecycleActive && mode !== this.lifecycleMode) {
+      if (this.lifecycleMode !== null) this.serverWanted = false;
+      this.lifecycleMode = mode;
+    }
+    const wanted = this.serverWanted;
+    const target = `${mode}:${wanted}`;
     if (force || target !== this.serverLifecycleTarget) {
       this.serverLifecycleTarget = target;
-      this.serverLifecycleQueue = this.serverLifecycleQueue.then(async () => {
+      // 每一项按排队时的目标执行:切换连接方式后紧接着启动,排在前面的断开照样执行
+      return this.enqueueLifecycle(async () => {
         if (!this.serverLifecycleActive) return;
-        if (!this.managedLocalServer()) {
-          this.bridge?.start();
-          return;
-        }
-        if (!this.serverWanted) {
-          // Bridge.stop 主动清掉 bot 后会抑制旧 bot 的 end 回调；关服边界必须在这里
-          // 显式终结身体租约和旧连接上的任务，重开后不能被 frozen/busyWith 卡住。
-          this.detachItemBreak();
-          this.detachRanged();
-          this.executor?.onConnectionLost('受管服务器已停止');
-          this.combat?.onConnectionLost();
+        const managed = this.managedLocalServer();
+        if (!wanted) {
+          const wasLinked = this.bridge?.active ?? false;
+          // 停的是受管进程时由服务器相位事件投递世界下线;其余情况在这里投递断开
+          const hosting = this.mcServer.hosting;
+          const address = targetAddress(this.linkTarget());
+          this.endConnection(managed ? '受管服务器已停止' : '控制台断开了连接');
           const stopped = await Promise.allSettled([
             this.bridge?.stop() ?? Promise.resolve(),
-            this.mcServer.stop(),
+            managed || hosting ? this.mcServer.stop() : Promise.resolve(),
           ]);
           const failures = stopped.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
           if (failures.length > 0) {
-            throw new AggregateError(failures.map((failure) => failure.reason), '受管服务器关闭不完整');
+            throw new AggregateError(failures.map((failure) => failure.reason), '服务器连接关闭不完整');
           }
+          if (wasLinked && !hosting) {
+            this.emit('minecraft.event', `[Minecraft] 控制台断开了与 ${address} 的连接;重新连接之前,游戏里的动作都不会生效。`, true);
+          }
+          return;
+        }
+        if (!this.serverWanted) return;
+        this.applyConfiguredTarget();
+        if (!managed) {
+          if (this.bridge?.active) this.bridge.reconnectNow('控制台连接');
+          else this.bridge?.start();
           return;
         }
         this.ensureCheatOps();
@@ -2773,13 +2931,23 @@ export class MinecraftWorld implements World {
         if (state.phase === 'running' || state.reachable) {
           this.bridge?.reconnectNow('受管服务器已就绪');
         }
-      }).catch((error: unknown) => {
-        // 外部边界失败后留出下一次心跳重试，不把未落地的目标当成已完成。
-        this.serverLifecycleTarget = null;
-        this.fallbackLog.error(`受管服务器启停失败: ${error instanceof Error ? error.message : String(error)}`);
       });
     }
     return this.serverLifecycleQueue;
+  }
+
+  /** 外部服务器:结束当前连接上的任务,按配置里的目标重新连接。 */
+  private relink(): Promise<void> {
+    this.serverLifecycleTarget = `${this.serverMode()}:true`;
+    return this.enqueueLifecycle(async () => {
+      if (!this.serverLifecycleActive || !this.serverWanted || this.managedLocalServer()) return;
+      if (this.bridge?.active) {
+        this.endConnection('控制台重新连接');
+        await this.bridge.stop();
+      }
+      this.applyConfiguredTarget();
+      this.bridge?.start();
+    });
   }
 
   /** 本部署里有名有姓的三个账号,顺序即面板上的顺序。 */
@@ -2824,7 +2992,7 @@ export class MinecraftWorld implements World {
     create(name: string, gen: WorldGenChoice): Promise<MinecraftWorldState>;
     apply(patch: Partial<GameSettings>): Promise<MinecraftWorldState>;
   } {
-    const dir = (): string => this.mcServer.directory();
+    const dir = (): string => this.hostedServerDir();
     const load = (): { lines: ReturnType<typeof loadProperties>; settings: GameSettings } => {
       const lines = loadProperties(dir());
       return { lines, settings: settingsFrom(lines) };
@@ -2844,12 +3012,12 @@ export class MinecraftWorld implements World {
         settings,
         flatPresets: FLAT_PRESETS,
         levelTypes: LEVEL_TYPE_LABELS,
-        detail: note ?? (configured ? null : '先在本 World 配置里填 worlds.minecraft.local.serverDir'),
+        detail: note ?? (configured ? null : this.noServerDirNote()),
       };
     };
     const requireStopped = async (what: string): Promise<MinecraftWorldState | null> => {
       const st = await state();
-      if (!st.configured) return { ...st, detail: '没配服务器目录,改不了' };
+      if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
       if (st.live) return { ...st, detail: `${what}要先把服务器停下来` };
       return null;
     };
@@ -2892,7 +3060,7 @@ export class MinecraftWorld implements World {
       },
       apply: async (patch) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: '没配服务器目录,改不了' };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
         if (!st.live) {
           const { lines } = load();
           saveProperties(dir(), applySettings(lines, patch));
@@ -2932,7 +3100,7 @@ export class MinecraftWorld implements World {
     setOp(name: string, on: boolean): Promise<MinecraftAccessState>;
     apply(patch: Partial<AccessSettings>): Promise<MinecraftAccessState>;
   } {
-    const dir = (): string => this.mcServer.directory();
+    const dir = (): string => this.hostedServerDir();
     const state = async (note?: string): Promise<MinecraftAccessState> => {
       const serverDir = dir();
       const srv = await this.mcServer.state();
@@ -2956,14 +3124,14 @@ export class MinecraftWorld implements World {
         autoOp: this.cfg.local.cheats,
         members,
         settings: accessFrom(configured ? loadProperties(serverDir) : []),
-        detail: note ?? (configured ? null : '先在本 World 配置里填 worlds.minecraft.local.serverDir'),
+        detail: note ?? (configured ? null : this.noServerDirNote()),
       };
     };
     return {
       state: () => state(),
       setOp: async (name, on) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: '没配服务器目录,改不了' };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
         const who = name.trim();
         if (!who) return state('要先写个名字');
         if (/[\s"]/.test(who)) return state('游戏名里不会有空格或引号,确认一下');
@@ -2985,7 +3153,7 @@ export class MinecraftWorld implements World {
       },
       apply: async (patch) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: '没配服务器目录,改不了' };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
         if (st.live) return { ...st, detail: '这几项服务器只在启动时读,要先把它停下来' };
         saveProperties(dir(), applyAccess(loadProperties(dir()), patch));
         return state('已写入 server.properties,下次启动生效');
@@ -3036,7 +3204,7 @@ export class MinecraftWorld implements World {
     // 摄像机说明是一整段措辞,所以它住在自己的可编辑片段里——代码只决定用不用,
     // 措辞归人。前缀里不该有任何一句只存在于 .ts 里的话。
     return {
-      'minecraft.world': worldEnvLine(this.worldIdentity()),
+      'minecraft.world': this.worldLine(),
       'minecraft.explored': this.explored.summary(normalizeDimension(this.bridge?.bot?.game?.dimension)),
       // 上下文截断时读取当前非默认设置，同时注明被蓝图预留收口的垫脚料。
       'minecraft.policy': renderPolicyEnv(this.policy.get(), false, this.blueprintHeldScaffold()),
@@ -3047,16 +3215,23 @@ export class MinecraftWorld implements World {
   }
 
   console(): WorldConsoleDecl {
-    const connected = this.bridge?.connected ?? false;
-    const managedServerOff = this.managedLocalServer() && !this.serverWanted;
+    const link = this.bridge?.link ?? null;
+    const online = link?.phase === 'online';
+    const address = targetAddress(this.linkTarget());
+    // 没在连:World 没起或本地服务器没开是「未启动」,外部服务器被控制台断开是「已断开」
+    const off = !this.bridge
+      ? '未启动'
+      : !this.serverWanted
+        ? (this.managedLocalServer() ? '未启动' : '已断开')
+        : null;
     const task = this.executor?.current;
     // 给人看的画面从哪来:观察者客户端窗口出来了就是它,否则 viewer 网页,都没有就没有
     const origin = this.client.windowHint() ? 'client' : this.bridge?.viewerUrl ? 'viewer' : null;
     const badges: WorldConsoleDecl['badges'] = [
-      managedServerOff
-        ? { label: '服务器', value: '未启动', tone: 'off' }
-        : connected
-          ? { label: '服务器', value: `${this.cfg.host}:${this.cfg.port}`, tone: 'on' }
+      off
+        ? { label: '服务器', value: off, tone: 'off' }
+        : online
+          ? { label: '服务器', value: address, tone: 'on' }
           : { label: '服务器', value: '未连接', tone: 'off' },
       task ? { label: '任务', value: task, tone: 'on' } : { label: '任务', value: '空闲', tone: 'plain' },
       origin
@@ -3072,15 +3247,13 @@ export class MinecraftWorld implements World {
       lamps: [
         {
           label: '服务器',
-          ...(managedServerOff
-            ? { state: 'offline' as const, hint: '未启动' }
-            : !this.bridge
-              ? { state: 'offline' as const, hint: '未启动' }
-              : connected
-                ? { state: 'online' as const, hint: `${this.cfg.host}:${this.cfg.port}` }
-                : this.bridge.reconnects <= 2
-                  ? { state: 'loading' as const, hint: '连接中' }
-                  : { state: 'error' as const, hint: `连不上 ${this.cfg.host}:${this.cfg.port}` }),
+          ...(off || !link
+            ? { state: 'offline' as const, hint: off ?? '未启动' }
+            : online
+              ? { state: 'online' as const, hint: address }
+              : link.attempt <= 2
+                ? { state: 'loading' as const, hint: '连接中' }
+                : { state: 'error' as const, hint: `连不上 ${address}${link.failure ? `(${link.failure})` : ''}` }),
         },
         {
           label: '任务',
@@ -3168,7 +3341,7 @@ export class MinecraftWorld implements World {
         return this.invokePanel(lane, method.slice(dot + 1), args);
       }
       case 'server':
-        return call(this.serverConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop']);
+        return call(this.serverConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop', 'reconnect']);
       case 'client':
         return call(this.clientConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop']);
       case 'player':
@@ -3677,15 +3850,14 @@ export class MinecraftWorld implements World {
       diag: this.diag,
     });
 
+    this.appliedTarget = this.configuredTarget();
     this.bridge = new Bridge({
-      host: this.cfg.host,
-      port: this.cfg.port,
-      username: this.cfg.username || this.botName,
-      version: this.cfg.version,
+      ...this.appliedTarget,
       viewerPort: this.cfg.viewerPort,
       log,
       diag: this.diag,
       shuttingDown: () => this.shuttingDown,
+      managedServer: () => this.managedLocalServer(),
       scaffoldBlocks: () => this.scaffoldBlocksForUse(),
       movementCosts: () => TRAVEL_COSTS[this.policy.get().travel],
       // 在建工地(锚点已绑、游标未满):寻路器不在体积里垫脚搭路,工地建材也降到
@@ -3738,7 +3910,8 @@ export class MinecraftWorld implements World {
 
     this.serverLifecycleActive = true;
     this.serverLifecycleTarget = null;
-    this.serverWanted = this.cfg.local.startWithWorld;
+    this.lifecycleMode = this.serverMode();
+    this.serverWanted = this.lifecycleMode === 'local' ? this.cfg.local.startWithWorld : true;
     void this.syncManagedServerLifecycle(true);
     this.reflexes.start();
     this.combat.start();
@@ -3746,7 +3919,7 @@ export class MinecraftWorld implements World {
     // 客户端自己会花几十秒加载,和连服务器并行起就行,不等它
     if (this.cfg.client.enabled) void this.client.start();
     if (this.cfg.player.enabled) void this.playerClient.start();
-    log.info(`minecraft World 已启动,目标 ${this.cfg.host}:${this.cfg.port}`);
+    log.info(`minecraft World 已启动,${this.lifecycleMode === 'local' ? '本地托管' : '外部服务器'} ${targetAddress(this.linkTarget())}`);
   }
 
   async stop(): Promise<void> {
@@ -3757,6 +3930,8 @@ export class MinecraftWorld implements World {
     this.detachItemBreak();
     this.serverLifecycleActive = false;
     this.serverLifecycleTarget = null;
+    this.lifecycleMode = null;
+    this.appliedTarget = null;
     this.host = null;
     if (this.worldTimer) clearInterval(this.worldTimer);
     this.worldTimer = null;
@@ -3863,8 +4038,9 @@ export class MinecraftWorld implements World {
     if (!m || !m.painted) {
       return this.toolLog('mc_view_map', args, `地图 #${id} 的整张画面还没收到:服务端只在登录后推一次整张,之后只推变了的部分;刚拿到手的图等一两秒再看`);
     }
-    const identity = worldIdentityOf(this.cfg.local.serverDir, `${this.cfg.host}:${this.cfg.port}`);
-    const dat = identity.local ? readMapDat(join(this.cfg.local.serverDir, identity.key, 'data', `map_${id}.dat`)) : null;
+    const hostedDir = this.hostedServerDir();
+    const identity = worldIdentityOf(hostedDir, targetAddress(this.linkTarget()));
+    const dat = identity.local ? readMapDat(join(hostedDir, identity.key, 'data', `map_${id}.dat`)) : null;
     const per = 2 ** m.scale;
     const world = (px: number, pz: number): string => (dat
       ? `,世界约 (${Math.round(dat.xCenter + (px - MAP_SIZE / 2) * per)}, ${Math.round(dat.zCenter + (pz - MAP_SIZE / 2) * per)})`
@@ -4991,7 +5167,7 @@ export class MinecraftWorld implements World {
     this.hookBotEvents(bot);
     this.diag.write({
       lane: 'link', event: 'spawn',
-      msg: `连入 ${this.cfg.host}:${this.cfg.port},物品栏${this.bridge?.invSynced ? '已同步' : '还没同步'}`,
+      msg: `连入 ${targetAddress(this.linkTarget())},物品栏${this.bridge?.invSynced ? '已同步' : '还没同步'}`,
       data: {
         connectionGeneration,
         invSynced: this.bridge?.invSynced,
@@ -5008,7 +5184,7 @@ export class MinecraftWorld implements World {
     this.emit(
       'minecraft.event',
       [
-        `[Minecraft] 已连入服务器 ${this.cfg.host}:${this.cfg.port},身份 ${this.chatName()}。`,
+        `[Minecraft] 已连入服务器 ${targetAddress(this.linkTarget())},身份 ${this.chatName()}。`,
         snap ? narrateWorld(snap, this.nearMarkNote(snap.position)) : '',
         // 五格落盘跨重启活着:上一场设下的规矩必须有一句话说出来,且点明是上一场的
         renderPolicyEnv(this.policy.get(), this.policy.restored(), this.blueprintHeldScaffold()),
@@ -5125,9 +5301,14 @@ export class MinecraftWorld implements World {
     );
   }
 
-  /** 世界身份:托管中的那份目录优先(activeServerDir),否则同 proxy 侧读配置里的目录 */
+  /** 环境提示词里的世界身份一行;子进程随状态推给 proxy,与连接所用的目标一致。 */
+  worldLine(): string {
+    return worldEnvLine(this.worldIdentity());
+  }
+
+  /** 世界身份:本地托管读受管目录(运行中锁定的那份),外部服务器只按连接地址;proxy 侧同一口径 */
   private worldIdentity(): WorldIdentity {
-    return worldIdentityOf(this.mcServer.directory(), `${this.cfg.host}:${this.cfg.port}`);
+    return worldIdentityOf(this.hostedServerDir(), targetAddress(this.linkTarget()));
   }
 
   /**
@@ -5148,7 +5329,7 @@ export class MinecraftWorld implements World {
       const uuid = this.mcServer.realm()?.uuid;
       if (uuid) return `uuid:${uuid}`;
     }
-    return `weak:${this.cfg.host}:${this.cfg.port}|${world.local ? world.key : ''}`;
+    return `weak:${targetAddress(this.linkTarget())}|${world.local ? world.key : ''}`;
   }
 
   /**
@@ -5221,7 +5402,7 @@ export class MinecraftWorld implements World {
     if (phase === 'starting') {
       this.emit('minecraft.event', '[Minecraft] 服务器启动中,世界加载要一阵。', false);
     } else if (phase === 'running') {
-      if (this.managedLocalServer() && !this.serverWanted) return;
+      if (!this.serverWanted) return;
       if (this.bridge?.active) this.bridge.reconnectNow('服务器就绪');
       else this.bridge?.start();
       this.emit('minecraft.event', '[Minecraft] 服务器就绪,世界上线了。', false);
@@ -6159,7 +6340,7 @@ export class MinecraftWorld implements World {
   }
 
   private hydratePersonalSpawn(): void {
-    const dir = this.mcServer.directory();
+    const dir = this.hostedServerDir();
     if (!dir) return;
     const world = settingsFrom(loadProperties(dir)).levelName;
     const file = playerDatPath(dir, world, offlineUuid(this.chatName()));
@@ -6412,8 +6593,9 @@ export class MinecraftWorld implements World {
   }
 
 
+  /** 当前连接所用的游戏内名字;配置里改了名字但还没重连时,游戏里的仍是旧名。 */
   private chatName(): string {
-    return this.cfg.username || this.botName;
+    return this.linkTarget().username;
   }
 
   /** 观察者客户端账号不计入在线玩家。 */

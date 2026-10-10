@@ -276,6 +276,31 @@ describe('MinecraftWorldProxy(前缀变量)', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('外部服务器不读本地存档名;子进程报了状态后用它按当前连接算的那一行', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'mc-proxy-ext-'));
+    try {
+      const cfg = structuredClone(MINECRAFT_DEFAULTS) as unknown as MinecraftConfigSection;
+      cfg.serverMode = 'external';
+      cfg.host = 'mc.example.org';
+      cfg.port = 25570;
+      cfg.local.serverDir = dir;
+      writeFileSync(join(dir, 'server.properties'), 'level-name=世界33\n', 'utf8');
+      const proxy = new MinecraftWorldProxy({ cfg, dataDir: dir });
+      expect(proxy.envPromptVars()['minecraft.world']).toBe('当前服务器:mc.example.org:25570');
+
+      // 配置已改到新端口,连接仍在旧端口上:以子进程报的为准
+      cfg.port = 25571;
+      // 状态推送只在挂上宿主后处理
+      Object.assign(proxy, { host: {} });
+      (proxy as unknown as { onNote(note: unknown): void }).onNote({
+        kind: 'status', decl: {}, worldLine: '当前服务器:mc.example.org:25570', storage: [],
+      });
+      expect(proxy.envPromptVars()['minecraft.world']).toBe('当前服务器:mc.example.org:25570');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe('MinecraftWorldProxy(子进程未起时的存储面)', () => {

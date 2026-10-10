@@ -80,6 +80,8 @@ export type EngineNote =
   | {
       kind: 'status';
       decl: Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>;
+      /** 环境提示词的世界身份一行,按当前连接的目标算 */
+      worldLine: string;
       storage: StorageStat[];
     };
 

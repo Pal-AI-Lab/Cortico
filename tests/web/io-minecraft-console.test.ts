@@ -90,13 +90,13 @@ describe('invoke 按局部 id 分派', () => {
     await expect(c.invoke!('nope', 'x', [])).rejects.toThrow('未知面板');
   });
 
-  it('权限面板没配服务器目录时不抛错,回一句"改不了"', async () => {
+  it('权限面板没配服务器目录时不抛错,回一句无法修改', async () => {
     const c = ioPageContribution('minecraft', 'Minecraft', undefined, mc());
     const st = await c.invoke!('access', 'state', []) as { configured: boolean; detail: string };
     expect(st.configured).toBe(false);
     expect(st.detail).toContain('serverDir');
     const after = await c.invoke!('access', 'setOp', ['CortiV', true]) as { detail: string };
-    expect(after.detail).toContain('改不了');
+    expect(after.detail).toContain('无法在这里修改');
     await expect(c.invoke!('access', 'nope', [])).rejects.toThrow('未知面板方法');
   });
 

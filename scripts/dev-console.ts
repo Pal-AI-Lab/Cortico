@@ -29,7 +29,7 @@ import { TerminalWorld } from '../src/worlds/terminal/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
 import type { Language } from '../src/core/language.ts';
 import { WEBSEARCH_CONFIG_GROUP } from '../src/worlds/websearch/config.ts';
-import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP } from '../src/worlds/minecraft/config.ts';
+import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
 import { MINECRAFT_PANEL_DECLS } from '../src/worlds/minecraft/world.ts';
 import { FLAT_PRESETS, LEVEL_TYPE_LABELS } from '../src/worlds/minecraft/server-config.ts';
 import { BILIBILI_CONFIG_GROUP, BILIBILI_DEFAULTS } from '../src/worlds/bilibili/config.ts';
@@ -401,6 +401,58 @@ function devMount(
   };
 }
 
+/**
+ * Minecraft「服务器」一行:按 devCfg 的 serverMode 分本地托管与外部服务器。外部服务器
+ * 连接 3 秒后进入世界;端口为 25571 时模拟端口可达但被白名单拒绝。
+ */
+function devMinecraftServer(): { state(): Promise<unknown>; start(): Promise<unknown>; stop(): Promise<unknown>; reconnect(): Promise<unknown> } {
+  const local = devMount(
+    () => ({ address: '127.0.0.1:25565', serverDir: 'C:\\mc\\server', configured: true }),
+    (phase) => ({ reachable: phase === 'running' }),
+  );
+  const mc = () => (devCfg.worlds as unknown as Record<string, MinecraftConfigSection>).minecraft;
+  const targetOf = () => ({ host: mc().host, port: mc().port, username: mc().username, version: mc().version });
+  let wanted = true;
+  let applied = targetOf();
+  let since = Date.now();
+  const external = () => mc().serverMode === 'external';
+  const link = (phase: string) => {
+    if (!external()) {
+      return { phase: phase === 'running' ? 'online' : 'stopped', target: '127.0.0.1:25565', username: applied.username, version: applied.version, attempt: 0, failure: null };
+    }
+    const blocked = applied.port === 25571;
+    const settled = Date.now() - since > 3_000;
+    return {
+      phase: !wanted ? 'stopped' : !settled ? 'connecting' : blocked ? 'retrying' : 'online',
+      target: `${applied.host}:${applied.port}`,
+      username: applied.username,
+      version: applied.version,
+      attempt: wanted && settled && blocked ? 1 : 0,
+      failure: wanted && settled && blocked ? '被服务器断开(白名单):multiplayer.disconnect.not_whitelisted' : null,
+    };
+  };
+  const snap = async () => {
+    const base = await local.state() as { phase: string } & Record<string, unknown>;
+    const now = targetOf();
+    const differs = now.host !== applied.host || now.port !== applied.port
+      || now.username !== applied.username || now.version !== applied.version;
+    if (!external()) return { ...base, mode: 'local', modeInferred: false, wanted: base.phase !== 'stopped', link: link(base.phase), pending: null };
+    return {
+      ...base, phase: 'stopped', pid: null, detail: null, reachable: true, configured: false,
+      address: `${applied.host}:${applied.port}`, mode: 'external', modeInferred: false, wanted,
+      link: link(base.phase),
+      pending: wanted && differs ? `${now.host}:${now.port}(${now.username},${now.version})` : null,
+    };
+  };
+  const connect = () => { wanted = true; applied = targetOf(); since = Date.now(); };
+  return {
+    state: snap,
+    start: async () => { if (external()) { if (!wanted) connect(); } else await local.start(); return snap(); },
+    stop: async () => { if (external()) wanted = false; else await local.stop(); return snap(); },
+    reconnect: async () => { connect(); return snap(); },
+  };
+}
+
 
 const devQqNames = (): unknown => ({
   groups: [
@@ -662,10 +714,7 @@ const devPanels: Record<string, Record<string, Record<string, (...args: never[])
     },
       // 面板方法的链路前缀与 MinecraftWorld.invokePanel 一致。
 
-    server: devMount(
-      () => ({ address: '127.0.0.1:25565', serverDir: 'C:\\mc\\server', configured: true }),
-      (phase) => ({ reachable: phase === 'running' }),
-    ),
+    server: devMinecraftServer(),
     client: devMount(
       () => ({
         enabled: true, gameDir: 'C:\\mc\\.minecraft', versionId: '1.20.1-fabric-iris',
