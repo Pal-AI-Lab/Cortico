@@ -594,7 +594,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const id = `worlds.${worldId}`;
     let track = this.moduleUsageTracks.get(id);
     if (!track) {
-      track = this.sessions.open(id, opts?.label ?? `${worldId}World 自带模型`, { id });
+      track = this.sessions.open(id, opts?.label ?? worldId, { id });
       this.moduleUsageTracks.set(id, track);
     }
     track.record(usage, undefined, opts?.model, { charges: opts?.charges });

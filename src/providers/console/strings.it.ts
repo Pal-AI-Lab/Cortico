@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: 'Il modulo del provider non è disponibile.',
   modelMissing: 'Serve un modello.',
   apiKeyMissing: 'Serve una API Key.',
+  invalidIdentifier: "Nome dell'istanza del provider non valido.",
+  nameShape: "Usa lettere latine, cifre, - o _ e inizia con una lettera o una cifra. Gli spazi non sono ammessi.",
+  nameReserved: "Questo nome è riservato da Windows.",
+  modulePanelMissing: "Questo modulo non ha un pannello della console",
+  foreignRequest: "Il pannello ha richiesto un'istanza del provider diversa da quella in modifica",
+  busy: "È in corso un'altra modifica del provider. Riprova quando è finita.",
+  changedElsewhere: "La configurazione è stata modificata in un'altra pagina o in un altro bot. Ricarica prima di salvare.",
+  copySourceGone: "L'origine della copia non esiste più.",
+  inUse: (names: string) => `L'istanza del provider è usata da: ${names}`,
 };

@@ -100,6 +100,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: '로컬 종료 완료: 모든 단계 완료',
     summaryUnverified: (items: string[]) => `로컬 종료는 끝났지만 외부 상태의 종료가 확인되지 않았습니다: ${items.join(', ')}(직접 확인 필요)`,
   },
+  storagePartGone: (world: string, key: string) => `${world}의 저장 항목 ${key}이(가) 현재 인스턴스에 없습니다`,
+  panelNoInvoke: (panel: string) => `패널 데이터 처리기가 없습니다: ${panel}`,
+  panelNoStream: (panel: string) => `패널 스트림이 없습니다: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

@@ -54,6 +54,15 @@ const zh = {
   moduleMissing: '供应商模块不可用。',
   modelMissing: '请选择模型。',
   apiKeyMissing: '请配置 API Key。',
+  invalidIdentifier: "供应实例名不合法。",
+  nameShape: "实例名只能用英文字母、数字、- 或 _,以字母或数字开头,不能有空格。",
+  nameReserved: "这个名字被 Windows 保留。",
+  modulePanelMissing: "此模块没有控制台面板",
+  foreignRequest: "面板请求的供应实例与正在编辑的不一致",
+  busy: "另一次供应实例修改正在进行,等它结束后重试。",
+  changedElsewhere: "配置已在别的页面或 bot 里改过,重新载入后再保存。",
+  copySourceGone: "复制来源已不存在。",
+  inUse: (names: string) => `供应实例正被这些部署使用:${names}`,
 };
 export const en: typeof zh = {
   connectionDescription: 'Requests bind at start; changes apply from the next request.',
@@ -99,6 +108,15 @@ export const en: typeof zh = {
   moduleMissing: 'Provider module is unavailable.',
   modelMissing: 'Model is required.',
   apiKeyMissing: 'API Key is required.',
+  invalidIdentifier: "Invalid provider instance name.",
+  nameShape: "Use English letters, digits, - or _; start with a letter or digit. Spaces are not allowed.",
+  nameReserved: "This name is reserved by Windows.",
+  modulePanelMissing: "This module has no console panel",
+  foreignRequest: "The panel requested a provider instance other than the one being edited",
+  busy: "Another provider transaction is in progress. Retry after it completes.",
+  changedElsewhere: "Configuration changed in another page or bot. Reload before saving.",
+  copySourceGone: "Copy source no longer exists.",
+  inUse: (names: string) => `Provider instance is used by: ${names}`,
 };
 export const text = (language: Language) => pick(language, {
   zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,

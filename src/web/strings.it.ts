@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'Nessun selettore di percorso disponibile su questo computer; installa zenity o kdialog',
   pickerFailed: (error: string) => `Impossibile aprire il selettore di percorso di questo computer: ${error}`,
   pickerUnsupported: (platform: string) => `Questa piattaforma non ha un selettore di percorso nativo: ${platform}`,
+  providersUnavailable: "La configurazione dei provider non è disponibile",
 };

@@ -106,6 +106,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'Локальное выключение завершено: все шаги выполнены',
     summaryUnverified: (items: string[]) => `Локальное выключение завершено, но завершение внешнего состояния не подтверждено: ${items.join(', ')} (нужна ручная проверка)`,
   },
+  storagePartGone: (world: string, key: string) => `Элемент хранилища ${key} у ${world} отсутствует в текущем экземпляре`,
+  panelNoInvoke: (panel: string) => `Нет обработчика данных панели: ${panel}`,
+  panelNoStream: (panel: string) => `Нет потока панели: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

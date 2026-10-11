@@ -100,6 +100,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'Lokales Herunterfahren beendet: alle Schritte erledigt',
     summaryUnverified: (items: string[]) => `Lokales Herunterfahren beendet, aber das Ende des externen Zustands ist nicht bestätigt: ${items.join(', ')} (manuelle Bestätigung nötig)`,
   },
+  storagePartGone: (world: string, key: string) => `Das Speicherelement ${key} von ${world} existiert in der aktuellen Instanz nicht`,
+  panelNoInvoke: (panel: string) => `Kein Daten-Handler für das Panel: ${panel}`,
+  panelNoStream: (panel: string) => `Kein Stream für das Panel: ${panel}`,
 };
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `Erstellung fehlgeschlagen: ${detail}`,

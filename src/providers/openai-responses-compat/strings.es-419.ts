@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: 'Método desconocido',
   modelRequired: 'Primero elige un modelo',
   thinkingOff: 'El razonamiento está desactivado en este endpoint; la forma de reenvío no aplica',
+  title: "Compatible con OpenAI Responses",
 };
 export const panel: Partial<typeof panelEn> = {
   title: 'Razonamiento',

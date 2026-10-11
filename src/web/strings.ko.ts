@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: '이 컴퓨터에 사용할 수 있는 경로 선택기가 없습니다. zenity 또는 kdialog를 설치하세요',
   pickerFailed: (error: string) => `이 컴퓨터의 경로 선택기를 열 수 없습니다: ${error}`,
   pickerUnsupported: (platform: string) => `이 플랫폼에는 기본 경로 선택기가 없습니다: ${platform}`,
+  providersUnavailable: "공급자 설정을 사용할 수 없습니다",
 };

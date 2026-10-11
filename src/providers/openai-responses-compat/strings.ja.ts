@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: '不明な操作です',
   modelRequired: '先にモデルを選択してください',
   thinkingOff: 'このエンドポイントは思考がオフのため、返送形式は関係ありません',
+  title: "OpenAI Responses 互換",
 };
 
 export const panel: Partial<typeof panelEn> = {

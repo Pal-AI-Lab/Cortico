@@ -84,4 +84,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'No hay ningún selector de rutas disponible en esta computadora; instala zenity o kdialog',
   pickerFailed: (error: string) => `No se pudo abrir el selector de rutas de esta computadora: ${error}`,
   pickerUnsupported: (platform: string) => `Esta plataforma no tiene un selector de rutas nativo: ${platform}`,
+  providersUnavailable: "La configuración de proveedores no está disponible",
 };

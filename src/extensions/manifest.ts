@@ -5,6 +5,9 @@
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
  */
 
+import type { Language } from '../core/language.ts';
+import { text } from './strings.ts';
+
 export type ExtensionKind = 'world' | 'provider' | 'bot';
 export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', 'bot'];
 
@@ -77,68 +80,69 @@ export function isSafeRelativeFile(p: unknown): p is string {
   return !p.split('/').some((seg) => seg === '..' || seg === '');
 }
 
-export function parseExtensionManifest(pkg: ExtensionPackageJson): ExtensionManifestResult {
+/** reasons 与 warnings 按 `language` 给。 */
+export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Language = 'zh'): ExtensionManifestResult {
+  const t = text(language);
   const reasons: string[] = [];
   const warnings: string[] = [];
 
   if (pkg.type !== 'module') {
-    reasons.push("package.json 需要 \"type\": \"module\"，以保持扩展与框架的 ESM 模块实例一致。");
+    reasons.push(t.typeModule);
   }
 
   const block = pkg.cortico;
   if (!block || typeof block !== 'object' || Array.isArray(block)) {
-    reasons.push('package.json 缺少 cortico 块(至少要 kind 与 api)。');
+    reasons.push(t.corticoMissing);
     return { ok: false, reasons, warnings };
   }
   const m = block as Record<string, unknown>;
   const displayName = typeof m.displayName === 'string' ? m.displayName.trim() : '';
-  if (m.displayName !== undefined && !displayName) warnings.push('cortico.displayName 必须是非空字符串,已忽略。');
+  if (m.displayName !== undefined && !displayName) warnings.push(t.displayNameEmpty);
   const icon = isSafeRelativeFile(m.icon) && Object.keys(ICON_TYPES).some((ext) => (m.icon as string).toLowerCase().endsWith(ext)) ? m.icon : undefined;
   if (m.icon !== undefined && icon === undefined) {
-    warnings.push(`cortico.icon 必须是包内相对路径,指向 ${Object.keys(ICON_TYPES).join(' / ')},现在是 ${JSON.stringify(m.icon)};已忽略。`);
+    warnings.push(t.iconBad(Object.keys(ICON_TYPES).join(' / '), JSON.stringify(m.icon)));
   }
 
   const kind = m.kind;
   const kindOk = typeof kind === 'string' && (EXTENSION_KINDS as readonly string[]).includes(kind);
   if (!kindOk) {
-    reasons.push(`cortico.kind 必须是 ${EXTENSION_KINDS.map((k) => `"${k}"`).join(' 或 ')},现在是 ${JSON.stringify(kind)}。`);
+    reasons.push(t.kindBad(EXTENSION_KINDS.map((k) => `"${k}"`), JSON.stringify(kind)));
   }
 
   const api = m.api;
   // kind 认不出时不比版本:每一类的契约版本各走各的,不知道是哪一类就没有可比的数。
   const expected = kindOk ? EXTENSION_API_VERSIONS[kind as ExtensionKind] : undefined;
   if (typeof api !== 'number' || !Number.isInteger(api) || api < 1) {
-    const note = expected === undefined ? '' : `(本框架的 ${kind} 契约是 v${expected})`;
-    reasons.push(`cortico.api 必须是正整数${note},现在是 ${JSON.stringify(api)}。`);
+    reasons.push(expected === undefined ? t.apiNotInteger(JSON.stringify(api)) : t.apiNotInteger(JSON.stringify(api), kind as string, expected));
   } else if (expected !== undefined && api < expected) {
-    reasons.push(`扩展按 ${kind} 契约 v${api} 编写,本框架的 ${kind} 契约是 v${expected}:扩展需要升级。`);
+    reasons.push(t.apiTooOld(kind as string, api, expected));
   } else if (expected !== undefined && api > expected) {
-    reasons.push(`扩展要求 ${kind} 契约 v${api},本框架的 ${kind} 契约只到 v${expected}:框架需要升级。`);
+    reasons.push(t.apiTooNew(kind as string, api, expected));
   }
 
   const client = m.consoleClient;
   if (client !== undefined) {
     if (!isSafeRelativeFile(client)) {
-      reasons.push(`cortico.consoleClient 必须是包内相对路径(不含 ..、不以 / 开头、只用 /),现在是 ${JSON.stringify(client)}。`);
+      reasons.push(t.clientPath(JSON.stringify(client)));
     } else if (!/\.m?js$/.test(client)) {
-      reasons.push('cortico.consoleClient 必须指向预构建好的 .js / .mjs;浏览器不跑 TypeScript。');
+      reasons.push(t.clientNotJs);
     }
   }
   const style = m.consoleStyle;
   if (style !== undefined) {
     if (client === undefined) {
-      reasons.push('cortico.consoleStyle 要与 consoleClient 一起给:样式随面板 bundle 注入。');
+      reasons.push(t.styleWithoutClient);
     } else if (!isSafeRelativeFile(style)) {
-      reasons.push(`cortico.consoleStyle 必须是包内相对路径,现在是 ${JSON.stringify(style)}。`);
+      reasons.push(t.stylePath(JSON.stringify(style)));
     } else if (!/\.css$/.test(style)) {
-      reasons.push('cortico.consoleStyle 必须指向 .css。');
+      reasons.push(t.styleNotCss);
     }
   }
 
   if (kindOk) {
     const keyword = EXTENSION_KEYWORDS[kind as ExtensionKind];
     if (!(pkg.keywords ?? []).includes(keyword)) {
-      warnings.push(`keywords 里没有 "${keyword}":发布到 npm 后控制台的搜索找不到它(本地安装不受影响)。`);
+      warnings.push(t.keywordMissing(keyword));
     }
   }
 

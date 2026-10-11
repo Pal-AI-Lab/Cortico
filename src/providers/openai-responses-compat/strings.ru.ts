@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: 'Неизвестный метод',
   modelRequired: 'Сначала выберите модель',
   thinkingOff: 'На этом эндпоинте рассуждение выключено; форма передачи не применяется',
+  title: "Совместимый с OpenAI Responses",
 };
 export const panel: Partial<typeof panelEn> = {
   title: 'Рассуждение',

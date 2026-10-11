@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: '알 수 없는 작업',
   modelRequired: '먼저 모델을 선택하세요',
   thinkingOff: '이 엔드포인트는 추론이 꺼져 있어 회신 형식이 적용되지 않습니다',
+  title: "OpenAI Responses 호환",
 };
 
 export const panel: Partial<typeof panelEn> = {

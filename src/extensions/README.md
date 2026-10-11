@@ -27,8 +27,8 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 }
 ```
 
-`parseExtensionManifest(pkg)` 只做解析与校验,不碰文件系统;装载器与
-`pnpm check:extension <dir>` 共用它。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
+`parseExtensionManifest(pkg, language)` 只做解析与校验,不碰文件系统;装载器与
+`pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
 
 `EXTENSION_API_VERSIONS` 按 kind 各记一个版本:`WorldDefinition` 不兼容变更只加 world,
 `ProviderModule` 只加 provider,`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;

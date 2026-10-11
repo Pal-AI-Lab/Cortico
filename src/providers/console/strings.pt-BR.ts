@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: 'O módulo do provedor está indisponível.',
   modelMissing: 'É necessário escolher um modelo.',
   apiKeyMissing: 'É necessário configurar a API Key.',
+  invalidIdentifier: "Nome de instância de provedor inválido.",
+  nameShape: "Use letras latinas, dígitos, - ou _ e comece com uma letra ou um dígito. Espaços não são permitidos.",
+  nameReserved: "Este nome é reservado pelo Windows.",
+  modulePanelMissing: "Este módulo não tem painel de console",
+  foreignRequest: "O painel pediu uma instância de provedor diferente da que está sendo editada",
+  busy: "Outra alteração de provedor está em andamento. Tente de novo quando ela terminar.",
+  changedElsewhere: "A configuração foi alterada em outra página ou outro bot. Recarregue antes de salvar.",
+  copySourceGone: "A origem da cópia não existe mais.",
+  inUse: (names: string) => `A instância de provedor está em uso por: ${names}`,
 };

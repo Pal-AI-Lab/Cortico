@@ -110,6 +110,9 @@ const botZh = {
     summaryComplete: '本地关机步骤全部完成',
     summaryUnverified: (items: string[]) => `本地关机完成,但外部状态未确认结束:${items.join('、')}(需人工确认)`,
   },
+  storagePartGone: (world: string, key: string) => `${world} 的存储项 ${key} 在当前实例上不存在`,
+  panelNoInvoke: (panel: string) => `没有面板数据面: ${panel}`,
+  panelNoStream: (panel: string) => `没有流式面: ${panel}`,
 };
 export const botEn: typeof botZh = {
   noFile: '(no file)',
@@ -211,6 +214,9 @@ export const botEn: typeof botZh = {
     summaryComplete: 'Local shutdown finished: every step completed',
     summaryUnverified: (items: string[]) => `Local shutdown finished, but external state is not confirmed ended: ${items.join(', ')} (manual confirmation needed)`,
   },
+  storagePartGone: (world: string, key: string) => `Storage item ${key} of ${world} does not exist on the current instance`,
+  panelNoInvoke: (panel: string) => `No panel data handler: ${panel}`,
+  panelNoStream: (panel: string) => `No panel stream: ${panel}`,
 };
 export const botText = (language: Language) => pick(language, {
   zh: botZh, en: botEn, 'zh-Hant': botZhHant, ja: botJa, ko: botKo, fr: botFr, de: botDe,

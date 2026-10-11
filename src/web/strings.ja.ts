@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'このマシンで使えるパス選択ダイアログがありません。zenity または kdialog をインストールしてください',
   pickerFailed: (error: string) => `このマシンのパス選択ダイアログを開けませんでした：${error}`,
   pickerUnsupported: (platform: string) => `このプラットフォームにはネイティブのパス選択ダイアログがありません：${platform}`,
+  providersUnavailable: "プロバイダー設定を利用できません",
 };

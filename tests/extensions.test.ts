@@ -78,7 +78,7 @@ describe('loadExtensions', () => {
     installFake('good', { body: definitionSource('good') });
     const set = await loadExtensions(root);
     expect(set.worlds.map((m) => m.id)).toEqual(['good']);
-    const byName = Object.fromEntries(set.records.map((r) => [r.name, r]));
+    const byName = Object.fromEntries(set.records.map((r) => [r.name, { ...r, reason: r.reason?.('zh') }]));
     expect(byName['bad-shape']).toMatchObject({ loaded: false, reason: expect.stringContaining('WorldDefinition') });
     expect(byName.gone).toMatchObject({ loaded: false, version: null, reason: expect.stringContaining('node_modules') });
     expect(byName.throws).toMatchObject({ loaded: false, reason: expect.stringContaining('boom at import') });
@@ -91,7 +91,7 @@ describe('loadExtensions', () => {
     installFake('second', { body: definitionSource('dup') });
     const set = await loadExtensions(root, { reserved: ['terminal-like'] });
     expect(set.worlds.map((m) => m.id)).toEqual(['dup']);
-    const byName = Object.fromEntries(set.records.map((r) => [r.name, r]));
+    const byName = Object.fromEntries(set.records.map((r) => [r.name, { ...r, reason: r.reason?.('zh') }]));
     expect(byName['clash-builtin']).toMatchObject({ loaded: false, worldId: 'terminal-like', reason: expect.stringContaining('占用') });
     expect(byName.first.loaded).toBe(true);
     expect(byName.second).toMatchObject({ loaded: false, worldId: 'dup' });
@@ -164,7 +164,7 @@ describe('ExtensionManager', () => {
 
   it('install:本机目录必须存在且含 package.json,按绝对路径交给 pnpm', async () => {
     const { mgr, runs } = manager();
-    await expect(mgr.install({ path: './nowhere' })).rejects.toThrow('目录不存在');
+    await expect(mgr.install({ path: './nowhere' })).rejects.toThrow('Directory does not exist');
     mkdirSync(join(root, 'empty'));
     await expect(mgr.install({ path: './empty' })).rejects.toThrow('package.json');
     mkdirSync(join(root, 'my mod'));
@@ -176,24 +176,24 @@ describe('ExtensionManager', () => {
   it('install:拒绝带 shell 元字符的包名、版本与路径,一次 pnpm 都不起', async () => {
     const { mgr, runs } = manager();
     for (const name of ['a b', 'x;rm -rf /', 'Upper', '../escape', '$(id)']) {
-      await expect(mgr.install({ name })).rejects.toThrow('包名');
+      await expect(mgr.install({ name })).rejects.toThrow('package name');
     }
     for (const version of ['1.0 || 2.0', '>=1.0.0', '1.0"', '%PATH%']) {
-      await expect(mgr.install({ name: 'ok', version })).rejects.toThrow('版本');
+      await expect(mgr.install({ name: 'ok', version })).rejects.toThrow('version');
     }
-    await expect(mgr.install({ path: './a"b' })).rejects.toThrow('字符');
+    await expect(mgr.install({ path: './a"b' })).rejects.toThrow('characters');
     expect(runs).toEqual([]);
   });
 
   it('install:pnpm 非零退出 → 抛错带输出尾部', async () => {
     const { mgr } = manager({}, { code: 1 });
-    await expect(mgr.install({ name: 'x' })).rejects.toThrow('退出码 1');
+    await expect(mgr.install({ name: 'x' })).rejects.toThrow('exited with 1');
   });
 
   it('装卸串行:前一个没回来时第二个直接拒绝', async () => {
     const { mgr, runs, release } = manager({}, { hang: true });
     const first = mgr.install({ name: 'x' });
-    await expect(mgr.install({ name: 'y' })).rejects.toThrow('在进行');
+    await expect(mgr.install({ name: 'y' })).rejects.toThrow('already running');
     release();
     await first;
     expect(runs.map((r) => r.args[1])).toEqual(['x']);
@@ -202,8 +202,8 @@ describe('ExtensionManager', () => {
   it('uninstall:没装的包拒绝;装了的 → pnpm remove', async () => {
     installFake('present');
     const { mgr, runs } = manager();
-    await expect(mgr.uninstall('absent')).rejects.toThrow('没有安装');
-    await expect(mgr.uninstall('bad name')).rejects.toThrow('包名');
+    await expect(mgr.uninstall('absent')).rejects.toThrow('not installed');
+    await expect(mgr.uninstall('bad name')).rejects.toThrow('package name');
     const msg = await mgr.uninstall('present');
     expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
     expect(msg).toContain('重启');
@@ -429,7 +429,7 @@ describe('ExtensionManager', () => {
     expect(await mgr.check({ path: local })).toEqual({ name: 'local-world', version: '0.1.0', kind: 'world' });
     writeFileSync(join(local, 'package.json'), JSON.stringify({ name: 'local-world', version: '0.1.0' }));
     await expect(mgr.check({ path: local })).rejects.toThrow('cortico');
-    await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('目录不存在');
+    await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('Directory does not exist');
     expect(runs.map((r) => r.args)).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
   });
 
@@ -538,7 +538,7 @@ describe('ExtensionManager', () => {
     expect(info.manifest).toBeUndefined();
     expect(info.problems?.join(' ')).toContain('type');
     expect(info.problems?.join(' ')).toContain('v99');
-    await expect(mgr.packageInfo('Bad Name')).rejects.toThrow('包名');
+    await expect(mgr.packageInfo('Bad Name')).rejects.toThrow('package name');
     const { mgr: empty } = manager({}, { packument: { 'dist-tags': {}, versions: {} } });
     await expect(empty.packageInfo('c')).rejects.toThrow('latest');
   });

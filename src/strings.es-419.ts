@@ -102,6 +102,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'Apagado local terminado: se completaron todos los pasos',
     summaryUnverified: (items: string[]) => `El apagado local terminó, pero no se confirmó que el estado externo haya terminado: ${items.join(', ')} (requiere confirmación manual)`,
   },
+  storagePartGone: (world: string, key: string) => `El elemento de almacenamiento ${key} de ${world} no existe en la instancia actual`,
+  panelNoInvoke: (panel: string) => `No hay manejador de datos para el panel: ${panel}`,
+  panelNoStream: (panel: string) => `No hay flujo para el panel: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

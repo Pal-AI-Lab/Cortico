@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type ExtensionInstallTarget } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
+import { LocalizedError } from '../../src/core/language.ts';
 import { FakeStore } from './fakes.ts';
 
 let app: WebApp;
@@ -60,7 +61,7 @@ beforeAll(async () => {
       },
       packageInfo: async (name, version) => {
         asked.push(version ? `${name}@${version}` : name);
-        if (name === 'bad name') throw new Error('不是合法的 npm 包名: bad name');
+        if (name === 'bad name') throw new LocalizedError(() => '不是合法的 npm 包名: bad name');
         if (name === 'gone') throw new Error('registry 没有给出 gone 的 latest 版本');
         return {
           name, version: '1.0.0', versionCount: 1, history: [], warnings: [], frameworkApi: 4,

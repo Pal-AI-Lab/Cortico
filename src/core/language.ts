@@ -43,6 +43,14 @@ export function baseLanguage(language: Language): BaseLanguage {
   return language === 'zh' || language === 'zh-Hant' ? 'zh' : 'en';
 }
 
+/**
+ * An error whose operator-facing text is chosen per request: `describe` renders it in the request
+ * language, `message` holds the English text for logs. `status` is the HTTP status to answer with.
+ */
+export class LocalizedError extends Error {
+  constructor(readonly describe: (language: Language) => string, readonly status = 400) { super(describe('en')); }
+}
+
 /** BCP 47 tag for `<html lang>`; zh is written zh-CN. */
 export function languageTag(language: Language): string {
   return language === 'zh' ? 'zh-CN' : language;

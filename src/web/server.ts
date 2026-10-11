@@ -28,7 +28,7 @@ import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
 import { blobScheme } from '../core/blobs.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
-import { isLanguage, languageTag, systemLanguage, type Language } from '../core/language.ts';
+import { isLanguage, languageTag, LocalizedError, systemLanguage, type Language } from '../core/language.ts';
 import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
 import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
@@ -269,25 +269,25 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
   list(language: Language): { dir: string; extensions: ExtensionInfo[] };
-  updates(): Promise<ExtensionUpdateResult>;
+  updates(language: Language): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
   /** 最近一次这一类的搜索翻到了上限,结果可能不全。 */
   searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
   /** 单个包的详情(另取一次包文档);`version` 是版本号或 dist-tag,缺省 latest。 */
-  packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail>;
+  packageInfo(name: string, version: string | undefined, language: Language): Promise<ExtensionPackageDetail>;
   /** 已装包声明的图标文件;没有时 null。 */
   icon?(name: string): { file: string; type: string } | null;
   /** 安装前只读 manifest 的检查;给了 `kind` 就要求类别一致。 */
-  check?(target: ExtensionInstallTarget, kind?: 'world' | 'provider' | 'bot'): Promise<{ name: string; version: string; kind: string }>;
+  check?(target: ExtensionInstallTarget, kind: 'world' | 'provider' | 'bot' | undefined, language: Language): Promise<{ name: string; version: string; kind: string }>;
   /**
    * 已加载扩展的浏览器端产物。服务端据此把页 id 映到 `/assets/extensions/<包>/<版本>/<文件>`
    * 并只发这几个文件;缺席 = 没有扩展带面板。
    */
   consoleAssets?(): readonly ExtensionConsoleAsset[];
   /** 返回一句结果描述(含 pnpm 输出尾部) */
-  install(target: ExtensionInstallTarget): Promise<string>;
-  uninstall(name: string): Promise<string>;
+  install(target: ExtensionInstallTarget, language: Language): Promise<string>;
+  uninstall(name: string, language: Language): Promise<string>;
 }
 
 /** 规范关机 / 重启的账:本地步骤与外部状态分开记。 */
@@ -898,6 +898,12 @@ export class WebApp {
     return isLanguage(fromQuery) ? fromQuery : this.language;
   }
 
+  /** 报错的文案:LocalizedError 按这次请求的语言取。 */
+  private errorText(err: unknown, req: Request): string {
+    if (err instanceof LocalizedError) return err.describe(this.languageOf(req));
+    return err instanceof Error ? err.message : String(err);
+  }
+
   /** 部署的主题记录；文件读不成时记一条，按没有记录发给浏览器。 */
   private readTheme(dir: string): StoredTheme | null {
     const { state, error } = readDeploymentTheme(dir);
@@ -1423,11 +1429,13 @@ export class WebApp {
     });
 
     const providerRoute = (handler: (hub: ProviderHub, req: Request) => unknown) => wrap(async (req, res) => {
-      if (!this.deps.providers) { res.status(503).json({ error: 'Provider configuration unavailable.' }); return; }
+      if (!this.deps.providers) { res.status(503).json({ error: serverText(this.languageOf(req)).providersUnavailable }); return; }
       try { res.json((await handler(this.deps.providers, req)) ?? { ok: true });
         if (req.method === 'POST' && /^\/api\/providers(?:$|\/[^/]+\/(save|delete|activate)$)/.test(req.path)) this.debugBroadcast({ t: 'status', status: this.safeStatus() });
       }
-      catch (error) { res.status(error instanceof Error && 'status' in error && typeof error.status === 'number' ? error.status : 400).json({ error: error instanceof Error ? error.message : String(error) }); }
+      catch (error) {
+        res.status(error instanceof LocalizedError ? error.status : 400).json({ error: this.errorText(error, req) });
+      }
     });
     app.get('/api/providers', providerRoute((hub, req) => hub.list(this.languageOf(req))));
     app.get('/api/provider-modules', providerRoute((hub, req) => hub.moduleList(this.languageOf(req))));
@@ -1774,7 +1782,7 @@ export class WebApp {
     app.get('/api/extensions/updates', wrap(async (req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
-      res.json(await src.updates());
+      res.json(await src.updates(this.languageOf(req)));
     }));
 
     app.get('/api/extensions/search', wrap(async (req, res) => {
@@ -1789,7 +1797,7 @@ export class WebApp {
         const hits = await src.search(kind);
         res.json({ hits, partial: src.searchPartial?.(kind) ?? false });
       } catch (err) {
-        res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(String(err)) });
+        res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(this.errorText(err, req)) });
       }
     }));
 
@@ -1799,11 +1807,10 @@ export class WebApp {
       const name = strParam(req.query.name)?.trim();
       if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       try {
-        res.json(await src.packageInfo(name, strParam(req.query.version)?.trim() || undefined));
+        res.json(await src.packageInfo(name, strParam(req.query.version)?.trim() || undefined, this.languageOf(req)));
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // 包名不合法是请求的问题,其余当成 registry 那一头的问题
-        res.status(msg.includes('包名') ? 400 : 502).json({ error: msg });
+        // 请求本身不合法的报错带 400,其余当成 registry 那一头的问题
+        res.status(err instanceof LocalizedError ? err.status : 502).json({ error: this.errorText(err, req) });
       }
     }));
 
@@ -1834,9 +1841,9 @@ export class WebApp {
       if (!target) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackageOrPath }); return; }
       if (kind !== undefined && kind !== 'world' && kind !== 'provider' && kind !== 'bot') { res.status(400).json({ error: serverText(this.languageOf(req)).badKind(String(kind)) }); return; }
       try {
-        res.json(await src.check(target, kind));
+        res.json(await src.check(target, kind, this.languageOf(req)));
       } catch (err) {
-        res.status(400).json({ error: err instanceof Error ? err.message : String(err) });
+        res.status(400).json({ error: this.errorText(err, req) });
       }
     }));
 
@@ -1851,11 +1858,11 @@ export class WebApp {
           : null;
       if (!target) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackageOrPath }); return; }
       try {
-        const result = await src.install(target);
+        const result = await src.install(target, this.languageOf(req));
         this.deps.log.warn('扩展已安装(重启后加载)', { target });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
+        const error = this.errorText(err, req);
         this.deps.log.error('扩展安装失败', { target, error });
         res.status(400).json({ error });
       }
@@ -1868,11 +1875,11 @@ export class WebApp {
       const name = typeof body.name === 'string' ? body.name.trim() : '';
       if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       try {
-        const result = await src.uninstall(name);
+        const result = await src.uninstall(name, this.languageOf(req));
         this.deps.log.warn('扩展已卸载(重启后消失)', { name });
         res.json({ ok: true, result, restartRequired: true });
       } catch (err) {
-        const error = err instanceof Error ? err.message : String(err);
+        const error = this.errorText(err, req);
         this.deps.log.error('扩展卸载失败', { name, error });
         res.status(400).json({ error });
       }

@@ -702,7 +702,7 @@ export interface WorldHost {
   blob(handle: string): { bytes: Uint8Array; mime: string } | null;
   /**
    * 记录 World 自有模型的用量，写入 session 统计和 usage.jsonl。
-   * 仅记录主动上报的用量；Core 不管理 World 自有模型的运行时。
+   * 仅记录主动上报的用量；Core 不管理 World 自有模型的运行时。`label` 是 session 列表里的显示名,缺省为 World id。
    */
   reportUsage(usage: LLMUsage, opts?: { model?: string; label?: string; charges?: import('./generation.ts').Charge[] }): void;
   /**
@@ -921,9 +921,9 @@ export interface World {
   onRunPhase?(phase: RunPhase): void;
   /**
    * stop() 完成后返回外部状态检查的同步只读快照。
-   * 网络检查须在 stop() 的既有期限内完成并缓存。
+   * 网络检查须在 stop() 的既有期限内完成并缓存。label、detail 与 manualAction 按 `language` 给。
    */
-  shutdownVerification?(): readonly ShutdownExternalCheck[];
+  shutdownVerification?(language: Language): readonly ShutdownExternalCheck[];
 }
 
 /** text 按序拼入 system 前缀；title 仅用于显示。 */

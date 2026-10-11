@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: 'Método desconhecido',
   modelRequired: 'Escolha um modelo primeiro',
   thinkingOff: 'O raciocínio está desativado neste endpoint; a forma de reenvio não se aplica',
+  title: "Compatível com OpenAI Responses",
 };
 export const panel: Partial<typeof panelEn> = {
   title: 'Raciocínio',

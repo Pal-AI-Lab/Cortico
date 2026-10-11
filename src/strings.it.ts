@@ -100,6 +100,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'Arresto locale terminato: tutti i passaggi completati',
     summaryUnverified: (items: string[]) => `Arresto locale terminato, ma la fine dello stato esterno non è confermata: ${items.join(', ')} (serve conferma manuale)`,
   },
+  storagePartGone: (world: string, key: string) => `L'elemento di archiviazione ${key} di ${world} non esiste nell'istanza attuale`,
+  panelNoInvoke: (panel: string) => `Nessun gestore dati per il pannello: ${panel}`,
+  panelNoStream: (panel: string) => `Nessuno stream per il pannello: ${panel}`,
 };
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `Costruzione non riuscita: ${detail}`,

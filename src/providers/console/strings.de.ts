@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: 'Das Anbietermodul ist nicht verfügbar.',
   modelMissing: 'Ein Modell ist erforderlich.',
   apiKeyMissing: 'Ein API Key ist erforderlich.',
+  invalidIdentifier: "Ungültiger Name der Anbieter-Instanz.",
+  nameShape: "Verwende lateinische Buchstaben, Ziffern, - oder _ und beginne mit einem Buchstaben oder einer Ziffer. Leerzeichen sind nicht erlaubt.",
+  nameReserved: "Dieser Name ist von Windows reserviert.",
+  modulePanelMissing: "Dieses Modul hat kein Konsolenpanel",
+  foreignRequest: "Das Panel hat eine andere Anbieter-Instanz angefordert als die gerade bearbeitete",
+  busy: "Eine andere Anbieter-Änderung läuft gerade. Versuche es danach erneut.",
+  changedElsewhere: "Die Konfiguration wurde auf einer anderen Seite oder in einem anderen Bot geändert. Lade neu, bevor du speicherst.",
+  copySourceGone: "Die Kopierquelle existiert nicht mehr.",
+  inUse: (names: string) => `Die Anbieter-Instanz wird verwendet von: ${names}`,
 };

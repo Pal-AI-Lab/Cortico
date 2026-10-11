@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: 'プロバイダーモジュールを利用できません。',
   modelMissing: 'モデルを選択してください。',
   apiKeyMissing: 'API Key を設定してください。',
+  invalidIdentifier: "プロバイダーインスタンス名が不正です。",
+  nameShape: "インスタンス名には英字、数字、- または _ を使い、英字か数字で始めてください。空白は使えません。",
+  nameReserved: "この名前は Windows で予約されています。",
+  modulePanelMissing: "このモジュールにはコンソールパネルがありません",
+  foreignRequest: "パネルが編集中とは別のプロバイダーインスタンスを要求しました",
+  busy: "別のプロバイダー変更を処理中です。完了してから再試行してください。",
+  changedElsewhere: "別のページまたは bot で設定が変更されました。再読み込みしてから保存してください。",
+  copySourceGone: "コピー元がもう存在しません。",
+  inUse: (names: string) => `このプロバイダーインスタンスは次で使用中です: ${names}`,
 };

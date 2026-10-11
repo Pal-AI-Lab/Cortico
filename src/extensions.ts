@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
-import type { Language } from './core/language.ts';
+import { LocalizedError, type Language } from './core/language.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -32,6 +32,7 @@ import {
   type ExtensionPackageJson,
 } from './extensions/manifest.ts';
 import { registerFrameworkResolver } from './extensions/runtime.ts';
+import { text } from './extensions/strings.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/console-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -62,7 +63,8 @@ export interface ExtensionRecord {
   loaded: boolean;
   /** bot 包装了但这份部署没引用它:没有 import,不算失败。 */
   idle?: true;
-  reason?: string;
+  /** 没装上的原因,按界面语言给。 */
+  reason?: (language: Language) => string;
   /** 默认导出的 id:World id、provider id 或 bot id,按 kind 解释。 */
   worldId?: string;
   label?: string;
@@ -148,15 +150,24 @@ export function isBotDefinition(v: unknown): v is BotDefinition<CoreConfig> {
     && typeof d.build === 'function';
 }
 
-const SHAPE_NEEDS: Readonly<Record<ExtensionKind, string>> = {
-  world: 'WorldDefinition 的 id / label / defaults() / create()',
-  provider: 'ProviderModule 的 id / title / reasoningTiers / serviceTiers / create()',
-  bot: 'BotDefinition 的 id / defaults() / build()',
+const SHAPE_NEEDS: Readonly<Record<ExtensionKind, readonly [type: string, members: string]>> = {
+  world: ['WorldDefinition', 'id / label / defaults() / create()'],
+  provider: ['ProviderModule', 'id / title / reasoningTiers / serviceTiers / create()'],
+  bot: ['BotDefinition', 'id / defaults() / build()'],
 };
 
 /** 默认导出与 `cortico.kind` 对不上时给作者的一句话。装载器与 `check:extension` 共用。 */
-export function extensionShapeMismatch(kind: ExtensionKind): string {
-  return `声明是 ${kind} 类,但默认导出缺 ${SHAPE_NEEDS[kind]}。`;
+export function extensionShapeMismatch(kind: ExtensionKind, language: Language = 'zh'): string {
+  return text(language).shapeMismatch(kind, ...SHAPE_NEEDS[kind]);
+}
+
+function extensionError(message: (t: ReturnType<typeof text>) => string, status?: number): LocalizedError {
+  return new LocalizedError((language) => message(text(language)), status);
+}
+
+function errorText(err: unknown, language: Language): string {
+  if (err instanceof LocalizedError) return err.describe(language);
+  return err instanceof Error ? err.message : String(err);
 }
 
 /** 解析包内相对路径；超出包目录或文件不存在时返回 null。 */
@@ -256,13 +267,16 @@ export async function loadExtensions(
     };
     records.push(record);
     if (!pkg) {
-      record.reason = 'node_modules 里没有这个包;在 extensions/ 下重新安装一次。';
+      record.reason = (language) => text(language).notInNodeModules;
       continue;
     }
     const parsed = parseExtensionManifest(pkg);
     for (const warning of parsed.warnings) opts.log?.warn(`扩展 manifest: ${name} — ${warning}`);
     if (!parsed.ok) {
-      record.reason = parsed.reasons.join(';');
+      record.reason = (language) => {
+        const result = parseExtensionManifest(pkg, language);
+        return result.ok ? '' : result.reasons.join(' ');
+      };
       continue;
     }
     const { kind, api, consoleClient, consoleStyle } = parsed.manifest;
@@ -308,20 +322,22 @@ export async function loadExtensions(
     try {
       exported = ((await import(pathToFileURL(entry).href)) as { default?: unknown }).default;
     } catch (error) {
-      record.reason = `导入失败: ${error instanceof Error ? error.message : String(error)}`;
-      opts.log?.warn(`扩展导入失败: ${name}`, { entry, error: record.reason });
+      const detail = error instanceof Error ? error.message : String(error);
+      record.reason = (language) => text(language).importFailed(detail);
+      opts.log?.warn(`扩展导入失败: ${name}`, { entry, error: detail });
       continue;
     }
 
     let id: string;
     if (kind === 'world') {
       if (!isWorldDefinition(exported)) {
-        record.reason = extensionShapeMismatch('world');
+        record.reason = (language) => extensionShapeMismatch('world', language);
         continue;
       }
       record.worldId = exported.id;
       if (taken.world.has(exported.id)) {
-        record.reason = `World id「${exported.id}」已被内建 World 或先加载的扩展占用。`;
+        const { id } = exported;
+        record.reason = (language) => text(language).worldIdTaken(id);
         continue;
       }
       taken.world.add(exported.id);
@@ -330,12 +346,13 @@ export async function loadExtensions(
       id = exported.id;
     } else {
       if (!isProviderModule(exported)) {
-        record.reason = extensionShapeMismatch('provider');
+        record.reason = (language) => extensionShapeMismatch('provider', language);
         continue;
       }
       record.worldId = exported.id;
       if (taken.provider.has(exported.id)) {
-        record.reason = `provider id「${exported.id}」已被内建 provider 或先加载的扩展占用。`;
+        const { id } = exported;
+        record.reason = (language) => text(language).providerIdTaken(id);
         continue;
       }
       taken.provider.add(exported.id);
@@ -574,7 +591,7 @@ export class ExtensionManager {
     const args = ['config', 'get', 'registry', '--ignore-workspace'];
     const pending = this.run(args, this.prepareDir()).then(({ code, output }) => {
       const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
-      if (!url) throw new Error(`读不到 pnpm 的 registry 配置(pnpm ${args.join(' ')} 退出码 ${code}):\n${output.trim().split('\n').slice(-20).join('\n')}`);
+      if (!url) throw extensionError((t) => t.registryUnreadable(`pnpm ${args.join(' ')}`, code, output.trim().split('\n').slice(-20).join('\n')), 502);
       return url.replace(/\/$/, '');
     });
     pending.catch(() => { if (this.registryUrl === pending) this.registryUrl = null; });
@@ -622,6 +639,7 @@ export class ExtensionManager {
       const pkgDir = join(this.dir, 'node_modules', ...r.name.split('/'));
       out.push({
         ...r,
+        reason: r.reason?.(language),
         ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
         ...(author ? { author } : {}),
         ...(pkg && extensionIconFile(pkgDir, pkg) ? { icon: true } : {}),
@@ -632,7 +650,7 @@ export class ExtensionManager {
     // 新装包仅报告 manifest 声明，浏览器产物状态在下一次加载时确定。
     for (const [name, spec] of onDisk) {
       const pkg = packageAt(name);
-      const parsed = pkg ? parseExtensionManifest(pkg) : null;
+      const parsed = pkg ? parseExtensionManifest(pkg, language) : null;
       const manifest = parsed?.ok ? parsed.manifest : null;
       out.push({
         name,
@@ -655,21 +673,21 @@ export class ExtensionManager {
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
-  async updates(): Promise<ExtensionUpdateResult> {
+  async updates(language: Language = 'zh'): Promise<ExtensionUpdateResult> {
     const checks = readInstalled(this.dir)
       .filter(({ spec }) => !/^(?:link|file|workspace):/.test(spec))
       .map(async ({ name }) => {
         try {
           const installedVersion = readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'))?.version;
-          if (!installedVersion) throw new Error('本机包缺失');
-          const info = await this.packageInfo(name);
+          if (!installedVersion) throw extensionError((t) => t.localPackageMissing);
+          const info = await this.packageInfo(name, undefined, language);
           const newer = newerVersion(info.version, installedVersion);
-          if (newer === null) throw new Error(`无法比较版本 ${installedVersion} 与 ${info.version}`);
+          if (newer === null) throw extensionError((t) => t.versionIncomparable(installedVersion, info.version));
           return newer ? { update: {
             name, installedVersion, latestVersion: info.version, problems: info.problems ?? [],
           } } : {};
         } catch (err) {
-          return { error: { name, error: err instanceof Error ? err.message : String(err) } };
+          return { error: { name, error: errorText(err, language) } };
         }
       });
     const results = await Promise.all(checks);
@@ -790,14 +808,14 @@ export class ExtensionManager {
    * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
    * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
    */
-  async packageInfo(name: string, version?: string): Promise<ExtensionPackageDetail> {
-    if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
+  async packageInfo(name: string, version?: string, language: Language = 'zh'): Promise<ExtensionPackageDetail> {
+    if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
     const doc = (await this.fetchJson(`${await this.registry()}/${name.replace('/', '%2F')}`)) as RegistryPackument;
     const latest = version ? doc['dist-tags']?.[version] ?? version : doc['dist-tags']?.latest;
     const v = latest ? doc.versions?.[latest] : undefined;
-    if (!latest || !v) throw new Error(`registry 没有给出 ${name} 的 ${version ?? 'latest'} 版本`);
+    if (!latest || !v) throw extensionError((t) => t.registryNoVersion(name, version ?? 'latest'), 502);
 
-    const parsed = parseExtensionManifest(v);
+    const parsed = parseExtensionManifest(v, language);
     const times = Object.keys(doc.versions ?? {}).map((version) => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
@@ -845,60 +863,63 @@ export class ExtensionManager {
    * 装之前看一眼声明:本机目录读 package.json,npm 包读包文档。只解析 manifest,不导入包代码;
    * `expectedKind` 给了就要求类别一致。
    */
-  async check(target: ExtensionInstallTarget, expectedKind?: ExtensionKind): Promise<{ name: string; version: string; kind: ExtensionKind }> {
+  async check(target: ExtensionInstallTarget, expectedKind?: ExtensionKind, language: Language = 'zh'): Promise<{ name: string; version: string; kind: ExtensionKind }> {
     const spec = this.installSpec(target);
     if ('path' in target) {
       const pkg = readPackageJson(join(spec, 'package.json'));
-      const parsed = pkg ? parseExtensionManifest(pkg) : null;
-      if (!pkg || !parsed) throw new Error(`目录里没有 package.json: ${spec}`);
+      const parsed = pkg ? parseExtensionManifest(pkg, language) : null;
+      if (!pkg || !parsed) throw extensionError((t) => t.noPackageJson(spec));
       if (!parsed.ok) throw new Error(parsed.reasons.join('\n'));
-      if (!pkg.name || !PACKAGE_NAME.test(pkg.name) || !pkg.version) throw new Error('扩展缺少有效包名或版本。');
-      if (expectedKind && parsed.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${parsed.manifest.kind}，请切换到对应分类。`);
-      return { name: pkg.name, version: pkg.version, kind: parsed.manifest.kind };
+      if (!pkg.name || !PACKAGE_NAME.test(pkg.name) || !pkg.version) throw extensionError((t) => t.noNameOrVersion);
+      const { kind } = parsed.manifest;
+      if (expectedKind && kind !== expectedKind) throw extensionError((t) => t.kindMismatch(kind));
+      return { name: pkg.name, version: pkg.version, kind };
     }
-    const info = await this.packageInfo(target.name.trim(), target.version?.trim() || undefined);
-    if (!info.manifest || info.problems?.length) throw new Error(info.problems?.join('\n') ?? '扩展声明不可用。');
-    if (expectedKind && info.manifest.kind !== expectedKind) throw new Error(`扩展实际类型为 ${info.manifest.kind}，请切换到对应分类。`);
-    return { name: info.name, version: info.version, kind: info.manifest.kind };
+    const info = await this.packageInfo(target.name.trim(), target.version?.trim() || undefined, language);
+    if (info.problems?.length) throw new Error(info.problems.join('\n'));
+    if (!info.manifest) throw extensionError((t) => t.manifestUnusable);
+    const { kind } = info.manifest;
+    if (expectedKind && kind !== expectedKind) throw extensionError((t) => t.kindMismatch(kind));
+    return { name: info.name, version: info.version, kind };
   }
 
-  async install(target: ExtensionInstallTarget): Promise<string> {
+  async install(target: ExtensionInstallTarget, language: Language = 'zh'): Promise<string> {
     const spec = this.installSpec(target);
     this.prepareDir();
     const output = await this.exclusive(['add', spec, '--ignore-workspace']);
-    return `已安装 ${spec}。重启进程后加载。\n${output}`;
+    return `${text(language).installed(spec)}\n${output}`;
   }
 
-  async uninstall(name: string): Promise<string> {
-    if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的包名: ${name}`);
-    if (!readInstalled(this.dir).some((p) => p.name === name)) throw new Error(`没有安装这个包: ${name}`);
+  async uninstall(name: string, language: Language = 'zh'): Promise<string> {
+    if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
+    if (!readInstalled(this.dir).some((p) => p.name === name)) throw extensionError((t) => t.notInstalled(name));
     const output = await this.exclusive(['remove', name, '--ignore-workspace']);
-    return `已卸载 ${name}。重启进程后生效。\n${output}`;
+    return `${text(language).uninstalled(name)}\n${output}`;
   }
 
   private installSpec(target: ExtensionInstallTarget): string {
     if ('path' in target) {
       const raw = target.path.trim();
-      if (!LOCAL_PATH.test(raw)) throw new Error('路径含有不接受的字符。');
+      if (!LOCAL_PATH.test(raw)) throw extensionError((t) => t.badPathChars);
       const abs = isAbsolute(raw) ? raw : resolve(this.repoRoot, raw);
-      if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`目录不存在: ${abs}`);
-      if (!existsSync(join(abs, 'package.json'))) throw new Error(`目录里没有 package.json: ${abs}`);
+      if (!existsSync(abs) || !statSync(abs).isDirectory()) throw extensionError((t) => t.dirMissing(abs));
+      if (!existsSync(join(abs, 'package.json'))) throw extensionError((t) => t.noPackageJson(abs));
       return abs;
     }
     const name = target.name.trim();
-    if (!PACKAGE_NAME.test(name)) throw new Error(`不是合法的 npm 包名: ${name}`);
+    if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
     const version = target.version?.trim() ?? '';
-    if (version && !VERSION_SPEC.test(version)) throw new Error(`不是合法的版本: ${version}`);
+    if (version && !VERSION_SPEC.test(version)) throw extensionError((t) => t.badVersion(version));
     return version ? `${name}@${version}` : name;
   }
 
   private async exclusive(args: string[]): Promise<string> {
-    if (this.busy) throw new Error('已有一个安装 / 卸载在进行,等它结束。');
+    if (this.busy) throw extensionError((t) => t.busy);
     this.busy = true;
     try {
       const { code, output } = await this.run(args, this.dir);
       const tail = output.trim().split('\n').slice(-20).join('\n');
-      if (code !== 0) throw new Error(`pnpm ${args[0]} 退出码 ${code}:\n${tail}`);
+      if (code !== 0) throw extensionError((t) => t.pnpmFailed(args[0], code, tail));
       return tail;
     } finally {
       this.busy = false;

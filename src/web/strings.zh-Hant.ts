@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: '本機沒有可用的路徑選擇器；請安裝 zenity 或 kdialog',
   pickerFailed: (error: string) => `無法開啟本機路徑選擇器: ${error}`,
   pickerUnsupported: (platform: string) => `目前平台不支援本機路徑選擇器: ${platform}`,
+  providersUnavailable: "端點設定無法使用",
 };

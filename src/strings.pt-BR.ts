@@ -102,6 +102,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'Desligamento local concluído: todas as etapas foram concluídas',
     summaryUnverified: (items: string[]) => `O desligamento local terminou, mas não foi confirmado que o estado externo terminou: ${items.join(', ')} (requer confirmação manual)`,
   },
+  storagePartGone: (world: string, key: string) => `O item de armazenamento ${key} de ${world} não existe na instância atual`,
+  panelNoInvoke: (panel: string) => `Não há manipulador de dados para o painel: ${panel}`,
+  panelNoStream: (panel: string) => `Não há fluxo para o painel: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

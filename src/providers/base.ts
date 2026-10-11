@@ -93,10 +93,11 @@ export interface ProviderModule {
   serviceTiers: readonly ServiceTier[];
   temperatureNote?: string;
   /**
-   * Console copies of the tier tables and temperature note in the console language.
-   * Absent (or a field left out) = the tables above are shown as written.
+   * Console copies of the title, description, tier tables and temperature note in the console language.
+   * Absent (or a field left out) = the fields above are shown as written.
    */
   localize?(language: Language): {
+    title?: string;
     description?: string;
     reasoningTiers?: readonly ReasoningTier[];
     serviceTiers?: readonly ServiceTier[];

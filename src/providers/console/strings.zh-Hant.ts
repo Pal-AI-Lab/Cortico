@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: '供應商模組無法使用。',
   modelMissing: '請選擇模型。',
   apiKeyMissing: '請設定 API Key。',
+  invalidIdentifier: "供應實例名稱不合法。",
+  nameShape: "實例名稱只能用英文字母、數字、- 或 _,以字母或數字開頭,不能有空格。",
+  nameReserved: "這個名稱被 Windows 保留。",
+  modulePanelMissing: "此模組沒有控制台面板",
+  foreignRequest: "面板請求的供應實例與正在編輯的不一致",
+  busy: "另一次供應實例修改正在進行,等它結束後重試。",
+  changedElsewhere: "設定已在別的頁面或 bot 裡改過,重新載入後再儲存。",
+  copySourceGone: "複製來源已不存在。",
+  inUse: (names: string) => `供應實例正被這些部署使用:${names}`,
 };

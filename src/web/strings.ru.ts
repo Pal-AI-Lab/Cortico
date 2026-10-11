@@ -90,4 +90,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'На этом компьютере нет доступного окна выбора пути; установите zenity или kdialog',
   pickerFailed: (error: string) => `Не удалось открыть окно выбора пути на этом компьютере: ${error}`,
   pickerUnsupported: (platform: string) => `На этой платформе нет системного окна выбора пути: ${platform}`,
+  providersUnavailable: "Настройка провайдеров недоступна",
 };

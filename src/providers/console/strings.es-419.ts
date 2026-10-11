@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: 'El módulo del proveedor no está disponible.',
   modelMissing: 'Se requiere un modelo.',
   apiKeyMissing: 'Se requiere la API Key.',
+  invalidIdentifier: "Nombre de instancia de proveedor no válido.",
+  nameShape: "Usa letras latinas, dígitos, - o _ y empieza con una letra o un dígito. No se permiten espacios.",
+  nameReserved: "Windows reserva este nombre.",
+  modulePanelMissing: "Este módulo no tiene panel de consola",
+  foreignRequest: "El panel pidió una instancia de proveedor distinta de la que se está editando",
+  busy: "Hay otro cambio de proveedor en curso. Vuelve a intentarlo cuando termine.",
+  changedElsewhere: "La configuración cambió en otra página u otro bot. Recarga antes de guardar.",
+  copySourceGone: "La fuente de la copia ya no existe.",
+  inUse: (names: string) => `La instancia de proveedor la usa: ${names}`,
 };

@@ -100,6 +100,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: 'ローカルのシャットダウン手順がすべて完了しました',
     summaryUnverified: (items: string[]) => `ローカルのシャットダウンは完了しましたが、外部状態の終了は確認できていません：${items.join('、')}（手動での確認が必要）`,
   },
+  storagePartGone: (world: string, key: string) => `${world} の保存項目 ${key} は現在のインスタンスに存在しません`,
+  panelNoInvoke: (panel: string) => `パネルのデータ処理がありません: ${panel}`,
+  panelNoStream: (panel: string) => `パネルのストリームがありません: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

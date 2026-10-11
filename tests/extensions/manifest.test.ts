@@ -25,7 +25,7 @@ afterEach(() => rmSync(root, { recursive: true, force: true }));
 
 const byName = async (opts?: Parameters<typeof loadExtensions>[1]) => {
   const set = await loadExtensions(root, opts);
-  return { set, records: Object.fromEntries(set.records.map((r) => [r.name, r])) };
+  return { set, records: Object.fromEntries(set.records.map((r) => [r.name, { ...r, reason: r.reason?.('zh') }])) };
 };
 
 describe('按 kind 分派', () => {

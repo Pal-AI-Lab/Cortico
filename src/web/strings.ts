@@ -95,6 +95,7 @@ const zh = {
   pickerNoLinuxTool: '本机没有可用的路径选择器；请安装 zenity 或 kdialog',
   pickerFailed: (error: string) => `无法打开本机路径选择器: ${error}`,
   pickerUnsupported: (platform: string) => `当前平台不支持本机路径选择器: ${platform}`,
+  providersUnavailable: "端点配置不可用",
 };
 export const en: typeof zh = {
   paused: 'Paused: events are still stored and queued, no wake is delivered',
@@ -178,6 +179,7 @@ export const en: typeof zh = {
   pickerNoLinuxTool: 'No path picker is available on this machine; install zenity or kdialog',
   pickerFailed: (error: string) => `Could not open the path picker on this machine: ${error}`,
   pickerUnsupported: (platform: string) => `This platform has no native path picker: ${platform}`,
+  providersUnavailable: "Provider configuration unavailable",
 };
 export const serverText = (language: Language) => pick(language, {
   zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,

@@ -34,6 +34,7 @@ const zh = {
   unknownMethod: '未知操作',
   modelRequired: '先选模型',
   thinkingOff: '这条端点关着思维链,回传形态无关',
+  title: "OpenAI Responses 兼容",
 };
 export const en: typeof zh = {
   description: 'Connect to Responses-compatible model services.',
@@ -59,6 +60,7 @@ export const en: typeof zh = {
   unknownMethod: 'Unknown method',
   modelRequired: 'Choose a model first',
   thinkingOff: 'Reasoning is off on this endpoint; the replay form does not apply',
+  title: "OpenAI Responses Compatible",
 };
 export type Text = typeof zh;
 export const text = (language: Language) => pick(language, {

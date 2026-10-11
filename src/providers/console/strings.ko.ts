@@ -44,4 +44,13 @@ export const text: Partial<typeof en> = {
   moduleMissing: '공급자 모듈을 사용할 수 없습니다.',
   modelMissing: '모델을 선택하세요.',
   apiKeyMissing: 'API Key를 설정하세요.',
+  invalidIdentifier: "공급자 인스턴스 이름이 올바르지 않습니다.",
+  nameShape: "인스턴스 이름에는 영문자, 숫자, - 또는 _만 쓰고 영문자나 숫자로 시작하세요. 공백은 쓸 수 없습니다.",
+  nameReserved: "이 이름은 Windows에서 예약되어 있습니다.",
+  modulePanelMissing: "이 모듈에는 콘솔 패널이 없습니다",
+  foreignRequest: "패널이 편집 중인 것과 다른 공급자 인스턴스를 요청했습니다",
+  busy: "다른 공급자 변경이 진행 중입니다. 끝난 뒤 다시 시도하세요.",
+  changedElsewhere: "다른 페이지나 bot에서 설정이 바뀌었습니다. 다시 불러온 뒤 저장하세요.",
+  copySourceGone: "복사할 원본이 더 이상 없습니다.",
+  inUse: (names: string) => `이 공급자 인스턴스를 사용하는 곳: ${names}`,
 };

@@ -57,7 +57,7 @@ export default {
   id: 'openai-responses-compat',
   title: 'OpenAI Responses Compatible',
   description: 'Connect to Responses-compatible model services.',
-  localize: (language) => ({ description: text(language).description }),
+  localize: (language) => ({ title: text(language).title, description: text(language).description }),
   defaultBaseUrl: BASE_URLS[0],
   baseUrlSuggestions: BASE_URLS,
   normalize: normalizeCompat,

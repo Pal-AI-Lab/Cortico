@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: 'Unbekannte Methode',
   modelRequired: 'Wähle zuerst ein Modell',
   thinkingOff: 'Der Denkprozess ist an diesem Endpunkt aus; die Rückgabeform spielt keine Rolle',
+  title: "OpenAI-Responses-kompatibel",
 };
 export const panel: Partial<typeof panelEn> = {
   title: 'Denkprozess',

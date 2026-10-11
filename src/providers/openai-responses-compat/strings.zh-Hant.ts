@@ -24,6 +24,7 @@ export const text: Partial<typeof en> = {
   unknownMethod: '未知操作',
   modelRequired: '先選模型',
   thinkingOff: '這個端點關著思維鏈,回傳形態無關',
+  title: "OpenAI Responses 相容",
 };
 
 export const panel: Partial<typeof panelEn> = {

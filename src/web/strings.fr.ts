@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'Aucun sélecteur de chemin disponible sur cette machine ; installez zenity ou kdialog',
   pickerFailed: (error: string) => `Impossible d'ouvrir le sélecteur de chemin de cette machine : ${error}`,
   pickerUnsupported: (platform: string) => `Cette plateforme n'a pas de sélecteur de chemin natif : ${platform}`,
+  providersUnavailable: "La configuration des fournisseurs est indisponible",
 };

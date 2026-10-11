@@ -100,6 +100,9 @@ export const botText: Partial<typeof botEn> = {
     summaryComplete: '本機關機步驟全部完成',
     summaryUnverified: (items: string[]) => `本機關機完成,但外部狀態未確認結束:${items.join('、')}(需人工確認)`,
   },
+  storagePartGone: (world: string, key: string) => `${world} 的儲存項目 ${key} 在目前實例上不存在`,
+  panelNoInvoke: (panel: string) => `沒有面板資料處理: ${panel}`,
+  panelNoStream: (panel: string) => `沒有串流處理: ${panel}`,
 };
 
 export const assemblyText: Partial<typeof assemblyEn> = {

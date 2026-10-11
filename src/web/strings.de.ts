@@ -83,4 +83,5 @@ export const serverText: Partial<typeof en> = {
   pickerNoLinuxTool: 'Auf diesem Rechner ist keine Pfadauswahl verfügbar; installiere zenity oder kdialog',
   pickerFailed: (error: string) => `Die Pfadauswahl auf diesem Rechner konnte nicht geöffnet werden: ${error}`,
   pickerUnsupported: (platform: string) => `Diese Plattform hat keine native Pfadauswahl: ${platform}`,
+  providersUnavailable: "Anbieter-Konfiguration nicht verfügbar",
 };

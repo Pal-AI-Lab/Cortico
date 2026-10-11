@@ -525,7 +525,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
   const providers = providerModules.filter((module) => !externalProviders.has(module.id)).map((module): ExtensionInfo => {
     const description = module.localize?.(language).description ?? module.description;
     return {
-      ...common, name: `builtin:provider:${module.id}`, kind: 'provider', worldId: module.id, label: module.title,
+      ...common, name: `builtin:provider:${module.id}`, kind: 'provider', worldId: module.id, label: module.localize?.(language).title ?? module.title,
       ...(description ? { description } : {}), loaded: true, state: 'loaded',
     };
   });
@@ -565,7 +565,7 @@ function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedSt
     (slot.instance.console?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
       const current = (): StoragePart => {
         const found = slot.instance.console?.(language)?.storage?.find((p) => p.key === part.key);
-        if (!found) throw new Error(`${slot.id} 的存储项 ${part.key} 在当前实例上不存在`);
+        if (!found) throw new Error(botText(language).storagePartGone(slot.id, part.key));
         return found;
       };
       return { ...part, owner: `world:${slot.id}`, stat: () => current().stat(), clear: () => current().clear() };
@@ -701,6 +701,7 @@ export function mergePersonaContributions(
   label: string,
   core: ConsolePageContribution | null,
   extras: readonly ConsolePageContribution[],
+  language: Language = 'zh',
 ): ConsolePageContribution | null {
   const parts = [core, ...extras].filter((c): c is ConsolePageContribution => !!c);
   if (parts.length === 0) return null;
@@ -735,14 +736,14 @@ export function mergePersonaContributions(
   if (parts.some((p) => p.invoke)) {
     out.invoke = async (panel, method, args) => {
       const target = owner.get(panel);
-      if (!target?.invoke) throw new Error(`没有面板数据面: ${panel}`);
+      if (!target?.invoke) throw new Error(botText(language).panelNoInvoke(panel));
       return target.invoke(panel, method, args);
     };
   }
   if (parts.some((p) => p.stream)) {
     out.stream = (panel, socket) => {
       const target = owner.get(panel);
-      if (!target?.stream) throw new Error(`没有流式面: ${panel}`);
+      if (!target?.stream) throw new Error(botText(language).panelNoStream(panel));
       target.stream(panel, socket);
     };
   }
@@ -812,6 +813,7 @@ export function deriveConsolePageSources(
           personaLabel,
           persona ? personaPageContribution(bot.id, personaLabel, persona, language) : null,
           [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
+          language,
         ),
       });
       if (persona) {
@@ -1201,7 +1203,7 @@ async function runShutdown<C extends CoreConfig>(ctx: {
       }];
     }
     try {
-      return module.shutdownVerification().map((check) => ({ ...check }));
+      return module.shutdownVerification(ctx.language).map((check) => ({ ...check }));
     } catch (error) {
       return [{
         key: `${module.id}.shutdown-verification`,

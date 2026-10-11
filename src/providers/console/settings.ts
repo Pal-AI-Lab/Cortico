@@ -321,7 +321,7 @@ export class ProviderSettings {
       ...extra,
       id: `llm:${module.id}`,
       kind: 'llm',
-      label: module.title,
+      label: module.localize?.(language)?.title ?? module.title,
       availability: 'active',
       lamps: [],
       badges: [{ label: S.instancesBadge, value: String(entries.length) }, ...(extra.badges ?? [])],
