@@ -85,7 +85,7 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [con
 `ConsolePageLoader` 按页 id 查找 bundle，缓存成功的导入，校验默认导出的 `{ panels }`；缺少 `mount` 的面板显示错误。
 卸载依次执行 abort、dispose、清空 root，并释放上下文登记的轮询、RAF、observer、监听器、请求和音频资源。
 
-`ConsoleUi` 返回 DOM 节点，文本参数不作为 HTML 解析。面板通过 `signal` 管理资源。abort 会关闭关联的 toast、confirm 和 drawer，
+`ConsoleUi` 返回 DOM 节点，文本参数不作为 HTML 解析。面板通过 `signal` 管理资源。abort 会关闭关联的 toast、confirm、drawer 和 lightbox，
 待决 confirm 返回 `false`。
 
 ## 构建

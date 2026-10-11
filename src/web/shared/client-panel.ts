@@ -285,6 +285,9 @@ export interface ConsoleUi {
   /** 抽屉响应 Esc、遮罩和关闭按钮。字符串放入 pre.mono，节点放入 modalbody；面板卸载时关闭。 */
   drawer(title: string, body: string | HTMLElement): Disposable;
 
+  /** 遮罩上居中显示一张图,点任意处或按 Esc 关闭;面板卸载时关闭。 */
+  lightbox(src: string, alt?: string): Disposable;
+
   /** busy 只能由 Disposable 或面板 abort 关闭，不响应用户关闭操作。abort 后不显示，并返回可释放的空句柄。 */
   busy(title: string, text?: string): Disposable;
 

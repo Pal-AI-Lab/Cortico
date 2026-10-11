@@ -21,7 +21,7 @@ import {
   sheet,
 } from './sheet.ts';
 import type { Overlay, OverlayEnv } from './overlay.ts';
-import { busy, confirm, drawer, noopDisposable, toast } from './overlay.ts';
+import { busy, confirm, drawer, lightbox, noopDisposable, toast } from './overlay.ts';
 
 export interface ConsoleUiDeps {
   /** 面板局部持久化。`foldSheet` 的展开状态存这儿。 */
@@ -80,6 +80,7 @@ export function createConsoleUi(deps: ConsoleUiDeps): ConsoleUi {
     toast: showToast,
     confirm: (opts) => confirm(env, opts),
     drawer: (title, body) => drawer(env, title, body),
+    lightbox: (src, alt) => lightbox(env, src, alt),
     busy: (title, text) => busy(env, title, text),
     disable: (...els) => disable(els),
     fmt: consoleFormat,

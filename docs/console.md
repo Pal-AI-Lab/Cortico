@@ -46,6 +46,11 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 操作员开口或按下按钮时控制台销掉标记(`POST /api/onboarding/dismiss`),这一组不再出现。
 没有可用端点时按钮按不动。
 
+终端页时间线把记录上 `image/*` 的附件画成缩略图,点击在浮层里看原图;取不到字节的那张不画,正文里的
+`[blob …]` 行照常显示。字节经 `GET /api/blob?handle=<句柄>` 取,按 `Core.resolveBlob` 解析:`log:` 回应可长期缓存,
+`mem:` 回应 `no-store`,认不出或已不在回 404。回应带 `X-Content-Type-Options: nosniff` 与
+`Content-Security-Policy: sandbox`。
+
 左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
 左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`)。
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
@@ -83,7 +88,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 登记的资源在卸载时释放;`memo` 按页面和面板隔离本地状态,`guardLeave` 检查是否允许离开,
 `pickPath` 打开本机路径选择器,`setConfig` 写配置组,`mountSlot` 挂本页声明到某插槽的面板,
 `ui` 提供界面组件(`sheet`、`table`、
-`log`、`toast`、`confirm`、`drawer`、`promptInput`…)。面板不碰 `document.body`,不直连
+`log`、`toast`、`confirm`、`drawer`、`lightbox`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
 
 ## 框架更新提示

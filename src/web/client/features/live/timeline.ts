@@ -25,6 +25,8 @@ const EXTERNAL_EVENT_FRAME = 'external_event_frame';
 /** bot 头像。不带缓存破坏参数:一条时间线上几十个组共用同一份缓存。 */
 const AVATAR_URL = '/api/avatar';
 
+const blobUrl = (handle: string): string => `/api/blob?handle=${encodeURIComponent(handle)}`;
+
 function toggleClass(el: HTMLElement, cls: string, on: boolean): void {
   const set = new Set(el.className.split(' ').filter((s) => s !== ''));
   if (on) set.add(cls);
@@ -317,6 +319,29 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     return card;
   };
 
+  /** 记录上的图片附件印成缩略图,点击在浮层里看原图。取不到字节的那张撤掉,正文里的 [blob …] 行照常显示。 */
+  const blobThumbs = (entry: ContextRecord): HTMLElement | null => {
+    const images = (entry.context.blobs ?? []).filter((b) => b.mime.startsWith('image/'));
+    if (images.length === 0) return null;
+    const row = ui.h('div', 'blob-thumbs');
+    for (const ref of images) {
+      const link = ui.h('a', 'blob-thumb');
+      link.href = blobUrl(ref.handle);
+      link.title = ref.fallbackText;
+      link.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        ui.lightbox(link.href, ref.fallbackText);
+      }, { signal });
+      const image = ui.h('img');
+      image.alt = ref.fallbackText;
+      image.addEventListener('error', () => link.remove(), { signal });
+      image.src = blobUrl(ref.handle);
+      link.appendChild(image);
+      row.appendChild(link);
+    }
+    return row;
+  };
+
   /** user 消息＝内部系统文本(事件到达通知这类),靠右的 USER 组。 */
   const renderWorld = (entry: ContextRecord, index: Ordinal, live: boolean): HTMLElement => {
     const item = entry.item as MessageItem;
@@ -334,6 +359,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     for (const line of partsText(item.content).split('\n')) {
       world.appendChild(ui.h('div', live ? 'world-line slide-in' : 'world-line', line));
     }
+    const thumbs = blobThumbs(entry);
+    if (thumbs) world.appendChild(thumbs);
     col.append(head, world);
     return grp;
   };
@@ -435,6 +462,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
       slot.textContent = '';
       tag(slot, entry);
       slot.appendChild(foldedPre(text || S.empty));
+      const thumbs = blobThumbs(entry);
+      if (thumbs) slot.appendChild(thumbs);
       stick();
       return null;
     }
@@ -444,6 +473,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     const ord = ordinal(index);
     if (ord) head.appendChild(ord);
     card.append(head, foldedPre(text || S.empty));
+    const thumbs = blobThumbs(entry);
+    if (thumbs) card.appendChild(thumbs);
     return card;
   };
 

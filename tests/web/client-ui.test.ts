@@ -1078,6 +1078,22 @@ describe('confirm', () => {
   });
 });
 
+describe('lightbox', () => {
+  it('点图片、点遮罩或按 Esc 都关闭,doc 上的监听归零', async () => {
+    const { ui, doc, host } = await mkUi();
+    ui.lightbox('/api/blob?handle=log%3Aa.png', '截图');
+    const image = (host.children[0] as FakeEl).findTag('img') as FakeEl & { src: string; alt: string };
+    expect([image.src, image.alt]).toEqual(['/api/blob?handle=log%3Aa.png', '截图']);
+    image.dispatchEvent({ type: 'click' });
+    expect(host.children).toHaveLength(0);
+
+    ui.lightbox('/x.png');
+    doc.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    expect(host.children).toHaveLength(0);
+    expect(doc.countListeners('keydown')).toBe(0);
+  });
+});
+
 describe('drawer', () => {
   it('长文本进 pre.mono，Esc / 关闭键都能收干净', async () => {
     const { ui, doc, host } = await mkUi();

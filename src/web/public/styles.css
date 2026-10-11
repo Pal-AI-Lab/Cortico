@@ -423,6 +423,9 @@
 
   .world { max-width: 90%; min-width: 0; border: 1px solid color-mix(in srgb, var(--world-ink) 36%, transparent); background: var(--world-bg); border-radius: 14px 4px 14px 14px; padding: 8px 14px; }
   .world-line { font: 12.5px/1.7 var(--mono); color: var(--world-ink); white-space: pre-wrap; word-break: break-word; }
+  .blob-thumbs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .blob-thumb { display: block; line-height: 0; cursor: zoom-in; }
+  .blob-thumb img { max-width: 220px; max-height: 160px; border-radius: 8px; border: 1px solid var(--line); object-fit: cover; }
   .usergrp .badge { color: var(--world-ink); border-color: color-mix(in srgb, var(--world-ink) 42%, transparent); }
   .usergrp .gutter { color: var(--world-ink); }
 
@@ -569,6 +572,8 @@
 
 
   .modal { position: fixed; inset: 0; background: var(--overlay); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 30; animation: fadein .14s ease-out; }
+  .lightbox { cursor: zoom-out; }
+  .lightbox-image { max-width: 94vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 50px -24px var(--shadow-strong); }
   .modalcard { background: var(--paper); border: 1px solid var(--line-strong); border-radius: 14px; width: min(880px, 92vw); max-height: min(84vh, 920px); display: flex; flex-direction: column; box-shadow: 0 20px 50px -24px var(--shadow-strong); }
   .modalhead { flex: none; display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--line); }
   .modaltitle { font: 600 15px var(--sans); color: var(--ink); flex: 1; }
