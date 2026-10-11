@@ -102,6 +102,13 @@ describe("World 构造检查", () => {
     expect(report.failures.join('\n')).toContain('「Main Panel」');
   });
 
+  it('localize() 抛错或 label 不是字符串是失败', async () => {
+    const throwing = { ...worldDef('alpha', []), localize: () => { throw new Error('缺译文'); } };
+    expect((await dryMountWorld(throwing, { scratchDir })).failures.join('\n')).toContain('缺译文');
+    const malformed = { ...worldDef('alpha', []), localize: () => ({ label: 42 as unknown as string }) };
+    expect((await dryMountWorld(malformed, { scratchDir })).failures.join('\n')).toContain('localize().label');
+  });
+
   it('defaults().enabled 不是 false 是警告', async () => {
     const report = await dryMountWorld(worldDef('alpha', [], {}, { enabled: true }), { scratchDir });
     expect(report.failures).toEqual([]);

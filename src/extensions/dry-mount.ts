@@ -143,6 +143,16 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
   }
   ok.push('defaults() 返回配置段。');
 
+  if (def.localize) {
+    try {
+      const label = def.localize(opts.language ?? 'zh').label;
+      if (label !== undefined && typeof label !== 'string') failures.push('localize().label 不是字符串。');
+      else ok.push('localize() 调用成功。');
+    } catch (error) {
+      failures.push(`localize() 抛错: ${message(error)}`);
+    }
+  }
+
   let world: World;
   try {
     world = def.create(fakeWorldContext(def, opts));
