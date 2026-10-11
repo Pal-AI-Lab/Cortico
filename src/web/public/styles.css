@@ -444,7 +444,7 @@
   @keyframes toast { 0% { opacity: 0; transform: translate(-50%, 8px); } 12% { opacity: 1; transform: translate(-50%, 0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -8px); } }
 
   .toast {
-    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 90;
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 130;
     background: var(--sheet); border: 1px solid var(--line-2); color: var(--ink-soft);
     font-size: 12px; border-radius: 16px; padding: 5px 15px; white-space: nowrap;
     pointer-events: none; animation: toast 1.9s ease forwards;
@@ -571,7 +571,8 @@
   .strow .ststat { font: var(--text-detail)/1.4 var(--mono); color: var(--ink-blue); white-space: nowrap; }
 
 
-  .modal { position: fixed; inset: 0; background: var(--overlay); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 30; animation: fadein .14s ease-out; }
+  /* 层级:页面内的元素不超过 60,窄屏的 #rail 100,弹窗 120,toast 与 .u-tip 130。 */
+  .modal { position: fixed; inset: 0; background: var(--overlay); backdrop-filter: blur(2px); display: flex; align-items: center; justify-content: center; z-index: 120; animation: fadein .14s ease-out; }
   .lightbox { cursor: zoom-out; }
   .lightbox-image { max-width: 94vw; max-height: 92vh; object-fit: contain; border-radius: 8px; box-shadow: 0 20px 50px -24px var(--shadow-strong); }
   .modalcard { background: var(--paper); border: 1px solid var(--line-strong); border-radius: 14px; width: min(880px, 92vw); max-height: min(84vh, 920px); display: flex; flex-direction: column; box-shadow: 0 20px 50px -24px var(--shadow-strong); }
@@ -623,7 +624,7 @@
   .usagetables { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
 
 
-  .u-tip { position: fixed; z-index: 90; pointer-events: none; box-sizing: border-box; width: max-content; max-width: min(268px, calc(100vw - 16px)); background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 9px; padding: 9px 11px; box-shadow: 0 6px 22px var(--shadow-soft); font: 12px var(--sans); color: var(--ink); overflow-wrap: anywhere; }
+  .u-tip { position: fixed; z-index: 130; pointer-events: none; box-sizing: border-box; width: max-content; max-width: min(268px, calc(100vw - 16px)); background: var(--sheet); border: 1px solid var(--line-strong); border-radius: 9px; padding: 9px 11px; box-shadow: 0 6px 22px var(--shadow-soft); font: 12px var(--sans); color: var(--ink); overflow-wrap: anywhere; }
   .u-tip.hidden { display: none; }
   .u-tip .tt-h { font: 600 12.5px var(--mono); color: var(--accent); margin-bottom: 3px; }
   .u-tip .tt-tot { font: 12px var(--mono); color: var(--ink-soft); margin-bottom: 4px; }

@@ -5,6 +5,7 @@
  */
 
 import { getEventListeners } from 'node:events';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 
 const UI_ENTRY = '../../src/web/client/ui/index.ts';
@@ -1075,6 +1076,17 @@ describe('confirm', () => {
     expect(modal.find('primary')).toBeNull();
     ok.dispatchEvent({ type: 'click' });
     await expect(p).resolves.toBe(true);
+  });
+});
+
+describe('浮层层级', () => {
+  it('弹窗压在窄屏顶栏之上,toast 与提示压在弹窗之上', () => {
+    const css = readFileSync(new URL('../../src/web/public/styles.css', import.meta.url), 'utf8');
+    // 选择器开头、规则体里写的 z-index;同一选择器在各个媒体查询里的值都收
+    const z = (selector: string): number[] => [...css.matchAll(new RegExp(`(?:^|\\s)${selector} \\{[^}]*?z-index: (\\d+)`, 'gm'))].map((m) => Number(m[1]));
+    const [modal] = z('\\.modal');
+    expect(Math.max(...z('#rail'))).toBeLessThan(modal!);
+    expect(Math.min(...z('\\.toast'), ...z('\\.u-tip'))).toBeGreaterThan(modal!);
   });
 });
 
