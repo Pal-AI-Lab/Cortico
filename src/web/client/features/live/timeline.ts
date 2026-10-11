@@ -334,6 +334,8 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
       }, { signal });
       const image = ui.h('img');
       image.alt = ref.fallbackText;
+      // 图到得比卡片晚,撑高时间线后按贴底状态再滚一次
+      image.addEventListener('load', () => stick(), { signal });
       image.addEventListener('error', () => link.remove(), { signal });
       image.src = blobUrl(ref.handle);
       link.appendChild(image);

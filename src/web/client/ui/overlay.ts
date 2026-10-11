@@ -164,7 +164,7 @@ export function busy(env: OverlayEnv, title: string, text?: string): Disposable 
   return layer;
 }
 
-/** 可关闭的抽屉；字符串正文显示为 pre.mono，节点正文直接挂入 modalbody。 */
+/** 遮罩上居中一张图；点图或遮罩、按 Esc 都关闭。 */
 export function lightbox(env: OverlayEnv, src: string, alt = ''): Disposable {
   if (env.signal.aborted) return noopDisposable;
   const modal = openModal(env, () => {});
@@ -177,6 +177,7 @@ export function lightbox(env: OverlayEnv, src: string, alt = ''): Disposable {
   return modal;
 }
 
+/** 可关闭的抽屉；字符串正文显示为 pre.mono，节点正文直接挂入 modalbody。 */
 export function drawer(env: OverlayEnv, title: string, body: string | HTMLElement): Disposable {
   if (env.signal.aborted) return noopDisposable;
   const doc = env.doc;
