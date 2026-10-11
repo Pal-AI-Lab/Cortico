@@ -41,8 +41,9 @@ Conventions that hold across the repository:
 
 - **One prefix per World**, the id in PascalCase (`Minecraft`, `Pvz`, `QQ`, `WebSearch`), on its
   contract exports: `<PREFIX>` definition, `<Prefix>ConfigSection`, `<PREFIX>_DEFAULTS`,
-  `<PREFIX>_CONFIG_GROUP`, `<PREFIX>_TOOL_DECLS`, `<PREFIX>_PANEL_DECLS`, the `<Prefix>World`
-  class and its `<Prefix>WorldProxy`. Internal helpers carry no prefix; engine-ipc types
+  `<PREFIX>_TOOL_DECLS`, the `<Prefix>World` class and its `<Prefix>WorldProxy`. Exports that
+  carry display text take the request language: `<prefix>ConfigGroup(language)`,
+  `<prefix>PanelDecls(language)`. Internal helpers carry no prefix; engine-ipc types
   (`EngineInit`, `EngineRequest`, `HostRequest`, `MainToChild`) are unprefixed in every World.
 - **Fixed files per World**: `definition.ts` (the definition), `config.ts` (config section,
   defaults, config groups, secret names), `world.ts` (the class); a World that runs in a child

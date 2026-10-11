@@ -1,6 +1,6 @@
 import { pick, type Language } from '../../../core/language.ts';
 
-/** Minecraft 五个面板的浏览器端文案。中文逐字保留现状。 */
+/** Minecraft 五个面板的浏览器端文案。 */
 const zh = {
   // 各面板共用
   opFailed: (err: string) => `操作失败: ${err}`,
