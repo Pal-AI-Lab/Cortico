@@ -984,7 +984,7 @@
   /* 24 单位的线条图标在任何尺寸下都是同一线宽 */
   svg[viewBox="0 0 24 24"][stroke="currentColor"] { stroke-width: 1.6px; }
   svg[viewBox="0 0 24 24"][stroke="currentColor"] * { vector-effect: non-scaling-stroke; }
-  input[type="checkbox"], input[type="radio"] { accent-color: color-mix(in srgb, var(--accent) 78%, #000); }
+  input[type="checkbox"] { accent-color: color-mix(in srgb, var(--accent) 78%, #000); }
   .visually-hidden {
     position: absolute !important;
     width: 1px !important;
