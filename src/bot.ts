@@ -950,6 +950,7 @@ export function createBot<C extends CoreConfig>(
       memoryDir: loaded.memoryDir,
       dataDir: loaded.dataDir,
       botDir: loaded.rootDir,
+      blob: (handle) => core.resolveBlob(handle),
       language,
       ...(cfg.web.host ? { host: cfg.web.host } : {}),
       allowedHosts: cfg.web.allowedHosts ?? [],

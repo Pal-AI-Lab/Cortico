@@ -10,6 +10,8 @@ import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 import type { ToolSchema } from '../../src/core/types.ts';
 import type { PathPickerOptions } from '../../src/web/shared/path-picker.ts';
+import { LogBlobStore, blobScheme } from '../../src/core/blobs.ts';
+import { WorkspaceBlobStore } from '../../bots/cormini/persona/memory.ts';
 
 let app: WebApp;
 let onboardingFlag = true;
@@ -19,6 +21,8 @@ let dataDir: string;
 let pickerFile: string;
 let pickerDir: string;
 let pickerResult: string | null = null;
+let logBlobs: LogBlobStore;
+let memBlobs: WorkspaceBlobStore;
 const pickerRequests: PathPickerOptions[] = [];
 const store = new FakeStore();
 const promptDocs = new Map([
@@ -82,11 +86,15 @@ beforeAll(async () => {
     });
   }
 
+  logBlobs = new LogBlobStore(dataDir);
+  memBlobs = new WorkspaceBlobStore(memoryDir);
+
   app = new WebApp({
     store,
     memoryDir,
     dataDir,
     botDir: memoryDir,
+    blob: (handle) => blobScheme(handle) === 'log' ? logBlobs.read(handle) : memBlobs.get(handle),
     getStatus: () => ({ session: { tokens: 1234, messages: 56 }, dream: 'idle', onboardingPending: onboardingFlag }),
     onboarding: { dismiss: () => { onboardingFlag = false; } },
     // World 自己声明控制台露出:badges,控制台不按 id 分支
@@ -243,6 +251,35 @@ describe('bot 头像', () => {
       body: Buffer.from('not an image'),
     });
     expect(response.status).toBe(400);
+  });
+});
+
+describe('/api/blob', () => {
+  const getBlob = (handle: string) => fetch(`${base()}/api/blob?handle=${encodeURIComponent(handle)}`);
+
+  it('log: 附件回原字节与 MIME,可长期缓存', async () => {
+    const bytes = Buffer.from('log-image');
+    const handle = logBlobs.put(bytes, 'image/png');
+    const r = await getBlob(handle);
+    expect(r.status).toBe(200);
+    expect(r.headers.get('content-type')).toContain('image/png');
+    expect(r.headers.get('cache-control')).toContain('immutable');
+    expect(Buffer.from(await r.arrayBuffer())).toEqual(bytes);
+  });
+
+  it('mem: 附件每次回源,改写后读到新字节', async () => {
+    const handle = memBlobs.put('shot.jpg', Buffer.from('old'), 'image/jpeg');
+    const first = await getBlob(handle);
+    expect(first.headers.get('cache-control')).toBe('no-store');
+    expect(await first.text()).toBe('old');
+    memBlobs.put('shot.jpg', Buffer.from('new'), 'image/jpeg');
+    expect(await (await getBlob(handle)).text()).toBe('new');
+  });
+
+  it('认不出或已不在的句柄回 404', async () => {
+    expect((await getBlob('log:0000000000000000dead.png')).status).toBe(404);
+    expect((await getBlob('mem:blobs/missing.jpg')).status).toBe(404);
+    expect((await fetch(base() + '/api/blob')).status).toBe(404);
   });
 });
 

@@ -26,6 +26,7 @@ import type {
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
+import { blobScheme } from '../core/blobs.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
 import { isLanguage, languageTag, systemLanguage, type Language } from '../core/language.ts';
 import { serverText } from './strings.ts';
@@ -466,6 +467,8 @@ export interface ConsoleSurface {
   dataDir: string;
   /** bot 根目录。头像固定写入此目录的 avatar.png；未提供时不挂载头像写入面。 */
   botDir?: string;
+  /** 按附件句柄取字节与 MIME;认不出或已不在时返回 null。未提供时 `/api/blob` 一律 404。 */
+  blob?(handle: string): { bytes: Uint8Array; mime: string } | null;
   /**
    * 控制台的默认语言:印在 `<html lang>` 上,也是没带语言的请求用的那种。缺省按进程读一次
    * 系统语言。每个请求可以经 `CONSOLE_LANGUAGE_HEADER`(WebSocket 握手经
@@ -1454,6 +1457,18 @@ export class WebApp {
       if (!existsSync(file)) { res.status(404).end(); return; }
       res.setHeader('Cache-Control', 'no-store');
       res.type('png').send(readFileSync(file));
+    }));
+
+    // log: 按内容寻址,同一句柄的字节不变;mem: 是 Memory 里可改写的文件,每次回源。
+    // sandbox 让 Persona 后端交回的可执行类型在新标签里打开也跑不了脚本。
+    app.get('/api/blob', wrap((req, res) => {
+      const handle = typeof req.query.handle === 'string' ? req.query.handle : '';
+      const got = handle ? this.deps.blob?.(handle) : null;
+      if (!got) { res.status(404).end(); return; }
+      res.setHeader('Cache-Control', blobScheme(handle) === 'log' ? 'private, max-age=31536000, immutable' : 'no-store');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('Content-Security-Policy', 'sandbox');
+      res.type(got.mime).send(Buffer.from(got.bytes));
     }));
 
     app.post('/api/avatar', express.raw({ type: 'image/png', limit: AVATAR_MAX_BYTES }), wrap((req, res) => {
