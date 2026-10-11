@@ -48,8 +48,6 @@ export interface WorldContext<S extends WorldSection = WorldSection> {
 export interface WorldDefinition<S extends WorldSection = WorldSection> {
   id: string;
   label: string;
-  /** 控制台语言下的显示名;缺省或不给 label = 用 `label`。 */
-  localize?(language: Language): { label?: string };
   /** World 配置默认值，每次返回新对象；enabled=false，由 bot 声明或部署配置启用。 */
   defaults(): S;
   /** 激活前置检查。抛错 = 不能激活,错误信息原样给操作者。 */
@@ -298,23 +296,19 @@ export class WorldAssembly {
   }
 
   /**
-   * `language` 下的显示名,每次现取:实例 `console(language).label`,其次定义的
-   * `localize(language).label` 与 `label`;预建实例与没有定义的缺失项用装配时记下的名字。
+   * `language` 下的显示名,每次现取:实例的 `console(language).label`,其次定义的 `label`;
+   * 预建实例与只有声明的缺失项用装配时记下的名字。
    */
   labelIn(id: string, language: Language): string {
     const slot = this.slots.find((s) => s.id === id);
-    let fromConsole: string | undefined;
+    let declared: string | undefined;
     try {
-      fromConsole = slot?.instance.console?.(language)?.label;
+      declared = slot?.instance.console?.(language)?.label;
     } catch {
-      fromConsole = undefined;
+      declared = undefined;
     }
     const def = slot ? slot.definition : this.worlds.find((d) => d.id === id);
-    return fromConsole
-      ?? (def ? def.localize?.(language).label ?? def.label : undefined)
-      ?? slot?.label
-      ?? this.missing.find((m) => m.id === id)?.label
-      ?? id;
+    return declared ?? def?.label ?? slot?.label ?? this.missing.find((m) => m.id === id)?.label ?? id;
   }
 
   /** 三个动作的回执与拒绝理由按 `language` 给;省略 = 中文。 */
