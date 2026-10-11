@@ -379,7 +379,8 @@ export type ToolOwner =
   | { kind: 'world'; id: string; label?: string };
 
 export interface WebAppToolSchemasDeps {
-  list(): Array<ToolSchema & { owner: ToolOwner }>;
+  /** 归属方的显示名按 `language` 给。 */
+  list(language: Language): Array<ToolSchema & { owner: ToolOwner }>;
 }
 
 export interface WebAppSessionControlDeps {
@@ -1922,7 +1923,7 @@ export class WebApp {
     app.get('/api/tool-schemas', wrap((req, res) => {
       const src = this.deps.toolSchemas;
       if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).toolSchemasUnavailable }); return; }
-      res.json({ tools: src.list() });
+      res.json({ tools: src.list(this.languageOf(req)) });
     }));
 
     app.post('/api/session/reload-prefix', (req: Request, res: Response) => {
