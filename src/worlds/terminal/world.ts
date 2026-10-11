@@ -161,7 +161,7 @@ const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
 /** 接收的图片格式:媒体库认得扩展名、主流多模态模型都吃的那几种。 */
 const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
-/** 回显/回放帧里的一张图:ref 是附件句柄,客户端凭它经 `blob` 调用取字节。 */
+/** 回显/回放帧里的一张图:ref 是附件句柄,字节经控制台的 `/api/blob?handle=` 取。 */
 interface WireImage {
   ref: string;
   mime: string;
