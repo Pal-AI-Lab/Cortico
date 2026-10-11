@@ -8,6 +8,8 @@ export const S: Partial<typeof en> = {
   navAria: 'コンソールのナビゲーション',
   runResume: '再開',
   runPause: '一時停止',
+  runStateRunning: '実行中',
+  runStatePaused: '一時停止中',
   runUnavailable: '実行制御を利用できません',
   shutdownAria: 'シャットダウン',
   settingsAria: '設定',

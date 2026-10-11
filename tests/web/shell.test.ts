@@ -536,6 +536,22 @@ describe('底部运行控制', () => {
     expect(run.getAttribute('aria-label')).toBe('继续运行');
   });
 
+  it('名字下面用字写出运行状态，随暂停键切换;没有运行控制时不写', async () => {
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const payload = String(url) === '/api/status' ? { loop: { paused: false } } : { paused: true };
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
+    });
+    const { el, shell } = await mkShell({ capabilities: { run: true } });
+    await flush();
+    const state = el.find('rail-runstate')!;
+    expect([state.textContent, state.hidden]).toEqual(['运行中', false]);
+    click(el.find('rail-run')!);
+    await flush();
+    expect([state.textContent, state.classList.contains('paused')]).toEqual(['已暂停', true]);
+    shell.setCapabilities({});
+    expect(state.hidden).toBe(true);
+  });
+
   it('齿轮在底栏那一排里,点它进设置页,路由到了就跟着高亮', async () => {
     stubStatus({});
     const { el, shell, navigated } = await mkShell();

@@ -8,6 +8,8 @@ export const S: Partial<typeof en> = {
   navAria: '控制台導覽',
   runResume: '繼續執行',
   runPause: '暫停執行',
+  runStateRunning: '執行中',
+  runStatePaused: '已暫停',
   runUnavailable: '執行控制無法使用',
   shutdownAria: '關機',
   settingsAria: '設定',

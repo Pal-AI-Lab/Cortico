@@ -975,6 +975,12 @@
   .rail-action:disabled { opacity: .35; cursor: default; }
   .rail-action .icon { width: 17px; height: 17px; }
   .rail-run:not(.paused) { color: var(--accent); }
+  .rail-run.paused, .rail-run.paused:hover { color: var(--warn); }
+  .rail-ident { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; }
+  .rail-ident > * { max-width: 100%; }
+  .rail-runstate { padding: 0 6px; font: 600 11.5px/1.3 var(--sans); color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rail-runstate.paused { color: var(--warn); }
+  .rail-runstate[hidden] { display: none; }
   .visually-hidden {
     position: absolute !important;
     width: 1px !important;

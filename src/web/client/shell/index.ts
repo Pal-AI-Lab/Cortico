@@ -138,8 +138,13 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   botNameEdit.setAttribute('aria-hidden', 'true');
   botNameEdit.appendChild(icon(doc, 'pencil'));
   botName.append(botNameText, botNameEdit);
+  // 名字下面一行写运行状态，颜色跟暂停键一致;按钮的 aria-label 已经说明状态，读屏跳过这行。
+  const runState = ui.h('span', 'rail-runstate');
+  runState.setAttribute('aria-hidden', 'true');
+  const ident = ui.h('div', 'rail-ident');
+  ident.append(botName, runState);
   const who = ui.h('div', 'rail-who');
-  who.append(avatar.el, botName);
+  who.append(avatar.el, ident);
   const footActions = ui.h('div', 'rail-actions');
   const runButton = ui.h('button', 'rail-action rail-run');
   runButton.type = 'button';
@@ -163,6 +168,9 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     runButton.setAttribute('aria-label', paused ? S.runResume : S.runPause);
     runButton.title = available ? (paused ? S.runResume : S.runPause) : S.runUnavailable;
     runButton.classList.toggle('paused', paused);
+    runState.textContent = paused ? S.runStatePaused : S.runStateRunning;
+    runState.classList.toggle('paused', paused);
+    runState.hidden = !available;
   };
   renderRun();
 

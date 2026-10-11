@@ -8,6 +8,8 @@ export const S: Partial<typeof en> = {
   navAria: 'Навигация консоли',
   runResume: 'Продолжить',
   runPause: 'Приостановить',
+  runStateRunning: 'Работает',
+  runStatePaused: 'На паузе',
   runUnavailable: 'Управление запуском недоступно',
   shutdownAria: 'Выключить',
   settingsAria: 'Настройки',

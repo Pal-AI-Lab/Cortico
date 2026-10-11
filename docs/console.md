@@ -47,7 +47,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 没有可用端点时按钮按不动。
 
 左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
-左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`)。
+左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`),展示名下面写运行中或已暂停。
 根 URL 不带 hash 时跳转到 `live`；未知路由不显示页面内容，侧栏仍可导航。
 存储项按归属分页:Core 的在运行诊断的「数据」子页,一键清空也在那里;World、Persona 与 Memory 页
 各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「配置」子页,其余在声明方自己的页。
