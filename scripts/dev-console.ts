@@ -4,6 +4,7 @@ import { ProviderRegistry } from '../src/providers/registry.ts';
 import type { FixtureMessage } from '../tests/core/fixture-messages.ts';
 import { fixtureRecords } from '../tests/core/fixture-messages.ts';
 import { responseTimelineFixture } from '../tests/web/response-timeline-fixture.ts';
+import { functionCall, functionResult, message } from '../src/protocol/open-responses/context.ts';
 /**
  * 使用代表性固定夹具启动 WebApp，供前端开发与截图核验。
  * 不连接真实 API，不启动 core。
@@ -210,7 +211,28 @@ const fixtureSession: FixtureMessage[] = [
   { role: 'tool', tool_call_id: 'c2', content: '[sent #5]' } as FixtureMessage,
   { role: 'assistant', content: '', reasoning_content: '' } as FixtureMessage,
 ];
-const session = [...fixtureRecords(fixtureSession, 'dev-console'), ...responseTimelineFixture().session.slice(1)];
+// 带图的终端消息与工具回执:时间线经 /api/blob 取图
+const devImage = (width: number, height: number, from: [number, number, number], to: [number, number, number]): Buffer => {
+  const raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const t = (x + y) / (width + height);
+      for (let c = 0; c < 3; c++) raw[y * (width * 3 + 1) + 1 + x * 3 + c] = Math.round(from[c] + (to[c] - from[c]) * t);
+    }
+  }
+  return encodePng(width, height, 2, raw);
+};
+const devImageRef = (bytes: Buffer, name: string, fallbackText: string): BlobRef =>
+  ({ handle: devBlobs.put(bytes, 'image/png'), mime: 'image/png', name, fallbackText });
+const userImage = devImageRef(devImage(320, 240, [240, 180, 120], [120, 160, 240]), 'sunset.png', 'image 1/1 from 阿明');
+const shotImage = devImageRef(devImage(480, 270, [40, 60, 90], [200, 220, 240]), 'screen.png', '屏幕截图 480×270');
+const session = [
+  ...fixtureRecords(fixtureSession, 'dev-console'),
+  message('user', withBlobLines('[15:12] 阿明: 看我拍的', [userImage]), { blobs: [userImage] }),
+  functionCall('c-shot', 'look_screen', '{}', { responseId: 'resp-dev-shot' }),
+  functionResult('c-shot', withBlobLines('截到了', [shotImage]), { blobs: [shotImage] }),
+  ...responseTimelineFixture().session.slice(1),
+];
 
 
 const worldLabels: Record<string, string> = {
@@ -1192,6 +1214,7 @@ const app = new WebApp({
   memoryDir: tmpPersona,
   dataDir: tmpData,
   botDir: tmpPersona,
+  blob: (handle) => devBlobs.read(handle),
   password: process.env.CORTICO_DEV_PASSWORD ?? '',
   defaultScheme: cfg.web.theme,
   getStatus: () => ({
