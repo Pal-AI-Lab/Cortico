@@ -89,8 +89,8 @@ const botZh = {
     reset: (title: string) => `已删除 ${title} 的部署覆盖文件`,
   },
   visibility: {
-    shown: (id: string) => `${id} 对 agent 重新可见。事件投递已恢复;前缀段与工具要等前缀重载才回来。`,
-    hidden: (id: string) => `${id} 已对 agent 隐藏。新事件不再唤醒 agent(仍照常落库);前缀段与工具要等前缀重载才撤下。`,
+    shown: (label: string) => `${label} 对 agent 重新可见。事件投递已恢复;前缀段与工具要等前缀重载才回来。`,
+    hidden: (label: string) => `${label} 已对 agent 隐藏。新事件不再唤醒 agent(仍照常落库);前缀段与工具要等前缀重载才撤下。`,
     prefixReloaded: (kept: number) => `系统前缀与工具表已重载，保留当前session的${kept}条既有消息`,
   },
   shutdown: {
@@ -190,8 +190,8 @@ export const botEn: typeof botZh = {
     reset: (title: string) => `Removed the deployment override for ${title}`,
   },
   visibility: {
-    shown: (id: string) => `${id} is visible to the agent again. Event delivery has resumed; its prefix segment and tools return once the prefix is reloaded.`,
-    hidden: (id: string) => `${id} is now hidden from the agent. New events no longer wake the agent (they are still stored); its prefix segment and tools are removed once the prefix is reloaded.`,
+    shown: (label: string) => `${label} is visible to the agent again. Event delivery has resumed; its prefix segment and tools return once the prefix is reloaded.`,
+    hidden: (label: string) => `${label} is now hidden from the agent. New events no longer wake the agent (they are still stored); its prefix segment and tools are removed once the prefix is reloaded.`,
     prefixReloaded: (kept: number) => `System prefix and tool table reloaded; ${kept} existing messages of the current session kept`,
   },
   shutdown: {

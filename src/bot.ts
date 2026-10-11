@@ -534,17 +534,23 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
 
 /**
  * 扩展条目在本进程的运行状态:World 看挂载与对 agent 是否可见,provider 与 bot 看启动时是否加载。
- * 已卸载的条目不算生效。
+ * 已卸载的条目不算生效。有实例的 World 名按 `language` 现取,外部扩展的名字因此也跟界面语言走。
  */
 export function extensionRuntimeState(
   assembly: WorldAssembly,
   isWorldVisible: (id: string) => boolean,
-): (item: ExtensionInfo) => ExtensionInfo {
-  return (item) => {
+): (item: ExtensionInfo, language: Language) => ExtensionInfo {
+  return (item, language) => {
     if (item.state === 'removed') return { ...item, enabled: false };
     if (item.kind === 'world' && item.worldId) {
-      const mounted = assembly.slots.some((slot) => slot.id === item.worldId && slot.mounted);
-      return { ...item, enabled: mounted, ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}) };
+      const slot = assembly.slots.find((s) => s.id === item.worldId);
+      const mounted = slot?.mounted ?? false;
+      return {
+        ...item,
+        ...(slot ? { label: assembly.labelIn(slot.id, language) } : {}),
+        enabled: mounted,
+        ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}),
+      };
     }
     return { ...item, enabled: item.loaded && item.state === 'loaded' };
   };
@@ -1003,7 +1009,8 @@ export function createBot<C extends CoreConfig>(
           core.setWorldVisible(id, visible);
           notifyLifecycle({ kind: 'visibility', id, label: assembly.labelOf(id) ?? id, visible });
           const t = botText(language).visibility;
-          return visible ? t.shown(id) : t.hidden(id);
+          const label = assembly.labelIn(id, language);
+          return visible ? t.shown(label) : t.hidden(label);
         },
       },
       sessionControl: {

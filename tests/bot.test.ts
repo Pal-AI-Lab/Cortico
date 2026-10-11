@@ -40,7 +40,8 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   assembly.bind({ mount: async (world: World) => { await world.start({} as WorldHost); }, unmount: async () => {} });
   const set = { dir, records: [], worlds: [fromExtension], providers: [providerModules[0]], consoleAssets: [] };
 
-  const entries = builtinExtensions(assembly, set, 'en').map(extensionRuntimeState(assembly, (id) => id !== running));
+  const decorate = extensionRuntimeState(assembly, (id) => id !== running);
+  const entries = builtinExtensions(assembly, set, 'en').map((entry) => decorate(entry, 'en'));
   const worlds = entries.filter((entry) => entry.kind === 'world');
   expect(worlds.map((entry) => [entry.worldId, entry.state, entry.enabled, entry.hidden ?? false])).toEqual([
     [running, 'loaded', true, true], [parked, 'loaded', false, false], [broken, 'failed', false, false],
@@ -53,7 +54,7 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   for (const entry of entries) expect(entry).toMatchObject({ builtin: true, version, location: repoRoot(), name: `builtin:${entry.kind}:${entry.worldId}` });
 });
 
-it('World names follow the request language: the terminal World and a definition whose label getter changed after assembly', () => {
+it('World names follow the request language: the terminal World, a definition whose label getter changed after assembly, and the same World loaded from an extension', () => {
   let current = 'name at startup';
   const live: WorldDefinition<WorldSection> = { ...probe('live'), get label() { return current; } };
   const defs = [TERMINAL as unknown as WorldDefinition<WorldSection>, live];
@@ -65,11 +66,13 @@ it('World names follow the request language: the terminal World and a definition
     .filter((entry) => entry.kind === 'world').map((entry) => [entry.worldId, entry.label]));
   expect(labels('en')).toEqual({ terminal: terminalText('en').moduleLabel, live: 'name now' });
   expect(labels('pt-BR').terminal).toBe(terminalText('pt-BR').moduleLabel);
+  const installed = { name: 'cortico-world-live', spec: '^1.0.0', version: '1.0.0', kind: 'world' as const, worldId: 'live', label: 'name at startup', consoleClient: false, loaded: true, state: 'loaded' as const };
+  expect(extensionRuntimeState(assembly, () => true)(installed, 'en').label).toBe('name now');
 });
 
 it('removed entries are never enabled', () => {
   const loaded = loadDeployment({ defaults: () => makeCfg() }, dir, dir);
   const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true);
   const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, consoleClient: false, loaded: true, state: 'removed' as const };
-  expect(decorate(removed).enabled).toBe(false);
+  expect(decorate(removed, 'en').enabled).toBe(false);
 });

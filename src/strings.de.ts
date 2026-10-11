@@ -79,8 +79,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `Deployment-Überschreibung für ${title} entfernt`,
   },
   visibility: {
-    shown: (id: string) => `${id} ist für den Agenten wieder sichtbar. Die Ereigniszustellung läuft wieder; Präfixabschnitt und Tools kehren nach dem Neuladen des Präfixes zurück.`,
-    hidden: (id: string) => `${id} ist jetzt vor dem Agenten verborgen. Neue Ereignisse wecken den Agenten nicht mehr (sie werden weiter gespeichert); Präfixabschnitt und Tools werden nach dem Neuladen des Präfixes entfernt.`,
+    shown: (label: string) => `${label} ist für den Agenten wieder sichtbar. Die Ereigniszustellung läuft wieder; Präfixabschnitt und Tools kehren nach dem Neuladen des Präfixes zurück.`,
+    hidden: (label: string) => `${label} ist jetzt vor dem Agenten verborgen. Neue Ereignisse wecken den Agenten nicht mehr (sie werden weiter gespeichert); Präfixabschnitt und Tools werden nach dem Neuladen des Präfixes entfernt.`,
     prefixReloaded: (kept: number) => `Systempräfix und Tool-Tabelle neu geladen; ${kept} ${kept === 1 ? 'bestehende Nachricht' : 'bestehende Nachrichten'} der aktuellen Session behalten`,
   },
   shutdown: {

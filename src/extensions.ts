@@ -531,8 +531,8 @@ export interface ExtensionManagerOptions {
   fetchJson?: (url: string) => Promise<unknown>;
   /** 随框架提供的 World 与 provider,与已装的包列在一起;不能卸载。 */
   builtins?: (language: Language) => ExtensionInfo[];
-  /** 补上本进程的运行状态(`enabled`、`hidden`);已装包与内建条目都经过它。 */
-  decorate?: (item: ExtensionInfo) => ExtensionInfo;
+  /** 补上本进程的运行状态(`enabled`、`hidden`)与 `language` 下的 World 名;已装包与内建条目都经过它。 */
+  decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -544,7 +544,7 @@ export class ExtensionManager {
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
   private readonly builtins?: (language: Language) => ExtensionInfo[];
-  private readonly decorate?: (item: ExtensionInfo) => ExtensionInfo;
+  private readonly decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
 
   constructor(
     private readonly repoRoot: string,
@@ -651,7 +651,7 @@ export class ExtensionManager {
       });
     }
     const all = [...out, ...(this.builtins?.(language) ?? [])];
-    return { dir: this.dir, extensions: this.decorate ? all.map(this.decorate) : all };
+    return { dir: this.dir, extensions: this.decorate ? all.map((item) => this.decorate!(item, language)) : all };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */

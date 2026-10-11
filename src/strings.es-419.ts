@@ -81,8 +81,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `Se eliminó la sobrescritura del despliegue de ${title}`,
   },
   visibility: {
-    shown: (id: string) => `${id} vuelve a ser visible para el agente. La entrega de eventos se reanudó; su segmento de prefijo y sus herramientas vuelven cuando se recarga el prefijo.`,
-    hidden: (id: string) => `${id} ahora está oculto para el agente. Los eventos nuevos ya no despiertan al agente (se siguen guardando); su segmento de prefijo y sus herramientas se quitan cuando se recarga el prefijo.`,
+    shown: (label: string) => `${label} vuelve a ser visible para el agente. La entrega de eventos se reanudó; su segmento de prefijo y sus herramientas vuelven cuando se recarga el prefijo.`,
+    hidden: (label: string) => `${label} ahora está oculto para el agente. Los eventos nuevos ya no despiertan al agente (se siguen guardando); su segmento de prefijo y sus herramientas se quitan cuando se recarga el prefijo.`,
     prefixReloaded: (kept: number) => `Prefijo del sistema y tabla de herramientas recargados; ${kept === 1 ? 'se conservó 1 mensaje existente' : `se conservaron ${kept} mensajes existentes`} de la sesión actual`,
   },
   shutdown: {

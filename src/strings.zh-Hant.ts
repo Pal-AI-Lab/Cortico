@@ -79,8 +79,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `已刪除 ${title} 的部署覆蓋檔案`,
   },
   visibility: {
-    shown: (id: string) => `${id} 對 agent 重新可見。事件投遞已恢復;前綴段與工具要等前綴重新載入才回來。`,
-    hidden: (id: string) => `${id} 已對 agent 隱藏。新事件不再喚醒 agent(仍照常寫入資料庫);前綴段與工具要等前綴重新載入才撤下。`,
+    shown: (label: string) => `${label} 對 agent 重新可見。事件投遞已恢復;前綴段與工具要等前綴重新載入才回來。`,
+    hidden: (label: string) => `${label} 已對 agent 隱藏。新事件不再喚醒 agent(仍照常寫入資料庫);前綴段與工具要等前綴重新載入才撤下。`,
     prefixReloaded: (kept: number) => `系統前綴與工具表已重新載入，保留目前session的${kept}條既有訊息`,
   },
   shutdown: {

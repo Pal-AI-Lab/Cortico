@@ -81,8 +81,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `Substituição da implantação removida para ${title}`,
   },
   visibility: {
-    shown: (id: string) => `${id} está visível para o agente novamente. A entrega de eventos foi retomada; o segmento de prefixo e as ferramentas voltam quando o prefixo for recarregado.`,
-    hidden: (id: string) => `${id} agora está oculto para o agente. Novos eventos não despertam mais o agente (continuam sendo armazenados); o segmento de prefixo e as ferramentas são removidos quando o prefixo for recarregado.`,
+    shown: (label: string) => `${label} está visível para o agente novamente. A entrega de eventos foi retomada; o segmento de prefixo e as ferramentas voltam quando o prefixo for recarregado.`,
+    hidden: (label: string) => `${label} agora está oculto para o agente. Novos eventos não despertam mais o agente (continuam sendo armazenados); o segmento de prefixo e as ferramentas são removidos quando o prefixo for recarregado.`,
     prefixReloaded: (kept: number) => `Prefixo de sistema e tabela de ferramentas recarregados; ${kept === 1 ? '1 mensagem existente da sessão atual mantida' : `${kept} mensagens existentes da sessão atual mantidas`}`,
   },
   shutdown: {

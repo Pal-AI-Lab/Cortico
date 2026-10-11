@@ -79,8 +79,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `Surcharge de déploiement de ${title} supprimée`,
   },
   visibility: {
-    shown: (id: string) => `${id} est de nouveau visible pour l'agent. La livraison des événements a repris ; son segment de préfixe et ses outils reviennent au rechargement du préfixe.`,
-    hidden: (id: string) => `${id} est désormais masqué pour l'agent. Les nouveaux événements ne réveillent plus l'agent (ils sont toujours stockés) ; son segment de préfixe et ses outils sont retirés au rechargement du préfixe.`,
+    shown: (label: string) => `${label} est de nouveau visible pour l'agent. La livraison des événements a repris ; son segment de préfixe et ses outils reviennent au rechargement du préfixe.`,
+    hidden: (label: string) => `${label} est désormais masqué pour l'agent. Les nouveaux événements ne réveillent plus l'agent (ils sont toujours stockés) ; son segment de préfixe et ses outils sont retirés au rechargement du préfixe.`,
     prefixReloaded: (kept: number) => `Préfixe système et table des outils rechargés ; ${kept} message${kept > 1 ? 's' : ''} existant${kept > 1 ? 's' : ''} de la session actuelle conservé${kept > 1 ? 's' : ''}`,
   },
   shutdown: {

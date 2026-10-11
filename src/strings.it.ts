@@ -79,8 +79,8 @@ export const botText: Partial<typeof botEn> = {
     reset: (title: string) => `Override di deployment per ${title} rimosso`,
   },
   visibility: {
-    shown: (id: string) => `${id} è di nuovo visibile all'agente. La consegna degli eventi è ripresa; il suo segmento del prefisso e i suoi strumenti tornano al ricaricamento del prefisso.`,
-    hidden: (id: string) => `${id} è ora nascosto all'agente. I nuovi eventi non svegliano più l'agente (vengono comunque archiviati); il suo segmento del prefisso e i suoi strumenti vengono rimossi al ricaricamento del prefisso.`,
+    shown: (label: string) => `${label} è di nuovo visibile all'agente. La consegna degli eventi è ripresa; il suo segmento del prefisso e i suoi strumenti tornano al ricaricamento del prefisso.`,
+    hidden: (label: string) => `${label} è ora nascosto all'agente. I nuovi eventi non svegliano più l'agente (vengono comunque archiviati); il suo segmento del prefisso e i suoi strumenti vengono rimossi al ricaricamento del prefisso.`,
     prefixReloaded: (kept: number) => `Prefisso di sistema e tabella strumenti ricaricati; ${kept} ${kept === 1 ? 'messaggio esistente' : 'messaggi esistenti'} della sessione attuale ${kept === 1 ? 'conservato' : 'conservati'}`,
   },
   shutdown: {
