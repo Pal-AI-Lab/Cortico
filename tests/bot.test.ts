@@ -12,6 +12,9 @@ import { WorldAssembly, worldDefaults, type WorldDefinition, type WorldSection }
 import { providerModules } from '../src/providers/registry.ts';
 import { repoRoot } from '../src/paths.ts';
 import type { World, WorldHost } from '../src/core/types.ts';
+import type { Language } from '../src/core/language.ts';
+import { TERMINAL } from '../src/worlds/terminal/definition.ts';
+import { text as terminalText } from '../src/worlds/terminal/strings.ts';
 import { makeCfg } from './core/helpers.ts';
 
 let dir: string;
@@ -48,6 +51,20 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   expect(providers.every((entry) => entry.enabled)).toBe(true);
   const version = (JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { version: string }).version;
   for (const entry of entries) expect(entry).toMatchObject({ builtin: true, version, location: repoRoot(), name: `builtin:${entry.kind}:${entry.worldId}` });
+});
+
+it('World names follow the request language: the terminal World and a definition whose label getter changed after assembly', () => {
+  let current = 'name at startup';
+  const live: WorldDefinition<WorldSection> = { ...probe('live'), get label() { return current; } };
+  const defs = [TERMINAL as unknown as WorldDefinition<WorldSection>, live];
+  const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(defs, []) } as never) }, dir, dir);
+  const assembly = new WorldAssembly(loaded, defs, []);
+  current = 'name now';
+  const set = { dir, records: [], worlds: [], providers: [], consoleAssets: [] };
+  const labels = (language: Language) => Object.fromEntries(builtinExtensions(assembly, set, language)
+    .filter((entry) => entry.kind === 'world').map((entry) => [entry.worldId, entry.label]));
+  expect(labels('en')).toEqual({ terminal: terminalText('en').moduleLabel, live: 'name now' });
+  expect(labels('pt-BR').terminal).toBe(terminalText('pt-BR').moduleLabel);
 });
 
 it('removed entries are never enabled', () => {

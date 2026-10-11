@@ -457,7 +457,7 @@ export function deriveWorldFacts(
     } catch {
       decl = undefined;
     }
-    const label = decl?.label ?? slot.label;
+    const label = decl?.label ?? assembly.labelIn(slot.id, language);
     if (!slot.mounted) {
       return { id: slot.id, status: 'inactive' as const, label, declared: slot.declared };
     }
@@ -478,7 +478,7 @@ export function deriveWorldFacts(
   const missing: WorldFacts[] = assembly.missing.map((m) => ({
     id: m.id,
     status: 'missing' as const,
-    label: m.label,
+    label: assembly.labelIn(m.id, language),
     declared: m.declared ?? true,
     reason: m.reason(language),
   }));
@@ -516,7 +516,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
   const worlds = candidates.filter((world) => !external.has(world.id)).flatMap((world): ExtensionInfo[] => {
     const slot = assembly.slots.find((item) => item.id === world.id);
     const missing = assembly.missing.find((item) => item.id === world.id);
-    const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: slot?.label ?? world.label };
+    const base = { ...common, name: `builtin:world:${world.id}`, kind: 'world' as const, worldId: world.id, label: assembly.labelIn(world.id, language) };
     if (slot) return [{ ...base, loaded: true, state: 'loaded' }];
     if (missing) return [{ ...base, loaded: false, state: 'failed', reason: missing.reason(language) }];
     return [];
@@ -756,7 +756,6 @@ export function deriveConsolePageSources(
   extra?: (language: Language) => ConsolePageContribution[],
 ): () => ConsolePageSource[] {
   const { assembly } = parts;
-  const labelOf = (id: string): string => assembly.labelOf(id) ?? id;
   return () => {
     // 每次枚举按语言缓存状态，供同一批 contribute() 调用共享。
     const once = new Map<Language, Map<string, WorldFacts>>();
@@ -773,7 +772,7 @@ export function deriveConsolePageSources(
     const sources: ConsolePageSource[] = ids.map((id) => ({
       id: pageIdFor('world', id),
       contribute: (language) =>
-        ioPageContribution(id, labelOf(id), infos(language).get(id), instances.get(id), language),
+        ioPageContribution(id, assembly.labelIn(id, language), infos(language).get(id), instances.get(id), language),
     }));
 
     const persona = parts.persona;
@@ -1054,12 +1053,11 @@ export function createBot<C extends CoreConfig>(
         },
       },
       toolSchemas: {
-        list: () => {
+        list: (language) => {
 
           const byWorld = new Map<string, ToolOwner>();
           for (const m of assembly.mounted) {
-            const label = assembly.labelOf(m.id);
-            const owner: ToolOwner = { kind: 'world', id: m.id, ...(label ? { label } : {}) };
+            const owner: ToolOwner = { kind: 'world', id: m.id, label: assembly.labelIn(m.id, language) };
             for (const t of m.tools()) byWorld.set(t.name, owner);
           }
           const extras = (contribution.extraToolSchemas?.() ?? []).map((s) => ({ ...s, tags: [] }));
