@@ -742,8 +742,6 @@
     .usagetables { grid-template-columns: 1fr; }
     .theme-workbench { grid-template-columns: 1fr; }
     .theme-preview-sheet { position: static; }
-    #rail { width: 210px; }
-    .scroll, .pagehead, .subtabs, .liveband { padding-left: 16px; padding-right: 16px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
@@ -1649,8 +1647,12 @@
   .tool-schema-card, .theme-scheme { border-radius: var(--radius-md); }
   .tool-schema-card:hover, .theme-scheme:hover { transform: none; box-shadow: none; background: var(--surface-hover); }
 
+  /* 左栏随窗口连续收窄:1180px 起是 --sidebar-width,窄到 932px 以下停在 210px */
+  @media (min-width: 721px) {
+    #rail { width: clamp(210px, calc(28.3vw - 54px), var(--sidebar-width)); }
+  }
+
   @media (max-width: 900px) {
-    #rail { width: 232px; }
     :root { --page-gutter: 20px; }
     .settings-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
     .settings-index { position: static; flex-direction: row; overflow-x: auto; }
