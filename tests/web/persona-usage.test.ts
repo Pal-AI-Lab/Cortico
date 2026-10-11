@@ -11,7 +11,7 @@ import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import { composeDefaults } from '../../bots/corti-soulmate/assemble.ts';
 import { CORE_CONFIG_GROUP } from '../../src/core/config.ts';
 import { PERSONA_CONFIG_GROUP } from '../../bots/corti-soulmate/persona/config.ts';
-import { WEBSEARCH_CONFIG_GROUP } from '../../src/worlds/websearch/config.ts';
+import { webSearchConfigGroup } from '../../src/worlds/websearch/config.ts';
 import { readGroupValues, setByPath, type ConfigGroup } from '../../src/core/config-schema.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -36,7 +36,7 @@ const postJ = async (p: string, body?: any): Promise<{ status: number; body: any
 const cfg: BotConfig = JSON.parse(JSON.stringify(composeDefaults())) as BotConfig;
 cfg.dream.maxRounds = 6;
 cfg.batching.quietGapMs = 2500;
-const configGroups: ConfigGroup[] = [CORE_CONFIG_GROUP, PERSONA_CONFIG_GROUP, WEBSEARCH_CONFIG_GROUP];
+const configGroups: ConfigGroup[] = [CORE_CONFIG_GROUP, PERSONA_CONFIG_GROUP, webSearchConfigGroup('zh')];
 
 beforeAll(async () => {
   memoryDir = mkdtempSync(join(tmpdir(), 'webpersona-'));

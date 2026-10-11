@@ -20,6 +20,7 @@ import type {
   ToolDef,
   BlobInput,
 } from '../../core/types.ts';
+import type { Language } from '../../core/language.ts';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { nowIso, shortTime, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
@@ -51,7 +52,8 @@ import {
 } from './normalize.ts';
 import { VISION_DEFAULTS, type VisionConfig, type VisionService } from './vision.ts';
 import { downloadImageBytes } from './image-download.ts';
-import { QQ_DEFAULTS, QQ_SECRETS, QQ_CONFIG_GROUP, type QQRosterEntry } from './config.ts';
+import { QQ_DEFAULTS, QQ_SECRETS, qqConfigGroup, type QQRosterEntry } from './config.ts';
+import { text } from './strings.ts';
 
 export type { Conv } from './conversation.ts';
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
@@ -74,6 +76,8 @@ type PttTextAction = (typeof PTT_TEXT_ACTIONS)[number];
 const PTT_TEXT_PROTOCOL_WAIT_MS = 30_000;
 
 
+
+type QQText = ReturnType<typeof text>;
 
 export function enabledRosterIds(entries: QQRosterEntry[]): number[] {
   return entries.filter((e) => e.enabled).map((e) => e.id);
@@ -355,9 +359,11 @@ export class QQWorld implements World {
    * 控制台里露出什么:连接状态徽标 + 本 World 的三个专用面板 + 视觉旋钮。
    * 控制台不认识 'qq' 这个 id,它只照这份声明渲染。
    */
-  console(): WorldConsoleDecl {
+  console(language: Language = 'zh'): WorldConsoleDecl {
+    const t = text(language);
     const conn = this.getConnection();
     return {
+      label: t.moduleLabel,
       // 两条链路各一颗:协议端连着没有、监听名单空不空。
       //
       // 接入门关着 = 灰(拨下来的);开着却连不上协议端 = 红:这个渠道存在的全部意义
@@ -365,85 +371,87 @@ export class QQWorld implements World {
       // 连着也收不到任何消息——所以它值一颗自己的灯。
       lamps: [
         {
-          label: '协议端',
+          label: t.endpoint,
           ...(this.gate?.enabled() === false
-            ? { state: 'offline' as const, hint: '接入门关闭' }
+            ? { state: 'offline' as const, hint: t.gateClosed }
             : conn.connected
               ? { state: 'online' as const, hint: conn.nickname || String(conn.selfId ?? '') }
-              : { state: 'error' as const, hint: '未连接' }),
+              : { state: 'error' as const, hint: t.disconnected }),
         },
         {
-          label: '监听',
+          label: t.watch,
           ...(conn.groups.length + conn.privates.length > 0
             ? {
                 state: 'online' as const,
-                hint: `群 ${conn.groups.length} · 私聊 ${conn.privates.length}`,
+                hint: t.watchCounts(conn.groups.length, conn.privates.length),
               }
-            : { state: 'offline' as const, hint: '名单为空' }),
+            : { state: 'offline' as const, hint: t.rosterEmpty }),
         },
       ],
       badges: [
         {
-          label: '协议端',
-          value: conn.connected ? `已连接 ${conn.nickname || conn.selfId || ''}`.trim() : '未连接',
+          label: t.endpoint,
+          value: conn.connected ? t.connectedAs(String(conn.nickname || conn.selfId || '')) : t.disconnected,
           tone: conn.connected ? 'on' : 'off',
         },
-        { label: '监听', value: `群 ${conn.groups.length} · 私聊 ${conn.privates.length}` },
+        { label: t.watch, value: t.watchCounts(conn.groups.length, conn.privates.length) },
       ],
       // 局部 id + 真标题(控制台把 title 画成面板切换页签);渲染在
       // src/worlds/qq/console/ 的自有浏览器扩展里,中央前端不认识这三个名字。
       panels: [
-        { id: 'gate', title: '接入门', description: '接入开关、连接状态与 OneBot 协议端地址。' },
-        { id: 'roster', title: '监听名单', description: '监听哪些群、哪些私聊;改动热生效。' },
-        { id: 'events', title: '事件', description: '事件库里 source=qq 的历史,按会话翻。' },
+        { id: 'gate', title: t.gatePanelTitle, description: t.gatePanelDescription },
+        { id: 'roster', title: t.rosterPanelTitle, description: t.rosterPanelDescription },
+        { id: 'events', title: t.eventsPanelTitle, description: t.eventsPanelDescription },
       ],
-      invoke: (panel, method, args) => this.invokePanel(panel, method, args),
+      invoke: (panel, method, args) => this.invokePanel(panel, method, args, language),
       promptDocs: [
         {
           key: 'worlds.qq.envPrompt',
-          title: 'QQ · 环境提示词',
-          description: 'QQ 渠道的常驻事实(消息形态、起草确认门、图片)。',
+          title: t.promptDocTitle,
+          description: t.promptDocDescription,
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
           vars: [
             {
               name: 'qq.conversations',
-              description: '当前监听的群与私聊清单,每行一条:群名、群号、你在该群的昵称。',
+              description: t.conversationsVarDescription,
               multiline: true,
             },
             {
               name: 'qq.identity',
-              description: '你自己的 QQ 号;未连接协议端时为空(此时用缺省文案)。',
+              description: t.identityVarDescription,
             },
           ],
         },
       ],
-      config: [QQ_CONFIG_GROUP],
-      ...(this.vision ? { storage: [this.visionStorage(this.vision)] } : {}),
+      config: [qqConfigGroup(language)],
+      ...(this.vision ? { storage: [this.visionStorage(this.vision, language)] } : {}),
     };
   }
 
   /** 辅助视觉的缓存(图片字节 + 被动描述 + 追问 session)作为可清除存储上报。 */
-  private visionStorage(vision: VisionService): StoragePart {
+  private visionStorage(vision: VisionService, language: Language): StoragePart {
+    const t = text(language);
     return {
       key: 'vision',
-      label: '外挂视觉缓存(图片+描述+追问session)',
+      label: t.visionStorageLabel,
       kind: 'disk',
       location: 'data/vision/',
-      note: '图片字节/被动描述/追问轮次全部抹除,IMG计数器归零;历史消息里旧IMG-N此后查不到',
-      stat: () => `${vision.imageCount()}张图`,
-      clear: () => `已清除${vision.clear()}张图的视觉缓存`,
+      note: t.visionStorageNote,
+      stat: () => t.visionStorageStat(vision.imageCount()),
+      clear: () => t.visionStorageCleared(vision.clear()),
     };
   }
 
   /**
    * 面板调用按 (panel, method, args) 透传；panel 为 console() 声明中的局部 id。
    */
-  private async invokePanel(panel: string, method: string, args: unknown[]): Promise<unknown> {
-    if (panel === 'gate') return this.invokeGate(method, args);
-    if (panel === 'roster') return this.invokeRoster(method, args);
-    if (panel === 'events') return this.invokeEvents(method, args);
-    throw new Error(`未知面板: ${panel}`);
+  private async invokePanel(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {
+    const t = text(language);
+    if (panel === 'gate') return this.invokeGate(method, args, t);
+    if (panel === 'roster') return this.invokeRoster(method, args, t);
+    if (panel === 'events') return this.invokeEvents(method, args, t);
+    throw new Error(t.unknownPanel(panel));
   }
 
   /**
@@ -459,9 +467,9 @@ export class QQWorld implements World {
     return { groups: conn.groups, privates: conn.privates };
   }
 
-  private async invokeGate(method: string, args: unknown[]): Promise<unknown> {
+  private async invokeGate(method: string, args: unknown[], t: QQText): Promise<unknown> {
     const gate = this.gate;
-    if (!gate) throw new Error('QQ 接入控制不可用(装配层没提供 gate 数据面)');
+    if (!gate) throw new Error(t.gateUnavailable);
     if (method === 'state') {
       const conn = this.getConnection();
       const roster = gate.roster();
@@ -482,7 +490,7 @@ export class QQWorld implements World {
     }
     if (method === 'setEnabled') {
       const enabled = args[0];
-      if (typeof enabled !== 'boolean') throw new Error('enabled 必须是布尔');
+      if (typeof enabled !== 'boolean') throw new Error(t.enabledNotBoolean);
       gate.setEnabled(enabled);
       this.log.warn('QQ 接入开关已改,即将重启', { enabled });
       this.scheduleGateRestart(gate);
@@ -491,13 +499,13 @@ export class QQWorld implements World {
     if (method === 'setConnection') {
       const wsUrl = typeof args[0] === 'string' ? args[0].trim() : '';
       const token = typeof args[1] === 'string' ? args[1] : '';
-      if (!/^wss?:\/\/.+/i.test(wsUrl)) throw new Error('wsUrl 必须是 ws:// 或 wss:// 地址');
+      if (!/^wss?:\/\/.+/i.test(wsUrl)) throw new Error(t.badWsUrl);
       gate.setConnection(wsUrl, token);
       this.log.warn('协议端连接配置已改,即将重启', { wsUrl, tokenChanged: token !== '' });
       this.scheduleGateRestart(gate);
       return { ok: true, restarting: true };
     }
-    throw new Error(`未知面板方法: gate.${method}`);
+    throw new Error(t.unknownMethod(`gate.${method}`));
   }
 
   /** HTTP 响应冲刷后再写重启标志并退出进程。 */
@@ -507,25 +515,25 @@ export class QQWorld implements World {
     }, 300);
   }
 
-  private async invokeRoster(method: string, args: unknown[]): Promise<unknown> {
+  private async invokeRoster(method: string, args: unknown[], t: QQText): Promise<unknown> {
     // 名字快照不依赖装配层的 gate 数据面:名单读不出来的时候,至少还能显示名字
     if (method === 'names') return this.convNames();
     const gate = this.gate;
-    if (!gate) throw new Error('QQ 监听配置不可用(装配层没提供 gate 数据面)');
+    if (!gate) throw new Error(t.rosterUnavailable);
     if (method === 'get') return gate.roster();
     if (method === 'set') {
       const coerce = (raw: unknown, field: string): QQRosterEntry[] => {
         if (raw === undefined || raw === null) return [];
-        if (!Array.isArray(raw)) throw new Error(`${field}必须是数组`);
+        if (!Array.isArray(raw)) throw new Error(t.rosterNotArray(field));
         const out: QQRosterEntry[] = [];
         const seen = new Set<number>();
         for (const item of raw) {
-          if (!item || typeof item !== 'object') throw new Error(`${field}的每一项必须是{id,enabled}对象`);
+          if (!item || typeof item !== 'object') throw new Error(t.rosterItemNotObject(field));
           const id = Number((item as Record<string, unknown>).id);
           if (!Number.isInteger(id) || id <= 0) {
-            throw new Error(`${field}的每一项id必须是>0的整数,收到: ${String((item as Record<string, unknown>).id)}`);
+            throw new Error(t.rosterBadId(field, String((item as Record<string, unknown>).id)));
           }
-          if (seen.has(id)) throw new Error(`${field}里号码${id}重复`);
+          if (seen.has(id)) throw new Error(t.rosterDuplicate(field, id));
           seen.add(id);
           out.push({ id, enabled: (item as Record<string, unknown>).enabled !== false });
         }
@@ -537,15 +545,15 @@ export class QQWorld implements World {
       this.log.warn('QQ监听配置已修改', { groups, privates });
       return { ok: true, result, config: gate.roster() };
     }
-    throw new Error(`未知面板方法: roster.${method}`);
+    throw new Error(t.unknownMethod(`roster.${method}`));
   }
 
   /** 事件历史按会话分组(读事件库 source=qq;World 未启动时不可用) */
-  private async invokeEvents(method: string, args: unknown[]): Promise<unknown> {
+  private async invokeEvents(method: string, args: unknown[], t: QQText): Promise<unknown> {
     if (method === 'names') return this.convNames();
-    if (method !== 'list') throw new Error(`未知面板方法: events.${method}`);
+    if (method !== 'list') throw new Error(t.unknownMethod(`events.${method}`));
     const store = this.host?.store;
-    if (!store) throw new Error('QQ World 未启动,事件历史不可用');
+    if (!store) throw new Error(t.notStarted);
     const opts = (args[0] ?? {}) as { conv?: unknown; limit?: unknown };
     for (const e of store.range({ source: this.id, fromCursor: this.summarizedCursor + 1 })) this.summarize(e);
     this.summarizedCursor = store.latestCursor();

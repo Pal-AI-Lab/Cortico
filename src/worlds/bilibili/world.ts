@@ -13,6 +13,7 @@ import type {
   ShutdownExternalCheck,
   ToolDef,
 } from '../../core/types.ts';
+import type { Language } from '../../core/language.ts';
 import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
   AudienceAdmission,
@@ -37,20 +38,24 @@ import {
 import { projectOverlayEvent } from './overlay/project.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from './overlay/server.ts';
 import type { BilibiliOverlayConfig, OverlayAudienceEvent } from './overlay/types.ts';
-import { BILIBILI_DEFAULTS, BILIBILI_CONFIG_GROUP } from './config.ts';
+import { BILIBILI_DEFAULTS, bilibiliConfigGroup } from './config.ts';
+import { text, type BilibiliText } from './strings.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 
 const PANEL_LOG = 'log';
 
 /** 开发控制台复用此面板声明。 */
-export const BILIBILI_PANEL_DECLS: readonly WorldPanelDecl[] = [
-  {
-    id: PANEL_LOG,
-    title: '直播间事件',
-    description: '直播间事件与各 cmd 计数。',
-  },
-];
+export function bilibiliPanelDecls(language: Language): readonly WorldPanelDecl[] {
+  const t = text(language);
+  return [
+    {
+      id: PANEL_LOG,
+      title: t.panelLogTitle,
+      description: t.panelLogDescription,
+    },
+  ];
+}
 
 const RECENT_CAP = 200;
 /** 最近弹幕的观众 uid 检查窗口。 */
@@ -118,7 +123,7 @@ interface LiveSource {
   stop(): Promise<void>;
   current(): LiveStatus;
   /** 自定义 source 只有显式提供时才声明外部关机检查。 */
-  shutdownVerification?(): readonly ShutdownExternalCheck[];
+  shutdownVerification?(language: Language): readonly ShutdownExternalCheck[];
 }
 
 export interface LiveHandlers {
@@ -182,7 +187,8 @@ export class BilibiliWorld implements World {
   private overlayServer: BilibiliOverlayServer | null = null;
   private overlayError: string | null = null;
   private status: LiveStatus | null = null;
-  private shutdownChecks: readonly ShutdownExternalCheck[] = [];
+  /** 关机检查按请求语言成文。 */
+  private shutdownChecks: (language: Language) => readonly ShutdownExternalCheck[] = () => [];
   private lifecycleGeneration = 0;
   private readonly coalescing: CoalescingBuffer<PendingLiveEvent>;
   private readonly admission: AudienceAdmission;
@@ -263,43 +269,44 @@ export class BilibiliWorld implements World {
     };
   }
 
-  console(): WorldConsoleDecl {
+  /** 文案按这次请求的界面语言;编辑器链接用 `lang` 带上同一语言。 */
+  console(language: Language = 'zh'): WorldConsoleDecl {
+    const t = text(language);
     const s = this.status;
     const phase = s?.phase ?? 'stopped';
     const phaseLabel: Record<string, string> = {
-      stopped: '未接入',
-      connecting: '连接中',
-      connected: '已接入',
-      retrying: '重连中',
+      stopped: t.phaseStopped,
+      connecting: t.phaseConnecting,
+      connected: t.phaseConnected,
+      retrying: t.phaseRetrying,
     };
     return {
-
+      label: t.label,
       lamps: [
         {
-          label: '接入',
+          label: t.feed,
           ...(phase === 'connected'
             ? { state: 'online' as const }
             : phase === 'stopped'
-              ? { state: 'offline' as const, hint: s?.lastError ?? '未接入' }
+              ? { state: 'offline' as const, hint: s?.lastError ?? t.phaseStopped }
               : this.feedOutageReported && this.feedDownSince !== null
                 ? {
                     state: 'error' as const,
-                    hint: `弹幕接入中断 ${Math.round((Date.now() - this.feedDownSince) / 1000)} 秒,重连中`
-                      + (s?.lastError ? `:${s.lastError}` : ''),
+                    hint: t.feedOutage(Math.round((Date.now() - this.feedDownSince) / 1000), s?.lastError ?? null),
                   }
                 : { state: 'loading' as const, hint: s?.lastError ?? phaseLabel[phase] ?? phase }),
         },
         {
-          label: '直播间',
+          label: t.room,
           ...(s?.living
-            ? { state: 'online' as const, hint: `${s.realRoomId ?? s.roomId} · 直播中` }
-            : { state: 'offline' as const, hint: s?.realRoomId ? `${s.realRoomId} · 未开播` : '未知' }),
+            ? { state: 'online' as const, hint: t.roomLive(s.realRoomId ?? s.roomId) }
+            : { state: 'offline' as const, hint: s?.realRoomId ? t.roomOffline(s.realRoomId) : t.unknown }),
         },
         {
-          label: '身份',
+          label: t.identity,
           ...(this.desensitized()
-            ? { state: 'offline' as const, hint: '匿名(认不出人)' }
-            : { state: 'online' as const, hint: this.identityLabel() }),
+            ? { state: 'offline' as const, hint: t.anonymous }
+            : { state: 'online' as const, hint: this.identityLabel(t) }),
         },
         {
           label: 'Overlay',
@@ -307,64 +314,68 @@ export class BilibiliWorld implements World {
             ? { state: 'error' as const, hint: this.overlayError }
             : this.overlayServer?.running
               ? { state: 'online' as const, hint: this.overlayServer.overlayUrl }
-              : { state: 'offline' as const, hint: this.overlayConfig.enabled ? '未启动' : '未启用' }),
+              : { state: 'offline' as const, hint: this.overlayConfig.enabled ? t.overlayNotStarted : t.overlayDisabled }),
         },
       ],
       badges: [
         {
-          label: '接入',
+          label: t.feed,
           value: phaseLabel[phase] ?? phase,
           tone: phase === 'connected' ? 'on' : phase === 'stopped' ? 'off' : 'plain',
         },
         {
-          label: '直播间',
-          value: s?.realRoomId ? `${s.realRoomId}${s.living ? ' · 直播中' : ' · 未开播'}` : '—',
+          label: t.room,
+          value: s?.realRoomId ? (s.living ? t.roomLive(s.realRoomId) : t.roomOffline(s.realRoomId)) : '—',
           tone: s?.living ? 'on' : 'plain',
         },
         {
-          label: '身份',
-          value: this.identityLabel(),
+          label: t.identity,
+          value: this.identityLabel(t),
           tone: this.desensitized() ? 'off' : 'on',
         },
         {
           label: 'Overlay',
           value: this.overlayServer?.running
-            ? `${this.overlayServer.subscriberCount} 个订阅`
-            : this.overlayConfig.enabled ? '未启动' : '未启用',
+            ? t.overlaySubscribers(this.overlayServer.subscriberCount)
+            : this.overlayConfig.enabled ? t.overlayNotStarted : t.overlayDisabled,
           tone: this.overlayServer?.running ? 'on' : 'plain',
         },
       ],
-      panels: [...BILIBILI_PANEL_DECLS],
+      panels: [...bilibiliPanelDecls(language)],
       invoke: async (panel, method, args) => {
-        if (panel !== PANEL_LOG) throw new Error(`未知面板: ${panel}`);
+        if (panel !== PANEL_LOG) throw new Error(t.unknownPanel(panel));
         if (method === 'state') return this.logState();
-        throw new Error(`未知方法: ${method}`);
+        throw new Error(t.unknownMethod(method));
       },
       ...(this.overlayServer?.running
         ? {
             links: [
-              { label: '打开 Overlay 编辑器', href: this.overlayServer.editorUrl, inheritTheme: true },
-              { label: '打开 OBS Overlay', href: this.overlayServer.overlayUrl },
+              {
+                label: t.linkEditor,
+                href: `${this.overlayServer.editorUrl}?lang=${encodeURIComponent(language)}`,
+                inheritTheme: true,
+              },
+              { label: t.linkObs, href: this.overlayServer.overlayUrl },
             ],
           }
         : {}),
-      config: [BILIBILI_CONFIG_GROUP],
+      config: [bilibiliConfigGroup(language)],
       promptDocs: [
         {
           key: 'worlds.bilibili.envPrompt',
-          title: 'B 站直播间 · 环境提示词',
-          description: '直播间这个场所的常驻事实。',
+          title: t.promptDocTitle,
+          description: t.promptDocDescription,
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
           vars: [
             {
               name: 'bilibili.agentAnnouncement',
-              description: 'Agent 公告栏当前保存的纯文本。',
+              description: t.announcementVarDescription,
               multiline: true,
             },
             {
               name: 'bilibili.agentAnnouncementLimit',
-              description: 'Agent 公告工具当前允许的最大字数。',
+              description: t.announcementLimitVarDescription,
             },
           ],
         },
@@ -389,7 +400,7 @@ export class BilibiliWorld implements World {
     this.lastKnownLiving = null;
     this.clearFeedOutage();
     this.feedOutageReported = false;
-    this.shutdownChecks = [];
+    this.shutdownChecks = () => [];
     this.anonymousLoginReported = false;
     this.loginUid = 0;
     this.coalesceFolds = 0;
@@ -426,7 +437,7 @@ export class BilibiliWorld implements World {
           onStatus: handlers.onStatus,
         });
     this.onLiveStatus(this.client.current());
-    this.shutdownChecks = [this.unknownSourceShutdownCheck('直播源尚未执行关机核验')];
+    this.shutdownChecks = this.unknownSourceShutdownChecks((t) => t.sourcePending);
     await this.client.start();
   }
 
@@ -470,17 +481,17 @@ export class BilibiliWorld implements World {
     if (client) {
       if (!clientStop.ok) {
         failures.push({ part: '直播源', error: clientStop.error });
-        this.shutdownChecks = [this.unknownSourceShutdownCheck(
-          `直播源停止失败:${clientStop.error instanceof Error ? clientStop.error.message : String(clientStop.error)}`,
-        )];
+        const message = clientStop.error instanceof Error ? clientStop.error.message : String(clientStop.error);
+        this.shutdownChecks = this.unknownSourceShutdownChecks((t) => t.sourceStopFailed(message));
       } else {
         try {
-          this.shutdownChecks = this.sourceShutdownChecks(client);
+          // 读不出检查结果计入停止失败;文案在请求时按语言再读。
+          this.sourceShutdownChecks(client, 'zh');
+          this.shutdownChecks = (language) => this.sourceShutdownChecks(client, language);
         } catch (error) {
           failures.push({ part: '关机核验', error });
-          this.shutdownChecks = [this.unknownSourceShutdownCheck(
-            `读取直播源关机核验失败:${error instanceof Error ? error.message : String(error)}`,
-          )];
+          const message = error instanceof Error ? error.message : String(error);
+          this.shutdownChecks = this.unknownSourceShutdownChecks((t) => t.sourceReadFailed(message));
         }
       }
     }
@@ -494,27 +505,32 @@ export class BilibiliWorld implements World {
     }
   }
 
-  shutdownVerification(): readonly ShutdownExternalCheck[] {
-    return this.shutdownChecks.map((check) => ({ ...check }));
+  shutdownVerification(language: Language): readonly ShutdownExternalCheck[] {
+    return this.shutdownChecks(language).map((check) => ({ ...check }));
   }
 
-  private sourceShutdownChecks(source: LiveSource): readonly ShutdownExternalCheck[] {
+  private sourceShutdownChecks(source: LiveSource, language: Language): readonly ShutdownExternalCheck[] {
     if (source.shutdownVerification) {
-      const checks = source.shutdownVerification().map((check) => ({ ...check }));
+      const checks = source.shutdownVerification(language).map((check) => ({ ...check }));
       return checks.length > 0
         ? checks
-        : [this.unknownSourceShutdownCheck('关机核验未返回任何检查项')];
+        : this.unknownSourceShutdownChecks((t) => t.sourceEmpty)(language);
     }
-    return [this.unknownSourceShutdownCheck('已挂载的 LiveSource 未提供关机状态验证')];
+    return this.unknownSourceShutdownChecks((t) => t.sourceUnsupported)(language);
   }
 
-  private unknownSourceShutdownCheck(detail: string): ShutdownExternalCheck {
-    return {
-      key: 'bilibili.live-source',
-      label: 'B 站直播源',
-      status: 'unknown',
-      detail,
-      manualAction: '立即打开 B 站主播后台或直播伴侣人工确认直播状态；在确认前不要假定直播已经结束。',
+  private unknownSourceShutdownChecks(
+    detail: (t: BilibiliText) => string,
+  ): (language: Language) => readonly ShutdownExternalCheck[] {
+    return (language) => {
+      const t = text(language);
+      return [{
+        key: 'bilibili.live-source',
+        label: t.sourceLabel,
+        status: 'unknown',
+        detail: detail(t),
+        manualAction: t.manualCheck,
+      }];
     };
   }
 
@@ -1211,9 +1227,9 @@ export class BilibiliWorld implements World {
     return this.identified.length > 0 && !this.identified.includes(true);
   }
 
-  private identityLabel(): string {
-    if (this.identified.length === 0) return '待观察';
-    return this.desensitized() ? '近期弹幕缺少观众 uid' : '可认人';
+  private identityLabel(t: BilibiliText): string {
+    if (this.identified.length === 0) return t.identityPending;
+    return this.desensitized() ? t.identityMasked : t.identityOk;
   }
 }
 

@@ -1050,3 +1050,12 @@ describe('事件面板', () => {
     expect(view.events.map((e) => e.text)).toEqual([host.pushed[0].event.text, host.pushed[3].event.text]);
   });
 });
+
+describe('控制台文案', () => {
+  it('英文界面的 console() 展示文案与面板调用错误不含中文', async () => {
+    const decl = mod.console('en');
+    const shown = JSON.stringify(decl, (k, v) => (k === 'path' ? undefined : v));
+    expect(shown).not.toMatch(/[一-鿿]/);
+    await expect(decl.invoke!('events', 'nope', [])).rejects.toThrow(/^[^一-鿿]*$/);
+  });
+});

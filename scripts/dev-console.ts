@@ -25,16 +25,16 @@ import { LogBlobStore, withBlobLines } from '../src/core/blobs.ts';
 import type { BlobRef } from '../src/core/types.ts';
 import { CortiSoulmate } from '../bots/corti-soulmate/persona/index.ts';
 import { QQWorld } from '../src/worlds/qq/world.ts';
-import { QQ_CONFIG_GROUP } from '../src/worlds/qq/config.ts';
+import { qqConfigGroup } from '../src/worlds/qq/config.ts';
 import { TerminalWorld } from '../src/worlds/terminal/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
 import type { Language } from '../src/core/language.ts';
-import { WEBSEARCH_CONFIG_GROUP } from '../src/worlds/websearch/config.ts';
-import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_DEFAULTS, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
-import { MINECRAFT_PANEL_DECLS } from '../src/worlds/minecraft/world.ts';
-import { FLAT_PRESETS, LEVEL_TYPE_LABELS } from '../src/worlds/minecraft/server-config.ts';
-import { BILIBILI_CONFIG_GROUP, BILIBILI_DEFAULTS } from '../src/worlds/bilibili/config.ts';
-import { BILIBILI_PANEL_DECLS } from '../src/worlds/bilibili/world.ts';
+import { webSearchConfigGroup } from '../src/worlds/websearch/config.ts';
+import { minecraftClientConfigGroup, minecraftConfigGroup, MINECRAFT_DEFAULTS, minecraftPlayerConfigGroup, minecraftRhythmConfigGroup, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
+import { minecraftPanelDecls } from '../src/worlds/minecraft/world.ts';
+import { flatPresets, levelTypeLabels } from '../src/worlds/minecraft/server-config.ts';
+import { bilibiliConfigGroup, BILIBILI_DEFAULTS } from '../src/worlds/bilibili/config.ts';
+import { bilibiliPanelDecls } from '../src/worlds/bilibili/world.ts';
 import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bilibili/overlay/model.ts';
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
@@ -93,10 +93,10 @@ const devCfg = JSON.parse(JSON.stringify(cfg)) as BotConfig;
 const devConfigGroups: ConfigGroup[] = MINIMAL
   ? [CORE_CONFIG_GROUP]
   : [
-      CORE_CONFIG_GROUP, PERSONA_CONFIG_GROUP, QQ_CONFIG_GROUP, WEBSEARCH_CONFIG_GROUP,
-      MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, MINECRAFT_CLIENT_CONFIG_GROUP,
-      MINECRAFT_PLAYER_CONFIG_GROUP,
-      BILIBILI_CONFIG_GROUP,
+      CORE_CONFIG_GROUP, PERSONA_CONFIG_GROUP, qqConfigGroup('zh'), webSearchConfigGroup('zh'),
+      minecraftConfigGroup('zh'), minecraftRhythmConfigGroup('zh'), minecraftClientConfigGroup('zh'),
+      minecraftPlayerConfigGroup('zh'),
+      bilibiliConfigGroup('zh'),
     ];
 function genUsage(): UsageRecord[] {
   const recs: UsageRecord[] = [];
@@ -850,8 +850,8 @@ const devPanels: Record<string, Record<string, Record<string, (...args: never[])
           sizeBytes: 0, dimensions: [], info: null as never,
         }]),
         settings: { ...settings },
-        flatPresets: FLAT_PRESETS,
-        levelTypes: LEVEL_TYPE_LABELS,
+        flatPresets: flatPresets('zh'),
+        levelTypes: levelTypeLabels('zh'),
         detail,
       });
       return {
@@ -941,13 +941,13 @@ function devPanelSurface(id: string): { invoke(panel: string, method: string, ar
 /** 复用 World 的面板声明,以 devPanels 提供方法结果。 */
 function devFakeWorld(
   id: string,
-  panels: WorldConsoleDecl['panels'],
+  panels: (language: Language) => WorldConsoleDecl['panels'],
   lamps: WorldConsoleDecl['lamps'],
   badges: WorldConsoleDecl['badges'],
   links: WorldConsoleDecl['links'],
   envPrompt: string,
 
-  config: WorldConsoleDecl['config'] = [],
+  config: (language: Language) => NonNullable<WorldConsoleDecl['config']> = () => [],
 ): World {
   const surface = devPanelSurface(id);
 
@@ -957,12 +957,12 @@ function devFakeWorld(
     id,
     envPromptVars: () => ({}),
     tools: () => [],
-    console: () => ({
+    console: (language: Language = 'zh') => ({
       lamps,
       badges,
-      panels,
+      panels: panels(language),
       links,
-      ...(config.length ? { config } : {}),
+      config: config(language),
       promptDocs: [
         {
           key: `worlds.${id}.envPrompt`,
@@ -992,20 +992,20 @@ const devBilibiliBadges: WorldConsoleDecl['badges'] = [
 ];
 const devFakeWorlds: World[] = MINIMAL ? [] : [
   devFakeWorld(
-    'minecraft', [...MINECRAFT_PANEL_DECLS], [
+    'minecraft', (language) => [...minecraftPanelDecls(language)], [
       { label: '服务器', state: 'online', hint: '127.0.0.1:25565' },
       { label: '任务', state: 'online', hint: '采集 5 个 oak_log' },
       { label: '画面', state: 'online', hint: '客户端主视角' },
     ], devMinecraftBadges,
     [{ label: '打开画面', href: 'http://127.0.0.1:3007' }],
     '(dev) Minecraft World 的环境提示词假数据。',
-    [
-      MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, MINECRAFT_CLIENT_CONFIG_GROUP,
-      MINECRAFT_PLAYER_CONFIG_GROUP,
+    (language) => [
+      minecraftConfigGroup(language), minecraftRhythmConfigGroup(language), minecraftClientConfigGroup(language),
+      minecraftPlayerConfigGroup(language),
     ],
   ),
   devFakeWorld(
-    'bilibili', [...BILIBILI_PANEL_DECLS], [
+    'bilibili', (language) => [...bilibiliPanelDecls(language)], [
       { label: '接入', state: 'online' },
       { label: '直播间', state: 'online', hint: '7734200 · 直播中' },
       { label: '身份', state: 'online', hint: '可认人' },
@@ -1018,7 +1018,7 @@ const devFakeWorlds: World[] = MINIMAL ? [] : [
         ]
       : [],
     '(dev) B 站直播间的环境提示词假数据。',
-    [BILIBILI_CONFIG_GROUP],
+    (language) => [bilibiliConfigGroup(language)],
   ),
 ];
 

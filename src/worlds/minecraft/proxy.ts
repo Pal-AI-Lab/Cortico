@@ -14,8 +14,10 @@ import type {
   ToolDef,
   ToolOutcome,
 } from '../../core/types.ts';
-import { COGNITION_ABSENT, MINECRAFT_PANEL_DECLS, MINECRAFT_STORAGE_DECLS, MINECRAFT_TOOL_DECLS, type MinecraftWorldOptions } from './world.ts';
-import { MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, serverModeOf } from './config.ts';
+import { COGNITION_ABSENT, minecraftPanelDecls, minecraftStorageDecls, MINECRAFT_TOOL_DECLS, type MinecraftWorldOptions } from './world.ts';
+import { minecraftClientConfigGroup, minecraftConfigGroup, minecraftPlayerConfigGroup, minecraftRhythmConfigGroup, serverModeOf } from './config.ts';
+import { pick, type Language } from '../../core/language.ts';
+import { text } from './strings.ts';
 import type {
   ChildToMain,
   EngineCast,
@@ -74,7 +76,7 @@ export class MinecraftWorldProxy implements World {
   private stopping = false;
   private nextReqId = 1;
   private readonly pending = new Map<number, PendingRpc>();
-  private declCache: Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'> = {};
+  private declCache: Record<'zh' | 'en', Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>> = { zh: {}, en: {} };
   /** 子进程按当前连接目标算的世界身份行;子进程没起时按配置算 */
   private worldLineCache: string | null = null;
   private storageCache: StorageStat[] = [];
@@ -122,67 +124,58 @@ export class MinecraftWorldProxy implements World {
     }));
   }
 
-  console(): WorldConsoleDecl {
+  /** 灯、徽标、链接取子进程按这次请求的界面语言报上的那份;面板调用把语言带给子进程。 */
+  console(language: Language = 'zh'): WorldConsoleDecl {
+    const t = text(language);
+    const cached = pick(language, this.declCache);
     return {
-      lamps: this.declCache.lamps ?? [this.child
-        ? { label: '引擎', state: 'loading' as const, hint: '启动中' }
-        : { label: '引擎', state: 'offline' as const, hint: '未启动' }],
-      badges: this.declCache.badges ?? [
-        { label: '引擎', value: this.child ? '启动中' : '未启动', tone: 'off' },
+      label: t.label,
+      lamps: cached.lamps ?? [this.child
+        ? { label: t.engine, state: 'loading' as const, hint: t.engineStarting }
+        : { label: t.engine, state: 'offline' as const, hint: t.notStarted }],
+      badges: cached.badges ?? [
+        { label: t.engine, value: this.child ? t.engineStarting : t.notStarted, tone: 'off' },
       ],
-      panels: [...MINECRAFT_PANEL_DECLS],
+      panels: [...minecraftPanelDecls(language)],
       invoke: (panel, method, args) => {
         // 路径选择保存后紧接着会读状态或启动；同一 IPC 通道先投最新配置，
         // 让这次面板调用看到刚写入的值。
         this.pushConfigIfChanged();
-        return this.rpc({ kind: 'panel', panel, method, args }, PANEL_RPC_TIMEOUT_MS);
+        return this.rpc({ kind: 'panel', panel, method, args, language }, PANEL_RPC_TIMEOUT_MS);
       },
       promptDocs: [
         {
           key: 'worlds.minecraft.envPrompt',
-          title: 'Minecraft · 环境提示词',
-          description: 'Minecraft World 的常驻事实（技能序列、世界观察、反射层）。',
+          title: t.envPromptTitle,
+          description: t.envPromptDescription,
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
           vars: [
-            {
-              name: 'minecraft.world',
-              description: '世界身份:本地托管=「当前存档:名字」,外部服务器=「当前服务器:地址」。她的位置类记忆按它划界。',
-            },
-            {
-              name: 'minecraft.explored',
-              description: '探索覆盖摘要(8 方向历史最远与末端群系);一处没探过时为空。',
-            },
-            {
-              name: 'minecraft.policy',
-              description: 'mc_policy 六格里与默认不同的那几条;全默认时为空。',
-            },
-            {
-              name: 'minecraft.camera',
-              description: '观察者摄像机说明;没开客户端时为空。措辞在「摄像机说明」那份里改。',
-              multiline: true,
-            },
+            { name: 'minecraft.world', description: t.worldVar },
+            { name: 'minecraft.explored', description: t.exploredVar },
+            { name: 'minecraft.policy', description: t.policyVar },
+            { name: 'minecraft.camera', description: t.cameraVar, multiline: true },
           ],
         },
         {
           key: 'worlds.minecraft.cameraNote',
-          title: 'Minecraft · 摄像机说明',
-          description: '开了观察者客户端时,追加到环境提示词末尾的那一段。',
+          title: t.cameraNoteTitle,
+          description: t.cameraNoteDescription,
           path: CAMERA_NOTE_FILE,
         },
       ],
-      storage: MINECRAFT_STORAGE_DECLS.map((d): StoragePart => ({
+      storage: minecraftStorageDecls(language).map((d): StoragePart => ({
         ...d,
         stat: () =>
           this.storageCache.find((s) => s.key === d.key)?.stat ?? this.storageStatOffline(d.key),
         clear: async () => this.storageClear(d.key),
       })),
-      links: this.declCache.links ?? [],
+      links: cached.links ?? [],
       config: [
-        MINECRAFT_CONFIG_GROUP,
-        MINECRAFT_RHYTHM_CONFIG_GROUP,
-        MINECRAFT_CLIENT_CONFIG_GROUP,
-        MINECRAFT_PLAYER_CONFIG_GROUP,
+        minecraftConfigGroup(language),
+        minecraftRhythmConfigGroup(language),
+        minecraftClientConfigGroup(language),
+        minecraftPlayerConfigGroup(language),
       ],
     };
   }
@@ -280,7 +273,7 @@ export class MinecraftWorldProxy implements World {
   private teardownChild(): void {
     this.child = null;
     this.ready = false;
-    this.declCache = {};
+    this.declCache = { zh: {}, en: {} };
     this.worldLineCache = null;
     this.storageCache = [];
     for (const [, p] of this.pending) {

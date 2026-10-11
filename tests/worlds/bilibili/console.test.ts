@@ -42,6 +42,11 @@ describe('bilibili 的面板声明', () => {
     await expect(c.invoke!('styles', 'state', [])).rejects.toThrow('未知面板');
     await expect(c.invoke!('log', 'nope', [])).rejects.toThrow('未知方法');
   });
+
+  it('英文界面的声明(灯、徽标、面板、配置组、模板说明)不含中文', () => {
+    const shown = JSON.stringify(mod().console('en'), (k, v) => (k === 'path' ? undefined : v));
+    expect(shown).not.toMatch(/[一-鿿]/u);
+  });
 });
 
 describe('bilibili 的浏览器扩展', () => {

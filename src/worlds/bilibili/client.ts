@@ -11,7 +11,9 @@
  */
 import { createHash } from 'node:crypto';
 import WebSocket from 'ws';
+import type { Language } from '../../core/language.ts';
 import type { Logger, ShutdownExternalCheck } from '../../core/types.ts';
+import { text, type BilibiliText } from './strings.ts';
 import { encodePacket, OP, parseFrame } from './wire.ts';
 
 const UA =
@@ -88,7 +90,8 @@ export class LiveClient {
   private status: LiveStatus;
   /** 当前 phase 的进入时刻;看门狗据此算 connecting 卡了多久 */
   private phaseSince = Date.now();
-  private shutdownCheck: ShutdownExternalCheck;
+  /** 关机检查按请求语言成文。 */
+  private shutdownCheck: (language: Language) => ShutdownExternalCheck;
 
   constructor(opts: LiveClientOptions) {
     this.opts = opts;
@@ -102,7 +105,7 @@ export class LiveClient {
       selfUid: 0,
       lastError: null,
     };
-    this.shutdownCheck = this.unknownShutdownCheck('尚未执行直播间状态验证');
+    this.shutdownCheck = this.unknownShutdownCheck((t) => t.roomPending);
   }
 
   current(): LiveStatus {
@@ -111,7 +114,7 @@ export class LiveClient {
 
   async start(): Promise<void> {
     this.stopped = false;
-    this.shutdownCheck = this.unknownShutdownCheck('尚未执行直播间状态验证');
+    this.shutdownCheck = this.unknownShutdownCheck((t) => t.roomPending);
     await this.connect();
     // 轮询独立于 WS 连接的死活:WS 断着的窗口恰恰是最需要它的时候
     this.scheduleRoomPoll(ROOM_POLL_MS);
@@ -137,8 +140,8 @@ export class LiveClient {
     this.shutdownCheck = await this.verifyRoomEnded();
   }
 
-  shutdownVerification(): readonly ShutdownExternalCheck[] {
-    return [{ ...this.shutdownCheck }];
+  shutdownVerification(language: Language): readonly ShutdownExternalCheck[] {
+    return [{ ...this.shutdownCheck(language) }];
   }
 
   // ── 连接 ─────────────────────────────────────────────────────────────────
@@ -403,7 +406,7 @@ export class LiveClient {
   }
 
   /** 只读 Room/get_info；不调用 StopStream、不关闭平台直播，也不管理推流进程。 */
-  private async verifyRoomEnded(): Promise<ShutdownExternalCheck> {
+  private async verifyRoomEnded(): Promise<(language: Language) => ShutdownExternalCheck> {
     const roomId = this.status.realRoomId ?? this.opts.roomId;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -423,47 +426,59 @@ export class LiveClient {
         timeout,
       ]);
       if (typeof info.code !== 'number' || !Number.isFinite(info.code) || info.code !== 0) {
-        return this.unknownShutdownCheck(`Room/get_info 返回无效 code=${String(info.code)} ${str(info.message)}`);
+        const code = String(info.code);
+        const message = str(info.message);
+        return this.unknownShutdownCheck((t) => t.roomInvalidCode(code, message));
       }
       const rawLiveStatus = obj(info.data).live_status;
       if (typeof rawLiveStatus !== 'number' || !Number.isFinite(rawLiveStatus)) {
-        return this.unknownShutdownCheck('Room/get_info 响应缺少有效 live_status');
+        return this.unknownShutdownCheck((t) => t.roomMissingStatus);
       }
       const liveStatus = rawLiveStatus;
       if (liveStatus === 0) {
-        return {
-          key: 'bilibili.live-room',
-          label: `B 站直播间 ${roomId}`,
-          status: 'verified-ended',
-          detail: 'Room/get_info 已确认 live_status=0（未开播）',
-          manualAction: '无需操作。',
+        return (language) => {
+          const t = text(language);
+          return {
+            key: 'bilibili.live-room',
+            label: t.roomLabel(roomId),
+            status: 'verified-ended',
+            detail: t.roomEnded,
+            manualAction: t.noActionNeeded,
+          };
         };
       }
       if (liveStatus === 1) {
-        return {
-          key: 'bilibili.live-room',
-          label: `B 站直播间 ${roomId}`,
-          status: 'still-live',
-          detail: 'Room/get_info 返回 live_status=1，平台仍显示直播中',
-          manualAction: '立即打开 B 站主播后台或直播伴侣手动下播，并检查 OBS/推流进程是否仍在推流。',
+        return (language) => {
+          const t = text(language);
+          return {
+            key: 'bilibili.live-room',
+            label: t.roomLabel(roomId),
+            status: 'still-live',
+            detail: t.roomStillLive,
+            manualAction: t.endStreamManually,
+          };
         };
       }
-      return this.unknownShutdownCheck(`Room/get_info 返回未知 live_status=${liveStatus}`);
+      return this.unknownShutdownCheck((t) => t.roomUnknownStatus(liveStatus));
     } catch (error) {
-      return this.unknownShutdownCheck(error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      return this.unknownShutdownCheck(() => message);
     } finally {
       if (timer) clearTimeout(timer);
     }
   }
 
-  private unknownShutdownCheck(detail: string): ShutdownExternalCheck {
+  private unknownShutdownCheck(detail: (t: BilibiliText) => string): (language: Language) => ShutdownExternalCheck {
     const roomId = this.status.realRoomId ?? this.opts.roomId;
-    return {
-      key: 'bilibili.live-room',
-      label: `B 站直播间 ${roomId}`,
-      status: 'unknown',
-      detail,
-      manualAction: '立即打开 B 站主播后台或直播伴侣人工确认直播状态；在确认前不要假定直播已经结束。',
+    return (language) => {
+      const t = text(language);
+      return {
+        key: 'bilibili.live-room',
+        label: t.roomLabel(roomId),
+        status: 'unknown',
+        detail: detail(t),
+        manualAction: t.manualCheck,
+      };
     };
   }
 }

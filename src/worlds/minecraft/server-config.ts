@@ -3,6 +3,8 @@ import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, type Di
 import { join } from 'node:path';
 import { readLevelDat, type LevelDatInfo } from './level-dat.ts';
 import { offlineUuid } from './client-launch.ts';
+import type { Language } from '../../core/language.ts';
+import { text } from './strings.ts';
 
 export const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'] as const;
 export const DIFFICULTIES = ['peaceful', 'easy', 'normal', 'hard'] as const;
@@ -18,53 +20,34 @@ type Gamemode = (typeof GAMEMODES)[number];
 export type Difficulty = (typeof DIFFICULTIES)[number];
 export type LevelType = (typeof LEVEL_TYPES)[number];
 
-export const LEVEL_TYPE_LABELS: ReadonlyArray<{ value: LevelType; label: string; note: string }> = [
-  { value: 'minecraft:normal', label: '默认', note: '原版地形' },
-  { value: 'minecraft:flat', label: '超平坦', note: '按生成器细则逐层铺;不填就是原版那三层' },
-  { value: 'minecraft:large_biomes', label: '大型生物群系', note: '同样的地形,群系尺度放大' },
-  { value: 'minecraft:amplified', label: '放大化', note: '极端高山地形,吃性能' },
-  {
-    value: 'minecraft:single_biome_surface',
-    label: '单一生物群系',
-    note: '整个世界一个群系,群系名写在生成器细则里({"biome":"minecraft:desert"})',
-  },
-];
+/** 世界类型的选项表;措辞随界面语言。 */
+export function levelTypeLabels(language: Language): Array<{ value: LevelType; label: string; note: string }> {
+  const t = text(language).levelTypes;
+  return LEVEL_TYPES.map((value) => ({ value, ...t[value] }));
+}
 
-export function levelTypeLabel(type: LevelType): string {
-  return LEVEL_TYPE_LABELS.find((t) => t.value === type)?.label ?? type;
+export function levelTypeLabel(type: LevelType, language: Language): string {
+  return levelTypeLabels(language).find((t) => t.value === type)?.label ?? type;
 }
 
 /** 超平坦预设的方块层和结构参数。 */
-export const FLAT_PRESETS: ReadonlyArray<{ id: string; label: string; note: string; json: string }> = [
-  {
-    id: 'classic',
-    label: '经典平坦',
-    note: '基岩 + 2 层泥土 + 草方块,平原群系',
-    json: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},'
-      + '{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}',
-  },
-  {
-    id: 'void',
-    label: '虚空',
-    note: '只有一层空气,出生点一小块平台',
-    json: '{"layers":[{"block":"minecraft:air","height":1}],"biome":"minecraft:the_void"}',
-  },
-  {
-    id: 'tunnelers',
-    label: '隧道世界',
-    note: '基岩 + 230 层石头,整个世界都是可挖的岩层',
-    json: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:stone","height":230}],'
-      + '"biome":"minecraft:windswept_hills"}',
-  },
-  {
-    id: 'minable',
-    label: '可挖平坦',
-    note: '基岩 + 59 层石头 + 泥土草皮:地表是平的,底下有矿脉',
-    json: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:stone","height":59},'
-      + '{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],'
-      + '"biome":"minecraft:plains"}',
-  },
-];
+const FLAT_PRESET_LAYERS = {
+  classic: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},'
+    + '{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}',
+  void: '{"layers":[{"block":"minecraft:air","height":1}],"biome":"minecraft:the_void"}',
+  tunnelers: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:stone","height":230}],'
+    + '"biome":"minecraft:windswept_hills"}',
+  minable: '{"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:stone","height":59},'
+    + '{"block":"minecraft:dirt","height":3},{"block":"minecraft:grass_block","height":1}],'
+    + '"biome":"minecraft:plains"}',
+} as const;
+
+/** 超平坦预设的选项表;措辞随界面语言,配方各语言一致。 */
+export function flatPresets(language: Language): Array<{ id: string; label: string; note: string; json: string }> {
+  const t = text(language).flatPresets;
+  return (Object.keys(FLAT_PRESET_LAYERS) as Array<keyof typeof FLAT_PRESET_LAYERS>)
+    .map((id) => ({ id, ...t[id], json: FLAT_PRESET_LAYERS[id] }));
+}
 
 export interface GameSettings {
   gamemode: Gamemode;
@@ -205,26 +188,27 @@ export function applySettings(lines: Line[], patch: Partial<GameSettings>): Line
 }
 
 /** 存档名用作目录名;拒绝路径分隔符、相对路径和 Windows 保留名称。 */
-export function validWorldName(name: string): string | null {
+export function validWorldName(name: string, language: Language = 'zh'): string | null {
+  const t = text(language);
   const n = name.trim();
-  if (!n) return '存档名不能为空';
-  if (n.length > 64) return '存档名太长(最多 64 字)';
-  if (/[\\/:*?"<>|]/.test(n)) return '存档名里不能有 \\ / : * ? " < > |';
-  if (n === '.' || n === '..') return '这个名字不能用';
+  if (!n) return t.nameEmpty;
+  if (n.length > 64) return t.nameTooLong;
+  if (/[\\/:*?"<>|]/.test(n)) return t.nameBadChars;
+  if (n === '.' || n === '..') return t.nameReserved;
   return null;
 }
 
-export function validGeneratorSettings(text: string): string | null {
-  const t = text.trim();
+export function validGeneratorSettings(settings: string, language: Language = 'zh'): string | null {
+  const t = settings.trim();
   if (!t) return null;
   let parsed: unknown;
   try {
     parsed = JSON.parse(t);
   } catch (err) {
-    return `生成器细则不是合法 JSON: ${(err as Error).message}`;
+    return text(language).genNotJson((err as Error).message);
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return '生成器细则要是一个 JSON 对象(如 {"layers":[…],"biome":"…"})';
+    return text(language).genNotObject;
   }
   return null;
 }

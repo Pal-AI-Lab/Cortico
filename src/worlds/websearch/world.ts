@@ -5,13 +5,15 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { ConfigGroup, World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
+import type { Language } from '../../core/language.ts';
 import {
   BraveClient,
   type BraveClientConfig,
   type Freshness,
   type SearchMode,
 } from './brave-client.ts';
-import { WEBSEARCH_DEFAULTS, WEBSEARCH_SECRET, WEBSEARCH_CONFIG_GROUP } from './config.ts';
+import { WEBSEARCH_DEFAULTS, WEBSEARCH_SECRET, webSearchConfigGroup } from './config.ts';
+import { text } from './strings.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 
@@ -64,23 +66,25 @@ export class WebSearchWorld implements World {
   }
 
   /** 控制台里露出什么:密钥有没有配好 + 自己的检索偏好旋钮 */
-  console(): WorldConsoleDecl {
+  console(language: Language = 'zh'): WorldConsoleDecl {
+    const t = text(language);
     return {
+      label: t.moduleLabel,
       // 一条链路:密钥。没配 = 灰(部署没填,不是运行出错);工具照旧在,调用会自己说明。
       lamps: [this.client
-        ? { label: '密钥', state: 'online' as const, hint: '已配置' }
-        : { label: '密钥', state: 'offline' as const, hint: '未配置' }],
+        ? { label: t.key, state: 'online' as const, hint: t.keySet }
+        : { label: t.key, state: 'offline' as const, hint: t.keyUnset }],
       badges: [
         this.client
-          ? { label: '密钥', value: '已配置', tone: 'on' as const }
-          : { label: '密钥', value: '未配置(工具仍在,调用会提示)', tone: 'off' as const },
+          ? { label: t.key, value: t.keySet, tone: 'on' as const }
+          : { label: t.key, value: t.keyUnsetBadge, tone: 'off' as const },
       ],
-      config: [WEBSEARCH_CONFIG_GROUP],
+      config: [webSearchConfigGroup(language)],
       promptDocs: [
         {
           key: 'worlds.websearch.envPrompt',
-          title: 'WebSearch · 环境提示词',
-          description: '搜索工具 World 的可选常驻环境;留空时不进入系统前缀。',
+          title: t.promptDocTitle,
+          description: t.promptDocDescription,
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
         },

@@ -7,6 +7,7 @@ import type {
   CognitionRequest, CognitionResult, EventEnvelope, EventTag, LLMUsage, WorldConsoleDecl,
   PushOptions, TriggerMode,
 } from '../../core/types.ts';
+import type { Language } from '../../core/language.ts';
 import type { MinecraftConfigSection } from './config.ts';
 
 /** 构造引擎子进程 World 的一次性参数。 */
@@ -26,7 +27,8 @@ export type EngineRequest =
       kind: 'tool'; name: string; args: Record<string, unknown>; role: string;
       callId: string | null; round: number | null;
     }
-  | { kind: 'panel'; panel: string; method: string; args: unknown[] }
+  /** 回执与错误按 language 措辞。 */
+  | { kind: 'panel'; panel: string; method: string; args: unknown[]; language: Language }
   | { kind: 'storage-clear'; key: string }
   /** 投递时调用子进程登记的渲染回调；null 表示不生成事件正文。 */
   | { kind: 'render-deferred'; type: string }
@@ -79,7 +81,8 @@ export type EngineNote =
     }
   | {
       kind: 'status';
-      decl: Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>;
+      /** 灯、徽标、链接的中英两份;代理按请求的界面语言取一份。 */
+      decl: Record<'zh' | 'en', Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>>;
       /** 环境提示词的世界身份一行,按当前连接的目标算 */
       worldLine: string;
       storage: StorageStat[];

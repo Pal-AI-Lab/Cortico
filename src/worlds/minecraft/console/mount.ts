@@ -16,12 +16,9 @@ import {
   type MinecraftMsgLine,
   type MinecraftServerState,
 } from './client.ts';
+import { text, type MinecraftPanelText } from './strings.ts';
 
-const DESC =
-  '本地托管:本 World 启停服务器目录里的 server.jar,bot 随之连接。'
-  + '外部服务器:只连接、断开 bot,不启停对方的服务器。'
-  + '观察者客户端与玩家客户端可选,连接同一个地址和端口:观察者客户端以观察者模式跟随 bot,'
-  + '画面(含光影/模组)切换为它;玩家客户端以普通玩家身份进服,进服时传送到 bot 旁边。';
+type Text = MinecraftPanelText;
 
 /** 世界生成 / 权重加载 / 客户端起窗口要几十秒到几分钟,轮到不再是 starting 为止。 */
 const READY_TICKS = 90;
@@ -50,25 +47,18 @@ function isUp(st: LaneState): boolean {
  * 等待收尾的判据,null = 还要等。外部服务器只认 bot 进入世界;第一次失败就带着原因
  * 收尾,不陪自动重连等下去。
  */
-function settle(lane: Lane, name: string, st: LaneState): string | null {
+function settle(T: Text, lane: Lane, name: string, st: LaneState): string | null {
   const srv = st as MinecraftServerState;
   if (lane === 'server' && srv.mode === 'external') {
-    if (srv.link.phase === 'online') return 'bot 已进入世界';
+    if (srv.link.phase === 'online') return T.mount.botInWorld;
     // 新一次尝试开始后上一次的原因还留着,只有等待重连时它才是这一次的结果
-    if (srv.link.phase === 'retrying' && srv.link.failure) return `[失败] ${srv.link.failure}`;
-    if (srv.link.phase === 'stopped') return '[失败] 连接未开启';
+    if (srv.link.phase === 'retrying' && srv.link.failure) return `${T.failed} ${srv.link.failure}`;
+    if (srv.link.phase === 'stopped') return `${T.failed} ${T.mount.linkNotOpen}`;
     return null;
   }
   if (st.phase === 'starting') return null;
-  return isUp(st) ? `${name}就绪` : `[失败] ${name} ${st.detail || st.phase}`;
+  return isUp(st) ? T.mount.ready(name) : `${T.failed} ${name} ${st.detail || st.phase}`;
 }
-
-const LINK_WORDS: Record<string, string> = {
-  stopped: '未连接',
-  connecting: '连接中',
-  online: '已进入世界',
-  retrying: '等待重连',
-};
 
 // ---------------------------------------------------------------------------
 // 挂载行
@@ -115,22 +105,23 @@ interface LaneView {
   stop: HTMLButtonElement;
 }
 
-function laneView(ctx: ConsolePanelContext, name: string): LaneView {
+function laneView(ctx: ConsolePanelContext, T: Text, name: string): LaneView {
   const row = mountRow(ctx, name);
-  const stop = ctx.ui.button('停止', { size: 'sm', variant: 'danger' });
-  const start = ctx.ui.button('启动', { size: 'sm', variant: 'primary' });
+  const stop = ctx.ui.button(T.mount.stop, { size: 'sm', variant: 'danger' });
+  const start = ctx.ui.button(T.mount.start, { size: 'sm', variant: 'primary' });
   row.acts.append(stop, start);
   return { row, start, stop };
 }
 
 /** 两行共用的渲染:reachable 时不管托管 phase 一律亮绿(外部起的也算就绪)。 */
-function renderMount<T extends LaneState>(
+function renderMount<S extends LaneState>(
+  T: Text,
   view: LaneView,
-  st: T | null,
-  extra: (st: T) => string,
+  st: S | null,
+  extra: (st: S) => string,
 ): void {
   if (!st) {
-    view.row.set('plain', '不可用', '');
+    view.row.set('plain', T.mount.unavailable, '');
     view.start.disabled = true;
     view.stop.disabled = true;
     return;
@@ -139,11 +130,10 @@ function renderMount<T extends LaneState>(
   let word: string;
   if (isUp(st)) {
     tone = 'on';
-    word = st.pid ? '运行中' : '运行中(外部)';
+    word = st.pid ? T.mount.running : T.mount.runningExternal;
   } else {
     tone = st.phase === 'starting' ? 'warn' : 'off';
-    word = ({ starting: '启动中', error: '异常', stopped: '未启动' } as Record<string, string>)[st.phase]
-      ?? st.phase;
+    word = T.mount.phases[st.phase] ?? st.phase;
   }
   view.row.set(tone, word, extra(st));
   view.start.disabled = st.phase === 'starting' || isUp(st);
@@ -151,28 +141,24 @@ function renderMount<T extends LaneState>(
 }
 
 /** 服务器行下面的明细:目标、端口与 bot 的连接各占一行,失败原因与待采用的目标有才出现。 */
-function linkRows(ctx: ConsolePanelContext, st: MinecraftServerState): ConsoleKvRow[] {
+function linkRows(ctx: ConsolePanelContext, T: Text, st: MinecraftServerState): ConsoleKvRow[] {
   const { ui } = ctx;
+  const M = T.mount;
   const external = st.mode === 'external';
   const link = st.link;
   const rows: ConsoleKvRow[] = [];
   if (external) {
     rows.push(
-      { k: '目标', v: `${link.username}@${link.target}(${link.version})` },
-      { k: '端口', v: ui.pill(st.reachable ? '可连接' : '无法连接', st.reachable ? 'on' : 'off') },
+      { k: M.target, v: `${link.username}@${link.target}(${link.version})` },
+      { k: M.port, v: ui.pill(st.reachable ? M.reachable : M.unreachable, st.reachable ? 'on' : 'off') },
     );
   }
   const word = link.phase === 'retrying' && link.attempt > 0
-    ? `等待重连(已连续失败 ${link.attempt} 次)`
-    : LINK_WORDS[link.phase] ?? link.phase;
+    ? M.retryingN(link.attempt)
+    : M.linkWords[link.phase] ?? link.phase;
   rows.push({ k: 'bot', v: ui.pill(word, link.phase === 'online' ? 'on' : link.phase === 'stopped' ? 'plain' : 'off') });
-  if (link.failure) rows.push({ k: '原因', v: link.failure });
-  if (st.pending) {
-    rows.push({
-      k: '待采用',
-      v: `${st.pending};${external ? '点击「重连」后采用' : '停止并重新启动服务器后采用'}`,
-    });
-  }
+  if (link.failure) rows.push({ k: M.reason, v: link.failure });
+  if (st.pending) rows.push({ k: M.pending, v: M.pendingValue(st.pending, external) });
   return rows;
 }
 
@@ -181,41 +167,43 @@ function linkRows(ctx: ConsolePanelContext, st: MinecraftServerState): ConsoleKv
 export const mountPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
     const { ui, root } = ctx;
-    const card = ui.sheet({ title: '挂载', en: 'bring-up', desc: DESC });
+    const T = text(ctx.language);
+    const M = T.mount;
+    const card = ui.sheet({ title: M.title, en: 'bring-up', desc: M.desc });
 
     const msg = msgLine(ctx, 'grow');
-    const btnAll = ui.button('⏻ 一键挂载', { variant: 'primary' });
-    const btnRefresh = ui.button('刷新', { size: 'sm' });
+    const btnAll = ui.button(M.mountAll, { variant: 'primary' });
+    const btnRefresh = ui.button(M.refresh, { size: 'sm' });
     const bar = ui.rowbar();
     bar.append(btnAll, msg.el, btnRefresh);
     card.body.appendChild(bar);
 
     const modeSeg = ui.segmented(
-      [{ value: 'local', label: '本地托管' }, { value: 'external', label: '外部服务器' }],
+      [{ value: 'local', label: M.modeLocal }, { value: 'external', label: M.modeExternal }],
       { size: 'sm', onSelect: (v) => { void chooseMode(v); } },
     );
     const modeNote = ui.h('span', 'grow');
     const modeBar = ui.rowbar();
-    modeBar.append(ui.h('span', null, '连接方式'), modeSeg.el, modeNote);
+    modeBar.append(ui.h('span', null, M.mode), modeSeg.el, modeNote);
 
-    const srv = laneView(ctx, '游戏服务器');
-    const cli = laneView(ctx, '观察者客户端');
-    const ply = laneView(ctx, '玩家客户端');
-    const pickServer = ui.button('选择目录…', { size: 'sm' });
-    const pickClient = ui.button('选择目录…', { size: 'sm' });
-    const pickPlayer = ui.button('选择目录…', { size: 'sm' });
+    const srv = laneView(ctx, T, M.gameServer);
+    const cli = laneView(ctx, T, M.spectatorClient);
+    const ply = laneView(ctx, T, M.playerClient);
+    const pickServer = ui.button(M.chooseDir, { size: 'sm' });
+    const pickClient = ui.button(M.chooseDir, { size: 'sm' });
+    const pickPlayer = ui.button(M.chooseDir, { size: 'sm' });
     srv.row.acts.prepend(pickServer);
     cli.row.acts.prepend(pickClient);
     ply.row.acts.prepend(pickPlayer);
     // 外部服务器那套按钮与本地托管的启停共处一行,按连接方式只显示一套
-    const extStop = ui.button('断开', { size: 'sm', variant: 'danger' });
-    const extRelink = ui.button('重连', { size: 'sm' });
-    const extStart = ui.button('连接', { size: 'sm', variant: 'primary' });
+    const extStop = ui.button(M.disconnect, { size: 'sm', variant: 'danger' });
+    const extRelink = ui.button(M.reconnect, { size: 'sm' });
+    const extStart = ui.button(M.connect, { size: 'sm', variant: 'primary' });
     srv.row.acts.append(extStop, extRelink, extStart);
     const linkBox = ui.h('div');
     // 传送是这一行独有的动作:自动那次挂在"进服"那一刻上,中途死了、退回主菜单
     // 再进都够不着它
-    const btnTp = ui.button('传送到她旁边', { size: 'sm' });
+    const btnTp = ui.button(M.teleport, { size: 'sm' });
     ply.row.acts.prepend(btnTp);
     card.body.append(modeBar, srv.row.el, linkBox, cli.row.el, ply.row.el);
     root.appendChild(card.el);
@@ -230,13 +218,13 @@ export const mountPanel: ConsolePanel = {
     const showFor = (external: boolean): void => {
       for (const b of [srv.start, srv.stop, pickServer]) b.style.display = external ? 'none' : '';
       for (const b of [extStart, extStop, extRelink]) b.style.display = external ? '' : 'none';
-      srv.row.name.textContent = external ? '外部服务器' : '游戏服务器';
+      srv.row.name.textContent = external ? M.externalServer : M.gameServer;
     };
 
     const renderExternal = (st: MinecraftServerState): void => {
       const l = st.link;
       const tone: Tone = !st.wanted ? 'off' : l.phase === 'online' ? 'on' : l.phase === 'stopped' ? 'plain' : 'warn';
-      const word = !st.wanted ? '已断开' : l.phase === 'stopped' ? '未启动' : LINK_WORDS[l.phase] ?? l.phase;
+      const word = !st.wanted ? M.disconnected : l.phase === 'stopped' ? M.notStarted : M.linkWords[l.phase] ?? l.phase;
       srv.row.set(tone, word, null);
       extStart.disabled = st.wanted && l.phase !== 'stopped';
       extStop.disabled = !st.wanted;
@@ -249,17 +237,17 @@ export const mountPanel: ConsolePanel = {
       const external = st?.mode === 'external';
       showFor(external);
       if (st) modeSeg.setValue(st.mode);
-      modeNote.textContent = st?.modeInferred ? '按是否填写了本地服务器目录推定' : '';
-      linkBox.replaceChildren(...(st ? [ui.kv(linkRows(ctx, st))] : []));
+      modeNote.textContent = st?.modeInferred ? M.modeInferred : '';
+      linkBox.replaceChildren(...(st ? [ui.kv(linkRows(ctx, T, st))] : []));
       if (st && external) { renderExternal(st); return; }
       if (st && !st.configured && st.phase === 'stopped' && !st.reachable) {
-        srv.row.set('warn', '未配置', '在本 World 配置里填 worlds.minecraft.local.serverDir(含 server.jar 的目录)');
+        srv.row.set('warn', M.unconfigured, M.serverUnconfigured);
         srv.start.disabled = false;
         srv.stop.disabled = true;
         return;
       }
-      renderMount(srv, st, (s) =>
-        [s.pid ? `pid ${s.pid}` : null, s.address, s.wanted ? null : 'bot 未连接', s.detail]
+      renderMount(T, srv, st, (s) =>
+        [s.pid ? `pid ${s.pid}` : null, s.address, s.wanted ? null : M.botNotConnected, s.detail]
           .filter(Boolean).join(' · '));
       // 端口可连而 bot 不以它为目标时(外部起的服务器),启动只让 bot 连上去
       if (st && !st.wanted && st.phase !== 'starting') srv.start.disabled = false;
@@ -269,20 +257,20 @@ export const mountPanel: ConsolePanel = {
     const renderCli = (st: MinecraftClientState | null): void => {
       if (!alive()) return;
       clientState = st;
-      if (!st) { renderMount<LaneState>(cli, null, () => ''); return; }
+      if (!st) { renderMount<LaneState>(T, cli, null, () => ''); return; }
       if (!st.configured) {
-        cli.row.set('warn', '未配置', st.detail || '在配置里填 worlds.minecraft.client.gameDir');
+        cli.row.set('warn', M.unconfigured, st.detail || M.clientUnconfigured);
         cli.start.disabled = true;
         cli.stop.disabled = st.pid === null;
         return;
       }
       // 客户端那条的就绪判据是窗口,补一个 reachable 让三行走同一份渲染
       const merged: MinecraftClientState & { reachable: boolean } = { ...st, reachable: st.windowReady };
-      renderMount(cli, merged, (c) => [
+      renderMount(T, cli, merged, (c) => [
         c.pid ? `pid ${c.pid}` : null,
         c.versionId,
         c.username,
-        c.enabled ? null : '配置未启用(可手动启停)',
+        c.enabled ? null : M.disabledManual,
         c.detail,
       ].filter(Boolean).join(' · '));
     };
@@ -291,20 +279,20 @@ export const mountPanel: ConsolePanel = {
     const renderPly = (st: MinecraftClientState | null): void => {
       if (!alive()) return;
       playerState = st;
-      if (!st) { renderMount<LaneState>(ply, null, () => ''); btnTp.disabled = true; return; }
+      if (!st) { renderMount<LaneState>(T, ply, null, () => ''); btnTp.disabled = true; return; }
       btnTp.disabled = !st.windowReady;
       if (!st.configured) {
-        ply.row.set('warn', '未配置', st.detail || '在配置里填 worlds.minecraft.player.gameDir(或先配好观察者客户端那份)');
+        ply.row.set('warn', M.unconfigured, st.detail || M.playerUnconfigured);
         ply.start.disabled = true;
         ply.stop.disabled = st.pid === null;
         return;
       }
       const merged: MinecraftClientState & { reachable: boolean } = { ...st, reachable: st.windowReady };
-      renderMount(ply, merged, (c) => [
+      renderMount(T, ply, merged, (c) => [
         c.pid ? `pid ${c.pid}` : null,
         c.versionId,
         c.username,
-        c.enabled ? null : '配置未启用(可手动启停)',
+        c.enabled ? null : M.disabledManual,
         c.detail,
       ].filter(Boolean).join(' · '));
     };
@@ -331,7 +319,7 @@ export const mountPanel: ConsolePanel = {
     const refreshServerAfterPath = async (): Promise<void> => {
       const needsRestart = serverState !== null && (serverState.pid !== null || serverState.reachable);
       await fetchSrv();
-      if (needsRestart) msg.say('路径已保存；停止并重新启动游戏服务器后采用新目录');
+      if (needsRestart) msg.say(M.serverPathSaved);
     };
     const refreshClientAfterPath = async (
       state: MinecraftClientState | null,
@@ -340,7 +328,7 @@ export const mountPanel: ConsolePanel = {
     ): Promise<void> => {
       const needsRestart = state !== null && (state.pid !== null || state.windowReady);
       await fetchState();
-      if (needsRestart) msg.say(`路径已保存；停止并重新启动${name}后采用新目录`);
+      if (needsRestart) msg.say(M.clientPathSaved(name));
     };
 
     let polling = false;
@@ -355,8 +343,8 @@ export const mountPanel: ConsolePanel = {
       const st = serverState;
       if (st && (st.wanted || st.pid !== null)) {
         const ok = await ui.confirm({
-          title: '切换连接方式',
-          body: `bot 会断开当前连接${st.pid !== null ? ',本 World 托管的服务器会停止' : ''}。切换后在这里重新启动或连接。`,
+          title: M.switchTitle,
+          body: M.switchBody(st.pid !== null),
           danger: true,
         });
         if (!alive()) return;
@@ -364,9 +352,9 @@ export const mountPanel: ConsolePanel = {
       }
       try {
         await ctx.setConfig('world:minecraft', { 'worlds.minecraft.serverMode': mode });
-        msg.say(mode === 'external' ? '已切换为外部服务器' : '已切换为本地托管');
+        msg.say(mode === 'external' ? M.switchedExternal : M.switchedLocal);
       } catch (err) {
-        if (alive()) msg.say(`切换失败: ${errText(err)}`, true);
+        if (alive()) msg.say(M.switchFailed(errText(err)), true);
       }
       await fetchSrv();
     }
@@ -383,10 +371,10 @@ export const mountPanel: ConsolePanel = {
         const path = await ctx.pickPath(options);
         if (!path || !alive()) return;
         await ctx.setConfig(groupId, { [key]: path });
-        msg.say(`已保存: ${path}`);
+        msg.say(M.saved(path));
         await after();
       } catch (err) {
-        if (alive()) msg.say(`路径保存失败: ${errText(err)}`, true);
+        if (alive()) msg.say(M.pathSaveFailed(errText(err)), true);
       } finally {
         lock.dispose();
       }
@@ -394,26 +382,26 @@ export const mountPanel: ConsolePanel = {
 
     pickServer.addEventListener('click', () => {
       void choose(pickServer, {
-        kind: 'directory', title: '选择 Minecraft 服务器目录',
+        kind: 'directory', title: M.pickServer,
         ...(serverState?.serverDir ? { currentPath: serverState.serverDir } : {}),
         recommendedDir: '../Cortico-Resources/minecraft/server',
       }, 'world:minecraft', 'worlds.minecraft.local.serverDir', refreshServerAfterPath);
     }, { signal: ctx.signal });
     pickClient.addEventListener('click', () => {
       void choose(pickClient, {
-        kind: 'directory', title: '选择观察者 Minecraft 客户端目录',
+        kind: 'directory', title: M.pickClient,
         ...(clientState?.gameDir ? { currentPath: clientState.gameDir } : {}),
         recommendedDir: '../Cortico-Resources/minecraft/client',
       }, 'world:minecraft:client', 'worlds.minecraft.client.gameDir',
-      () => refreshClientAfterPath(clientState, fetchCli, '观察者客户端'));
+      () => refreshClientAfterPath(clientState, fetchCli, M.spectatorClient));
     }, { signal: ctx.signal });
     pickPlayer.addEventListener('click', () => {
       void choose(pickPlayer, {
-        kind: 'directory', title: '选择玩家 Minecraft 客户端目录',
+        kind: 'directory', title: M.pickPlayer,
         ...(playerState?.gameDir ? { currentPath: playerState.gameDir } : {}),
         recommendedDir: '../Cortico-Resources/minecraft/client-player',
       }, 'world:minecraft:player', 'worlds.minecraft.player.gameDir',
-      () => refreshClientAfterPath(playerState, fetchPly, '玩家客户端'));
+      () => refreshClientAfterPath(playerState, fetchPly, M.playerClient));
     }, { signal: ctx.signal });
 
     // ---- 启停 ----
@@ -435,19 +423,19 @@ export const mountPanel: ConsolePanel = {
         const done = (note: string): void => { timer.dispose(); resolve(note); };
         const timer = ctx.interval(() => {
           if (probing) return;
-          if (++ticks > READY_TICKS) { done(`[失败] ${name} 启动超时`); return; }
+          if (++ticks > READY_TICKS) { done(`${T.failed} ${M.startTimedOut(name)}`); return; }
           probing = true;
           void ctx.invoke<LaneState>(`${lane}.state`).then(
             (st) => {
               render(lane, st);
-              const note = settle(lane, name, st);
+              const note = settle(T, lane, name, st);
               if (note === null) { probing = false; return; }
               done(note);
             },
-            (err: unknown) => { done(`[失败] ${name} ${errText(err)}`); },
+            (err: unknown) => { done(`${T.failed} ${name} ${errText(err)}`); },
           );
         }, READY_TICK_MS);
-        ctx.signal.addEventListener('abort', () => resolve(`${name}等待已中断`), { once: true });
+        ctx.signal.addEventListener('abort', () => resolve(M.waitAborted(name)), { once: true });
       });
 
     /** `method` 之后等这条链路收尾;`method` 是 start 或 reconnect。 */
@@ -456,11 +444,11 @@ export const mountPanel: ConsolePanel = {
       try {
         const st = await ctx.invoke<LaneState>(`${lane}.${method}`);
         render(lane, st);
-        if (st.phase === 'error') { msg.say(`[失败] ${name} ${st.detail || ''}`, true); return; }
+        if (st.phase === 'error') { msg.say(`${T.failed} ${name} ${st.detail || ''}`, true); return; }
         const result = await waitReady(lane, name);
-        msg.say(result, result.startsWith('[失败]'));
+        msg.say(result, result.startsWith(T.failed));
       } catch (err) {
-        if (alive()) msg.say(`启动失败: ${errText(err)}`, true);
+        if (alive()) msg.say(M.startFailed(errText(err)), true);
       }
     };
 
@@ -470,34 +458,34 @@ export const mountPanel: ConsolePanel = {
         render(lane, await ctx.invoke<LaneState>(`${lane}.stop`));
         msg.say(doneNote);
       } catch (err) {
-        if (alive()) msg.say(`停止失败: ${errText(err)}`, true);
+        if (alive()) msg.say(M.stopFailed(errText(err)), true);
       }
     };
 
     const bindStartStop = (lane: Lane, name: string, view: LaneView, startNote: string): void => {
       view.start.addEventListener('click', () => { void runAndWait(lane, name, 'start', startNote); }, { signal: ctx.signal });
-      view.stop.addEventListener('click', () => { void runStop(lane, name, `${name}已停止`); }, { signal: ctx.signal });
+      view.stop.addEventListener('click', () => { void runStop(lane, name, M.laneStopped(name)); }, { signal: ctx.signal });
     };
 
-    bindStartStop('server', '服务器', srv, '启动中…(要加载世界)');
-    bindStartStop('client', '客户端', cli, '启动中…(真客户端,要加载资源与着色器)');
-    bindStartStop('player', '玩家客户端', ply, '启动中…(真客户端,要加载资源与着色器)');
-    extStart.addEventListener('click', () => { void runAndWait('server', '外部服务器', 'start', '连接中…'); },
+    bindStartStop('server', M.serverName, srv, M.startingServer);
+    bindStartStop('client', M.clientName, cli, M.startingClient);
+    bindStartStop('player', M.playerClient, ply, M.startingClient);
+    extStart.addEventListener('click', () => { void runAndWait('server', M.externalServer, 'start', M.connecting); },
       { signal: ctx.signal });
-    extRelink.addEventListener('click', () => { void runAndWait('server', '外部服务器', 'reconnect', '重新连接中…'); },
+    extRelink.addEventListener('click', () => { void runAndWait('server', M.externalServer, 'reconnect', M.reconnecting); },
       { signal: ctx.signal });
-    extStop.addEventListener('click', () => { void runStop('server', '外部服务器', '已断开,不再自动重连'); },
+    extStop.addEventListener('click', () => { void runStop('server', M.externalServer, M.disconnectedNoRetry); },
       { signal: ctx.signal });
 
     btnTp.addEventListener('click', () => {
       void ctx.invoke<MinecraftClientState>('player.teleport').then(
         (st) => { msg.say(st.detail ?? ''); renderPly(st); },
-        (err: unknown) => { if (alive()) msg.say(`传送失败: ${errText(err)}`, true); },
+        (err: unknown) => { if (alive()) msg.say(M.teleportFailed(errText(err)), true); },
       );
     }, { signal: ctx.signal });
 
     btnRefresh.addEventListener('click', () => { msg.say(''); void refresh(); }, { signal: ctx.signal });
-    btnAll.addEventListener('click', () => { void mountAll(ctx, msg, btnAll, render, refresh, waitReady); },
+    btnAll.addEventListener('click', () => { void mountAll(ctx, T, msg, btnAll, render, refresh, waitReady); },
       { signal: ctx.signal });
 
     void refresh();
@@ -514,44 +502,46 @@ export const mountPanel: ConsolePanel = {
  */
 async function mountAll(
   ctx: ConsolePanelContext,
+  T: Text,
   msg: MinecraftMsgLine,
   btnAll: HTMLButtonElement,
   render: (lane: Lane, st: LaneState | null) => void,
   refresh: () => Promise<unknown>,
   waitReady: (lane: Lane, name: string) => Promise<string>,
 ): Promise<void> {
+  const M = T.mount;
   const lock = ctx.ui.disable(btnAll);
-  msg.say('挂载中…');
+  msg.say(M.mounting);
   try {
     const jobs: Array<Promise<string>> = [];
     const bring = async (lane: Lane, name: string, upNote: string | null): Promise<string> => {
       if (upNote) return upNote;
       const st = await ctx.invoke<LaneState>(`${lane}.start`);
       render(lane, st);
-      if (st.phase === 'error') return `[失败] ${name} ${st.detail || ''}`;
+      if (st.phase === 'error') return `${T.failed} ${name} ${st.detail || ''}`;
       return waitReady(lane, name);
     };
 
     const srv = await ctx.invoke<MinecraftServerState>('server.state');
     if (srv.mode === 'external') {
-      jobs.push(bring('server', '外部服务器', srv.link.phase === 'online' ? 'bot 已进入世界' : null));
+      jobs.push(bring('server', M.externalServer, srv.link.phase === 'online' ? M.botInWorld : null));
     } else {
-      jobs.push(bring('server', '服务器', srv.reachable && srv.wanted ? '服务器已在运行' : null));
+      jobs.push(bring('server', M.serverName, srv.reachable && srv.wanted ? M.serverRunning : null));
     }
     const cli = await ctx.invoke<MinecraftClientState>('client.state').catch(() => null);
     if (cli && cli.enabled && cli.configured) {
-      jobs.push(bring('client', '客户端', cli.windowReady ? '客户端已在运行' : null));
+      jobs.push(bring('client', M.clientName, cli.windowReady ? M.clientRunning : null));
     }
     const ply = await ctx.invoke<MinecraftClientState>('player.state').catch(() => null);
     if (ply && ply.enabled && ply.configured) {
-      jobs.push(bring('player', '玩家客户端', ply.windowReady ? '玩家客户端已在运行' : null));
+      jobs.push(bring('player', M.playerClient, ply.windowReady ? M.playerRunning : null));
     }
 
     const notes = await Promise.all(jobs);
     await refresh();
-    if (!ctx.signal.aborted) msg.say(notes.join(' · '), notes.some((n) => n.startsWith('[失败]')));
+    if (!ctx.signal.aborted) msg.say(notes.join(' · '), notes.some((n) => n.startsWith(T.failed)));
   } catch (err) {
-    if (!ctx.signal.aborted) msg.say(`挂载失败: ${errText(err)}`, true);
+    if (!ctx.signal.aborted) msg.say(M.mountFailed(errText(err)), true);
   } finally {
     lock.dispose();
   }

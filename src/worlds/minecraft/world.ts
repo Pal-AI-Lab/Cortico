@@ -83,8 +83,8 @@ import {
   type BlockReader, type ItemStack, type WorldSnapshot,
 } from './terrain.ts';
 import {
-  accessFrom, applyAccess, applySettings, ensureOps, FLAT_PRESETS, grantOp, isOp,
-  LEVEL_TYPE_LABELS, levelTypeLabel, listWorlds, loadProperties, readOps, revokeOp,
+  accessFrom, applyAccess, applySettings, ensureOps, flatPresets, grantOp, isOp,
+  levelTypeLabels, levelTypeLabel, listWorlds, loadProperties, readOps, revokeOp,
   saveProperties, settingsFrom, validGeneratorSettings, validWorldName, worldEnvLine,
   worldIdentityOf, writeOps,
   type AccessSettings, type GameSettings, type LevelType, type WorldIdentity, type WorldInfo,
@@ -125,8 +125,10 @@ import {
   ESCAPE_TP_MS, SET_SPAWN_TRANSLATE, normalizeDimension, playerDatPath, readPlayerDatFile, runEscape,
   spawnAt, type SpawnTarget, type Vec3like,
 } from './escape.ts';
-import { MINECRAFT_DEFAULTS, MINECRAFT_CONFIG_GROUP, MINECRAFT_RHYTHM_CONFIG_GROUP, MINECRAFT_CLIENT_CONFIG_GROUP, MINECRAFT_PLAYER_CONFIG_GROUP, type MinecraftConfigSection, type MinecraftServerMode, serverModeOf } from './config.ts';
+import { MINECRAFT_DEFAULTS, minecraftConfigGroup, minecraftRhythmConfigGroup, minecraftClientConfigGroup, minecraftPlayerConfigGroup, type MinecraftConfigSection, type MinecraftServerMode, serverModeOf } from './config.ts';
 import { sameTarget, targetAddress, type LinkPhase, type LinkTarget } from './link.ts';
+import type { Language } from '../../core/language.ts';
+import { text } from './strings.ts';
 
 /** 死亡掉落的消失时限；回执注明剩余时间，到期后撤回仍在原地的提示。 */
 const DROP_DESPAWN_MS = 5 * 60 * 1000;
@@ -290,9 +292,9 @@ export interface MinecraftWorldState {
   worlds: WorldInfo[];
   settings: GameSettings;
   /** 超平坦层配方的常用预设;面板照它铺选项,措辞与配方只此一份 */
-  flatPresets: typeof FLAT_PRESETS;
-  /** 世界类型的中文词表,同上 */
-  levelTypes: typeof LEVEL_TYPE_LABELS;
+  flatPresets: ReturnType<typeof flatPresets>;
+  /** 世界类型的词表,同上 */
+  levelTypes: ReturnType<typeof levelTypeLabels>;
   detail: string | null;
 }
 
@@ -362,71 +364,27 @@ const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.
  * 代理与真 World 共用这一份。控制台隔着子进程代理看到的表面必须与直连时一模一样
  * ——面板 id 两边一旦不同,浏览器插件那几个键就只在其中一条路上对得上。
  */
-export const MINECRAFT_PANEL_DECLS: readonly WorldPanelDecl[] = [
-  { id: 'mount', title: '挂载', description: '连接方式;本地服务器的启停或外部服务器的连接;观察者客户端与玩家客户端的启停。' },
-  { id: 'skin', title: '皮肤', description: '她和玩家各穿哪一张皮肤:选一张 PNG,由客户端读(离线服自己没有材质)。' },
-  { id: 'world', title: '存档与玩法', description: '换存档、开新世界、调难度与游戏模式。' },
-  { id: 'access', title: '权限与作弊', description: '谁有作弊权限(ops.json),以及命令方块、正版验证这类服务器项。' },
-  { id: 'log', title: 'World 日志', description: '一场试玩的现场:下过的令、投递、每一步的结局。' },
-];
+export function minecraftPanelDecls(language: Language): readonly WorldPanelDecl[] {
+  const p = text(language).panels;
+  return (['mount', 'skin', 'world', 'access', 'log'] as const).map((id) => ({ id, ...p[id] }));
+}
 
 /**
  * 代理与进程内 World 共用的静态存储元数据，不含 stat/clear。
  * 装配期即可列出全部存储项，不依赖 start() 后才启动的子进程。
  */
-export const MINECRAFT_STORAGE_DECLS: ReadonlyArray<Omit<StoragePart, 'stat' | 'clear'>> = [
-  {
-    key: 'minecraft-chests',
-    label: '容器账本',
-    kind: 'disk',
-    location: 'data/minecraft-chests.json',
-    note: 'stow/take/use 开过的箱子、炉子的槽位与到期估计、自备的工作站;清了下次当没开过。不是地标',
-  },
-  {
-    key: 'minecraft-deaths',
-    label: '死亡账本',
-    kind: 'disk',
-    location: 'data/minecraft-deaths.json',
-    note: '这个世界今天死了几次、累计几次;死亡回执报序号,她写记忆提到死亡时回执带上这个读数。清了当没死过',
-  },
-  {
-    key: 'minecraft-explored',
-    label: '探索覆盖账本',
-    kind: 'disk',
-    location: 'data/minecraft-explored.json',
-    note: 'find 边走边找收工时按方向记历史最远与末端群系,摘要进环境提示词;清了当哪儿都没去过。不是地标',
-  },
-  {
-    key: 'minecraft-works',
-    label: '成果登记',
-    kind: 'disk',
-    location: 'data/minecraft-works.json',
-    note: '她亲手做成的格:建成的蓝图、锄成的耕地、种下的作物。寻路不往登记格头顶垫,'
-      + 'excavate 与放置只把它摆进回执不拦人;清了当这些地方她没建过。不是地标',
-  },
-  {
-    key: 'minecraft-policy',
-    label: '常驻规矩(mc_policy)',
-    kind: 'disk',
-    location: 'data/minecraft-policy.json',
-    note: '垫脚/照明名单与场合、赶路取向、收着不用的家伙什、主动交战条件;清了六格全回默认',
-  },
-  {
-    key: 'minecraft-blueprints',
-    label: '蓝图表',
-    kind: 'disk',
-    location: 'data/minecraft-blueprints.json',
-    note: '装载过的蓝图设计(palette + 矩阵),外加每个世界里那几张图的施工锚点与进度。'
-      + '设计没有世界性、跨世界留着;清了等于她画的图全没了,要重新出图或重新 save',
-  },
-  {
-    key: 'minecraft-pwsr',
-    label: '暂态表(目标/路标等)',
-    kind: 'memory',
-    note: 'PWSR 暂态:她从笔记投影进来的目标与路标,外加蓝图施工进度那张视图,按世界分命名空间。'
-      + '本来就不跨重启,清了等于提前进了下一场',
-  },
-];
+export function minecraftStorageDecls(language: Language): Array<Omit<StoragePart, 'stat' | 'clear'>> {
+  const t = text(language).storage;
+  return [
+    { key: 'minecraft-chests', ...t['minecraft-chests'], kind: 'disk', location: 'data/minecraft-chests.json' },
+    { key: 'minecraft-deaths', ...t['minecraft-deaths'], kind: 'disk', location: 'data/minecraft-deaths.json' },
+    { key: 'minecraft-explored', ...t['minecraft-explored'], kind: 'disk', location: 'data/minecraft-explored.json' },
+    { key: 'minecraft-works', ...t['minecraft-works'], kind: 'disk', location: 'data/minecraft-works.json' },
+    { key: 'minecraft-policy', ...t['minecraft-policy'], kind: 'disk', location: 'data/minecraft-policy.json' },
+    { key: 'minecraft-blueprints', ...t['minecraft-blueprints'], kind: 'disk', location: 'data/minecraft-blueprints.json' },
+    { key: 'minecraft-pwsr', ...t['minecraft-pwsr'], kind: 'memory' },
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // PWSR 暂态骨架(Persona–World State Reconciliation;准则见 docs/worlds.md「Persona–World 状态对账」)
@@ -2728,24 +2686,23 @@ export class MinecraftWorld implements World {
   }
 
   /** 当场把选择铺进两份游戏目录,回一句"什么时候看得到"。 */
-  private applySkinsNow(): string {
+  private applySkinsNow(language: Language): string {
+    const t = text(language);
     const entries = this.skinInstall();
     for (const dir of new Set([this.cameraGameDir(), this.playerGameDir()])) {
       applySkins(dir, entries, this.fallbackLog);
     }
-    const live = [this.client.running ? '摄像机' : '', this.playerClient.running ? '玩家客户端' : '']
+    const live = [this.client.running ? t.skinCamera : '', this.playerClient.running ? t.skinPlayerClient : '']
       .filter(Boolean);
     // CustomSkinLoader 只在拿到玩家档案时取一次材质,换了图要重新进服才会再取
-    return live.length > 0
-      ? `已铺好;${live.join('与')}正跑着,要它重进一次服务器才换得过来`
-      : '已铺好,下次启动客户端生效';
+    return live.length > 0 ? t.skinsLive(live) : t.skinsNextStart;
   }
 
   /**
    * 挂载面板「服务器」那一行。本地托管时启动/停止管受管服务器与 bot 连接;外部服务器时
    * 启动/停止/重连只管 bot 的连接,不碰对方的服务器进程。
    */
-  serverConsole(): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerConsoleState>> {
+  serverConsole(language: Language = 'zh'): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerConsoleState>> {
     const report = async (state?: MinecraftServerState): Promise<MinecraftServerConsoleState> =>
       this.serverConsoleState(state ?? await this.mcServer.state());
     // 每次操作前先让配置里的连接方式落地(断开旧连接排进队列),这次操作的 serverWanted 按新方式设
@@ -2780,7 +2737,7 @@ export class MinecraftWorld implements World {
       },
       reconnect: async () => {
         reconcile();
-        if (this.serverMode() !== 'external') throw new Error('本地托管时使用「停止」与「启动」重新连接');
+        if (this.serverMode() !== 'external') throw new Error(text(language).reconnectLocal);
         this.serverWanted = true;
         if (this.serverLifecycleActive) await this.relink();
         return report();
@@ -2829,14 +2786,14 @@ export class MinecraftWorld implements World {
   }
 
   /** 存档与权限面板没有本地目录可读时的说明 */
-  private noServerDirNote(): string {
-    return this.managedLocalServer()
-      ? '先在本 World 配置里填 worlds.minecraft.local.serverDir'
-      : '连接外部服务器时，存档与权限由那台服务器管理；本地托管（worlds.minecraft.local.serverDir）才能在这里修改';
+  private noServerDirNote(language: Language): string {
+    const t = text(language);
+    return this.managedLocalServer() ? t.noServerDirLocal : t.noServerDirExternal;
   }
 
-  private noServerDirRefusal(): string {
-    return this.managedLocalServer() ? '没配服务器目录,改不了' : '外部服务器的设置无法在这里修改';
+  private noServerDirRefusal(language: Language): string {
+    const t = text(language);
+    return this.managedLocalServer() ? t.refusalLocal : t.refusalExternal;
   }
 
   private configuredTarget(): LinkTarget {
@@ -2986,12 +2943,13 @@ export class MinecraftWorld implements World {
    * 模式能经控制台指令当场改,且不落盘——那会儿写文件既不生效,还可能被服务端
    * 自己的存盘盖掉。
    */
-  worldConsole(): {
+  worldConsole(language: Language = 'zh'): {
     state(): Promise<MinecraftWorldState>;
     select(name: string): Promise<MinecraftWorldState>;
     create(name: string, gen: WorldGenChoice): Promise<MinecraftWorldState>;
     apply(patch: Partial<GameSettings>): Promise<MinecraftWorldState>;
   } {
+    const t = text(language);
     const dir = (): string => this.hostedServerDir();
     const load = (): { lines: ReturnType<typeof loadProperties>; settings: GameSettings } => {
       const lines = loadProperties(dir());
@@ -3010,37 +2968,37 @@ export class MinecraftWorld implements World {
         hosted: srv.pid !== null,
         worlds: configured ? listWorlds(serverDir, settings.levelName) : [],
         settings,
-        flatPresets: FLAT_PRESETS,
-        levelTypes: LEVEL_TYPE_LABELS,
-        detail: note ?? (configured ? null : this.noServerDirNote()),
+        flatPresets: flatPresets(language),
+        levelTypes: levelTypeLabels(language),
+        detail: note ?? (configured ? null : this.noServerDirNote(language)),
       };
     };
     const requireStopped = async (what: string): Promise<MinecraftWorldState | null> => {
       const st = await state();
-      if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
-      if (st.live) return { ...st, detail: `${what}要先把服务器停下来` };
+      if (!st.configured) return { ...st, detail: this.noServerDirRefusal(language) };
+      if (st.live) return { ...st, detail: t.stopFirst(what) };
       return null;
     };
     return {
       state: () => state(),
       select: async (name) => {
-        const blocked = await requireStopped('换存档');
+        const blocked = await requireStopped(t.whatSelect);
         if (blocked) return blocked;
-        const bad = validWorldName(name);
+        const bad = validWorldName(name, language);
         if (bad) return state(bad);
         const { lines } = load();
         saveProperties(dir(), applySettings(lines, { levelName: name.trim() }));
-        return state(`下次启动进「${name.trim()}」`);
+        return state(t.nextStartLoads(name.trim()));
       },
       create: async (name, gen) => {
-        const blocked = await requireStopped('开新存档');
+        const blocked = await requireStopped(t.whatCreate);
         if (blocked) return blocked;
-        const bad = validWorldName(name);
+        const bad = validWorldName(name, language);
         if (bad) return state(bad);
         const world = name.trim();
-        if (existsSync(join(dir(), world))) return state(`「${world}」已经存在,直接选它就行`);
+        if (existsSync(join(dir(), world))) return state(t.worldExists(world));
         const generatorSettings = (gen.generatorSettings ?? '').trim();
-        const brokenGen = validGeneratorSettings(generatorSettings);
+        const brokenGen = validGeneratorSettings(generatorSettings, language);
         if (brokenGen) return state(brokenGen);
         const seed = (gen.seed ?? '').trim();
         const { lines } = load();
@@ -3052,30 +3010,28 @@ export class MinecraftWorld implements World {
           generateStructures: gen.generateStructures,
         }));
         const how = [
-          levelTypeLabel(gen.levelType ?? 'minecraft:normal'),
-          seed ? `种子 ${seed}` : null,
-          gen.generateStructures === false ? '不生成结构' : null,
+          levelTypeLabel(gen.levelType ?? 'minecraft:normal', language),
+          seed ? t.seedPart(seed) : null,
+          gen.generateStructures === false ? t.noStructures : null,
         ].filter(Boolean).join(' · ');
-        return state(`下次启动会生成新世界「${world}」(${how})`);
+        return state(t.willGenerate(world, how));
       },
       apply: async (patch) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal(language) };
         if (!st.live) {
           const { lines } = load();
           saveProperties(dir(), applySettings(lines, patch));
-          return state('已写入 server.properties,下次启动生效');
+          return state(t.propertiesWritten);
         }
         // 跑着的时候:只有这两项能热改,而且只对本轮有效
         const sent: string[] = [];
-        if (patch.difficulty && this.mcServer.command(`difficulty ${patch.difficulty}`)) sent.push('难度');
-        if (patch.gamemode && this.mcServer.command(`defaultgamemode ${patch.gamemode}`)) sent.push('默认游戏模式');
+        if (patch.difficulty && this.mcServer.command(`difficulty ${patch.difficulty}`)) sent.push(t.difficulty);
+        if (patch.gamemode && this.mcServer.command(`defaultgamemode ${patch.gamemode}`)) sent.push(t.defaultGamemode);
         if (sent.length === 0) {
-          return state(st.hosted
-            ? '服务器跑着,只有难度和默认游戏模式能当场改;别的要先停机'
-            : '服务器是外部起的,没有控制台可用;要改就先停机改文件');
+          return state(st.hosted ? t.liveHostedOnly : t.liveExternal);
         }
-        return state(`${sent.join('、')}已当场生效(只对本轮有效,没写进 server.properties)`);
+        return state(t.appliedLive(t.list(sent)));
       },
     };
   }
@@ -3095,11 +3051,12 @@ export class MinecraftWorld implements World {
    *  - **跑着但是外部起的**:没有 stdin,什么都改不了——这会儿写 ops.json 只会
    *    被服务端退出时的整份写回盖掉,所以宁可拒绝也不假装成功。
    */
-  accessConsole(): {
+  accessConsole(language: Language = 'zh'): {
     state(): Promise<MinecraftAccessState>;
     setOp(name: string, on: boolean): Promise<MinecraftAccessState>;
     apply(patch: Partial<AccessSettings>): Promise<MinecraftAccessState>;
   } {
+    const t = text(language);
     const dir = (): string => this.hostedServerDir();
     const state = async (note?: string): Promise<MinecraftAccessState> => {
       const serverDir = dir();
@@ -3124,39 +3081,37 @@ export class MinecraftWorld implements World {
         autoOp: this.cfg.local.cheats,
         members,
         settings: accessFrom(configured ? loadProperties(serverDir) : []),
-        detail: note ?? (configured ? null : this.noServerDirNote()),
+        detail: note ?? (configured ? null : this.noServerDirNote(language)),
       };
     };
     return {
       state: () => state(),
       setOp: async (name, on) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal(language) };
         const who = name.trim();
-        if (!who) return state('要先写个名字');
-        if (/[\s"]/.test(who)) return state('游戏名里不会有空格或引号,确认一下');
+        if (!who) return state(t.needName);
+        if (/[\s"]/.test(who)) return state(t.badName);
         if (st.live) {
           if (!st.hosted) {
-            return state('服务器是外部起的,没有控制台可用;要改名单就先停机');
+            return state(t.liveExternalOps);
           }
           // 跑着的时候服务端手里有自己的一份名单,退出时整份写回——只能请它改
           const ok = this.mcServer.command(`${on ? 'op' : 'deop'} ${who}`);
-          return state(ok
-            ? `已让服务器${on ? '授权' : '收回'} ${who} 的作弊权限(当场生效)`
-            : '控制台写不进去,试试重启服务器');
+          return state(ok ? t.opSent(on, who) : t.consoleWriteFailed);
         }
         const before = readOps(dir());
         const next = on ? grantOp(before, dir(), who) : revokeOp(before, dir(), who);
-        if (!next.changed) return state(`${who} 本来就${on ? '有' : '没有'}作弊权限`);
+        if (!next.changed) return state(t.opUnchanged(on, who));
         writeOps(dir(), next.ops);
-        return state(`${on ? '已授权' : '已收回'} ${who} 的作弊权限,下次启动生效`);
+        return state(t.opWritten(on, who));
       },
       apply: async (patch) => {
         const st = await state();
-        if (!st.configured) return { ...st, detail: this.noServerDirRefusal() };
-        if (st.live) return { ...st, detail: '这几项服务器只在启动时读,要先把它停下来' };
+        if (!st.configured) return { ...st, detail: this.noServerDirRefusal(language) };
+        if (st.live) return { ...st, detail: t.stopForProperties };
         saveProperties(dir(), applyAccess(loadProperties(dir()), patch));
-        return state('已写入 server.properties,下次启动生效');
+        return state(t.propertiesWritten);
       },
     };
   }
@@ -3182,7 +3137,7 @@ export class MinecraftWorld implements World {
    * `teleport` 是手动补一次传送:自动那次挂在"这个名字进服了"这个时刻上,
    * 而人中途死了、回主菜单再进、或者自己开的客户端都够不着那一刻。
    */
-  playerConsole(): {
+  playerConsole(language: Language = 'zh'): {
     state(): Promise<ClientState>;
     start(): Promise<ClientState>;
     stop(): Promise<ClientState>;
@@ -3192,7 +3147,7 @@ export class MinecraftWorld implements World {
       state: () => this.playerClient.state(),
       start: () => this.playerClient.start(),
       stop: () => this.playerClient.stop(),
-      teleport: async () => ({ ...(await this.playerClient.state()), detail: this.teleportPlayer('手动') }),
+      teleport: async () => ({ ...(await this.playerClient.state()), detail: this.teleportPlayer('手动', language) }),
     };
   }
 
@@ -3214,104 +3169,94 @@ export class MinecraftWorld implements World {
     };
   }
 
-  console(): WorldConsoleDecl {
+  /** 控制台露出,文案按这次请求的界面语言;面板调用的回执与错误也按它。 */
+  console(language: Language = 'zh'): WorldConsoleDecl {
+    const t = text(language);
     const link = this.bridge?.link ?? null;
     const online = link?.phase === 'online';
     const address = targetAddress(this.linkTarget());
     // 没在连:World 没起或本地服务器没开是「未启动」,外部服务器被控制台断开是「已断开」
     const off = !this.bridge
-      ? '未启动'
+      ? t.notStarted
       : !this.serverWanted
-        ? (this.managedLocalServer() ? '未启动' : '已断开')
+        ? (this.managedLocalServer() ? t.notStarted : t.disconnected)
         : null;
     const task = this.executor?.current;
     // 给人看的画面从哪来:观察者客户端窗口出来了就是它,否则 viewer 网页,都没有就没有
     const origin = this.client.windowHint() ? 'client' : this.bridge?.viewerUrl ? 'viewer' : null;
     const badges: WorldConsoleDecl['badges'] = [
       off
-        ? { label: '服务器', value: off, tone: 'off' }
+        ? { label: t.server, value: off, tone: 'off' }
         : online
-          ? { label: '服务器', value: address, tone: 'on' }
-          : { label: '服务器', value: '未连接', tone: 'off' },
-      task ? { label: '任务', value: task, tone: 'on' } : { label: '任务', value: '空闲', tone: 'plain' },
+          ? { label: t.server, value: address, tone: 'on' }
+          : { label: t.server, value: t.notConnected, tone: 'off' },
+      task ? { label: t.task, value: task, tone: 'on' } : { label: t.task, value: t.idle, tone: 'plain' },
       origin
-        ? { label: '画面', value: origin === 'client' ? '客户端主视角' : 'viewer', tone: 'on' }
-        : { label: '画面', value: '无', tone: 'off' },
+        ? { label: t.view, value: origin === 'client' ? t.clientView : t.viewer, tone: 'on' }
+        : { label: t.view, value: t.none, tone: 'off' },
     ];
     const viewerUrl = this.bridge?.viewerUrl;
     return {
+      label: t.label,
       // 三条链路各一颗:进服务器、手上的任务、给人看的画面。
       //
       // 服务器那颗:头两次重连算"正在回来"(掉线重连是常态,退避表前两档共 13 秒);
       // 再往上就是服务器根本不在,该有人去看一眼。
       lamps: [
         {
-          label: '服务器',
+          label: t.server,
           ...(off || !link
-            ? { state: 'offline' as const, hint: off ?? '未启动' }
+            ? { state: 'offline' as const, hint: off ?? t.notStarted }
             : online
               ? { state: 'online' as const, hint: address }
               : link.attempt <= 2
-                ? { state: 'loading' as const, hint: '连接中' }
-                : { state: 'error' as const, hint: `连不上 ${address}${link.failure ? `(${link.failure})` : ''}` }),
+                ? { state: 'loading' as const, hint: t.connecting }
+                : { state: 'error' as const, hint: t.unreachable(address, link.failure) }),
         },
         {
-          label: '任务',
+          label: t.task,
           ...(task
             ? { state: 'online' as const, hint: task }
-            : { state: 'offline' as const, hint: '空闲' }),
+            : { state: 'offline' as const, hint: t.idle }),
         },
         {
-          label: '画面',
+          label: t.view,
           ...(origin
-            ? { state: 'online' as const, hint: origin === 'client' ? '客户端主视角' : 'viewer' }
-            : { state: 'offline' as const, hint: '无' }),
+            ? { state: 'online' as const, hint: origin === 'client' ? t.clientView : t.viewer }
+            : { state: 'offline' as const, hint: t.none }),
         },
       ],
       badges,
-      panels: [...MINECRAFT_PANEL_DECLS],
-      invoke: (panel, method, args) => this.invokePanel(panel, method, args),
+      panels: [...minecraftPanelDecls(language)],
+      invoke: (panel, method, args) => this.invokePanel(panel, method, args, language),
       promptDocs: [
         {
           key: 'worlds.minecraft.envPrompt',
-          title: 'Minecraft · 环境提示词',
-          description: 'Minecraft World 的常驻事实（技能序列、世界观察、反射层）。',
+          title: t.envPromptTitle,
+          description: t.envPromptDescription,
           path: ENV_PROMPT_FILE,
           role: 'envPrompt',
           vars: [
-            {
-              name: 'minecraft.world',
-              description: '世界身份:本地托管=「当前存档:名字」,外部服务器=「当前服务器:地址」。她的位置类记忆按它划界。',
-            },
-            {
-              name: 'minecraft.explored',
-              description: '探索覆盖摘要(8 方向历史最远与末端群系);一处没探过时为空。',
-            },
-            {
-              name: 'minecraft.policy',
-              description: 'mc_policy 六格里与默认不同的那几条;全默认时为空。',
-            },
-            {
-              name: 'minecraft.camera',
-              description: '观察者摄像机说明;没开客户端时为空。措辞在「摄像机说明」那份里改。',
-              multiline: true,
-            },
+            { name: 'minecraft.world', description: t.worldVar },
+            { name: 'minecraft.explored', description: t.exploredVar },
+            { name: 'minecraft.policy', description: t.policyVar },
+            { name: 'minecraft.camera', description: t.cameraVar, multiline: true },
           ],
         },
         {
           key: 'worlds.minecraft.cameraNote',
-          title: 'Minecraft · 摄像机说明',
-          description: '开了观察者客户端时,追加到环境提示词末尾的那一段。',
+          title: t.cameraNoteTitle,
+          description: t.cameraNoteDescription,
           path: CAMERA_NOTE_FILE,
         },
       ],
-      storage: this.storageParts(),
-      links: viewerUrl ? [{ label: '打开画面', href: viewerUrl }] : [],
+      storage: this.storageParts(language),
+      links: viewerUrl ? [{ label: t.openView, href: viewerUrl }] : [],
       config: [
-        MINECRAFT_CONFIG_GROUP,
-        MINECRAFT_RHYTHM_CONFIG_GROUP,
-        MINECRAFT_CLIENT_CONFIG_GROUP,
-        MINECRAFT_PLAYER_CONFIG_GROUP,
+        minecraftConfigGroup(language),
+        minecraftRhythmConfigGroup(language),
+        minecraftClientConfigGroup(language),
+        minecraftPlayerConfigGroup(language),
       ],
     };
   }
@@ -3324,11 +3269,12 @@ export class MinecraftWorld implements World {
    * 的控制面,方法名与语义一字未改;`mount` 的方法名把是哪一条缀在前面
    * (`server.state` / `client.stop` / `player.teleport`),再分派回下面那三支。
    */
-  private async invokePanel(panel: string, method: string, args: unknown[]): Promise<unknown> {
+  private async invokePanel(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {
+    const t = text(language);
     const call = async (obj: Record<string, unknown>, allowed: string[]): Promise<unknown> => {
-      if (!allowed.includes(method)) throw new Error(`未知面板方法: ${panel}.${method}`);
+      if (!allowed.includes(method)) throw new Error(t.unknownMethod(panel, method));
       const fn = obj[method];
-      if (typeof fn !== 'function') throw new Error(`未知面板方法: ${panel}.${method}`);
+      if (typeof fn !== 'function') throw new Error(t.unknownMethod(panel, method));
       return (fn as (...a: unknown[]) => unknown).apply(obj, args);
     };
     switch (panel) {
@@ -3336,35 +3282,35 @@ export class MinecraftWorld implements World {
         const dot = method.indexOf('.');
         const lane = dot < 0 ? '' : method.slice(0, dot);
         if (!['server', 'client', 'player'].includes(lane)) {
-          throw new Error(`未知面板方法: ${panel}.${method}`);
+          throw new Error(t.unknownMethod(panel, method));
         }
-        return this.invokePanel(lane, method.slice(dot + 1), args);
+        return this.invokePanel(lane, method.slice(dot + 1), args, language);
       }
       case 'server':
-        return call(this.serverConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop', 'reconnect']);
+        return call(this.serverConsole(language) as unknown as Record<string, unknown>, ['state', 'start', 'stop', 'reconnect']);
       case 'client':
         return call(this.clientConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop']);
       case 'player':
         return call(
-          this.playerConsole() as unknown as Record<string, unknown>,
+          this.playerConsole(language) as unknown as Record<string, unknown>,
           ['state', 'start', 'stop', 'teleport'],
         );
       case 'world':
-        return call(this.worldConsole() as unknown as Record<string, unknown>, ['state', 'select', 'create', 'apply']);
+        return call(this.worldConsole(language) as unknown as Record<string, unknown>, ['state', 'select', 'create', 'apply']);
       case 'access':
-        return call(this.accessConsole() as unknown as Record<string, unknown>, ['state', 'setOp', 'apply']);
+        return call(this.accessConsole(language) as unknown as Record<string, unknown>, ['state', 'setOp', 'apply']);
       case 'skin':
         return call(
-          this.skinConsole() as unknown as Record<string, unknown>,
+          this.skinConsole(language) as unknown as Record<string, unknown>,
           ['state', 'set', 'clear', 'file'],
         );
       case 'log': {
-        if (method !== 'entries') throw new Error(`未知面板方法: ${panel}.${method}`);
+        if (method !== 'entries') throw new Error(t.unknownMethod(panel, method));
         const after = typeof args[0] === 'number' ? args[0] : 0;
         return { entries: this.logConsole().entries(after) };
       }
       default:
-        throw new Error(`未知面板: ${panel}`);
+        throw new Error(t.unknownPanel(panel));
     }
   }
 
@@ -3374,14 +3320,14 @@ export class MinecraftWorld implements World {
    * 选中即铺:字节按账号名进两份游戏目录,由客户端侧的 CustomSkinLoader 读。
    * 服务器一侧什么都不做——离线服的玩家档案里根本没有材质这一格。
    */
-  skinConsole(): {
+  skinConsole(language: Language = 'zh'): {
     state(): Promise<MinecraftSkinState>;
     set(role: string, base64: string): Promise<MinecraftSkinState>;
     clear(role: string): Promise<MinecraftSkinState>;
     file(role: string): Promise<{ $binary: { mime: string; base64: string } }>;
   } {
     const asRole = (role: string): SkinRole => {
-      if (role !== 'bot' && role !== 'player') throw new Error(`没有这个角色: ${role}`);
+      if (role !== 'bot' && role !== 'player') throw new Error(text(language).noSuchRole(role));
       return role;
     };
     const state = async (detail?: string): Promise<MinecraftSkinState> => {
@@ -3411,7 +3357,7 @@ export class MinecraftWorld implements World {
       set: async (role, base64) => {
         const added = setStoredSkin(this.skinStoreDir(), asRole(role), Buffer.from(base64, 'base64'));
         if ('error' in added) throw new Error(added.error);
-        return state(this.applySkinsNow());
+        return state(this.applySkinsNow(language));
       },
       clear: async (role) => {
         const key = asRole(role);
@@ -3420,11 +3366,11 @@ export class MinecraftWorld implements World {
         for (const dir of new Set([this.cameraGameDir(), this.playerGameDir()])) {
           removeInstalledSkin(dir, username, prev);
         }
-        return state(prev ? '已撤回,那个账号回到原版随机皮肤' : '本来就没选');
+        return state(prev ? text(language).skinCleared : text(language).skinNone);
       },
       file: async (role) => {
         const bytes = readStoredSkin(this.skinStoreDir(), asRole(role));
-        if (!bytes) throw new Error('这个角色还没选皮肤');
+        if (!bytes) throw new Error(text(language).noSkinYet);
         return { $binary: { mime: 'image/png', base64: bytes.toString('base64') } };
       },
     };
@@ -3652,7 +3598,7 @@ export class MinecraftWorld implements World {
   }
 
   /** World 日志跨进程持久化。 */
-  private storageParts(): NonNullable<WorldConsoleDecl['storage']> {
+  private storageParts(language: Language): NonNullable<WorldConsoleDecl['storage']> {
     const impl: Record<string, Pick<StoragePart, 'stat' | 'clear'>> = {
       'minecraft-chests': {
         stat: () => this.chests.stat(),
@@ -3697,7 +3643,7 @@ export class MinecraftWorld implements World {
         clear: () => this.pwsr.clear(),
       },
     };
-    return MINECRAFT_STORAGE_DECLS.map((d) => ({ ...d, ...impl[d.key]! }));
+    return minecraftStorageDecls(language).map((d) => ({ ...d, ...impl[d.key]! }));
   }
 
   logConsole(): { entries(after?: number): MinecraftLogEntry[] } {
@@ -5580,21 +5526,22 @@ export class MinecraftWorld implements World {
    * 把玩家客户端那个人传送到 bot 旁边。托管服务器走控制台 stdin;外部服务器
    * 借 bot 的聊天权限(需要 op)。返回一句给控制台看的回执。
    */
-  private teleportPlayer(reason: string): string {
+  private teleportPlayer(reason: string, language: Language = 'zh'): string {
+    const t = text(language);
     const who = this.cfg.player.username.trim();
     const target = this.chatName();
-    if (!who) return '没配玩家名,不知道要传谁';
-    if (who === target) return `玩家名与 bot 同名(${who}),传送不了`;
+    if (!who) return t.tpNoPlayer;
+    if (who === target) return t.tpSameName(who);
     this.diag.write({
       lane: 'link', event: 'player-tp',
       msg: `把玩家 ${who} 传送到 ${target} 旁边(${reason})`,
       data: { reason, who, target },
     });
-    if (this.mcServer.command(`tp ${who} ${target}`)) return `已把 ${who} 传送到 ${target} 旁边`;
+    if (this.mcServer.command(`tp ${who} ${target}`)) return t.tpDone(who, target);
     const bot = this.bridge?.bot;
-    if (!bot) return '服务器不是本 World 托管的,而 bot 还没连上:传送没人下得了';
+    if (!bot) return t.tpNoBot;
     bot.chat(`/tp ${who} ${target}`);
-    return `已借 bot 的权限下 /tp ${who} ${target}(bot 不是 op 时服务器会拒)`;
+    return t.tpViaBot(who, target);
   }
 
   private hookBotEvents(bot: any): void {

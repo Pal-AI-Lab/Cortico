@@ -294,7 +294,7 @@ describe('MinecraftWorldProxy(前缀变量)', () => {
       // 状态推送只在挂上宿主后处理
       Object.assign(proxy, { host: {} });
       (proxy as unknown as { onNote(note: unknown): void }).onNote({
-        kind: 'status', decl: {}, worldLine: '当前服务器:mc.example.org:25570', storage: [],
+        kind: 'status', decl: { zh: {}, en: {} }, worldLine: '当前服务器:mc.example.org:25570', storage: [],
       });
       expect(proxy.envPromptVars()['minecraft.world']).toBe('当前服务器:mc.example.org:25570');
     } finally {

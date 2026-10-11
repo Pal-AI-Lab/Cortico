@@ -166,12 +166,16 @@ function storageStats(parts: StoragePart[]): StorageStat[] {
 
 function pushStatus(): void {
   if (!mod) return;
-  const decl = mod.console();
+  const zh = mod.console('zh');
+  const en = mod.console('en');
   const note = {
     kind: 'status' as const,
-    decl: { lamps: decl.lamps, badges: decl.badges, links: decl.links },
+    decl: {
+      zh: { lamps: zh.lamps, badges: zh.badges, links: zh.links },
+      en: { lamps: en.lamps, badges: en.badges, links: en.links },
+    },
     worldLine: mod.worldLine(),
-    storage: storageStats(decl.storage ?? []),
+    storage: storageStats(zh.storage ?? []),
   };
   const key = JSON.stringify(note);
   if (key === lastStatus) return;
@@ -224,7 +228,7 @@ async function handleRequest(req: EngineRequest): Promise<unknown> {
     if (!part) throw new Error(`未知存储部分: ${req.key}`);
     return part.clear();
   }
-  const invoke = mod.console().invoke;
+  const invoke = mod.console(req.language).invoke;
   if (!invoke) throw new Error('World 没有面板调用面');
   return invoke(req.panel, req.method, req.args);
 }

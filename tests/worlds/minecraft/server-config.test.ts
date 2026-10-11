@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
-  accessFrom, applyAccess, applySettings, ensureOps, FLAT_PRESETS, grantOp, isOp, listWorlds,
+  accessFrom, applyAccess, applySettings, ensureOps, flatPresets, grantOp, isOp, listWorlds,
   parseProperties, readOps, readProperty, resolveUuid, revokeOp, settingsFrom,
   stringifyProperties, validGeneratorSettings, validWorldName, writeOps, writeProperty,
 } from '../../../src/worlds/minecraft/server-config.ts';
@@ -142,7 +142,7 @@ describe('世界生成项', () => {
   it('applySettings 写生成项;没给的键一个不动', () => {
     const after = applySettings(parseProperties(SAMPLE), {
       levelType: 'minecraft:flat',
-      generatorSettings: FLAT_PRESETS[0].json,
+      generatorSettings: flatPresets('zh')[0].json,
       generateStructures: false,
       maxWorldSize: 5000,
     });
@@ -153,7 +153,7 @@ describe('世界生成项', () => {
   });
 
   it('自带的超平坦预设都是合法 JSON 对象', () => {
-    for (const preset of FLAT_PRESETS) {
+    for (const preset of flatPresets('zh')) {
       expect(validGeneratorSettings(preset.json), preset.id).toBeNull();
       expect(JSON.parse(preset.json)).toHaveProperty('biome');
     }

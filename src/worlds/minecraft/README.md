@@ -182,8 +182,13 @@ export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载
 `skin` 皮肤、`world` 存档与玩法、`access` 权限与作弊、`log` World 日志。数据面一律走
 `ctx.invoke / invokeBinary`，DOM 一律用 `ctx.ui` 原语，定时器一律 `ctx.interval`。
 
-面板 id 与标题由 `MINECRAFT_PANEL_DECLS` 一处给出，真 World 与子进程代理共用——
+面板 id 与标题由 `minecraftPanelDecls(language)` 一处给出，真 World 与子进程代理共用——
 控制台隔着代理看到的表面必须与直连时一模一样。
+
+给操作员看的文案只有中英两份:服务端的(控制台露出、配置组、面板回执、世界生成词表)在
+`strings.ts`，浏览器面板的在 `console/strings.ts`(按 `ctx.language` 取)。`console(language)`
+每次请求重算;隔着代理时，灯、徽标、链接由子进程每秒按中英各算一份报上来，代理按请求语言取一份，
+面板调用把 `language` 带给子进程。
 
 ### 挂载(mount)
 
@@ -761,7 +766,7 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 `level-type` / `generator-settings` / `level-seed` / `generate-structures` 只在世界
 **第一次生成**时被读到，对着已有的世界改毫无作用。所以它们不在"应用"那条路上，而是
 **开新存档**这个动作的参数(`world.create(name, gen)`)。世界类型词表与超平坦预设由
-服务端一处给出(`LEVEL_TYPE_LABELS` / `FLAT_PRESETS`)，随 `world.state` 下发——浏览器
+服务端一处给出(`levelTypeLabels(language)` / `flatPresets(language)`)，随 `world.state` 下发——浏览器
 面板 bundle 不 import 服务端模块，措辞与层配方也就只有一份。
 
 超平坦预设里除了原版那三个，还有一个自配的「可挖平坦」：原版超平坦的三层底下没有

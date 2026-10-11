@@ -121,4 +121,11 @@ describe('WebSearchWorld', () => {
     const out = await mod.tools()[0].handler({ q: '测试查询' }, ctx);
     expect(out).toContain('[search failed]');
   });
+
+  it('英文界面的 console() 展示文案不含中文', () => {
+    for (const apiKey of ['k', '']) {
+      const shown = JSON.stringify(new WebSearchWorld({ apiKey }).console('en'), (k, v) => (k === 'path' ? undefined : v));
+      expect(shown).not.toMatch(/[一-鿿]/);
+    }
+  });
 });

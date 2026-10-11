@@ -10,17 +10,21 @@ import type {
   ConsolePanel,
 } from '../../../web/shared/client-panel.ts';
 import { autoload, errText, type QQGateState } from './client.ts';
+import { qqPanelText } from './strings.ts';
+
+type Text = ReturnType<typeof qqPanelText>;
 
 /** WS 地址的形状。与服务端 `invokeGate` 那条校验同一个判据,先在本地拦一次。 */
 const WS_URL_RE = /^wss?:\/\/.+/i;
 
 export const gatePanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
+    const T = qqPanelText(ctx.language);
     autoload<QQGateState>(ctx, {
-      loading: '加载 QQ 接入状态…',
-      failed: 'QQ 接入状态不可用',
+      loading: T.gateLoading,
+      failed: T.gateFailed,
       load: () => ctx.invoke<QQGateState>('state'),
-      render: (st) => [enableSheet(ctx, st), connSheet(ctx, st), endpointSheet(ctx, st)],
+      render: (st) => [enableSheet(ctx, st, T), connSheet(ctx, st, T), endpointSheet(ctx, st, T)],
     });
   },
 };
@@ -29,28 +33,28 @@ export const gatePanel: ConsolePanel = {
 // 接入开关
 // ---------------------------------------------------------------------------
 
-function enableSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
+function enableSheet(ctx: ConsolePanelContext, st: QQGateState, T: Text): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: '接入开关',
+    title: T.enableTitle,
     en: 'enabled',
-    desc: '开启或关闭 QQ 接入会重启进程。',
+    desc: T.enableDesc,
   });
 
   const status = ui.rowbar();
-  const btn = ui.button(st.enabled ? '关闭 QQ 接入' : '开启 QQ 接入', {
+  const btn = ui.button(st.enabled ? T.turnOff : T.turnOn, {
     variant: st.enabled ? 'danger' : 'primary',
-    onClick: () => { void toggleEnabled(ctx, st, btn); },
+    onClick: () => { void toggleEnabled(ctx, st, btn, T); },
   });
   status.append(
     st.enabled
-      ? ui.pill(st.connected ? '已启用 · 已连接' : '已启用 · 未连接', st.connected ? 'on' : 'off')
-      : ui.pill('未启用', 'plain'),
+      ? ui.pill(st.connected ? T.enabledConnected : T.enabledDisconnected, st.connected ? 'on' : 'off')
+      : ui.pill(T.notEnabled, 'plain'),
     ui.h('span', 'grow'),
   );
   card.body.appendChild(status);
   if (st.enabled && !st.connected) {
-    card.body.appendChild(ui.msgline('协议端未连接。', true));
+    card.body.appendChild(ui.msgline(T.endpointDown, true));
   }
   const actions = ui.actions();
   actions.append(ui.h('span', 'grow'), btn);
@@ -62,21 +66,21 @@ async function toggleEnabled(
   ctx: ConsolePanelContext,
   st: QQGateState,
   btn: HTMLButtonElement,
+  T: Text,
 ): Promise<void> {
   const next = !st.enabled;
-  const verb = next ? '开启' : '关闭';
   const ok = await ctx.ui.confirm({
-    title: `${verb} QQ 接入?`,
-    body: '此操作会重启进程。',
+    title: T.toggleConfirmTitle(next ? T.verbOn : T.verbOff),
+    body: T.restartsProcess,
     danger: true,
   });
   if (!ok) return;
   btn.disabled = true;
   try {
     await ctx.invoke('setEnabled', [next]);
-    restartWatch(ctx, verb);
+    restartWatch(ctx, next ? T.restartingOn : T.restartingOff, T);
   } catch (err) {
-    ctx.ui.toast(`操作失败: ${errText(err)}`, 'bad');
+    ctx.ui.toast(T.actionFailed(errText(err)), 'bad');
     btn.disabled = false;
   }
 }
@@ -85,34 +89,34 @@ async function toggleEnabled(
 // 连接状态
 // ---------------------------------------------------------------------------
 
-function connSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
+function connSheet(ctx: ConsolePanelContext, st: QQGateState, T: Text): HTMLElement {
   const { ui } = ctx;
-  const card = ui.sheet({ title: '连接状态', en: 'OneBot ⇄ core' });
+  const card = ui.sheet({ title: T.connTitle, en: 'OneBot ⇄ core' });
 
   const conn = !st.enabled
-    ? '未启用'
+    ? T.notEnabled
     : st.connected
-      ? '已连接'
-      : '未连接';
+      ? T.connected
+      : T.disconnected;
   const self = st.selfId != null
     ? `${st.selfId}${st.nickname ? ` · ${st.nickname}` : ''}`
     : '—';
   const groups = st.groups.length
     ? st.groups
-      .map((g) => `${g.name}(${g.id})${g.card ? ` · 我的群昵称「${g.card}」` : ''}`)
+      .map((g) => `${g.name}(${g.id})${g.card ? T.myGroupCard(g.card) : ''}`)
       .join('\n')
-    : '(未配置)';
+    : T.notConfigured;
   const privates = st.privates.length
-    ? st.privates.map((p) => (p.name ? `${p.name}(${p.id})` : String(p.id))).join('、')
-    : '(未配置)';
+    ? st.privates.map((p) => (p.name ? `${p.name}(${p.id})` : String(p.id))).join(T.listSep)
+    : T.notConfigured;
 
   const table = ui.table();
-  table.addRow(['连接', { el: ui.pill(conn, !st.enabled ? 'plain' : st.connected ? 'on' : 'off') }]);
-  table.addRow(['自身 QQ', { text: self, cls: 'txt' }]);
-  table.addRow(['监听群', { text: groups, cls: 'txt' }]);
-  table.addRow(['监听私聊', { text: privates, cls: 'txt' }]);
+  table.addRow([T.rowConn, { el: ui.pill(conn, !st.enabled ? 'plain' : st.connected ? 'on' : 'off') }]);
+  table.addRow([T.rowSelf, { text: self, cls: 'txt' }]);
+  table.addRow([T.rowGroups, { text: groups, cls: 'txt' }]);
+  table.addRow([T.rowPrivates, { text: privates, cls: 'txt' }]);
   card.body.appendChild(table.el);
-  card.body.appendChild(ui.msgline('监听名单在「监听名单」面板里热改(无需重启)。'));
+  card.body.appendChild(ui.msgline(T.rosterHint));
   return card.el;
 }
 
@@ -120,31 +124,30 @@ function connSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
 // OneBot 协议端连接
 // ---------------------------------------------------------------------------
 
-function endpointSheet(ctx: ConsolePanelContext, st: QQGateState): HTMLElement {
+function endpointSheet(ctx: ConsolePanelContext, st: QQGateState, T: Text): HTMLElement {
   const { ui } = ctx;
   const card = ui.sheet({
-    title: 'OneBot 协议端',
-    en: '正向 WS + token',
-    desc: '推荐 SnowLuma,NapCat 等 OneBot v11 实现同样可用。协议端需保持运行、登录 QQ 并开启正向 WebSocket;'
-      + 'SnowLuma 的 token 在它的 config/onebot_<QQ号>.json 里。保存连接配置后重启进程。',
+    title: T.endpointTitle,
+    en: T.endpointEn,
+    desc: T.endpointDesc,
   });
 
   const ws = ui.input({ value: st.wsUrl || '', placeholder: 'ws://127.0.0.1:3001' });
   const token = ui.input({
     type: 'password',
-    placeholder: st.tokenSet ? '已配置(留空＝不改动)' : '(未配置)',
+    placeholder: st.tokenSet ? T.tokenSet : T.tokenUnset,
   });
   const msg = ui.msgline('');
-  const save = ui.button('保存并重启', {
+  const save = ui.button(T.saveRestart, {
     variant: 'primary',
-    onClick: () => { void saveConnection(ctx, ws, token, msg, save); },
+    onClick: () => { void saveConnection(ctx, ws, token, msg, save, T); },
   });
 
   const bar = ui.actions();
   bar.append(msg, ui.h('span', 'grow'), save);
   card.body.append(
-    ui.field('WS 地址', ws),
-    ui.field('Access Token(可空)', token),
+    ui.field(T.fieldWsUrl, ws),
+    ui.field(T.fieldToken, token),
     bar,
   );
   return card.el;
@@ -156,6 +159,7 @@ async function saveConnection(
   token: HTMLInputElement,
   msg: HTMLDivElement,
   save: HTMLButtonElement,
+  T: Text,
 ): Promise<void> {
   const fail = (text: string): void => {
     msg.textContent = text;
@@ -163,22 +167,22 @@ async function saveConnection(
   };
   const wsUrl = ws.value.trim();
   if (!WS_URL_RE.test(wsUrl)) {
-    fail('WS 地址必须以 ws:// 或 wss:// 开头');
+    fail(T.badWsUrl);
     return;
   }
   msg.textContent = '';
   msg.classList.remove('bad');
   const ok = await ctx.ui.confirm({
-    title: '保存协议端连接并重启?',
-    body: '保存连接配置后重启进程。',
+    title: T.saveConfirmTitle,
+    body: T.saveConfirmBody,
   });
   if (!ok) return;
   save.disabled = true;
   try {
     await ctx.invoke('setConnection', [wsUrl, token.value]);
-    restartWatch(ctx, '保存连接');
+    restartWatch(ctx, T.restartingSave, T);
   } catch (err) {
-    fail(`保存失败: ${errText(err)}`);
+    fail(T.saveFailed(errText(err)));
     save.disabled = false;
   }
 }
@@ -196,13 +200,10 @@ const TICK_MS = 1000;
 /**
  * 重启期间显示等待状态，以 ctx.interval 轮询 ctx.invoke("state")，确认本面板服务恢复后整页重载。轮询和请求均随 ctx.signal 取消，离开面板后停止。
  */
-function restartWatch(ctx: ConsolePanelContext, verb: string): void {
+function restartWatch(ctx: ConsolePanelContext, title: string, T: Text): void {
   const { ui } = ctx;
   const view = ctx.root.ownerDocument?.defaultView ?? null;
-  let notice = ui.drawer(
-    `${verb}中`,
-    '正在重启，完成后自动刷新页面。',
-  );
+  let notice = ui.drawer(title, T.restartingBody);
 
   let ticks = 0;
   let probing = false;
@@ -212,11 +213,7 @@ function restartWatch(ctx: ConsolePanelContext, verb: string): void {
     if (ticks > MAX_TICKS) {
       timer.dispose();
       notice.dispose();
-      notice = ui.drawer(
-        '重启耗时偏长',
-        '请手动刷新页面,或检查启动器是否还在运行'
-        + '(没用启动器起的进程,退出后不会有人把它拉起来)。',
-      );
+      notice = ui.drawer(T.restartSlowTitle, T.restartSlowBody);
       return;
     }
     if (probing) return; // 上一拍的探活还没回来,不叠着发

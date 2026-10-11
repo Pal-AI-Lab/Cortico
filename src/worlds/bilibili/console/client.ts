@@ -8,6 +8,7 @@
  */
 
 import type { ConsoleClientBundle, ConsolePanelContext, ConsolePanel } from '../../../web/shared/client-panel.ts';
+import { logText } from './strings.ts';
 
 export function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -64,15 +65,6 @@ interface BilibiliLogState {
   };
 }
 
-const DESC = '直播间事件与各 cmd 计数。';
-
-const PHASE_TEXT: Record<string, string> = {
-  stopped: '未接入',
-  connecting: '连接中',
-  connected: '已接入',
-  retrying: '重连中',
-};
-
 const POLL_MS = 2000;
 /** 与服务端 RECENT_CAP 一致。 */
 const KEEP = 200;
@@ -80,15 +72,16 @@ const KEEP = 200;
 const logPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
     const { ui, root } = ctx;
-    const card = ui.sheet({ title: '直播间事件', en: 'bilibili live', desc: DESC });
+    const T = logText(ctx.language);
+    const card = ui.sheet({ title: T.sheetTitle, en: 'bilibili live', desc: T.sheetDesc });
     root.appendChild(card.el);
 
     const err = ui.msgline();
     const info = ui.h('div');
     const gauges = ui.statgrid();
-    const view = ui.log({ max: KEEP, maxHeight: '320px', empty: '(等待直播间消息…)' });
-    const counts = ui.table({ head: ['cmd', '条数'] });
-    const btnEnd = ui.button('回到底部', { size: 'sm', onClick: () => view.scrollToEnd() });
+    const view = ui.log({ max: KEEP, maxHeight: '320px', empty: T.logEmpty });
+    const counts = ui.table({ head: ['cmd', T.colCount] });
+    const btnEnd = ui.button(T.scrollToEnd, { size: 'sm', onClick: () => view.scrollToEnd() });
     const bar = ui.rowbar();
     bar.append(ui.h('span', 'grow'), btnEnd);
     card.body.append(err, info, gauges, bar, view.el, counts.el);
@@ -105,22 +98,22 @@ const logPanel: ConsolePanel = {
     const drawInfo = (st: BilibiliLogState): void => {
       const s = st.status;
       const room = s?.realRoomId
-        ? `${s.realRoomId}${s.roomId && s.roomId !== s.realRoomId ? `(短号 ${s.roomId})` : ''}`
+        ? s.roomId && s.roomId !== s.realRoomId ? T.roomWithShort(s.realRoomId, s.roomId) : String(s.realRoomId)
         : s?.roomId
-          ? `${s.roomId}(还没换算出真实房间号)`
-          : '未配置';
+          ? T.roomUnresolved(s.roomId)
+          : T.roomUnset;
       info.replaceChildren(ui.kv([
-        { k: '接入', v: PHASE_TEXT[s?.phase ?? 'stopped'] ?? s?.phase ?? '未接入' },
-        { k: '直播间', v: room },
-        { k: '标题', v: s?.title || '—' },
-        { k: '开播', v: ui.pill(s?.living ? '直播中' : '未开播', s?.living ? 'on' : 'off') },
+        { k: T.kFeed, v: T.phase[s?.phase ?? 'stopped'] ?? s?.phase ?? T.phase.stopped },
+        { k: T.kRoom, v: room },
+        { k: T.kTitle, v: s?.title || '—' },
+        { k: T.kLive, v: ui.pill(s?.living ? T.live : T.offline, s?.living ? 'on' : 'off') },
         {
-          k: '身份',
+          k: T.kIdentity,
           v: st.desensitized
-            ? ui.pill('近期弹幕缺少观众 uid', 'off')
-            : ui.pill(s?.selfUid ? `已登录(uid ${s.selfUid})` : '待观察', s?.selfUid ? 'on' : 'plain'),
+            ? ui.pill(T.identityMasked, 'off')
+            : ui.pill(s?.selfUid ? T.loggedIn(s.selfUid) : T.identityPending, s?.selfUid ? 'on' : 'plain'),
         },
-        ...(s?.lastError ? [{ k: '最近错误', v: s.lastError }] : []),
+        ...(s?.lastError ? [{ k: T.kLastError, v: s.lastError }] : []),
       ]));
     };
 
@@ -130,27 +123,27 @@ const logPanel: ConsolePanel = {
       const last = admission.lastBatch;
       const limiter = admission.crowd.active
         ? last?.limitingActive
-          ? `拥挤（上批保留 ${last.selected}/${last.input}）`
-          : '拥挤'
+          ? T.crowdKept(last.selected, last.input)
+          : T.crowd
         : last?.limitingActive
-          ? `未限流（上批保留 ${last.selected}/${last.input}）`
-          : '未限流';
+          ? T.notLimitedKept(last.selected, last.input)
+          : T.notLimited;
       gauges.replaceChildren(
-        ui.stat({ k: '待投递 · 进场', v: agg.enter, unit: '人' }),
-        ui.stat({ k: '待投递 · 点赞', v: agg.like, unit: '次' }),
-        ui.stat({ k: '待投递 · 免费礼物', v: agg.freeGift, unit: '个' }),
-        ui.stat({ k: '高能榜', v: num(admission.crowd.onlineRankCount ?? agg.online), unit: '人' }),
-        ui.stat({ k: '事件筛选', v: limiter }),
-        ui.stat({ k: '重要观众', v: admission.qualifiedViewers, unit: '人' }),
-        ui.stat({ k: '累计过滤', v: admission.totals.dropped, unit: '条' }),
-        ui.stat({ k: '看过', v: num(agg.watched) }),
-        ui.stat({ k: '人气', v: num(agg.popularity) }),
-        ui.stat({ k: '粉丝', v: num(agg.fans) }),
+        ui.stat({ k: T.statEnter, v: agg.enter, unit: T.unitPeople }),
+        ui.stat({ k: T.statLike, v: agg.like, unit: T.unitTimes }),
+        ui.stat({ k: T.statFreeGift, v: agg.freeGift, unit: T.unitGifts }),
+        ui.stat({ k: T.statOnlineRank, v: num(admission.crowd.onlineRankCount ?? agg.online), unit: T.unitPeople }),
+        ui.stat({ k: T.statFilter, v: limiter }),
+        ui.stat({ k: T.statImportant, v: admission.qualifiedViewers, unit: T.unitPeople }),
+        ui.stat({ k: T.statDropped, v: admission.totals.dropped, unit: T.unitItems }),
+        ui.stat({ k: T.statWatched, v: num(agg.watched) }),
+        ui.stat({ k: T.statPopularity, v: num(agg.popularity) }),
+        ui.stat({ k: T.statFans, v: num(agg.fans) }),
       );
     };
 
     const drawCounts = (rows: BilibiliLogState['counts']): void => {
-      counts.clear(rows.length ? undefined : '(还没收到任何 cmd)');
+      counts.clear(rows.length ? undefined : T.countsEmpty);
       for (const [cmd, n] of rows) counts.addRow([cmd, n]);
     };
 
@@ -182,7 +175,7 @@ const logPanel: ConsolePanel = {
         (e: unknown) => {
           polling = false;
           if (ctx.signal.aborted) return;
-          setError(`读取直播间状态失败: ${errText(e)}`);
+          setError(T.stateFailed(errText(e)));
         },
       );
     };

@@ -24,45 +24,22 @@ import {
   type MinecraftWorldInfo,
   type MinecraftWorldState,
 } from './client.ts';
+import { text, type MinecraftPanelText } from './strings.ts';
 
-const DESC =
-  '换存档、开新世界、调难度与游戏模式。这些写在 server.properties 里,'
-  + '而服务器只在启动时读一次:停机时改什么都行(下次启动生效),'
-  + '跑着的时候只有难度和默认游戏模式能当场改(走控制台指令,只对本轮有效)。';
+type Text = MinecraftPanelText['world'];
 
-const GAMEMODES = [
-  { value: 'survival', label: '生存' },
-  { value: 'creative', label: '创造' },
-  { value: 'adventure', label: '冒险' },
-  { value: 'spectator', label: '旁观' },
-] as const;
-
-const DIFFICULTIES = [
-  { value: 'peaceful', label: '和平' },
-  { value: 'easy', label: '简单' },
-  { value: 'normal', label: '普通' },
-  { value: 'hard', label: '困难' },
-] as const;
-
-/** level.dat 里的 GameType / Difficulty 是数字 */
-const GAMEMODE_ZH = ['生存', '创造', '冒险', '旁观'];
-const DIFFICULTY_ZH = ['和平', '简单', '普通', '困难'];
-const GENERATOR_ZH: Record<string, string> = {
-  flat: '超平坦',
-  amplified: '放大化',
-  large_biomes: '大型生物群系',
-  normal: '默认',
-  overworld: '默认',
-};
+/** 下标与 level.dat 里的 GameType / Difficulty 数字一致 */
+const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'] as const;
+const DIFFICULTIES = ['peaceful', 'easy', 'normal', 'hard'] as const;
 
 const DAY_MS = 86_400_000;
 
 /** 分组:按最近活跃分档,顺序即从近到远。 */
-const GROUPS: ReadonlyArray<{ id: string; label: string; within: number }> = [
-  { id: 'today', label: '今天', within: 1 },
-  { id: 'week', label: '最近 7 天', within: 7 },
-  { id: 'month', label: '最近 30 天', within: 30 },
-  { id: 'older', label: '更早', within: Infinity },
+const GROUPS: ReadonlyArray<{ id: keyof Text['groups']; within: number }> = [
+  { id: 'today', within: 1 },
+  { id: 'week', within: 7 },
+  { id: 'month', within: 30 },
+  { id: 'older', within: Infinity },
 ];
 
 /** 本地日历日的差值:23:59 与次日 00:01 是两天,差 2 分钟也算 */
@@ -88,39 +65,39 @@ function fmtBytes(n: number): string {
   return `${v < 10 && i > 0 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
-function fmtWhen(iso: string | null, now: Date): string {
-  if (!iso) return '还没生成';
+function fmtWhen(W: Text, iso: string | null, now: Date): string {
+  if (!iso) return W.notGenerated;
   const days = daysAgo(iso, now);
   const clock = iso.slice(11, 16);
-  if (days === 0) return `今天 ${clock}`;
-  if (days === 1) return `昨天 ${clock}`;
-  if (days < 30) return `${days} 天前`;
+  if (days === 0) return W.today(clock);
+  if (days === 1) return W.yesterday(clock);
+  if (days < 30) return W.daysAgo(days);
   return iso.slice(0, 10);
 }
 
 /** 存档自述里能读出多少写多少;一项都读不出来就不摆这一行 */
-function infoRows(w: MinecraftWorldInfo, now: Date): Array<{ k: string; v: string }> {
+function infoRows(W: Text, w: MinecraftWorldInfo, now: Date): Array<{ k: string; v: string }> {
   const rows: Array<{ k: string; v: string }> = [
-    { k: '最后活跃', v: `${fmtWhen(w.modified, now)}${w.modified ? `(${w.modified.slice(0, 16).replace('T', ' ')})` : ''}` },
-    { k: '占盘', v: fmtBytes(w.sizeBytes) },
+    { k: W.lastActive, v: `${fmtWhen(W, w.modified, now)}${w.modified ? `(${w.modified.slice(0, 16).replace('T', ' ')})` : ''}` },
+    { k: W.diskSize, v: fmtBytes(w.sizeBytes) },
   ];
   const info = w.info;
   if (info) {
-    if (info.generator) rows.push({ k: '世界类型', v: GENERATOR_ZH[info.generator] ?? info.generator });
-    if (info.seed) rows.push({ k: '种子', v: info.seed });
-    if (info.gameType !== null) rows.push({ k: '游戏模式', v: GAMEMODE_ZH[info.gameType] ?? String(info.gameType) });
+    if (info.generator) rows.push({ k: W.worldType, v: W.generators[info.generator] ?? info.generator });
+    if (info.seed) rows.push({ k: W.seed, v: info.seed });
+    if (info.gameType !== null) rows.push({ k: W.gamemode, v: W.gamemodes[info.gameType] ?? String(info.gameType) });
     if (info.difficulty !== null) {
       rows.push({
-        k: '难度',
-        v: `${DIFFICULTY_ZH[info.difficulty] ?? info.difficulty}${info.hardcore ? ' · 极限' : ''}`,
+        k: W.difficulty,
+        v: `${W.difficulties[info.difficulty] ?? info.difficulty}${info.hardcore ? W.hardcoreSuffix : ''}`,
       });
     }
-    if (info.version) rows.push({ k: '版本', v: info.version });
-    if (info.dayTime !== null) rows.push({ k: '世界天数', v: `第 ${Math.floor(info.dayTime / 24_000) + 1} 天` });
-    if (info.levelName && info.levelName !== w.name) rows.push({ k: '存档自述名', v: info.levelName });
+    if (info.version) rows.push({ k: W.version, v: info.version });
+    if (info.dayTime !== null) rows.push({ k: W.worldDay, v: W.dayN(Math.floor(info.dayTime / 24_000) + 1) });
+    if (info.levelName && info.levelName !== w.name) rows.push({ k: W.levelDatName, v: info.levelName });
   }
   if (w.dimensions.length) {
-    rows.push({ k: '已生成维度', v: w.dimensions.map((d) => (d === 'nether' ? '下界' : '末地')).join('、') });
+    rows.push({ k: W.dimensions, v: W.list(w.dimensions.map((d) => (d === 'nether' ? W.nether : W.theEnd))) });
   }
   return rows;
 }
@@ -128,11 +105,13 @@ function infoRows(w: MinecraftWorldInfo, now: Date): Array<{ k: string; v: strin
 export const worldPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
     const { ui, root } = ctx;
+    const T = text(ctx.language);
+    const W = T.world;
 
     // -----------------------------------------------------------------------
     // 卡一:存档
     // -----------------------------------------------------------------------
-    const card = ui.sheet({ title: '存档与玩法', en: 'world & rules', desc: DESC });
+    const card = ui.sheet({ title: W.title, en: 'world & rules', desc: W.desc });
     const s = card.body;
     root.appendChild(card.el);
 
@@ -140,10 +119,10 @@ export const worldPanel: ConsolePanel = {
     s.appendChild(msg.el);
 
     const stateBox = ui.h('div');
-    s.append(ui.section('当前世界'), stateBox);
+    s.append(ui.section(W.currentWorld), stateBox);
 
     const layout = ui.segmented(
-      [{ value: 'grid', label: '网格' }, { value: 'detail', label: '详情' }],
+      [{ value: 'grid', label: W.grid }, { value: 'detail', label: W.detail }],
       {
         value: ctx.memo.get<string>('layout', 'grid'),
         size: 'sm',
@@ -153,37 +132,37 @@ export const worldPanel: ConsolePanel = {
     const listBar = ui.rowbar();
     listBar.append(ui.h('span', 'grow'), layout.el);
     const listBox = ui.h('div');
-    s.append(ui.section('存档', '按最近活跃分组,默认只展开最近的一组'), listBar, listBox);
+    s.append(ui.section(W.saves, W.savesNote), listBar, listBox);
 
     // ---- 玩法 ----
-    const gmSel = ui.select({ options: GAMEMODES });
-    const diffSel = ui.select({ options: DIFFICULTIES });
-    const hardcoreIn = ui.checkbox('极限模式');
+    const gmSel = ui.select({ options: GAMEMODES.map((value, i) => ({ value, label: W.gamemodes[i]! })) });
+    const diffSel = ui.select({ options: DIFFICULTIES.map((value, i) => ({ value, label: W.difficulties[i]! })) });
+    const hardcoreIn = ui.checkbox(W.hardcore);
     const pvpIn = ui.checkbox('PVP');
-    const monstersIn = ui.checkbox('刷怪');
-    const btnApply = ui.button('应用', { size: 'sm', variant: 'primary' });
+    const monstersIn = ui.checkbox(W.monsters);
+    const btnApply = ui.button(T.apply, { size: 'sm', variant: 'primary' });
     const ruleForm = ui.h('div', 'mc-form');
-    ruleForm.append(ui.field('游戏模式', gmSel), ui.field('难度', diffSel));
+    ruleForm.append(ui.field(W.gamemode, gmSel), ui.field(W.difficulty, diffSel));
     const ruleBar = ui.actions();
     ruleBar.append(hardcoreIn.el, pvpIn.el, monstersIn.el, ui.h('span', 'grow'), btnApply);
-    s.append(ui.section('玩法'), ruleForm, ruleBar);
+    s.append(ui.section(W.gameplay), ruleForm, ruleBar);
 
     // ---- 世界规则(收起来的那些) ----
-    const netherIn = ui.checkbox('允许下界');
+    const netherIn = ui.checkbox(W.allowNether);
     const spawnProtIn = ui.input({ type: 'number', value: '16' });
     const viewIn = ui.input({ type: 'number', value: '10' });
     const simIn = ui.input({ type: 'number', value: '10' });
     const borderIn = ui.input({ type: 'number', value: '29999984' });
     const rulesForm = ui.h('div', 'mc-form');
     rulesForm.append(
-      ui.field('出生点保护(格)', spawnProtIn),
-      ui.field('视距(区块)', viewIn),
-      ui.field('模拟距离(区块)', simIn),
-      ui.field('世界边界(格)', borderIn),
+      ui.field(W.spawnProtection, spawnProtIn),
+      ui.field(W.viewDistance, viewIn),
+      ui.field(W.simulationDistance, simIn),
+      ui.field(W.worldBorder, borderIn),
     );
     const rulesBar = ui.actions();
     rulesBar.append(netherIn.el, ui.h('span', 'grow'));
-    const moreRules = fold(ctx, '更多世界规则', '这几项都要停机改,下次启动生效。');
+    const moreRules = fold(ctx, W.moreRules, W.moreRulesNote);
     moreRules.body.append(rulesForm, rulesBar);
     s.append(moreRules.el);
 
@@ -191,31 +170,30 @@ export const worldPanel: ConsolePanel = {
     // 卡二:开新存档
     // -----------------------------------------------------------------------
     const newCard = ui.sheet({
-      title: '开新存档',
+      title: W.newTitle,
       en: 'new world',
-      desc: '这里的生成参数只在世界第一次生成时被读到;开出来之后再改不会重塑地形。'
-        + '服务器停机时登记,下次启动按它生成。',
+      desc: W.newDesc,
     });
     const n = newCard.body;
     root.appendChild(newCard.el);
 
-    const newName = ui.input({ placeholder: '新存档名' });
-    const newSeed = ui.input({ placeholder: '留空 = 随机' });
+    const newName = ui.input({ placeholder: W.newName });
+    const newSeed = ui.input({ placeholder: W.seedPlaceholder });
     const typeSel = ui.select();
-    const structIn = ui.checkbox('生成村庄、神殿这些结构', { checked: true });
+    const structIn = ui.checkbox(W.structures, { checked: true });
     const typeNote = ui.h('div', 'pagedesc');
     const newForm = ui.h('div', 'mc-form');
-    newForm.append(ui.field('存档名', newName), ui.field('种子', newSeed), ui.field('世界类型', typeSel));
+    newForm.append(ui.field(W.saveName, newName), ui.field(W.seed, newSeed), ui.field(W.worldType, typeSel));
 
     const presetSel = ui.select();
-    const genText = ui.textarea({ placeholder: '留空 = 该世界类型的默认生成', cls: 'mono' });
+    const genText = ui.textarea({ placeholder: W.genPlaceholder, cls: 'mono' });
     const presetNote = ui.h('div', 'pagedesc');
-    const moreGen = fold(ctx, '更多世界生成', '超平坦的层配方、单一群系的群系名都写在这份 JSON 里。');
+    const moreGen = fold(ctx, W.moreGen, W.moreGenNote);
     const presetForm = ui.h('div', 'mc-form');
-    presetForm.append(ui.field('超平坦预设', presetSel));
-    moreGen.body.append(presetForm, presetNote, ui.field('生成器细则(generator-settings)', genText));
+    presetForm.append(ui.field(W.flatPreset, presetSel));
+    moreGen.body.append(presetForm, presetNote, ui.field(W.generatorSettings, genText));
 
-    const btnCreate = ui.button('登记新存档', { size: 'sm', variant: 'primary' });
+    const btnCreate = ui.button(W.register, { size: 'sm', variant: 'primary' });
     const newBar = ui.actions();
     newBar.append(structIn.el, ui.h('span', 'grow'), btnCreate);
     n.append(newForm, typeNote, moreGen.el, newBar);
@@ -229,7 +207,7 @@ export const worldPanel: ConsolePanel = {
 
     function fillPresets(st: MinecraftWorldState): void {
       if (presetSel.options.length) return;
-      const custom = ui.h('option', null, '自定义');
+      const custom = ui.h('option', null, W.custom);
       custom.value = '';
       presetSel.appendChild(custom);
       for (const p of st.flatPresets) {
@@ -268,28 +246,28 @@ export const worldPanel: ConsolePanel = {
       const el = ui.h('div', `mc-world${isCur ? ' cur' : ''}`);
       const head = ui.h('div', 'mc-worldhead');
       head.append(ui.h('span', 'mc-worldname', w.name));
-      if (isCur) head.append(ui.pill('当前', 'on'));
-      if (!w.generated) head.append(ui.pill('还没生成', 'plain'));
+      if (isCur) head.append(ui.pill(W.current, 'on'));
+      if (!w.generated) head.append(ui.pill(W.notGenerated, 'plain'));
       el.append(head);
 
       if (detail) {
-        el.append(ui.kv(infoRows(w, now)));
+        el.append(ui.kv(infoRows(W, w, now)));
       } else {
         const meta = ui.h('div', 'mc-worldmeta');
-        meta.append(ui.h('span', null, fmtWhen(w.modified, now)));
+        meta.append(ui.h('span', null, fmtWhen(W, w.modified, now)));
         if (w.sizeBytes > 0) meta.append(ui.h('span', null, fmtBytes(w.sizeBytes)));
         if (w.info?.version) meta.append(ui.h('span', null, w.info.version));
         if (w.info?.generator) {
-          meta.append(ui.h('span', null, GENERATOR_ZH[w.info.generator] ?? w.info.generator));
+          meta.append(ui.h('span', null, W.generators[w.info.generator] ?? w.info.generator));
         }
         el.append(meta);
       }
 
       const acts = ui.h('div', 'mc-worldacts');
-      const pick = ui.button('换到这个存档', { size: 'sm' });
+      const pick = ui.button(W.switchTo, { size: 'sm' });
       pick.disabled = isCur || !st.configured || st.live;
       pick.addEventListener('click', () => {
-        void act(() => ctx.invoke<MinecraftWorldState>('select', [w.name]), '切换中…');
+        void act(() => ctx.invoke<MinecraftWorldState>('select', [w.name]), W.switching);
       }, { signal: ctx.signal });
       acts.append(pick);
       el.append(acts);
@@ -304,13 +282,13 @@ export const worldPanel: ConsolePanel = {
         const id = groupOf(w, now);
         (buckets.get(id) ?? buckets.set(id, []).get(id)!).push(w);
       }
-      const order = [...GROUPS.map((g) => ({ id: g.id, label: g.label })), { id: 'pending', label: '还没生成' }]
+      const order = [...GROUPS.map((g) => ({ id: g.id as string, label: W.groups[g.id] })), { id: 'pending', label: W.notGenerated }]
         .filter((g) => buckets.has(g.id));
       if (opened === null) opened = new Set(order.length ? [order[0].id] : []);
 
       listBox.replaceChildren();
       if (!order.length) {
-        listBox.append(ui.placeholder('还没有存档(下次启动会按当前存档名生成一个)'));
+        listBox.append(ui.placeholder(W.noSaves));
         return;
       }
       for (const g of order) {
@@ -318,7 +296,7 @@ export const worldPanel: ConsolePanel = {
         const box = ui.h('details', 'mc-group');
         box.open = opened.has(g.id);
         const sum = ui.h('summary');
-        sum.append(ui.h('span', null, g.label), ui.h('span', 'mc-groupcount', `${items.length} 份`));
+        sum.append(ui.h('span', null, g.label), ui.h('span', 'mc-groupcount', W.count(items.length)));
         box.append(sum);
         const grid = ui.h('div', `mc-worlds ${detail ? 'detail' : 'grid'}`);
         for (const w of items) grid.append(worldCard(w, st, now, detail));
@@ -335,8 +313,8 @@ export const worldPanel: ConsolePanel = {
       if (ctx.signal.aborted) return;
       cur = st;
       if (!st) {
-        msg.say('存档设置不可用', true);
-        stateBox.replaceChildren(ui.placeholder('读不到服务器目录里的 server.properties'));
+        msg.say(W.unavailable, true);
+        stateBox.replaceChildren(ui.placeholder(W.noProperties));
         listBox.replaceChildren(ui.placeholder('—'));
         return;
       }
@@ -344,16 +322,16 @@ export const worldPanel: ConsolePanel = {
       fillLevelTypes(st);
       fillPresets(st);
 
-      const genZh = st.levelTypes.find((t) => t.value === st.settings.levelType)?.label ?? st.settings.levelType;
+      const genLabel = st.levelTypes.find((t) => t.value === st.settings.levelType)?.label ?? st.settings.levelType;
       stateBox.replaceChildren(ui.kv([
-        { k: '当前存档', v: st.settings.levelName },
-        { k: '种子', v: st.settings.levelSeed || '(随机)' },
-        { k: '世界类型', v: `${genZh}${st.settings.generatorSettings ? ' · 带生成器细则' : ''}` },
-        { k: '服务器', v: ui.pill(
-          st.live ? (st.hosted ? '运行中(本 World 托管)' : '运行中(外部)') : '已停机',
+        { k: W.currentSave, v: st.settings.levelName },
+        { k: W.seed, v: st.settings.levelSeed || W.random },
+        { k: W.worldType, v: `${genLabel}${st.settings.generatorSettings ? W.withGenerator : ''}` },
+        { k: T.server, v: ui.pill(
+          st.live ? (st.hosted ? T.runningHosted : T.runningExternal) : T.stopped,
           st.live ? 'on' : 'plain',
         ) },
-        { k: '服务器目录', v: st.serverDir || '(未配置)' },
+        { k: T.serverDir, v: st.serverDir || T.notConfigured },
       ]));
 
       renderWorlds(st);
@@ -376,7 +354,7 @@ export const worldPanel: ConsolePanel = {
       netherIn.input.disabled = spawnProtIn.disabled = viewIn.disabled = off || !stopped;
       simIn.disabled = borderIn.disabled = off || !stopped;
       gmSel.disabled = diffSel.disabled = btnApply.disabled = off;
-      msg.say(st.detail || (st.live ? '服务器跑着:只有难度和默认游戏模式能当场改' : ''));
+      msg.say(st.detail || (st.live ? W.liveNote : ''));
     }
 
     const refresh = (): Promise<void> =>
@@ -396,7 +374,7 @@ export const worldPanel: ConsolePanel = {
       try {
         next = await fn();
       } catch (err) {
-        if (!ctx.signal.aborted) msg.say(`操作失败: ${errText(err)}`, true);
+        if (!ctx.signal.aborted) msg.say(T.opFailed(errText(err)), true);
       } finally {
         lock.dispose();
       }
@@ -409,7 +387,7 @@ export const worldPanel: ConsolePanel = {
         levelType: typeSel.value,
         generatorSettings: genText.value,
         generateStructures: structIn.checked,
-      }]), '登记中…');
+      }]), W.registering);
     }, { signal: ctx.signal });
 
     btnApply.addEventListener('click', () => {
@@ -428,7 +406,7 @@ export const worldPanel: ConsolePanel = {
           simulationDistance: Number(simIn.value),
           maxWorldSize: Number(borderIn.value),
         };
-      void act(() => ctx.invoke<MinecraftWorldState>('apply', [patch]), '应用中…');
+      void act(() => ctx.invoke<MinecraftWorldState>('apply', [patch]), T.applying);
     }, { signal: ctx.signal });
 
     void refresh();

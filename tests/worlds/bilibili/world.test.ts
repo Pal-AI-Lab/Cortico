@@ -253,7 +253,7 @@ describe('BilibiliWorld', () => {
   it('已挂载的自定义 source 未提供核验能力时保守记为 unknown', async () => {
     const { module } = await mount();
     await module.stop();
-    expect(module.shutdownVerification()).toEqual([expect.objectContaining({
+    expect(module.shutdownVerification('zh')).toEqual([expect.objectContaining({
       key: 'bilibili.live-source',
       status: 'unknown',
       manualAction: expect.stringContaining('人工确认'),
@@ -308,7 +308,7 @@ describe('BilibiliWorld', () => {
     expect(verificationCalls).toBe(0);
     await module.stop();
     expect(verificationCalls).toBe(1);
-    expect(module.shutdownVerification()).toEqual([expect.objectContaining({
+    expect(module.shutdownVerification('zh')).toEqual([expect.objectContaining({
       key: 'test.source',
       status: 'verified-ended',
     })]);
@@ -337,7 +337,7 @@ describe('BilibiliWorld', () => {
     expect(overlayStop).toHaveBeenCalledOnce();
     expect((module as unknown as { host: unknown }).host).toBeNull();
     expect((module as unknown as { status: unknown }).status).toBeNull();
-    expect(module.shutdownVerification()).toEqual([expect.objectContaining({
+    expect(module.shutdownVerification('zh')).toEqual([expect.objectContaining({
       key: 'bilibili.live-source',
       status: 'unknown',
       detail: expect.stringContaining('source stop failed'),
@@ -368,7 +368,7 @@ describe('BilibiliWorld', () => {
     expect((module as unknown as { overlayServer: unknown }).overlayServer).toBeNull();
     expect((module as unknown as { host: unknown }).host).toBeNull();
     expect((module as unknown as { status: unknown }).status).toBeNull();
-    expect(module.shutdownVerification()).toEqual([expect.objectContaining({ status: 'unknown' })]);
+    expect(module.shutdownVerification('zh')).toEqual([expect.objectContaining({ status: 'unknown' })]);
   });
 
   it('自定义 source 的核验 hook 返回空数组时保守记为 unknown', async () => {
@@ -384,7 +384,7 @@ describe('BilibiliWorld', () => {
     await module.start(new FakeHost());
     await module.stop();
 
-    expect(module.shutdownVerification()).toEqual([expect.objectContaining({
+    expect(module.shutdownVerification('zh')).toEqual([expect.objectContaining({
       status: 'unknown',
       detail: expect.stringContaining('未返回任何检查项'),
     })]);
@@ -395,7 +395,7 @@ describe('BilibiliWorld', () => {
     const host = new FakeHost();
     await module.start(host);
     await module.stop();
-    expect(module.shutdownVerification()).toEqual([]);
+    expect(module.shutdownVerification('zh')).toEqual([]);
   });
 
   it('弹幕按 debounce 推,礼物按金额分档', async () => {
@@ -905,8 +905,8 @@ describe('BilibiliWorld', () => {
       const editorUrl = editorLink?.href;
       expect(editorLink?.inheritTheme).toBe(true);
       expect(links.find((link) => link.label.includes('OBS'))?.inheritTheme).toBeUndefined();
-      expect(editorUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/editor$/);
-      const baseUrl = editorUrl!.replace(/\/editor$/, '');
+      expect(editorUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/editor\?lang=zh$/);
+      const baseUrl = new URL(editorUrl!).origin;
       const state = await (await fetch(`${baseUrl}/api/editor/state`)).json() as {
         design: typeof persisted.design;
         designRevision: number;
@@ -1002,7 +1002,7 @@ describe('BilibiliWorld', () => {
     await module.start(new FakeHost());
     try {
       const editorUrl = module.console().links?.find((link) => link.label.includes('编辑器'))?.href;
-      const baseUrl = editorUrl!.replace(/\/editor$/, '');
+      const baseUrl = new URL(editorUrl!).origin;
       const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]).toString('base64');
       const upload = await fetch(`${baseUrl}/api/editor/assets`, {
         method: 'POST',

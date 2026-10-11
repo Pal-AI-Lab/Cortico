@@ -70,7 +70,7 @@ export interface QQRoster {
 // 共享 helper
 // ---------------------------------------------------------------------------
 
-/** 错误 → 一句人话。`ConsoleInvokeError` 带的就是服务端的中文措辞。 */
+/** 错误 → 一句人话。`ConsoleInvokeError` 带的是服务端按界面语言给的措辞。 */
 export function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }

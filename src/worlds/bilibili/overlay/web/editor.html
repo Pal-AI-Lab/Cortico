@@ -9,47 +9,47 @@
   <body>
     <div class="editor-shell">
       <header class="topbar">
-        <div class="brandmark" aria-label="Bilibili Overlay 编辑器">
+        <div class="brandmark" aria-label="Bilibili Overlay 编辑器" data-i18n-aria-label="pageTitle">
           <span class="brand-icon">B</span>
-          <span><strong>Overlay 编辑器</strong><small>BILIBILI LIVE</small></span>
+          <span><strong data-i18n="brandName">Overlay 编辑器</strong><small>BILIBILI LIVE</small></span>
         </div>
         <div class="history-actions">
-          <button class="icon-button" id="undo" type="button" title="撤销 (Ctrl+Z)" aria-label="撤销">↶</button>
-          <button class="icon-button" id="redo" type="button" title="重做 (Ctrl+Shift+Z)" aria-label="重做">↷</button>
+          <button class="icon-button" id="undo" type="button" title="撤销 (Ctrl+Z)" aria-label="撤销" data-i18n-title="undoTitle" data-i18n-aria-label="undo">↶</button>
+          <button class="icon-button" id="redo" type="button" title="重做 (Ctrl+Shift+Z)" aria-label="重做" data-i18n-title="redoTitle" data-i18n-aria-label="redo">↷</button>
         </div>
         <div class="top-spacer"></div>
-        <div class="preview-actions" aria-label="试显事件">
-          <span>试显</span>
-          <button class="quiet-button" id="demo-danmaku" type="button">弹幕</button>
-          <button class="quiet-button" id="demo-gift" type="button">礼物</button>
+        <div class="preview-actions" aria-label="试显事件" data-i18n-aria-label="demoEvents">
+          <span data-i18n="demo">试显</span>
+          <button class="quiet-button" id="demo-danmaku" type="button" data-i18n="eventDanmaku">弹幕</button>
+          <button class="quiet-button" id="demo-gift" type="button" data-i18n="eventGift">礼物</button>
         </div>
-        <a class="quiet-button link-button" id="open-overlay" href="/overlay" target="_blank" rel="noreferrer">OBS 页面 ↗</a>
-        <span class="save-state" id="save-state" role="status" aria-live="polite"><i></i><span>正在连接</span></span>
-        <button class="quiet-button hidden" id="adopt-design" type="button">采用远端</button>
-        <button class="primary-button" id="save" type="button">保存设计</button>
+        <a class="quiet-button link-button" id="open-overlay" href="/overlay" target="_blank" rel="noreferrer" data-i18n="obsPage">OBS 页面 ↗</a>
+        <span class="save-state" id="save-state" role="status" aria-live="polite"><i></i><span data-i18n="connecting">正在连接</span></span>
+        <button class="quiet-button hidden" id="adopt-design" type="button" data-i18n="adoptRemote">采用远端</button>
+        <button class="primary-button" id="save" type="button" data-i18n="saveDesign">保存设计</button>
       </header>
 
       <main class="editor-main">
-        <nav class="mode-rail" aria-label="编辑器工作区">
+        <nav class="mode-rail" aria-label="编辑器工作区" data-i18n-aria-label="workspaces">
           <button class="mode-button active" type="button" data-mode="styles" aria-current="page">
-            <span class="mode-glyph">◩</span><span>样式</span>
+            <span class="mode-glyph">◩</span><span data-i18n="modeStyles">样式</span>
           </button>
           <button class="mode-button" type="button" data-mode="components">
-            <span class="mode-glyph">▣</span><span>组件</span>
+            <span class="mode-glyph">▣</span><span data-i18n="modeComponents">组件</span>
           </button>
           <button class="mode-button" type="button" data-mode="layout">
-            <span class="mode-glyph">⌖</span><span>布局</span>
+            <span class="mode-glyph">⌖</span><span data-i18n="modeLayout">布局</span>
           </button>
           <div class="rail-spacer"></div>
-          <button class="mode-button" id="help" type="button" title="快捷键与使用说明">
-            <span class="mode-glyph">?</span><span>帮助</span>
+          <button class="mode-button" id="help" type="button" title="快捷键与使用说明" data-i18n-title="helpButtonTitle">
+            <span class="mode-glyph">?</span><span data-i18n="help">帮助</span>
           </button>
         </nav>
 
         <aside class="inspector-shell">
           <div class="inspector-head">
-            <div><p id="workspace-kicker">STYLE</p><h1 id="workspace-title">样式编辑器</h1></div>
-            <button class="square-button" id="create" type="button" title="新建">＋</button>
+            <div><p id="workspace-kicker">STYLE</p><h1 id="workspace-title" data-i18n="stylesEditor">样式编辑器</h1></div>
+            <button class="square-button" id="create" type="button" title="新建" data-i18n-title="create">＋</button>
           </div>
           <div class="inspector-scroll" id="inspector" aria-live="polite"></div>
         </aside>
@@ -57,15 +57,15 @@
         <section class="canvas-workspace">
           <div class="canvas-bar">
             <div class="canvas-meta">
-              <strong id="canvas-name">直播画布</strong>
+              <strong id="canvas-name" data-i18n="liveCanvas">直播画布</strong>
               <span id="canvas-size">1920 × 1080</span>
             </div>
             <div class="canvas-tools">
-              <div class="segmented wall-toggle" aria-label="画布背景墙">
-                <button type="button" data-wall-mode="light" title="浅色背景墙">浅</button>
-                <button type="button" data-wall-mode="dark" title="深色背景墙">深</button>
+              <div class="segmented wall-toggle" aria-label="画布背景墙" data-i18n-aria-label="wall">
+                <button type="button" data-wall-mode="light" title="浅色背景墙" data-i18n-title="wallLightTitle" data-i18n="wallLight">浅</button>
+                <button type="button" data-wall-mode="dark" title="深色背景墙" data-i18n-title="wallDarkTitle" data-i18n="wallDark">深</button>
               </div>
-              <label class="compact-field">网格
+              <label class="compact-field"><span data-i18n="grid">网格</span>
                 <select id="snap-grid">
                   <option value="1">1 px</option>
                   <option value="5">5 px</option>
@@ -73,23 +73,23 @@
                   <option value="20">20 px</option>
                 </select>
               </label>
-              <button class="icon-button" id="zoom-out" type="button" aria-label="缩小">−</button>
-              <button class="zoom-value" id="zoom-reset" type="button" title="适合画布"><span id="zoom-label">适合</span></button>
-              <button class="icon-button" id="zoom-in" type="button" aria-label="放大">＋</button>
+              <button class="icon-button" id="zoom-out" type="button" aria-label="缩小" data-i18n-aria-label="zoomOut">−</button>
+              <button class="zoom-value" id="zoom-reset" type="button" title="适合画布" data-i18n-title="fitCanvas"><span id="zoom-label" data-i18n="fit">适合</span></button>
+              <button class="icon-button" id="zoom-in" type="button" aria-label="放大" data-i18n-aria-label="zoomIn">＋</button>
             </div>
           </div>
           <div class="canvas-viewport" id="canvas-viewport">
             <div class="canvas-sizer" id="canvas-sizer">
               <div class="canvas-shell" id="canvas-shell">
-                <iframe id="preview-frame" title="Overlay 实时草稿预览" data-src="/overlay?preview=1"></iframe>
-                <div class="interaction-layer" id="interaction-layer" aria-label="布局交互层"></div>
+                <iframe id="preview-frame" title="Overlay 实时草稿预览" data-i18n-title="previewFrame" data-src="/overlay?preview=1"></iframe>
+                <div class="interaction-layer" id="interaction-layer" aria-label="布局交互层" data-i18n-aria-label="interactionLayer"></div>
               </div>
             </div>
-            <div class="empty-overlay" id="loading"><span class="spinner"></span><strong>正在装入编辑器</strong></div>
+            <div class="empty-overlay" id="loading"><span class="spinner"></span><strong data-i18n="loading">正在装入编辑器</strong></div>
           </div>
           <footer class="canvas-status">
-            <span id="selection-status">请选择一个对象</span>
-            <span class="shortcut-hint">拖动移动 · 八向缩放 · 方向键 1px · Shift 10px · Delete 删除</span>
+            <span id="selection-status" data-i18n="selectObject">请选择一个对象</span>
+            <span class="shortcut-hint" data-i18n="shortcutHint">拖动移动 · 八向缩放 · 方向键 1px · Shift 10px · Delete 删除</span>
           </footer>
         </section>
       </main>

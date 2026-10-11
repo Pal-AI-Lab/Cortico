@@ -94,7 +94,7 @@ describe('LiveClient shutdown verification', () => {
 
     const live = client();
     await live.stop();
-    expect(live.shutdownVerification()[0]).toMatchObject({ status: expected });
+    expect(live.shutdownVerification('zh')[0]).toMatchObject({ status: expected });
     expect(calls).toEqual([expect.objectContaining({
       url: expect.stringContaining('/room/v1/Room/get_info?room_id=7734200'),
       method: 'GET',
@@ -116,7 +116,7 @@ describe('LiveClient shutdown verification', () => {
     await vi.advanceTimersByTimeAsync(SHUTDOWN_VERIFY_TIMEOUT_MS + 1);
     await stopping;
 
-    expect(live.shutdownVerification()[0]).toMatchObject({
+    expect(live.shutdownVerification('zh')[0]).toMatchObject({
       status: 'unknown',
       detail: expect.stringContaining('超时'),
       manualAction: expect.stringContaining('人工确认'),
@@ -133,7 +133,7 @@ describe('LiveClient shutdown verification', () => {
     }));
     const live = client();
     await live.stop();
-    expect(live.shutdownVerification()[0]).toMatchObject({
+    expect(live.shutdownVerification('zh')[0]).toMatchObject({
       status: 'unknown',
       detail: expect.stringContaining('live_status'),
     });
@@ -146,7 +146,7 @@ describe('LiveClient shutdown verification', () => {
     }));
     const live = client();
     await live.stop();
-    expect(live.shutdownVerification()[0]).toMatchObject({
+    expect(live.shutdownVerification('zh')[0]).toMatchObject({
       status: 'unknown',
       detail: expect.stringContaining('code=60004'),
     });

@@ -24,25 +24,17 @@ import {
   type MinecraftSkinRole,
   type MinecraftSkinState,
 } from './client.ts';
-
-const DESC =
-  '离线服务器发不出皮肤材质,这里选的 PNG 由客户端侧的 CustomSkinLoader 按账号名'
-  + '读——直播画面(摄像机窗口)与你自己那份客户端都看得到,别人的客户端看不到。'
-  + '她和玩家各选各的。';
-
-/** 两块的中文名与它们各自是谁 */
-const ROLE_ZH: Record<MinecraftSkinRole['role'], { label: string; note: string }> = {
-  bot: { label: '她', note: '游戏内账号(worlds.minecraft.username)' },
-  player: { label: '玩家', note: '你自己进服那份客户端(worlds.minecraft.player.username)' },
-};
+import { text } from './strings.ts';
 
 const FACE_PX = 72;
 
 export const skinPanel: ConsolePanel = {
   mount(ctx: ConsolePanelContext) {
     const { ui, root } = ctx;
+    const T = text(ctx.language);
+    const K = T.skin;
 
-    const card = ui.sheet({ title: '皮肤', en: 'skins', desc: DESC });
+    const card = ui.sheet({ title: K.title, en: 'skins', desc: K.desc });
     const s = card.body;
     root.appendChild(card.el);
 
@@ -51,12 +43,12 @@ export const skinPanel: ConsolePanel = {
 
     const roleBox = ui.h('div', 'mc-skins');
     s.append(
-      ui.section('谁穿哪一张', '选中即铺进两份游戏目录;客户端正跑着的话,要它重进一次服务器才换得过来'),
+      ui.section(K.whoWears, K.whoWearsNote),
       roleBox,
     );
 
     const premise = ui.h('div');
-    s.append(ui.section('前提', '皮肤由客户端 mod 读;它不在游戏目录里就一切照旧'), premise);
+    s.append(ui.section(K.premise, K.premiseNote), premise);
 
     /** 一个角色一个隐藏的 file input:点的是卡里那颗钮 */
     const pickers = new Map<MinecraftSkinRole['role'], HTMLInputElement>();
@@ -71,7 +63,7 @@ export const skinPanel: ConsolePanel = {
         void act(async () => {
           const base64 = await toBase64(file);
           return ctx.invoke<MinecraftSkinState>('set', [role, base64]);
-        }, `读取 ${file.name}…`);
+        }, K.reading(file.name));
       }, { signal: ctx.signal });
       pickers.set(role, input);
       s.appendChild(input);
@@ -116,8 +108,8 @@ export const skinPanel: ConsolePanel = {
         cv.addEventListener('click', () => {
           const big = ui.h('img', 'mc-shot-big');
           big.src = url;
-          big.alt = `${ROLE_ZH[role].label}的皮肤`;
-          ui.drawer(`${ROLE_ZH[role].label}的皮肤`, big);
+          big.alt = K.skinOf(K.roles[role].label);
+          ui.drawer(K.skinOf(K.roles[role].label), big);
         }, { signal: ctx.signal });
       }, () => { /* 取不到就留一块空 canvas */ });
       return cv;
@@ -128,7 +120,7 @@ export const skinPanel: ConsolePanel = {
     let cur: MinecraftSkinState | null = null;
 
     function roleCard(role: MinecraftSkinRole, st: MinecraftSkinState): HTMLDivElement {
-      const zh = ROLE_ZH[role.role];
+      const who = K.roles[role.role];
       const el = ui.h('div', 'mc-skin');
       if (role.skin) el.classList.add('cur');
 
@@ -138,28 +130,28 @@ export const skinPanel: ConsolePanel = {
         : ui.h('div', 'mc-face mc-facenone'));
 
       const meta = ui.h('div');
-      const title = ui.h('div', 'mc-worldname', zh.label);
-      title.title = zh.note;
+      const title = ui.h('div', 'mc-worldname', who.label);
+      title.title = who.note;
       meta.appendChild(title);
-      meta.appendChild(ui.h('div', 'mc-worldmeta', role.username || '(没配账号名)'));
+      meta.appendChild(ui.h('div', 'mc-worldmeta', role.username || K.noUsername));
       if (role.skin) {
         const shared = st.dirs.camera === st.dirs.player;
         const laid = role.installed.camera && (shared || role.installed.player);
         const line = ui.h('div', 'mc-worldmeta');
         line.append(
           ui.h('span', null, `${role.skin.width}×${role.skin.height} · ${ui.fmt.bytes(role.skin.bytes)}`),
-          ui.h('span', null, `选于 ${ui.fmt.clock(role.skin.at)}`),
-          laid ? ui.pill('已铺好', 'on') : ui.pill('未铺到位', 'off'),
+          ui.h('span', null, K.chosenAt(ui.fmt.clock(role.skin.at))),
+          laid ? ui.pill(K.installed, 'on') : ui.pill(K.notInstalled, 'off'),
         );
         meta.appendChild(line);
       } else {
-        meta.appendChild(ui.h('div', 'mc-worldmeta', '没选 · 原版随机皮肤'));
+        meta.appendChild(ui.h('div', 'mc-worldmeta', K.noneChosen));
       }
       head.appendChild(meta);
       el.appendChild(head);
 
       const acts = ui.actions();
-      const btnPick = ui.button(role.skin ? '换一张…' : '选一张…', {
+      const btnPick = ui.button(role.skin ? K.change : K.choose, {
         size: 'sm',
         variant: role.skin ? 'plain' : 'primary',
       });
@@ -170,16 +162,16 @@ export const skinPanel: ConsolePanel = {
       );
       acts.append(btnPick, ui.h('span', 'grow'));
       if (role.skin) {
-        const btnClear = ui.button('撤回', { size: 'sm', variant: 'danger' });
+        const btnClear = ui.button(K.remove, { size: 'sm', variant: 'danger' });
         btnClear.addEventListener('click', () => {
           void (async () => {
             const ok = await ui.confirm({
-              title: `撤回${zh.label}的皮肤?`,
-              body: '那个账号回到原版随机皮肤。',
+              title: K.removeTitle(who.label),
+              body: K.removeBody,
               danger: true,
             });
             if (!ok) return;
-            await act(() => ctx.invoke<MinecraftSkinState>('clear', [role.role]), '撤回中…');
+            await act(() => ctx.invoke<MinecraftSkinState>('clear', [role.role]), K.removing);
           })();
         }, { signal: ctx.signal });
         acts.appendChild(btnClear);
@@ -191,15 +183,15 @@ export const skinPanel: ConsolePanel = {
     function renderPremise(st: MinecraftSkinState): void {
       const shared = st.dirs.camera === st.dirs.player;
       const modPill = (ok: boolean): HTMLSpanElement =>
-        ok ? ui.pill('已装', 'on') : ui.pill('没装 · 皮肤不会生效', 'off');
+        ok ? ui.pill(K.modInstalled, 'on') : ui.pill(K.modMissing, 'off');
       const rows = [
-        { k: shared ? '客户端目录' : '摄像机目录', v: ui.h('span', null, st.dirs.camera) },
+        { k: shared ? K.clientDir : K.cameraDir, v: ui.h('span', null, st.dirs.camera) },
         { k: 'CustomSkinLoader', v: modPill(st.mod.camera) },
       ];
       if (!shared) {
         rows.push(
-          { k: '玩家目录', v: ui.h('span', null, st.dirs.player) },
-          { k: 'CustomSkinLoader(玩家)', v: modPill(st.mod.player) },
+          { k: K.playerDir, v: ui.h('span', null, st.dirs.player) },
+          { k: K.playerMod, v: modPill(st.mod.player) },
         );
       }
       premise.replaceChildren(ui.kv(rows));
@@ -207,8 +199,7 @@ export const skinPanel: ConsolePanel = {
         premise.appendChild(ui.h(
           'div',
           'pagedesc',
-          '把 CustomSkinLoader 的 jar 放进该目录的 mods/ 再启动客户端。它是纯客户端 mod,'
-          + '服务器不用装,也不影响 mineflayer 那条连接。',
+          K.modNote,
         ));
       }
     }
@@ -217,8 +208,8 @@ export const skinPanel: ConsolePanel = {
       if (ctx.signal.aborted) return;
       cur = st;
       if (!st) {
-        msg.say('皮肤设置不可用', true);
-        roleBox.replaceChildren(ui.placeholder('读不到皮肤设置'));
+        msg.say(K.unavailable, true);
+        roleBox.replaceChildren(ui.placeholder(K.unreadable));
         premise.replaceChildren();
         return;
       }
@@ -238,7 +229,7 @@ export const skinPanel: ConsolePanel = {
       } catch (err) {
         if (ctx.signal.aborted) return;
         if (cur) render(cur);
-        msg.say(`操作失败: ${errText(err)}`, true);
+        msg.say(T.opFailed(errText(err)), true);
       }
     }
 
