@@ -64,7 +64,7 @@ const ICON_PROPS = {
 
 function ArrowUpIcon(): React.ReactElement {
   return (
-    <svg {...ICON_PROPS} strokeWidth={2.2}>
+    <svg {...ICON_PROPS}>
       <path d="M12 19.5v-15" />
       <path d="M5.5 11 12 4.5 18.5 11" />
     </svg>
@@ -73,7 +73,7 @@ function ArrowUpIcon(): React.ReactElement {
 
 function PictureIcon(): React.ReactElement {
   return (
-    <svg {...ICON_PROPS} strokeWidth={2}>
+    <svg {...ICON_PROPS}>
       <rect x="3.5" y="4.5" width="17" height="15" rx="2.5" />
       <circle cx="8.5" cy="9" r="1.6" />
       <path d="m4 17.5 5-4.5 3.5 3 3-2.5 4.5 4" />
@@ -83,7 +83,7 @@ function PictureIcon(): React.ReactElement {
 
 function CrossIcon(): React.ReactElement {
   return (
-    <svg {...ICON_PROPS} strokeWidth={2.4}>
+    <svg {...ICON_PROPS}>
       <path d="M7 7l10 10" />
       <path d="M17 7 7 17" />
     </svg>
