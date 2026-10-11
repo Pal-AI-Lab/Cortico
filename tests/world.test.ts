@@ -12,6 +12,7 @@ import { WorldAssembly, withWorlds, worldDefaults, type WorldDefinition, type Wo
 import { loadDeployment } from '../src/deploy.ts';
 import type { BotDefinition } from '../src/bot.ts';
 import type { CoreConfig, ToolDef, World, WorldHost, WorldLifecycleEvent } from '../src/core/types.ts';
+import type { Language } from '../src/core/language.ts';
 import { makeCfg } from './core/helpers.ts';
 
 interface ProbeSection { enabled: boolean; port: number; nested: { name: string; tags: string[] } }
@@ -264,6 +265,43 @@ describe('激活 / 停用 / 重启', () => {
     expect(assembly.mounted).toEqual([prebuilt]);
     await expect(assembly.activate('a')).resolves.toContain('已启用');
     expect(existsSync(join(dir, '.env'))).toBe(false);
+  });
+});
+
+describe('显示名', () => {
+  const labelled = (id: string, labels: Partial<Record<Language, string>>) => probeDefinition(id, {
+    create: (ctx) => Object.assign(new Probe(id, ctx), { console: (language: Language) => ({ label: labels[language] }) }),
+  });
+
+  it('按请求语言现取:实例 console().label,其次定义的 localize().label,再次定义的 label', () => {
+    let current = '启动时的名字';
+    const live = Object.defineProperty(probeDefinition('live'), 'label', { get: () => current });
+    const localized = probeDefinition('localized', { localize: (language) => ({ label: `localized ${language}` }) });
+    const { assembly } = assemblyOf([labelled('decl', { en: 'Declared' }), localized, live], []);
+    current = '现在的名字';
+    expect(assembly.labelIn('decl', 'en')).toBe('Declared');
+    expect(assembly.labelIn('decl', 'zh')).toBe('decl 探针');
+    expect(assembly.labelIn('localized', 'ja')).toBe('localized ja');
+    expect(assembly.labelIn('live', 'en')).toBe('现在的名字');
+  });
+
+  it('构造失败的定义按 localize 给名;只在声明里出现的用声明的名字', () => {
+    const boom = probeDefinition('boom', { create: () => { throw new Error('x'); }, localize: (language) => ({ label: `boom ${language}` }) });
+    const { assembly } = assemblyOf([boom], [{ id: 'declared-only', label: '声明名' }]);
+    expect(assembly.labelIn('boom', 'en')).toBe('boom en');
+    expect(assembly.labelIn('declared-only', 'en')).toBe('声明名');
+  });
+
+  it('预建实例用装配时给的名字,替换同 id 定义后不再用定义的名字', () => {
+    const { assembly } = assemblyOf([probeDefinition('pre')], []);
+    assembly.addPrebuilt([new Probe('pre', {} as WorldContext<ProbeSection>)], { labels: { pre: '预建' } });
+    expect(assembly.labelIn('pre', 'en')).toBe('预建');
+  });
+
+  it('激活与停用的回执用请求语言的名字', async () => {
+    const { assembly } = assemblyOf([labelled('a', { en: 'Alpha' })], []);
+    expect(await assembly.activate('a', 'en')).toContain('Alpha');
+    expect(await assembly.deactivate('a', 'en')).toContain('Alpha');
   });
 });
 

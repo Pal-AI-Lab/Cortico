@@ -48,6 +48,8 @@ export interface WorldContext<S extends WorldSection = WorldSection> {
 export interface WorldDefinition<S extends WorldSection = WorldSection> {
   id: string;
   label: string;
+  /** 控制台语言下的显示名;缺省或不给 label = 用 `label`。 */
+  localize?(language: Language): { label?: string };
   /** World 配置默认值，每次返回新对象；enabled=false，由 bot 声明或部署配置启用。 */
   defaults(): S;
   /** 激活前置检查。抛错 = 不能激活,错误信息原样给操作者。 */
@@ -295,13 +297,33 @@ export class WorldAssembly {
     return this.slots.find((s) => s.id === id)?.label;
   }
 
+  /**
+   * `language` 下的显示名,每次现取:实例 `console(language).label`,其次定义的
+   * `localize(language).label` 与 `label`;预建实例与没有定义的缺失项用装配时记下的名字。
+   */
+  labelIn(id: string, language: Language): string {
+    const slot = this.slots.find((s) => s.id === id);
+    let fromConsole: string | undefined;
+    try {
+      fromConsole = slot?.instance.console?.(language)?.label;
+    } catch {
+      fromConsole = undefined;
+    }
+    const def = slot ? slot.definition : this.worlds.find((d) => d.id === id);
+    return fromConsole
+      ?? (def ? def.localize?.(language).label ?? def.label : undefined)
+      ?? slot?.label
+      ?? this.missing.find((m) => m.id === id)?.label
+      ?? id;
+  }
+
   /** 三个动作的回执与拒绝理由按 `language` 给;省略 = 中文。 */
   async activate(id: string, language: Language = 'zh'): Promise<string> {
     const t = text(language);
     const slot = this.slot(id, language);
-    if (slot.mounted) return t.alreadyRunning(slot.label);
+    if (slot.mounted) return t.alreadyRunning(this.labelIn(id, language));
     const def = slot.definition;
-    if (!def) throw new Error(t.prebuilt(slot.label));
+    if (!def) throw new Error(t.prebuilt(this.labelIn(id, language)));
     const ctx = this.context(def);
     def.preflight?.(ctx);
     const clash = this.toolClash(slot.instance, this.mounted);
@@ -316,7 +338,7 @@ export class WorldAssembly {
     }
     slot.mounted = true;
     this.host?.lifecycle?.({ kind: 'mounted', id, label: slot.label });
-    return t.activated(slot.label, id);
+    return t.activated(this.labelIn(id, language), id);
   }
 
   async deactivate(id: string, language: Language = 'zh'): Promise<string> {
@@ -325,19 +347,19 @@ export class WorldAssembly {
     if (wasMounted) await this.stopSlot(slot);
     this.persist(id, { enabled: false });
     if (wasMounted) this.host?.lifecycle?.({ kind: 'unmounted', id, label: slot.label });
-    return text(language).deactivated(slot.label, id);
+    return text(language).deactivated(this.labelIn(id, language), id);
   }
 
   async restart(id: string, language: Language = 'zh'): Promise<string> {
     const slot = this.slot(id, language);
-    if (!slot.mounted) throw new Error(text(language).notActive(slot.label));
+    if (!slot.mounted) throw new Error(text(language).notActive(this.labelIn(id, language)));
     await this.stopSlot(slot);
     const clash = this.toolClash(slot.instance, this.mounted);
     if (clash) throw new Error(clash(language));
     await this.mountHost().mount(slot.instance);
     slot.mounted = true;
     this.host?.lifecycle?.({ kind: 'restarted', id, label: slot.label });
-    return text(language).restarted(slot.label);
+    return text(language).restarted(this.labelIn(id, language));
   }
 
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
@@ -367,8 +389,7 @@ export class WorldAssembly {
     for (const other of mounted) {
       const shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
       if (shared.length) {
-        const label = this.labelOf(other.id) ?? other.id;
-        return (language) => text(language).toolClash(label, shared);
+        return (language) => text(language).toolClash(this.labelIn(other.id, language), shared);
       }
     }
     return null;

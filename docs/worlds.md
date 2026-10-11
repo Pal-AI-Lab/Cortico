@@ -69,8 +69,10 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 
 ## 定义与装配
 
-`WorldDefinition`(`src/world.ts`):`id`、`label`、`defaults()`(配置段默认值,World 声明的
-`enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`。
+`WorldDefinition`(`src/world.ts`):`id`、`label`、`localize?`(按界面语言给显示名)、`defaults()`
+(配置段默认值,World 声明的 `enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`。
+控制台里的 World 名按请求语言现取:实例的 `console(language).label`,其次 `localize(language).label`,
+再次 `label`。
 `WorldContext` 向 `create` 提供:`cfg`(共享配置对象)、`timezone`、`botName`、`botDir` /
 `packageDir` / `dataDir` / `repoRoot`、`secret()` / `storeSecret()`、`persist()`(写回
 `worlds.<id>`)、`restart()`。界面语言不在其中:它是每个请求的属性,`console(language)` 与
