@@ -771,8 +771,10 @@ export function deriveConsolePageSources(
     const ids = [...assembly.slots.map((s) => s.id), ...assembly.missing.map((m) => m.id)];
     const sources: ConsolePageSource[] = ids.map((id) => ({
       id: pageIdFor('world', id),
-      contribute: (language) =>
-        ioPageContribution(id, assembly.labelIn(id, language), infos(language).get(id), instances.get(id), language),
+      contribute: (language) => {
+        const info = infos(language).get(id);
+        return ioPageContribution(id, info?.label ?? id, info, instances.get(id), language);
+      },
     }));
 
     const persona = parts.persona;
