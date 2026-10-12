@@ -3,8 +3,7 @@
  * args 保留模型原始参数；receipt 保存摘要，chars 记录全文长度。
  * 完整回执可通过 call 在 transcript.jsonl 中查找。
  */
-import { appendFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { appendFileSync, existsSync, statSync, writeFileSync } from 'node:fs';
 import { currentAnchors } from './log-context.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './util.ts';
 
@@ -47,7 +46,6 @@ export interface ToolCallLogOptions {
 /** JSONL 追加;不给文件名就只计数(测试与未配目录的部署) */
 export class ToolCallLog {
   private seq = 0;
-  private dirReady = false;
   private readonly timezone: string;
   private readonly run: string;
 
@@ -99,10 +97,6 @@ export class ToolCallLog {
   private append(entry: ToolCallEntry): void {
     if (!this.file) return;
     try {
-      if (!this.dirReady) {
-        mkdirSync(dirname(this.file), { recursive: true });
-        this.dirReady = true;
-      }
       appendFileSync(this.file, `${JSON.stringify(entry)}\n`, 'utf8');
     } catch {
       // 日志写不进去不影响运行

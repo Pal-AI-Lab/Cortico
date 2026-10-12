@@ -182,7 +182,7 @@ describe('统一入口:框架派生的控制台', () => {
 
   it('模块保存模型档位后热生效，非法档位不改变配置', async () => {
     const save = (spec: Record<string, unknown>) => postJ('/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'fixture', spec, pricing: [] }] });
-    const effective = () => bot.core.mainSessionSpec();
+    const effective = () => bot.core.activeSpec();
     expect((await save({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' })).status).toBe(200);
     expect(effective()).toMatchObject({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' });
     expect((await save({ model: 'test-model', thinking: false })).status).toBe(200);

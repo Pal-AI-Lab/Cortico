@@ -243,20 +243,4 @@ describe('JsonlEventStore', () => {
     expect(store.range({}).map((e) => e.text)).toEqual(['一', '二', '四']);
     expect(spy.calls.filter((c) => c.level === 'warn').map((c) => c.data)).toEqual([{ run: RUN_A, skipped: 1 }]);
   });
-
-  it('写盘前发现文件被别人动过,报一次 error', () => {
-    const spy = spyLogger();
-    const store = open(RUN_A, spy.log);
-    seed(store, 2);
-    expect(spy.calls.filter((c) => c.level === 'error')).toHaveLength(0);
-    appendFileSync(fileOf(RUN_A), JSON.stringify({
-      type: 'qq.message', ts: '2026-08-27T10:00:00.000+08:00', source: 'qq', origin: 'external', text: '别人写的', cursor: 1,
-    }) + '\n', 'utf8');
-    seed(store, 1, 2);
-    const errors = spy.calls.filter((c) => c.level === 'error');
-    expect(errors).toHaveLength(1);
-    expect(errors[0].msg).toContain('另一个实例');
-    seed(store, 1, 3);
-    expect(spy.calls.filter((c) => c.level === 'error')).toHaveLength(1);
-  });
 });

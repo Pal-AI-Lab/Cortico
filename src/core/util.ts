@@ -4,7 +4,7 @@ import { type ContextRecord } from '../protocol/open-responses/context.ts';
  */
 import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { LOG_LEVEL_RANK, type EventEnvelope, type LogEmitOptions, type LogError, type LogInput, type Logger, type LogLevel, type LogRecord } from './types.ts';
 import { currentAnchors } from './log-context.ts';
 
@@ -182,7 +182,21 @@ function slug(text: string): string {
   return text.replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '').slice(0, 40) || 'error';
 }
 
-const ANCHOR_KEYS = ['sess', 'round', 'resp', 'call', 'ev', 'task'] as const;
+export const LOG_ANCHOR_KEYS = ['sess', 'round', 'resp', 'call', 'ev', 'task'] as const;
+
+/** data 本身是 Error，或带 Error 类型的 err / error 字段时，错误移到 err，其余字段留在 data。 */
+export function splitLogError(data: unknown, err: unknown): { data: unknown; err: unknown } {
+  if (data instanceof Error) return { data: undefined, err: err ?? data };
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const bag = data as Record<string, unknown>;
+    const carried = bag.err instanceof Error ? bag.err : bag.error instanceof Error ? bag.error : undefined;
+    if (carried) {
+      const { err: _e, error: _error, ...rest } = bag;
+      return { data: Object.keys(rest).length ? rest : undefined, err: err ?? carried };
+    }
+  }
+  return { data, err };
+}
 
 /**
  * 日志写入 data/runs/<run>/log.jsonl，并按独立门槛输出到 stdout。
@@ -197,7 +211,6 @@ export class Runlog {
   private readonly echo: boolean;
   private seq = 0;
   private bytes = 0;
-  private dirReady = false;
   private areaSpec = '';
   private areaLevels: Array<{ prefix: string; level: LogLevel }> = [];
   private readonly ring: LogRecord[] = [];
@@ -213,9 +226,6 @@ export class Runlog {
     this.incidentsDir = opts.incidentsDir ?? null;
     this.echo = opts.console ?? true;
     if (file) {
-      const dir = dirname(file);
-      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      this.dirReady = true;
       try { this.bytes = existsSync(file) ? statSync(file).size : 0; } catch { this.bytes = 0; }
     }
   }
@@ -263,23 +273,12 @@ export class Runlog {
       msg: input.msg,
     };
     if (input.event !== undefined) record.event = input.event;
-    for (const key of ANCHOR_KEYS) {
+    for (const key of LOG_ANCHOR_KEYS) {
       const value = input[key] ?? anchors[key];
       if (value !== undefined) (record as unknown as Record<string, unknown>)[key] = value;
     }
     if (input.durMs !== undefined) record.durMs = input.durMs;
-    let data = input.data;
-    let err = input.err;
-    if (data instanceof Error) { err ??= data; data = undefined; }
-    else if (data && typeof data === 'object' && !Array.isArray(data)) {
-      const bag = data as Record<string, unknown>;
-      const carried = bag.err instanceof Error ? bag.err : bag.error instanceof Error ? bag.error : undefined;
-      if (carried) {
-        err ??= carried;
-        const { err: _e, error: _error, ...rest } = bag;
-        data = Object.keys(rest).length ? rest : undefined;
-      }
-    }
+    const { data, err } = splitLogError(input.data, input.err);
     if (data !== undefined) record.data = data;
     if (err !== undefined) record.err = normalizeError(err);
     return record;
@@ -307,7 +306,6 @@ export class Runlog {
     if (this.ring.length > RING_SIZE) this.ring.shift();
     if (toFile && this.file) {
       try {
-        if (!this.dirReady) { mkdirSync(dirname(this.file), { recursive: true }); this.dirReady = true; }
         if (this.bytes > ROTATE_BYTES) this.rotate();
         const line = `${JSON.stringify(record)}\n`;
         appendFileSync(this.file, line, 'utf8');

@@ -5,7 +5,7 @@
  */
 import type { LogAnchorFields, LogEmitOptions, LogError, Logger, LogLevel } from './types.ts';
 import { currentAnchors } from './log-context.ts';
-import { normalizeError, nowIso } from './util.ts';
+import { LOG_ANCHOR_KEYS, normalizeError, nowIso, splitLogError } from './util.ts';
 
 export interface LogNote extends LogAnchorFields {
   kind: 'log';
@@ -20,30 +20,19 @@ export interface LogNote extends LogAnchorFields {
   atMs: number;
 }
 
-const ANCHOR_KEYS = ['sess', 'round', 'resp', 'call', 'ev', 'task'] as const;
-
 export function createIpcLogger(send: (note: LogNote) => void, area = ''): Logger {
   const emit = (level: LogLevel, msg: string, opts?: LogEmitOptions): void => {
     const anchors = currentAnchors();
     const note: LogNote = { kind: 'log', level, area, msg, atMs: Date.now() };
     if (opts?.event !== undefined) note.event = opts.event;
     if (opts?.durMs !== undefined) note.durMs = opts.durMs;
-    for (const key of ANCHOR_KEYS) {
+    for (const key of LOG_ANCHOR_KEYS) {
       const value = opts?.[key] ?? anchors[key];
       if (value !== undefined) (note as unknown as Record<string, unknown>)[key] = value;
     }
-    let data = opts?.data;
-    let err = opts?.err;
-    if (data instanceof Error) { err ??= data; data = undefined; }
-    else if (data && typeof data === 'object' && !Array.isArray(data)) {
-      const bag = data as Record<string, unknown>;
-      const carried = bag.err instanceof Error ? bag.err : bag.error instanceof Error ? bag.error : undefined;
-      if (carried) {
-        err ??= carried;
-        const { err: _e, error: _error, ...rest } = bag;
-        data = Object.keys(rest).length ? rest : undefined;
-      }
-    }
+    const split = splitLogError(opts?.data, opts?.err);
+    let data = split.data;
+    const err = split.err;
     if (data !== undefined) {
       try { JSON.stringify(data); } catch { data = String(data); }
       note.data = data;

@@ -1,6 +1,6 @@
 /** Core 机械状态，持久化到 `<dataDir>/core-state.json`。 */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export interface CoreStateData {
   /** 上次截断时刻ISO */
@@ -81,8 +81,6 @@ export class CoreState {
   }
 
   save(): void {
-    const dir = dirname(this.file);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
     const tmp = this.file + '.tmp';
     writeFileSync(tmp, JSON.stringify(this.data, null, 2), 'utf8');
     // 通过 rename 原子覆盖状态文件，不先删除，避免崩溃后状态缺失。Windows 的 renameSync 使用 MoveFileExW 与 MOVEFILE_REPLACE_EXISTING 支持覆盖。

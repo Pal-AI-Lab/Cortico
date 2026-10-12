@@ -272,11 +272,11 @@ describe('认知外包 · 并发记账与用量归账', () => {
     const b = live.host().cognition!.request({ brief: '第二件' });
     await bothEntered;
     expect(seen).toEqual([1, 2]);
-    expect(live.core.cognitionInFlight()).toEqual({ mc: 2 });
 
     release();
     await Promise.all([a, b]);
-    expect(live.core.cognitionInFlight()).toEqual({});
+    await live.host().cognition!.request({ brief: '第三件' });
+    expect(seen).toEqual([1, 2, 1]);
   });
 
   it('人格实现走 spawnFork:工具装进 fork,用量归到它自己的声明上', async () => {
@@ -306,6 +306,5 @@ describe('认知外包 · 并发记账与用量归账', () => {
     // cognition 不重复记录 spawnFork 已计入的用量。
     const stats = live.core.sessions.list().find((s) => s.role === 'cognition');
     expect(stats?.calls).toBe(1);
-    expect(live.core.cognitionInFlight()).toEqual({});
   });
 });

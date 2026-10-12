@@ -4,7 +4,7 @@
  * 分片按 cursor / ts 区间按需装载,只缓存最近一次查询读到的那些;range / around / grep
  * 跨分片作答。
  */
-import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync, statSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   EventEnvelope,
@@ -106,13 +106,6 @@ export class JsonlEventStore implements EventStore {
   private readonly current: Segment;
   /** 下一条事件拿到的 cursor */
   private next = 1;
-  /**
-   * 本实例记录的分片字节数；写入前的大小变化可能来自其他写入方。
-   * 用 stat 比较大小，避免每次追加都读取全部文件。
-   */
-  private expectedSize = 0;
-  /** 文件大小不符的错误只报告一次。 */
-  private concurrencyReported = false;
   private appendListeners: Array<(e: EventEnvelope) => void> = [];
   /**
    * 最近一次查询(get / range / around / grep,grep 为每条命中取上下文的 around 也各算一次)
@@ -150,9 +143,7 @@ export class JsonlEventStore implements EventStore {
     mkdirSync(join(runsDir, this.run), { recursive: true });
     this.current = { run: this.run, file: currentFile, first: 0, last: 0, firstAtMs: 0, lastAtMs: 0, events: [] };
     if (existsSync(currentFile)) {
-      const raw = readFileSync(currentFile, 'utf8');
-      this.expectedSize = Buffer.byteLength(raw, 'utf8');
-      this.current.events = this.parseAll(raw, this.run);
+      this.current.events = this.parseAll(readFileSync(currentFile, 'utf8'), this.run);
       const events = this.current.events;
       if (events.length) {
         this.current.first = events[0].cursor;
@@ -210,7 +201,6 @@ export class JsonlEventStore implements EventStore {
   }
 
   append(e: Omit<EventEnvelope, 'cursor'>): EventEnvelope {
-    this.checkExclusiveWrite();
     const envelope: EventEnvelope = { ...e, cursor: this.next++, run: this.run };
     const events = this.current.events!;
     events.push(envelope);
@@ -218,32 +208,11 @@ export class JsonlEventStore implements EventStore {
     if (events.length === 1) { this.current.first = envelope.cursor; this.current.firstAtMs = atMs; }
     this.current.last = envelope.cursor;
     this.current.lastAtMs = atMs;
-    const line = JSON.stringify(envelope) + '\n';
-    appendFileSync(this.current.file, line, 'utf8');
-    this.expectedSize += Buffer.byteLength(line, 'utf8');
+    appendFileSync(this.current.file, JSON.stringify(envelope) + '\n', 'utf8');
     for (const cb of this.appendListeners) {
       try { cb(envelope); } catch { /* 观察者异常不影响主流程 */ }
     }
     return envelope;
-  }
-
-  /** 大小与本实例记录不符时报告文件变化，仍继续写入；独占检查由 instanceLock 负责。 */
-  private checkExclusiveWrite(): void {
-    if (this.concurrencyReported) return;
-    let onDisk = 0;
-    try {
-      onDisk = existsSync(this.current.file) ? statSync(this.current.file).size : 0;
-    } catch {
-      return; // 读不到文件状态不影响写入
-    }
-    if (onDisk === this.expectedSize) return;
-    this.concurrencyReported = true;
-    this.log.error('事件库被本进程之外的写入改动过,疑似另一个实例在写同一个事件库', {
-      expectedSize: this.expectedSize,
-      onDiskSize: onDisk,
-      file: this.current.file,
-    });
-    this.expectedSize = onDisk;
   }
 
   /** 事件追加订阅，供控制台实时观察。 */
@@ -373,7 +342,6 @@ export class JsonlEventStore implements EventStore {
     this.current.firstAtMs = 0;
     this.current.lastAtMs = 0;
     if (existsSync(this.current.file)) rmSync(this.current.file);
-    this.expectedSize = 0;
     this.log.warn('当前 run 的事件分片已清空', { cleared: n, run: this.run });
     return n;
   }

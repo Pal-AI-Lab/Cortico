@@ -3,8 +3,7 @@
  * session-main.jsonl 会在上下文替换时重写；本文件保留每次追加的正文，
  * 并在交接、清空和前缀重载时写入边界记录。
  */
-import { appendFileSync, mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { appendFileSync } from 'node:fs';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import { currentAnchors } from './log-context.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './util.ts';
@@ -43,7 +42,6 @@ export interface TranscriptOptions {
 export class Transcript {
   private readonly run: string;
   private readonly timezone: string;
-  private dirReady = false;
 
   constructor(private readonly file: string | null, opts: TranscriptOptions = {}) {
     this.run = opts.run ?? 'r-none';
@@ -80,10 +78,6 @@ export class Transcript {
   private append(record: TranscriptRecord): void {
     if (!this.file) return;
     try {
-      if (!this.dirReady) {
-        mkdirSync(dirname(this.file), { recursive: true });
-        this.dirReady = true;
-      }
       appendFileSync(this.file, `${JSON.stringify(record)}\n`, 'utf8');
     } catch {
       // 写不进去不影响运行

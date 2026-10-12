@@ -174,7 +174,6 @@ describe('全系统集成(终端对话链路)', () => {
     expect(r.status).toBe(200);
 
     expect(bot.core.activeSpec()).toEqual({ model: 'test-reasoner', thinking: false });
-    expect(bot.core.mainSessionSpec()).toEqual(bot.core.activeSpec());
     expect(entryOnDisk('fixture').spec).toEqual({ model: 'test-reasoner', thinking: false });
 
     r = await setModel({ model: 'test-reasoner', thinking: true, reasoningEffort: 'high' });

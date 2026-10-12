@@ -339,7 +339,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         },
       });
     } finally {
-      this.forkRunning.set(decl.id, Math.max(0, (this.forkRunning.get(decl.id) ?? 1) - 1));
+      this.forkRunning.set(decl.id, this.forkRunning.get(decl.id)! - 1);
       track.close();
     }
   }
@@ -380,17 +380,10 @@ export class Core<C extends CoreConfig = CoreConfig> {
           log.warn('认知请求受理失败', { err: e });
           return { error: e instanceof Error ? e.message : String(e) };
         } finally {
-          this.cognitionRunning.set(mod.id, Math.max(0, (this.cognitionRunning.get(mod.id) ?? 1) - 1));
+          this.cognitionRunning.set(mod.id, this.cognitionRunning.get(mod.id)! - 1);
         }
       },
     };
-  }
-
-  /** 各 World 当下在途的认知外包请求数(控制台/诊断用;没有在途的 World 不出现) */
-  cognitionInFlight(): Record<string, number> {
-    const out: Record<string, number> = {};
-    for (const [id, n] of this.cognitionRunning) if (n > 0) out[id] = n;
-    return out;
   }
 
   get config() {
@@ -431,11 +424,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const visibility: Record<string, boolean> = {};
     for (const mod of this.worlds) visibility[mod.id] = this.isWorldVisible(mod.id);
     return { visibility, driftedWorlds: this.loop.modulePrefixDrift() };
-  }
-
-  /** 用于控制台状态和启动信息的当前模型配置。 */
-  mainSessionSpec(): ModelSpec {
-    return this.activeSpec();
   }
 
   /** 按 activeProvider 读取模型配置；端点未配置模型时抛错。 */
@@ -601,8 +589,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
   }
 
   async start(): Promise<void> {
-    const dataDir = this.loaded.dataDir;
-    if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
     // 构造期已加载状态；此处再次 load 会覆盖装配后、启动前的修改。
     const repair = this.session.load();
     if (repair) {
@@ -636,7 +622,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.log.emit('info', 'core已启动', { event: 'started', data: { run: this.run.id } });
   }
 
-  /** 先终止主循环，再并发停止 World；各步骤有独立期限，失败写入返回结果。 */
   /**
    * 运行中挂载一个 World:入表,core 已启动则立即 start,并重建 system 前缀
    * (环境提示词段与工具表同属缓存前缀,挂载必须连带换掉)。start 抛错时不入表。
@@ -680,6 +665,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     return failure;
   }
 
+  /** 先终止主循环，再并发停止 World；各步骤有独立期限，失败写入返回结果。 */
   async stop(): Promise<WorldStopFailure[]> {
     this.started = false;
     this.loop.stop();

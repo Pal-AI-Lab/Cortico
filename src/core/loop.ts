@@ -652,7 +652,6 @@ export class MainLoop {
         tags: deferred.tags,
       }));
     }
-    if (!this.active(generation)) return false;
     if (delivered.length > 0) {
       // 捕获钩子完成前的即时注入；钩子完成后恢复总线投递。
       const injected: EventEnvelope[] = [];
@@ -684,7 +683,7 @@ export class MainLoop {
     // 仅当整条消息都可清除时标记 ephemeral，混合消息需保留其他内容。
     const ephemeral = ephemeralCount > 0 && ephemeralCount === internals.length && events.length === 0;
     if (!this.active(generation)) return false;
-    this.dropEphemeral(generation);
+    this.dropEphemeral();
     if (lines.length > 0) {
       const msg: ContextRecord = message('user', lines.join('\n'));
       if (ephemeral) msg.context.ephemeral = true;
@@ -697,7 +696,7 @@ export class MainLoop {
       if (blobs.length > 0) msg.context.blobs = blobs;
       session.append(msg);
     }
-    if (events.length > 0 && !inUser) this.appendEventFrame(events, generation);
+    if (events.length > 0 && !inUser) this.appendEventFrame(events);
     this.noteHandled(delivered, generation);
     this.notifySettled(delivered, 'delivered');
     const changed = lines.length > 0 || events.length > 0;
@@ -768,8 +767,7 @@ export class MainLoop {
   }
 
   /** 每批投递前删除带 ephemeral 标记的旧消息；重启读回的标记同样有效。 */
-  private dropEphemeral(generation: number): void {
-    if (!this.active(generation)) return;
+  private dropEphemeral(): void {
     const { session } = this.d;
     if (!session.records.some((m) => m.context.ephemeral)) return;
     const kept = session.records.filter((m) => !m.context.ephemeral);
@@ -780,7 +778,6 @@ export class MainLoop {
 
   /** 延迟渲染应读取当前状态；null、超时或异常均不归档、不投递，超时与异常记录日志。 */
   private async renderDeferred(spec: DeferredEventSpec, generation: number): Promise<DeferredRendered | null> {
-    if (!this.active(generation)) return null;
     const { log } = this.d;
     let timer: ReturnType<typeof setTimeout> | null = null;
     try {
@@ -806,8 +803,7 @@ export class MainLoop {
    * 以合成调用及回执承载外部正文，不新增模型请求。
    * 该模式下 user 消息仅承载内部文本。
    */
-  private appendEventFrame(events: EventEnvelope[], generation: number): void {
-    if (!this.active(generation)) return;
+  private appendEventFrame(events: EventEnvelope[]): void {
     const { session } = this.d;
     const id = `evf_${events[events.length - 1].cursor}`;
     session.append(functionCall(id, EXTERNAL_EVENT_FRAME, '{}'));
@@ -1068,7 +1064,6 @@ export class MainLoop {
   }
 
   private async roundsInScope(generation: number): Promise<void> {
-    if (!this.active(generation)) return;
     const { llm, session, log, bus, decl } = this.d;
     const schemas = this.getToolSchemas();
     const caps = decl.rounds();
@@ -1251,18 +1246,10 @@ export class MainLoop {
           // 已向外发送的部分输出必须保存；已执行的工具调用使用真实结果配对。
           await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation);
           if (!this.active(generation)) {
-            try {
-              tap.onAbort?.(ABORT_SHUTDOWN);
-            } catch (tapErr) {
-              log.warn('outputTap.onAbort异常', { err: tapErr });
-            }
+            this.tapAbort(tap, ABORT_SHUTDOWN);
             return;
           }
-          try {
-            tap.onAbort?.(e.message);
-          } catch (tapErr) {
-            log.warn('outputTap.onAbort异常', { err: tapErr });
-          }
+          this.tapAbort(tap, e.message);
         }
         // 提前执行的工具可能已消费队列；失败后将这些事件退回总线。
         // 重试前重新接收已就绪事件，否则随下一批投递。
@@ -1319,7 +1306,6 @@ export class MainLoop {
       if (meters && meters.input !== null && meters.output !== null) {
         this.anchor = { records: session.records.length, tokens: meters.input + meters.output, reasoningTokens: meters.reasoning ?? 0 };
       }
-      if (!this.active(generation)) return;
       if (tap) {
         try {
           tap.onRoundEnd?.();
@@ -1395,7 +1381,6 @@ export class MainLoop {
       toolMs = Date.now() - toolsStart;
       flight.phase = 'done';
 
-      if (!this.active(generation)) return;
       if (round === caps.soft && results.length > 0) {
         const hint = caps.softHint?.();
         if (hint) results[results.length - 1] = withText(results[results.length - 1], `${textOf(results[results.length - 1])}\n${hint}`);
@@ -1543,7 +1528,6 @@ export class MainLoop {
 
   /** 一批结束后调用 Persona 钩子，再检查是否超过模型容量；超限时强制交接。 */
   private async batchEndCheck(generation: number): Promise<void> {
-    if (!this.active(generation)) return;
     const { persona, log } = this.d;
     try {
       persona.onBatchEnd?.();
@@ -1718,7 +1702,6 @@ export class MainLoop {
   }
 
   private async performClearSession(generation: number): Promise<void> {
-    if (!this.active(generation)) return;
     const { session, log } = this.d;
     const sysMsg = await this.buildSystem();
     if (!this.active(generation)) return;
@@ -1767,7 +1750,6 @@ export class MainLoop {
   }
 
   private async performSystemPrefixReload(generation: number): Promise<void> {
-    if (!this.active(generation)) return;
     const { session, log } = this.d;
     const sysMsg = await this.buildSystem();
     if (!this.active(generation)) return;
@@ -1877,9 +1859,8 @@ export class MainLoop {
     const latest = store.latestCursor();
     const { behind, oldest } = this.watermarkBacklog();
     const stalledForMs = oldest ? Date.now() - Date.parse(oldest.ts) : 0;
-    const stalled = oldest !== null && Number.isFinite(stalledForMs) && stalledForMs > WATERMARK_STALL_MS;
 
-    if (!stalled) {
+    if (oldest === null || !(stalledForMs > WATERMARK_STALL_MS)) {
       if (this.watermarkStallAt >= 0 && this.watermarkStallAt !== watermark) {
         log.warn('投递水位停滞已解除:水位又开始推进了', {
           stalledAtCursor: this.watermarkStallAt,
@@ -1890,7 +1871,7 @@ export class MainLoop {
       }
       return;
     }
-    if (oldest === null) return; // stalled 为真时 backlog 非空，此处分支用于类型收窄。同一水位按退避表重报告警，并带上落后增量。
+    // 同一水位按退避表重报告警，并带上落后增量。
     if (this.watermarkStallAt === watermark) {
       const idx = this.watermarkStallReports - 1;
       if (idx >= WATERMARK_RESTATE_MS.length) return;

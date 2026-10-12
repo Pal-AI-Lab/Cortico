@@ -2,7 +2,6 @@
  * 单实例锁按 dataDir 隔离，防止同一数据目录被多个进程并发写入。
  * 使用 wx 排他创建；陈旧锁通过临时文件、rename 和读回核对接管，竞争失败则拒绝启动。
  * force 仅放行当前进程，不取得锁所有权，退出时不删除其他实例的锁。锁 startedAt 早于本机开机时刻时按陈旧锁处理，避免 PID 复用误判。
- * verify 检测锁丢失或被接管并报告 error；丢失时补写，被接管时不争抢。
  */
 import { closeSync, existsSync, openSync, readFileSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { uptime } from 'node:os';
@@ -11,8 +10,6 @@ import type { Logger } from './types.ts';
 import { nullLogger } from './util.ts';
 
 export const INSTANCE_LOCK_FILE = 'instance.lock';
-
-const VERIFY_INTERVAL_MS = 60_000;
 
 interface LockPayload {
   pid: number;
@@ -25,11 +22,6 @@ export interface InstanceLock {
   readonly file: string;
   /** 使用 force 跳过占用检查时不取得锁所有权。 */
   readonly owns: boolean;
-  /**
-   * 锁缺失时尝试重写；所有权记录变化时仅报告。
-   * 同一异常状态只报一次，恢复后允许再次报告。
-   */
-  verify(): void;
   /** 释放:只删自己写的那把锁 */
   release(): void;
 }
@@ -167,43 +159,9 @@ export function acquireInstanceLock(
   }
 
   let released = false;
-  /** 同一异常状态只报告一次；所有权恢复后重置。 */
-  let breachReported = false;
-
-  const verify = (): void => {
-    if (released || !owns) return;
-    const now = existsSync(file) ? readPayload(file) : null;
-    if (now?.pid === mine.pid) {
-      breachReported = false;
-      return;
-    }
-    if (breachReported) return;
-    breachReported = true;
-    if (now === null) {
-      // 缺失或无法读取的锁尝试重写，结果随日志报告。
-      const rewritten = createExclusive(file, mine) || takeOver(file, mine);
-      log.error("实例锁缺失或无法读取，已尝试重写；结果见 rewritten", {
-        file,
-        rewritten,
-      });
-      return;
-    }
-    // 不覆盖已变化的所有权记录。
-    log.error("实例锁的所有权记录已变化", {
-      minePid: mine.pid,
-      nowPid: now.pid,
-      nowStartedAt: now.startedAt,
-      file,
-    });
-  };
-
-  const timer = owns ? setInterval(verify, VERIFY_INTERVAL_MS) : null;
-  timer?.unref?.();
-
   const release = (): void => {
     if (released) return;
     released = true;
-    if (timer) clearInterval(timer);
     // 释放时移除退出钩子，避免重复获取锁时累积监听器。
     process.off('exit', release);
     if (!owns) return;
@@ -217,5 +175,5 @@ export function acquireInstanceLock(
     }
   };
   process.on('exit', release);
-  return { file, owns, verify, release };
+  return { file, owns, release };
 }

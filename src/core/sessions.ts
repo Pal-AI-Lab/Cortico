@@ -146,26 +146,20 @@ export class SessionTracker {
         s.cacheMissTokens += usage.cacheMissTokens;
         s.reasoningTokens += usage.reasoningTokens ?? 0;
         if (messagesRef) entry.messagesRef = () => messagesRef;
-        if (this.onRecord) {
-          try {
-            this.onRecord({
-              ts: nowIso(this.timezone),
-              sessionId: id,
-              role: s.role,
-              label: s.label,
-              model: model ?? '',
-              promptTokens: usage.promptTokens,
-              completionTokens: usage.completionTokens,
-              cacheHitTokens: usage.cacheHitTokens,
-              cacheMissTokens: usage.cacheMissTokens,
-              reasoningTokens: usage.reasoningTokens ?? 0,
-              ...(extra?.prefixHash ? { prefixHash: extra.prefixHash } : {}),
-              ...(extra?.charges ? { charges: structuredClone(extra.charges) } : {}),
-            });
-          } catch {
-            // 持久化观察失败不改变session本身的运行状态。
-          }
-        }
+        this.onRecord?.({
+          ts: nowIso(this.timezone),
+          sessionId: id,
+          role: s.role,
+          label: s.label,
+          model: model ?? '',
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          cacheHitTokens: usage.cacheHitTokens,
+          cacheMissTokens: usage.cacheMissTokens,
+          reasoningTokens: usage.reasoningTokens ?? 0,
+          ...(extra?.prefixHash ? { prefixHash: extra.prefixHash } : {}),
+          ...(extra?.charges ? { charges: structuredClone(extra.charges) } : {}),
+        });
         this.emit();
       },
       close: () => {
@@ -221,23 +215,11 @@ export class SessionTracker {
 
   /** 某session当前消息流(引用实时序列化);未知id或无引用→null */
   messages(id: string): readonly ContextRecord[] | null {
-    const e = this.entries.get(id);
-    if (!e?.messagesRef) return null;
-    try {
-      return e.messagesRef();
-    } catch {
-      return null;
-    }
+    return this.entries.get(id)?.messagesRef?.() ?? null;
   }
 
-
   private countMessages(e: Entry): number {
-    if (!e.messagesRef) return 0;
-    try {
-      return e.messagesRef().length;
-    } catch {
-      return 0;
-    }
+    return e.messagesRef?.().length ?? 0;
   }
 
   /** 已结束session只留最近CLOSED_KEEP个(按结束时间;常驻条目永不清) */
