@@ -229,7 +229,6 @@ export class BilibiliWorld implements World {
   private readonly identified: boolean[] = [];
 
   private anonymousLoginReported = false;
-  /** 登录 uid；0 表示匿名。 */
 
   private coalesceFolds = 0;
   private coalesceFoldedItems = 0;
