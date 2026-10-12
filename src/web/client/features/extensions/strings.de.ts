@@ -78,6 +78,7 @@ export const S: Partial<typeof en> = {
   pageOf: (page: number, pages: number) => `${page} / ${pages}`,
   searching: 'Lädt…',
   noPackages: 'Noch keine Pakete dieser Art auf npm',
+  noPackagesAt: (registry: string) => `Keine Pakete dieser Art in der npm-Registry ${registry}. Für eine andere Registry eine Zeile registry=<URL> in die .npmrc am Installationsort schreiben und den Prozess neu starten.`,
   noHits: 'Keine passenden Pakete',
   searchFailed: (msg: string) => `Laden fehlgeschlagen: ${msg}`,
   partial: 'Die npm-Ergebnisse sind unvollständig. Nutze die manuelle Installation für einen exakten Paketnamen.',

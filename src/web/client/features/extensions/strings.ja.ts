@@ -78,6 +78,7 @@ export const S: Partial<typeof en> = {
   pageOf: (page: number, pages: number) => `${page} / ${pages}`,
   searching: '読み込み中…',
   noPackages: 'npm にはまだこの種類のパッケージがありません',
+  noPackagesAt: (registry: string) => `npm レジストリ ${registry} にこの種類のパッケージはありません。レジストリを変えるには、インストール先の .npmrc に registry=<URL> の行を書き、プロセスを再起動してください。`,
   noHits: '一致するパッケージがありません',
   searchFailed: (msg: string) => `読み込みに失敗しました：${msg}`,
   partial: 'npm の検索結果は一部のみ表示しています。正確なパッケージ名は手動インストールで指定してください。',

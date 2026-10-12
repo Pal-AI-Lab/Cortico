@@ -274,6 +274,8 @@ export interface WebAppExtensionDeps {
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;
   /** 最近一次这一类的搜索翻到了上限,结果可能不全。 */
   searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
+  /** 搜索用的 registry 地址。 */
+  npmRegistry?(): Promise<string>;
   /** 单个包的详情(另取一次包文档);`version` 是版本号或 dist-tag,缺省 latest。 */
   packageInfo(name: string, version: string | undefined, language: Language): Promise<ExtensionPackageDetail>;
   /** 已装包声明的图标文件;没有时 null。 */
@@ -1795,7 +1797,7 @@ export class WebApp {
       }
       try {
         const hits = await src.search(kind);
-        res.json({ hits, partial: src.searchPartial?.(kind) ?? false });
+        res.json({ hits, partial: src.searchPartial?.(kind) ?? false, registry: await src.npmRegistry?.() });
       } catch (err) {
         res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(this.errorText(err, req)) });
       }

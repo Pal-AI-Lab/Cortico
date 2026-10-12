@@ -445,8 +445,31 @@ describe('ExtensionManager', () => {
     });
     await mgr.search('world');
     await mgr.packageInfo('a');
-    expect(urls.map((u) => u.split('?')[0])).toEqual(['https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/a']);
+    // `keywords:` 一条没回,再按关键字文本搜一次
+    expect(urls.map((u) => u.split('?')[0])).toEqual([
+      'https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/a',
+    ]);
     expect(runs).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
+    expect(await mgr.npmRegistry()).toBe('https://mirror.example.invalid/npm');
+  });
+
+  it('search:registry 不认 keywords: 写法(空列表)时按关键字文本搜,只留带关键字的包', async () => {
+    const queries: string[] = [];
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+      registry: 'https://mirror.example.invalid',
+      fetchJson: async (url) => {
+        if (!url.includes('/-/v1/search')) return {};
+        const text = new URL(url).searchParams.get('text')!;
+        queries.push(text);
+        if (text.startsWith('keywords:')) return { objects: [] };
+        return { objects: [
+          { package: { name: 'cortico-world-a', version: '1.0.0', keywords: ['cortico-world'] } },
+          { package: { name: 'cortico-world-lookalike', version: '1.0.0', keywords: ['other'] } },
+        ] };
+      },
+    });
+    expect((await mgr.search('world')).map((hit) => hit.name)).toEqual(['cortico-world-a']);
+    expect(queries).toEqual(['keywords:cortico-world', 'cortico-world']);
   });
 
   it('pnpm 读不出 registry 时查询报 pnpm 的错误,下次再问', async () => {

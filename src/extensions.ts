@@ -701,10 +701,15 @@ export class ExtensionManager {
    * 列出 npm 上带这一类关键字的全部包。**不接文本查询**:registry 的 `text=` 在
    * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
    * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
+   * npmmirror 等镜像不认 `keywords:` 写法，回 200 和空列表；`keywords:` 一条没回时改按关键字本身做文本搜索，
+   * 结果照样只留带这个关键字的包。
    */
   private readonly partialSearch = new Map<ExtensionKind, boolean>();
   /** 最近一次这一类的搜索翻到了上限:后面可能还有包没列出来。 */
   searchPartial(kind: ExtensionKind = 'world'): boolean { return this.partialSearch.get(kind) ?? false; }
+
+  /** 搜索与安装用的 registry 地址，见 `registry()`。 */
+  npmRegistry(): Promise<string> { return this.registry(); }
 
   async search(kind: ExtensionKind = 'world'): Promise<ExtensionSearchHit[]> {
     this.partialSearch.set(kind, false);
@@ -713,39 +718,46 @@ export class ExtensionManager {
     const hits: ExtensionSearchHit[] = [];
     const seen = new Set<string>();
     const registry = await this.registry();
-    for (let from = 0; from < SEARCH_MAX_HITS; from += SEARCH_PAGE_SIZE) {
-      const text = encodeURIComponent(`keywords:${keyword}`);
-      const url = `${registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
-      const data = (await this.fetchJson(url)) as RegistrySearchResponse;
-      const objects = data.objects ?? [];
-      for (const obj of objects) {
-        const p = obj.package;
-        if (!p?.name || !p.version || !(p.keywords ?? []).includes(keyword)) continue;
-        if (seen.has(p.name)) continue;
-        seen.add(p.name);
-        const repository = p.links?.repository;
-        hits.push({
-          name: p.name,
-          version: p.version,
-          description: p.description ?? '',
-          kind,
-          ...(p.date ? { date: p.date } : {}),
-          ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
-          ...(p.license ? { license: p.license } : {}),
-          ...(p.keywords?.length ? { keywords: p.keywords } : {}),
-          downloads: { month: obj.downloads?.monthly ?? 0 },
-          dependents: Number(obj.dependents) || 0,
-          links: {
-            ...(p.links?.npm ? { npm: p.links.npm } : {}),
-            ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
-            ...(p.links?.homepage ? { homepage: p.links.homepage } : {}),
-          },
-          installed: installed.has(p.name),
-        });
+    /** 按 `query` 翻页收进带关键字的包；返回 registry 回了多少条(过滤前)。 */
+    const collect = async (query: string): Promise<number> => {
+      let received = 0;
+      for (let from = 0; from < SEARCH_MAX_HITS; from += SEARCH_PAGE_SIZE) {
+        const text = encodeURIComponent(query);
+        const url = `${registry}/-/v1/search?text=${text}&size=${SEARCH_PAGE_SIZE}&from=${from}`;
+        const data = (await this.fetchJson(url)) as RegistrySearchResponse;
+        const objects = data.objects ?? [];
+        received += objects.length;
+        for (const obj of objects) {
+          const p = obj.package;
+          if (!p?.name || !p.version || !(p.keywords ?? []).includes(keyword)) continue;
+          if (seen.has(p.name)) continue;
+          seen.add(p.name);
+          const repository = p.links?.repository;
+          hits.push({
+            name: p.name,
+            version: p.version,
+            description: p.description ?? '',
+            kind,
+            ...(p.date ? { date: p.date } : {}),
+            ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
+            ...(p.license ? { license: p.license } : {}),
+            ...(p.keywords?.length ? { keywords: p.keywords } : {}),
+            downloads: { month: obj.downloads?.monthly ?? 0 },
+            dependents: Number(obj.dependents) || 0,
+            links: {
+              ...(p.links?.npm ? { npm: p.links.npm } : {}),
+              ...(repository ? { repository: repositoryWebUrl(repository) } : {}),
+              ...(p.links?.homepage ? { homepage: p.links.homepage } : {}),
+            },
+            installed: installed.has(p.name),
+          });
+        }
+        if (objects.length < SEARCH_PAGE_SIZE) break;
+        if (from + SEARCH_PAGE_SIZE >= SEARCH_MAX_HITS) this.partialSearch.set(kind, true);
       }
-      if (objects.length < SEARCH_PAGE_SIZE) break;
-      if (from + SEARCH_PAGE_SIZE >= SEARCH_MAX_HITS) this.partialSearch.set(kind, true);
-    }
+      return received;
+    };
+    if (await collect(`keywords:${keyword}`) === 0) await collect(keyword);
     const stats = await this.downloadStats(hits.map((hit) => hit.name));
     for (const hit of hits) Object.assign(hit.downloads, stats.get(hit.name));
     return hits;

@@ -78,6 +78,7 @@ export const S: Partial<typeof en> = {
   pageOf: (page: number, pages: number) => `${page} / ${pages}`,
   searching: '불러오는 중…',
   noPackages: 'npm에 아직 이 종류의 패키지가 없습니다',
+  noPackagesAt: (registry: string) => `npm 레지스트리 ${registry}에 이 종류의 패키지가 없습니다. 레지스트리를 바꾸려면 설치 위치의 .npmrc에 registry=<URL> 줄을 추가하고 프로세스를 재시작하세요.`,
   noHits: '일치하는 패키지가 없습니다',
   searchFailed: (msg: string) => `불러오지 못했습니다: ${msg}`,
   partial: 'npm 검색 결과의 일부만 표시됩니다. 정확한 패키지 이름은 수동 설치로 지정하세요.',

@@ -182,6 +182,8 @@ export function mountExtensions(ctx: FeatureContext): void {
   let installed: ExtensionView[] = [];
   let updates = new Map<string, UpdateView>();
   let directory = '';
+  /** 最近一次搜索用的 registry;市场为空时提示里写出它。 */
+  let registry = '';
   let loadGeneration = 0;
   let installedFetched = false;
   let restoringScroll = true;
@@ -380,7 +382,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       info.append(ui.pill(downloadsText(hit))); card.append(info); return card;
     }));
     stabilizeGrid(marketGrid, result.matched, pageSize('market'));
-    if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : S.noPackages : S.searching));
+    if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : registry ? S.noPackagesAt(registry) : S.noPackages : S.searching));
     pager(marketPager, result.matched, result.page, pageSize('market'), page => { marketGrid.style.minHeight = `${marketGrid.getBoundingClientRect().height}px`; state.page = page; renderMarket(); save(); });
   }
   async function load(): Promise<boolean> {
@@ -401,9 +403,9 @@ export function mountExtensions(ctx: FeatureContext): void {
     const state = states[owner], generation = ++state.generation;
     message(owner, 'market', S.searching);
     try {
-      const data = await get<{ hits: SearchHitView[]; partial?: boolean }>(`/api/extensions/search?kind=${owner}`, { signal });
+      const data = await get<{ hits: SearchHitView[]; partial?: boolean; registry?: string }>(`/api/extensions/search?kind=${owner}`, { signal });
       if (signal.aborted || state.generation !== generation) return;
-      state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? S.partial : ''); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
+      registry = data.registry ?? ''; state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? S.partial : ''); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
     } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
   /** 安装先按当前类别检查声明再装;删除直接卸。两者都改磁盘,重启进程后生效。 */

@@ -78,6 +78,7 @@ export const S: Partial<typeof en> = {
   pageOf: (page: number, pages: number) => `${page} / ${pages}`,
   searching: 'Carregando…',
   noPackages: 'Ainda não há pacotes deste tipo no npm',
+  noPackagesAt: (registry: string) => `Não há pacotes deste tipo no registro npm ${registry}. Para usar outro registro, adicione uma linha registry=<url> ao .npmrc do local de instalação e reinicie o processo.`,
   noHits: 'Nenhum pacote correspondente',
   searchFailed: (msg: string) => `Falha ao carregar: ${msg}`,
   partial: 'Os resultados do npm estão incompletos. Use a instalação manual para um nome de pacote exato.',

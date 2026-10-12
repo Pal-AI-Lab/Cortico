@@ -84,6 +84,7 @@ export const S: Partial<typeof en> = {
   pageOf: (page: number, pages: number) => `${page} / ${pages}`,
   searching: 'Загрузка…',
   noPackages: 'В npm пока нет пакетов этого типа',
+  noPackagesAt: (registry: string) => `В реестре npm ${registry} нет пакетов этого типа. Чтобы сменить реестр, добавьте строку registry=<url> в .npmrc в месте установки и перезапустите процесс.`,
   noHits: 'Подходящих пакетов нет',
   searchFailed: (msg: string) => `Ошибка загрузки: ${msg}`,
   partial: 'Результаты npm неполные. Для точного имени пакета используйте ручную установку.',
