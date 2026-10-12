@@ -85,11 +85,12 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
 
   // ── 调色盘 ─────────────────────────────────────────────────────────
 
-  const paletteSheet = ui.sheet({
+  const paletteFold = ui.foldSheet('appearance-palette', {
     title: S.paletteSheetTitle,
     en: 'palette',
     desc: S.paletteSheetDesc,
   });
+  paletteFold.el.classList.add('theme-palette-fold');
   const nameInput = ui.input({ cls: 'mono', placeholder: S.schemeName });
   nameInput.maxLength = 40;
   const paletteBox = ui.h('div', 'theme-palette');
@@ -189,12 +190,14 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
   const actions = ui.actions();
   actions.classList.add('theme-actions');
   actions.append(msg, resetBtn, deleteBtn, copyBtn, saveBtn);
-  paletteSheet.body.append(ui.field(S.schemeName, nameInput), paletteBox, actions);
-
-  const workbench = ui.h('div', 'theme-workbench');
-  workbench.append(paletteSheet.el, specimen(ctx));
+  const colors = ui.h('div', 'theme-bench-colors');
+  colors.append(ui.field(S.schemeName, nameInput), paletteBox);
+  const bench = ui.h('div', 'theme-bench');
+  bench.append(colors, specimen(ctx));
+  paletteFold.body.append(bench, actions);
+  schemeSheet.body.append(paletteFold.el);
   if (!opts.embedded) root.appendChild(intro);
-  root.append(schemeSheet.el, workbench);
+  root.append(schemeSheet.el);
 
   // ── 刷新 ───────────────────────────────────────────────────────────
 
@@ -268,13 +271,6 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
 /** 无交互的主题预览示例。 */
 function specimen(ctx: FeatureContext): HTMLElement {
   const { ui } = ctx;
-  const card = ui.sheet({
-    title: S.specimenTitle,
-    en: 'live specimen',
-
-  });
-  card.el.classList.add('theme-preview-sheet');
-
   const box = ui.h('div', 'theme-specimen');
 
   // USER 组:内容列在前、记号栏在后(镜像)
@@ -320,8 +316,9 @@ function specimen(ctx: FeatureContext): HTMLElement {
   }
 
   box.append(world, turn, chart);
-  card.body.appendChild(box);
-  return card.el;
+  const sample = ui.h('div', 'theme-bench-sample');
+  sample.append(ui.h('h4', null, S.specimenTitle), box);
+  return sample;
 }
 
 /** 外观设置保存在浏览器本地，不依赖服务端能力。 */

@@ -696,7 +696,13 @@
   .theme-scheme-note { min-height: 32px; margin: 4px 0 8px; color: var(--ink-soft); font-size: 11px; line-height: 1.45; }
   .theme-swatches { display: flex; height: 15px; overflow: hidden; border: 1px solid var(--line); border-radius: 3px; }
   .theme-swatches span { flex: 1; }
-  .theme-workbench { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(290px, .75fr); gap: 16px; align-items: start; }
+  details.sheet.fold.theme-palette-fold { margin: 22px 0 0; padding: 16px 0 0; background: transparent; border: 0; border-top: 1px solid var(--border); border-radius: 0; }
+  details.sheet.fold.theme-palette-fold > .foldbody { padding: 0; margin-top: 10px; }
+  .theme-bench { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 24px; align-items: start; }
+  .theme-bench-colors > .fieldrow:first-child { margin-top: 0; }
+  .theme-bench-colors > .theme-palette { margin-top: 14px; }
+  .theme-bench-sample { position: sticky; top: 110px; display: flex; flex-direction: column; gap: 10px; }
+  .theme-bench-sample > h4 { margin: 0; color: var(--ink-soft); font: 600 11px var(--sans); letter-spacing: .08em; }
   .theme-palette { display: flex; flex-direction: column; gap: 13px; }
   .theme-color-group { border-top: 1px solid var(--line); padding-top: 9px; }
   .theme-color-group:first-child { border-top: 0; padding-top: 0; }
@@ -718,7 +724,6 @@
   }
   .theme-color.invalid { border-color: var(--danger); }
   .theme-actions { justify-content: flex-end; }
-  .theme-preview-sheet { position: sticky; top: 0; }
   .theme-specimen { display: flex; flex-direction: column; gap: 11px; }
   .theme-specimen .tcard { margin: 0; }
   .theme-chart-preview {
@@ -739,15 +744,15 @@
     .pagehead { padding-top: 14px; }
     .pagedesc { max-width: none; }
     .modalcard { width: 96vw; max-height: 92dvh; }
-    .theme-workbench { grid-template-columns: 1fr; }
-    .theme-preview-sheet { position: static; }
+    .theme-bench { grid-template-columns: 1fr; }
+    .theme-bench-sample { position: static; }
     .theme-color-grid { grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); }
   }
 
   @media (max-width: 900px) {
     .usagetables { grid-template-columns: 1fr; }
-    .theme-workbench { grid-template-columns: 1fr; }
-    .theme-preview-sheet { position: static; }
+    .theme-bench { grid-template-columns: 1fr; }
+    .theme-bench-sample { position: static; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
@@ -1109,7 +1114,7 @@
   .panelslot > .sheet + .sheet,
   .measure > .sheet + .sheet,
   .measure > div > .sheet + .sheet { margin-top: var(--section-gap); }
-  .featureslot > :where(.iogrid, .theme-workbench, .usagetables) {
+  .featureslot > :where(.iogrid, .usagetables) {
     margin-top: var(--section-gap);
   }
   .featureslot > .featureintro + .sheet {
@@ -1117,7 +1122,6 @@
     padding-top: 0;
     border-top: 0;
   }
-  .theme-workbench > .sheet,
   .usagetables > .sheet {
     padding-top: 0;
     border-top: 0;
@@ -1692,8 +1696,8 @@
     .usagecards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
     .usagetables,
-    .theme-workbench { grid-template-columns: minmax(0, 1fr); }
-    .theme-preview-sheet { position: static; }
+    .theme-bench { grid-template-columns: minmax(0, 1fr); }
+    .theme-bench-sample { position: static; }
   }
 
   @container console-content (max-width: 560px) {
