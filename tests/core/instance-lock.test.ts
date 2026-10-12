@@ -4,7 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { acquireInstanceLock, INSTANCE_LOCK_FILE } from '../../src/core/instance-lock.ts';
+import { acquireInstanceLock, INSTANCE_LOCK_FILE, InstanceLockedError } from '../../src/core/instance-lock.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { makeTmpDir } from './helpers.ts';
 
@@ -49,6 +49,7 @@ describe('acquireInstanceLock', () => {
   it('同一个 dataDir 起第二个:拒绝启动,错误里带第一个的 pid', () => {
     held.push(acquireInstanceLock(tmp.dir));
     expect(() => acquireInstanceLock(tmp.dir)).toThrow(new RegExp(String(process.pid)));
+    expect(() => acquireInstanceLock(tmp.dir)).toThrow(InstanceLockedError);
     expect(() => acquireInstanceLock(tmp.dir)).toThrow(/锁记录指向运行中的进程/);
   });
 
@@ -113,6 +114,19 @@ describe('acquireInstanceLock', () => {
       held.push(lock);
       expect(JSON.parse(readFileSync(lock.file, 'utf8')).pid).toBe(process.pid);
       expect(spy.calls.some((c) => c.level === 'warn' && c.msg.includes('接管'))).toBe(true);
+    });
+
+    it('PID 被别的程序复用(可执行文件名与锁里记的不同):按陈旧锁接管', () => {
+      writeFileSync(join(tmp.dir, INSTANCE_LOCK_FILE), JSON.stringify({
+        pid: process.pid, // 活着、开机后启动，但可执行文件不是锁里记的那个
+        startedAt: new Date().toISOString(),
+        argv: ['old'],
+        execPath: join(tmp.dir, 'another-app.exe'),
+      }), 'utf8');
+      const lock = acquireInstanceLock(tmp.dir, { log: nullLogger() });
+      held.push(lock);
+      expect(lock.owns).toBe(true);
+      expect(JSON.parse(readFileSync(lock.file, 'utf8'))).toMatchObject({ pid: process.pid, execPath: process.execPath });
     });
   });
 
