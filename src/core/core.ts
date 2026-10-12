@@ -99,8 +99,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
   private readonly forkRunning = new Map<string, number>();
   /** 各 World 在途的认知请求数；并发限制由 Persona 决定。 */
   private readonly cognitionRunning = new Map<string, number>();
-  /** 接收事件的主 session 声明。 */
-  private readonly mainDecl: SessionDecl;
   /** World 自愿上报用量的常驻仪表条目(每 World 一条) */
   private readonly moduleUsageTracks = new Map<string, SessionHandle>();
   /** 隐藏 World 照常落库的事件计数与上次回报时刻(每 World 一条) */
@@ -168,7 +166,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
       );
     }
 
-    this.mainDecl = main[0];
     this.loop = new MainLoop({
       cfg,
 

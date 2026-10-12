@@ -24,10 +24,9 @@ import { hasRole, textOf } from 'cortico/protocol/open-responses/context-helpers
  *    工具面 = World 点名的那几把 + 她自己的工作区文件工具;单实例、15 分钟封顶。
  */
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import type {
-
   CognitionContext,
   CognitionRequest,
   CognitionResult,
@@ -35,7 +34,6 @@ import type {
   EventEnvelope,
   PersonaCognition,
   PersonaConsoleDecl,
-  PrefixSegment,
   SessionDecl,
   SessionOpeningReason,
   ToolDef,

@@ -2,9 +2,8 @@
  * WebSearch 是仅提供请求/响应工具的 World。
  * 它不提供环境提示词或事件;搜索结果不落事件库且不参与异步投递。
  */
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import type { ConfigGroup, World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
+import type { World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import {
   BraveClient,
@@ -12,7 +11,7 @@ import {
   type Freshness,
   type SearchMode,
 } from './brave-client.ts';
-import { WEBSEARCH_DEFAULTS, WEBSEARCH_SECRET, webSearchConfigGroup } from './config.ts';
+import { webSearchConfigGroup } from './config.ts';
 import { text } from './strings.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));

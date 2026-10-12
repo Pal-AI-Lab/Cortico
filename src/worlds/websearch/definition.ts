@@ -1,5 +1,4 @@
 import type { WorldDefinition } from '../../world.ts';
-import type { BraveClientConfig } from './brave-client.ts';
 import { type WebSearchConfigSection, WEBSEARCH_DEFAULTS, WEBSEARCH_SECRET } from './config.ts';
 import { WebSearchWorld } from './world.ts';
 

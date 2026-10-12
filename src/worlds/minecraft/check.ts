@@ -4,7 +4,7 @@
  */
 
 import { blueprintStepStateMatches, diffBlueprint, type BlueprintPlan } from './blueprint-plan.ts';
-import { blockIdOf, isAirState, type NormalizedBlueprint, type PositionXYZ } from './blueprint.ts';
+import { blockIdOf, type NormalizedBlueprint, type PositionXYZ } from './blueprint.ts';
 import type { ItemEnchant } from './item-facts.ts';
 import { roman, zhDimension, zhEnchant, zhName } from './names.ts';
 

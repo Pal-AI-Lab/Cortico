@@ -1,7 +1,7 @@
 import type { WorldDefinition } from '../../world.ts';
-import { type QQConfigSection, QQ_DEFAULTS, QQ_SECRETS, type QQRosterEntry } from './config.ts';
+import { type QQConfigSection, QQ_DEFAULTS, QQ_SECRETS } from './config.ts';
 import { QQWorld, enabledRosterIds } from './world.ts';
-import { VISION_DEFAULTS, VisionService, type VisionConfig } from './vision.ts';
+import { VISION_DEFAULTS, VisionService } from './vision.ts';
 import { OpenRouterVLMClient } from './vlm.ts';
 
 export const QQ: WorldDefinition<QQConfigSection> = {

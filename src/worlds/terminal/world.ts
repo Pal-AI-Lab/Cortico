@@ -45,7 +45,6 @@
  * 图片进媒体库(core data/media/),事件只带引用;正文末尾标注张数,模型不接受
  * 图像时标注里同时写明她看不到,不让她对着一句"附图"猜内容。
  */
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { BlobInput, EventEnvelope, World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
 import type { ConfigGroup } from '../../core/config-schema.ts';

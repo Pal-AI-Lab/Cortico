@@ -262,7 +262,6 @@ const toolSchemas: Array<ToolSchema & { owner: ToolOwner; tags: readonly ToolTag
   owner: toolOwner.get(t.name) ?? (t.tags.includes('flow') ? { kind: 'core' } : { kind: 'persona' }),
 }));
 
-const now = '2026-07-19T15:20:00+08:00';
 const sessionsList: SessionStats[] = [
   { id: 'main', role: 'main', label: '主意识', startedAt: '2026-07-19T09:00:00+08:00', endedAt: null, calls: 42, promptTokens: 358000, completionTokens: 12400, cacheHitTokens: 322000, cacheMissTokens: 36000, reasoningTokens: 5200, cacheHitRate: 322000 / 358000, messageCount: 96 } as SessionStats,
   { id: 'dream-1', role: 'dream', label: '梦', startedAt: '2026-07-19T04:00:00+08:00', endedAt: '2026-07-19T04:06:00+08:00', calls: 8, promptTokens: 61000, completionTokens: 3400, cacheHitTokens: 40000, cacheMissTokens: 21000, reasoningTokens: 1200, cacheHitRate: 40000 / 61000, messageCount: 18 } as SessionStats,

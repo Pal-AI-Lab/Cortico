@@ -10,8 +10,8 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  ConfigGroup, World, WorldHost, WorldConsoleDecl, WorldPanelDecl,
-  EventTag, StoragePart, ToolCallContext, ToolDef, ToolOutcome, TriggerMode,
+  World, WorldHost, WorldConsoleDecl, WorldPanelDecl, EventTag, StoragePart, ToolCallContext,
+  ToolDef, ToolOutcome, TriggerMode,
 } from '../../core/types.ts';
 import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
 import { selfDamageText, takeSelfDamage } from './damage-source.ts';
@@ -125,7 +125,7 @@ import {
   ESCAPE_TP_MS, SET_SPAWN_TRANSLATE, normalizeDimension, playerDatPath, readPlayerDatFile, runEscape,
   spawnAt, type SpawnTarget, type Vec3like,
 } from './escape.ts';
-import { MINECRAFT_DEFAULTS, minecraftConfigGroup, minecraftRhythmConfigGroup, minecraftClientConfigGroup, minecraftPlayerConfigGroup, type MinecraftConfigSection, type MinecraftServerMode, serverModeOf } from './config.ts';
+import { minecraftConfigGroup, minecraftRhythmConfigGroup, minecraftClientConfigGroup, minecraftPlayerConfigGroup, type MinecraftConfigSection, type MinecraftServerMode, serverModeOf } from './config.ts';
 import { sameTarget, targetAddress, type LinkPhase, type LinkTarget } from './link.ts';
 import type { Language } from '../../core/language.ts';
 import { text } from './strings.ts';

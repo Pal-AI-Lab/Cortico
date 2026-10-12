@@ -3,8 +3,7 @@
  * 工作区与版本历史两块的行为在 tests/cormini/consoleSurface.test.ts。
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { personaConsoleDecl, personaPanels } from '../../bots/corti-soulmate/persona/consoleSurface.ts';
@@ -16,16 +15,12 @@ import type { WorkspaceGit } from '../../bots/cormini/persona/workspaceGit.ts';
 import type { PersonaConsoleDecl } from '../../src/core/types.ts';
 import { cleanup, tmpPersona, WORKSPACE_DIRS } from './helpers.ts';
 
-const gitAvailable = new GitWorkspaceMemory({ memoryDir: process.cwd() }).git.available();
-
 let dir: string;
 let decl: PersonaConsoleDecl;
 let git: WorkspaceGit;
 
 const call = <T>(panel: string, method: string, args: unknown[] = []): Promise<T> =>
   decl.invoke!(panel, method, args) as Promise<T>;
-
-const sha = (s: string): string => createHash('sha256').update(s).digest('hex');
 
 beforeEach(() => {
   dir = tmpPersona();

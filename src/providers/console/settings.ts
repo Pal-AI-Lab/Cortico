@@ -20,7 +20,7 @@ import type { ConsolePageSource } from '../../web/console-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
 import { endpointAvailability, validateEntry, withContextWindows } from '../configuration.ts';
-import { quotePrices, validatePrices, type PriceDefinition } from '../pricebook.ts';
+import { quotePrices, validatePrices } from '../pricebook.ts';
 import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';

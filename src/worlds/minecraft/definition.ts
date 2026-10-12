@@ -1,4 +1,3 @@
-import { join } from 'node:path';
 import type { WorldDefinition } from '../../world.ts';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from './config.ts';
 import { MinecraftWorldProxy } from './proxy.ts';

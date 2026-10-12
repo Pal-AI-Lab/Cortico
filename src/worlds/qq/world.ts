@@ -10,7 +10,6 @@
  */
 import { createHash } from 'node:crypto';
 import type {
-  ConfigGroup,
   EventEnvelope,
   WorldConsoleDecl,
   World,
@@ -21,7 +20,6 @@ import type {
   BlobInput,
 } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
-import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { nowIso, shortTime, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import {
@@ -52,7 +50,7 @@ import {
 } from './normalize.ts';
 import { VISION_DEFAULTS, type VisionConfig, type VisionService } from './vision.ts';
 import { downloadImageBytes } from './image-download.ts';
-import { QQ_DEFAULTS, QQ_SECRETS, qqConfigGroup, type QQRosterEntry } from './config.ts';
+import { qqConfigGroup, type QQRosterEntry } from './config.ts';
 import { text } from './strings.ts';
 
 export type { Conv } from './conversation.ts';

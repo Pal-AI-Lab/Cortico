@@ -7,7 +7,7 @@
 import type { Bot } from 'mineflayer';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { INVENTORY_SLOTS } from './inventory.ts';
-import { DIRECTION_ZH, narrateInventory, type Direction, type ItemStack } from './terrain.ts';
+import { DIRECTION_ZH, narrateInventory, type ItemStack } from './terrain.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { NEAR_DEFAULT, type Expectation, type SkillCall } from './skills.ts';
 import { FACE_ZH, SHAPE_ZH } from './cell-facts.ts';

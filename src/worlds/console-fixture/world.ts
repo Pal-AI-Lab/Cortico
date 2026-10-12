@@ -1,7 +1,7 @@
 /** 用于验证 World 面板的自动发现、调用、徽标更新与资源释放；未列入默认 World 列表。 */
 
 import { fileURLToPath } from 'node:url';
-import type { World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
+import type { World, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
 
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 
@@ -13,7 +13,6 @@ interface ConsoleFixtureOptions {
 export class ConsoleFixtureWorld implements World {
   readonly id: string;
   private readonly label: string;
-  private host: WorldHost | null = null;
   private pings = 0;
 
   constructor(opts: ConsoleFixtureOptions = {}) {
@@ -63,11 +62,7 @@ export class ConsoleFixtureWorld implements World {
     };
   }
 
-  async start(host: WorldHost): Promise<void> {
-    this.host = host;
-  }
+  async start(): Promise<void> {}
 
-  async stop(): Promise<void> {
-    this.host = null;
-  }
+  async stop(): Promise<void> {}
 }

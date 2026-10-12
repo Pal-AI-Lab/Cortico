@@ -4,7 +4,6 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 
 const CONFIG = '../../src/web/client/features/config/view.ts';
 const STORAGE = '../../src/web/client/features/storage/view.ts';
-const FEATURE = '../../src/web/client/features/feature.ts';
 const UI = '../../src/web/client/ui/index.ts';
 const LIFECYCLE = '../../src/web/client/core/lifecycle.ts';
 

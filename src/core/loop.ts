@@ -1,6 +1,6 @@
-import { message, record, functionCall, functionResult, responseRecords, itemText, withText, type ContextRecord, type Item } from '../protocol/open-responses/context.ts';
+import { message, record, functionCall, functionResult, responseRecords, withText, type ContextRecord, type Item } from '../protocol/open-responses/context.ts';
 import { hasRole, textOf, withoutPastReasoning, responseRequest, usageCounters } from '../protocol/open-responses/context-helpers.ts';
-import type { Response, StreamEvent } from '../protocol/open-responses/index.ts';
+import type { StreamEvent } from '../protocol/open-responses/index.ts';
 import { GenerationError, type ResponseClient, type TokenMeters } from './generation.ts';
 /**
  * MainLoop 执行 receivesEvents=true 的常驻 session。
