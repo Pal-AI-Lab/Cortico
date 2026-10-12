@@ -701,8 +701,8 @@ export class ExtensionManager {
    * 列出 npm 上带这一类关键字的全部包。**不接文本查询**:registry 的 `text=` 在
    * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
    * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
-   * npmmirror 等镜像不认 `keywords:` 写法，回 200 和空列表；`keywords:` 一条没回时改按关键字本身做文本搜索，
-   * 结果照样只留带这个关键字的包。
+   * `keywords:` 查询一个包都没回时，再按关键字本身做文本搜索(不认 `keywords:` 的 registry 对它回空列表);
+   * 两种查询的结果都只留带这个关键字的包。
    */
   private readonly partialSearch = new Map<ExtensionKind, boolean>();
   /** 最近一次这一类的搜索翻到了上限:后面可能还有包没列出来。 */
