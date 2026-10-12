@@ -677,10 +677,6 @@
   .treerow.sel .fsize { color: color-mix(in srgb, #fff 72%, transparent); }
 
 
-  .theme-current {
-    flex: none; padding: 6px 10px; border: 1px solid var(--line); background: var(--sheet-2);
-    color: var(--ink-soft); font: 11px var(--sans); border-radius: 4px 9px 6px 3px;
-  }
   .theme-schemes {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;
   }

@@ -57,7 +57,6 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
     en: 'theme schema',
     desc: S.schemeSheetDesc,
   });
-  const currentEl = ui.h('div', 'theme-current', '—');
   const modes = ui.segmented(
     THEME_MODES.map((m) => ({ value: m, label: THEME_MODE_LABELS[m] })),
     {
@@ -70,7 +69,7 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
     },
   );
   const modeBar = ui.rowbar();
-  modeBar.append(modes.el, ui.h('span', 'grow'), currentEl);
+  modeBar.append(modes.el);
   const schemesBox = ui.h('div', 'theme-schemes');
   schemesBox.addEventListener(
     'click',
@@ -250,7 +249,6 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
     disarmDelete();
     const snap = studio.snapshot();
     draft = snap.palette;
-    currentEl.textContent = `${snap.scheme.name} · ${THEME_APPEARANCE_LABELS[snap.appearance]}`;
     nameInput.value = snap.scheme.name;
     modes.setValue(snap.mode);
     deleteBtn.classList.toggle('hidden', !snap.scheme.custom);
