@@ -207,6 +207,7 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
     version: root.version,
     type: 'module',
     description: spec.description,
+    author: root.author,
     license: root.license,
     repository: { ...root.repository, directory: `src/worlds/${id}` },
     homepage: `${REPO_URL}/tree/main/src/worlds/${id}#readme`,

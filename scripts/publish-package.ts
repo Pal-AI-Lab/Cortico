@@ -35,6 +35,7 @@ const HOST_ENTRIES = ['web/client/ui/index.ts'] as const;
 export interface RootPackageJson {
   version: string;
   description: string;
+  author: string;
   license: string;
   repository: { type: string; url: string };
   engines: Record<string, string>;
@@ -47,6 +48,7 @@ export interface PublishManifest {
   version: string;
   type: 'module';
   description: string;
+  author: string;
   license: string;
   repository: { type: string; url: string };
   homepage: string;
@@ -75,6 +77,7 @@ export function buildManifest(root: RootPackageJson): PublishManifest {
     version: root.version,
     type: 'module',
     description: root.description,
+    author: root.author,
     license: root.license,
     repository: root.repository,
     homepage: `${REPO_URL}#readme`,
