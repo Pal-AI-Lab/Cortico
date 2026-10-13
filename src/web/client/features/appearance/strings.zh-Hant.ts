@@ -4,7 +4,6 @@ export const S: Partial<typeof en> = {
   pageTitle: '外觀',
   deleteScheme: '刪除方案',
   schemeSheetTitle: '顏色方案',
-  schemeSheetDesc: '選擇後立即套用並儲存在目前瀏覽器。',
   switchedMode: (label: string) => `已切換到「${label}」`,
   switchedScheme: (name: string) => `✓ 已切換到「${name}」`,
   paletteSheetTitle: '調色盤',

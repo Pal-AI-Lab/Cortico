@@ -4,7 +4,6 @@ export const S: Partial<typeof en> = {
   pageTitle: 'Darstellung',
   deleteScheme: 'Schema löschen',
   schemeSheetTitle: 'Farbschema',
-  schemeSheetDesc: 'Die Auswahl gilt sofort und wird in diesem Browser gespeichert.',
   switchedMode: (label: string) => `Zu „${label}“ gewechselt`,
   switchedScheme: (name: string) => `✓ Zu „${name}“ gewechselt`,
   paletteSheetTitle: 'Farbpalette',

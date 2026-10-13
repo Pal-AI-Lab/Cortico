@@ -55,7 +55,6 @@ export function mountAppearance(ctx: FeatureContext, opts: { embedded?: boolean 
   const schemeSheet = ui.sheet({
     title: S.schemeSheetTitle,
     en: 'theme schema',
-    desc: S.schemeSheetDesc,
   });
   const modes = ui.segmented(
     THEME_MODES.map((m) => ({ value: m, label: THEME_MODE_LABELS[m] })),
@@ -319,7 +318,7 @@ function specimen(ctx: FeatureContext): HTMLElement {
   return sample;
 }
 
-/** 外观设置保存在浏览器本地，不依赖服务端能力。 */
+/** 不要求框架能力；主题记录经 `/api/theme` 存在部署里。 */
 export const appearanceFeature: FrameworkFeature = {
   route: 'appearance',
   label: S.navLabel,

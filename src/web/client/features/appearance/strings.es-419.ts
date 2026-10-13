@@ -4,7 +4,6 @@ export const S: Partial<typeof en> = {
   pageTitle: 'Apariencia',
   deleteScheme: 'Eliminar esquema',
   schemeSheetTitle: 'Esquema de colores',
-  schemeSheetDesc: 'La selección se aplica de inmediato y se guarda en este navegador.',
   switchedMode: (label: string) => `Se cambió a “${label}”`,
   switchedScheme: (name: string) => `✓ Se cambió a “${name}”`,
   paletteSheetTitle: 'Paleta',

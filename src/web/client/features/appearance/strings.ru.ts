@@ -4,7 +4,6 @@ export const S: Partial<typeof en> = {
   pageTitle: 'Внешний вид',
   deleteScheme: 'Удалить схему',
   schemeSheetTitle: 'Цветовая схема',
-  schemeSheetDesc: 'Выбор применяется сразу и сохраняется в этом браузере.',
   switchedMode: (label: string) => `Выбрано: «${label}»`,
   switchedScheme: (name: string) => `✓ Выбрано: «${name}»`,
   paletteSheetTitle: 'Палитра',

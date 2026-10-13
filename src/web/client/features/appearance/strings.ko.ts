@@ -4,7 +4,6 @@ export const S: Partial<typeof en> = {
   pageTitle: '모양',
   deleteScheme: '구성표 삭제',
   schemeSheetTitle: '색 구성표',
-  schemeSheetDesc: '선택하면 바로 적용되고 이 브라우저에 저장됩니다.',
   switchedMode: (label: string) => `"${label}"(으)로 전환했습니다`,
   switchedScheme: (name: string) => `✓ "${name}"(으)로 전환했습니다`,
   paletteSheetTitle: '팔레트',
