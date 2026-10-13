@@ -678,7 +678,7 @@
 
 
   .theme-schemes {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-top: 4px;
   }
   .theme-scheme {
     min-width: 0; padding: 11px 12px; text-align: left; cursor: pointer; color: var(--ink);
