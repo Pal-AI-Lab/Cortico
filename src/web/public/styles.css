@@ -697,7 +697,7 @@
   .theme-bench { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); gap: 24px; align-items: start; }
   .theme-bench-colors > .fieldrow:first-child { margin-top: 0; }
   .theme-bench-colors > .theme-palette { margin-top: 14px; }
-  .theme-bench-sample { position: sticky; top: 110px; display: flex; flex-direction: column; gap: 10px; }
+  .theme-bench-sample { position: sticky; top: 100px; display: flex; flex-direction: column; gap: 10px; }
   .theme-bench-sample > h4 { margin: 0; color: var(--ink-soft); font: 600 11px var(--sans); letter-spacing: .08em; }
   .theme-palette { display: flex; flex-direction: column; gap: 13px; }
   .theme-color-group { border-top: 1px solid var(--line); padding-top: 9px; }
