@@ -82,6 +82,11 @@ Conventions that hold across the repository:
 5. **Tunables are declared, never hand-built.** A knob is a JSON Schema property in its owner's
    `ConfigGroup`; the console renders it. Adding a World or a Persona leaves `src/web/**`
    byte-identical, and `tests/web/acceptance-zero-diff.test.ts` enforces that.
+6. **The console web UI is a developer tool shipped with Cortico.** A downstream product builds
+   its own frontend and uses Core only through the public console HTTP API listed in
+   [docs/console.md](docs/console.md); it does not depend on the web UI's pages, DOM, class names
+   or `src/web/client/` modules. A UI change from a product may be proposed upstream and is
+   judged on whether it improves Cortico's own web UI.
 
 ## 4. Writing
 

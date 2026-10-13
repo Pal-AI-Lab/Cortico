@@ -91,6 +91,32 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 `log`、`toast`、`confirm`、`drawer`、`lightbox`、`promptInput`…)。面板不碰 `document.body`,不直连
 `/api/`,不用裸定时器。
 
+## HTTP API 的公开范围
+
+下游产品自己维护前端，只经下表的公开路由读写 Core 的状态。公开路由的破坏性变更(删除路由、改方法或路径、
+删除回应字段或改变已有字段的含义)按提交规则带 `!` 与 `BREAKING CHANGE:` 脚注，写明迁移办法。
+
+| 路由 | 内容 |
+|---|---|
+| `GET /api/capabilities` | 框架级表面的挂载情况 |
+| `GET /api/status` | 运行状态快照与 `uptimeSec` |
+| `GET /api/config`、`POST /api/config` | 配置组;POST 体 `{ group, values }`,按 schema 校验 |
+| `GET /api/config/options/:kind` | schema 里 `x-options` 为 `kind` 的配置项的当前候选值 |
+| `GET /api/blob?handle=` | 附件字节 |
+| `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;激活或停用,体 `{ id, enabled }` |
+| `POST /api/storage/clear?key=` | 清除一个存储部分 |
+| `GET /api/theme`、`POST /api/theme` | 部署的配色 |
+| `GET /api/avatar` | bot 头像 PNG,没有时 404 |
+| `GET /api/usage` | 用量聚合;查询参数 `bucket`、`currency`、`basis`、`from`、`to`、`days` |
+| `GET /api/console/manifest` | 每页一条 `ConsolePageManifest`,以及框架级能力;形状见 `console-protocol.ts` |
+| `GET`/`POST /api/console/providers/<page>/panels/<panel>/<method>`、WebSocket `/ws/providers/<page>/panels/<panel>` | 面板契约:面板方法调用与推送通道 |
+
+请求带 `x-cortico-language` 头时，回应里的文案按该语言给出。其余路由都是内部路由，包括框架更新提示用的
+`GET /api/framework/release` 和左栏状态灯的轮询 `GET /api/console/lamps`。
+
+控制台网页本身(页面、DOM、类名与 `src/web/client/` 下的模块)是随 Cortico 发布、给开发者用的入口，
+对下游不作承诺。下游可以复制其中的组件起步，复制后由下游维护。
+
 ## 框架更新提示
 
 打开控制台时查询 GitHub 上 Cortico 的最新正式 Release。它的版本高于 `package.json` 的版本时，
