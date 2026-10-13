@@ -108,6 +108,8 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/theme`、`POST /api/theme` | 部署的配色 |
 | `GET /api/avatar` | bot 头像 PNG,没有时 404 |
 | `GET /api/usage` | 用量聚合;查询参数 `bucket`、`currency`、`basis`、`from`、`to`、`days` |
+| `POST /api/run/pause`、`POST /api/run/resume` | 暂停与继续，见「运行控制」 |
+| `GET /api/auth/status`、`POST /api/auth/login`、`POST /api/auth/logout` | 部署设了访问密码时的登录与登出 |
 | `GET /api/console/manifest` | 每页一条 `ConsolePageManifest`,以及框架级能力;形状见 `console-protocol.ts` |
 | `GET`/`POST /api/console/providers/<page>/panels/<panel>/<method>`、WebSocket `/ws/providers/<page>/panels/<panel>` | 面板契约:面板方法调用与推送通道 |
 
