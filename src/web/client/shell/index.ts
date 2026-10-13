@@ -206,7 +206,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     try {
       const out = await post<{
         ok?: boolean; localComplete?: boolean; result?: string; error?: string;
-        steps?: Array<{ label: string; ok: boolean; ms: number; detail?: string }>;
+        steps?: Array<{ label: string; ok: boolean; elapsedMs: number; detail?: string }>;
         externalChecks?: Array<{ status: 'verified-ended' | 'still-live' | 'unknown' }>;
       }>('/api/run/shutdown', undefined, { signal });
       if (out?.error) throw new Error(out.error);
@@ -215,7 +215,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       const externalUnverified = (out?.externalChecks ?? [])
         .some((check) => check.status !== 'verified-ended');
       const lines = steps.map((s) =>
-        `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.ms / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
+        `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.elapsedMs / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
       void ui.confirm({
         title: !localComplete
           ? S.resultLocalIncomplete

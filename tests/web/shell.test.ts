@@ -595,9 +595,9 @@ describe('底部运行控制', () => {
             localComplete: false,
             result: '收尾完成,但有 1 步没走完:托管 LLM server 停机',
             steps: [
-              { label: '按住事件投递', ok: true, ms: 2 },
-              { label: 'World 收尾(托管的外部进程与存档都在这一步)', ok: true, ms: 4200 },
-              { label: '托管 LLM server 停机', ok: false, ms: 3000, detail: '超时(3秒)' },
+              { label: '按住事件投递', ok: true, elapsedMs: 2 },
+              { label: 'World 收尾(托管的外部进程与存档都在这一步)', ok: true, elapsedMs: 4200 },
+              { label: '托管 LLM server 停机', ok: false, elapsedMs: 3000, detail: '超时(3秒)' },
             ],
           }
         : {};
@@ -617,8 +617,8 @@ describe('底部运行控制', () => {
 
     expect(seen.find((c) => c.url === '/api/run/shutdown')?.method).toBe('POST');
     const body = doc.body.textContent;
-    expect(body).toContain('World 收尾');
-    expect(body).toContain('✗ 托管 LLM server 停机');
+    expect(body).toContain('World 收尾(托管的外部进程与存档都在这一步) · 4.2s');
+    expect(body).toContain('✗ 托管 LLM server 停机 · 3.0s');
     expect(body).toContain('超时(3秒)');
   });
 
@@ -630,8 +630,8 @@ describe('底部运行控制', () => {
             localComplete: true,
             result: '本地关机完成(4 步全部走完)；[P0] B 站直播间=still-live。',
             steps: [
-              { label: '按住事件投递', ok: true, ms: 2 },
-              { label: 'World 收尾', ok: true, ms: 100 },
+              { label: '按住事件投递', ok: true, elapsedMs: 2 },
+              { label: 'World 收尾', ok: true, elapsedMs: 100 },
             ],
             externalChecks: [{ status: 'still-live' }],
           }
