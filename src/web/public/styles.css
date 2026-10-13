@@ -740,15 +740,11 @@
     .pagehead { padding-top: 14px; }
     .pagedesc { max-width: none; }
     .modalcard { width: 96vw; max-height: 92dvh; }
-    .theme-bench { grid-template-columns: 1fr; }
-    .theme-bench-sample { position: static; }
     .theme-color-grid { grid-template-columns: repeat(auto-fill, minmax(144px, 1fr)); }
   }
 
   @media (max-width: 900px) {
     .usagetables { grid-template-columns: 1fr; }
-    .theme-bench { grid-template-columns: 1fr; }
-    .theme-bench-sample { position: static; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
