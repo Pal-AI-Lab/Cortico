@@ -106,9 +106,10 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;激活或停用,体 `{ id, enabled }` |
 | `POST /api/storage/clear?key=` | 清除一个存储部分;`key` 取自各页 manifest 的 `storageKeys`,Core 自己的对话历史是 `session` |
 | `GET /api/theme`、`POST /api/theme` | 部署的配色;GET 回 `{ defaultScheme, theme }`,POST 体是 `StoredTheme`(`src/web/shared/theme.ts`),回 `{ ok, theme }` |
-| `GET /api/avatar` | bot 头像 PNG,没有时 404 |
+| `GET /api/avatar`、`POST /api/avatar` | bot 头像 PNG,没有时 404;POST 体是 `image/png` 原始字节，不是 PNG 时回 400 |
 | `GET /api/usage` | 用量聚合;查询参数 `bucket`(`auto`/`minute`/`hour`/`day`/`week`/`month`)、`currency`、`basis`(`marginal`/`equivalent`)、`from`、`to`、`days`(不小于 1 的整数) |
-| `POST /api/run/pause`、`POST /api/run/resume` | 暂停与继续，见「运行控制」 |
+| `POST /api/run/pause`、`POST /api/run/resume`、`POST /api/run/shutdown` | 暂停、继续与关机，见「运行控制」 |
+| `GET /api/prompts`、`POST /api/prompts` | 固定提示词的列表与编辑;POST 体 `{ key, content, baseRevision? }`,带上的 `baseRevision` 过期时回 409 并带 `conflict: true`,成功回新的 `revision` |
 | `GET /api/auth/status`、`POST /api/auth/login`、`POST /api/auth/logout` | 部署设了访问密码时的登录与登出;登录态在 Cookie 里，未登录的请求回 401 并带 `x-cortico-auth: required` 头，WebSocket 握手直接断开 |
 | `GET /api/providers`、`GET /api/providers/:name`、`POST /api/providers`、`POST /api/providers/:name/save`、`POST /api/providers/:name/activate`、`POST /api/providers/:name/test` | 模型端点：列出、详情、新建、保存(体带 `expectedRevision`)、设为当前端点、测试连通;没挂 provider 时 503 |
 | `GET /api/console/manifest` | 每页一条 `ConsolePageManifest`,以及框架级能力;形状见 `console-protocol.ts` |
