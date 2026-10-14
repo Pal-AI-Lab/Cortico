@@ -52,6 +52,7 @@ const zh = {
   badPathChars: '路径含有不接受的字符。',
   dirMissing: (path: string) => `目录不存在: ${path}`,
   badVersion: (version: string) => `不是合法的版本: ${version}`,
+  badRegistry: (value: string) => `npm 源要填 http:// 或 https:// 开头的地址,现在是 ${value}`,
   busy: '已有一个安装 / 卸载在进行,等它结束。',
   pnpmFailed: (command: string, code: number | null, output: string) => `pnpm ${command} 退出码 ${code}:\n${output}`,
 };
@@ -94,6 +95,7 @@ export const en: typeof zh = {
   badPathChars: 'The path contains characters that are not accepted.',
   dirMissing: (path) => `Directory does not exist: ${path}`,
   badVersion: (version) => `Not a valid version: ${version}`,
+  badRegistry: (value) => `The npm registry must be an http:// or https:// URL, got ${value}`,
   busy: 'An install or uninstall is already running; wait for it to finish.',
   pnpmFailed: (command, code, output) => `pnpm ${command} exited with ${code}:\n${output}`,
 };

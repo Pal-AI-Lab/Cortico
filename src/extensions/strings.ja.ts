@@ -35,6 +35,7 @@ export const text: Partial<typeof en> = {
   badPathChars: "パスに使えない文字が含まれています。",
   dirMissing: (path) => `ディレクトリがありません: ${path}`,
   badVersion: (version) => `有効なバージョンではありません: ${version}`,
+  badRegistry: (value) => `npm レジストリには http:// または https:// で始まる URL を入力してください(入力値: ${value})`,
   busy: "別のインストールまたはアンインストールを実行中です。終わるまで待ってください。",
   pnpmFailed: (command, code, output) => `pnpm ${command} の終了コード ${code}:\n${output}`,
 };

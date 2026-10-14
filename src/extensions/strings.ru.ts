@@ -35,6 +35,7 @@ export const text: Partial<typeof en> = {
   badPathChars: "В пути есть недопустимые символы.",
   dirMissing: (path) => `Каталог не существует: ${path}`,
   badVersion: (version) => `Недопустимая версия: ${version}`,
+  badRegistry: (value) => `Реестр npm должен быть адресом http:// или https://, получено: ${value}`,
   busy: "Уже идёт установка или удаление; дождитесь окончания.",
   pnpmFailed: (command, code, output) => `pnpm ${command} завершился с кодом ${code}:\n${output}`,
 };

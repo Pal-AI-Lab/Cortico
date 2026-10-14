@@ -453,6 +453,32 @@ describe('ExtensionManager', () => {
     expect(await mgr.npmRegistry()).toBe('https://mirror.example.invalid/npm');
   });
 
+  it('setRegistry 只换 .npmrc 的 registry 行,之后的查询改问 pnpm 用新源;空串删掉这一行', async () => {
+    const dir = join(root, 'extensions');
+    const npmrc = join(dir, '.npmrc');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(npmrc, '@acme:registry=https://scoped.example.invalid/\r\nregistry=https://old.example.invalid/\r\nstrict-ssl=false\r\n');
+    const hosts: string[] = [];
+    const mgr = new ExtensionManager(root, { dir, records: [], worlds: [], providers: [], consoleAssets: [] }, {
+      // 与 pnpm 一样读 cwd 的 .npmrc,没有 registry 行时是官方源
+      run: async (_args, cwd) => {
+        const file = join(cwd, '.npmrc');
+        return { code: 0, output: (existsSync(file) ? /^registry=(.*)$/m.exec(readFileSync(file, 'utf8'))?.[1].trim() : undefined) ?? 'https://registry.npmjs.org/' };
+      },
+      fetchJson: async (url) => { hosts.push(new URL(url).host); return { objects: [] }; },
+    });
+    await mgr.search('world');
+    expect(() => mgr.setRegistry('ftp://mirror.example.invalid/')).toThrow('ftp://mirror.example.invalid/');
+    mgr.setRegistry('https://new.example.invalid/npm/');
+    await mgr.search('world');
+    expect(hosts).toEqual(['old.example.invalid', 'old.example.invalid', 'new.example.invalid', 'new.example.invalid']);
+    expect(readFileSync(npmrc, 'utf8')).toBe('@acme:registry=https://scoped.example.invalid/\r\nregistry=https://new.example.invalid/npm/\r\nstrict-ssl=false\r\n');
+    mgr.setRegistry('');
+    expect(readFileSync(npmrc, 'utf8')).toBe('@acme:registry=https://scoped.example.invalid/\r\nstrict-ssl=false\r\n');
+    expect(mgr.configuredRegistry()).toBeNull();
+    expect(await mgr.npmRegistry()).toBe('https://registry.npmjs.org');
+  });
+
   it('search:registry 不认 keywords: 写法(空列表)时按关键字文本搜,只留带关键字的包', async () => {
     const queries: string[] = [];
     const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {

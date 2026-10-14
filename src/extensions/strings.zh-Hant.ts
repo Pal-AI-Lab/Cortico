@@ -35,6 +35,7 @@ export const text: Partial<typeof en> = {
   badPathChars: "路徑含有不接受的字元。",
   dirMissing: (path) => `目錄不存在: ${path}`,
   badVersion: (version) => `不是合法的版本: ${version}`,
+  badRegistry: (value) => `npm 來源要填 http:// 或 https:// 開頭的網址,現在是 ${value}`,
   busy: "已有一個安裝 / 解除安裝在進行,等它結束。",
   pnpmFailed: (command, code, output) => `pnpm ${command} 結束代碼 ${code}:\n${output}`,
 };

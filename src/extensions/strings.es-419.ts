@@ -35,6 +35,7 @@ export const text: Partial<typeof en> = {
   badPathChars: "La ruta contiene caracteres no aceptados.",
   dirMissing: (path) => `El directorio no existe: ${path}`,
   badVersion: (version) => `No es una versión válida: ${version}`,
+  badRegistry: (value) => `El registro de npm debe ser una URL http:// o https://; se recibió ${value}`,
   busy: "Ya hay una instalación o desinstalación en curso; espera a que termine.",
   pnpmFailed: (command, code, output) => `pnpm ${command} terminó con ${code}:\n${output}`,
 };

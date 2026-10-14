@@ -7,7 +7,7 @@
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
@@ -415,6 +415,11 @@ function fetchFailure(url: string, err: unknown): string {
   return `${new URL(url).host}: ${message}${detail ? ` (${detail})` : ''}`;
 }
 
+/** extensions/ 里的 npm 配置文件;`pnpm add` 与 `pnpm config get` 在这个目录跑,都读它。 */
+const NPMRC = '.npmrc';
+/** .npmrc 里设默认源的那一行;`@scope:registry=` 不算。 */
+const REGISTRY_LINE = /^\s*registry\s*=(.*)$/;
+
 /** 本地目录。排除 `%` `!` `"` 与重定向符,其余交给引号。 */
 const LOCAL_PATH = /^[A-Za-z0-9_.\-/:\\ ~]{1,512}$/;
 
@@ -585,7 +590,8 @@ export class ExtensionManager {
   /**
    * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里带 `--ignore-workspace` 跑
    * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`,没配时是 npm 官方的。
-   * pnpm 失败或没给出地址时抛出它的退出码与输出,下次查询再问。改了配置要重启进程。
+   * pnpm 失败或没给出地址时抛出它的退出码与输出,下次查询再问。解析结果缓存到 `setRegistry()` 改写
+   * extensions/.npmrc 为止;在别处改了配置要重启进程。
    */
   private registry(): Promise<string> {
     if (this.registryUrl) return this.registryUrl;
@@ -598,6 +604,33 @@ export class ExtensionManager {
     pending.catch(() => { if (this.registryUrl === pending) this.registryUrl = null; });
     this.registryUrl = pending;
     return pending;
+  }
+
+  /** extensions/.npmrc 里 `registry=` 行的值;没有这一行时 null。 */
+  configuredRegistry(): string | null {
+    const file = join(this.dir, NPMRC);
+    if (!existsSync(file)) return null;
+    const values = readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line) => REGISTRY_LINE.exec(line)?.[1].trim() ?? []);
+    return values.at(-1) ?? null;
+  }
+
+  /**
+   * 把 extensions/.npmrc 的 `registry=` 行换成 `url`,其余行原样保留;`url` 为空时删掉这一行,文件只剩空白时删掉文件。
+   * 写入后检查更新、搜索、详情和 `pnpm add` 都用新的源。
+   */
+  setRegistry(url: string): void {
+    const value = url.trim();
+    if (value && !(/^https?:\/\/\S+$/i.test(value) && URL.canParse(value))) throw extensionError((t) => t.badRegistry(value));
+    const file = join(this.prepareDir(), NPMRC);
+    const raw = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const eol = raw.includes('\r\n') ? '\r\n' : '\n';
+    const lines = raw ? raw.replace(/\r?\n$/, '').split(/\r?\n/) : [];
+    const at = lines.findIndex((line) => REGISTRY_LINE.test(line));
+    const kept = lines.filter((line) => !REGISTRY_LINE.test(line));
+    if (value) kept.splice(at < 0 ? kept.length : at, 0, `registry=${value}`);
+    if (kept.some((line) => line.trim())) writeFileSync(file, kept.join(eol) + eol, 'utf8');
+    else if (existsSync(file)) unlinkSync(file);
+    this.registryUrl = null;
   }
 
   /** extensions/ 和其中的 package.json,pnpm 以它为项目目录;返回目录。 */

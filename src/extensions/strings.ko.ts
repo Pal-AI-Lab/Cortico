@@ -35,6 +35,7 @@ export const text: Partial<typeof en> = {
   badPathChars: "경로에 허용되지 않는 문자가 있습니다.",
   dirMissing: (path) => `디렉터리가 없습니다: ${path}`,
   badVersion: (version) => `올바른 버전이 아닙니다: ${version}`,
+  badRegistry: (value) => `npm 레지스트리는 http:// 또는 https:// 로 시작하는 주소여야 합니다. 입력값: ${value}`,
   busy: "다른 설치 또는 제거가 진행 중입니다. 끝날 때까지 기다리세요.",
   pnpmFailed: (command, code, output) => `pnpm ${command} 종료 코드 ${code}:\n${output}`,
 };
