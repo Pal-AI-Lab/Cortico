@@ -24,6 +24,9 @@ export function protocolConfig(name: string, entry: LLMProviderEntry, language: 
         [`providers.${name}.options.reasoningReplay`]: {
           type: 'string', enum: [...REASONING_REPLAYS], title: S.reasoningReplay, description: S.reasoningReplayDescription, 'x-hot': true,
         },
+        [`providers.${name}.options.sendSyntheticReasoning`]: {
+          type: 'boolean', title: S.sendSyntheticReasoning, description: S.sendSyntheticReasoningDescription, 'x-hot': true,
+        },
         [`providers.${name}.options.syntheticReasoningText`]: {
           type: 'string', title: S.syntheticReasoningText, description: S.syntheticReasoningTextDescription(SYNTHETIC_REASONING_TEXT), 'x-hot': true,
         },

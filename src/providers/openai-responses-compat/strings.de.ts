@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `Bei Klartext-Rückgabe der Denktext vor einem Tool-Aufruf ohne erfasste Herkunft; das Modell liest ihn. Leer nutzt den Standard „${fallback}“; Endpunkte lehnen leere oder nur aus Leerzeichen bestehende Strings ab.`,
   syntheticReasoningTextValue: 'Der synthetische Denktext darf nicht leer sein oder nur aus Leerzeichen bestehen: Der Endpunkt lehnt die ganze Anfrage ab',
+  sendSyntheticReasoning: 'Synthetischen Denktext senden',
+  sendSyntheticReasoningDescription: 'Ausgeschaltet wird nichts gesendet. Endpunkte, die vor jedem Tool-Aufruf Denktext verlangen, lehnen die Anfrage ab (400).',
   reasoningPanel: 'Denkprozess',
   reasoningPanelDescription: 'Die Form, in der der Denkprozess an den Endpunkt zurückgesendet wird.',
   bodyRequired: 'Anfrage-Body erforderlich',

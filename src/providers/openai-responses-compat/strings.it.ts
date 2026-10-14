@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `Nel reinvio in chiaro, il ragionamento inviato prima di una chiamata a strumento senza origine registrata; il modello lo legge. Vuoto usa il predefinito «${fallback}»; gli endpoint rifiutano una stringa vuota o di soli spazi.`,
   syntheticReasoningTextValue: "Il testo di ragionamento sintetico non può essere vuoto o di soli spazi: l'endpoint rifiuta l'intera richiesta",
+  sendSyntheticReasoning: 'Invia ragionamento sintetico',
+  sendSyntheticReasoningDescription: 'Se disattivato non viene inviato nulla. Gli endpoint che richiedono un ragionamento prima di ogni chiamata a strumento rifiutano la richiesta (400).',
   reasoningPanel: 'Ragionamento',
   reasoningPanelDescription: "La forma in cui il ragionamento viene rimandato all'endpoint.",
   bodyRequired: 'Corpo della richiesta obbligatorio',

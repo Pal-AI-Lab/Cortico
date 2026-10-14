@@ -5,7 +5,7 @@ import { nullLogger } from '../../core/util.ts';
 import { OpenAIHttpClient } from '../transport/chat.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { createResponse, type Request } from '../../protocol/open-responses/index.ts';
-import { standardUsage, type GenerateOptions } from '../../core/generation.ts';
+import { GenerationError, standardUsage, type GenerateOptions, type Generation } from '../../core/generation.ts';
 import { NativeResponseAssembly, normalizeCompletedFunctionCalls, type ResponseAssembly, type parseChatResponse } from '../transport/response-assembly.ts';
 import { responseMeters } from '../transport/response-meters.ts';
 import { responsesInput, type ReasoningReplay, type ResponsesInputOptions } from '../transport/responses-input.ts';
@@ -24,6 +24,8 @@ export interface ResponsesProviderOptions {
   keepThinking?: () => boolean;
   reasoningReplay?: ReasoningReplay;
   syntheticReasoningText?: string;
+  /** Plaintext replay only; default true. */
+  sendSyntheticReasoning?: boolean;
   log?: Logger;
 }
 
@@ -68,10 +70,27 @@ export class ResponsesProvider extends OpenAIHttpClient {
     this.chatPath = opts.endpointPath ?? '/responses';
   }
 
+  /**
+   * A 400 whose body names `reasoning_text`, sent while plaintext replay runs without synthetic
+   * reasoning, carries a message naming `sendSyntheticReasoning`: the endpoint requires reasoning
+   * before every tool call.
+   */
+  override async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
+    try {
+      return await super.respond(request, options);
+    } catch (error) {
+      if (error instanceof GenerationError && error.status === 400 && /reasoning_text/.test(error.body)
+        && this.opts.reasoningReplay === 'plaintext' && this.opts.sendSyntheticReasoning === false)
+        throw new GenerationError(`${error.message}: the endpoint requires reasoning before every tool call; turn sendSyntheticReasoning on`,
+          error.attempts, error.partial, error.origin, error.status, error.body, { cause: error });
+      throw error;
+    }
+  }
+
   protected override buildResponseBody(request: Request, options: GenerateOptions): Record<string, unknown> {
     return buildResponsesBody(request, options, {
       media: this.opts.media, keepThinking: this.opts.keepThinking, reasoningReplay: this.opts.reasoningReplay,
-      syntheticReasoningText: this.opts.syntheticReasoningText,
+      syntheticReasoningText: this.opts.syntheticReasoningText, sendSyntheticReasoning: this.opts.sendSyntheticReasoning,
     }, this.opts.extraBody);
   }
 

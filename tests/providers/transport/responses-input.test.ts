@@ -40,6 +40,12 @@ describe('responsesInput 明文形态', () => {
     expect(textOf('这条调用由运行时发出。')).toBe('这条调用由运行时发出。');
   });
 
+  it('填充开关关掉:合成调用前不补推理,记录里的推理照回', () => {
+    const context = [message('user', 'hi'), functionCall('evf_1', 'external_event_frame', '{}'), functionResult('evf_1', 'x'), reasoning('own', '想了想', { origin })];
+    const input = responsesInput(request, { context, origin }, { reasoningReplay: 'plaintext', sendSyntheticReasoning: false }).input;
+    expect(reasoningItems(input).map((item) => item.id)).toEqual(['own']);
+  });
+
   it('推理项以 reasoning_text 出线,不看 origin;签名块照带;没有文字也没有签名的不出线', () => {
     const context = [
       message('user', 'hi'),

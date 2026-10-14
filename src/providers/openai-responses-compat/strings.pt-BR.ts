@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `No reenvio em texto simples, é o raciocínio enviado antes de uma chamada de ferramenta sem origem registrada; o modelo o lê. Vazio usa o padrão “${fallback}”; os endpoints rejeitam uma string vazia ou em branco.`,
   syntheticReasoningTextValue: 'O texto de raciocínio sintético não pode ficar vazio nem em branco: o endpoint rejeita a requisição inteira',
+  sendSyntheticReasoning: 'Enviar raciocínio sintético',
+  sendSyntheticReasoningDescription: 'Desligado, nada é enviado. Endpoints que exigem raciocínio antes de cada chamada de ferramenta rejeitam a requisição (400).',
   reasoningPanel: 'Raciocínio',
   reasoningPanelDescription: 'A forma como o raciocínio é reenviado ao endpoint.',
   bodyRequired: 'Corpo da requisição obrigatório',

@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `En el reenvío en texto plano, es el razonamiento que se envía antes de una llamada a herramienta sin origen registrado; el modelo lo lee. Si está vacío, se usa el predeterminado “${fallback}”; los endpoints rechazan una cadena vacía o en blanco.`,
   syntheticReasoningTextValue: 'El texto de razonamiento sintético no puede estar vacío ni en blanco: el endpoint rechaza la solicitud completa',
+  sendSyntheticReasoning: 'Enviar razonamiento sintético',
+  sendSyntheticReasoningDescription: 'Desactivado, no se envía nada. Los endpoints que exigen razonamiento antes de cada llamada a herramienta rechazan la solicitud (400).',
   reasoningPanel: 'Razonamiento',
   reasoningPanelDescription: 'La forma en que el razonamiento se reenvía al endpoint.',
   bodyRequired: 'Se requiere el cuerpo de la solicitud',

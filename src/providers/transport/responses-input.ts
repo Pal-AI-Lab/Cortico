@@ -32,14 +32,16 @@ export interface ResponsesInputOptions {
   reasoningReplay?: ReasoningReplay;
   /** Plaintext replay only; defaults to `SYNTHETIC_REASONING_TEXT`. Endpoints reject an empty one. */
   syntheticReasoningText?: string;
+  /** Plaintext replay only; default true. False sends no synthetic reasoning item. */
+  sendSyntheticReasoning?: boolean;
 }
 
 /**
  * Encrypted replay: a reasoning item re-enters only with `encrypted_content` and when the recorded
  * instance, module, compatibility domain and model match this request. Plaintext replay: a reasoning
  * item re-enters as `reasoning_text`; the turn after the last user message is always replayed, earlier
- * turns follow `keepThinking`; a function call without an origin gets a synthetic reasoning item
- * unless one already precedes it. System and developer text is joined into instructions.
+ * turns follow `keepThinking`; unless `sendSyntheticReasoning` is false, a function call without an
+ * origin gets a synthetic reasoning item when none already precedes it. System and developer text is joined into instructions.
  */
 export function responsesInput(
   request: Request,
@@ -74,7 +76,7 @@ export function responsesInput(
       systems.push(typeof item.content === 'string' ? item.content : item.content.map(part => 'text' in part ? part.text : '').join(''));
       return;
     }
-    if (plaintext && item.type === 'function_call' && !entry.context.origin && input.at(-1)?.type !== 'reasoning')
+    if (plaintext && opts.sendSyntheticReasoning !== false && item.type === 'function_call' && !entry.context.origin && input.at(-1)?.type !== 'reasoning')
       input.push({
         type: 'reasoning', id: `rs_${item.call_id}`, summary: [],
         content: [{ type: 'reasoning_text', text: opts.syntheticReasoningText ?? SYNTHETIC_REASONING_TEXT }],

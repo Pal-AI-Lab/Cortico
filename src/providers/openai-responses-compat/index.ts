@@ -27,6 +27,8 @@ export interface CompatOptions {
   reasoningReplay?: ReasoningReplay;
   /** Plaintext replay only; defaults to `SYNTHETIC_REASONING_TEXT`. */
   syntheticReasoningText?: string;
+  /** Plaintext replay only; default true. */
+  sendSyntheticReasoning?: boolean;
 }
 export function compatOptions(entry: LLMProviderEntry): CompatOptions {
   return (entry.options ?? {}) as CompatOptions;
@@ -34,7 +36,7 @@ export function compatOptions(entry: LLMProviderEntry): CompatOptions {
 
 /** Module-owned control object, used by the endpoint page's reasoning section. */
 export interface CompatControl {
-  /** A client for this endpoint with the given replay form; the stored entry is unchanged. */
+  /** A client for this endpoint with the given replay form, sending synthetic reasoning; the stored entry is unchanged. */
   probeClient(replay: ReasoningReplay): ResponseClient;
 }
 
@@ -102,12 +104,13 @@ export default {
       keepThinking: host.keepThinking,
       reasoningReplay,
       syntheticReasoningText: options.syntheticReasoningText,
+      sendSyntheticReasoning: options.sendSyntheticReasoning,
     });
     return {
       listModels: () => catalog.list(),
       contextWindow: (model) => catalog.contextWindow(model),
       compatibilityKey: () => [options.endpointPath ?? '/responses', name],
-      control: { probeClient: (replay) => new ResponsesProvider(clientOptions(replay)) } satisfies CompatControl,
+      control: { probeClient: (replay) => new ResponsesProvider({ ...clientOptions(replay), sendSyntheticReasoning: true }) } satisfies CompatControl,
       client: new ResponsesProvider(clientOptions(options.reasoningReplay)),
     };
   },

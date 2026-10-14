@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `En renvoi en clair, le raisonnement envoyé avant un appel d'outil sans origine enregistrée ; le modèle le lit. Vide = valeur par défaut « ${fallback} » ; les endpoints rejettent une chaîne vide ou composée d'espaces.`,
   syntheticReasoningTextValue: "Le texte de raisonnement synthétique ne peut pas être vide ou composé d'espaces : l'endpoint rejette toute la requête",
+  sendSyntheticReasoning: 'Envoyer le raisonnement synthétique',
+  sendSyntheticReasoningDescription: "Désactivé, rien n'est envoyé. Les endpoints qui exigent un raisonnement avant chaque appel d'outil rejettent la requête (400).",
   reasoningPanel: 'Raisonnement',
   reasoningPanelDescription: "Forme sous laquelle le raisonnement est renvoyé à l'endpoint.",
   bodyRequired: 'Corps de requête requis',

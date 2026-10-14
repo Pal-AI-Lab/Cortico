@@ -26,6 +26,8 @@ const zh = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `明文回传时,没有记录来源的工具调用前补的那一段推理,模型会读到。留空用默认「${fallback}」;端点拒收空串与全空白。`,
   syntheticReasoningTextValue: '合成推理填充不能是空串或全空白:端点会拒收整条请求',
+  sendSyntheticReasoning: '填充合成推理',
+  sendSyntheticReasoningDescription: '关闭后不再填充。要求每个工具调用前都带推理的端点会拒收请求(400)。',
   reasoningPanel: '思维链',
   reasoningPanelDescription: '思维链回传给上游的形态。',
   bodyRequired: '需要请求体',
@@ -52,6 +54,8 @@ export const en: typeof zh = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `In plaintext replay, the reasoning sent before a tool call with no recorded origin; the model reads it. Empty uses the default "${fallback}"; endpoints reject an empty or blank string.`,
   syntheticReasoningTextValue: 'Synthetic reasoning text cannot be empty or blank: the endpoint rejects the whole request',
+  sendSyntheticReasoning: 'Send synthetic reasoning',
+  sendSyntheticReasoningDescription: 'When off, none is sent. Endpoints that require reasoning before every tool call reject the request (400).',
   reasoningPanel: 'Reasoning',
   reasoningPanelDescription: 'The form in which reasoning is sent back to the endpoint.',
   bodyRequired: 'Request body required',

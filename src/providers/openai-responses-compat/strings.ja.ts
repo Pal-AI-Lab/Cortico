@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `plaintext で返送するとき、記録元のないツール呼び出しの前に補う推論テキストです。モデルはこれを読みます。空欄の場合は既定の「${fallback}」を使います。エンドポイントは空文字列と空白だけの文字列を拒否します。`,
   syntheticReasoningTextValue: '合成推論テキストは空文字列や空白だけにはできません：エンドポイントがリクエスト全体を拒否します',
+  sendSyntheticReasoning: '合成推論を補う',
+  sendSyntheticReasoningDescription: 'オフにすると補いません。すべてのツール呼び出しの前に推論を求めるエンドポイントはリクエストを拒否します（400）。',
   reasoningPanel: '思考',
   reasoningPanelDescription: '思考を上流へ返送する形式。',
   bodyRequired: 'リクエストボディが必要です',

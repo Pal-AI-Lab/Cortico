@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `明文回傳時,沒有記錄來源的工具呼叫前補的那一段推理,模型會讀到。留空用預設「${fallback}」;端點拒收空字串與全空白。`,
   syntheticReasoningTextValue: '合成推理填充不能是空字串或全空白:端點會拒收整個請求',
+  sendSyntheticReasoning: '填充合成推理',
+  sendSyntheticReasoningDescription: '關閉後不再填充。要求每個工具呼叫前都帶推理的端點會拒收請求(400)。',
   reasoningPanel: '思維鏈',
   reasoningPanelDescription: '思維鏈回傳給上游的形態。',
   bodyRequired: '需要請求內容',

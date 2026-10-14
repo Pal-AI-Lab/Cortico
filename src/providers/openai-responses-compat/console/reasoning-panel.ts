@@ -14,6 +14,7 @@ export const reasoningPanel: ConsolePanel = {
     const S = pick(ctx.language, panel);
     const name = ctx.scope.instance;
     const path = `providers.${name}.options.reasoningReplay`;
+    const sendPath = `providers.${name}.options.sendSyntheticReasoning`;
     const textPath = `providers.${name}.options.syntheticReasoningText`;
     const labels: Record<string, string> = { encrypted: S.encrypted, plaintext: S.plaintext };
     const card = ui.sheet({ title: S.title });
@@ -28,7 +29,7 @@ export const reasoningPanel: ConsolePanel = {
         result.verdict ? S.applied(labels[result.verdict]) : S.undetermined,
       );
 
-    async function save(groupId: string, key: string, value: string): Promise<void> {
+    async function save(groupId: string, key: string, value: string | boolean): Promise<void> {
       message.classList.remove('bad');
       try {
         await ctx.setConfig(groupId, { [key]: value });
@@ -81,6 +82,14 @@ export const reasoningPanel: ConsolePanel = {
       row.append(select, button, message);
       card.body.replaceChildren(ui.field(property.title, row));
       if (property.description) card.body.append(ui.msgline(property.description));
+
+      const sendProperty = group.schema.properties[sendPath];
+      const send = configField(ui, sendProperty, values[sendPath] !== false, () => {
+        if (send.read) void save(group.id, sendPath, send.read() === true);
+      }, ctx.signal);
+      send.node.setAttribute('aria-label', sendProperty.title);
+      card.body.append(ui.field(sendProperty.title, send.node));
+      if (sendProperty.description) card.body.append(ui.msgline(sendProperty.description));
 
       const textProperty = group.schema.properties[textPath];
       const text = configField(ui, textProperty, values[textPath], () => {

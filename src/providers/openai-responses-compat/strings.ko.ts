@@ -16,6 +16,8 @@ export const text: Partial<typeof en> = {
   syntheticReasoningTextDescription: (fallback: string) =>
     `plaintext로 회신할 때 출처 기록이 없는 도구 호출 앞에 채워 넣는 추론이며, 모델이 읽습니다. 비워 두면 기본값 "${fallback}"을(를) 씁니다. 엔드포인트는 빈 문자열과 공백뿐인 문자열을 거부합니다.`,
   syntheticReasoningTextValue: '합성 추론 텍스트는 빈 문자열이나 공백뿐일 수 없습니다: 엔드포인트가 요청 전체를 거부합니다',
+  sendSyntheticReasoning: '합성 추론 보내기',
+  sendSyntheticReasoningDescription: '끄면 보내지 않습니다. 모든 도구 호출 앞에 추론을 요구하는 엔드포인트는 요청을 거부합니다(400).',
   reasoningPanel: '추론',
   reasoningPanelDescription: '추론을 업스트림으로 돌려보내는 형식.',
   bodyRequired: '요청 본문이 필요합니다',
