@@ -1,4 +1,4 @@
-<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts, src/web/client/features/prompts/index.ts, src/web/client/features/prompts/editor.ts -->
 
 # 控制台
 
@@ -38,6 +38,15 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 | `extensions` | 扩展 | 安装、删除、npm 搜索、更新检查与安装历史版本（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
+
+系统提示词页按 `PrefixSegment.sourceKey` 编辑源模板，生成段只读。保存按钮或 Ctrl/⌘+S 写入模板；
+重载前缀会先保存，再调用已有的 session 前缀重载接口，保留 session 内容。保存期间继续输入的文字保持未保存，
+本次重载取消；某份模板保存失败时，其余尚未保存的模板仍留在待保存列表。
+
+撤销、重做和恢复到上次保存使用同一份编辑历史；刷新变量值和生成段不进入历史。变量可单击查看，
+用上下键选择、Enter 或双击插入，也可拖入所属段；段内预览不修改模板原文。段说明取自模板声明。
+各段默认展开，折叠状态保存在当前浏览器标签页的会话中。World 配置入口来自 manifest；没有配置能力时不显示。
+未进入当前前缀的 World 环境模板仍可编辑，并标记其状态；Persona 的前缀装配模板继续在其归属页编辑。
 
 终端页在部署目录里还挂着 `.onboarding` 标记时(自建部署写下的一次性开关,见
 [deployment.md](deployment.md))多出一组开场引导:

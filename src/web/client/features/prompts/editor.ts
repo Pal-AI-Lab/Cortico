@@ -1,294 +1,368 @@
-/** 前缀以单文档编辑；模板对应可跟随编辑变化的区间，只读区间由 changeFilter 拦截。 */
-
-import { EditorState, StateEffect, StateField, type Extension, type Range } from '@codemirror/state';
-import {
-  Decoration, EditorView, keymap, lineNumbers, type DecorationSet,
-} from '@codemirror/view';
+/** Templates remain ranges in one document; folds and variable values only affect presentation. */
+import { EditorState, StateEffect, StateField, Transaction, type Range } from '@codemirror/state';
+import { Decoration, EditorView, WidgetType, keymap, lineNumbers, dropCursor, type DecorationSet } from '@codemirror/view';
+import { defaultKeymap, history, historyKeymap, isolateHistory, undo, redo, undoDepth } from '@codemirror/commands';
+import type { PromptVar } from './view.ts';
 import { S } from './strings.ts';
 
-/** 一块 = 一份可编辑模板(或一段只读文本)在文档里占的那一截。 */
 export interface PrefixBlock {
   title: string;
-  /** 可编辑源的 key;无 = 这一块来自代码,只读 */
+  description?: string;
   sourceKey?: string;
-  /** 按来源分档,决定底色 */
   tone: 'persona' | 'world' | 'derived';
-  /** 这一块此刻的文本 */
   text: string;
+  vars?: readonly PromptVar[];
+  collapsed?: boolean;
 }
-
-/** 块在文档里的位置。`from`/`to` 随编辑实时更新。 */
-interface BlockRange {
-  block: PrefixBlock;
-  from: number;
-  to: number;
-}
-
-/** 整份重排(重新载入时用)。 */
+interface BlockRange { block: PrefixBlock; from: number; to: number; collapsed: boolean; preview: boolean; minHeight: number; padding: number }
 const setBlocks = StateEffect.define<BlockRange[]>();
-/** 鼠标此刻停在第几块上(-1 = 不在任何块上)。纯装饰用,不影响文档。 */
+const setCollapsed = StateEffect.define<{ index: number; collapsed: boolean }>();
+const setVariables = StateEffect.define<{ key: string; values: readonly PromptVar[] }>();
+const setSpacing = StateEffect.define<Array<{ minHeight: number; padding: number }>>();
+const refreshGenerated = StateEffect.define<null>();
+const setPreview = StateEffect.define<{ key: string; preview: boolean }>();
+const restoreSources = StateEffect.define<null>();
 const setHover = StateEffect.define<number>();
-
 const hoverField = StateField.define<number>({
   create: () => -1,
-  update(value, tr) {
-    for (const e of tr.effects) if (e.is(setHover)) return e.value;
-    return value;
-  },
+  update: (value, tr) => tr.effects.find((e) => e.is(setHover))?.value ?? value,
 });
-
-/** 保存状态。`idle` = 这次打开还没动过,什么也不提示。 */
-export type SaveState = 'idle' | 'dirty' | 'saving' | 'saved';
+type SaveState = 'idle' | 'dirty' | 'saving' | 'saved';
 const setSaveState = StateEffect.define<SaveState>();
-
-const SAVE_LABEL: Record<SaveState, string> = {
-  idle: '',
-  dirty: S.saveHintDirty,
-  saving: S.saving,
-  saved: S.saved,
-};
-
-/**
- * 保存状态,外加它落在哪一行(`at` = 换状态那一刻的光标位置)。
- *
- * **文档一变就是 `dirty`**,不等页面来通知——提示的时效性不该押在上层的回调链上;
- * 页面只在保存前后覆盖成 `saving` / `saved`。
- */
 const saveField = StateField.define<{ state: SaveState; at: number }>({
   create: () => ({ state: 'idle', at: 0 }),
   update(value, tr) {
     for (const e of tr.effects) {
       if (e.is(setSaveState)) return { state: e.value, at: tr.state.selection.main.head };
+      if (e.is(setBlocks)) return { state: 'idle', at: 0 };
+      if (e.is(refreshGenerated)) return value;
     }
-    if (tr.docChanged) return { state: 'dirty', at: tr.state.selection.main.head };
-    return value;
+    return tr.docChanged ? { state: 'dirty', at: tr.state.selection.main.head } : value;
   },
 });
-
-/** 编辑时映射块边界：to 的 assoc=1、from 的 assoc=-1，使边界插入内容归入该块。 */
 const blockField = StateField.define<BlockRange[]>({
   create: () => [],
   update(value, tr) {
-    for (const e of tr.effects) if (e.is(setBlocks)) return e.value;
-    if (!tr.docChanged) return value;
-    return value.map((r) => ({
-      block: r.block,
-      from: tr.changes.mapPos(r.from, -1),
-      to: tr.changes.mapPos(r.to, 1),
-    }));
+    for (const effect of tr.effects) if (effect.is(setBlocks)) return effect.value;
+    return value.map((range, index) => {
+      let next = tr.docChanged ? { ...range, from: tr.changes.mapPos(range.from, -1), to: tr.changes.mapPos(range.to, 1) } : range;
+      for (const effect of tr.effects) {
+        if (effect.is(setCollapsed) && effect.value.index === index) next = { ...next, collapsed: effect.value.collapsed };
+        if (effect.is(setPreview) && effect.value.key === next.block.sourceKey) next = { ...next, preview: effect.value.preview };
+        if (effect.is(setVariables) && effect.value.key === next.block.sourceKey) next = { ...next, block: { ...next.block, vars: effect.value.values } };
+        if (effect.is(setSpacing)) next = { ...next, ...effect.value[index] };
+      }
+      return next;
+    });
   },
 });
+export const VARIABLE_DRAG_TYPE = 'application/x-cortico-prompt-variable';
 
-/** 悬停与光标高亮覆盖所属块的全部行。 */
-const blockDecorations = EditorView.decorations.compute(
-  [blockField, hoverField, saveField, 'doc', 'selection'],
-  (state) => {
-    const ranges: Range<Decoration>[] = [];
-    const blocks = state.field(blockField);
-    const hovered = state.field(hoverField);
-    const caret = state.selection.main.head;
-    for (let i = 0; i < blocks.length; i++) {
-      const r = blocks[i];
-      const first = state.doc.lineAt(Math.min(r.from, state.doc.length)).number;
-      const last = state.doc.lineAt(Math.max(r.from, Math.min(r.to, state.doc.length))).number;
-      const active = r.block.sourceKey && caret >= r.from && caret <= r.to;
-      for (let n = first; n <= last; n++) {
-        const line = state.doc.line(n);
-        const cls = `cm-block cm-block-${r.block.tone}`
-          + (n === first ? ' cm-block-first' : '')
-          + (r.block.sourceKey ? '' : ' cm-block-readonly')
-          + (i === hovered ? ' cm-block-hover' : '')
-          + (active ? ' cm-block-active' : '');
-        // 块首行挂上序号:左侧标签与右栏靠它读**真实**位置(见 blockGeometry)
-        ranges.push(Decoration.line(
-          n === first ? { class: cls, attributes: { 'data-block': String(i) } } : { class: cls },
-        ).range(line.from));
+export function references(text: string): Array<{ name: string; from: number; to: number; token: string; fallback?: string }> {
+  return [...text.matchAll(/\{\{\s*([\w.]+)\s*(?:\|([^}]*))?\}\}/g)].map((m) => ({
+    name: m[1], from: m.index!, to: m.index! + m[0].length, token: m[0], fallback: m[2]?.trim(),
+  }));
+}
+
+function valueOf(variable: PromptVar, fallback?: string): string {
+  return variable.value || fallback || S.emptyValue;
+}
+
+class VariableWidget extends WidgetType {
+  constructor(readonly variable: PromptVar, readonly token: string, readonly preview: boolean, readonly fallback?: string) { super(); }
+  eq(other: VariableWidget): boolean {
+    return this.token === other.token && this.preview === other.preview && this.variable.value === other.variable.value
+      && this.variable.description === other.variable.description && this.variable.multiline === other.variable.multiline;
+  }
+  toDOM(view: EditorView): HTMLElement {
+    const doc = view.dom.ownerDocument;
+    const root = doc.createElement('span');
+    root.className = `prompt-reference${this.preview ? ' is-preview' : ''}`;
+    root.dataset.variable = this.variable.name;
+    root.contentEditable = 'false';
+    const button = doc.createElement('button');
+    button.type = 'button';
+    button.className = 'prompt-reference-label';
+    button.draggable = true;
+    button.textContent = this.preview ? this.variable.value === undefined ? this.token : valueOf(this.variable, this.fallback) : this.variable.name;
+    button.title = `${this.variable.name}: ${this.variable.description}`;
+    const remove = doc.createElement('button');
+    remove.type = 'button';
+    remove.className = 'prompt-reference-remove';
+    remove.textContent = '×';
+    remove.title = S.removeReference;
+    remove.setAttribute('aria-label', `${S.removeReference}: ${this.variable.name}`);
+    const range = () => {
+      const at = view.posAtDOM(root);
+      return references(view.state.doc.toString()).find((r) => r.from === at);
+    };
+    remove.addEventListener('click', () => {
+      const r = range();
+      if (r) {
+        // Undo returns to the edited reference, even when focus was in another section.
+        view.dispatch({ selection: { anchor: r.from }, annotations: Transaction.addToHistory.of(false) });
+        view.dispatch({ changes: { from: r.from, to: r.to }, selection: { anchor: r.from }, userEvent: 'delete', annotations: isolateHistory.of('full') });
       }
+      view.focus();
+    });
+    button.addEventListener('dragstart', (event) => {
+      const r = range();
+      if (!r || !event.dataTransfer) return;
+      event.dataTransfer.setData(VARIABLE_DRAG_TYPE, JSON.stringify({
+        key: view.state.field(blockField).find((b) => r.from >= b.from && r.to <= b.to)?.block.sourceKey, name: r.name, from: r.from, to: r.to, token: r.token,
+      }));
+      event.dataTransfer.effectAllowed = 'move';
+    });
+    root.append(button, remove);
+    return root;
+  }
+  ignoreEvent(): boolean { return true; }
+}
+
+
+class SectionHeader extends WidgetType {
+  constructor(readonly index: number, readonly description: string, readonly collapsed: boolean, readonly height = 0) { super(); }
+  eq(other: SectionHeader): boolean { return this.index === other.index && this.description === other.description && this.collapsed === other.collapsed && this.height === other.height; }
+  toDOM(view: EditorView): HTMLElement {
+    const el = view.dom.ownerDocument.createElement('div');
+    el.className = 'prefix-comment';
+    el.dataset.block = String(this.index);
+    if (this.collapsed) el.style.height = `${this.height}px`;
+    const text = view.dom.ownerDocument.createElement('span');
+    text.className = 'prefix-comment-text';
+    text.textContent = this.description;
+    text.title = this.description;
+    const status = view.dom.ownerDocument.createElement('button');
+    status.type = 'button';
+    status.className = `prefix-fold-status ${this.collapsed ? 'is-collapsed' : 'is-expanded'}`;
+    status.textContent = this.collapsed ? '+' : '−';
+    status.setAttribute('aria-label', this.collapsed ? S.collapsed : S.expanded);
+    status.setAttribute('aria-expanded', String(!this.collapsed));
+    status.title = this.collapsed ? S.collapsed : S.expanded;
+    status.addEventListener('click', () => {
+      view.dispatch({ effects: setCollapsed.of({ index: this.index, collapsed: !this.collapsed }) });
+      view.contentDOM.querySelector<HTMLButtonElement>(`.prefix-comment[data-block="${this.index}"] button`)?.focus({ preventScroll: true });
+    });
+    el.append(text, status);
+    return el;
+  }
+}
+
+function decorate(state: EditorState): DecorationSet {
+  const decorations: Range<Decoration>[] = [];
+  state.field(blockField).forEach((range, index) => {
+    const { block, from, to } = range;
+    if (range.collapsed) {
+      decorations.push(Decoration.replace({ widget: new SectionHeader(index, block.description ?? '', true, range.minHeight), block: true }).range(from, to));
+      return;
     }
-    /* 保存提示使用属性与 CSS 伪元素，不插入 contentEditable 节点，以保留空行退格行为。已保存提示仅留在保存时的光标行。 */
-    const save = state.field(saveField);
-    const line = state.doc.lineAt(Math.min(caret, state.doc.length));
-    const pinned = save.state === 'saved'
-      && state.doc.lineAt(Math.min(save.at, state.doc.length)).number !== line.number;
-    const label = pinned ? '' : SAVE_LABEL[save.state];
-    if (label) {
-      ranges.push(Decoration.line({
-        class: `cm-save-${save.state}`,
-        attributes: { 'data-save-hint': label },
+    decorations.push(Decoration.widget({ widget: new SectionHeader(index, block.description ?? '', false), block: true, side: -1 }).range(from));
+    for (let n = state.doc.lineAt(from).number; n <= state.doc.lineAt(to).number; n++) {
+      const line = state.doc.line(n);
+      decorations.push(Decoration.line({
+        class: `cm-block cm-block-${block.tone}${line.from === from ? ' cm-block-first' : ''}`,
+        attributes: {
+          'data-prompt-section': String(index),
+          ...(n === state.doc.lineAt(to).number ? { style: `padding-bottom:${range.padding}px` } : {}),
+        },
       }).range(line.from));
     }
-    return Decoration.set(ranges, true) as DecorationSet;
+    const declared = new Map(block.vars?.map((v) => [v.name, v]));
+    for (const ref of references(state.doc.sliceString(from, to))) {
+      const variable = declared.get(ref.name);
+      if (variable) decorations.push(Decoration.replace({ widget: new VariableWidget(variable, ref.token, range.preview, ref.fallback) }).range(from + ref.from, from + ref.to));
+    }
+  });
+  return Decoration.set(decorations, true);
+}
+const decorations = StateField.define<DecorationSet>({
+  create: decorate,
+  update: (value, tr) => tr.docChanged || tr.effects.some((e) => e.is(setBlocks) || e.is(setCollapsed) || e.is(setVariables) || e.is(setSpacing) || e.is(setPreview)) ? decorate(tr.state) : value,
+  provide: (field) => [EditorView.decorations.from(field), EditorView.atomicRanges.of((view) => view.state.field(field))],
+});
+const interactionDecorations = EditorView.decorations.compute(
+  [blockField, hoverField, saveField, 'selection', 'doc'],
+  (state) => {
+    const ranges: Range<Decoration>[] = [];
+    const caret = state.selection.main.head;
+    state.field(blockField).forEach((r, index) => {
+      if (r.collapsed) return;
+      const active = r.block.sourceKey && caret >= r.from && caret <= r.to;
+      const hovered = state.field(hoverField) === index;
+      if (!active && !hovered) return;
+      for (let n = state.doc.lineAt(r.from).number; n <= state.doc.lineAt(r.to).number; n++) {
+        ranges.push(Decoration.line({ class: `${active ? 'cm-block-active' : ''} ${hovered ? 'cm-block-hover' : ''}` }).range(state.doc.line(n).from));
+      }
+    });
+    const save = state.field(saveField);
+    const line = state.doc.lineAt(caret);
+    const label = { idle: '', dirty: S.saveHintDirty, saving: S.saving, saved: S.saved }[save.state];
+    if (label && (save.state !== 'saved' || state.doc.lineAt(Math.min(save.at, state.doc.length)).number === line.number)) {
+      ranges.push(Decoration.line({ class: `cm-save-${save.state}`, attributes: { 'data-save-hint': label } }).range(line.from));
+    }
+    return Decoration.set(ranges, true);
   },
 );
 
-/** 鼠标移动时算出停在第几块上。只在结果变了时 dispatch,免得每帧一次事务。 */
-const hoverTracker = EditorView.domEventHandlers({
-  mousemove(event, view) {
-    const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
-    const blocks = view.state.field(blockField);
-    let idx = -1;
-    if (pos != null) idx = blocks.findIndex((r) => pos >= r.from && pos <= r.to);
-    if (idx !== view.state.field(hoverField)) view.dispatch({ effects: setHover.of(idx) });
-    return false;
-  },
-  mouseleave(_event, view) {
-    if (view.state.field(hoverField) !== -1) view.dispatch({ effects: setHover.of(-1) });
-    return false;
-  },
-});
-
-/* 块标签由页面按 blockGeometry 绝对定位。 */
-
-/** 落在只读块里的改动一律拦掉。 */
-const readonlyGuard = EditorState.changeFilter.of((tr) => {
-  const blocks = tr.startState.field(blockField, false);
-  if (!blocks) return true;
-  let ok = true;
-  tr.changes.iterChangedRanges((fromA, toA) => {
-    for (const r of blocks) {
-      if (r.block.sourceKey) continue;
-      // 只读块内部(不含两端边界)被碰到就否决整笔改动
-      if (fromA < r.to && toA > r.from) ok = false;
-    }
+const sourceGuard = EditorState.changeFilter.of((tr) => {
+  if (tr.effects.some((e) => e.is(setBlocks) || e.is(refreshGenerated) || e.is(restoreSources))) return true;
+  const blocks = tr.startState.field(blockField);
+  let allowed = true;
+  tr.changes.iterChangedRanges((from, to) => {
+    if (!blocks.some((r) => r.block.sourceKey && (!r.collapsed || tr.isUserEvent('undo') || tr.isUserEvent('redo')) && from >= r.from && to <= r.to)) allowed = false;
   });
-  return ok;
+  return allowed;
 });
 
-export interface PrefixEditorOptions {
+export function createPrefixEditor(options: {
   parent: HTMLElement;
-  /** 文档变化时报出每块的当前文本(已按区间切好)。只报可编辑块。 */
-  onChange(changed: Array<{ sourceKey: string; text: string }>): void;
-  /** Ctrl/Cmd+S。**不自动保存**,写盘只从这里发起。 */
+  onChange(changes: Array<{ sourceKey: string; text: string }>): void;
   onSave?(): void;
-  /** 几何变化(行数、滚动、尺寸)时通知,用来重排右栏。 */
   onGeometry?(): void;
-}
-
-export interface PrefixEditor {
-  view: EditorView;
-  /** 整份重载:重新拼文档、重设区间。 */
-  setBlocks(blocks: PrefixBlock[]): void;
-  /** 覆盖行尾提示的状态(保存前后各一次)。打字会自动回到 `dirty`。 */
-  setSaveState(state: SaveState): void;
-  /** 内容区顶边的视口坐标。左右两层据此换算到与正文同一条基线上。 */
-  contentTop(): number;
-  /** 某一块此刻在视口里的垂直位置(相对编辑器内容顶部),用来对齐左侧标签与右栏。 */
-  blockGeometry(): Array<{
-    sourceKey?: string;
-    title: string;
-    tone: PrefixBlock['tone'];
-    top: number;
-    height: number;
-  }>;
-  dispose(): void;
-}
-
-/** 块文本拼成一份文档:块之间**恰好一个换行**,那一格属于分隔本身。 */
-function joinBlocks(blocks: PrefixBlock[]): { doc: string; ranges: BlockRange[] } {
-  const ranges: BlockRange[] = [];
-  let doc = '';
-  for (const block of blocks) {
-    const from = doc.length;
-    doc += block.text;
-    ranges.push({ block, from, to: doc.length });
-    doc += '\n';
-  }
-  return { doc: doc.replace(/\n$/, ''), ranges };
-}
-
-export function createPrefixEditor(opts: PrefixEditorOptions): PrefixEditor {
+  onFold?(index: number, collapsed: boolean): void;
+  onHistory?(): void;
+}) {
   let last = new Map<string, string>();
-
   const view = new EditorView({
-    parent: opts.parent,
-    state: EditorState.create({
-      doc: '',
-      extensions: [
-        blockField,
-        hoverField,
-        saveField,
-        blockDecorations,
-        hoverTracker,
-        lineNumbers(),
-        readonlyGuard,
-        keymap.of([{
-          key: 'Mod-s',
-          preventDefault: true,
-          run: () => { opts.onSave?.(); return true; },
-        }]),
-        EditorView.lineWrapping,
-        EditorView.updateListener.of((u) => {
-          if (u.docChanged) {
-            const changed: Array<{ sourceKey: string; text: string }> = [];
-            for (const r of u.state.field(blockField)) {
-              const key = r.block.sourceKey;
-              if (!key) continue;
-              const text = u.state.doc.sliceString(
-                Math.min(r.from, u.state.doc.length),
-                Math.min(r.to, u.state.doc.length),
-              );
-              if (last.get(key) !== text) {
-                last.set(key, text);
-                changed.push({ sourceKey: key, text });
-              }
-            }
-            if (changed.length) opts.onChange(changed);
+    parent: options.parent,
+    state: EditorState.create({ extensions: [
+      blockField, hoverField, saveField, decorations, interactionDecorations, sourceGuard, history(), lineNumbers(), dropCursor(), EditorView.lineWrapping,
+      EditorView.contentAttributes.of({ 'aria-label': S.title, spellcheck: 'false' }),
+      keymap.of([
+        { key: 'Mod-s', preventDefault: true, run: () => { options.onSave?.(); return true; } },
+        { key: 'Mod-Shift-z', preventDefault: true, run: redo },
+        ...defaultKeymap, ...historyKeymap,
+      ]),
+      EditorView.updateListener.of((update) => {
+        if (update.docChanged) {
+          const changes: Array<{ sourceKey: string; text: string }> = [];
+          for (const range of update.state.field(blockField)) {
+            const key = range.block.sourceKey;
+            if (!key) continue;
+            const text = update.state.doc.sliceString(range.from, range.to);
+            if (last.get(key) !== text) { last.set(key, text); changes.push({ sourceKey: key, text }); }
           }
-          if (u.docChanged || u.geometryChanged || u.viewportChanged) opts.onGeometry?.();
-        }),
-      ] as Extension[],
-    }),
+          if (changes.length) options.onChange(changes);
+        }
+        for (const transaction of update.transactions) for (const effect of transaction.effects) {
+          if (effect.is(setCollapsed)) options.onFold?.(effect.value.index, effect.value.collapsed);
+        }
+        if (update.docChanged) options.onHistory?.();
+        if (update.docChanged || update.geometryChanged || update.viewportChanged || update.transactions.some((t) => t.effects.length)) options.onGeometry?.();
+      }),
+      EditorView.domEventHandlers({
+        mousemove(event) {
+          const at = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          const index = at == null ? -1 : view.state.field(blockField).findIndex((r) => !r.collapsed && at >= r.from && at <= r.to);
+          if (index !== view.state.field(hoverField)) view.dispatch({ effects: setHover.of(index) });
+          return false;
+        },
+        mouseleave() {
+          if (view.state.field(hoverField) !== -1) view.dispatch({ effects: setHover.of(-1) });
+          return false;
+        },
+        dragover(event) {
+          if (!event.dataTransfer?.types.includes(VARIABLE_DRAG_TYPE)) return false;
+          event.preventDefault();
+          return false;
+        },
+        drop(event) {
+          const raw = event.dataTransfer?.getData(VARIABLE_DRAG_TYPE);
+          if (!raw) return false;
+          event.preventDefault();
+          let data: { key?: string; name?: string; from?: number; to?: number; token?: string };
+          try { data = JSON.parse(raw); } catch { return true; }
+          const at = view.posAtCoords({ x: event.clientX, y: event.clientY });
+          const range = view.state.field(blockField).find((r) => r.block.sourceKey === data.key && !r.collapsed && at != null && at >= r.from && at <= r.to);
+          if (!range || !range.block.vars?.some((v) => v.name === data.name)) return true;
+          const pos = outsideReference(at!);
+          const moving = references(view.state.doc.toString()).find((r) => r.from === data.from && r.to === data.to && r.token === data.token && r.from >= range.from && r.to <= range.to);
+          if (moving) {
+            if (pos >= moving.from && pos <= moving.to) return true;
+            const anchor = pos > moving.to ? pos : pos + moving.token.length;
+            view.dispatch({ selection: { anchor: moving.from }, annotations: Transaction.addToHistory.of(false) });
+            view.dispatch({ changes: [{ from: moving.from, to: moving.to }, { from: pos, insert: moving.token }], selection: { anchor }, userEvent: 'move.drop', annotations: isolateHistory.of('full') });
+            view.focus();
+          } else insert(data.key!, data.name!, pos);
+          return true;
+        },
+      }),
+    ] }),
   });
-
+  function outsideReference(position: number): number {
+    const ref = references(view.state.doc.toString()).find((r) => r.from < position && r.to > position);
+    return ref?.to ?? position;
+  }
+  function insert(key: string, name: string, position = view.state.selection.main.head): void {
+    const range = view.state.field(blockField).find((r) => r.block.sourceKey === key);
+    if (!range || range.collapsed || !range.block.vars?.some((v) => v.name === name)) return;
+    const at = outsideReference(position >= range.from && position <= range.to ? position : range.to);
+    const token = `{{${name}}}`;
+    view.dispatch({ selection: { anchor: at }, annotations: Transaction.addToHistory.of(false) });
+    view.dispatch({ changes: { from: at, insert: token }, selection: { anchor: at + token.length }, scrollIntoView: true, userEvent: 'input', annotations: isolateHistory.of('full') });
+    view.focus();
+    requestAnimationFrame(() => {
+      for (const node of view.dom.querySelectorAll<HTMLElement>('.prompt-reference')) if (view.posAtDOM(node) === at) {
+        node.classList.remove('reference-arrive');
+        void node.offsetWidth;
+        node.classList.add('reference-arrive');
+      }
+    });
+  }
   return {
-    view,
-    setBlocks(blocks) {
-      // 文档把 CRLF/CR 折成 LF;块区间与改动基线都按折后的文本算,否则区间比文档长
-      blocks = blocks.map((b) => ({ ...b, text: view.state.toText(b.text).toString() }));
-      const { doc, ranges } = joinBlocks(blocks);
-      last = new Map(blocks.filter((b) => b.sourceKey).map((b) => [b.sourceKey!, b.text]));
-      view.dispatch({
-        // 载入不是"改动":`setSaveState` 与 `setBlocks` 同批发,把 docChanged
-        // 顺带置上的 dirty 压回去,否则一进页面就挂着"按 Ctrl+S 保存"
-        changes: { from: 0, to: view.state.doc.length, insert: doc },
-        effects: [setBlocks.of(ranges), setSaveState.of('idle')],
+    view, insert,
+    undo() { undo(view); view.focus(); },
+    redo() { redo(view); view.focus(); },
+    canUndo: () => undoDepth(view.state) > 0,
+    restore(sources: ReadonlyMap<string, string>) {
+      const changes = view.state.field(blockField).flatMap((r) => {
+        const text = r.block.sourceKey && sources.get(r.block.sourceKey);
+        return typeof text === 'string' && text !== view.state.doc.sliceString(r.from, r.to) ? [{ from: r.from, to: r.to, insert: text }] : [];
       });
-      opts.onGeometry?.();
+      if (changes.length) view.dispatch({ changes, effects: restoreSources.of(null), userEvent: 'input.restore', annotations: isolateHistory.of('full') });
     },
-    setSaveState(state) {
-      view.dispatch({ effects: setSaveState.of(state) });
+    setPreview(key: string, preview: boolean) { view.dispatch({ effects: setPreview.of({ key, preview }) }); },
+    setSaveState(state: SaveState) { view.dispatch({ effects: setSaveState.of(state) }); },
+    setBlocks(blocks: PrefixBlock[]) {
+      let doc = '';
+      const ranges = blocks.map((block) => {
+        block = { ...block, text: view.state.toText(block.text).toString() };
+        const from = doc.length;
+        doc += block.text;
+        const range = { block, from, to: doc.length, collapsed: block.collapsed ?? false, preview: false, minHeight: 50, padding: 0 };
+        doc += '\n';
+        return range;
+      });
+      last = new Map(ranges.filter((r) => r.block.sourceKey).map((r) => [r.block.sourceKey!, r.block.text]));
+      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: doc.slice(0, -1) }, effects: setBlocks.of(ranges), annotations: Transaction.addToHistory.of(false) });
+    },
+    setCollapsed(index: number, collapsed: boolean) { view.dispatch({ effects: setCollapsed.of({ index, collapsed }) }); },
+    text(key: string): string {
+      const range = view.state.field(blockField).find((r) => r.block.sourceKey === key)!;
+      return view.state.doc.sliceString(range.from, range.to);
+    },
+    updateVariables(key: string, values: readonly PromptVar[]) { view.dispatch({ effects: setVariables.of({ key, values }) }); },
+    updateGenerated(index: number, text: string) {
+      const range = view.state.field(blockField)[index];
+      const normalized = view.state.toText(text).toString();
+      if (range.block.sourceKey || view.state.doc.sliceString(range.from, range.to) === normalized) return;
+      view.dispatch({ changes: { from: range.from, to: range.to, insert: normalized }, effects: refreshGenerated.of(null), annotations: Transaction.addToHistory.of(false) });
+    },
+    setSpacing(spacing: Array<{ minHeight: number; padding: number }>) {
+      if (view.state.field(blockField).some((r, i) => Math.abs(r.minHeight - spacing[i].minHeight) > 1 || Math.abs(r.padding - spacing[i].padding) > 1)) {
+        view.dispatch({ effects: setSpacing.of(spacing) });
+      }
+    },
+    blockGeometry() {
+      const base = view.contentDOM.getBoundingClientRect().top;
+      const blocks = view.state.field(blockField);
+      const tops = blocks.map((r, index) => {
+        const el = view.contentDOM.querySelector(`[data-block="${index}"]`);
+        return el ? el.getBoundingClientRect().top - base : view.lineBlockAt(r.from).top;
+      });
+      return blocks.map((r, index) => ({ top: tops[index], height: (tops[index + 1] ?? view.contentDOM.getBoundingClientRect().height) - tops[index], collapsed: r.collapsed, padding: r.padding }));
     },
     contentTop: () => view.contentDOM.getBoundingClientRect().top,
-    /** 优先测量已渲染块首行的 DOM 位置；不可见行回退到 lineBlockAt 估算值。 */
-    blockGeometry() {
-      const out: Array<{
-        sourceKey?: string; title: string; tone: PrefixBlock['tone']; top: number; height: number;
-      }> = [];
-      const len = view.state.doc.length;
-      const blocks = view.state.field(blockField);
-      const base = view.contentDOM.getBoundingClientRect().top;
-      const topOf = (i: number, pos: number): number => {
-        const el = view.contentDOM.querySelector(`[data-block="${i}"]`);
-        if (el) return el.getBoundingClientRect().top - base;
-        return view.lineBlockAt(Math.min(pos, len)).top;
-      };
-      for (let i = 0; i < blocks.length; i++) {
-        const r = blocks[i];
-        const top = topOf(i, r.from);
-        // 高度取到下一块的起点;最后一块吃到内容底部
-        const next = i + 1 < blocks.length
-          ? topOf(i + 1, blocks[i + 1].from)
-          : view.contentDOM.getBoundingClientRect().height;
-        out.push({
-          sourceKey: r.block.sourceKey,
-          title: r.block.title,
-          tone: r.block.tone,
-          top,
-          height: Math.max(next - top, 0),
-        });
-      }
-      return out;
-    },
     dispose: () => view.destroy(),
   };
 }

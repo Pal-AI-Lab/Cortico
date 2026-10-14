@@ -14,6 +14,7 @@ import { functionCall, functionResult, message } from '../src/protocol/open-resp
  *   CORTICO_DEV_PASSWORD=xxx npx tsx scripts/dev-console.ts → 带访问密码起,用来看登录页
  */
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -1320,7 +1321,7 @@ const app = new WebApp({
       const doc = devPromptDocs.find((item) => item.key === key);
       if (!doc) throw new Error(`未知提示词模板: ${key}`);
       if (baseRevision && baseRevision !== doc.revision) throw new PromptRevisionConflict(`${doc.title} 已在别处被修改，请重新载入后再保存`);
-      doc.content = content; doc.revision = `dev-${Date.now()}`;
+      doc.content = content; doc.revision = createHash('sha256').update(content).digest('hex');
       return `已保存 ${doc.title} (dev)`;
     },
   },
