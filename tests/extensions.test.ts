@@ -522,6 +522,32 @@ describe('ExtensionManager', () => {
     expect(errors[0].error).toContain('ECONNREFUSED');
   });
 
+  it('回应正文读到一半断开或不是 JSON 时，错误同样带主机与底层原因', async () => {
+    installFake('cut-mod');
+    installFake('html-mod');
+    const server = createServer((req, res) => {
+      if (req.url?.includes('cut-mod')) {
+        res.writeHead(200, { 'content-type': 'application/json', 'content-length': '1000' });
+        res.write('{"dist-tags":');
+        setTimeout(() => res.socket?.destroy(), 20);
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'text/html' }).end('<html>blocked</html>');
+    });
+    await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
+    const { port } = server.address() as AddressInfo;
+    try {
+      const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+      const errors = new Map((await mgr.updates()).errors.map((e) => [e.name, e.error]));
+      expect(errors.get('cut-mod')).toContain(`127.0.0.1:${port}: terminated`);
+      expect(errors.get('cut-mod')).toContain('UND_ERR_SOCKET');
+      expect(errors.get('html-mod')).toContain(`127.0.0.1:${port}: `);
+      expect(errors.get('html-mod')).toContain('JSON');
+    } finally {
+      await new Promise((done) => server.close(done));
+    }
+  });
+
   it.each([
     { shape: 'string', author: 'Example author <author@example.test> (https://example.test)', expected: 'Example author' },
     { shape: 'object', author: { name: 'Example author' }, expected: 'Example author' },
