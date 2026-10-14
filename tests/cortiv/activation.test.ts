@@ -5,11 +5,13 @@ import { join, resolve } from 'node:path';
 import { createBot, type Bot } from '../../src/bot.ts';
 import { loadDeployment } from '../../src/deploy.ts';
 import { withWorlds } from '../../src/world.ts';
-import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../../src/worlds/index.ts';
 import cortiv, { type CortiVConfig } from '../../bots/cortiv/index.ts';
 
+const builtinWorlds = await loadBuiltinWorlds();
+
 /** 与启动器同一条线:仓内全部实现并进定义,扩展不装。 */
-const definition = withWorlds(cortiv, BUILTIN_WORLDS);
+const definition = withWorlds(cortiv, builtinWorlds);
 
 let dir: string;
 let bot: Bot<CortiVConfig> | null = null;

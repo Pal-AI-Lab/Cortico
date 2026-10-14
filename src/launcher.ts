@@ -17,7 +17,7 @@ import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterfac
 import { extensionIconFile, extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
 import { parseExtensionManifest } from './extensions/manifest.ts';
 import { withWorlds } from './world.ts';
-import { BUILTIN_WORLDS } from './worlds/index.ts';
+import { loadBuiltinWorlds } from './worlds/index.ts';
 import { checkFrameworkRelease } from './web/framework-release.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
 import { deploymentDir, deploymentRoot, mainRepoRoot, packageDir, providerDir, providersRoot, readDeploymentManifest, repoRoot } from './paths.ts';
@@ -166,14 +166,15 @@ async function main(): Promise<void> {
 
   const { definition: loadedDefinition, deployDir: botDir, pkgDir, botPackage } = await loadBotDefinition(botName);
 
+  const builtinWorlds = await loadBuiltinWorlds();
   // 扩展 provider 必须在 createBot 解析端点配置前注册。
   const extensions = await loadExtensions(repoRoot(), {
-    reserved: BUILTIN_WORLDS.map((m) => m.id),
+    reserved: builtinWorlds.map((m) => m.id),
     reservedProviders: providerModules.map((m) => m.id),
     ...(botPackage ? { activeBot: botPackage } : {}),
   });
   registerProviderModules(extensions.providers);
-  const definition = withWorlds(loadedDefinition, [...BUILTIN_WORLDS, ...extensions.worlds]);
+  const definition = withWorlds(loadedDefinition, [...builtinWorlds, ...extensions.worlds]);
 
   const loaded = loadDeployment(definition, botDir, repoRoot(), pkgDir, providersRoot());
   const cfg = loaded.config;

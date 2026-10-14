@@ -10,10 +10,12 @@ import { createBot, type Bot } from '../src/bot.ts';
 import { loadDeployment } from '../src/deploy.ts';
 import { FakeLLM } from './core/helpers.ts';
 import { withWorlds } from '../src/world.ts';
-import { BUILTIN_WORLDS } from '../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../src/worlds/index.ts';
 import cormini, { type CorminiConfig } from '../bots/cormini/index.ts';
 
-const definition = withWorlds(cormini, BUILTIN_WORLDS);
+const builtinWorlds = await loadBuiltinWorlds();
+
+const definition = withWorlds(cormini, builtinWorlds);
 
 let dir: string;
 let bot: Bot<CorminiConfig>;

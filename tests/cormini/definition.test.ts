@@ -6,13 +6,15 @@ import { join, resolve } from 'node:path';
 import { createBot, type Bot } from '../../src/bot.ts';
 import { loadDeployment } from '../../src/deploy.ts';
 import { withWorlds, type WorldDefinition, type WorldSection } from '../../src/world.ts';
-import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../../src/worlds/index.ts';
 import { FakeLLM } from '../core/helpers.ts';
 import type { ConfigGroup } from '../../src/core/types.ts';
 import cormini, { type CorminiConfig } from '../../bots/cormini/index.ts';
 
+const builtinWorlds = await loadBuiltinWorlds();
+
 /** 与启动器同一条线:仓内全部实现并进定义;多声明一个没有实现的 id,验收灰卡那条路。 */
-const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), 'phantom'] }, BUILTIN_WORLDS);
+const definition = withWorlds({ ...cormini, declares: [...(cormini.declares ?? []), 'phantom'] }, builtinWorlds);
 
 let dir: string;
 let bot: Bot<CorminiConfig>;

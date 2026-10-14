@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import WebSocket from 'ws';
 import cortiv, { type CortiVConfig } from '../../bots/cortiv/index.ts';
 import { withWorlds } from '../../src/world.ts';
-import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../../src/worlds/index.ts';
 import { createBot, type Bot } from '../../src/bot.ts';
 import type { LoadedConfig } from '../../src/core/config.ts';
 import { BilibiliWorld, type LiveHandlers } from '../../src/worlds/bilibili/world.ts';
@@ -19,8 +19,9 @@ import type { LiveStatus } from '../../src/worlds/bilibili/client.ts';
 import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
 import { FakeLLM, makeTmpDir, sleep, toolReply } from '../core/helpers.ts';
 
+const builtinWorlds = await loadBuiltinWorlds();
 
-const definition = withWorlds(cortiv, BUILTIN_WORLDS);
+const definition = withWorlds(cortiv, builtinWorlds);
 
 async function waitFor(condition: () => boolean, timeoutMs = 8_000): Promise<void> {
   const startedAt = Date.now();

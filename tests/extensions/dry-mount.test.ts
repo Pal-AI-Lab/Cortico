@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld, fakeWorldContext } from '../../src/extensions/dry-mount.ts';
-import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../../src/worlds/index.ts';
 import { providerModules } from '../../src/providers/registry.ts';
 import { RESERVED_FRAME_NAMES } from '../../src/core/loop.ts';
 import { CORE_DEFAULTS } from '../../src/core/config.ts';
@@ -16,6 +16,8 @@ import type { BotDefinition } from '../../src/bot.ts';
 import type { WorldDefinition, WorldSection } from '../../src/world.ts';
 import type { ConfigGroup, CoreConfig, ToolDef, World } from '../../src/core/types.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
+
+const builtinWorlds = await loadBuiltinWorlds();
 
 let scratchDir: string;
 beforeEach(() => { scratchDir = mkdtempSync(join(tmpdir(), 'dry-mount-')); });
@@ -133,14 +135,14 @@ describe("World 构造检查", () => {
   });
 
   it('内建 World 声明的每个配置路径都在自己的 defaults() 里', async () => {
-    for (const def of BUILTIN_WORLDS) {
+    for (const def of builtinWorlds) {
       const report = await dryMountWorld(def, { scratchDir });
       expect(report.failures, def.id).toEqual([]);
     }
   });
 
   it('内建 World 全部在假环境下构造得出来,工具名可供对照', () => {
-    const { taken, skipped } = collectToolNames(BUILTIN_WORLDS, { scratchDir });
+    const { taken, skipped } = collectToolNames(builtinWorlds, { scratchDir });
     expect(skipped).toEqual([]);
     expect(taken.get('web_search')).toBe('WebSearch');
   });

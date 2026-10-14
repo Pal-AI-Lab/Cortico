@@ -1,4 +1,4 @@
-<!-- Owner: src/core/types.ts (World, WorldHost), src/world.ts -->
+<!-- Owner: src/core/types.ts (World, WorldHost), src/world.ts, src/worlds/index.ts -->
 
 # World
 
@@ -77,7 +77,22 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 `configOptions(kind, language)` 每次传入(见 [console.md](console.md))。控制台里的 World 名取
 `console(language).label`,没有时取定义的 `label`,两者都按请求现读。
 
-仓内定义列在 `src/worlds/index.ts`;启动器合并内建与扩展定义,通过 `withWorlds()` 交给 bot 定义。
+仓内定义列在 `src/worlds/index.ts`,由 `loadBuiltinWorlds(ids?)` 按 id 动态导入 `src/worlds/<id>/definition.ts`;
+不给 `ids` 时带上全部(`BUILTIN_WORLD_IDS`),有不认识的 id 时抛错。启动器带上全部仓内 World,与扩展定义
+合并后通过 `withWorlds()` 交给 bot 定义。
+
+自己写装配入口的下游产品(调 `loadDeployment()`、`createBot()` 的应用)传 `ids` 选要带的仓内 World:
+
+```ts
+const builtin = await loadBuiltinWorlds(['terminal']);
+const extensions = await loadExtensions(repoRoot(), { reserved: builtin.map((w) => w.id), /* … */ });
+const definition = withWorlds(bot, [...builtin, ...extensions.worlds]);
+```
+
+`src/worlds/index.ts` 不静态导入任何 World,导入路径是模板字符串,TypeScript 不解析。没选上的 World 不被
+加载;产物里删掉 `src/worlds/<id>/` 目录不影响装配和对其余文件的类型检查,它在 `package.json` 里的依赖
+也可以不装。`src/launcher.ts` 总是带全部仓内 World,删了目录的产物不能用它启动。
+
 bot 的 `index.ts` 在 `declares` 中列出默认启用的 World id。声明但未安装的 World 显示为不可用;
 补充 World 默认段时,声明过的 `enabled` 置 true,其余置 false;bot 已提供的配置段保留原值,
 部署配置可继续覆盖。
@@ -150,5 +165,5 @@ Minecraft 的 `PwsrTables` 管理目标、路标及蓝图的 realm 视图,空间
 
 从 `WorldDefinition` 起:`defaults()` 定配置段,`create()` 返回实现 `World` 的实例;有自定义面板就加
 `console/client.ts`;有环境描述就加 `ENV_PROMPT.md`。测试用 `tests/helpers/fake-host.ts` 的
-`FakeHost` 记录推送。放进仓库的在 `src/worlds/index.ts` 登记一行;放进仓库还是做成扩展,判据在
+`FakeHost` 记录推送。放进仓库的在 `src/worlds/index.ts` 的 id 表里登记 id 与定义的导出名;放进仓库还是做成扩展,判据在
 [CONTRIBUTING.md](../CONTRIBUTING.md)。

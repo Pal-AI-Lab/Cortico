@@ -7,12 +7,14 @@ import { pathToFileURL } from 'node:url';
 import { EXTENSION_API_VERSIONS, EXTENSION_KEYWORDS, parseExtensionManifest, type ExtensionPackageJson } from '../../src/extensions/manifest.ts';
 import { isBotDefinition, isProviderModule, isWorldDefinition, resolveExtensionEntry } from '../../src/extensions.ts';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld } from '../../src/extensions/dry-mount.ts';
-import { BUILTIN_WORLDS } from '../../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../../src/worlds/index.ts';
 import { providerModules } from '../../src/providers/registry.ts';
 import type { BotDefinition } from '../../src/bot.ts';
 import type { CoreConfig } from '../../src/core/types.ts';
 import type { WorldDefinition, WorldSection } from '../../src/world.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
+
+const builtinWorlds = await loadBuiltinWorlds();
 
 const TEMPLATES = resolve(import.meta.dirname, '../../templates/extension');
 const BOTS_DIR = resolve(import.meta.dirname, '../../bots');
@@ -47,8 +49,8 @@ describe('templates/extension', () => {
     const { pkgDir, exported } = await loadTemplate('world');
     expect(isWorldDefinition(exported)).toBe(true);
     const def = exported as WorldDefinition<WorldSection>;
-    expect(BUILTIN_WORLDS.map((w) => w.id)).not.toContain(def.id);
-    const { taken } = collectToolNames(BUILTIN_WORLDS, { scratchDir });
+    expect(builtinWorlds.map((w) => w.id)).not.toContain(def.id);
+    const { taken } = collectToolNames(builtinWorlds, { scratchDir });
     const report = await dryMountWorld(def, { scratchDir, packageDir: pkgDir, takenToolNames: taken });
     expect(report.failures).toEqual([]);
     expect(report.warnings).toEqual([]);

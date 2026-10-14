@@ -15,7 +15,7 @@ import {
 } from '../src/extensions/manifest.ts';
 import { registerFrameworkResolver } from '../src/extensions/runtime.ts';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld, type DryMountReport } from '../src/extensions/dry-mount.ts';
-import { BUILTIN_WORLDS } from '../src/worlds/index.ts';
+import { loadBuiltinWorlds } from '../src/worlds/index.ts';
 import { providerModules } from '../src/providers/registry.ts';
 import type { BotDefinition } from '../src/bot.ts';
 import type { CoreConfig } from '../src/core/types.ts';
@@ -31,6 +31,8 @@ import {
   resolveExtensionEntry,
 } from '../src/extensions.ts';
 import { pageIdFor } from '../src/web/shared/console-protocol.ts';
+
+const builtinWorlds = await loadBuiltinWorlds();
 
 let failures = 0;
 const ok = (msg: string): void => console.log(`  ✓ ${msg}`);
@@ -116,7 +118,7 @@ async function main(): Promise<void> {
     console.log('    包目录只读:promptDocs 里没给 deploymentPath 的模板在控制台里显示但不能保存。');
   } else {
     console.log(`    ${noun} id 在整份部署里唯一,与内建的或别的扩展同名时无法加载。`);
-    const builtin = manifest.kind === 'world' ? BUILTIN_WORLDS.map((w) => w.id) : providerModules.map((p) => p.id);
+    const builtin = manifest.kind === 'world' ? builtinWorlds.map((w) => w.id) : providerModules.map((p) => p.id);
     if (builtin.includes(id)) fail(`${noun} id「${id}」与内建的撞名,装载器拒绝加载。`);
   }
 
@@ -150,7 +152,7 @@ async function main(): Promise<void> {
     };
     let report: DryMountReport;
     if (manifest.kind === 'world') {
-      const { taken, skipped } = collectToolNames(BUILTIN_WORLDS, dryOpts);
+      const { taken, skipped } = collectToolNames(builtinWorlds, dryOpts);
       for (const s of skipped) warn(`内建 World 构造失败,无法将其工具纳入重名检查: ${s}`);
       report = await dryMountWorld(exported as WorldDefinition<WorldSection>, { ...dryOpts, takenToolNames: taken });
     } else if (manifest.kind === 'provider') {
