@@ -73,7 +73,8 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 末尾接 `builtins` 给的随框架条目,每条再经 `decorate` 补上本进程的 `enabled` / `hidden`。
 `search()` 按 `keywords:<类关键字>` 查 npm registry,一个包都没回时再按类关键字做文本搜索，结果只留带这个关键字的包;翻到上限时 `searchPartial()` 为真;`npmRegistry()` 给出所用的 registry;`packageInfo(name, version?)` 取一个版本的包文档;
 `updates()` 比较磁盘版本与 `latest`。这三处用安装时的 registry:首次查询时在 `extensions/` 里跑
-`pnpm config get registry --ignore-workspace`,成功的结果用到进程结束,pnpm 失败时抛出它的输出;请求失败的错误带主机和
+`pnpm config get registry --ignore-workspace`,成功的结果缓存到 `setRegistry()` 改写 `extensions/.npmrc` 的
+`registry=` 行为止(`configuredRegistry()` 读这一行),pnpm 失败时抛出它的输出;连接失败和读正文时断线的错误都带主机和
 undici 的 `cause` 错误码。
 `search()` 命中的 `downloads` 另问 `api.npmjs.org/downloads/point`,不走这个 registry:`week`、`month` 为近 7 天、近 30 天,
 `total` 按 365 天一段往前累加、某段为 0 即停。不带 scope 的包合批问,带 scope 的逐个问;单次请求 3 秒没回或失败就缺那一项,
