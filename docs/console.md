@@ -110,6 +110,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/usage` | 用量聚合;查询参数 `bucket`(`auto`/`minute`/`hour`/`day`/`week`/`month`)、`currency`、`basis`(`marginal`/`equivalent`)、`from`、`to`、`days`(不小于 1 的整数) |
 | `POST /api/run/pause`、`POST /api/run/resume`、`POST /api/run/shutdown` | 暂停、继续与关机，见「运行控制」 |
 | `GET /api/prompts`、`POST /api/prompts` | 固定提示词的列表与编辑;POST 体 `{ key, content, baseRevision? }`,带上的 `baseRevision` 过期时回 409 并带 `conflict: true`,成功回新的 `revision` |
+| `GET /api/prompts/prefix`、`POST /api/prompts/reset`、`POST /api/session/reload-prefix` | 整条系统前缀的分段预览，回 `{ segments: [{ title, text, sourceKey? }] }`;移除一条固定提示词的部署覆盖，体 `{ key }`,回 `{ ok, result }`;用当前提示词重载当前 session 的系统前缀，对话保留，回 `{ ok, result }`。服务没挂时回 503 |
 | `GET /api/auth/status`、`POST /api/auth/login`、`POST /api/auth/logout` | 部署设了访问密码时的登录与登出;登录态在 Cookie 里，未登录的请求回 401 并带 `x-cortico-auth: required` 头，WebSocket 握手直接断开 |
 | `GET /api/providers`、`GET /api/providers/:name`、`POST /api/providers`、`POST /api/providers/:name/save`、`POST /api/providers/:name/activate`、`POST /api/providers/:name/test` | 模型端点：列出、详情、新建、保存(体带 `expectedRevision`)、设为当前端点、测试连通;没挂 provider 时 503 |
 | `GET /api/console/manifest` | 每页一条 `ConsolePageManifest`,以及框架级能力;形状见 `console-protocol.ts` |
