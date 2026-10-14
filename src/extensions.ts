@@ -577,7 +577,8 @@ export class ExtensionManager {
       let res: Response;
       try { res = await fetch(url); } catch (err) { throw new Error(fetchFailure(url, err)); }
       if (!res.ok) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);
-      return res.json();
+      // 读正文时断线报 `terminated`,原因同样只在 cause 里
+      try { return await res.json(); } catch (err) { throw new Error(fetchFailure(url, err)); }
     });
   }
 

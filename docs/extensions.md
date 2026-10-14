@@ -37,7 +37,7 @@ World 先在 World 页停用。
 更新会向 `extensions/` 执行 `pnpm add`，重启进程后加载新版，不需要先卸载。
 详情的历史版本可安装 registry 中仍存在的任一版本，经 check 后 `pnpm add name@version`，重启后生效；配置与 Memory 不随包回退。
 契约不兼容的新版不能更新。
-`link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。错误里带出错的主机和底层错误码
+`link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。连接失败和读正文时断线的错误里都带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。
 搜索、详情和检查更新用安装时的 registry:在 `extensions/` 里跑 `pnpm config get registry --ignore-workspace`,
 读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。改了要重启进程;
