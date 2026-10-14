@@ -70,18 +70,13 @@ export class ResponsesProvider extends OpenAIHttpClient {
     this.chatPath = opts.endpointPath ?? '/responses';
   }
 
-  /**
-   * A 400 whose body names `reasoning_text`, sent while plaintext replay runs without synthetic
-   * reasoning, carries a message naming `sendSyntheticReasoning`: the endpoint requires reasoning
-   * before every tool call.
-   */
   override async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
     try {
       return await super.respond(request, options);
     } catch (error) {
       if (error instanceof GenerationError && error.status === 400 && /reasoning_text/.test(error.body)
         && this.opts.reasoningReplay === 'plaintext' && this.opts.sendSyntheticReasoning === false)
-        throw new GenerationError(`${error.message}: the endpoint requires reasoning before every tool call; turn sendSyntheticReasoning on`,
+        throw new GenerationError(`${error.message}: 400 body names reasoning_text while sendSyntheticReasoning is off`,
           error.attempts, error.partial, error.origin, error.status, error.body, { cause: error });
       throw error;
     }
