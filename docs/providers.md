@@ -70,7 +70,8 @@ provider 模块不预设任何模型名;端点
 `options.reasoningReplay` 回传:
 `encrypted`(默认)只回 `encrypted_content`,且只回来源实例、模块、兼容域与模型均匹配的项,受
 `keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传,最后一条 user 消息之后的
-那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理。签名块要靠
+那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理(`options.sendSyntheticReasoning`
+为 false 时不补;探测的明文一侧始终补)。签名块要靠
 `include` 取回,所以只有 `encrypted` 形态的请求带 `include: ['reasoning.encrypted_content']`;
 不认 `include` 的端点因此只在这一形态上会拒收整条请求。模块的 `detect`
 探测发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种写回 `reasoningReplay`。
