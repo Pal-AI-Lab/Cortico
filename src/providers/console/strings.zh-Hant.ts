@@ -41,6 +41,8 @@ export const text: Partial<typeof en> = {
   probeNoResponses: '請求回傳 404；請檢查供應位址、端點路徑及服務支援的 API。',
   probeAuth: '驗證失敗:檢查金鑰變數名稱與金鑰值',
   probeUnreachable: '連線或回應串流失敗；請檢查網路、供應位址與代理伺服器。',
+  probeRegion: (url: string) => `所在地區不受該服務支援；支援的地區見 ${url}`,
+  probeIncompatible: '服務已回應，但回應格式不相容。',
   moduleMissing: '供應商模組無法使用。',
   modelMissing: '請選擇模型。',
   apiKeyMissing: '請設定 API Key。',

@@ -41,6 +41,8 @@ export const text: Partial<typeof en> = {
   probeNoResponses: 'リクエストが 404 を返しました。プロバイダー URL、エンドポイントのパス、サービスが対応している API を確認してください。',
   probeAuth: '認証に失敗しました：シークレットの変数名とキーの値を確認してください',
   probeUnreachable: '接続または応答ストリームに失敗しました。ネットワーク、プロバイダー URL、プロキシを確認してください。',
+  probeRegion: (url: string) => `お住まいの地域はこのサービスに対応していません。対応地域：${url}`,
+  probeIncompatible: 'サービスは応答しましたが、応答の形式に互換性がありません。',
   moduleMissing: 'プロバイダーモジュールを利用できません。',
   modelMissing: 'モデルを選択してください。',
   apiKeyMissing: 'API Key を設定してください。',

@@ -41,6 +41,8 @@ export const text: Partial<typeof en> = {
   probeNoResponses: '요청이 404를 반환했습니다. 공급자 URL, 엔드포인트 경로, 서비스가 지원하는 API를 확인하세요.',
   probeAuth: '인증 실패: 비밀 값 변수 이름과 키 값을 확인하세요',
   probeUnreachable: '연결 또는 응답 스트림에 실패했습니다. 네트워크, 공급자 URL, 프록시를 확인하세요.',
+  probeRegion: (url: string) => `현재 지역은 이 서비스를 지원하지 않습니다. 지원 지역: ${url}`,
+  probeIncompatible: '서비스가 응답했지만 응답 형식이 호환되지 않습니다.',
   moduleMissing: '공급자 모듈을 사용할 수 없습니다.',
   modelMissing: '모델을 선택하세요.',
   apiKeyMissing: 'API Key를 설정하세요.',

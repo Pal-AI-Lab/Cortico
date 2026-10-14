@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from './helpers.ts';
 import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/console/settings.ts';
+import { text as providerText } from '../../src/providers/console/strings.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { loadDeployment } from '../../src/deploy.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
@@ -386,6 +387,19 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     expect(String(missing.hint)).toContain('端点路径');
     expect(bodies).toHaveLength(2);
     await expect(invoke(settings, 'probe', { name: 'local' })).resolves.toMatchObject({ ok: false });
+  });
+  it('探测失败的提示:403 地区拒绝与鉴权失败分开,200 但正文不成形的不算连接失败', async () => {
+    const { cfg, settings } = fixture();
+    cfg.providers.cloud.spec = { model: 'deepseek-flash', thinking: false };
+    const S = providerText('zh');
+    let reply = (): Response => new Response(JSON.stringify({ error: { code: 'unsupported_country_region_territory', message: 'Country, region, or territory not supported' } }), { status: 403 });
+    vi.stubGlobal('fetch', async () => reply());
+    const hintOf = async () => ((await invoke(settings, 'probe', { name: 'cloud' })) as Record<string, unknown>).hint;
+    expect(await hintOf()).toBe(S.probeRegion('https://developers.openai.com/api/docs/supported-countries'));
+    reply = () => new Response(JSON.stringify({ error: { code: 'invalid_api_key' } }), { status: 403 });
+    expect(await hintOf()).toBe(S.probeAuth);
+    reply = () => new Response('<html>ok</html>', { status: 200 });
+    expect(await hintOf()).toBe(S.probeIncompatible);
   });
   it('模型名是自由字串:目录外、带斜杠冒号日期的名字照样存下并启用,只有空名被拒', async () => {
     const { cfg, settings, endpoint } = fixture();

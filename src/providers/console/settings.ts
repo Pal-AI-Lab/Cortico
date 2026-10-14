@@ -25,9 +25,13 @@ import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
 import { record } from '../../protocol/open-responses/context.ts';
+import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { text } from './strings.ts';
 import { PROBE_MAX_OUTPUT_TOKENS, type ProviderConsoleHost } from './types.ts';
 import { connectionBlocks, connectionGroup } from './config.ts';
+
+/** Where the OpenAI error code `unsupported_country_region_territory` sends the reader. */
+const SUPPORTED_REGIONS_URL = 'https://developers.openai.com/api/docs/supported-countries';
 
 export type SecretStatus = 'env' | 'file' | 'none';
 
@@ -232,8 +236,13 @@ export class ProviderSettings {
       };
     } catch (error) {
       const status = error instanceof GenerationError ? error.status : null;
+      // A 2xx body that does not parse is an answer in another format; the GenerationError status stays 0.
+      const cause = error instanceof GenerationError ? error.cause : undefined;
+      const incompatible = cause instanceof ResponseProtocolError || cause instanceof SyntaxError;
       const hint = status === 404 ? S.probeNoResponses
+        : status === 403 && error instanceof GenerationError && error.body.includes('unsupported_country_region_territory') ? S.probeRegion(SUPPORTED_REGIONS_URL)
         : status === 401 || status === 403 ? S.probeAuth
+        : incompatible ? S.probeIncompatible
         : status === 0 || status === null ? S.probeUnreachable
         : undefined;
       return {

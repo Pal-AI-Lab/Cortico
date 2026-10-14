@@ -41,6 +41,8 @@ export const text: Partial<typeof en> = {
   probeNoResponses: "La richiesta ha restituito 404; controlla l'URL del provider, il percorso dell'endpoint e le API supportate.",
   probeAuth: 'Autenticazione non riuscita: controlla il nome della variabile del secret e il valore della chiave',
   probeUnreachable: "La connessione o lo stream di risposta non è riuscito; controlla la rete, l'URL del provider e il proxy.",
+  probeRegion: (url: string) => `La tua regione non è supportata da questo servizio; regioni supportate: ${url}`,
+  probeIncompatible: 'Il servizio ha risposto, ma il formato della risposta non è compatibile.',
   moduleMissing: 'Il modulo del provider non è disponibile.',
   modelMissing: 'Serve un modello.',
   apiKeyMissing: 'Serve una API Key.',
