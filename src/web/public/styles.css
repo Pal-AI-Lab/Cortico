@@ -1343,6 +1343,7 @@
   .prefix-comment::before { content:'//'; margin-right:7px; opacity:.6; }
   .prefix-comment-text { min-width:0; flex:1; display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .prefix-flag:focus-visible,.varchip:focus-visible,.prompt-reference button:focus-visible,.prompt-settings-link:focus-visible,.prompt-preview-toggle:focus-visible { outline:2px solid var(--section-color); outline-offset:2px; }
+  .prefix-railnote { color: var(--ink-dim); font-size: 11px; }
   .prompt-rail-heading { color:var(--ink-soft); font-size:12px; font-weight:600; }
   .prefix-railcontent .prompt-preview-toggle { align-self:flex-start; border:1px solid var(--border); background:var(--sheet); font-size:12px; text-align:left; white-space:normal; }
   .prompt-preview-toggle[aria-pressed=true] { color:var(--section-color); background:var(--sheet-3); }

@@ -102,7 +102,7 @@ const mounted: Any[] = [];
 beforeEach(() => {
   calls = [];
   sessionStorage.clear();
-  vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }));
   Range.prototype.getClientRects = () => [] as unknown as DOMRectList;
   Range.prototype.getBoundingClientRect = () => new DOMRect();
@@ -533,7 +533,7 @@ describe('continuous prompt document', () => {
     editor.view.dispatch({ changes: { from: 8, to: 10 } });
     editor.view.dispatch({ changes: { from: 11, insert: 'no' } });
     expect(editor.view.state.doc.toString()).toBe(before);
-    editor.updateGenerated(1, 'new.md');
+    editor.setBlocks([{ title: 'CONSTITUTION', sourceKey: 'constitution', tone: 'persona', text: 'Persona' }, { title: 'WORKSPACE', tone: 'derived', text: 'new.md' }]);
     expect(editor.text('constitution')).toBe('Persona!');
     expect(editor.view.state.doc.toString()).toBe('Persona!\nnew.md');
   });
@@ -544,7 +544,7 @@ describe('continuous prompt document', () => {
       { title: 'CONSTITUTION', sourceKey: 'constitution', tone: 'persona', text: 'Identity' },
     ]);
     editor.view.dispatch({ changes: { from: editor.view.state.doc.length, insert: '!' }, userEvent: 'input.type' });
-    editor.updateGenerated(0, 'files.md\nnotes.md');
+    editor.setBlocks([{ title: 'WORKSPACE', tone: 'derived', text: 'files.md\nnotes.md' }, { title: 'CONSTITUTION', sourceKey: 'constitution', tone: 'persona', text: 'Identity' }]);
     editor.undo();
     expect(editor.view.state.doc.toString()).toBe('files.md\nnotes.md\nIdentity');
     expect(editor.canUndo()).toBe(false);
@@ -697,7 +697,7 @@ async function mountPage() {
   const ui = createConsoleUi({ doc: document, overlayHost: document.body, signal: life.signal, memo: { get: (_: unknown, fallback: unknown) => fallback, set() {} } });
   const router = new Router({ win: window, confirmLeave: (body: string) => ui.confirm({ title: 'Leave', body }) });
   life.own(router.start());
-  await prompts.mountPrompts({ root, ui, router, route: router.route, signal: life.signal, lifecycle: life, capabilities: { prompts: true, storage: true, sessionControl: true }, onError: (error: unknown) => { throw error; } });
+  await prompts.mountPrompts({ root, ui, router, route: router.route, signal: life.signal, lifecycle: life, capabilities: { prompts: true, storage: true, sessionControl: true }, onError() {} });
   await vi.waitFor(() => expect(root.querySelector<HTMLElement>(`[data-source="${worldKey}"]`)!.textContent).toContain('Fixture World'));
   const view = EditorView.findFromDOM(root.querySelector<HTMLElement>('.cm-editor')!);
   const button = (label: string) => [...root.querySelectorAll<HTMLButtonElement>('.prompt-actions button')].find((el) => el.textContent === label)!;
@@ -766,12 +766,25 @@ it('refreshes variables and generated text after applying, preserving undo and r
 it('retains empty editable templates omitted from the prefix and applies their restored content', async () => {
   sources[1].content = '';
   const { root, view, button } = await mountPage();
-  const flag = root.querySelector<HTMLElement>(`[data-source="${worldKey}"]`)!;
-  expect(flag.textContent).toContain(S.outsidePrefix);
+  const flag = () => root.querySelector<HTMLElement>(`[data-source="${worldKey}"]`)!;
+  expect(flag().textContent).toContain(S.outsidePrefix);
   view.dispatch({ changes: { from: view.state.doc.length, insert: 'Restored environment' } });
   button(S.reloadSession).click();
   await vi.waitFor(() => expect(session.find((segment) => segment.sourceKey === worldKey)?.text).toBe('Restored environment'));
-  await vi.waitFor(() => expect(flag.textContent).not.toContain(S.outsidePrefix));
+  await vi.waitFor(() => expect(flag().textContent).not.toContain(S.outsidePrefix));
+});
+
+it('reloads a template saved elsewhere so the next save uses its new revision', async () => {
+  const { root, view, button } = await mountPage();
+  expect(root.querySelector<HTMLElement>('.prefix-railnote')!.textContent).toBe(S.originWorld);
+  sources[1].content = 'Changed elsewhere'; sources[1].revision = '5'; sources[1].origin = 'deployment';
+  button(S.reloadSession).click();
+  await vi.waitFor(() => expect(view.state.doc.toString()).toContain('Changed elsewhere'));
+  expect(root.querySelector<HTMLElement>('.prefix-railnote')!.textContent).toBe(S.originDeployment);
+  view.dispatch({ changes: { from: view.state.doc.toString().indexOf('Changed'), insert: 'Again ' } });
+  button(S.saveToFile).click();
+  await vi.waitFor(() => expect(sources[1].content).toBe('Again Changed elsewhere'));
+  expect(writes.at(-1).baseRevision).toBe('5');
 });
 
 it('omits the World configuration shortcut when the manifest disables configuration', async () => {

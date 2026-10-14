@@ -15,6 +15,7 @@ interface Section {
   cell: HTMLElement;
   note: HTMLElement;
   badge: HTMLElement;
+  origin?: HTMLElement;
   divider: HTMLElement;
   collapsed: boolean;
   updateVariables(): void;
@@ -24,7 +25,7 @@ const FOLDS_KEY = 'cortico.prompt-folds';
 let folds = new Map<string, boolean>();
 
 function description(segment: PrefixSegment, doc?: PromptDoc): { title: string; detail: string } {
-  return { title: doc?.title || segment.title, detail: doc?.description || (doc ? '' : S.fromCode) };
+  return { title: doc?.title || segment.title, detail: doc ? doc.description ?? '' : segment.sourceKey ? S.sourceMissing(segment.sourceKey) : S.fromCode };
 }
 
 export async function mountPrompts(ctx: FeatureContext): Promise<void> {
@@ -33,6 +34,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
   const docs = new Map<string, PromptDoc>();
   const dirty = new Map<string, string>();
   const sections: Section[] = [];
+  const previews = new Set<string>();
   let segments: PrefixSegment[] = [];
   let pendingApply = false;
   let savePromise: Promise<boolean> | null = null;
@@ -72,6 +74,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       if (doc && !segments.some((s) => s.sourceKey === key)) section.badge.textContent += ` · ${S.outsidePrefix}`;
       section.badge.classList.toggle('is-dirty', !!changed);
       section.toggle.title = doc?.origin === 'deployment' ? S.loadedFromDeployment : doc?.origin === 'package' ? S.loadedFromPackage : doc?.origin === 'module' ? S.loadedFromWorld : doc ? S.loadedFromSource : S.flagReadonly;
+      if (section.origin) section.origin.textContent = doc!.origin === 'deployment' ? S.originDeployment : doc!.origin === 'package' ? S.originPackage : S.originWorld;
     }
   }
   function open(section: Section, expanded: boolean): void {
@@ -105,35 +108,59 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
   actions.append(expand, undoStep, restore, save);
   toolbar.append(status, actions);
 
-  async function refreshPreview(): Promise<boolean> {
+  /** Rebuilds the sections from the server. Templates with unsaved edits keep their text, revision and undo history. */
+  async function load(): Promise<boolean> {
     try {
-      const [data, sources] = await Promise.all([
-        get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal }),
+      const [sources, prefix] = await Promise.all([
         get<{ prompts: PromptDoc[] }>('/api/prompts', { signal }),
+        get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal }).catch((error) => {
+          if (signal.aborted) throw error;
+          ctx.onError(error);
+          return null;
+        }),
       ]);
-      if (signal.aborted) return false;
-      segments = data.segments;
-
-      for (const section of sections) {
-        if (docs.has(section.segment.sourceKey!)) continue;
-        const current = segments.find((s) => s.title === section.segment.title);
-        editor.updateGenerated(sections.indexOf(section), current?.text ?? '');
+      for (const doc of sources.prompts) {
+        const old = docs.get(doc.key);
+        doc.content = editor.view.state.toText(doc.content).toString();
+        docs.set(doc.key, old && dirty.has(doc.key) ? { ...doc, content: old.content, revision: old.revision, origin: old.origin } : doc);
       }
-      updateVariables(sources.prompts);
+      segments = prefix?.segments ?? [];
+      closePopup();
+      for (const section of sections) observer.unobserve(section.note);
+      sections.length = 0;
+      flags.replaceChildren();
+      rail.replaceChildren();
+      dividers.replaceChildren();
+      segments.forEach(addSection);
+      for (const doc of docs.values()) {
+        if (doc.role === 'envPrompt' && !segments.some((s) => s.sourceKey === doc.key)) addSection({ title: doc.title, sourceKey: doc.key, text: '' });
+      }
+      editor.setBlocks(sections.map(({ segment, collapsed }) => {
+        const doc = docs.get(segment.sourceKey!);
+        return {
+          title: segment.title, description: description(segment, doc).detail, sourceKey: doc?.key,
+          tone: doc ? doc.key.startsWith('worlds.') ? 'world' : 'persona' : 'derived',
+          text: doc ? dirty.get(doc.key) ?? doc.content : segment.text, vars: doc?.vars, collapsed, preview: !!doc && previews.has(doc.key),
+        };
+      }));
+      editor.restore(new Map([...docs.values()].filter((doc) => !dirty.has(doc.key)).map((doc) => [doc.key, doc.content])));
+      expand.textContent = sections.every((s) => !s.collapsed) ? S.collapseAll : S.expandAll;
+      for (const section of sections) section.updateVariables();
       state();
+      if (!prefix) say(S.prefixUnavailable, true);
+      else if (!segments.length) say(S.prefixEmpty);
+      void addSettings();
       return true;
     } catch (error) {
-      if (!signal.aborted) say(S.loadFailed(String(error)), true);
+      if (!signal.aborted) { ctx.onError(error); say(S.loadFailed(String(error)), true); }
       return false;
     }
   }
   async function persist(): Promise<boolean> {
-    const batch = [...dirty];
-    for (const [key, content] of batch) {
+    for (const [key, content] of [...dirty]) {
       const doc = docs.get(key)!;
       try {
-        const out = await post<{ revision?: string }>('/api/prompts', { key, content, baseRevision: doc.revision }, { signal });
-        if (signal.aborted) return false;
+        const out = await post<{ revision: string }>('/api/prompts', { key, content, baseRevision: doc.revision }, { signal });
         doc.content = content;
         doc.revision = out.revision;
         if (doc.origin) doc.origin = 'deployment';
@@ -142,13 +169,13 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
         pendingApply = true;
       } catch (error) {
         if (!signal.aborted) {
+          ctx.onError(error);
           state();
           say(S.saveFailedFor(doc.title, String(error)), true);
         }
         return false;
       }
     }
-    if (signal.aborted) return false;
     state();
     return dirty.size === 0;
   }
@@ -160,7 +187,6 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
     save.disabled = restore.disabled = true;
     savePromise = persist().finally(() => {
       savePromise = null;
-      if (signal.aborted) return;
       controls();
       editor.setSaveState(dirty.size ? 'dirty' : 'saved');
     });
@@ -171,22 +197,20 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
     actions.append(reload);
   }
   async function reloadPrefix(button: HTMLButtonElement): Promise<void> {
-    if (changingSession) return;
     changingSession = true;
     controls();
     try {
-      if (!await saveAll() || signal.aborted) return;
+      if (!await saveAll()) return;
       say(S.reloading);
-      await post('/api/session/reload-prefix', undefined, { signal });
-      if (signal.aborted) return;
+      const out = await post<{ result?: string }>('/api/session/reload-prefix', undefined, { signal });
       pendingApply = false;
-      if (await refreshPreview() && !dirty.size) say(S.prefixReloaded);
+      if (await load() && !dirty.size) say(out.result || S.prefixReloaded);
     } catch (error) {
       if (!signal.aborted) { ctx.onError(error); say(String(error), true); }
     } finally {
       changingSession = false;
-      if (!signal.aborted) controls();
-      if (button.isConnected) button.focus({ preventScroll: true });
+      controls();
+      button.focus({ preventScroll: true });
     }
   }
   ctx.lifecycle.own(ctx.router.addLeaveGuard(() => dirty.size || savePromise ? S.leaveUnsaved : null));
@@ -213,9 +237,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       }
       state();
       for (const section of sections) section.updateVariables();
-      queueMicrotask(() => {
-        if (!signal.aborted) editor.setSaveState(savePromise ? 'saving' : dirty.size ? 'dirty' : 'idle');
-      });
+      queueMicrotask(() => editor.setSaveState(savePromise ? 'saving' : dirty.size ? 'dirty' : 'idle'));
     },
     onSave: () => { if (!changingSession) void saveAll(); },
     onHistory: controls,
@@ -229,7 +251,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       section.cell.hidden = collapsed;
       closePopup();
       expand.textContent = sections.every((s) => !s.collapsed) ? S.collapseAll : S.expandAll;
-      queueMicrotask(() => { if (!signal.aborted) animateSection(section, index); });
+      queueMicrotask(() => animateSection(section, index));
       scheduleGeometry();
     },
   });
@@ -325,7 +347,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
     toggle.className = 'prefix-flag';
     toggle.setAttribute('aria-expanded', String(!collapsed));
     const title = ui.h('span', 'prefix-flag-title', info.title);
-    const key = segment.sourceKey?.startsWith('worlds.') ? 'WORLD' : segment.sourceKey;
+    const key = segment.sourceKey;
     const meta = ui.h('span', 'prefix-flag-meta');
     const badge = ui.h('span', 'prompt-section-badge');
     if (key) meta.append(ui.h('span', 'prefix-flag-key mono', key));
@@ -346,19 +368,23 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
     if (!doc) return;
     const chips = new Map<string, HTMLButtonElement>();
     const warning = ui.h('div', 'prompt-railwarn');
+    if (doc.origin) {
+      section.origin = ui.h('div', 'prefix-railnote');
+      note.append(section.origin);
+    }
     if (doc.vars?.length) {
       note.append(ui.h('div', 'prompt-rail-heading', S.variablesTitle), ui.h('p', 'prompt-help', S.insertHint));
-      let previewing = false;
-      const preview = ui.button(S.previewVariables, { size: 'sm', onClick: () => {
+      const preview = ui.button(previews.has(doc.key) ? S.showVariableNames : S.previewVariables, { size: 'sm', onClick: () => {
         closePopup();
-        previewing = !previewing;
+        const previewing = !previews.has(doc.key);
+        if (previewing) previews.add(doc.key); else previews.delete(doc.key);
         editor.setPreview(doc.key, previewing);
         preview.textContent = previewing ? S.showVariableNames : S.previewVariables;
         preview.setAttribute('aria-pressed', String(previewing));
-        if (previewing) void refreshVariables(doc.key);
+        if (previewing) void refreshVariables(section, doc);
       } });
       preview.classList.add('prompt-preview-toggle');
-      preview.setAttribute('aria-pressed', 'false');
+      preview.setAttribute('aria-pressed', String(previews.has(doc.key)));
       const list = ui.h('div', 'prompt-variable-list');
       note.append(list, preview);
       for (const variable of doc.vars) {
@@ -413,12 +439,11 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
   async function addSettings(): Promise<void> {
     try {
       const manifest = await fetchManifest({ signal });
-      if (signal.aborted) return;
       for (const section of sections) {
         const page = manifest.providers.find((p) => p.kind === 'world' && p.prompts?.some((p) => p.key === section.segment.sourceKey));
         if (!page) continue;
         section.toggle.querySelector('.prefix-flag-title')!.textContent = page.label;
-        if (manifest.framework?.capabilities?.config === false || !page.configGroups?.length) continue;
+        if (manifest.framework.capabilities.config === false || !page.configGroups?.length) continue;
         const settings = ui.button(S.worldSettings, { size: 'sm', variant: 'primary', onClick: () => {
           ctx.router.navigate(['provider', page.id, '~config']);
         } });
@@ -428,54 +453,15 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       }
     } catch (error) { if (!signal.aborted) ctx.onError(error); }
   }
-  function updateVariables(sources: PromptDoc[], key?: string): void {
-    closePopup();
-    for (const section of sections) {
-      const doc = docs.get(section.segment.sourceKey!);
-      const current = sources.find((source) => source.key === doc?.key);
-      if (doc && current && (!key || doc.key === key)) {
-        doc.vars = current.vars;
-        editor.updateVariables(doc.key, doc.vars ?? []);
-        section.updateVariables();
-      }
-    }
-  }
-  async function refreshVariables(key: string): Promise<void> {
+  async function refreshVariables(section: Section, doc: PromptDoc): Promise<void> {
     try {
       const data = await get<{ prompts: PromptDoc[] }>('/api/prompts', { signal });
-      if (signal.aborted) return;
-      updateVariables(data.prompts, key);
+      doc.vars = data.prompts.find((source) => source.key === doc.key)?.vars;
+      editor.updateVariables(doc.key, doc.vars ?? []);
+      section.updateVariables();
     } catch (error) { if (!signal.aborted) say(S.loadFailed(String(error)), true); }
   }
-  try {
-    const [sources, prefix] = await Promise.all([
-      get<{ prompts: PromptDoc[] }>('/api/prompts', { signal }),
-      get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal }).catch((error) => {
-        if (signal.aborted) throw error;
-        ctx.onError(error);
-        return null;
-      }),
-    ]);
-    if (signal.aborted) return;
-    for (const doc of sources.prompts) docs.set(doc.key, doc);
-    segments = prefix?.segments ?? [];
-
-    segments.forEach(addSection);
-    for (const doc of docs.values()) {
-      if (doc.role === 'envPrompt' && !segments.some((s) => s.sourceKey === doc.key)) addSection({ title: doc.title, sourceKey: doc.key, text: '' });
-    }
-    for (const doc of docs.values()) doc.content = editor.view.state.toText(doc.content).toString();
-    editor.setBlocks(sections.map(({ segment, collapsed }) => {
-      const doc = docs.get(segment.sourceKey!);
-      return { title: segment.title, description: description(segment, doc).detail, sourceKey: doc?.key, tone: doc ? doc.key.startsWith('worlds.') ? 'world' : 'persona' : 'derived', text: doc?.content ?? segment.text, vars: doc?.vars, collapsed };
-    }));
-    expand.textContent = sections.every((s) => !s.collapsed) ? S.collapseAll : S.expandAll;
-    for (const section of sections) section.updateVariables();
-    state();
-    if (!prefix) say(S.prefixUnavailable, true);
-    else if (!segments.length) say(S.prefixEmpty);
-    void addSettings();
-  } catch (error) { if (!signal.aborted) say(S.loadFailed(String(error)), true); }
+  await load();
 }
 
 export const promptsFeature: FrameworkFeature = {
