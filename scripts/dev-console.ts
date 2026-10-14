@@ -28,7 +28,7 @@ import { QQWorld } from '../src/worlds/qq/world.ts';
 import { qqConfigGroup } from '../src/worlds/qq/config.ts';
 import { TerminalWorld } from '../src/worlds/terminal/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
-import type { Language } from '../src/core/language.ts';
+import { LocalizedError, type Language } from '../src/core/language.ts';
 import { webSearchConfigGroup } from '../src/worlds/websearch/config.ts';
 import { minecraftClientConfigGroup, minecraftConfigGroup, MINECRAFT_DEFAULTS, minecraftPlayerConfigGroup, minecraftRhythmConfigGroup, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
 import { minecraftPanelDecls } from '../src/worlds/minecraft/world.ts';
@@ -1135,6 +1135,9 @@ const devPersonaPageSources = deriveConsolePageSources(
   { id: 'corti-soulmate', label: devCfg.displayName, memoryName: 'GitMem' },
 );
 
+/** 扩展页 npm 源输入框写下的值;只存在内存里。 */
+let devNpmRegistry: string | null = null;
+
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
   {
@@ -1349,6 +1352,13 @@ const app = new WebApp({
       }));
     },
     searchPartial: () => false,
+    npmRegistry: async () => devNpmRegistry ?? 'https://registry.npmjs.org',
+    configuredRegistry: () => devNpmRegistry,
+    setRegistry: (url) => {
+      const value = url.trim();
+      if (value && !/^https?:\/\/\S+$/i.test(value)) throw new LocalizedError(() => `npm 源要填 http:// 或 https:// 开头的地址,现在是 ${value} (dev)`);
+      devNpmRegistry = value || null;
+    },
     check: async (target, kind) => {
       await new Promise((r) => setTimeout(r, 300));
       if ('path' in target) return { name: `local-${target.path.split(/[\\/]/).filter(Boolean).pop() ?? 'module'}`, version: '0.0.1', kind: kind ?? 'world' };

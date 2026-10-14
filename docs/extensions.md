@@ -40,8 +40,12 @@ World 先在 World 页停用。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。连接失败和读正文时断线的错误里都带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。
 搜索、详情和检查更新用安装时的 registry:在 `extensions/` 里跑 `pnpm config get registry --ignore-workspace`,
-读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。改了要重启进程;
+读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。结果在进程内缓存,在扩展页以外改了配置要重启进程;
 pnpm 读不出地址时这三处都报 pnpm 的错误。
+扩展页的「npm 源」读写 `extensions/.npmrc` 的 `registry=` 行,其余行原样保留,填空保存删掉这一行;写入后缓存作废,
+检查更新、搜索、详情和 `pnpm add` 立即改用新源。接口是内部路由 `GET /api/extensions/registry`
+(回 `configured`,即 .npmrc 里的值或 null,以及 pnpm 实际用的 `registry`,读不出时换成 `registryError`)与
+`POST /api/extensions/registry`(体 `{ registry }`,只收 http(s) 地址,回应同 GET)。
 搜索按 `keywords:<类关键字>` 查;这条查询一个包都没回时，再按类关键字本身做文本搜索(有的 registry 不认 `keywords:`,对它回空列表),
 结果都只留带这个关键字的包。市场为空时提示写出所用的 registry。
 搜索结果的下载量另问 npm 下载统计 `api.npmjs.org`,不随 registry 配置变:近 30 天、近 7 天,

@@ -276,6 +276,10 @@ export interface WebAppExtensionDeps {
   searchPartial?(kind?: 'world' | 'provider' | 'bot'): boolean;
   /** 搜索用的 registry 地址。 */
   npmRegistry?(): Promise<string>;
+  /** 扩展目录 .npmrc 里 `registry=` 行的值;没有这一行时 null。 */
+  configuredRegistry?(): string | null;
+  /** 改写扩展目录 .npmrc 的 `registry=` 行,空串删掉这一行;不是 http(s) 地址时抛 400 的 LocalizedError。 */
+  setRegistry?(url: string): void;
   /** 单个包的详情(另取一次包文档);`version` 是版本号或 dist-tag,缺省 latest。 */
   packageInfo(name: string, version: string | undefined, language: Language): Promise<ExtensionPackageDetail>;
   /** 已装包声明的图标文件;没有时 null。 */
@@ -1801,6 +1805,34 @@ export class WebApp {
       } catch (err) {
         res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(this.errorText(err, req)) });
       }
+    }));
+
+    // 扩展用的 npm 源,内部路由;请求与回应的形状见 docs/extensions.md。
+    const registryState = async (src: WebAppExtensionDeps, req: Request) => {
+      try {
+        return { configured: src.configuredRegistry!(), registry: await src.npmRegistry!() };
+      } catch (err) {
+        return { configured: src.configuredRegistry!(), registryError: this.errorText(err, req) };
+      }
+    };
+    app.get('/api/extensions/registry', wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.configuredRegistry || !src.npmRegistry) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
+      res.json(await registryState(src, req));
+    }));
+    app.post('/api/extensions/registry', express.json(), wrap(async (req, res) => {
+      const src = this.deps.extensions;
+      if (!src?.setRegistry || !src.configuredRegistry || !src.npmRegistry) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
+      const registry = (req.body as { registry?: unknown } | undefined)?.registry;
+      if (typeof registry !== 'string') { res.status(400).json({ error: serverText(this.languageOf(req)).notString('registry') }); return; }
+      try {
+        src.setRegistry(registry);
+      } catch (err) {
+        res.status(err instanceof LocalizedError ? err.status : 500).json({ error: this.errorText(err, req) });
+        return;
+      }
+      this.deps.log.warn('扩展的 npm 源已改', { registry });
+      res.json(await registryState(src, req));
     }));
 
     app.get('/api/extensions/package', wrap(async (req, res) => {

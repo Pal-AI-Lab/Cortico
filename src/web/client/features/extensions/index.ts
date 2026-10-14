@@ -46,6 +46,13 @@ interface UpdateResultView {
   errors: Array<{ name: string; error: string }>;
 }
 
+/** `/api/extensions/registry` 的回应:.npmrc 的 registry 行,与 pnpm 实际用的源或读不出它的原因。 */
+interface RegistryView {
+  configured: string | null;
+  registry?: string;
+  registryError?: string;
+}
+
 /** 与 `ExtensionSearchHit` 同形。 */
 export interface SearchHitView {
   name: string;
@@ -184,6 +191,10 @@ export function mountExtensions(ctx: FeatureContext): void {
   let directory = '';
   /** 最近一次搜索用的 registry;市场为空时提示里写出它。 */
   let registry = '';
+  let registrySetting: RegistryView | null = null;
+  /** npm 源输入框里没保存的值;切换类别页签时保留。 */
+  let registryDraft: string | null = null;
+  let registryInput: HTMLInputElement | null = null;
   let loadGeneration = 0;
   let installedFetched = false;
   let restoringScroll = true;
@@ -408,6 +419,28 @@ export function mountExtensions(ctx: FeatureContext): void {
       registry = data.registry ?? ''; state.hits = data.hits; state.fetched = true; message(owner, 'market', data.partial ? S.partial : ''); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
     } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
+  async function loadRegistry() {
+    try { registrySetting = await get<RegistryView>('/api/extensions/registry', { signal }); }
+    catch (error) { if (!signal.aborted) message(kind, 'registry', errorText(error), true); return; }
+    if (signal.aborted) return;
+    if (registrySetting.registryError) message(kind, 'registry', registrySetting.registryError, true);
+    if (registryInput) { registryInput.placeholder = registrySetting.registry ?? ''; if (registryDraft === null) registryInput.value = registrySetting.configured ?? ''; }
+  }
+  /** 换源后已取到的搜索结果、包详情与更新检查都作废,按新源重取。 */
+  async function saveRegistry(value: string) {
+    const owner = kind;
+    try { registrySetting = await post<RegistryView>('/api/extensions/registry', { registry: value }, { signal }); }
+    catch (error) { if (!signal.aborted) message(owner, 'registry', errorText(error), true); return; }
+    if (signal.aborted) return;
+    registryDraft = null; detailsCache.clear(); updates = new Map();
+    for (const state of Object.values(states)) {
+      state.hits = []; state.fetched = false; state.generation++; delete state.messages.market;
+      if (state.messages.management?.bad) delete state.messages.management;
+    }
+    render();
+    message(owner, 'registry', registrySetting.registry ? S.registrySaved(registrySetting.registry) : registrySetting.registryError ?? '', !registrySetting.registry);
+    void checkUpdates(); void search(owner);
+  }
   /** 安装先按当前类别检查声明再装;删除直接卸。两者都改磁盘,重启进程后生效。 */
   async function operate(action: 'install' | 'delete', target: Target, area: string, owner: ExtensionKindView) {
     const identity = 'name' in target ? target.name : target.path; if (busy.has(identity)) return;
@@ -567,7 +600,13 @@ export function mountExtensions(ctx: FeatureContext): void {
     const marketSheet = ui.sheet({ title: S.market }); messageNodes.market = ui.msgline(); messageNodes.market.setAttribute('role', 'status');
     const filters = ui.rowbar(); filters.classList.add('extension-toolbar');
     filters.append(ui.input({ type: 'search', value: state.filter, placeholder: S.filterPlaceholder, onInput: value => { state.filter = value; state.page = 0; renderMarket(); save(); } }), ui.select({ value: state.sort, options: HIT_SORTS.map(value => ({ value, label: S.sortLabel[value] })), onChange: value => { state.sort = value as HitSort; state.page = 0; renderMarket(); save(); } }), ui.checkbox(S.hideInstalled, { checked: state.hide, onChange: value => { state.hide = value; state.page = 0; renderMarket(); save(); } }).el, sizePicker('market'), ui.button(S.refresh, { onClick: () => void search(kind) }));
-    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(filters, messageNodes.market, marketGrid, marketPager);
+    const registryBar = ui.rowbar(); registryBar.classList.add('extension-toolbar');
+    const registryField = registryInput = ui.input({ value: registryDraft ?? registrySetting?.configured ?? '', placeholder: registrySetting?.registry ?? '', onInput: value => { registryDraft = value; } });
+    registryField.setAttribute('aria-label', S.registryLabel);
+    const saveRegistryButton = ui.button(S.registrySave, { onClick: async () => { const lock = ui.disable(saveRegistryButton); try { await saveRegistry(registryField.value); } finally { lock.dispose(); } } });
+    registryBar.append(ui.h('span', '', S.registryLabel), registryField, saveRegistryButton);
+    messageNodes.registry = ui.msgline(S.registryHelp); messageNodes.registry.setAttribute('role', 'status');
+    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(registryBar, messageNodes.registry, filters, messageNodes.market, marketGrid, marketPager);
     const manual = ui.sheet({ title: S.manual }); messageNodes.manual = ui.msgline(); messageNodes.manual.setAttribute('role', 'status');
     const source = ui.segmented([{ value: 'npm', label: S.npm }, { value: 'local', label: S.local }], { value: state.source, onSelect: value => { state.source = value as 'npm' | 'local'; state.input = ''; render(); save(); } });
     const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, placeholder: state.source === 'npm' ? `@scope/cortico-${kind}-demo@1.2.3` : '', onInput: value => { state.input = value; } });
@@ -596,7 +635,7 @@ export function mountExtensions(ctx: FeatureContext): void {
   }); observer.observe(panel); lifecycle.add(() => observer.disconnect()); }
   render();
   if (!categories.includes(router.route.segments[1] as ExtensionKindView)) router.replace(['extensions', kind]);
-  void load(); void checkUpdates(); void search(kind);
+  void load(); void checkUpdates(); void search(kind); void loadRegistry();
   try { const marker = win.sessionStorage.getItem(storageKey + ':restart'); if (marker) { message(kind, 'management', S.reloadWait); watchRestart(JSON.parse(marker)); } } catch { /* Invalid recovery marker. */ }
 }
 export const extensionsFeature: FrameworkFeature = { route: 'extensions', label: S.navLabel, icon: 'download', navGroup: S.navGroup, needsAny: ['extensions'], mount: mountExtensions };
