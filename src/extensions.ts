@@ -867,7 +867,7 @@ export class ExtensionManager {
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
       .map(([version, date]) => {
-        // 包文档里每个版本都带完整 manifest,不用另发请求就能判断能不能装
+        // 包文档的 versions 里每个版本都带完整 manifest
         const manifest = parseExtensionManifest(doc.versions![version], language);
         return { version, date, ...(manifest.ok ? {} : { problems: manifest.reasons }) };
       });

@@ -32,7 +32,7 @@ export interface ExtensionView {
   enabled?: boolean;
   hidden?: boolean;
   icon?: boolean;
-  /** 官方索引拉黑了这个包(或它的发布者)时是拉黑原因,画在已装卡片上。 */
+  /** 官方索引拉黑了这个包或它的发布者时的拉黑原因。 */
   blocked?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
 }

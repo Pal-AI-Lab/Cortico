@@ -132,7 +132,6 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M10 11v6' }],
     ['path', { d: 'M14 11v6' }],
   ],
-  // 评分的上下三角:描边与填充同色,样式表里给 fill
   'vote-up': [['path', { d: 'M12 6.5 19 17.5H5Z' }]],
   'vote-down': [['path', { d: 'M12 17.5 5 6.5h14Z' }]],
   close: [
@@ -161,7 +160,6 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M12 8v4' }],
     ['path', { d: 'M12 16h.01' }],
   ],
-  // Cortico 标志的小号:外圈同标志的开口弧,里面两个眼睛在小尺寸下画成实心圆点
   cortico: [
     ['path', { d: 'M17.8 5.1A9 9 0 1 0 17.8 18.9', style: 'stroke-width: 2.6' }],
     ['circle', { cx: '10.4', cy: '10.8', r: '2.1', fill: 'currentColor', stroke: 'none' }],
