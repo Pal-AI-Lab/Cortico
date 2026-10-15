@@ -71,6 +71,18 @@ const FRAME_IDLE_MS = 120_000;
  */
 const CONTENT_IDLE_MS = 300_000;
 
+/**
+ * 错误文本:`<错误> (<cause 的错误码>: <cause 的说明>)`。undici 的错误文本固定是 `fetch failed`,
+ * 证书不符、DNS 解析失败、连接被重置只在 cause 里。
+ */
+function errorText(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = (cause as { code?: unknown } | undefined)?.code;
+  const detail = cause instanceof Error ? [typeof code === 'string' ? code : '', cause.message].filter(Boolean).join(': ') : '';
+  return `${message}${detail ? ` (${detail})` : ''}`;
+}
+
 /** Every fetch attempt produces its own immutable metering and price snapshot. */
 export async function generate(request: Request, options: GenerateOptions, origin: ItemOrigin, transport: ResponseTransport): Promise<Generation> {
   const generationId = crypto.randomUUID();
@@ -81,7 +93,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
   // 上一次尝试的 `Retry-After`;没有头或解析不成形时按固定间隔退避。
   let retryAfterMs: number | null = null;
   const delays = options.diagnostic ? [] : [1000, 4000, 10000];
-  const fail = (error: unknown): GenerationError => new GenerationError((error instanceof Error ? error.message : String(error)) + reqIdSuffix(attempts.filter(attempt => attempt.purpose !== 'diagnostic').at(-1)?.requestId), attempts,
+  const fail = (error: unknown): GenerationError => new GenerationError(errorText(error) + reqIdSuffix(attempts.filter(attempt => attempt.purpose !== 'diagnostic').at(-1)?.requestId), attempts,
     partial, origin, error instanceof LLMError ? error.status : 0, error instanceof LLMError ? error.body : '', { cause: error });
   for (let ordinal = 0; ordinal <= delays.length; ordinal++) {
     try {
@@ -194,9 +206,9 @@ export async function generate(request: Request, options: GenerateOptions, origi
       if (status !== 0 && status !== 408 && status !== 429 && status < 500) break;
       if (!options.diagnostic && observed && Date.now() - started >= 20000 && !await transport.failure({
         model: request.model ?? '', role: options.role, elapsedMs: Date.now() - started, status,
-        requestId: attempt.requestId, body: error instanceof LLMError ? error.body : '', message: String(error),
+        requestId: attempt.requestId, body: error instanceof LLMError ? error.body : '', message: errorText(error),
       }, values => diagnostics.push(...values))) break;
-      transport.log.warn('Provider attempt failed; retrying', { ordinal, err: String(error) });
+      transport.log.warn('Provider attempt failed; retrying', { ordinal, err: errorText(error) });
     } finally {
       clearTimeout(timer);
       if (contentTimer) clearTimeout(contentTimer);

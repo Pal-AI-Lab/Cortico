@@ -5,13 +5,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { OpenAIHttpClient } from '../../../src/providers/transport/chat.ts';
 import type { NativeChatMessage } from '../../../src/providers/transport/native-types.ts';
-import type { ModelSpec, ToolSchema } from '../../../src/core/types.ts';
+import type { Logger, ModelSpec, ToolSchema } from '../../../src/core/types.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 class Fixture extends OpenAIHttpClient {
-  constructor() { super('https://fixture.test', nullLogger()); }
+  constructor(log: Logger = nullLogger()) { super('https://fixture.test', log); }
   protected buildBody(spec: ModelSpec, messages: NativeChatMessage[], tools?: ToolSchema[]): Record<string, unknown> {
     return { model: spec.model, messages };
   }
@@ -67,5 +67,22 @@ describe('retry policy', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(1);
     await expect(promise).resolves.toMatchObject({ response: { status: 'completed' } });
+  });
+});
+
+describe('network failure detail', () => {
+  it('the retry log and the final error carry the cause code and message', async () => {
+    vi.useFakeTimers();
+    const text = 'fetch failed (UNABLE_TO_GET_ISSUER_CERT_LOCALLY: unable to get local issuer certificate)';
+    const cause = Object.assign(new Error('unable to get local issuer certificate'), { code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' });
+    vi.stubGlobal('fetch', async () => { throw new TypeError('fetch failed', { cause }); });
+    const retries: unknown[] = [];
+    const log = { ...nullLogger(), warn: (_msg: string, meta?: Record<string, unknown>) => retries.push(meta?.err) };
+    const promise = new Fixture(log).respond({ model: 'test', input: 'hi' });
+    const settled = expect(promise).rejects.toThrow(text);
+    await vi.advanceTimersByTimeAsync(15_000);
+    await settled;
+    expect(retries.length).toBeGreaterThan(0);
+    expect(new Set(retries)).toEqual(new Set([text]));
   });
 });
