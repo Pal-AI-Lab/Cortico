@@ -370,7 +370,7 @@ export async function loadExtensions(
 // 装卸与搜索(WebUI 那一面)
 
 /** npm 包名。与 npm 自己的校验同形;不含任何 shell 元字符。 */
-const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+export const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
 /**
  * 版本或 dist-tag。`^` `~` `*` 之外的范围符号(`>=` `||`)不收:它们在 cmd.exe 里是
  * 重定向与管道,而 Windows 上 corepack 只能经 shell 起。
@@ -407,7 +407,7 @@ function newerVersion(latest: string, installed: string): boolean | null {
  * 一次失败的请求:`<主机>: <错误> (<cause 的错误码>: <cause 的说明>)`。undici 的错误文本固定是
  * `fetch failed`,出错的原因(证书不符、连接被拒、超时)只在 cause 里。
  */
-function fetchFailure(url: string, err: unknown): string {
+export function fetchFailure(url: string, err: unknown): string {
   const message = err instanceof Error ? err.message : String(err);
   const cause = err instanceof Error ? err.cause : undefined;
   const code = (cause as { code?: unknown } | undefined)?.code;
@@ -453,6 +453,7 @@ interface RegistrySearchResponse {
       license?: string;
       links?: { npm?: string; homepage?: string; repository?: string };
       publisher?: { username?: string };
+      maintainers?: Array<{ username?: string }>;
     };
     /** 被依赖的包数。热门包回字符串,新包回数字。 */
     dependents?: number | string;
@@ -775,6 +776,7 @@ export class ExtensionManager {
             kind,
             ...(p.date ? { date: p.date } : {}),
             ...(p.publisher?.username ? { publisher: p.publisher.username } : {}),
+            ...(p.maintainers?.length ? { maintainers: p.maintainers.flatMap((m) => m.username ? [m.username] : []) } : {}),
             ...(p.license ? { license: p.license } : {}),
             ...(p.keywords?.length ? { keywords: p.keywords } : {}),
             downloads: { month: obj.downloads?.monthly ?? 0 },

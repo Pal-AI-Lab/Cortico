@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts -->
 
 # 扩展
 
@@ -57,11 +57,44 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 
 ## 市场的官方索引
 
-扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、自描述与更新日志来自官方索引仓
-[Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),由服务端读取后合进搜索结果的 `index`
-与每条结果;服务端这部分随 0.2.0 补上,读不到索引时这些都不显示。包的简介按 Markdown 子集渲染:段落、标题、列表、代码、
-粗体、斜体与 http(s) 链接,原始 HTML 当文字。投票与评论同样等这部分服务端:登录 GitHub 后由服务端代发,令牌将存在
-扩展目录的 `github-token.json`,`.gitignore` 已单列这个文件名。
+扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢与评论来自官方索引仓
+[Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),文件格式以那里的 DESIGN.md 为准。
+`src/extensions/market.ts` 经 raw.githubusercontent.com 读 `index.json` 与 `catalog.json`,读到的内容在内存里留 5 分钟
+(raw 的 CDN 缓存也是 5 分钟),单次 3 秒没回算读不到。`GET /api/extensions/search` 的回应多一个 `index`
+(按界面语言取好的标签词表与 `newDays`),每条结果按索引补字段:
+
+- 拉黑的包与拉黑的发布者发的包不出现在结果里;已装的照常列出,`/api/extensions` 里那一条带 `blocked`(原因)。
+- `tags`:`catalog.json` 里作者当前版本声明的(官方标注除外)、`keywords` 里的普通标签、粘住名单里的警示标签与官方
+  `addTags`,去掉官方 `removeTags`。
+- `official`:npm 维护者里有 `official.maintainers` 的账号,且 repository 在 `official.githubOwners` 名下。`certified` 来自
+  `certified`;`isNew` 按 `catalog.json` 的首次发布时间与 `newDays`;`note`、`supersededBy` 来自官方覆盖;`rating` 来自
+  `catalog.json`。
+- `schema` 不是 1 的文件当作读不到。`index.json` 每次读到都写进扩展目录的 `market-index.json`,读不到时用它,拉黑照常生效;
+  它也没有时 `index` 只有 `error`,结果原样返回。`catalog.json` 读不到时结果不带它补的字段。
+
+包的简介按 Markdown 子集渲染:段落、标题、列表、代码、粗体、斜体与 http(s) 链接,原始 HTML 当文字。
+
+### GitHub 登录、投票与评论
+
+投票与评论由服务端用 GitHub App「Cortico Extension Market」的用户令牌代用户调 GraphQL;这个 App 只有 Discussions 读写权限,
+只装在索引仓。以下都是内部路由:
+
+| 路由 | 请求 | 回应 |
+|---|---|---|
+| `GET /api/extensions/github` | | `{ login?, avatar? }` |
+| `POST /api/extensions/github/login` | | `{ userCode, verificationUri, expiresIn, interval }`;服务端在后台等授权,登上后上一行有账号 |
+| `POST /api/extensions/github/logout` | | `{ ok: true }` |
+| `POST /api/extensions/vote` | `{ name, vote: "up" \| "down" \| null }` | `{ up, down, comments, discussion?, mine? }`,投完后的实时数 |
+| `GET /api/extensions/comments?name=&cursor=` | | `{ comments: [{ id, author, avatar?, body, createdAt, replies? }], total, next?, discussion? }` |
+| `POST /api/extensions/comments` | `{ name, body, replyTo? }` | 新发的那条评论 |
+
+- 令牌存在扩展目录的 `github-token.json`(`.gitignore` 单列了这个文件名),不过期。退出只删这个文件,GitHub 上的授权由用户在
+  GitHub 设置里撤销。
+- 要账号的接口没登录时回 428;令牌被撤销时删掉令牌文件,同样回 428。控制台先弹设备码登录,登上后重发一次。
+- 每个包一帖,帖子只由索引仓的 Action 在 extensions 分类(Announcement 格式)里开,标题是包名;还没开帖的包投票与发评论回 409。
+- 改票先撤掉本账号的另一种 reaction 再加上新的。评论数含前 100 条顶层评论下的回复(GraphQL 一页的上限)。
+- 评论一页 5 条,新的在前,`replyTo` 是顶层评论的 id。登录了实时读,管理员隐藏的不列;没登录读 Action 写的
+  `comments/<包名>.json` 快照(作用域包名的 `/` 换成 `__`),比实时晚一个扫描周期;包还没有帖子时是空页。
 
 ## 起步
 

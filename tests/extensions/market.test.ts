@@ -1,0 +1,246 @@
+/**
+ * 扩展市场:官方索引合进搜索结果、拉黑与缓存、设备码登录、投票与评论。
+ * GitHub 由一个按地址与 GraphQL 操作分派的假 fetch 代替:raw 文件、OAuth 端点与讨论区状态都在内存里。
+ */
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { ExtensionMarket, GITHUB_TOKEN_FILE } from '../../src/extensions/market.ts';
+import { LocalizedError } from '../../src/core/language.ts';
+import { nullLogger } from '../../src/core/util.ts';
+import type { ExtensionComment, ExtensionSearchHit } from '../../src/web/server.ts';
+
+const RAW = 'https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main/';
+
+const bi = (zh: string, en: string) => ({ zh, en });
+const INDEX = {
+  schema: 1,
+  official: { maintainers: ['maintainer'], githubOwners: ['Pal-AI-Lab'], names: [] },
+  tags: {
+    blue: { style: 'official', label: bi('蓝', 'Blue'), hint: bi('蓝说明', 'Blue hint'), when: '' },
+    plain: { label: bi('普通', 'Plain'), hint: bi('普通说明', 'Plain hint'), when: '' },
+    other: { label: bi('其他', 'Other'), hint: bi('其他说明', 'Other hint'), when: '' },
+    yellow: { style: 'notice', label: bi('黄', 'Yellow'), hint: bi('黄说明', 'Yellow hint'), when: '' },
+    red: { style: 'warning', label: bi('红', 'Red'), hint: bi('红说明', 'Red hint'), when: '' },
+  },
+  certified: ['cortico-world-a'],
+  newDays: 14,
+  blocked: { packages: { 'cortico-world-bad': bi('恶意代码', 'Malicious code') }, publishers: { villain: bi('冒名', 'Impersonation') } },
+  overrides: { 'cortico-world-a': { addTags: ['blue'], removeTags: ['other'], note: bi('官方说明', 'Official note'), supersededBy: 'cortico-world-a2' } },
+};
+
+const hit = (name: string, extra: Partial<ExtensionSearchHit> = {}): ExtensionSearchHit => ({
+  name, version: '1.0.0', description: '', downloads: { month: 0 }, dependents: 0, links: {}, installed: false, ...extra,
+});
+
+interface Discussion { id: string; number: number; title: string; reactions: Record<string, Set<string>>; comments: Array<ExtensionComment & { minimized?: boolean; replies: Array<ExtensionComment & { minimized?: boolean }> }> }
+
+/** 内存里的 GitHub:raw 文件按路径给,GraphQL 按查询里出现的操作名分派;`calls` 记下每次变更的操作。 */
+function fakeGithub(viewer = 'me') {
+  const raw = new Map<string, unknown>();
+  const discussions: Discussion[] = [];
+  const calls: string[] = [];
+  let rawDown = false;
+  let pollsBeforeGrant = 1;
+  const node = (id: string) => discussions.find((d) => d.id === id)!;
+  const gqlComment = (c: ExtensionComment & { minimized?: boolean }) => ({ id: c.id, body: c.body, createdAt: c.createdAt, isMinimized: !!c.minimized, author: { login: c.author } });
+  const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const url = String(input);
+    if (url.startsWith(RAW)) {
+      if (rawDown) throw new TypeError('fetch failed');
+      const path = url.slice(RAW.length);
+      return raw.has(path) ? json(raw.get(path)) : new Response('404: Not Found', { status: 404 });
+    }
+    if (url === 'https://github.com/login/device/code') {
+      return json({ device_code: 'dev-1', user_code: 'ABCD-1234', verification_uri: 'https://github.com/login/device', expires_in: 900, interval: 0 });
+    }
+    if (url === 'https://github.com/login/oauth/access_token') {
+      return json(pollsBeforeGrant-- > 0 ? { error: 'authorization_pending' } : { access_token: 'tok', token_type: 'bearer' });
+    }
+    if (url === 'https://api.github.com/user') return json({ login: viewer, avatar_url: 'https://avatars.example.invalid/me' });
+    if (url === 'https://api.github.com/graphql') {
+      const { query, variables: v } = JSON.parse(String(init!.body)) as { query: string; variables: Record<string, string | null> };
+      if (query.includes('removeReaction')) { calls.push(`remove ${v.content}`); node(v.id!).reactions[v.content!]!.delete(viewer); return json({ data: { removeReaction: {} } }); }
+      if (query.includes('addReaction')) { calls.push(`add ${v.content}`); node(v.id!).reactions[v.content!]!.add(viewer); return json({ data: { addReaction: {} } }); }
+      if (query.includes('addDiscussionComment')) {
+        calls.push(`comment ${v.replyTo ?? '-'}`);
+        const comment = { id: `c${Date.now()}`, author: viewer, body: v.body!, createdAt: '2026-10-15T00:00:00Z', replies: [] };
+        const d = node(v.id!);
+        if (v.replyTo) d.comments.find((c) => c.id === v.replyTo)!.replies.push(comment); else d.comments.push(comment);
+        return json({ data: { addDiscussionComment: { comment: gqlComment(comment) } } });
+      }
+      if (query.includes('discussions(')) {
+        return json({ data: { repository: { discussions: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: discussions.map((d) => ({ id: d.id, title: d.title, url: `https://github.com/d/${d.number}`, category: { slug: 'extensions' } })) } } } });
+      }
+      const d = node(v.id!);
+      if (query.includes('reactionGroups')) {
+        return json({ data: { node: {
+          url: `https://github.com/d/${d.number}`,
+          reactionGroups: Object.entries(d.reactions).map(([content, users]) => ({ content, viewerHasReacted: users.has(viewer), reactors: { totalCount: users.size } })),
+          comments: { totalCount: d.comments.length, nodes: d.comments.map((c) => ({ replies: { totalCount: c.replies.length } })) },
+        } } });
+      }
+      // comments(last: N, before: cursor):游标是从旧到新的下标
+      const size = Number(/last: (\d+)/.exec(query)![1]);
+      const end = v.before ? Number(v.before) : d.comments.length;
+      const start = Math.max(0, end - size);
+      return json({ data: { node: {
+        url: `https://github.com/d/${d.number}`,
+        comments: {
+          totalCount: d.comments.length,
+          pageInfo: { hasPreviousPage: start > 0, startCursor: String(start) },
+          nodes: d.comments.slice(start, end).map((c) => ({ ...gqlComment(c), replies: { nodes: c.replies.map(gqlComment) } })),
+        },
+      } } });
+    }
+    throw new Error(`unexpected ${url}`);
+  });
+  return {
+    fetch: fetch as unknown as typeof globalThis.fetch,
+    raw, discussions, calls,
+    set rawDown(value: boolean) { rawDown = value; },
+    set pollsBeforeGrant(value: number) { pollsBeforeGrant = value; },
+    addDiscussion(title: string, number: number): Discussion {
+      const d: Discussion = { id: `D${number}`, number, title, reactions: { THUMBS_UP: new Set(), THUMBS_DOWN: new Set() }, comments: [] };
+      discussions.push(d);
+      return d;
+    },
+  };
+}
+
+let dir: string;
+beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'extension-market-')); });
+afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+const signIn = () => writeFileSync(join(dir, GITHUB_TOKEN_FILE), JSON.stringify({ token: 'tok', login: 'me' }));
+const statusOf = async (promise: Promise<unknown>) => promise.then(() => 200, (err: unknown) => (err instanceof LocalizedError ? err.status : 0));
+
+describe('merge', () => {
+  it('滤掉拉黑的包与发布者,按规则合出标签、官方、认证、新品、说明与评分', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', INDEX);
+    github.raw.set('catalog.json', {
+      schema: 1,
+      packages: {
+        'cortico-world-a': { created: new Date(Date.now() - 86_400_000).toISOString(), tags: ['yellow', 'blue', 'other', 'unknown'], discussion: 7, rating: { up: 3, down: 1, comments: 2 } },
+        'cortico-world-old': { created: '2020-01-01T00:00:00Z' },
+      },
+      sticky: { 'cortico-world-a': ['red', 'plain'] },
+    });
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const { hits, index } = await market.merge(Promise.resolve([
+      hit('cortico-world-a', { keywords: ['cortico-world', 'plain', 'yellow'], maintainers: ['maintainer'], links: { repository: 'https://github.com/pal-ai-lab/a' } }),
+      hit('cortico-world-old', { maintainers: ['maintainer'], links: { repository: 'https://github.com/someone/old' } }),
+      hit('cortico-world-bad'),
+      hit('cortico-world-c', { publisher: 'villain' }),
+    ]), 'en');
+    expect(hits.map((h) => h.name)).toEqual(['cortico-world-a', 'cortico-world-old']);
+    const [a, old] = hits;
+    // 作者声明的 blue 不算、unknown 不在词表;keywords 只映射普通标签;粘住名单只收红色;官方加 blue、去 other
+    expect(new Set(a.tags)).toEqual(new Set(['yellow', 'plain', 'red', 'blue']));
+    expect(a).toMatchObject({ certified: true, official: true, isNew: true, note: 'Official note', supersededBy: 'cortico-world-a2',
+      rating: { up: 3, down: 1, comments: 2, discussion: 'https://github.com/Pal-AI-Lab/cortico-extensions/discussions/7' } });
+    // 维护者是官方账号但仓库不在官方账号下:不算官方
+    expect(old.official).toBeUndefined();
+    expect(old.isNew).toBeUndefined();
+    expect(Object.keys(index.tags)).toEqual(Object.keys(INDEX.tags));
+    expect(index.tags.red).toEqual({ label: 'Red', hint: 'Red hint', style: 'warning' });
+    expect(index.newDays).toBe(INDEX.newDays);
+    expect(market.blocked('cortico-world-bad', 'zh')).toBe('恶意代码');
+  });
+
+  it('索引格式版本不认识时当作读不到:结果原样返回并给出原因', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', { ...INDEX, schema: 2 });
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const hits = [hit('cortico-world-bad')];
+    const merged = await market.merge(Promise.resolve(hits), 'en');
+    expect(merged.hits).toEqual(hits);
+    expect(merged.index).toEqual({ tags: {}, error: expect.stringContaining('index.json has format version 2') });
+  });
+
+  it('连不上 GitHub 时按扩展目录里上次读到的索引拦拉黑的包', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', INDEX);
+    await new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch }).merge(Promise.resolve([]), 'zh');
+    github.rawDown = true;
+    const offline = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    expect(offline.blocked('cortico-world-bad', 'en')).toBe('Malicious code');
+    const { hits, index } = await offline.merge(Promise.resolve([hit('cortico-world-bad'), hit('cortico-world-d')]), 'zh');
+    expect(hits.map((h) => h.name)).toEqual(['cortico-world-d']);
+    expect(index.error).toBeUndefined();
+  });
+});
+
+describe('GitHub 账号', () => {
+  it('设备码登录:后台等到授权后写下令牌,账号可读;退出删掉令牌', async () => {
+    const github = fakeGithub();
+    github.pollsBeforeGrant = 2;
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    expect(market.account()).toEqual({});
+    expect(await market.login()).toEqual({ userCode: 'ABCD-1234', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 0 });
+    await vi.waitFor(() => expect(market.account()).toEqual({ login: 'me', avatar: 'https://avatars.example.invalid/me' }));
+    expect(JSON.parse(readFileSync(join(dir, GITHUB_TOKEN_FILE), 'utf8')).token).toBe('tok');
+    market.logout();
+    expect(existsSync(join(dir, GITHUB_TOKEN_FILE))).toBe(false);
+    expect(market.account()).toEqual({});
+  });
+});
+
+describe('投票', () => {
+  it('没登录 428;包没有讨论帖 409', async () => {
+    const github = fakeGithub();
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    expect(await statusOf(market.vote('cortico-world-a', 'up'))).toBe(428);
+    signIn();
+    expect(await statusOf(market.vote('cortico-world-a', 'up'))).toBe(409);
+  });
+
+  it('改票先撤掉另一种再加上要的那种;撤回只撤自己的', async () => {
+    const github = fakeGithub();
+    const d = github.addDiscussion('cortico-world-a', 7);
+    d.reactions.THUMBS_DOWN!.add('me');
+    d.reactions.THUMBS_UP!.add('someone');
+    signIn();
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    expect(await market.vote('cortico-world-a', 'up')).toEqual({ up: 2, down: 0, comments: 0, discussion: 'https://github.com/d/7', mine: 'up' });
+    expect(github.calls).toEqual(['remove THUMBS_DOWN', 'add THUMBS_UP']);
+    expect(await market.vote('cortico-world-a', null)).toEqual({ up: 1, down: 0, comments: 0, discussion: 'https://github.com/d/7' });
+  });
+});
+
+describe('评论', () => {
+  const comment = (i: number): ExtensionComment => ({ id: `s${i}`, author: 'u', body: `#${i}`, createdAt: '2026-10-01T00:00:00Z' });
+
+  it('没登录读快照,一页 5 条,next 指向下一页', async () => {
+    const github = fakeGithub();
+    github.raw.set('comments/@scope__cortico-world-x.json', { schema: 1, discussion: 9, comments: Array.from({ length: 7 }, (_, i) => comment(i)) });
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const first = await market.comments('@scope/cortico-world-x', undefined);
+    expect(first).toMatchObject({ total: 7, next: '5', discussion: 'https://github.com/Pal-AI-Lab/cortico-extensions/discussions/9' });
+    expect(first.comments.map((c) => c.id)).toEqual(['s0', 's1', 's2', 's3', 's4']);
+    const second = await market.comments('@scope/cortico-world-x', first.next);
+    expect(second.comments.map((c) => c.id)).toEqual(['s5', 's6']);
+    expect(second.next).toBeUndefined();
+    expect(await market.comments('cortico-world-none', undefined)).toEqual({ comments: [], total: 0 });
+  });
+
+  it('登录后实时读:新的在前、隐藏的不列;回复挂在顶层评论下', async () => {
+    const github = fakeGithub();
+    const d = github.addDiscussion('cortico-world-a', 7);
+    for (let i = 0; i < 6; i++) d.comments.push({ ...comment(i), id: `t${i}`, replies: [] });
+    d.comments[4]!.minimized = true;
+    signIn();
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const posted = await market.comment('cortico-world-a', 'reply', 't5');
+    expect(github.calls).toEqual(['comment t5']);
+    const first = await market.comments('cortico-world-a', undefined);
+    expect(first.comments.map((c) => c.id)).toEqual(['t5', 't3', 't2', 't1']);
+    expect(first.comments[0]!.replies).toEqual([posted]);
+    const second = await market.comments('cortico-world-a', first.next);
+    expect(second.comments.map((c) => c.id)).toEqual(['t0']);
+    expect(second.next).toBeUndefined();
+  });
+});

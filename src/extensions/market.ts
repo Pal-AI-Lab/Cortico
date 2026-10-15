@@ -1,0 +1,465 @@
+/**
+ * 扩展市场的官方索引与讨论区,数据都在索引仓 Pal-AI-Lab/cortico-extensions,文件格式以那里的 DESIGN.md 为准。
+ * 索引文件经 raw.githubusercontent.com 读取。投票与评论用 GitHub App「Cortico Extension Market」的用户令牌
+ * 调 GraphQL;令牌由设备码登录取得,存在扩展目录的 github-token.json,App 设置里关了令牌过期。
+ * 没登录时评论读 Action 写进索引仓的 `comments/` 快照:App 私钥不随 Cortico 分发,匿名读不了 Discussions。
+ */
+
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { baseLanguage, LocalizedError, type Language } from '../core/language.ts';
+import type { Logger } from '../core/types.ts';
+import { fetchFailure, PACKAGE_NAME } from '../extensions.ts';
+import type {
+  ExtensionComment,
+  ExtensionCommentPage,
+  ExtensionRating,
+  ExtensionSearchHit,
+  GithubAccount,
+  GithubDeviceCode,
+  MarketIndex,
+  MarketTag,
+} from '../web/server.ts';
+import { text } from './strings.ts';
+
+const REPO_OWNER = 'Pal-AI-Lab';
+const REPO_NAME = 'cortico-extensions';
+const RAW_BASE = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main`;
+/** 每个包一帖的讨论区分类;Announcement 格式,只有维护者(Action)能开帖。 */
+const DISCUSSION_CATEGORY = 'extensions';
+const GITHUB_APP_CLIENT_ID = 'Iv23lidZhJ2BMvVFLsl0';
+export const GITHUB_TOKEN_FILE = 'github-token.json';
+/** 最近一次读到的 `index.json`;连不上 GitHub 时照它拦拉黑的包。 */
+const INDEX_CACHE_FILE = 'market-index.json';
+/** 本机认得的索引文件格式版本。 */
+const SCHEMA = 1;
+/** raw.githubusercontent.com 的 CDN 缓存是 5 分钟,更勤地取拿到的也是同一份。 */
+const RAW_CACHE_MS = 5 * 60_000;
+/**
+ * 搜索列表要等索引回来才出。连不上 GitHub 的机器会卡到系统的连接超时;
+ * 与 npm 下载统计同一个理由、同一个值(`src/extensions.ts` 的 DOWNLOADS_TIMEOUT_MS)。
+ */
+const RAW_TIMEOUT_MS = 3000;
+/** 控制台评论区一次显示 5 条。 */
+const COMMENTS_PAGE_SIZE = 5;
+/** GitHub GraphQL 一页最多 100 条:每条评论的回复只取前 100 条,评分的评论数只数前 100 条评论下的回复。 */
+const GRAPHQL_PAGE_MAX = 100;
+
+type Bilingual = { zh: string; en: string };
+
+/** `index.json`:官方维护的词表、官方账号、认证、拉黑与覆盖。 */
+interface IndexFile {
+  schema: number;
+  official: { maintainers: string[]; githubOwners: string[] };
+  tags: Record<string, { style?: MarketTag['style']; label: Bilingual; hint: Bilingual }>;
+  certified?: string[];
+  newDays?: number;
+  blocked?: { packages?: Record<string, Bilingual>; publishers?: Record<string, Bilingual> };
+  overrides?: Record<string, { addTags?: string[]; removeTags?: string[]; note?: Bilingual; supersededBy?: string }>;
+}
+
+/** `catalog.json`:Action 扫 npm 与讨论区生成。这里只读下面几个字段。 */
+interface CatalogFile {
+  schema: number;
+  packages: Record<string, {
+    /** 首次发布时间 */
+    created?: string;
+    /** 当前版本 `cortico.tags` 里的标签 */
+    tags?: string[];
+    /** 讨论帖编号 */
+    discussion?: number;
+    rating?: { up: number; down: number; comments: number };
+  }>;
+  /** 粘住名单:任一版本声明过的警示标签 */
+  sticky?: Record<string, string[]>;
+}
+
+/** `comments/<包>.json`:一个包讨论帖的评论快照,新的在前,回复旧的在前;`id` 是 GraphQL 节点 id。 */
+interface CommentsSnapshot {
+  schema: number;
+  discussion: number;
+  comments: ExtensionComment[];
+}
+
+interface TokenFile { token: string; login: string; avatar?: string }
+
+interface GraphqlComment {
+  id: string;
+  body: string;
+  createdAt: string;
+  isMinimized: boolean;
+  author: { login: string; avatarUrl?: string } | null;
+}
+
+const COMMENT_FIELDS = 'id body createdAt isMinimized author { login avatarUrl }';
+const RATING_FIELDS = `url reactionGroups { content viewerHasReacted reactors { totalCount } }
+  comments(first: ${GRAPHQL_PAGE_MAX}) { totalCount nodes { replies { totalCount } } }`;
+const REACTIONS = { up: 'THUMBS_UP', down: 'THUMBS_DOWN' } as const;
+
+interface GraphqlRating {
+  url: string;
+  reactionGroups: Array<{ content: string; viewerHasReacted: boolean; reactors: { totalCount: number } }>;
+  comments: { totalCount: number; nodes: Array<{ replies: { totalCount: number } }> };
+}
+
+function marketError(message: (t: ReturnType<typeof text>) => string, status: number): LocalizedError {
+  return new LocalizedError((language) => message(text(language)), status);
+}
+
+const pickText = (value: Bilingual, language: Language) => baseLanguage(language) === 'zh' ? value.zh : value.en;
+const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
+/** 包名当文件名,作用域包的 `/` 换成 `__`。 */
+const fileName = (name: string) => name.replace('/', '__');
+const toComment = (node: GraphqlComment): ExtensionComment => ({
+  id: node.id,
+  // 删了号的用户在 GitHub 上显示为 ghost
+  author: node.author?.login ?? 'ghost',
+  ...(node.author?.avatarUrl ? { avatar: node.author.avatarUrl } : {}),
+  body: node.body,
+  createdAt: node.createdAt,
+});
+
+export interface ExtensionMarketOptions {
+  /** 扩展目录:令牌文件与索引缓存放在这里 */
+  dir: string;
+  log: Logger;
+  fetch?: typeof fetch;
+}
+
+/** 官方索引、GitHub 登录、投票与评论;控制台的扩展页经它读写索引仓。 */
+export class ExtensionMarket {
+  private readonly dir: string;
+  private readonly log: Logger;
+  private readonly fetch: typeof fetch;
+  private readonly raws = new Map<string, { atMs: number; value: unknown }>();
+  /** 最近一次读到的合格 `index.json`,来自网络或缓存文件 */
+  private index: IndexFile | null = null;
+  /** 帖子标题(包名) → 节点 id 与网址 */
+  private discussions: { atMs: number; byTitle: Map<string, { id: string; url: string }> } | null = null;
+  /** 每次登录或退出加一;后台等待授权的循环发现它变了就停下 */
+  private loginRun = 0;
+
+  constructor(opts: ExtensionMarketOptions) {
+    this.dir = opts.dir;
+    this.log = opts.log;
+    this.fetch = opts.fetch ?? fetch;
+  }
+
+  /**
+   * 把官方索引合进搜索结果:滤掉拉黑的包与发布者,补上标签、徽标、官方说明、取代与评分。
+   * 索引在等搜索的同时读取;读不到时结果原样返回,`index` 只有空词表与原因。
+   */
+  async merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }> {
+    const loaded = Promise.all([
+      this.loadIndex().catch((err: unknown) => err instanceof LocalizedError ? err.describe(language) : err instanceof Error ? err.message : String(err)),
+      this.loadCatalog(),
+    ]);
+    const hits = await search;
+    const [index, catalog] = await loaded;
+    if (typeof index === 'string') return { hits, index: { tags: {}, error: index } };
+    const vocab = index.tags;
+    const now = Date.now();
+    const merged = hits.filter((hit) => !this.blockedEntry(index, hit.name, hit.publisher)).map((hit): ExtensionSearchHit => {
+      const override = index.overrides?.[hit.name];
+      const listed = catalog?.packages[hit.name];
+      // 作者能声明官方标注以外的标签;keywords 只映射普通标签;粘住名单只收警示标签;官方的去优先
+      const tags = [...new Set([
+        ...(listed?.tags ?? []).filter((id) => vocab[id] && vocab[id].style !== 'official'),
+        ...(hit.keywords ?? []).filter((id) => vocab[id] && !vocab[id].style),
+        ...(catalog?.sticky?.[hit.name] ?? []).filter((id) => vocab[id]?.style === 'warning'),
+        ...(override?.addTags ?? []).filter((id) => vocab[id]),
+      ])].filter((id) => !override?.removeTags?.includes(id));
+      const repository = hit.links.repository?.toLowerCase() ?? '';
+      const official = !!hit.maintainers?.some((m) => index.official.maintainers.includes(m))
+        && index.official.githubOwners.some((owner) => repository.startsWith(`https://github.com/${owner.toLowerCase()}/`));
+      const isNew = !!listed?.created && now - Date.parse(listed.created) < (index.newDays ?? 0) * 86_400_000;
+      return {
+        ...hit,
+        ...(tags.length ? { tags } : {}),
+        ...(override?.note ? { note: pickText(override.note, language) } : {}),
+        ...(index.certified?.includes(hit.name) ? { certified: true } : {}),
+        ...(official ? { official: true } : {}),
+        ...(isNew ? { isNew: true } : {}),
+        ...(override?.supersededBy ? { supersededBy: override.supersededBy } : {}),
+        ...(listed?.rating ? { rating: { ...listed.rating, ...(listed.discussion ? { discussion: discussionUrl(listed.discussion) } : {}) } } : {}),
+      };
+    });
+    const tags = Object.fromEntries(Object.entries(vocab).map(([id, tag]) => [id, {
+      label: pickText(tag.label, language), hint: pickText(tag.hint, language), ...(tag.style ? { style: tag.style } : {}),
+    }]));
+    return { hits: merged, index: { tags, ...(index.newDays !== undefined ? { newDays: index.newDays } : {}) } };
+  }
+
+  /** 已装包被官方拉黑时的原因;按最近一次读到的索引,本进程还没读过时读缓存文件。 */
+  blocked(name: string, language: Language): string | undefined {
+    const index = this.index ??= this.cachedIndex();
+    const reason = index && this.blockedEntry(index, name);
+    return reason ? pickText(reason, language) : undefined;
+  }
+
+  account(): GithubAccount {
+    const token = this.token();
+    return token ? { login: token.login, ...(token.avatar ? { avatar: token.avatar } : {}) } : {};
+  }
+
+  /**
+   * 向 GitHub 要设备码并在后台等用户授权,授权后取账号写进令牌文件;控制台按 `interval` 查 `account()`。
+   * 再次登录或退出时之前的等待作废。用户拒绝或码过期时记一条日志,控制台在过期时提示重新登录。
+   */
+  async login(): Promise<GithubDeviceCode> {
+    const run = ++this.loginRun;
+    const code = await this.form<{ device_code?: string; user_code: string; verification_uri: string; expires_in: number; interval: number; error_description?: string; error?: string }>(
+      'https://github.com/login/device/code', { client_id: GITHUB_APP_CLIENT_ID });
+    if (!code.device_code) throw marketError((t) => t.githubFailed(code.error_description ?? code.error ?? ''), 502);
+    const deviceCode = code.device_code;
+    void this.awaitAuthorization(run, deviceCode, code.interval, Date.now() + code.expires_in * 1000)
+      .catch((err: unknown) => this.log.warn('GitHub 登录没有完成', { error: err instanceof Error ? err.message : String(err) }));
+    return { userCode: code.user_code, verificationUri: code.verification_uri, expiresIn: code.expires_in, interval: code.interval };
+  }
+
+  /** 删掉本机令牌,停下进行中的登录。GitHub 那边的授权不撤销,用户在 GitHub 设置里自己撤。 */
+  logout(): void {
+    this.loginRun++;
+    const file = join(this.dir, GITHUB_TOKEN_FILE);
+    if (existsSync(file)) unlinkSync(file);
+  }
+
+  /** 改成 `vote` 或撤回(`null`):先撤掉本账号的另一种 reaction,再加上要的那种。回应是投完后的实时数。 */
+  async vote(name: string, vote: 'up' | 'down' | null): Promise<ExtensionRating> {
+    const { id } = await this.discussion(name);
+    const before = await this.rating(id);
+    for (const value of ['up', 'down'] as const) {
+      if (before.mine === value && vote !== value) {
+        await this.graphql('mutation($id: ID!, $content: ReactionContent!) { removeReaction(input: { subjectId: $id, content: $content }) { clientMutationId } }', { id, content: REACTIONS[value] });
+      }
+    }
+    if (vote && before.mine !== vote) {
+      await this.graphql('mutation($id: ID!, $content: ReactionContent!) { addReaction(input: { subjectId: $id, content: $content }) { clientMutationId } }', { id, content: REACTIONS[vote] });
+    }
+    return this.rating(id);
+  }
+
+  /**
+   * 一页评论,新的在前;`cursor` 是上一页回的 `next`。登录了用令牌实时读(被管理员隐藏的不列出),
+   * 没登录读快照;包还没有讨论帖时是空页。
+   */
+  async comments(name: string, cursor: string | undefined): Promise<ExtensionCommentPage> {
+    this.checkName(name);
+    if (!this.token()) return this.snapshotPage(name, cursor);
+    const found = await this.findDiscussion(name);
+    if (!found) return { comments: [], total: 0 };
+    const data = await this.graphql<{ node: { url: string; comments: {
+      totalCount: number;
+      pageInfo: { hasPreviousPage: boolean; startCursor: string | null };
+      nodes: Array<GraphqlComment & { replies: { nodes: GraphqlComment[] } }>;
+    } } }>(`query($id: ID!, $before: String) { node(id: $id) { ... on Discussion { url
+      comments(last: ${COMMENTS_PAGE_SIZE}, before: $before) { totalCount pageInfo { hasPreviousPage startCursor }
+        nodes { ${COMMENT_FIELDS} replies(first: ${GRAPHQL_PAGE_MAX}) { nodes { ${COMMENT_FIELDS} } } } } } } }`,
+    { id: found.id, before: cursor ?? null });
+    const page = data.node.comments;
+    const comments = page.nodes.filter((node) => !node.isMinimized).reverse().map((node) => {
+      const replies = node.replies.nodes.filter((reply) => !reply.isMinimized).map(toComment);
+      return { ...toComment(node), ...(replies.length ? { replies } : {}) };
+    });
+    return {
+      comments,
+      total: page.totalCount,
+      ...(page.pageInfo.hasPreviousPage && page.pageInfo.startCursor ? { next: page.pageInfo.startCursor } : {}),
+      discussion: data.node.url,
+    };
+  }
+
+  /** 发一条评论;`replyTo` 是顶层评论的 id,给了就是回复那条。回应是新发的这条。 */
+  async comment(name: string, body: string, replyTo: string | undefined): Promise<ExtensionComment> {
+    const { id } = await this.discussion(name);
+    const data = await this.graphql<{ addDiscussionComment: { comment: GraphqlComment } }>(
+      `mutation($id: ID!, $body: String!, $replyTo: ID) { addDiscussionComment(input: { discussionId: $id, body: $body, replyToId: $replyTo }) { comment { ${COMMENT_FIELDS} } } }`,
+      { id, body, replyTo: replyTo ?? null });
+    return toComment(data.addDiscussionComment.comment);
+  }
+
+  private async awaitAuthorization(run: number, deviceCode: string, interval: number, deadlineMs: number): Promise<void> {
+    while (run === this.loginRun && Date.now() < deadlineMs) {
+      await new Promise((resolve) => setTimeout(resolve, interval * 1000).unref());
+      if (run !== this.loginRun) return;
+      const reply = await this.form<{ access_token?: string; error?: string; error_description?: string; interval?: number }>(
+        'https://github.com/login/oauth/access_token',
+        { client_id: GITHUB_APP_CLIENT_ID, device_code: deviceCode, grant_type: 'urn:ietf:params:oauth:grant-type:device_code' });
+      if (reply.access_token) {
+        const user = await this.api<{ login: string; avatar_url?: string }>('https://api.github.com/user', reply.access_token);
+        if (run !== this.loginRun) return;
+        const token: TokenFile = { token: reply.access_token, login: user.login, ...(user.avatar_url ? { avatar: user.avatar_url } : {}) };
+        mkdirSync(this.dir, { recursive: true });
+        writeFileSync(join(this.dir, GITHUB_TOKEN_FILE), JSON.stringify(token, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
+        return;
+      }
+      if (reply.error === 'authorization_pending') continue;
+      // GitHub 要求收到 slow_down 后把间隔加长,回应里带新的间隔
+      if (reply.error === 'slow_down') { interval = reply.interval ?? interval + 5; continue; }
+      throw new Error(reply.error_description ?? reply.error ?? 'no access_token');
+    }
+  }
+
+  private token(): TokenFile | null {
+    const file = join(this.dir, GITHUB_TOKEN_FILE);
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as TokenFile : null;
+  }
+
+  private checkName(name: string): void {
+    if (!PACKAGE_NAME.test(name)) throw marketError((t) => t.badPackageName(name), 400);
+  }
+
+  private blockedEntry(index: IndexFile, name: string, publisher?: string): Bilingual | undefined {
+    return index.blocked?.packages?.[name] ?? (publisher ? index.blocked?.publishers?.[publisher] : undefined);
+  }
+
+  private cachedIndex(): IndexFile | null {
+    const file = join(this.dir, INDEX_CACHE_FILE);
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as IndexFile : null;
+  }
+
+  /** 读 `index.json` 并写进缓存文件;连不上时用本进程上次读到的或缓存文件,都没有才抛。 */
+  private async loadIndex(): Promise<IndexFile> {
+    let index: IndexFile;
+    try {
+      const value = await this.raw('index.json');
+      if (!value) throw marketError((t) => t.indexMissing('index.json'), 502);
+      index = this.checkSchema(value as IndexFile, 'index.json');
+    } catch (err) {
+      const fallback = this.index ??= this.cachedIndex();
+      if (!fallback) throw err;
+      this.log.warn('官方索引读取失败,用上次读到的', { error: err instanceof Error ? err.message : String(err) });
+      return fallback;
+    }
+    if (index !== this.index) {
+      mkdirSync(this.dir, { recursive: true });
+      writeFileSync(join(this.dir, INDEX_CACHE_FILE), JSON.stringify(index) + '\n', 'utf8');
+    }
+    return this.index = index;
+  }
+
+  /** `catalog.json` 没有、格式不认识或读不到时不补 Action 汇总的字段,后两种记日志。 */
+  private async loadCatalog(): Promise<CatalogFile | null> {
+    try {
+      const value = await this.raw('catalog.json');
+      return value ? this.checkSchema(value as CatalogFile, 'catalog.json') : null;
+    } catch (err) {
+      this.log.warn('官方索引的 catalog.json 读取失败', { error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  }
+
+  private checkSchema<T extends { schema: number }>(value: T, file: string): T {
+    if (value.schema !== SCHEMA) throw marketError((t) => t.indexSchema(file, String(value.schema), SCHEMA), 502);
+    return value;
+  }
+
+  /** 索引仓里的一个 JSON 文件,404 是 null;结果(含 404)按 CDN 缓存时长留在内存里。 */
+  private async raw(path: string): Promise<unknown> {
+    const kept = this.raws.get(path);
+    if (kept && Date.now() - kept.atMs < RAW_CACHE_MS) return kept.value;
+    const url = `${RAW_BASE}/${path}`;
+    let res: Response;
+    try { res = await this.fetch(url, { signal: AbortSignal.timeout(RAW_TIMEOUT_MS) }); } catch (err) { throw new Error(fetchFailure(url, err)); }
+    if (!res.ok && res.status !== 404) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);
+    let value: unknown = null;
+    if (res.ok) { try { value = await res.json(); } catch (err) { throw new Error(fetchFailure(url, err)); } }
+    this.raws.set(path, { atMs: Date.now(), value });
+    return value;
+  }
+
+  private async snapshotPage(name: string, cursor: string | undefined): Promise<ExtensionCommentPage> {
+    if (cursor !== undefined && !/^\d+$/.test(cursor)) throw marketError((t) => t.badCursor(cursor), 400);
+    const value = await this.raw(`comments/${fileName(name)}.json`);
+    if (!value) return { comments: [], total: 0 };
+    const snapshot = this.checkSchema(value as CommentsSnapshot, `comments/${fileName(name)}.json`);
+    const from = Number(cursor ?? 0);
+    const end = from + COMMENTS_PAGE_SIZE;
+    return {
+      comments: snapshot.comments.slice(from, end),
+      total: snapshot.comments.length,
+      ...(end < snapshot.comments.length ? { next: String(end) } : {}),
+      discussion: discussionUrl(snapshot.discussion),
+    };
+  }
+
+  /** 包的讨论帖;没登录抛 428,帖子还没开抛 409。 */
+  private async discussion(name: string): Promise<{ id: string; url: string }> {
+    this.checkName(name);
+    if (!this.token()) throw marketError((t) => t.githubLoginRequired, 428);
+    const found = await this.findDiscussion(name);
+    if (!found) throw marketError((t) => t.noDiscussion(name), 409);
+    return found;
+  }
+
+  /** 列出讨论区分类里的帖子按标题找;没找到时重新列一次,Action 可能刚开了帖。 */
+  private async findDiscussion(name: string): Promise<{ id: string; url: string } | undefined> {
+    const listed = this.discussions;
+    if (listed && Date.now() - listed.atMs < RAW_CACHE_MS && listed.byTitle.has(name)) return listed.byTitle.get(name);
+    const byTitle = new Map<string, { id: string; url: string }>();
+    for (let after: string | null = null; ;) {
+      const data: { repository: { discussions: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: Array<{ id: string; title: string; url: string; category: { slug: string } }>;
+      } } } = await this.graphql(`query($owner: String!, $name: String!, $after: String) { repository(owner: $owner, name: $name) {
+        discussions(first: ${GRAPHQL_PAGE_MAX}, after: $after) { pageInfo { hasNextPage endCursor } nodes { id title url category { slug } } } } }`,
+      { owner: REPO_OWNER, name: REPO_NAME, after });
+      const page = data.repository.discussions;
+      for (const node of page.nodes) if (node.category.slug === DISCUSSION_CATEGORY) byTitle.set(node.title, { id: node.id, url: node.url });
+      if (!page.pageInfo.hasNextPage) break;
+      after = page.pageInfo.endCursor;
+    }
+    this.discussions = { atMs: Date.now(), byTitle };
+    return byTitle.get(name);
+  }
+
+  /** 讨论帖首楼的喜欢、不喜欢与本账号的票;评论数含回复。 */
+  private async rating(id: string): Promise<ExtensionRating> {
+    const data = await this.graphql<{ node: GraphqlRating }>(`query($id: ID!) { node(id: $id) { ... on Discussion { ${RATING_FIELDS} } } }`, { id });
+    const group = (value: 'up' | 'down') => data.node.reactionGroups.find((g) => g.content === REACTIONS[value]);
+    const mine = (['up', 'down'] as const).find((value) => group(value)?.viewerHasReacted);
+    const comments = data.node.comments;
+    return {
+      up: group('up')?.reactors.totalCount ?? 0,
+      down: group('down')?.reactors.totalCount ?? 0,
+      comments: comments.totalCount + comments.nodes.reduce((sum, node) => sum + node.replies.totalCount, 0),
+      discussion: data.node.url,
+      ...(mine ? { mine } : {}),
+    };
+  }
+
+  /** 用本机令牌调 GraphQL。没登录抛 428;令牌被撤销或失效时删掉令牌文件,同样抛 428。 */
+  private async graphql<T>(query: string, variables: Record<string, unknown>): Promise<T> {
+    const token = this.token();
+    if (!token) throw marketError((t) => t.githubLoginRequired, 428);
+    const url = 'https://api.github.com/graphql';
+    let res: Response;
+    try {
+      res = await this.fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${token.token}`, 'Content-Type': 'application/json', 'User-Agent': 'Cortico' }, body: JSON.stringify({ query, variables }) });
+    } catch (err) { throw new Error(fetchFailure(url, err)); }
+    if (res.status === 401) { this.logout(); throw marketError((t) => t.githubLoginRequired, 428); }
+    const reply = await res.json() as { data?: T; errors?: Array<{ message: string }>; message?: string };
+    if (!res.ok || reply.errors?.length || !reply.data) {
+      const detail = reply.errors?.map((e) => e.message).join('; ') ?? reply.message ?? `${res.status} ${res.statusText}`;
+      throw marketError((t) => t.githubFailed(detail), 502);
+    }
+    return reply.data;
+  }
+
+  private async api<T>(url: string, token: string): Promise<T> {
+    let res: Response;
+    try { res = await this.fetch(url, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github+json', 'User-Agent': 'Cortico' } }); } catch (err) { throw new Error(fetchFailure(url, err)); }
+    if (!res.ok) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);
+    return await res.json() as T;
+  }
+
+  /** github.com 的 OAuth 端点:表单进、要 JSON 回;出错时也是 200,原因在 `error` 里。 */
+  private async form<T>(url: string, body: Record<string, string>): Promise<T> {
+    let res: Response;
+    try {
+      res = await this.fetch(url, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Cortico' }, body: new URLSearchParams(body).toString() });
+    } catch (err) { throw new Error(fetchFailure(url, err)); }
+    if (!res.ok) throw marketError((t) => t.githubFailed(`${res.status} ${res.statusText}`), 502);
+    return await res.json() as T;
+  }
+}
