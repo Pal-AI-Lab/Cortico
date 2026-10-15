@@ -167,8 +167,8 @@ provider 是 `providers.<端点名>.options.`。写回的三道闸(服务端的�
 
 ## 契约版本
 
-三类扩展各有一个契约版本,`cortico.api` 必须等于自己这一类的那个:world **5**、provider **5**、
-bot **6**。版本不符的扩展不能加载,页面显示「需要升级」。
+三类扩展各有一个契约版本,`cortico.api` 必须等于自己这一类的那个:world **6**、provider **6**、
+bot **7**。版本不符的扩展不能加载,页面显示「需要升级」。
 
 加一的判据按类分:`WorldDefinition` 不兼容变更只加 world,`ProviderModule` 只加 provider,
 `BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;`WebUiPanelContext`
