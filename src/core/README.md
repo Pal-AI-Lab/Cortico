@@ -85,7 +85,7 @@ piggyback 只入队，随后续唤醒一起投递。
 返回当前值。暂停与投递闸门不进入 `RunPhase`,由 `paused`、`scheduleBlocked` 报告。
 
 参数不是合法 JSON 时返回 `TOOL_FAILED_BAD_ARGS`，不执行工具；未知工具返回 `UNKNOWN_TOOL`；
-handler 抛错,或返回值既不是字符串也不是带字符串 text 的对象,都转为失败回执。流式生成时 `EagerDispatch` 可提前执行完整的工具调用，遵守
+handler 抛错，或返回值既不是字符串也不是带字符串 text 的对象，都转为失败回执。流式生成时 `EagerDispatch` 可提前执行完整的工具调用，遵守
 `barrierAfter` 顺序，并按 call id 配对结果。回执超过 8000 字符时记录 warn。
 
 ## 上下文
