@@ -198,6 +198,31 @@ export interface ToolSchema {
  */
 export type ToolTag = 'read' | 'write' | 'speak' | 'act' | 'flow' | 'snapshot';
 
+/** 自描述里给人看的文字:一种写法,或中英两份(按 WebUI 语言取,中文以外的语言取 en)。 */
+export type DescribeText = string | { zh: string; en: string };
+
+/**
+ * 扩展自描述里的一个工具:发给模型的字段与标签,加给人看的一句话。实例的 `tools()` 可以按配置改写
+ * `description` 与 `parameters`,名字要在声明里。
+ */
+export interface ToolDescribe extends ToolSchema {
+  tags: readonly ToolTag[];
+  /** 给人看的一句话;缺省时市场取 description 的第一句。 */
+  summary?: DescribeText;
+}
+
+/** 扩展自描述里的一种事件。 */
+export interface EventDescribe {
+  /** 与 EventEnvelope.type 相同。 */
+  type: string;
+  /** 给人看的一句话。 */
+  description: DescribeText;
+  /** 推送时缺省的投递方式;不写即 PushOptions 的缺省。 */
+  trigger?: TriggerMode;
+  /** 推送时带的事件标签。 */
+  tags?: readonly EventTag[];
+}
+
 export interface ToolCallContext {
   /** Persona 定义的 session id；Core 仅用于查询、用量统计和日志关联。 */
   role: string;

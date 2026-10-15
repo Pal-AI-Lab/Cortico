@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path';
 import type {
   ConfigGroup,
   CoreConfig,
+  DescribeText,
+  ToolDescribe,
   World,
   Logger,
   WorldLifecycleEvent,
@@ -74,6 +76,18 @@ export interface BotDefinition<C extends CoreConfig = CoreConfig> {
   declares?: readonly WorldDeclaration[];
   /** 配置已完成合并；worlds 与 Core 共用数组，激活和停用会就地更新，Persona 应在使用时读取。 */
   build(loaded: LoadedConfig<C>, worlds: World[]): BotParts<C>;
+  /**
+   * 自描述,给人和扩展市场看:Persona 提供的全部工具与 Memory 的形式。默认启用的 World 取 `declares`,
+   * Memory 的名字取 `memoryName`;`pnpm describe:extension` 一并导出成 describe.json。
+   */
+  describe?: BotDescribe;
+}
+
+/** Bot 的自描述。 */
+export interface BotDescribe {
+  tools: readonly ToolDescribe[];
+  /** Memory 是什么形式,如「工作区里的 Markdown 文件,git 记版本」。 */
+  memory: { form: DescribeText };
 }
 
 export interface BotStartContext<C extends CoreConfig> {

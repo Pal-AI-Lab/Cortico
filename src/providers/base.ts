@@ -80,10 +80,25 @@ export interface ProviderAvailability {
   reason?: string;
 }
 
+/** provider 的登录方式。 */
+export type ProviderAuth = 'api-key' | 'oauth' | 'device-code' | 'web-session';
+
+/** provider 的自描述;`pnpm describe:extension` 连同 title、description 与档位表导出成 describe.json。 */
+export interface ProviderDescribe {
+  /** 接入的协议,如 `openai-responses`、`openai-chat`、`anthropic-messages`。 */
+  protocols: readonly string[];
+  auth: readonly ProviderAuth[];
+  /** 模型在本机运行。 */
+  local: boolean;
+  input: readonly ('text' | 'image' | 'audio' | 'video')[];
+}
+
 export interface ProviderModule {
   id: string;
   title: string;
   description?: string;
+  /** 自描述,给人和扩展市场看。 */
+  describe?: ProviderDescribe;
   defaultBaseUrl?: string;
   /** Candidate endpoint URLs offered on the URL field. Candidates only: any URL is accepted. */
   baseUrlSuggestions?: readonly string[];

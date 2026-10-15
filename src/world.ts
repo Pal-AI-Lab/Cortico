@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CoreConfig, World, WorldLifecycleEvent } from './core/types.ts';
+import type { CoreConfig, EventDescribe, ToolDescribe, World, WorldLifecycleEvent } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
 import type { BotDefinition } from './bot.ts';
 import { updateJsonObject } from './config-file.ts';
@@ -59,6 +59,18 @@ export interface WorldDefinition<S extends WorldSection = WorldSection> {
    */
   configOptions?(kind: string, language: Language): Array<{ value: string; label: string }>;
   create(ctx: WorldContext<S>): World;
+  /**
+   * 自描述:全部工具与会推出的事件,给人和扩展市场看,不进提示词。实例的 `tools()` 返回其中的子集;
+   * 挂载时有不在这里的工具、推出不在这里的事件,照常生效,记进运行日志并在 World 页标出。
+   * `pnpm describe:extension` 把它导出成包里的 describe.json。
+   */
+  describe?: WorldDescribe;
+}
+
+/** World 的自描述。 */
+export interface WorldDescribe {
+  tools: readonly ToolDescribe[];
+  events: readonly EventDescribe[];
 }
 
 /**
