@@ -16,7 +16,7 @@ import { ToolCallLog } from '../../src/core/tool-log.ts';
 import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
-import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED } from '../../src/core/markers.ts';
+import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
@@ -2001,6 +2001,38 @@ describe('MainLoop user事件协议', () => {
       (message) => message.role === 'user' && message.content.includes('Process restarted'),
     )).toBe(true);
     assertPairing(rig.session.messages);
+  });
+
+  it('重启时删去找不到调用的回执，原记录留在 transcript 并记 error', async () => {
+    const logTmp = makeTmpDir();
+    const file = join(logTmp.dir, 'transcript.jsonl');
+    const errors: Array<{ msg: string; meta?: Record<string, unknown> }> = [];
+    rig = makeRig({
+      log: { ...nullLogger(), error: (msg: string, meta?: Record<string, unknown>) => errors.push({ msg, meta }) },
+      transcript: new Transcript(file, { run: 'r-test' }),
+      preSession: [
+        { role: 'system', content: 'old system' },
+        { role: 'user', content: '在吗' },
+        { role: 'tool', tool_call_id: 'ghost_call', content: SHUTDOWN_INTERRUPTED },
+      ],
+    });
+    try {
+      rig.start();
+      await until(() => rig.llm.calls.length >= 1);
+      expect(rig.session.messages.some((message) => message.tool_call_id === 'ghost_call')).toBe(false);
+      expect(JSON.stringify(rig.llm.calls[0])).not.toContain('ghost_call');
+      expect(errors).toEqual([expect.objectContaining({
+        meta: expect.objectContaining({ callId: 'ghost_call', line: 3, preview: SHUTDOWN_INTERRUPTED }),
+      })]);
+      const boundary = readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+        .find((row) => row.kind === 'boundary' && row.event === 'orphan-result-drop');
+      expect(boundary.data.dropped).toEqual([expect.objectContaining({
+        line: 3,
+        item: expect.objectContaining({ type: 'function_call_output', call_id: 'ghost_call' }),
+      })]);
+    } finally {
+      logTmp.cleanup();
+    }
   });
 
   it('交接事务先跑Persona策略，再重建前缀并把它的醒来消息追加为user消息', async () => {

@@ -8,7 +8,7 @@ import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import { currentAnchors } from './log-context.ts';
 import { nowIso, SYSTEM_TIMEZONE } from './util.ts';
 
-export type TranscriptBoundary = 'handoff' | 'clear' | 'prefix-reload' | 'ephemeral-drop';
+export type TranscriptBoundary = 'handoff' | 'clear' | 'prefix-reload' | 'ephemeral-drop' | 'orphan-result-drop';
 
 export interface TranscriptItemRecord {
   kind: 'item';

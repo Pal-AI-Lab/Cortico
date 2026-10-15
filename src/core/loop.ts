@@ -150,6 +150,8 @@ export const DEFAULT_RESUBMIT: ResubmitPolicy = { maxConsecutive: 2, maxPerBatch
 
 /** 单条工具回执超过此长度记 warn。体积归 World 管,core 只观测,不截断。 */
 const LARGE_RESULT_WARN_CHARS = 8_000;
+/** 删去孤儿回执时日志里保留的正文长度；整条原文在 transcript 里。 */
+const ORPHAN_PREVIEW_CHARS = 200;
 
 export interface LoopStatus {
   running: boolean;
@@ -776,6 +778,36 @@ export class MainLoop {
     this.d.transcript?.boundary('ephemeral-drop', { dropped });
   }
 
+  /**
+   * 前面没有同 call_id 的 function_call 的回执会让每次请求被上游拒绝，读回时从 session 删去。
+   * 原记录整条写进本次 run 的 transcript 边界记录，日志给出行号和正文开头。
+   */
+  private dropOrphanResults(): void {
+    const { session, log } = this.d;
+    const calls = new Set<string>();
+    const orphans: Array<{ line: number; callId: string; record: ContextRecord }> = [];
+    session.records.forEach((record, index) => {
+      const { item } = record;
+      if (item.type === 'function_call') calls.add(item.call_id);
+      else if (item.type === 'function_call_output' && !calls.has(item.call_id)) orphans.push({ line: index + 1, callId: item.call_id, record });
+    });
+    if (orphans.length === 0) return;
+    for (const { line, callId, record } of orphans) {
+      log.error('session 里有找不到调用的工具回执,已从上下文删去', {
+        callId,
+        ts: record.context.ts ?? null,
+        file: 'session-main.jsonl',
+        line,
+        preview: textOf(record).slice(0, ORPHAN_PREVIEW_CHARS),
+      });
+    }
+    const dropped = new Set(orphans.map((o) => o.record));
+    session.reset(session.records.filter((record) => !dropped.has(record)));
+    this.d.transcript?.boundary('orphan-result-drop', {
+      dropped: orphans.map(({ line, record }) => ({ line, item: record.item, context: record.context })),
+    });
+  }
+
   /** 延迟渲染应读取当前状态；null、超时或异常均不归档、不投递，超时与异常记录日志。 */
   private async renderDeferred(spec: DeferredEventSpec, generation: number): Promise<DeferredRendered | null> {
     const { log } = this.d;
@@ -956,6 +988,7 @@ export class MainLoop {
       return;
     }
 
+    this.dropOrphanResults();
     const unanswered = new Set<string>();
     for (const { item } of session.records) {
       if (item.type === 'function_call') unanswered.add(item.call_id);
