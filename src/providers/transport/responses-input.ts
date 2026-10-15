@@ -24,6 +24,9 @@ export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
  */
 export const SYNTHETIC_REASONING_TEXT = '-';
 
+/** Item types whose `id` is optional on input; the id is the issuing server's resource id. */
+const OPTIONAL_ID_TYPES: ReadonlySet<unknown> = new Set(['message', 'function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output']);
+
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
   /** Whether past reasoning re-enters the context; the first synthetic turn is exempt. */
@@ -42,6 +45,9 @@ export interface ResponsesInputOptions {
  * item re-enters as `reasoning_text`; the turn after the last user message is always replayed, earlier
  * turns follow `keepThinking`; unless `sendSyntheticReasoning` is false, a function call without an
  * origin gets a synthetic reasoning item when none already precedes it. System and developer text is joined into instructions.
+ * An item recorded from another instance, module or compatibility domain goes out without its
+ * optional `id`, since another server rejects ids it did not issue; `call_id` stays, and items
+ * without a recorded origin keep theirs.
  */
 export function responsesInput(
   request: Request,
@@ -55,6 +61,10 @@ export function responsesInput(
   const roundStart = plaintext ? lastUserMessage(entries) : -1;
   entries.forEach((entry, index) => {
     const item = entry.item;
+    const owner = entry.context.origin;
+    const current = options.origin;
+    const sameService = !!owner && !!current && owner.instance === current.instance && owner.module === current.module
+      && owner.compatibilityDomain === current.compatibilityDomain;
     if (item.type === 'reasoning') {
       if (plaintext) {
         const text = itemText(item);
@@ -67,10 +77,7 @@ export function responsesInput(
       }
       if (!item.encrypted_content) return;
       if (!entry.context.head && opts.keepThinking?.() === false) return;
-      const owner = entry.context.origin;
-      const current = options.origin;
-      if (!owner || !current || owner.instance !== current.instance || owner.module !== current.module
-        || owner.compatibilityDomain !== current.compatibilityDomain || owner.model !== request.model) return;
+      if (!sameService || owner?.model !== request.model) return;
     }
     if (item.type === 'message' && (item.role === 'system' || item.role === 'developer')) {
       systems.push(typeof item.content === 'string' ? item.content : item.content.map(part => 'text' in part ? part.text : '').join(''));
@@ -82,6 +89,7 @@ export function responsesInput(
         content: [{ type: 'reasoning_text', text: opts.syntheticReasoningText ?? SYNTHETIC_REASONING_TEXT }],
       });
     const wire = inputItem(entry) as Item;
+    if (owner && current && !sameService && OPTIONAL_ID_TYPES.has(item.type)) delete wire.id;
     const images = imageBlobs(entry.context.blobs);
     if (opts.media?.enabled() && images.length && (item.type === 'message' || item.type === 'function_call_output')) {
       const field = item.type === 'message' ? 'content' : 'output';

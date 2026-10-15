@@ -1,6 +1,7 @@
 /**
  * Responses 无状态重放的思维链形态。加密形态的规则由 tests/core/session-head.test.ts 覆盖;
- * 这里是明文形态:推理项以 reasoning_text 出线,当前轮不受 keepThinking 约束,本地合成的调用前补一项。
+ * 这里是明文形态:推理项以 reasoning_text 出线,当前轮不受 keepThinking 约束,本地合成的调用前补一项;
+ * 另有别的端点记下的项出线时 id 的去留。
  */
 import { describe, expect, it } from 'vitest';
 import { REASONING_REPLAYS, SYNTHETIC_REASONING_TEXT, responsesInput } from '../../../src/providers/transport/responses-input.ts';
@@ -110,5 +111,22 @@ describe('responsesInput 明文形态', () => {
       const input = responsesInput(request, { context, origin }, { keepThinking: () => true, ...(form ? { reasoningReplay: form } : {}) }).input;
       expect(input.map((item) => item.type)).toEqual(['message', 'function_call', 'function_call_output']);
     }
+  });
+});
+
+describe('responsesInput 跨端点的项 id', () => {
+  it('别的端点记下的调用去掉 id、call_id 不变;同一端点换模型和没有来源的项保留 id', () => {
+    const foreign = { ...origin, instance: 'other', compatibilityDomain: 'other' };
+    const context = [
+      message('user', 'hi'),
+      record({ type: 'function_call', id: '0f6c2b1e-7d4a-4c1b-9e2f-3a5b6c7d8e9f', call_id: 'call_a', name: 'look', arguments: '{}', status: 'completed' }, { origin: foreign }),
+      functionCall('call_b', 'look', '{}', { origin: { ...origin, model: 'other' } }),
+      functionResult('call_b', 'x'),
+    ];
+    const input = replay(context, true, 'encrypted');
+    expect(input[1]).not.toHaveProperty('id');
+    expect(input[1].call_id).toBe('call_a');
+    expect(input[2].id).toBe(context[2].item.id);
+    expect(input[3].id).toBe(context[3].item.id);
   });
 });
