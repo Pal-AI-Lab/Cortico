@@ -42,7 +42,7 @@ beforeAll(async () => {
     extensions: {
       list: () => ({
         dir: '/repo/extensions',
-        extensions: [{ name: 'a', spec: '^1', version: '1.0.0', consoleClient: false, loaded: true, worldId: 'a', label: 'A', state: 'loaded' }],
+        extensions: [{ name: 'a', spec: '^1', version: '1.0.0', webUiClient: false, loaded: true, worldId: 'a', label: 'A', state: 'loaded' }],
       }),
       search: async (kind) => {
         searched.push({ ...(kind ? { kind } : {}) });

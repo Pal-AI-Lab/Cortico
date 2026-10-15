@@ -206,7 +206,7 @@ describe("core.stop():单个 World 未完成时仍停止其他 World", () => {
   });
 });
 
-/** 不启动控制台的 bot，用于测试关机顺序。 */
+/** 不启动 WebUI 的 bot，用于测试关机顺序。 */
 function makeHeadlessBot(worlds: World[], onStop?: () => void | Promise<void>) {
   const env = makeEnv(worlds);
   const definition: BotDefinition<TestConfig> = {
@@ -217,7 +217,7 @@ function makeHeadlessBot(worlds: World[], onStop?: () => void | Promise<void>) {
       worlds: worlds,
       llm: new FakeLLM(),
       ...(onStop ? { onStop } : {}),
-      console: { enabled: false },
+      webUi: { enabled: false },
     }),
   };
   return { bot: createBot(env.loaded, definition), cleanup: env.cleanup };
@@ -234,7 +234,7 @@ describe("bot.shutdown():执行顺序与步骤结果", () => {
       expect(report.localComplete).toBe(true);
       expect(report.externalChecks).toEqual([]);
       expect(report.reason).toBe('测试');
-      // 控制台没起,所以没有 web 那一步。
+      // WebUI 没起,所以没有 web 那一步。
       expect(report.steps.map((s) => s.key)).toEqual(['pause', 'worlds', 'core', 'llm', 'flush']);
       expect(report.steps.every((s) => s.ok)).toBe(true);
       // 关机前先暂停事件投递，避免启动新的模型轮。

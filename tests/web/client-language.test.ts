@@ -9,7 +9,7 @@ beforeEach(() => {
 });
 afterEach(() => vi.restoreAllMocks());
 
-describe('console language preference', () => {
+describe('WebUI language preference', () => {
   it('uses the server stamp until a preference is saved', () => {
     expect(readLanguage(document)).toBe('en');
     document.documentElement.lang = 'zh-CN';
@@ -28,7 +28,7 @@ describe('console language preference', () => {
   });
 
   it('ignores an invalid stored preference', () => {
-    localStorage.setItem('cortico.console.language', 'xx');
+    localStorage.setItem('cortico.webui.language', 'xx');
     expect(readLanguage(document)).toBe('en');
   });
 

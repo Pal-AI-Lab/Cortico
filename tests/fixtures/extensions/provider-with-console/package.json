@@ -1,9 +1,0 @@
-{
-  "name": "cortico-fixture-provider-console",
-  "version": "0.4.2",
-  "description": "带浏览器端产物的 provider 扩展",
-  "type": "module",
-  "main": "./index.js",
-  "keywords": ["cortico-provider"],
-  "cortico": { "kind": "provider", "api": 5, "consoleClient": "dist/panel.js" }
-}

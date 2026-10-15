@@ -32,7 +32,7 @@ describe('CortiV 首轮对话', () => {
     });
     expect(p.sessionHead().map((item) => item.type)).toEqual(['message', 'message']);
     expect(p.sessionHead()[0]).toMatchObject({ role: 'user', content: [{ type: 'input_text', text: '晚上好' }] });
-    const doc = (p.console().promptDocs ?? []).find((d) => d.key === 'firstTurn.reply');
+    const doc = (p.webUi().promptDocs ?? []).find((d) => d.key === 'firstTurn.reply');
     expect(doc?.path).toBe(join(ftDir, FIRST_TURN_FILES.reply));
   });
 

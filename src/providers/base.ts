@@ -6,9 +6,9 @@ import type {
   ModelSpec,
   ConfigGroup,
 } from '../core/types.ts';
-import type { ConsolePageContribution } from '../web/shared/console-protocol.ts';
+import type { WebUiPageContribution } from '../web/shared/webui-protocol.ts';
 import type { Language } from '../core/language.ts';
-import type { ProviderConsoleHost } from './console/types.ts';
+import type { ProviderWebUiHost } from './webui/types.ts';
 import type { PriceDefinition, QuoteTime } from './pricebook.ts';
 import type { Request } from '../protocol/open-responses/index.ts';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
@@ -59,7 +59,7 @@ export interface ProviderInstance {
   client: BaseProvider;
   /** Models the endpoint advertises (`GET /models`). */
   listModels?(): Promise<ListedModel[]>;
-  /** Module-owned control object; interpreted by that module's console contribution. */
+  /** Module-owned control object; interpreted by that module's WebUI contribution. */
   control?: unknown;
   compatibilityKey?(): unknown;
   start?(): Promise<unknown>;
@@ -76,7 +76,7 @@ export interface ProviderInstance {
 /** 一个端点此刻能不能发起生成。判断只看本地状态,不连上游。 */
 export interface ProviderAvailability {
   ready: boolean;
-  /** 不可用的原因,控制台语言;可用时不带。 */
+  /** 不可用的原因,WebUI 语言;可用时不带。 */
   reason?: string;
 }
 
@@ -93,7 +93,7 @@ export interface ProviderModule {
   serviceTiers: readonly ServiceTier[];
   temperatureNote?: string;
   /**
-   * Console copies of the title, description, tier tables and temperature note in the console language.
+   * WebUI copies of the title, description, tier tables and temperature note in the WebUI language.
    * Absent (or a field left out) = the fields above are shown as written.
    */
   localize?(language: Language): {
@@ -109,12 +109,12 @@ export interface ProviderModule {
    */
   availability?(name: string, entry: LLMProviderEntry, language: Language): ProviderAvailability;
   normalize?(entry: LLMProviderEntry): LLMProviderEntry;
-  /** `language` is the console language for the thrown message; validation itself is fixed. */
+  /** `language` is the WebUI language for the thrown message; validation itself is fixed. */
   validateEntry?(entry: LLMProviderEntry, language: Language): void;
   validateModel?(entry: LLMProviderEntry, spec: ModelSpec): void;
   accepts?(entry: LLMProviderEntry, spec: ModelSpec, mime: string): boolean;
   config?(name: string, entry: LLMProviderEntry, language: Language): ConfigGroup[];
-  console?(host: ProviderConsoleHost): Partial<ConsolePageContribution>;
+  webUi?(host: ProviderWebUiHost): Partial<WebUiPageContribution>;
   prices?(entry: LLMProviderEntry, request: Request, at: QuoteTime): readonly PriceDefinition[];
   /**
    * Estimate tokens for records not yet covered by upstream usage.

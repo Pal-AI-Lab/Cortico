@@ -1,4 +1,4 @@
-/** 验收最小人格定义的派生控制台,以及未安装 World 的控制台目录状态。 */
+/** 验收最小人格定义的派生 WebUI,以及未安装 World 的 WebUI 目录状态。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -66,7 +66,7 @@ beforeAll(async () => {
       }],
       start: async () => {},
       stop: async () => {},
-      console: () => ({
+      webUi: () => ({
         promptDocs: [{
           key: 'worlds.dormant.envPrompt',
           title: '未激活 World · 环境提示词',
@@ -87,8 +87,8 @@ beforeAll(async () => {
       return {
         ...parts,
         llm: new FakeLLM(),
-        console: {
-          ...parts.console,
+        webUi: {
+          ...parts.webUi,
           promptDocs: [{
             key: 'orientation',
             title: 'ORIENTATION',
@@ -107,7 +107,7 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe('统一入口:框架派生的控制台', () => {
+describe('统一入口:框架派生的 WebUI', () => {
   it('层2 来自被选中的那个Persona,不掺别人的段', () => {
     const cfg = bot.core.config as CorminiConfig & Record<string, unknown>;
     expect(cfg.displayName).toBe('可缇mini');
@@ -128,7 +128,7 @@ describe('统一入口:框架派生的控制台', () => {
     ['/api/config', 'groups'],
     ['/api/worlds', 'worlds'],
     ['/api/tool-schemas', 'tools'],
-  ])('%s 提供配置与控制台能力', async (path, key) => {
+  ])('%s 提供配置与 WebUI 能力', async (path, key) => {
     const { status, body } = await getJ(path);
     expect(status).toBe(200);
     expect(body[key]).toBeDefined();
@@ -150,7 +150,7 @@ describe('统一入口:框架派生的控制台', () => {
       (body.tools as Array<{ name: string; owner: { kind: string; id?: string; label?: string } }>)
         .map((t) => [t.name, t.owner]),
     );
-    expect(owners.get('terminal_send')).toEqual({ kind: 'world', id: 'terminal', label: '终端对话' });
+    expect(owners.get('console_send')).toEqual({ kind: 'world', id: 'console', label: '控制台对话' });
     expect(owners.get('read_file')).toEqual({ kind: 'persona' });
     expect(owners.get('write_file')).toEqual({ kind: 'persona' });
   });
@@ -158,7 +158,7 @@ describe('统一入口:框架派生的控制台', () => {
   it('存储清单是框架派生的十条,加Persona的工作区,再加各 World 槽位自报的', async () => {
     const { body } = await getJ('/api/storage');
     const keys = (body.parts as Array<{ key: string }>).map((p) => p.key);
-    const slotKeys = new Set(bot.assembly.slots.flatMap((s) => s.instance.console?.()?.storage ?? []).map((p) => p.key));
+    const slotKeys = new Set(bot.assembly.slots.flatMap((s) => s.instance.webUi?.()?.storage ?? []).map((p) => p.key));
     expect(keys.filter((k) => !slotKeys.has(k)).sort()).toEqual(['events', 'media', 'pending', 'runlog', 'session', 'state', 'toolcalls', 'tracker', 'usage', 'wakes', 'workspace']);
   });
 
@@ -173,7 +173,7 @@ describe('统一入口:框架派生的控制台', () => {
   });
 
   it('模型与报价由 Provider 模块提供，旧全局端点不存在', async () => {
-    const { status, body } = await postJ('/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/state', { args: [] });
+    const { status, body } = await postJ('/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/state', { args: [] });
     expect(status).toBe(200);
     // 角色矩阵没了:一个端点一份档
     expect(body.roles).toBeUndefined();
@@ -183,7 +183,7 @@ describe('统一入口:框架派生的控制台', () => {
   });
 
   it('模块保存模型档位后热生效，非法档位不改变配置', async () => {
-    const save = (spec: Record<string, unknown>) => postJ('/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'fixture', spec, pricing: [] }] });
+    const save = (spec: Record<string, unknown>) => postJ('/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'fixture', spec, pricing: [] }] });
     const effective = () => bot.core.activeSpec();
     expect((await save({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' })).status).toBe(200);
     expect(effective()).toMatchObject({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' });
@@ -197,7 +197,7 @@ describe('统一入口:框架派生的控制台', () => {
 
   it('cormini 没有的那些面板:provider 里根本没声明,一律 404', async () => {
     for (const p of ['dream', 'checkpoints', 'reset', 'workspace']) {
-      const path = '/api/console/providers/persona%3Acormini/panels/' + p + '/state';
+      const path = '/api/webui/providers/persona%3Acormini/panels/' + p + '/state';
       expect((await postJ(path, { args: [] })).status, path).toBe(404);
     }
   });
@@ -213,8 +213,8 @@ describe('bot 声明的固定提示词源文件', () => {
     expect(orient!.scope).toBe('persona');
     expect(orient!.content).toContain('第一版定向');
     // World 自报的环境提示词仍在,scope 区分两者
-    expect(prompts.find((p) => p.key === 'worlds.terminal.envPrompt')?.scope).toBe('world');
-    // 只上控制台的实例也算:未激活的 World,环境提示词照样能改
+    expect(prompts.find((p) => p.key === 'worlds.console.envPrompt')?.scope).toBe('world');
+    // 只上 WebUI 的实例也算:未激活的 World,环境提示词照样能改
     expect(prompts.find((p) => p.key === 'worlds.dormant.envPrompt')?.content).toContain('未激活 World 的环境提示词');
   });
 
@@ -258,28 +258,28 @@ describe('bot 声明的固定提示词源文件', () => {
 
   it('前缀预览读的是 bot 侧覆盖;删掉覆盖后回到 World 那份', async () => {
     const segments = async () => (await getJ('/api/prompts/prefix')).body.segments as Array<{ text: string; sourceKey?: string }>;
-    const terminal = (await segments()).find((s) => s.sourceKey === 'worlds.terminal.envPrompt')!;
-    expect(terminal).toBeDefined();
-    const moduleText = terminal.text;
+    const consoleSegment = (await segments()).find((s) => s.sourceKey === 'worlds.console.envPrompt')!;
+    expect(consoleSegment).toBeDefined();
+    const moduleText = consoleSegment.text;
 
-    const doc = ((await getJ('/api/prompts')).body.prompts as Array<Record<string, string>>).find((p) => p.key === 'worlds.terminal.envPrompt')!;
-    await postJ('/api/prompts', { key: 'worlds.terminal.envPrompt', content: 'bot 侧的终端说明\n', baseRevision: doc.revision });
-    const overridden = (await segments()).find((s) => s.sourceKey === 'worlds.terminal.envPrompt')!;
-    expect(overridden.text).toContain('bot 侧的终端说明');
+    const doc = ((await getJ('/api/prompts')).body.prompts as Array<Record<string, string>>).find((p) => p.key === 'worlds.console.envPrompt')!;
+    await postJ('/api/prompts', { key: 'worlds.console.envPrompt', content: 'bot 侧的控制台说明\n', baseRevision: doc.revision });
+    const overridden = (await segments()).find((s) => s.sourceKey === 'worlds.console.envPrompt')!;
+    expect(overridden.text).toContain('bot 侧的控制台说明');
     expect(overridden.text).not.toBe(moduleText);
 
-    await postJ('/api/prompts/reset', { key: 'worlds.terminal.envPrompt' });
-    expect((await segments()).find((s) => s.sourceKey === 'worlds.terminal.envPrompt')!.text).toBe(moduleText);
+    await postJ('/api/prompts/reset', { key: 'worlds.console.envPrompt' });
+    expect((await segments()).find((s) => s.sourceKey === 'worlds.console.envPrompt')!.text).toBe(moduleText);
   });
 });
 
 describe('Persona定义了但是没安装', () => {
   it('未安装的 World 不进 core', () => {
-    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['terminal']);
-    expect(bot.core.worldVisibility().visibility).toEqual({ terminal: true });
+    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['console']);
+    expect(bot.core.worldVisibility().visibility).toEqual({ console: true });
   });
 
-  it('在控制台清单里标记未安装 World', async () => {
+  it('在 WebUI 清单里标记未安装 World', async () => {
     const { body } = await getJ('/api/worlds');
     const worlds = body.worlds as Array<Record<string, unknown>>;
     const missing = worlds.find((m) => m.status === 'missing');
@@ -318,7 +318,7 @@ describe('激活 / 停用 / 重启经 HTTP(热生效)', () => {
     const dormant = (await modulesOf()).find((m) => m.id === 'dormant')!;
     expect(dormant.status).toBe('active');
     expect(dormant.tools).toEqual(['dormant_ping']);
-    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['terminal', 'dormant']);
+    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['console', 'dormant']);
     expect(toolNames()).toContain('dormant_ping');
   });
 
@@ -333,7 +333,7 @@ describe('激活 / 停用 / 重启经 HTTP(热生效)', () => {
   it('停用:撤出 core、工具撤下、config.json 写回 false;未激活的 World 不能重启', async () => {
     const r = await postJ('/api/worlds/activation', { id: 'dormant', enabled: false });
     expect(r.status).toBe(200);
-    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['terminal']);
+    expect(bot.assembly.mounted.map((m) => m.id)).toEqual(['console']);
     expect(toolNames()).not.toContain('dormant_ping');
     expect(JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')).worlds.dormant.enabled).toBe(false);
     const dormant = (await modulesOf()).find((m) => m.id === 'dormant')!;
@@ -351,20 +351,20 @@ describe('激活 / 停用 / 重启经 HTTP(热生效)', () => {
 
 describe('可见性开关经 HTTP', () => {
   it('关掉后清单反映状态,并报告前缀尚未跟上', async () => {
-    const off = await postJ('/api/worlds/visibility', { id: 'terminal', visible: false });
+    const off = await postJ('/api/worlds/visibility', { id: 'console', visible: false });
     expect(off.status).toBe(200);
-    expect(off.body.driftedWorlds).toEqual(['terminal']);
+    expect(off.body.driftedWorlds).toEqual(['console']);
 
     const { body } = await getJ('/api/worlds');
-    const terminal = (body.worlds as Array<Record<string, unknown>>).find((m) => m.id === 'terminal')!;
-    expect(terminal.visible).toBe(false);
-    expect(terminal.prefixDrifted).toBe(true);
+    const consoleWorld = (body.worlds as Array<Record<string, unknown>>).find((m) => m.id === 'console')!;
+    expect(consoleWorld.visible).toBe(false);
+    expect(consoleWorld.prefixDrifted).toBe(true);
 
     await postJ('/api/session/reload-prefix', {});
     const after = await getJ('/api/worlds');
-    const t2 = (after.body.worlds as Array<Record<string, unknown>>).find((m) => m.id === 'terminal')!;
+    const t2 = (after.body.worlds as Array<Record<string, unknown>>).find((m) => m.id === 'console')!;
     expect(t2.prefixDrifted).toBe(false);
 
-    await postJ('/api/worlds/visibility', { id: 'terminal', visible: true });
+    await postJ('/api/worlds/visibility', { id: 'console', visible: true });
   });
 });

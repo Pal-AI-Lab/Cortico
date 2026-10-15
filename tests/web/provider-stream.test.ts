@@ -5,12 +5,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { WebApp, type WebAppDeps } from '../../src/web/server.ts';
-import type { ConsolePageSource } from '../../src/web/console-pages.ts';
+import type { WebUiPageSource } from '../../src/web/webui-pages.ts';
 import {
   panelStreamRoute,
-  type ConsolePageContribution,
-  type ConsoleStream,
-} from '../../src/web/shared/console-protocol.ts';
+  type WebUiPageContribution,
+  type WebUiStream,
+} from '../../src/web/shared/webui-protocol.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -30,11 +30,11 @@ afterAll(() => {
 
 // ── 起服务与连接的小工具 ────────────────────────────────────────────────
 
-const sourcesOf = (...cs: ConsolePageContribution[]): (() => ConsolePageSource[]) =>
+const sourcesOf = (...cs: WebUiPageContribution[]): (() => WebUiPageSource[]) =>
   () => cs.map((c) => ({ id: c.id, contribute: () => c }));
 
 async function withApp(
-  consolePageSources: () => ConsolePageSource[],
+  webUiPageSources: () => WebUiPageSource[],
   fn: (ctx: { base: string; port: number; app: WebApp }) => Promise<void>,
   extra: Partial<WebAppDeps> = {},
 ): Promise<void> {
@@ -44,7 +44,7 @@ async function withApp(
     dataDir: dir,
     webDistDir: emptyDist,
     getStatus: () => ({}),
-    consolePageSources,
+    webUiPageSources,
     log: nullLogger(),
     ...extra,
   };
@@ -105,8 +105,8 @@ Promise<'open' | 'rejected'> =>
 
 /** 最常用的假 provider:把拿到的 socket 交出来,别的什么都不做 */
 function capturing(id = 'world:demo', panelId = 'live') {
-  const got = deferred<{ panel: string; socket: ConsoleStream }>();
-  const c: ConsolePageContribution = {
+  const got = deferred<{ panel: string; socket: WebUiStream }>();
+  const c: WebUiPageContribution = {
     id,
     kind: 'world',
     label: '假 World',
@@ -152,8 +152,8 @@ describe('provider 流式通道', () => {
 
   it('provider 注册 onMessage 之前对端已发的帧不会丢', async () => {
     // provider 慢一拍才注册回调(真实 World 常常要先 await 点什么)
-    const late = deferred<ConsoleStream>();
-    const c: ConsolePageContribution = {
+    const late = deferred<WebUiStream>();
+    const c: WebUiPageContribution = {
       id: 'world:slow',
       kind: 'world',
       label: '慢半拍',
@@ -244,7 +244,7 @@ describe('流的关闭', () => {
       dataDir: dir,
       webDistDir: emptyDist,
       getStatus: () => ({}),
-      consolePageSources: fake.sources,
+      webUiPageSources: fake.sources,
       log: nullLogger(),
     };
     const app = new WebApp(deps);
@@ -292,7 +292,7 @@ describe('解析失败', () => {
 
   it('没这个 provider / 没有流式面,两种都先说明再关', async () => {
     const withStream = capturing().contribution;
-    const mute: ConsolePageContribution = {
+    const mute: WebUiPageContribution = {
       id: 'world:mute',
       kind: 'world',
       label: '没流式面',
@@ -306,7 +306,7 @@ describe('解析失败', () => {
 
   it('provider 的 stream() 抛错:只关这一条,服务器与别的连接都不受影响', async () => {
     const good = capturing('world:good', 'live');
-    const boom: ConsolePageContribution = {
+    const boom: WebUiPageContribution = {
       id: 'world:boom',
       kind: 'world',
       label: '会炸的',

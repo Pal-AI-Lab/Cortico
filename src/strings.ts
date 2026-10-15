@@ -9,7 +9,7 @@ import { botText as botPtBR, assemblyText as assemblyPtBR } from './strings.pt-B
 import { botText as botIt, assemblyText as assemblyIt } from './strings.it.ts';
 import { botText as botRu, assemblyText as assemblyRu } from './strings.ru.ts';
 
-/** bot.ts 给控制台的回执与说明,按发起请求的界面语言取。 */
+/** bot.ts 给 WebUI 的回执与说明,按发起请求的界面语言取。 */
 const botZh = {
   noFile: '(无文件)',
   storage: {
@@ -105,7 +105,7 @@ const botZh = {
     manualCheck: '请检查对应外部服务是否已停止。',
     llm: '停止 Provider 实例',
     flush: '保存 Core 状态',
-    web: '关闭控制台',
+    web: '关闭 WebUI',
     summarySkipped: '本地关机步骤未全部完成',
     summaryComplete: '本地关机步骤全部完成',
     summaryUnverified: (items: string[]) => `本地关机完成,但外部状态未确认结束:${items.join('、')}(需人工确认)`,
@@ -209,7 +209,7 @@ export const botEn: typeof botZh = {
     manualCheck: 'Check whether the corresponding external service has stopped.',
     llm: 'Stop provider instances',
     flush: 'Persist core state',
-    web: 'Close the console',
+    web: 'Close the WebUI',
     summarySkipped: 'Local shutdown steps incomplete',
     summaryComplete: 'Local shutdown finished: every step completed',
     summaryUnverified: (items: string[]) => `Local shutdown finished, but external state is not confirmed ended: ${items.join(', ')} (manual confirmation needed)`,
@@ -223,7 +223,7 @@ export const botText = (language: Language) => pick(language, {
   'es-419': botEs419, 'pt-BR': botPtBR, it: botIt, ru: botRu,
 });
 
-/** 装配层给控制台的回执与拒绝理由,按发起请求的界面语言取。 */
+/** 装配层给 WebUI 的回执与拒绝理由,按发起请求的界面语言取。 */
 const assemblyZh = {
   constructFailed: (detail: string) => `构造失败: ${detail}`,
   notImplemented: '本地没有找到这个 World 的实现。',

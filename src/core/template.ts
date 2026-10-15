@@ -31,7 +31,7 @@ export function renderTemplate(template: string, vars: Readonly<Record<string, s
   });
 }
 
-/** 未在值表声明的占位符；控制台据此提示，仍允许保存。 */
+/** 未在值表声明的占位符；WebUI 据此提示，仍允许保存。 */
 export function unknownVarNames(
   template: string,
   declared: readonly string[],

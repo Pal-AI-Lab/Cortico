@@ -72,7 +72,7 @@ beforeAll(async () => {
   };
   app = new WebApp({
     ...common,
-    consolePageSources: () => [{
+    webUiPageSources: () => [{
       id: 'world:minecraft',
       contribute: () => ({
         id: 'world:minecraft',
@@ -136,53 +136,53 @@ afterAll(async () => {
 
 describe('minecraft 面板 · server', () => {
   it('state 透传(含 configured 提示位)', async () => {
-    const { status, body } = await get(port, '/api/console/providers/world%3Aminecraft/panels/server/state');
+    const { status, body } = await get(port, '/api/webui/providers/world%3Aminecraft/panels/server/state');
     expect(status).toBe(200);
     expect(body.phase).toBe('stopped');
     expect(body.configured).toBe(false);
   });
 
   it('start → starting;stop → stopped', async () => {
-    const s1 = await post(port, '/api/console/providers/world%3Aminecraft/panels/server/start');
+    const s1 = await post(port, '/api/webui/providers/world%3Aminecraft/panels/server/start');
     expect(s1.body.phase).toBe('starting');
     expect(s1.body.pid).toBe(7);
-    const s2 = await post(port, '/api/console/providers/world%3Aminecraft/panels/server/stop');
+    const s2 = await post(port, '/api/webui/providers/world%3Aminecraft/panels/server/stop');
     expect(s2.body.phase).toBe('stopped');
   });
 });
 
 describe('minecraft 面板 · client', () => {
   it('state 透传(窗口就绪位与账号名)', async () => {
-    const { body } = await get(port, '/api/console/providers/world%3Aminecraft/panels/client/state');
+    const { body } = await get(port, '/api/webui/providers/world%3Aminecraft/panels/client/state');
     expect(body.windowReady).toBe(false);
     expect(body.username).toBe('CortiCam');
   });
 
   it('start/stop 走通', async () => {
-    expect((await post(port, '/api/console/providers/world%3Aminecraft/panels/client/start')).body.phase).toBe('starting');
-    expect((await post(port, '/api/console/providers/world%3Aminecraft/panels/client/stop')).body.phase).toBe('stopped');
+    expect((await post(port, '/api/webui/providers/world%3Aminecraft/panels/client/start')).body.phase).toBe('starting');
+    expect((await post(port, '/api/webui/providers/world%3Aminecraft/panels/client/stop')).body.phase).toBe('stopped');
   });
 });
 
 describe('minecraft 面板 · world', () => {
   it('state 透传存档表与设置', async () => {
-    const { status, body } = await get(port, '/api/console/providers/world%3Aminecraft/panels/world/state');
+    const { status, body } = await get(port, '/api/webui/providers/world%3Aminecraft/panels/world/state');
     expect(status).toBe(200);
     expect(body.settings.levelName).toBe('world');
     expect(body.worlds[0].name).toBe('world');
   });
 
   it('换存档与开新存档把名字带下去', async () => {
-    const sel = await postJson(port, '/api/console/providers/world%3Aminecraft/panels/world/select', { args: ['old-world'] });
+    const sel = await postJson(port, '/api/webui/providers/world%3Aminecraft/panels/world/select', { args: ['old-world'] });
     expect(sel.body.settings.levelName).toBe('old-world');
     expect(sel.body.detail).toContain('old-world');
-    const made = await postJson(port, '/api/console/providers/world%3Aminecraft/panels/world/create', { args: ['新世界', '42'] });
+    const made = await postJson(port, '/api/webui/providers/world%3Aminecraft/panels/world/create', { args: ['新世界', '42'] });
     expect(made.body.detail).toContain('种子42');
     expect(made.body.settings.levelName).toBe('新世界');
   });
 
   it('玩法补丁原样透传,不在路由层挑拣', async () => {
-    const { body } = await postJson(port, '/api/console/providers/world%3Aminecraft/panels/world/apply', {
+    const { body } = await postJson(port, '/api/webui/providers/world%3Aminecraft/panels/world/apply', {
       args: [{ difficulty: 'hard', gamemode: 'creative' }],
     });
     expect(body.detail).toBe('收到 difficulty,gamemode');
@@ -192,11 +192,11 @@ describe('minecraft 面板 · world', () => {
 describe('没有这个 provider', () => {
   it('没有这个 provider 时全部端点 404', async () => {
     for (const [path, method] of [
-      ['/api/console/providers/world%3Aminecraft/panels/server/state', get] as const,
-      ['/api/console/providers/world%3Aminecraft/panels/server/start', post] as const,
-      ['/api/console/providers/world%3Aminecraft/panels/client/state', get] as const,
-      ['/api/console/providers/world%3Aminecraft/panels/client/start', post] as const,
-      ['/api/console/providers/world%3Aminecraft/panels/world/state', get] as const,
+      ['/api/webui/providers/world%3Aminecraft/panels/server/state', get] as const,
+      ['/api/webui/providers/world%3Aminecraft/panels/server/start', post] as const,
+      ['/api/webui/providers/world%3Aminecraft/panels/client/state', get] as const,
+      ['/api/webui/providers/world%3Aminecraft/panels/client/start', post] as const,
+      ['/api/webui/providers/world%3Aminecraft/panels/world/state', get] as const,
     ]) {
       const { status, body } = await method(barePort, path);
       expect(status).toBe(404);

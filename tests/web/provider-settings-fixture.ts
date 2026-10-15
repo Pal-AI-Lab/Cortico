@@ -3,10 +3,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
-import { ProviderSettings } from '../../src/providers/console/settings.ts';
+import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import type { LLMProviderEntry, ModelSpec } from '../../src/core/types.ts';
-import { connectionGroup } from '../../src/providers/console/config.ts';
+import { connectionGroup } from '../../src/providers/webui/config.ts';
 import { protocolConfig } from '../../src/providers/openai-responses-compat/config.ts';
 import { getByPath, setByPath, type ConfigValues } from '../../src/core/config-schema.ts';
 
@@ -46,7 +46,7 @@ export const openFixtureWorld: ProviderModule = {
 };
 
 const UI = '../../src/web/client/ui/index.ts';
-const CLIENT = '../../src/web/client/console-pages/builtins/llm-settings/panel.ts';
+const CLIENT = '../../src/web/client/webui-pages/builtins/llm-settings/panel.ts';
 // Browser code is independently checked by tsconfig.web.json.
 type Any = any;
 const JSDOM_MODULE = 'jsdom';
@@ -119,7 +119,7 @@ export async function mountPanel(
 ) {
   /** 宿主挂插槽的记录:挂了哪个插槽、给的作用域,以及有没有被结束。 */
   const slots: Array<{ slot: string; scope: Record<string, string>; host: Any; disposed: boolean }> = [];
-  const { createConsoleUi } = (await import(UI)) as Any;
+  const { createWebUi } = (await import(UI)) as Any;
   const { llmSettingsPanel } = (await import(CLIENT)) as Any;
   const root = doc.createElement('div');
   doc.body.append(root);
@@ -129,7 +129,7 @@ export async function mountPanel(
   const nativeAbortController = globalThis.AbortController;
   globalThis.AbortController = doc.defaultView.AbortController;
   const memo = { get: (_key: string, fallback: unknown) => fallback, set: () => {} };
-  const ui = createConsoleUi({ memo, overlayHost: doc.body, signal: controller.signal, doc });
+  const ui = createWebUi({ memo, overlayHost: doc.body, signal: controller.signal, doc });
   const state = async (method: string, args: unknown[]) => {
     const result = await invoke(method, args) as Any;
     if (method === 'state') {

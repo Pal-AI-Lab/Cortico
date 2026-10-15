@@ -26,7 +26,7 @@
     "publish:worlds": "tsx scripts/publish-worlds.ts",
     "check:extension": "tsx scripts/extension-check.ts",
     "logq": "tsx scripts/logq.ts",
-    "dev:console": "tsx scripts/dev-console.ts",
+    "dev:webui": "tsx scripts/dev-webui.ts",
     "bots": "tsx src/launcher.ts --list"
   },
   "dependencies": {

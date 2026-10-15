@@ -4,13 +4,13 @@
  *
  * 本文件不静态 import 任何 World:定义按 id 从 `./<id>/definition.ts` 动态导入，导入路径是模板字符串，
  * TypeScript 不解析它。没选上的 World 不被加载，删掉它的目录不影响装配与类型检查。
- * `console-fixture` 是控制台边界的验收件，不在这里。
+ * `webui-fixture` 是 WebUI 边界的验收件，不在这里。
  */
 import type { WorldDefinition, WorldSection } from '../world.ts';
 
 /** id(即 `src/worlds/` 下的目录名)→ 该目录 `definition.ts` 导出定义的名字。 */
 const EXPORTS = {
-  terminal: 'TERMINAL',
+  console: 'CONSOLE',
   qq: 'QQ',
   bilibili: 'BILIBILI',
   minecraft: 'MINECRAFT',

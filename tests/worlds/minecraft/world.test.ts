@@ -349,9 +349,9 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
     expect(bad.length).toBeLessThan(200);
   });
 
-  it('console 自报:未连接 off 徽标 + 配置组归属正确', () => {
+  it('webUi 自报:未连接 off 徽标 + 配置组归属正确', () => {
     const m = new MinecraftWorld({ cfg: cfg() });
-    const decl = m.console();
+    const decl = m.webUi();
     expect(decl.badges?.[0]).toMatchObject({ label: '服务器', tone: 'off' });
     expect(decl.config?.[0].id).toBe('world:minecraft');
     // 分成几组是给人看的分节
@@ -371,7 +371,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
 
   it('画面徽标:两条路都没有时是 off', () => {
     const m = new MinecraftWorld({ cfg: cfg({ viewerPort: 0 }) });
-    expect(m.console().badges?.[2]).toMatchObject({ label: '画面', value: '无', tone: 'off' });
+    expect(m.webUi().badges?.[2]).toMatchObject({ label: '画面', value: '无', tone: 'off' });
   });
 
   it('摄像机段只认开关:关=空串(不留 {{}}),开=「摄像机说明」文件原文', async () => {
@@ -382,7 +382,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
     const m = new MinecraftWorld({
       cfg: cfg({ client: { ...MINECRAFT_DEFAULTS.client, enabled: true } }),
     });
-    const noteDoc = m.console().promptDocs?.find((d) => d.key === 'worlds.minecraft.cameraNote');
+    const noteDoc = m.webUi().promptDocs?.find((d) => d.key === 'worlds.minecraft.cameraNote');
     expect(noteDoc).toBeDefined();
     expect((m.envPromptVars() as Record<string, string>)['minecraft.camera'])
       .toBe(readFileSync(noteDoc!.path, 'utf8').trim());
@@ -390,7 +390,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
 
   it('客户端挂载面板:没有游戏目录时报未配置,并给出原因', async () => {
     const m = new MinecraftWorld({ cfg: cfg({ client: { ...MINECRAFT_DEFAULTS.client, gameDir: 'C:\\nope\\.minecraft' } }) });
-    const st = await m.clientConsole().state();
+    const st = await m.clientWebUi().state();
     expect(st.configured).toBe(false);
     expect(st.detail).toContain('不存在');
     expect(st.phase).toBe('stopped');
@@ -403,7 +403,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
         player: { ...MINECRAFT_DEFAULTS.player, username: '老王' },
       }),
     });
-    const st = await m.playerConsole().state();
+    const st = await m.playerWebUi().state();
     expect(st.username).toBe('老王');
     expect(st.gameDir).toBe('C:\\nope\\.minecraft');
     expect(st.enabled).toBe(false); // 配置没开,但面板仍可手动启停
@@ -412,7 +412,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
 
   it('传送:没有托管服务器也没有 bot 时说清是谁下不了这条指令', async () => {
     const m = new MinecraftWorld({ cfg: cfg() });
-    const st = await m.playerConsole().teleport();
+    const st = await m.playerWebUi().teleport();
     expect(st.detail).toContain('传送没人下得了');
   });
 
@@ -420,7 +420,7 @@ describe('MinecraftWorld World 面(未连接状态)', () => {
     const m = new MinecraftWorld({
       cfg: cfg({ username: '同名', player: { ...MINECRAFT_DEFAULTS.player, username: '同名' } }),
     });
-    expect((await m.playerConsole().teleport()).detail).toContain('传送不了');
+    expect((await m.playerWebUi().teleport()).detail).toContain('传送不了');
   });
 
   it('mc_do 收 steps 与 queue 两个字段;mc_scout 同一条队列同一套三态', async () => {
@@ -636,9 +636,9 @@ describe('MinecraftWorld 受管服务器启停', () => {
       await vi.advanceTimersByTimeAsync(600_000);
       expect(bridgeStart).not.toHaveBeenCalled();
       expect(serverStart).not.toHaveBeenCalled();
-      expect((await m.serverConsole().state()).wanted).toBe(false);
+      expect((await m.serverWebUi().state()).wanted).toBe(false);
 
-      expect((await m.serverConsole().start()).wanted).toBe(true);
+      expect((await m.serverWebUi().start()).wanted).toBe(true);
       expect(serverStart).toHaveBeenCalledTimes(1);
       expect(bridgeStart).toHaveBeenCalledTimes(1);
       // 心跳只在目标变化时动手,不会再起一次
@@ -652,12 +652,12 @@ describe('MinecraftWorld 受管服务器启停', () => {
       const combatLost = vi.spyOn(combat, 'onConnectionLost');
       (m as unknown as { mcServer: { activeServerDir: string | null } }).mcServer.activeServerDir = 'C:\\managed';
       runtimeCfg.local.serverDir = '';
-      expect((await m.serverConsole().stop()).wanted).toBe(false);
+      expect((await m.serverWebUi().stop()).wanted).toBe(false);
       expect(bridgeStop).toHaveBeenCalledTimes(2);
       expect(serverStop).toHaveBeenCalledTimes(2);
       expect(executorLost).toHaveBeenCalledWith('受管服务器已停止');
       expect(combatLost).toHaveBeenCalledOnce();
-      expect(m.console().badges?.[0]).toMatchObject({ value: '未启动', tone: 'off' });
+      expect(m.webUi().badges?.[0]).toMatchObject({ value: '未启动', tone: 'off' });
     } finally {
       await m.stop();
       vi.restoreAllMocks();
@@ -788,7 +788,7 @@ describe('MinecraftWorld 受管服务器启停', () => {
       await m.start(new FakeHost() as never);
       await vi.advanceTimersByTimeAsync(0);
       expect(bridgeStart).toHaveBeenCalledTimes(1);
-      expect((await m.serverConsole().state()).wanted).toBe(true);
+      expect((await m.serverWebUi().state()).wanted).toBe(true);
       expect(serverStart).not.toHaveBeenCalled();
       expect(serverStop).not.toHaveBeenCalled();
     } finally {
@@ -849,9 +849,9 @@ describe('MinecraftWorld 外部服务器连接', () => {
     try {
       await m.start(new FakeHost() as never);
       await vi.waitFor(async () => {
-        expect((await m.serverConsole().state()).link.failure).not.toBeNull();
+        expect((await m.serverWebUi().state()).link.failure).not.toBeNull();
       }, { timeout: 15_000, interval: 100 });
-      const st = await m.serverConsole().state();
+      const st = await m.serverWebUi().state();
       expect(st).toMatchObject({
         mode: 'external',
         modeInferred: false,
@@ -865,12 +865,12 @@ describe('MinecraftWorld 外部服务器连接', () => {
         },
       });
       expect(st.link.phase).not.toBe('online');
-      const lamp = m.console().lamps?.find((l) => l.label === '服务器');
+      const lamp = m.webUi().lamps?.find((l) => l.label === '服务器');
       expect(lamp?.state).not.toBe('online');
-      expect(m.console().badges?.[0]).toMatchObject({ value: '未连接', tone: 'off' });
+      expect(m.webUi().badges?.[0]).toMatchObject({ value: '未连接', tone: 'off' });
       expect(serverStart).not.toHaveBeenCalled();
       // 存档与权限面板不读本地目录,也不叫人去配 server.jar
-      const access = await m.accessConsole().state();
+      const access = await m.accessWebUi().state();
       expect(access.configured).toBe(false);
       expect(access.detail).toContain('外部服务器');
     } finally {
@@ -899,16 +899,16 @@ describe('MinecraftWorld 外部服务器连接', () => {
       await vi.advanceTimersByTimeAsync(0);
       expect(targets).toEqual(['127.0.0.1:25570']);
       expect(serverStart).not.toHaveBeenCalled();
-      expect((await m.serverConsole().state())).toMatchObject({
+      expect((await m.serverWebUi().state())).toMatchObject({
         mode: 'external', wanted: true, link: { phase: 'connecting' }, pending: null,
       });
 
       const first = await queueTask(m);
-      const off = await m.serverConsole().stop();
+      const off = await m.serverWebUi().stop();
       expect(off).toMatchObject({ wanted: false, link: { phase: 'stopped' } });
-      expect(cancelReceipt(host, first)).toContain('被控制台断开了连接');
-      expect(host.events.at(-1)?.text).toContain('控制台断开了与 127.0.0.1:25570 的连接');
-      expect(m.console().lamps?.find((l) => l.label === '服务器')).toMatchObject({ state: 'offline', hint: '已断开' });
+      expect(cancelReceipt(host, first)).toContain('被操作员从 WebUI 断开了连接');
+      expect(host.events.at(-1)?.text).toContain('WebUI 断开了与 127.0.0.1:25570 的连接');
+      expect(m.webUi().lamps?.find((l) => l.label === '服务器')).toMatchObject({ state: 'offline', hint: '已断开' });
       // 旧 bot 迟到的断线与十分钟的心跳都不会把连接带回来
       bots[0].emit('end', 'socketClosed');
       await vi.advanceTimersByTimeAsync(600_000);
@@ -917,15 +917,15 @@ describe('MinecraftWorld 外部服务器连接', () => {
 
       // 连接关着时改端口:面板、端口探测与下一次连接都按新端口,没有待采用
       runtimeCfg.port = 25571;
-      expect(await m.serverConsole().state()).toMatchObject({
+      expect(await m.serverWebUi().state()).toMatchObject({
         address: '127.0.0.1:25571', link: { target: '127.0.0.1:25571' }, pending: null,
       });
-      await m.serverConsole().start();
+      await m.serverWebUi().start();
       expect(targets.at(-1)).toBe('127.0.0.1:25571');
 
       // 连接开着时改端口:目标不动,自动重连仍回原地址,面板给出待采用
       runtimeCfg.port = 25572;
-      const changed = await m.serverConsole().state();
+      const changed = await m.serverWebUi().state();
       expect(changed.link.target).toBe('127.0.0.1:25571');
       expect(changed.pending).toContain('127.0.0.1:25572');
       bots.at(-1)!.emit('end', 'socketClosed');
@@ -933,8 +933,8 @@ describe('MinecraftWorld 外部服务器连接', () => {
       expect(targets.at(-1)).toBe('127.0.0.1:25571');
 
       const second = await queueTask(m);
-      const relinked = await m.serverConsole().reconnect();
-      expect(cancelReceipt(host, second)).toContain('被控制台重新连接');
+      const relinked = await m.serverWebUi().reconnect();
+      expect(cancelReceipt(host, second)).toContain('被操作员从 WebUI 重新连接');
       expect(targets.at(-1)).toBe('127.0.0.1:25572');
       expect(relinked).toMatchObject({ link: { target: '127.0.0.1:25572' }, pending: null });
     } finally {
@@ -954,8 +954,8 @@ describe('MinecraftWorld 外部服务器连接', () => {
       await m.start(new FakeHost() as never);
       await vi.advanceTimersByTimeAsync(0);
       runtimeCfg.username = 'corti2';
-      expect((await m.serverConsole().state()).pending).toContain('corti2');
-      await m.playerConsole().teleport();
+      expect((await m.serverWebUi().state()).pending).toContain('corti2');
+      await m.playerWebUi().teleport();
       expect(chats.at(-1)).toBe(`/tp ${MINECRAFT_DEFAULTS.player.username} corti`);
     } finally {
       await m.stop();
@@ -987,11 +987,11 @@ describe('MinecraftWorld 外部服务器连接', () => {
       await vi.advanceTimersByTimeAsync(0);
       (bots[0] as unknown as { quit(): void }).quit = () => void quits.push('external');
       runtimeCfg.serverMode = 'local';
-      await m.serverConsole().start();
+      await m.serverWebUi().start();
       await vi.advanceTimersByTimeAsync(1_000);
       expect(quits).toEqual(['external']);
       expect(serverStart).toHaveBeenCalledOnce();
-      expect(await m.serverConsole().state()).toMatchObject({ mode: 'local', wanted: true });
+      expect(await m.serverWebUi().state()).toMatchObject({ mode: 'local', wanted: true });
     } finally {
       await m.stop();
       vi.restoreAllMocks();
@@ -1019,7 +1019,7 @@ describe('MinecraftWorld 外部服务器连接', () => {
 
   it('本地托管时重连按钮不可用', async () => {
     const m = new MinecraftWorld({ cfg: cfg({ serverMode: 'local' }) });
-    await expect(m.serverConsole().reconnect()).rejects.toThrow('本地托管');
+    await expect(m.serverWebUi().reconnect()).rejects.toThrow('本地托管');
   });
 });
 
@@ -1149,7 +1149,7 @@ describe('状态效果与爆炸的事件成文', () => {
       x: 3.5, y: 64, z: 4.5, radius: 3,
       affectedBlockOffsets: [{ x: 0, y: -1, z: 0 }, { x: 1, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }],
     });
-    const rows = m.logConsole().entries().filter((e) => e.event === 'explosion');
+    const rows = m.logWebUi().entries().filter((e) => e.event === 'explosion');
     expect(rows).toHaveLength(1);
     expect(rows[0].lane).toBe('world');
     expect(rows[0].msg).toContain('爆炸:(4, 64, 5) 半径 3.0,炸掉 3 格,离我 5.0 格');
@@ -1278,7 +1278,7 @@ describe('MinecraftWorld 物品损坏事件', () => {
     return {
       m, host, bridge,
       spawn: () => (m as any).onSpawn(),
-      breaks: () => m.logConsole().entries().filter((entry) => entry.event === 'item-broke'),
+      breaks: () => m.logWebUi().entries().filter((entry) => entry.event === 'item-broke'),
     };
   }
 
@@ -1658,7 +1658,7 @@ describe('world 泳道:官方死因与重生点变更', () => {
     (rig.m as any).hookBotEvents(bot);
     return {
       ...rig, bot,
-      lane: (event: string) => rig.m.logConsole().entries().filter((e) => e.event === event),
+      lane: (event: string) => rig.m.logWebUi().entries().filter((e) => e.event === event),
     };
   }
 
@@ -1777,7 +1777,7 @@ describe('重生点与死亡:说清会落在哪儿、离多远、还剩多久', 
       find: (frag: string) => host.events.find((e) => e.text.includes(frag))?.text ?? null,
       /** 那一条是唤醒的还是搭车的 */
       trigger: (frag: string) => host.pushOpts[idx(frag)]?.trigger ?? null,
-      lane: (event: string) => m.logConsole().entries().filter((e) => e.event === event),
+      lane: (event: string) => m.logWebUi().entries().filter((e) => e.event === event),
     };
   }
 
@@ -2090,7 +2090,7 @@ describe('炉子到期与作物成熟:推事件,不给轮询入口', () => {
 
 describe('World 自报的可清除存储', () => {
   it('箱子账本、死亡账本、探索账本、成果登记、常驻规矩、暂态表各一条,归在自己那一节(World 日志进运行日志,不再是存储项)', () => {
-    const parts = new MinecraftWorld({ cfg: cfg() }).console().storage ?? [];
+    const parts = new MinecraftWorld({ cfg: cfg() }).webUi().storage ?? [];
     expect(parts.map((p) => p.key))
       .toEqual([
         'minecraft-chests', 'minecraft-deaths', 'minecraft-explored', 'minecraft-works',
@@ -2126,7 +2126,7 @@ describe('World 自报的可清除存储', () => {
       const m = new MinecraftWorld({ cfg: cfg(), dataDir: dir });
       expect((m.envPromptVars() as Record<string, string>)['minecraft.explored'])
         .toBe('探过:北460(平原);东北、东、东南、南、西南、西、西北没去过');
-      const part = (m.console().storage ?? []).find((p) => p.key === 'minecraft-explored')!;
+      const part = (m.webUi().storage ?? []).find((p) => p.key === 'minecraft-explored')!;
       expect(await part.clear()).toContain('已清空');
       expect((m.envPromptVars() as Record<string, string>)['minecraft.explored']).toBe('');
       expect(JSON.parse(readFileSync(join(dir, 'minecraft-explored.json'), 'utf8')))
@@ -2156,7 +2156,7 @@ describe('World 自报的可清除存储', () => {
       const again = new MinecraftWorld({ cfg: cfg(), dataDir: dir });
       expect((again.envPromptVars() as Record<string, string>)['minecraft.policy'])
         .toBe('常驻规矩(与默认不同的几条):铁镐收着不主动拿。');
-      const part = (m.console().storage ?? []).find((p) => p.key === 'minecraft-policy')!;
+      const part = (m.webUi().storage ?? []).find((p) => p.key === 'minecraft-policy')!;
       expect(await part.clear()).toContain('已清回默认');
       expect(vars()['minecraft.policy']).toBe('');
     } finally {
@@ -2203,7 +2203,7 @@ describe('mc_policy:规矩是设置,不是任务', () => {
     const m = new MinecraftWorld({ cfg: cfg({ combat: { ...MINECRAFT_DEFAULTS.combat, enabled: false } }) });
     const tools = Object.fromEntries(m.tools().map((t) => [t.name, t]));
     const text = await tools.mc_policy.handler({ fight: 'off' }, { role: 'test', log: console as never } as never) as string;
-    expect(text).toContain('战斗总开关在控制台关着,主动动手这一格现在不起作用');
+    expect(text).toContain('战斗总开关在 WebUI 关着,主动动手这一格现在不起作用');
   });
 
   /**
@@ -2261,12 +2261,12 @@ describe('存档与玩法面板(服务器停着)', () => {
   // 本机恰好开着 25565 的话这些用例会变成在测"服务器跑着"那一支
   const panelOn = (dir: string) => new MinecraftWorld({
     cfg: cfg({ port: 1, local: { ...MINECRAFT_DEFAULTS.local, serverDir: dir } }),
-  }).worldConsole();
+  }).worldWebUi();
 
   const props = (dir: string): string => readFileSync(join(dir, 'server.properties'), 'utf8');
 
   it('没配目录时说清楚,不给一份假的存档表', async () => {
-    const st = await new MinecraftWorld({ cfg: cfg({ port: 1 }) }).worldConsole().state();
+    const st = await new MinecraftWorld({ cfg: cfg({ port: 1 }) }).worldWebUi().state();
     expect(st.configured).toBe(false);
     expect(st.detail).toContain('worlds.minecraft.local.serverDir');
     expect(st.worlds).toEqual([]);
@@ -2375,7 +2375,7 @@ describe('权限与作弊面板(服务器停着)', () => {
     JSON.parse(readFileSync(join(dir, 'ops.json'), 'utf8'));
 
   it('三个身份都摆出来;一个都没授权时如实说没有', async () => {
-    const st = await rig(serverDir()).accessConsole().state();
+    const st = await rig(serverDir()).accessWebUi().state();
     expect(st.members.map((m) => [m.name, m.role, m.op]))
       .toEqual([['CortiV', 'bot', false], ['CortiCam', 'camera', false], ['Phant', 'player', false]]);
     expect(st.autoOp).toBe(true);
@@ -2384,7 +2384,7 @@ describe('权限与作弊面板(服务器停着)', () => {
 
   it('授权写进 ops.json,再读回来就是"有 4 级"', async () => {
     const dir = serverDir();
-    const panel = rig(dir).accessConsole();
+    const panel = rig(dir).accessWebUi();
     const st = await panel.setOp('CortiV', true);
     expect(st.detail).toContain('下次启动生效');
     expect(st.members[0]).toMatchObject({ name: 'CortiV', op: true, level: 4 });
@@ -2398,7 +2398,7 @@ describe('权限与作弊面板(服务器停着)', () => {
 
   it('名单里别人的名字也摆出来,否则收回权限得去翻文件', async () => {
     const dir = serverDir();
-    const panel = rig(dir).accessConsole();
+    const panel = rig(dir).accessWebUi();
     await panel.setOp('朋友', true);
     const st = await panel.state();
     expect(st.members.map((m) => m.role)).toEqual(['bot', 'camera', 'player', 'other']);
@@ -2407,7 +2407,7 @@ describe('权限与作弊面板(服务器停着)', () => {
 
   it('空名字与带空格的名字退回,不写文件', async () => {
     const dir = serverDir();
-    const panel = rig(dir).accessConsole();
+    const panel = rig(dir).accessWebUi();
     expect((await panel.setOp('   ', true)).detail).toContain('名字');
     expect((await panel.setOp('两 个词', true)).detail).toContain('空格');
     expect(existsSync(join(dir, 'ops.json'))).toBe(false);
@@ -2415,7 +2415,7 @@ describe('权限与作弊面板(服务器停着)', () => {
 
   it('权限项写进 server.properties,别的键一个不动', async () => {
     const dir = serverDir();
-    const st = await rig(dir).accessConsole().apply({
+    const st = await rig(dir).accessWebUi().apply({
       opPermissionLevel: 4, enableCommandBlock: true, allowFlight: true,
       onlineMode: false, whiteList: false,
     });
@@ -2427,7 +2427,7 @@ describe('权限与作弊面板(服务器停着)', () => {
 
   it('启动服务器前把三个名字补进名单;关掉自动授权就一个字都不写', async () => {
     const dir = serverDir();
-    await rig(dir).serverConsole().start();
+    await rig(dir).serverWebUi().start();
     expect(ops(dir).map((e) => e.name)).toEqual(['CortiV', 'CortiCam', 'Phant']);
 
     const off = mkdtempSync(join(tmpdir(), 'mcaccess-'));
@@ -2441,12 +2441,12 @@ describe('权限与作弊面板(服务器停着)', () => {
         },
       }),
     });
-    await m.serverConsole().start();
+    await m.serverWebUi().start();
     expect(existsSync(join(off, 'ops.json'))).toBe(false);
   });
 
   it('没配服务器目录时说清楚,不假装写成功了', async () => {
-    const panel = new MinecraftWorld({ cfg: cfg({ port: 1 }) }).accessConsole();
+    const panel = new MinecraftWorld({ cfg: cfg({ port: 1 }) }).accessWebUi();
     expect((await panel.state()).detail).toContain('worlds.minecraft.local.serverDir');
     expect((await panel.setOp('CortiV', true)).detail).toContain('无法在这里修改');
     expect((await panel.apply({ whiteList: true })).detail).toContain('无法在这里修改');
@@ -2873,7 +2873,7 @@ describe('PWSR 骨架:realm 命名空间', () => {
     expect(filled).not.toContain('从你的笔记里读回来'); // 有东西时不指路
   });
 
-  it('控制台存储项:规模一行点出旧命名空间还留着几个;清空是全清', () => {
+  it('WebUI 存储项:规模一行点出旧命名空间还留着几个;清空是全清', () => {
     const t = new PwsrTables();
     const goals = t.register(GOAL_TABLE_DECL);
     t.switchTo('世界甲');
@@ -3452,7 +3452,7 @@ describe('暂态现状一行(告知 + 指路,不是开机仪式)', () => {
     expect(said[0].text).toContain('已连入服务器'); // 就在连接回执里,不另起一条
     expect(said[0].text).toContain('暂态:目标 0 条');
     expect(said[0].text).toContain('从你的笔记里读回来重新登记');
-    expect(m.logConsole().entries().find((entry) => entry.event === 'spawn')?.data)
+    expect(m.logWebUi().entries().find((entry) => entry.event === 'spawn')?.data)
       .toMatchObject({ connectionGeneration: 1 });
   });
 
@@ -3463,7 +3463,7 @@ describe('暂态现状一行(告知 + 指路,不是开机仪式)', () => {
     tool();
     spawn();
     tool();
-    const entries = m.logConsole().entries();
+    const entries = m.logWebUi().entries();
     expect(entries.filter((entry) => entry.event === 'spawn').map((entry) => entry.data?.connectionGeneration))
       .toEqual([1, 2]);
     expect(entries.filter((entry) => entry.event === 'mc_check').map((entry) => entry.data?.connectionGeneration))

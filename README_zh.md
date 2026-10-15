@@ -33,7 +33,7 @@
 
 Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、持续运行、混合实时输入场景的智能体开发，适用于人格 Bot、AI 主播、角色扮演、聊天陪伴等多种下游任务。Cortico Bot 远不只是聊天 Bot：得益于围绕事件流设计的 Agent 系统，Cortico 可以帮助构建长期持续存在、适用于复杂输入的 AI 智能体，它支持自由的外部扩展，能够同时观察和操作多个外部环境，包括聊天平台、实时游戏、甚至现实环境。Cortico 的目标是：把你的 AI 带到这个世界！（Bring your AI to the world！）
 
-**语言**：Web 控制台有简体中文、繁體中文、English、日本語、한국어、Français、Deutsch、Español (Latinoamérica)、Português (Brasil)、Italiano、Русский 11 种语言。控制台语言不改变模型读到的内容；Core 写进模型上下文的文本是英文。
+**语言**：WebUI 有简体中文、繁體中文、English、日本語、한국어、Français、Deutsch、Español (Latinoamérica)、Português (Brasil)、Italiano、Русский 11 种语言。WebUI 语言不改变模型读到的内容；Core 写进模型上下文的文本是英文。
 
 ## 特性
 
@@ -62,7 +62,7 @@ Cortico 是基于事件流系统设计的 Agent Harness，用于自主响应、�
 3. 不需要写代码的经验或者知识也可以轻松使用！
 4. 完成扩展之后，可以发布到 npm 以共享给其他人~
 
-npm 上带 `cortico-world`、`cortico-provider` 或 `cortico-bot` 关键字的包会列在控制台的「扩展」页，显示 npm 统计的累计、近 30 天、近 7 天下载量。
+npm 上带 `cortico-world`、`cortico-provider` 或 `cortico-bot` 关键字的包会列在 WebUI 的「扩展」页，显示 npm 统计的累计、近 30 天、近 7 天下载量。
 
 <sub>Cortina 基于 Pal AI Lab 提出的 [TINA（There Is No App）Spec](https://github.com/Pal-AI-Lab/ThereIsNoApp) 设计。这里没有 APP：语言即代码，Agent 即 Runtime。</sub>
 
@@ -75,14 +75,14 @@ corepack pnpm install
 pnpm start
 ```
 
-### 1. 首次启动与控制台引导
-首次启动且未检测到已有部署时，启动器会自动创建名为 `mybot` 的默认部署（基于参考实现 `cormini`，默认启用终端对话），并自动启动控制台服务：
+### 1. 首次启动与 WebUI 引导
+首次启动且未检测到已有部署时，启动器会自动创建名为 `mybot` 的默认部署（基于参考实现 `cormini`，默认启用控制台对话），并自动启动 WebUI 服务：
 
 **`http://127.0.0.1:7788/`**
 
-在控制台的终端页面中，开场引导将协助你完成三项基础配置：配置语言模型端点、查看已挂载的 World、调整系统提示词。配置好可用端点后，点击「打个招呼」即可让 Bot 主动开口交流。模型端点、API 密钥与运行参数均可在控制台中可视化修改，保存后下一次请求生效；托管运行时的启动参数在它下一次启动时生效。
+在 WebUI 的控制台页面中，开场引导将协助你完成三项基础配置：配置语言模型端点、查看已挂载的 World、调整系统提示词。配置好可用端点后，点击「打个招呼」即可让 Bot 主动开口交流。模型端点、API 密钥与运行参数均可在 WebUI 中可视化修改，保存后下一次请求生效；托管运行时的启动参数在它下一次启动时生效。
 
-控制台的初始语言依次取 `config.json` 的 `language`、`CORTICO_LANGUAGE`、系统区域（读不到区域时用简体中文）。在「设置 → 通用」里切换，只对当前浏览器生效，不用重启 bot。
+WebUI 的初始语言依次取 `config.json` 的 `language`、`CORTICO_LANGUAGE`、系统区域（读不到区域时用简体中文）。在「设置 → 通用」里切换，只对当前浏览器生效，不用重启 bot。
 
 ### 2. 多部署管理
 每个部署对应 `deployments/` 下的一个独立子目录（详见 [deployment.md](docs/deployment.md)）。再建一份：
@@ -91,13 +91,13 @@ pnpm start
 pnpm start --new
 ```
 
-依次选择 bot 代码包、部署目录名与展示名称，建好后直接启动，端点等其余配置在控制台中完成。按名称启动指定部署：
+依次选择 bot 代码包、部署目录名与展示名称，建好后直接启动，端点等其余配置在 WebUI 中完成。按名称启动指定部署：
 
 ```bash
 pnpm start second
 ```
 
-启动脚本（`pnpm start`、`./start.sh` 或 Windows 上的 `start.bat`）会自动安装缺失依赖、在控制台前端产物缺失或落后于源码时构建，在交互式终端中列出全部部署供选择（含新建部署入口），并在控制台请求重启时自动重启守护进程。
+启动脚本（`pnpm start`、`./start.sh` 或 Windows 上的 `start.bat`）会自动安装缺失依赖、在 WebUI 前端产物缺失或落后于源码时构建，在交互式命令行中列出全部部署供选择（含新建部署入口），并在 WebUI 请求重启时自动重启守护进程。
 
 ## 四层设计
 
@@ -119,7 +119,7 @@ Cortico 采用严格解耦的四层架构设计：
 | [configuration.md](docs/configuration.md) | 四层配置合并规则、配置组定义与参数热更新 |
 | [providers.md](docs/providers.md) | Provider 模块、模型目录、端点配置与计费策略 |
 | [runtimes.md](docs/runtimes.md) | `llamacpp` 本机运行时管理与模型文件配置 |
-| [console.md](docs/console.md) | 控制台架构、运行时监控与各模块页面声明 |
+| [webui.md](docs/webui.md) | WebUI 架构、运行时监控与各模块页面声明 |
 | [sessions.md](docs/sessions.md) | Session 生命周期、上下文容量调度与交接机制 |
 | [runs.md](docs/runs.md) | 运行记录目录、日志结构与 `pnpm logq` 检索工具 |
 | [personas.md](docs/personas.md) | Persona 生命周期钩子、Memory 架构与装配机制 |
@@ -134,7 +134,7 @@ Cortico 采用严格解耦的四层架构设计：
 
 | World | ID | 接入环境与能力 |
 |---|---|---|
-| 终端对话 | `terminal` | 控制台内建交互终端，支持双向文字会话 |
+| 控制台对话 | `console` | WebUI 内建的对话页，支持双向文字会话 |
 | QQ | `qq` | 接入 QQ 群聊与私聊，支持可选的多模态视觉模型图像理解 |
 | 哔哩哔哩直播 | `bilibili` | 实时监听弹幕、礼物、醒目留言（SC）、大航海、进场通知与人流指标，附带本机 OBS 画面 Overlay |
 | Minecraft | `minecraft` | 基于 Mineflayer 接入 Minecraft 原版服务器，实现文字环境观察与高层动作执行 |
@@ -164,7 +164,7 @@ Cortico 采用严格解耦的四层架构设计：
 
 * 提交前请查阅 [CONTRIBUTING.md](CONTRIBUTING.md)（了解仓库边界与扩展开发规范）以及 [AGENTS.md](AGENTS.md)（代码审查清单）。
 * 欢迎使用 AI 编码助手辅助开发，但贡献者必须能够清晰解释提交的所有代码逻辑。
-* 控制台文案放在 `strings.ts`（`zh`、`en` 两版是全的），其余语言各写在旁边的 `strings.<语言代码>.ts`；译文缺的键，`zh-Hant` 读 `zh`，其余读 `en`。详见 [console.md](docs/console.md#语言) 的「语言」一节。
+* WebUI 文案放在 `strings.ts`（`zh`、`en` 两版是全的），其余语言各写在旁边的 `strings.<语言代码>.ts`；译文缺的键，`zh-Hant` 读 `zh`，其余读 `en`。详见 [webui.md](docs/webui.md#语言) 的「语言」一节。
 * 提交 PR 前请确保自动化校验通过：
 
 ```bash
@@ -172,7 +172,7 @@ pnpm test
 pnpm run typecheck
 ```
 
-若涉及控制台前端代码改动，需额外执行：
+若涉及 WebUI 前端代码改动，需额外执行：
 
 ```bash
 pnpm typecheck:web

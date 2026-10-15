@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: '終端',
+  navLabel: '控制台',
   currentProvider: '目前模型供應商',
   noProvider: '未選擇模型供應商',
   ctxOpenAria: '查看 token 分類',
   ctxPanelAria: 'Token 分類',
-  netConnecting: '控制台連線中…',
-  netOnline: '控制台已連線',
-  netOffline: '控制台已中斷連線',
-  composerLabel: '終端訊息輸入',
+  netConnecting: 'WebUI 連線中…',
+  netOnline: 'WebUI 已連線',
+  netOffline: 'WebUI 已中斷連線',
+  composerLabel: '控制台訊息輸入',
   composerPlaceholder: '輸入訊息…',
   exportDiagnostics: '匯出診斷',
   exportFailed: '診斷包取不回來',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: '診斷包包含對話、提示詞、事件、工具呼叫、用量和執行日誌。設定裡的金鑰已遮蔽，其餘內容原樣寫出。分享前請檢查其中的私人資訊。',
   composerFork: '正在查看背景工作階段；這裡發出的訊息仍送到主工作階段',
   composerNoProvider: '目前模型供應商無法使用，請前往「模型供應商」頁設定',
-  composerQueued: '終端通道正在重新連線，訊息已排入佇列',
+  composerQueued: '控制台通道正在重新連線，訊息已排入佇列',
   emptyConnecting: '連線除錯通道中…',
   ctxTitle: (total: string, max: string | null) =>
     `上下文 ${total}${max !== null ? ` / ${max}` : ''} tok · 點擊查看分類`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: '除錯通道無法使用，無法顯示時間軸。',
 
   // status.ts
-  docTitle: (name: string) => `控制台 · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: '未連線',
   chipMsgs: ' 則',
   chipCache: '快取 ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: '首先，請設定模型供應商：',
   obProviderNone: '尚未設定可用的模型供應商',
   obProviderReady: '模型供應商已設定',
-  obWorlds: '接下來，請啟用並設定你的 Bot 接入的外部環境模組（Cortico World）。也可以先僅啟用終端對話。',
+  obWorlds: '接下來，請啟用並設定你的 Bot 接入的外部環境模組（Cortico World）。也可以先僅啟用控制台對話。',
   obWorldsState: (labels: readonly string[]) => `目前已經啟用了 ${labels.length} 個外部環境：${labels.join('、')}`,
   obPrompts: '最後，你可以在這裡方便地編輯系統提示詞，來提供人格描述、行為規範、語言風格等客製化內容！',
   obReady: '準備就緒！',

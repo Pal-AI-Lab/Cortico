@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: 'Отображаемое имя',
-    description: 'Используется в заголовке консоли и как имя отправителя в сообщениях, которые отправляет бот. Консоль применяет его сразу; подключённый World применяет его после своего перезапуска.',
+    description: 'Используется в заголовке WebUI и как имя отправителя в сообщениях, которые отправляет бот. WebUI применяет его сразу; подключённый World применяет его после своего перезапуска.',
   },
   quietGap: {
     title: 'Окно тишины',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Порог записи журнала в файл',
     description: 'Записи ниже этого уровня не пишутся в data/runs/<run>/log.jsonl.',
   },
-  logConsole: {
+  logStdout: {
     title: 'Порог вывода журнала',
-    description: 'Записи ниже этого уровня не выводятся в окно консоли.',
+    description: 'Записи ниже этого уровня не выводятся в стандартный вывод.',
   },
   logAreas: {
     title: 'Пороги записи в файл по областям',

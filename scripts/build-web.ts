@@ -4,9 +4,9 @@
  * 入口与 asset key 按以下目录约定生成:
  *
  *   src/web/client/main.ts        → core
- *   src/worlds/<x>/console/client.ts → world:<x>
- *   src/providers/<x>/console/client.ts → llm:<x>
- *   bots/<y>/console/client.ts    → persona:<y>
+ *   src/worlds/<x>/webui/client.ts → world:<x>
+ *   src/providers/<x>/webui/client.ts → llm:<x>
+ *   bots/<y>/webui/client.ts    → persona:<y>
  */
 import * as esbuild from 'esbuild';
 import { readdirSync, existsSync, rmSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -14,10 +14,10 @@ import { isAbsolute, join, resolve, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hashSources } from '../bin/web-assets.mjs';
 import {
-  CONSOLE_PROTOCOL_VERSION,
+  WEBUI_PROTOCOL_VERSION,
   pageIdFor,
-  type ConsoleAssetManifest,
-} from '../src/web/shared/console-protocol.ts';
+  type WebUiAssetManifest,
+} from '../src/web/shared/webui-protocol.ts';
 
 /** 一个浏览器端入口:asset key 与它的源文件绝对路径。 */
 export interface WebEntry {
@@ -30,7 +30,7 @@ export interface WebEntry {
 /** core 入口的 asset key。 */
 const CORE_KEY = 'core';
 
-const CONSOLE_ENTRY = join('console', 'client.ts');
+const WEBUI_ENTRY = join('webui', 'client.ts');
 
 /** 目录下所有子目录名,目录不存在时为空。 */
 function subdirs(dir: string): string[] {
@@ -55,19 +55,19 @@ export function discoverEntries(root: string): WebEntry[] {
   const srcDir = join(root, 'src');
   const worldsDir = join(srcDir, 'worlds');
   for (const name of subdirs(worldsDir)) {
-    const entry = join(worldsDir, name, CONSOLE_ENTRY);
+    const entry = join(worldsDir, name, WEBUI_ENTRY);
     if (existsSync(entry)) providers.push({ key: pageIdFor('world', name), entry });
   }
 
   const llmDir = join(srcDir, 'providers');
   for (const name of subdirs(llmDir)) {
-    const entry = join(llmDir,name,CONSOLE_ENTRY);
+    const entry = join(llmDir,name,WEBUI_ENTRY);
     if (existsSync(entry)) providers.push({key:pageIdFor('llm',name),entry});
   }
 
   const botsDir = join(root, 'bots');
   for (const name of subdirs(botsDir)) {
-    const entry = join(botsDir, name, CONSOLE_ENTRY);
+    const entry = join(botsDir, name, WEBUI_ENTRY);
     if (existsSync(entry)) providers.push({ key: pageIdFor('persona', name), entry });
   }
 
@@ -91,7 +91,7 @@ function absFromMeta(metaPath: string): string {
   return resolve(process.cwd(), metaPath);
 }
 
-export async function buildWeb(root: string): Promise<ConsoleAssetManifest> {
+export async function buildWeb(root: string): Promise<WebUiAssetManifest> {
   const entries = discoverEntries(root);
   const resolvedRoot = resolve(root);
   const outdir = resolve(resolvedRoot,'dist','web');
@@ -100,11 +100,11 @@ export async function buildWeb(root: string): Promise<ConsoleAssetManifest> {
   rmSync(outdir, { recursive: true, force: true });
   mkdirSync(outdir, { recursive: true });
 
-  const manifest: ConsoleAssetManifest = { protocolVersion: CONSOLE_PROTOCOL_VERSION, core: null, providers: {}, sources: {} };
+  const manifest: WebUiAssetManifest = { protocolVersion: WEBUI_PROTOCOL_VERSION, core: null, providers: {}, sources: {} };
 
   if (entries.length === 0) {
     writeManifest(outdir, manifest);
-    console.log('没有发现浏览器端入口(src/web/client/main.ts 与 */console/client.ts 均不存在),已写出空清单。');
+    console.log('没有发现浏览器端入口(src/web/client/main.ts 与 */webui/client.ts 均不存在),已写出空清单。');
     return manifest;
   }
 
@@ -158,7 +158,7 @@ function repoInputs(root: string, metafile: esbuild.Metafile): string[] {
     .map((rel) => rel.split(sep).join('/'));
 }
 
-function writeManifest(outdir: string, manifest: ConsoleAssetManifest): void {
+function writeManifest(outdir: string, manifest: WebUiAssetManifest): void {
   writeFileSync(join(outdir, 'asset-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
 }
 

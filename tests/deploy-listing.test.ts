@@ -45,7 +45,7 @@ describe('取色', () => {
     expect(colorsOf(null, '也没这个').accent).toBe(BUILTIN_PALETTES.mint.dark.accent);
   });
 
-  it('终端按深色底算;钉在浅色的部署才取浅色那份', () => {
+  it('命令行按深色底算;钉在浅色的部署才取浅色那份', () => {
     const dark = root({ a: { [THEME_FILE]: { selectedId: 'mint', mode: 'dark', custom: [] } } });
     const light = root({ a: { [THEME_FILE]: { selectedId: 'mint', mode: 'light', custom: [] } } });
     expect(colorsOf(join(dark, 'a'), 'mint').accent).toBe(BUILTIN_PALETTES.mint.dark.accent);

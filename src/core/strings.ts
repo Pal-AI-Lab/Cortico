@@ -15,7 +15,7 @@ const coreGroupZh = {
   description: "",
   displayName: {
     title: '展示名',
-    description: '控制台标题与 bot 发出的消息用这个名字。控制台立刻跟上;已经挂载的 World 在自己重启后才跟上。',
+    description: 'WebUI 标题与 bot 发出的消息用这个名字。WebUI 立刻跟上;已经挂载的 World 在自己重启后才跟上。',
   },
   quietGap: {
     title: '安静窗口',
@@ -42,13 +42,13 @@ const coreGroupZh = {
     title: '日志落盘门槛',
     description: "低于此级别的记录不写入 data/runs/<run>/log.jsonl。",
   },
-  logConsole: {
+  logStdout: {
     title: '日志打印门槛',
-    description: '低于这一级的记录不打到控制台窗口。',
+    description: '低于这一级的记录不打印到标准输出。',
   },
   logAreas: {
     title: '按区域覆盖落盘门槛',
-    description: "以逗号分隔 `区域=级别`，例如 `core.loop=trace,console=warn`；支持 `.*`。最长匹配前缀优先，未匹配的区域使用默认门槛。",
+    description: "以逗号分隔 `区域=级别`，例如 `core.loop=trace,WebUI=warn`；支持 `.*`。最长匹配前缀优先，未匹配的区域使用默认门槛。",
   },
   usageRate: {
     title: (code: string) => `用量报告汇率 ${code}`,
@@ -60,7 +60,7 @@ export const coreGroupEn: typeof coreGroupZh = {
   description: "",
   displayName: {
     title: 'Display name',
-    description: 'Used for the console title and as the sender name on messages the bot sends. The console picks it up at once; a mounted World does so when that World restarts.',
+    description: 'Used for the WebUI title and as the sender name on messages the bot sends. The WebUI picks it up at once; a mounted World does so when that World restarts.',
   },
   quietGap: {
     title: 'Quiet window',
@@ -87,13 +87,13 @@ export const coreGroupEn: typeof coreGroupZh = {
     title: 'Log file threshold',
     description: "Records below this level are not written to data/runs/<run>/log.jsonl.",
   },
-  logConsole: {
+  logStdout: {
     title: 'Log print threshold',
-    description: 'Records below this level are not printed to the console window.',
+    description: 'Records below this level are not printed to standard output.',
   },
   logAreas: {
     title: 'Per-area file threshold overrides',
-    description: "Comma-separated `area=level`, such as `core.loop=trace,console=warn`; `.*` is supported. The longest matching prefix applies. Unmatched areas use the default threshold.",
+    description: "Comma-separated `area=level`, such as `core.loop=trace,WebUI=warn`; `.*` is supported. The longest matching prefix applies. Unmatched areas use the default threshold.",
   },
   usageRate: {
     title: (code: string) => `Usage report rate: ${code}`,

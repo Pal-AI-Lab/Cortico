@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: 'Terminal',
+  navLabel: 'Konsole',
   currentProvider: 'Aktueller Modellanbieter',
   noProvider: 'Kein Anbieter ausgewählt',
   ctxOpenAria: 'Token-Aufschlüsselung anzeigen',
   ctxPanelAria: 'Token-Aufschlüsselung',
-  netConnecting: 'Konsole verbindet…',
-  netOnline: 'Konsole verbunden',
-  netOffline: 'Konsole getrennt',
-  composerLabel: 'Terminal-Nachrichteneingabe',
+  netConnecting: 'WebUI verbindet…',
+  netOnline: 'WebUI verbunden',
+  netOffline: 'WebUI getrennt',
+  composerLabel: 'Konsolen-Nachrichteneingabe',
   composerPlaceholder: 'Nachricht eingeben…',
   exportDiagnostics: 'Diagnose exportieren',
   exportFailed: 'Das Diagnosepaket konnte nicht abgerufen werden',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: 'Das Paket enthält Gespräche, Prompts, Ereignisse, Tool-Aufrufe, Verbrauch und Laufprotokolle. Secrets in der Konfiguration werden geschwärzt; alles andere wird unverändert geschrieben. Prüfe es vor dem Teilen auf private Informationen.',
   composerFork: 'Du siehst eine Hintergrund-Session; hier gesendete Nachrichten gehen weiterhin an die Haupt-Session',
   composerNoProvider: 'Kein nutzbarer Anbieter. Richte einen auf der Seite „Modellverbindungen“ ein.',
-  composerQueued: 'Terminal-Kanal verbindet sich neu; Nachricht eingereiht',
+  composerQueued: 'Konsolen-Kanal verbindet sich neu; Nachricht eingereiht',
   emptyConnecting: 'Verbinde mit dem Debug-Kanal…',
   ctxTitle: (total: string, max: string | null) =>
     `Kontext ${total}${max !== null ? ` / ${max}` : ''} tok · für Aufschlüsselung klicken`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: 'Debug-Kanal nicht verfügbar; die Zeitleiste kann nicht angezeigt werden.',
 
   // status.ts
-  docTitle: (name: string) => `Konsole · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: 'Getrennt',
   chipMsgs: ' Nachr.',
   chipCache: 'Cache ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: 'Konfiguriere zuerst einen Modellanbieter:',
   obProviderNone: 'Noch kein nutzbarer Modellanbieter',
   obProviderReady: 'Modellanbieter konfiguriert',
-  obWorlds: 'Aktiviere und konfiguriere als Nächstes die externen Umgebungen, die dein Bot erreicht (Cortico-Worlds). Nur mit dem Terminal-Chat zu beginnen, ist auch in Ordnung.',
+  obWorlds: 'Aktiviere und konfiguriere als Nächstes die externen Umgebungen, die dein Bot erreicht (Cortico-Worlds). Nur mit dem Konsolen-Chat zu beginnen, ist auch in Ordnung.',
   obWorldsState: (labels: readonly string[]) =>
     `Derzeit ${labels.length === 1 ? 'ist 1 externe Umgebung' : `sind ${labels.length} externe Umgebungen`} aktiviert: ${labels.join(', ')}`,
   obPrompts: 'Zum Schluss bearbeitest du hier den System-Prompt: wer der Bot ist, wie er sich verhält, wie er spricht.',

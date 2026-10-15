@@ -3,7 +3,7 @@
  * 它不提供环境提示词或事件;搜索结果不落事件库且不参与异步投递。
  */
 import { fileURLToPath } from 'node:url';
-import type { World, WorldHost, WorldConsoleDecl, ToolDef } from '../../core/types.ts';
+import type { World, WorldHost, WorldWebUiDecl, ToolDef } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import {
   BraveClient,
@@ -64,8 +64,8 @@ export class WebSearchWorld implements World {
     return {};
   }
 
-  /** 控制台里露出什么:密钥有没有配好 + 自己的检索偏好旋钮 */
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  /** WebUI 里露出什么:密钥有没有配好 + 自己的检索偏好旋钮 */
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = text(language);
     return {
       label: t.moduleLabel,

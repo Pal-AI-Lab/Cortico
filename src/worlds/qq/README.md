@@ -8,7 +8,7 @@ QQ 群聊与私聊接入。World 作为客户端连接一个 OneBot v11 协议�
 ## 协议端
 
 任何 OneBot v11 实现都可以接,推荐 [SnowLuma](https://github.com/SnowLuma/SnowLuma),
-[NapCat](https://github.com/NapNeko/NapCatQQ) 同样可用。换协议端只改控制台「接入门」里的
+[NapCat](https://github.com/NapNeko/NapCatQQ) 同样可用。换协议端只改 WebUI「接入门」里的
 WS 地址与 token,保存后进程重启。
 
 SnowLuma:

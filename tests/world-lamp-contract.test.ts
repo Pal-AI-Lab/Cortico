@@ -2,21 +2,21 @@
 import { describe, expect, it } from 'vitest';
 import { MODULE_LAMP_MAX, type World, type WorldLamp } from '../src/core/types.ts';
 import { BilibiliWorld } from '../src/worlds/bilibili/world.ts';
-import { ConsoleFixtureWorld } from '../src/worlds/console-fixture/world.ts';
+import { WebUiFixtureWorld } from '../src/worlds/webui-fixture/world.ts';
 import { MinecraftWorld } from '../src/worlds/minecraft/world.ts';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
 import { QQWorld } from '../src/worlds/qq/world.ts';
-import { TerminalWorld } from '../src/worlds/terminal/world.ts';
+import { ConsoleWorld } from '../src/worlds/console/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
 
 const mcCfg = structuredClone({ ...MINECRAFT_DEFAULTS, enabled: true }) as MinecraftConfigSection;
 
 const MODULES: Array<() => World> = [
   () => new BilibiliWorld({ roomId: 0 }),
-  () => new ConsoleFixtureWorld(),
+  () => new WebUiFixtureWorld(),
   () => new MinecraftWorld({ cfg: mcCfg }),
   () => new QQWorld({ wsUrl: 'ws://127.0.0.1:1', groups: [], privates: [], token: '' }),
-  () => new TerminalWorld(),
+  () => new ConsoleWorld(),
   () => new WebSearchWorld({ apiKey: 'k' }),
 ];
 
@@ -26,7 +26,7 @@ describe('状态灯契约', () => {
   it.each(MODULES.map((make) => [make().id, make] as const))(
     '%s:状态灯名称唯一、状态合法且数量不超限',
     (_id, make) => {
-      const lamps = make().console?.()?.lamps ?? [];
+      const lamps = make().webUi?.()?.lamps ?? [];
       expect(lamps.length, 'World 必须声明状态灯')
         .toBeGreaterThan(0);
       expect(lamps.length).toBeLessThanOrEqual(MODULE_LAMP_MAX);
@@ -42,7 +42,7 @@ describe('状态灯契约', () => {
 });
 
 describe('几个具体判据', () => {
-  const lampsOf = (mod: World): WorldLamp[] => mod.console?.()?.lamps ?? [];
+  const lampsOf = (mod: World): WorldLamp[] => mod.webUi?.()?.lamps ?? [];
   const find = (mod: World, label: string): WorldLamp | undefined =>
     lampsOf(mod).find((l) => l.label === label);
 
@@ -62,8 +62,8 @@ describe('几个具体判据', () => {
     expect(find(mod, '监听')?.state).toBe('offline');
   });
 
-  it('终端对话没人在线仍是绿：没人说话不是故障', () => {
-    expect(lampsOf(new TerminalWorld())).toEqual([
+  it('控制台对话没人在线仍是绿：没人说话不是故障', () => {
+    expect(lampsOf(new ConsoleWorld())).toEqual([
       { label: '对话通道', state: 'online', hint: '无人在线' },
     ]);
   });

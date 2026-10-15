@@ -1,6 +1,6 @@
 /** World 示例：挂载事件、echo 工具与环境模板。状态和回执仅描述 World 可确认的事实。 */
 import { fileURLToPath } from 'node:url';
-import type { ToolDef, World, WorldConsoleDecl, WorldHost } from 'cortico/core/types.ts';
+import type { ToolDef, World, WorldWebUiDecl, WorldHost } from 'cortico/core/types.ts';
 import { nowIso } from 'cortico/core/util.ts';
 import { EXAMPLE_CONFIG_GROUP, type ExampleConfigSection } from './config.ts';
 
@@ -26,7 +26,7 @@ export class ExampleWorld implements World {
     return [this.echoTool()];
   }
 
-  console(): WorldConsoleDecl {
+  webUi(): WorldWebUiDecl {
     return {
       config: [EXAMPLE_CONFIG_GROUP],
       promptDocs: [

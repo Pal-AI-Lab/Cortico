@@ -33,7 +33,7 @@ the packaging rules.
 
 ## Running a bot
 
-Deployments, bot packages and the web console live in a checkout of the repository, which is
+Deployments, bot packages and the WebUI live in a checkout of the repository, which is
 where a bot runs from:
 [Quick Start](https://github.com/Pal-AI-Lab/Cortico#quick-start).
 

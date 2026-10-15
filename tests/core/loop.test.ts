@@ -1020,7 +1020,7 @@ describe('MainLoop user事件协议', () => {
 
     const shot = { handle: 'log:aaaa.png', mime: 'image/png', fallbackText: '[图片 1]' };
     const internal = rig.store.append({
-      type: 'terminal.message', ts: '2026-07-17T10:20:00+08:00', source: 'terminal', origin: 'internal',
+      type: 'console.message', ts: '2026-07-17T10:20:00+08:00', source: 'console', origin: 'internal',
       text: '[10:20] 阿明: 看这张', blobs: [shot],
     });
     rig.bus.push({ event: internal }, { trigger: 'flush' });
@@ -1947,7 +1947,7 @@ describe('MainLoop user事件协议', () => {
 
   it('推理中重载前缀会排队到自然回合边界，不覆盖半轮消息', async () => {
     const worlds = makeFakeIO('web', []);
-    rewriteFakeIOTemplate(worlds, '旧终端环境');
+    rewriteFakeIOTemplate(worlds, '旧控制台环境');
     rig = makeRig({ worlds: [worlds] });
     rig.start();
     await until(() => rig.llm.calls.length >= 1);
@@ -1964,17 +1964,17 @@ describe('MainLoop user事件协议', () => {
     rig.pushEvent('重载时仍在处理的消息');
     await until(() => entered);
 
-    rewriteFakeIOTemplate(worlds, '新终端环境');
+    rewriteFakeIOTemplate(worlds, '新控制台环境');
     let reloaded = false;
     const reload = rig.loop.reloadSystemPrefix().then(() => { reloaded = true; });
     await sleep(20);
     expect(reloaded).toBe(false);
-    expect(rig.session.messages[0].content).toContain('旧终端环境');
+    expect(rig.session.messages[0].content).toContain('旧控制台环境');
 
     release();
     await reload;
-    expect(rig.session.messages[0].content).toContain('新终端环境');
-    expect(rig.session.messages[0].content).not.toContain('旧终端环境');
+    expect(rig.session.messages[0].content).toContain('新控制台环境');
+    expect(rig.session.messages[0].content).not.toContain('旧控制台环境');
     expect(rig.session.messages.some(
       (message) => message.role === 'user' && message.content.includes('new event arrived'),
     )).toBe(true);
@@ -3402,7 +3402,7 @@ describe("deliver:false 与隐藏 World 的事件归档后推进水位", () => {
   it('World pushEvent({deliver:false}) 归档后推进水位', async () => {
     await build();
     const echo = await host.pushEvent({
-      type: 'terminal.self',
+      type: 'console.self',
       ts: new Date().toISOString(),
       source: 'probe',
       text: '[13:25] 你: test speech pipeline',

@@ -52,14 +52,14 @@ describe('CortiV 实时参数化', () => {
     expect(injected).toEqual(['[system] 2 条新事件。']);
   });
 
-  it('不给 orientation 就读默认源文件(与控制台改的是同一份)', async () => {
+  it('不给 orientation 就读默认源文件(与 WebUI 改的是同一份)', async () => {
     const p = new Cormini({ memoryDir: dir });
     const segs = await p.systemSegments({ now: new Date(), timezone: 'Asia/Shanghai', worlds: [] });
     expect(segs.find((s) => s.title === 'ORIENTATION')?.text)
       .toBe(readFileSync(CORMINI_ORIENTATION_FILE, 'utf8').trim());
   });
 
-  it('orientation 传函数则每次拼前缀时重取(控制台改源文件后重载即生效)', async () => {
+  it('orientation 传函数则每次拼前缀时重取(WebUI 改源文件后重载即生效)', async () => {
     let text = '第一版定向';
     const p = new Cormini({ memoryDir: dir, orientation: () => text });
     const first = await p.systemSegments({ now: new Date(), timezone: 'Asia/Shanghai', worlds: [] });

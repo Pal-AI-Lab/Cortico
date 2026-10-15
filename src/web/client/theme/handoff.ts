@@ -1,8 +1,8 @@
 /**
- * 独立页面主题交接。链接只携带点击瞬间的已解析颜色快照，接收方无需依赖控制台。
+ * 独立页面主题交接。链接只携带点击瞬间的已解析颜色快照，接收方无需依赖 WebUI。
  */
 
-import type { ConsoleLink } from '../../shared/console-protocol.ts';
+import type { WebUiLink } from '../../shared/webui-protocol.ts';
 import {
   isHexColor,
   THEME_TOKENS,
@@ -18,7 +18,7 @@ export interface ThemeHandoffSnapshot {
 }
 
 /** 无既有 fragment 的继承链接附加主题快照；其余链接逐字保持原值。 */
-export function resolveConsoleLinkHref(doc: Document, link: ConsoleLink): string {
+export function resolveWebUiLinkHref(doc: Document, link: WebUiLink): string {
   if (link.inheritTheme !== true) return link.href;
   if (link.href.includes('#')) return link.href;
 

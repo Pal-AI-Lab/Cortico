@@ -591,7 +591,7 @@ describe('WakeBus', () => {
       expect(bus.pending()).toBe(0);
     });
 
-    /** 控制台清空待投递事件使用此方法。 */
+    /** WebUI 清空待投递事件使用此方法。 */
     it("暂停时清空待投递事件，恢复后不投递已清除项", async () => {
       const bus = new WakeBus({ quietGapMs: 20, minBatchAgeMs: 0, maxBatchAgeMs: 5000, maxBatchSize: 100 });
       bus.setPaused(true);
@@ -621,7 +621,7 @@ describe('WakeBus', () => {
     });
 
     /** 延迟 render 同时重置 World 的待渲染标志；清空即时事件时需保留它。 */
-    it('挂单不随控制台清空被抽走:只丢已成文的积压', () => {
+    it('挂单不随 WebUI 清空被抽走:只丢已成文的积压', () => {
       const bus = new WakeBus({ quietGapMs: 10_000, minBatchAgeMs: 0, maxBatchAgeMs: 60_000, maxBatchSize: 100 });
       bus.push(evt(1));
       bus.push(deferred(), { trigger: 'piggyback' });

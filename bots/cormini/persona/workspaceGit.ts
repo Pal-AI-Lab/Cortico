@@ -106,10 +106,10 @@ export class WorkspaceGit {
   readonly dir: string;
   private availCache: boolean | null = null;
   private repoCache: boolean | null = null;
-  /** 最近一次建仓失败的原因;null = 没失败过。进 status() 供控制台展示。 */
+  /** 最近一次建仓失败的原因;null = 没失败过。进 status() 供 WebUI 展示。 */
   private initError: string | null = null;
   private warnedInitFail = false;
-  /** 最近一次提交失败的原因;成功一次就清空。进 status() 供控制台展示。 */
+  /** 最近一次提交失败的原因;成功一次就清空。进 status() 供 WebUI 展示。 */
   private commitError: string | null = null;
   /** 去重提交失败日志；提交成功后清空。 */
   private warnedCommitError: string | null = null;

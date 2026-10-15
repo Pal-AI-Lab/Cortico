@@ -1,14 +1,14 @@
 /** 表单控件与标签；事件监听绑定 UI 实例的 signal。 */
 
 import type {
-  ConsoleCheckbox,
-  ConsoleCheckboxOptions,
-  ConsoleFieldOptions,
-  ConsoleInputOptions,
-  ConsoleSegmented,
-  ConsoleSegmentedOptions,
-  ConsoleSelectOptions,
-  ConsoleTextareaOptions,
+  WebUiCheckbox,
+  WebUiCheckboxOptions,
+  WebUiFieldOptions,
+  WebUiInputOptions,
+  WebUiSegmented,
+  WebUiSegmentedOptions,
+  WebUiSelectOptions,
+  WebUiTextareaOptions,
 } from '../../shared/client-panel.ts';
 import { h } from './dom.ts';
 
@@ -21,7 +21,7 @@ function fieldClass(extra?: string): string {
 function wire(
   el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
   signal: AbortSignal,
-  opts: ConsoleFieldOptions,
+  opts: WebUiFieldOptions,
   event: 'input' | 'change',
 ): void {
   if (opts.value != null) el.value = opts.value;
@@ -58,7 +58,7 @@ function isCommitKey(el: { tagName: string }, ev: KeyboardEvent): boolean {
 export function input(
   doc: Document,
   signal: AbortSignal,
-  opts?: ConsoleInputOptions,
+  opts?: WebUiInputOptions,
 ): HTMLInputElement {
   const o = opts ?? {};
   const el = h(doc, 'input', fieldClass(o.cls));
@@ -72,7 +72,7 @@ export function input(
 export function select(
   doc: Document,
   signal: AbortSignal,
-  opts?: ConsoleSelectOptions,
+  opts?: WebUiSelectOptions,
 ): HTMLSelectElement {
   const o = opts ?? {};
   const el = h(doc, 'select', fieldClass(o.cls));
@@ -90,7 +90,7 @@ export function select(
 export function textarea(
   doc: Document,
   signal: AbortSignal,
-  opts?: ConsoleTextareaOptions,
+  opts?: WebUiTextareaOptions,
 ): HTMLTextAreaElement {
   const o = opts ?? {};
   const el = h(doc, 'textarea', fieldClass(o.cls));
@@ -107,8 +107,8 @@ export function checkbox(
   doc: Document,
   signal: AbortSignal,
   label: string,
-  opts?: ConsoleCheckboxOptions,
-): ConsoleCheckbox {
+  opts?: WebUiCheckboxOptions,
+): WebUiCheckbox {
   const o = opts ?? {};
   const el = h(doc, 'label', 'check');
   const box = h(doc, 'input');
@@ -149,8 +149,8 @@ export function segmented(
   doc: Document,
   signal: AbortSignal,
   items: readonly (string | { value: string; label?: string })[],
-  opts?: ConsoleSegmentedOptions,
-): ConsoleSegmented {
+  opts?: WebUiSegmentedOptions,
+): WebUiSegmented {
   const o = opts ?? {};
   const el = h(doc, 'div', o.size === 'sm' ? 'segwrap sm' : 'segwrap');
   const keys: { value: string; btn: HTMLButtonElement }[] = [];

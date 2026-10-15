@@ -1,5 +1,5 @@
 /**
- * session 卡条 —— 终端页顶上那一排"主意识 + 各 fork"。
+ * session 卡条 —— 控制台页顶上那一排"主意识 + 各 fork"。
  *
  * 一张卡就是一个可点的入口:点谁,时间线就切去看谁。数据来自 `/ws/debug` 的
  * `sessions` 帧;调试通道没挂时由 `/ws/sessions` 顶上(见 `index.ts`)。
@@ -8,12 +8,12 @@
  * 圆点配色写在 `styles.css` 里,前端这边一个角色名都不写死。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import type { SessionStat } from './protocol.ts';
 import { S } from './strings.ts';
 
 export interface SessionBandDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   /**
    * 本次挂载的 signal，统一管理卡片监听，unmount 后解除。
    */

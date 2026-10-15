@@ -20,7 +20,7 @@ interface InvokeErrorCtor {
 }
 
 const api = (await import(API_SPEC)) as ApiModule;
-const { ConsoleInvokeError } = (await import(BUNDLE_SPEC)) as { ConsoleInvokeError: InvokeErrorCtor };
+const { WebUiInvokeError } = (await import(BUNDLE_SPEC)) as { WebUiInvokeError: InvokeErrorCtor };
 
 /** 一次调用的记录，用来断言方法/头/body。 */
 interface Call {
@@ -50,7 +50,7 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-/** 断言并取回 ConsoleInvokeError（`rejects.toThrow` 拿不到 status）。 */
+/** 断言并取回 WebUiInvokeError（`rejects.toThrow` 拿不到 status）。 */
 async function catchErr(p: Promise<unknown>): Promise<Error & { status?: number }> {
   try {
     await p;
@@ -91,7 +91,7 @@ describe('web client api —— 正常返回', () => {
   it('fetchManifest 打的是协议规定的 manifest 路由', async () => {
     stubFetch(() => json({ protocolVersion: 1, providers: [], framework: { capabilities: {} } }));
     const m = await api.fetchManifest();
-    expect(calls[0]?.url).toBe('/api/console/manifest');
+    expect(calls[0]?.url).toBe('/api/webui/manifest');
     expect(m).toMatchObject({ protocolVersion: 1 });
   });
 
@@ -135,10 +135,10 @@ describe('web client api —— 正常返回', () => {
 });
 
 describe('web client api —— 错误归一化', () => {
-  it('非 2xx 带 {error} → ConsoleInvokeError，取服务端措辞与状态码', async () => {
+  it('非 2xx 带 {error} → WebUiInvokeError，取服务端措辞与状态码', async () => {
     stubFetch(() => json({ error: '没有这个面板' }, 404));
     const err = await catchErr(api.get('/api/x'));
-    expect(err).toBeInstanceOf(ConsoleInvokeError);
+    expect(err).toBeInstanceOf(WebUiInvokeError);
     expect(err.message).toBe('没有这个面板');
     expect(err.status).toBe(404);
   });
@@ -146,7 +146,7 @@ describe('web client api —— 错误归一化', () => {
   it('非 2xx 且 body 不是 JSON → 消息里带 HTTP 状态与响应片段', async () => {
     stubFetch(() => new Response('<html>502 Bad Gateway</html>', { status: 502 }));
     const err = await catchErr(api.get('/api/x'));
-    expect(err).toBeInstanceOf(ConsoleInvokeError);
+    expect(err).toBeInstanceOf(WebUiInvokeError);
     expect(err.message).toContain('HTTP 502');
     expect(err.message).toContain('502 Bad Gateway');
     expect(err.status).toBe(502);
@@ -159,10 +159,10 @@ describe('web client api —— 错误归一化', () => {
     expect(err.status).toBe(500);
   });
 
-  it('200 但 body 是坏 JSON → ConsoleInvokeError，消息里带片段', async () => {
+  it('200 但 body 是坏 JSON → WebUiInvokeError，消息里带片段', async () => {
     stubFetch(() => new Response('{oops', { status: 200 }));
     const err = await catchErr(api.get('/api/x'));
-    expect(err).toBeInstanceOf(ConsoleInvokeError);
+    expect(err).toBeInstanceOf(WebUiInvokeError);
     expect(err.message).toContain('{oops');
     expect(err.status).toBe(200);
   });
@@ -174,22 +174,22 @@ describe('web client api —— 错误归一化', () => {
     expect(err.message.length).toBeLessThan(240);
   });
 
-  it('网络 reject → ConsoleInvokeError，status 0', async () => {
+  it('网络 reject → WebUiInvokeError，status 0', async () => {
     stubFetch(() => { throw new TypeError('Failed to fetch'); });
     const err = await catchErr(api.get('/api/x'));
-    expect(err).toBeInstanceOf(ConsoleInvokeError);
+    expect(err).toBeInstanceOf(WebUiInvokeError);
     expect(err.status).toBe(0);
     expect(err.message).toContain('Failed to fetch');
   });
 
-  it('abort 原样抛出，不被包成 ConsoleInvokeError', async () => {
+  it('abort 原样抛出，不被包成 WebUiInvokeError', async () => {
     const ac = new AbortController();
     stubFetch(() => { throw new DOMException('The operation was aborted.', 'AbortError'); });
     const p = api.get('/api/slow', { signal: ac.signal });
     ac.abort();
     const err = await catchErr(p);
     // 调用方靠这条区分"面板卸载了，请求被取消"和"请求真失败了"
-    expect(err).not.toBeInstanceOf(ConsoleInvokeError);
+    expect(err).not.toBeInstanceOf(WebUiInvokeError);
     expect(err.name).toBe('AbortError');
   });
 
@@ -205,7 +205,7 @@ describe('web client api —— 路由拼接', () => {
   it('provider id 的冒号被编码：worlds:chat → world%3Achat', async () => {
     stubFetch(() => json({ ok: 1 }));
     await api.invokePanel('world:chat', 'gate', 'status');
-    expect(calls[0]?.url).toBe('/api/console/providers/world%3Achat/panels/gate/status');
+    expect(calls[0]?.url).toBe('/api/webui/providers/world%3Achat/panels/gate/status');
     expect(calls[0]?.url).not.toContain('world:chat');
   });
 
@@ -234,7 +234,7 @@ describe('web client api —— 路由拼接', () => {
   it('invokePanelBinary 的非 2xx 同样归一化', async () => {
     stubFetch(() => json({ error: '合成失败' }, 500));
     const err = await catchErr(api.invokePanelBinary('world:chat', 'voice', 'preview'));
-    expect(err).toBeInstanceOf(ConsoleInvokeError);
+    expect(err).toBeInstanceOf(WebUiInvokeError);
     expect(err.message).toBe('合成失败');
     expect(err.status).toBe(500);
   });

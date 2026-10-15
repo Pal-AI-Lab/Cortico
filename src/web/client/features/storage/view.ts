@@ -3,7 +3,7 @@
  * `clearAll` 打开时多一颗一键清空,清的是服务端整张清单;确认框逐项列出受影响的存储项与归属。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { get, post } from '../../core/api.ts';
 import { S } from './strings.ts';
 
@@ -22,7 +22,7 @@ export interface StoragePartView {
 }
 
 export interface StorageViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   signal: AbortSignal;
   /** 这一处画哪些项。省略 = 全部。 */
   filter?(part: StoragePartView): boolean;

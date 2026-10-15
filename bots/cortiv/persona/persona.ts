@@ -33,7 +33,7 @@ import type {
   ContextHandoffResult,
   EventEnvelope,
   PersonaCognition,
-  PersonaConsoleDecl,
+  PersonaWebUiDecl,
   SessionDecl,
   SessionOpeningReason,
   ToolDef,
@@ -42,7 +42,7 @@ import type { Language } from 'cortico/core/language.ts';
 import { DeadlineError, estimateTokens, withDeadline } from 'cortico/core/util.ts';
 import { Cormini, HANDOFF_DIR, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
 import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceGit.ts';
-import { personaConsoleDecl } from './consoleSurface.ts';
+import { personaWebUiDecl } from './webUiSurface.ts';
 import { VIEWERS_DIR, VIEWER_MEMORY_NOTE_FILE, viewerMemoryNote } from './viewers.ts';
 
 export { HANDOFF_DIR, VIEWERS_DIR, VIEWER_MEMORY_NOTE_FILE, viewerMemoryNote };
@@ -221,7 +221,7 @@ export function balancedSnapshot(snapshot: readonly ContextRecord[]): ContextRec
 
 export interface CortiVOptions extends CorminiOptions {
   /**
-   * 认知外包的全局开关(「允许 World 请托后台思考」)。每次现读——控制台上
+   * 认知外包的全局开关(「允许 World 请托后台思考」)。每次现读——WebUI 上
    * 关掉,下一次请求时 World host 上的句柄就不存在了。不给 = 恒开。
    */
   cognitionEnabled?: () => boolean;
@@ -294,17 +294,17 @@ export class CortiV extends Cormini {
   };
 
   /**
-   * 工作区的 git 仓;控制台的编辑与她自己的落笔共用一份。
-   * 取句柄不建仓——`console()` 在装配期就会被调到,建仓归第一次真写入或读历史。
+   * 工作区的 git 仓;WebUI 的编辑与她自己的落笔共用一份。
+   * 取句柄不建仓——`webUi()` 在装配期就会被调到,建仓归第一次真写入或读历史。
    */
   private get git(): WorkspaceGit {
     return this.memory.git;
   }
 
   /** Memory 页是工作区编辑器三块;Cormini 的工作区清除项不要:工作区归版本历史管,一键清空只扫 session/事件/用量。 */
-  override console(language: Language = 'zh'): PersonaConsoleDecl {
-    const base = super.console(language);
-    const surface = personaConsoleDecl({ memory: this.memory }, language);
+  override webUi(language: Language = 'zh'): PersonaWebUiDecl {
+    const base = super.webUi(language);
+    const surface = personaWebUiDecl({ memory: this.memory }, language);
     return {
       ...base,
       memory: { panels: surface.panels },
@@ -1038,7 +1038,7 @@ export class CortiV extends Cormini {
       '   而且要连理由一起写成句子:「(-222,22,-66) 那片岩浆别靠近,我在那儿烧死过」',
       '   ——不是「不要岩浆」。发现旧笔记里已经攒了这种清单,顺手删掉。',
       '   这一条是说给你听的,别自己另写一行「注意不要写XX」到笔记里。',
-      '   笔记顶部已有的 # 开头那行是控制台留给你的,原样保留,别删也别改。',
+      '   笔记顶部已有的 # 开头那行是 WebUI 留给你的,原样保留,别删也别改。',
       '5. 外部世界的结论,只收记录里的回执能支持的、或者我核对过的;对不上的写成「我以为」。',
       '6. 别改宪法(CONSTITUTION.md)。',
       '全部落盘后结束。最后一段话:若没有必须浮给主意识的事,只写 (nothing);',

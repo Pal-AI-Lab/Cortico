@@ -1,10 +1,10 @@
 /**
- * 控制台页浏览器扩展与控制台内核的契约，仅浏览器端 import，服务端不 import。此文件使用 DOM 类型，根 tsconfig 从初始文件表排除，由 tsconfig.web.json 检查。
- * 扩展通过 ConsolePanelContext 获取调用、根节点、取消、定时器、动画帧、存储、离开拦截及 UI。
+ * WebUI 页浏览器扩展与 WebUI 内核的契约，仅浏览器端 import，服务端不 import。此文件使用 DOM 类型，根 tsconfig 从初始文件表排除，由 tsconfig.web.json 检查。
+ * 扩展通过 WebUiPanelContext 获取调用、根节点、取消、定时器、动画帧、存储、离开拦截及 UI。
  * 卸载依次 abort、dispose、清空 root；离开面板后轮询、RAF、observer、listener、挂起 fetch 与音频播放均停止。
  */
 
-import type { ConsoleBadge } from './console-protocol.ts';
+import type { WebUiBadge } from './webui-protocol.ts';
 import type { ConfigValue } from '../../core/config-schema.ts';
 import type { Language } from '../../core/language.ts';
 import type { PathPickerOptions } from './path-picker.ts';
@@ -36,7 +36,7 @@ export function toDisposable(cleanup: () => void): Disposable {
  * 身份、DOM 根、生命周期与自有数据面是稳定基线；通用框架能力可以增量扩充。
  * 接口不接受任何具体页的专用成员。
  */
-export interface ConsolePanelContext {
+export interface WebUiPanelContext {
   /** `world:chat` / `persona:demo` */
   readonly pageId: string;
   /** 本页内的局部 id，如 `gate` */
@@ -61,8 +61,8 @@ export interface ConsolePanelContext {
   readonly signal: AbortSignal;
 
   /**
-   * 调本面板的数据面方法（`ConsolePageContribution.invoke`）。
-   * 走 POST，请求随 `signal` 取消；非 2xx 抛 `ConsoleInvokeError`。
+   * 调本面板的数据面方法（`WebUiPageContribution.invoke`）。
+   * 走 POST，请求随 `signal` 取消；非 2xx 抛 `WebUiInvokeError`。
    */
   invoke<T = unknown>(method: string, args?: unknown[]): Promise<T>;
 
@@ -79,9 +79,9 @@ export interface ConsolePanelContext {
   setConfig(groupId: string, values: Record<string, ConfigValue>): Promise<string>;
 
   /**
-   * 本面板的推送通道对应服务端 ConsolePageContribution.stream。连接中断后退避重连，unmount 同时终止连接与重连；已有推送的数据不另行轮询。
+   * 本面板的推送通道对应服务端 WebUiPageContribution.stream。连接中断后退避重连，unmount 同时终止连接与重连；已有推送的数据不另行轮询。
    */
-  stream(handlers: ConsoleStreamHandlers): ConsoleStreamHandle;
+  stream(handlers: WebUiStreamHandlers): WebUiStreamHandle;
 
   /** 轮询。返回的 `Disposable` 已登记，unmount 自动停；提前停就手动 `dispose()`。 */
   interval(fn: () => void, ms: number): Disposable;
@@ -99,7 +99,7 @@ export interface ConsolePanelContext {
   own<T extends Disposable>(d: T): T;
 
   /** 面板局部存储，按 page:panel 隔离键。浏览器存储不可用时退回内存，不抛错。 */
-  readonly memo: ConsoleMemo;
+  readonly memo: WebUiMemo;
 
   /**
    * 离开拦截。`fn` 返回一句话 = 拦下并让用户确认；返回 null = 放行。
@@ -124,7 +124,7 @@ export interface ConsolePanelContext {
   ): Promise<Disposable>;
 
   /** UI 原语。 */
-  readonly ui: ConsoleUi;
+  readonly ui: WebUi;
 
   /**
    * 重新读取 manifest 并更新 host 渲染的 badges、availability 与 prefixDrifted。保持面板挂载和表单状态；面板自身的数据由面板另行刷新。
@@ -133,16 +133,16 @@ export interface ConsolePanelContext {
 }
 
 /** invoke 失败，携带 HTTP 状态与服务端按界面语言提供的消息。 */
-export class ConsoleInvokeError extends Error {
+export class WebUiInvokeError extends Error {
   readonly status: number;
   constructor(message: string, status: number) {
     super(message);
-    this.name = 'ConsoleInvokeError';
+    this.name = 'WebUiInvokeError';
     this.status = status;
   }
 }
 
-export interface ConsoleStreamHandlers {
+export interface WebUiStreamHandlers {
   /** 收到一帧。 */
   message(text: string): void;
   /** 连上了（含每次重连成功）。用来重置面板里的"连接中"状态。 */
@@ -151,13 +151,13 @@ export interface ConsoleStreamHandlers {
   close?(willRetry: boolean): void;
 }
 
-export interface ConsoleStreamHandle extends Disposable {
+export interface WebUiStreamHandle extends Disposable {
   /** 往回推一帧。连接未就绪时排队，连上后按序发出。 */
   send(text: string): void;
   readonly open: boolean;
 }
 
-export interface ConsoleMemo {
+export interface WebUiMemo {
   get<T>(key: string, fallback: T): T;
   set(key: string, value: unknown): void;
 }
@@ -167,10 +167,10 @@ export interface ConsoleMemo {
 // ---------------------------------------------------------------------------
 
 /**
- * 控制台 UI 原语仅包含跨页通用的能力，领域波形、预览和播放器由各扩展实现。原语返回真实 DOM 元素，复用统一样式，不接受 HTML 字符串或 JSON UI 描述。
+ * WebUI 原语仅包含跨页通用的能力，领域波形、预览和播放器由各扩展实现。原语返回真实 DOM 元素，复用统一样式，不接受 HTML 字符串或 JSON UI 描述。
  * ctx.ui 绑定面板 signal：abort 时关闭 toast、confirm 与 drawer，待决 confirm resolve 为 false 以允许调用方清理；abort 后 confirm 立即返回 false，toast/drawer 不显示。
  */
-export interface ConsoleUi {
+export interface WebUi {
   /** `h('div', 'sheet', '文本')` */
   h<K extends keyof HTMLElementTagNameMap>(
     tag: K,
@@ -182,13 +182,13 @@ export interface ConsoleUi {
   esc(s: unknown): string;
 
   /** 档案卡。 */
-  sheet(opts: ConsoleSheetOptions): ConsoleSheet;
+  sheet(opts: WebUiSheetOptions): WebUiSheet;
 
   /**
    * 可折叠档案卡（`details.sheet.tabbed.fold`）。展开状态按 `id` 记在 `ctx.memo` 里，
    * 跨导航重建 DOM 后恢复。`note` 是折叠状态下唯一可见的字段。
    */
-  foldSheet(id: string, opts: ConsoleSheetOptions & { defaultOpen?: boolean }): ConsoleSheet;
+  foldSheet(id: string, opts: WebUiSheetOptions & { defaultOpen?: boolean }): WebUiSheet;
 
   /** 按钮与状态行。 */
   rowbar(): HTMLDivElement;
@@ -207,13 +207,13 @@ export interface ConsoleUi {
   }): HTMLButtonElement;
 
   /** 点击时读取函数形式的文本。Clipboard API 失败后尝试 execCommand；均失败则显示错误和含原文的抽屉。 */
-  copyButton(text: string | (() => string), opts?: ConsoleCopyOptions): HTMLButtonElement;
+  copyButton(text: string | (() => string), opts?: WebUiCopyOptions): HTMLButtonElement;
 
   /** 状态标签；on、off 分别使用启用和关闭色，plain 使用中性色。 */
-  pill(text: string, tone?: ConsoleBadge['tone']): HTMLSpanElement;
+  pill(text: string, tone?: WebUiBadge['tone']): HTMLSpanElement;
 
   /** 读数标签，支持中性、警示与强调色；可追加节点突出数值。 */
-  chip(text: string, tone?: ConsoleChipTone): HTMLSpanElement;
+  chip(text: string, tone?: WebUiChipTone): HTMLSpanElement;
 
   /** 一行消息（保存结果、错误）。`bad` 走警示配色（`.msgline` / `.msgline.bad`）。 */
   msgline(text?: string, bad?: boolean): HTMLDivElement;
@@ -225,25 +225,25 @@ export interface ConsoleUi {
    * 单行输入（`input.field`）。`cls` 追加到 `field` 后面（常用 `mono`）。
    * 监听随面板 `signal` 自动摘，扩展不必自己收尾。
    */
-  input(opts?: ConsoleInputOptions): HTMLInputElement;
+  input(opts?: WebUiInputOptions): HTMLInputElement;
 
   /** 下拉选择（`select.field`）。选项给字符串就是 value=label。 */
-  select(opts?: ConsoleSelectOptions): HTMLSelectElement;
+  select(opts?: WebUiSelectOptions): HTMLSelectElement;
 
   /** 多行输入（`textarea.field`，可竖向拉伸）。 */
-  textarea(opts?: ConsoleTextareaOptions): HTMLTextAreaElement;
+  textarea(opts?: WebUiTextareaOptions): HTMLTextAreaElement;
 
   /**
    * 对话输入器。textarea、提交动作与快捷键共享一个交互边界；面板卸载时 React 根随
    * `signal` 销毁。适用于消息式输入，不替代普通表单的 `input` / `textarea`。
    */
-  promptInput(opts: ConsolePromptInputOptions): ConsolePromptInput;
+  promptInput(opts: WebUiPromptInputOptions): WebUiPromptInput;
 
   /**
    * 可编辑勾选框，使用 label.check 包裹 input[type=checkbox]；只读状态使用 pill。
    * 返回句柄供读取 checked 和程序更新；setChecked 不触发代表用户操作的 onChange。
    */
-  checkbox(label: string, opts?: ConsoleCheckboxOptions): ConsoleCheckbox;
+  checkbox(label: string, opts?: WebUiCheckboxOptions): WebUiCheckbox;
 
   /** 将标签与任意控件包在 label 中；返回包装节点，控件句柄由调用方保留。 */
   field(label: string, control: HTMLElement): HTMLLabelElement;
@@ -251,26 +251,26 @@ export interface ConsoleUi {
   /** 分段选择器；点击已选项和 setValue 均不触发用户回调，重复 value 的选项一同更新。 */
   segmented(
     items: readonly (string | { value: string; label?: string })[],
-    opts?: ConsoleSegmentedOptions,
-  ): ConsoleSegmented;
+    opts?: WebUiSegmentedOptions,
+  ): WebUiSegmented;
 
   /** 数据表返回节点及 clear/addRow 句柄；可选表头保持置顶。 */
-  table(opts?: ConsoleTableOptions): ConsoleTable;
+  table(opts?: WebUiTableOptions): WebUiTable;
 
   /** 无表头的键值表，节点值直接挂入。值格使用等宽字体；需要保留换行时使用 table 的 txt 单元格。 */
-  kv(rows: readonly ConsoleKvRow[]): HTMLTableElement;
+  kv(rows: readonly WebUiKvRow[]): HTMLTableElement;
 
   /** 追加式日志，有行数上限。贴底时随新增行滚动，上翻后暂停，返回底部后恢复。 */
-  log(opts?: ConsoleLogOptions): ConsoleLog;
+  log(opts?: WebUiLogOptions): WebUiLog;
 
   /** 概览读数（`.stat`，内含 `.k` 小标题与 `.v` 大数字；`accent` 上强调色）。 */
-  stat(item: ConsoleStat): HTMLDivElement;
+  stat(item: WebUiStat): HTMLDivElement;
 
   /** 读数网格（`.statgrid`，自适应列宽）。把一组 `stat` 排进去。 */
-  statgrid(items?: readonly ConsoleStat[]): HTMLDivElement;
+  statgrid(items?: readonly WebUiStat[]): HTMLDivElement;
 
   /** 占比条；默认显示百分比，可用 format 定义读数文本。 */
-  progress(opts?: ConsoleProgressOptions): ConsoleProgress;
+  progress(opts?: WebUiProgressOptions): WebUiProgress;
 
   /**
    * 瞬时提示（`.toast` / `.toast.bad`，屏幕下沿居中）。
@@ -295,12 +295,12 @@ export interface ConsoleUi {
    * 局部禁用一组控件，dispose() 恢复各自原本的 disabled 状态；整页阻塞使用 busy。
    * 同一控件只记录首次原值；dispose() 幂等。
    */
-  disable(...els: readonly ConsoleDisablable[]): Disposable;
+  disable(...els: readonly WebUiDisablable[]): Disposable;
 
-  readonly fmt: ConsoleFormat;
+  readonly fmt: WebUiFormat;
 }
 
-export interface ConsoleSheetOptions {
+export interface WebUiSheetOptions {
   title: string;
   /** 标题后的英文小注（`h3 > .en`） */
   en?: string;
@@ -308,7 +308,7 @@ export interface ConsoleSheetOptions {
   desc?: string;
 }
 
-export interface ConsoleSheet {
+export interface WebUiSheet {
   /** 整张卡，扩展把它 append 到 `ctx.root` */
   el: HTMLElement;
   /** 内容区 */
@@ -320,10 +320,10 @@ export interface ConsoleSheet {
 }
 
 /** chip 的中性、警示与强调配色。 */
-export type ConsoleChipTone = 'plain' | 'warn' | 'accent';
+export type WebUiChipTone = 'plain' | 'warn' | 'accent';
 
 /** 输入控件的回调分别对应输入、change 与提交键；监听随面板 signal 释放。 */
-export interface ConsoleFieldOptions {
+export interface WebUiFieldOptions {
   value?: string;
   placeholder?: string;
   /** 追加到 `field` 之后的 class，如 `mono` */
@@ -338,7 +338,7 @@ export interface ConsoleFieldOptions {
 }
 
 /** `checkbox` 的选项。 */
-export interface ConsoleCheckboxOptions {
+export interface WebUiCheckboxOptions {
   checked?: boolean;
   disabled?: boolean;
   /** 悬停气泡（`title` 属性）。写"点一下会发生什么"，别重复标签本身。 */
@@ -347,7 +347,7 @@ export interface ConsoleCheckboxOptions {
   onChange?: (checked: boolean) => void;
 }
 
-export interface ConsoleCheckbox {
+export interface WebUiCheckbox {
   /** `label.check`（含方框与标签文字），扩展把它 append 到卡里 */
   el: HTMLLabelElement;
   /** 里面那个 `input[type=checkbox]`。要设 `disabled`、要聚焦时用。 */
@@ -358,7 +358,7 @@ export interface ConsoleCheckbox {
   setChecked(checked: boolean): void;
 }
 
-export interface ConsoleSegmentedOptions {
+export interface WebUiSegmentedOptions {
   /** 初始选中的 value。不给（或给了一个不在 items 里的值）就一颗都不亮。 */
   value?: string;
   /** `.segwrap.sm`：塞进 `rowbar` 与 `.btn.sm` 并排时用 */
@@ -367,7 +367,7 @@ export interface ConsoleSegmentedOptions {
   onSelect?: (value: string) => void;
 }
 
-export interface ConsoleSegmented {
+export interface WebUiSegmented {
   /** `.segwrap`，扩展把它 append 到卡里 */
   el: HTMLDivElement;
   /** 当前选中的 value */
@@ -377,30 +377,30 @@ export interface ConsoleSegmented {
 }
 
 /** `kv` 的一行。`k` 是字段名（左列窄灰），`v` 给节点就直接放。 */
-export interface ConsoleKvRow {
+export interface WebUiKvRow {
   k: string;
   v: string | number | HTMLElement | null | undefined;
 }
 
-export interface ConsoleInputOptions extends ConsoleFieldOptions {
+export interface WebUiInputOptions extends WebUiFieldOptions {
   /** 缺省 `text`。`search` 会带上浏览器的清除按钮。 */
   type?: 'text' | 'number' | 'password' | 'search' | 'date';
 }
 
-export interface ConsoleSelectOptions extends ConsoleFieldOptions {
+export interface WebUiSelectOptions extends WebUiFieldOptions {
   /** 给字符串等价于 `{ value: s, label: s }` */
   options?: readonly (string | { value: string; label?: string })[];
 }
 
-export interface ConsoleTextareaOptions extends ConsoleFieldOptions {
+export interface WebUiTextareaOptions extends WebUiFieldOptions {
   rows?: number;
 }
 
 /**
- * 输入器交出的一张图:已按 `ConsolePromptImagesOptions` 归一化(长边缩到上限、超限的
+ * 输入器交出的一张图:已按 `WebUiPromptImagesOptions` 归一化(长边缩到上限、超限的
  * 重编码),base64 不带 `data:` 前缀,直接可进 JSON 帧。
  */
-export interface ConsoleImageAttachment {
+export interface WebUiImageAttachment {
   name: string;
   /** image/jpeg | image/png | image/webp | image/gif */
   mime: string;
@@ -415,7 +415,7 @@ export interface ConsoleImageAttachment {
  * 输入器的图片通道。给了就出现附图按钮、接收粘贴与拖放,输入框上方长出缩略图托盘;
  * 不给就是纯文本输入器。
  */
-export interface ConsolePromptImagesOptions {
+export interface WebUiPromptImagesOptions {
   /** 一条消息最多带几张,缺省 8。超出的拒收并就地提示。 */
   max?: number;
   /** 长边上限(像素),缺省 2048。超过的按比例缩小。 */
@@ -424,7 +424,7 @@ export interface ConsolePromptImagesOptions {
   maxBytes?: number;
 }
 
-export interface ConsolePromptInputOptions {
+export interface WebUiPromptInputOptions {
   label?: string;
   placeholder?: string;
   /** 底栏左侧的灰字。不给就不占字。 */
@@ -435,15 +435,15 @@ export interface ConsolePromptInputOptions {
   /** 底栏最左的入口，排在 `hint` 之前。节点所有权随 prompt input 一起结束。 */
   leading?: HTMLElement;
   /** 图片通道。不给 = 不收图,`onSubmit` 的第二参恒为空数组。 */
-  images?: ConsolePromptImagesOptions;
+  images?: WebUiPromptImagesOptions;
   /**
    * 文本与图片至少一样非空才触发。
    * 返回 `false` 保留当前内容(文本与托盘都留)；其余返回值表示已接收并清空。
    */
-  onSubmit(text: string, images: readonly ConsoleImageAttachment[]): boolean | void;
+  onSubmit(text: string, images: readonly WebUiImageAttachment[]): boolean | void;
 }
 
-export interface ConsolePromptInput {
+export interface WebUiPromptInput {
   el: HTMLDivElement;
   focus(): void;
   setDisabled(disabled: boolean): void;
@@ -453,10 +453,10 @@ export interface ConsolePromptInput {
    * 把文字与已归一化的图片放回输入框:文字接在已有内容之前,空一行隔开;图片放进托盘,
    * 超出张数上限的部分不放并给出提示。不提交。
    */
-  restore(text: string, images?: readonly ConsoleImageAttachment[]): void;
+  restore(text: string, images?: readonly WebUiImageAttachment[]): void;
 }
 
-export interface ConsoleTableOptions {
+export interface WebUiTableOptions {
   /** 表头文字。不给就不渲染 `<thead>`。 */
   head?: readonly string[];
   /** 外框最高多少（如 `calc(100vh - 300px)`）。给了才滚，表头的 sticky 也才有意义。 */
@@ -467,7 +467,7 @@ export interface ConsoleTableOptions {
  * 一格。给字符串/数字就是纯文本；给节点就直接放进去（塞 `pill`、按钮用）；
  * 给对象可以额外指定单元格 class（既有的 `mono` = 等宽不换行，`txt` = 保留换行）。
  */
-export type ConsoleCell =
+export type WebUiCell =
   | string
   | number
   | null
@@ -475,18 +475,18 @@ export type ConsoleCell =
   | HTMLElement
   | { text?: string | number | null; el?: HTMLElement; cls?: string };
 
-export interface ConsoleTable {
+export interface WebUiTable {
   /** 外框 `.tablewrap`，扩展把它 append 到卡里 */
   el: HTMLDivElement;
   /** `<tbody>`，想自己操作行时用 */
   body: HTMLTableSectionElement;
   /** 追加一行 */
-  addRow(cells: readonly ConsoleCell[]): HTMLTableRowElement;
+  addRow(cells: readonly WebUiCell[]): HTMLTableRowElement;
   /** 清空。带一句话就铺一行跨列的 `.placeholder` 空态。 */
   clear(empty?: string): void;
 }
 
-export interface ConsoleStat {
+export interface WebUiStat {
   /** 小标题（`.k`） */
   k: string;
   /** 大数字（`.v`）。给节点就直接放。 */
@@ -499,12 +499,12 @@ export interface ConsoleStat {
 
 /**
  * 一行日志的配色，对应 `.logline` / `.logline.dim` / `.logline.warn` / `.logline.bad`。
- * 与 `ConsoleChipTone` 一样按**角色**命名：`dim` 是次要噪声（心跳、回执），
+ * 与 `WebUiChipTone` 一样按**角色**命名：`dim` 是次要噪声（心跳、回执），
  * `warn` 是需要留意但没坏，`bad` 是真出事了。
  */
-export type ConsoleLogTone = 'plain' | 'dim' | 'warn' | 'bad';
+export type WebUiLogTone = 'plain' | 'dim' | 'warn' | 'bad';
 
-export interface ConsoleLogOptions {
+export interface WebUiLogOptions {
   /** `conversation` 使用阅读型正文排版；缺省保留等宽日志排版。 */
   variant?: 'plain' | 'conversation';
   /**
@@ -519,11 +519,11 @@ export interface ConsoleLogOptions {
   stickThreshold?: number;
 }
 
-export interface ConsoleLog {
+export interface WebUiLog {
   /** `.logview`，扩展把它 append 到卡里 */
   el: HTMLDivElement;
   /** 追加一行，返回那一行的节点（想再往里塞 `chip` / 链接时用） */
-  append(line: string, tone?: ConsoleLogTone): HTMLDivElement;
+  append(line: string, tone?: WebUiLogTone): HTMLDivElement;
   /** 清空（回到空态） */
   clear(): void;
   /** 当前有几行 */
@@ -534,7 +534,7 @@ export interface ConsoleLog {
   scrollToEnd(): void;
 }
 
-export interface ConsoleProgressOptions {
+export interface WebUiProgressOptions {
   /** 满值，缺省 1。给 0 或非有限数一律当 1（否则读数是 `NaN%`）。 */
   max?: number;
   /** 初值，缺省 0 */
@@ -543,11 +543,11 @@ export interface ConsoleProgressOptions {
   label?: string;
   /** 右侧读数怎么印。不给就是百分比；给了可以印成 `3 / 12`。 */
   format?: (value: number, max: number) => string;
-  /** 条的配色，与 `ConsoleChipTone` 同一套词。 */
-  tone?: ConsoleChipTone;
+  /** 条的配色，与 `WebUiChipTone` 同一套词。 */
+  tone?: WebUiChipTone;
 }
 
-export interface ConsoleProgress {
+export interface WebUiProgress {
   /** `.progress`，扩展把它 append 到卡里 */
   el: HTMLDivElement;
   readonly value: number;
@@ -558,7 +558,7 @@ export interface ConsoleProgress {
   setLabel(text: string): void;
 }
 
-export interface ConsoleCopyOptions {
+export interface WebUiCopyOptions {
   /** 按钮上的字，缺省「复制」 */
   label?: string;
   /** 缺省 `sm`：这颗几乎总是跟在别的东西后面，不该抢主按钮的份量 */
@@ -569,9 +569,9 @@ export interface ConsoleCopyOptions {
 }
 
 /** 接受任意带 disabled 字段的控件，忽略 null 与 undefined。 */
-export type ConsoleDisablable = { disabled: boolean } | null | undefined;
+export type WebUiDisablable = { disabled: boolean } | null | undefined;
 
-export interface ConsoleFormat {
+export interface WebUiFormat {
   /** 12345 → `12.3k` */
   count(n: number | null | undefined): string;
   /** 1536 → `1.5K` */
@@ -590,16 +590,16 @@ export interface ConsoleFormat {
 // Bundle
 // ---------------------------------------------------------------------------
 
-export interface ConsolePanel {
+export interface WebUiPanel {
   /**
    * 渲染面板，返回的 Disposable 在 unmount 时释放；ctx.own、interval、frame 已登记的资源无需再次返回。抛错由 host 转成当前面板错误卡，不影响其他面板或其他页。
    */
-  mount(ctx: ConsolePanelContext): void | Disposable | Promise<void | Disposable>;
+  mount(ctx: WebUiPanelContext): void | Disposable | Promise<void | Disposable>;
 }
 
-/** console/client.ts 的 default 导出。panels 以局部 panel id 为键；服务端已声明但扩展未提供的面板显示错误。 */
-export interface ConsoleClientBundle {
-  panels: Record<string, ConsolePanel>;
+/** webui/client.ts 的 default 导出。panels 以局部 panel id 为键；服务端已声明但扩展未提供的面板显示错误。 */
+export interface WebUiClientBundle {
+  panels: Record<string, WebUiPanel>;
 }
 
 /**
@@ -609,7 +609,7 @@ export interface ConsoleClientBundle {
  * 按 `panels[panelId]` 全部取空，报成"扩展缺这个面板"——那是条误导的诊断，
  * 真相是"这压根不是个扩展"。
  */
-export function isConsoleClientBundle(v: unknown): v is ConsoleClientBundle {
-  const panels = (v as ConsoleClientBundle | null)?.panels;
+export function isWebUiClientBundle(v: unknown): v is WebUiClientBundle {
+  const panels = (v as WebUiClientBundle | null)?.panels;
   return !!panels && typeof panels === 'object' && !Array.isArray(panels);
 }

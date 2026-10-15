@@ -1,5 +1,5 @@
 /**
- * 控制台的三道本机防线:
+ * WebUI 的三道本机防线:
  *  - 只绑回环:局域网地址上根本没有这个端口
  *  - Host 白名单:Host 头不是回环名或绑定地址的请求一律 421,DNS rebinding 的页面同源也拿不到
  *  - 同源闸门:带外站 Origin 的写请求/WS 握手一律拒;没有 Origin 的程序化客户端放行
@@ -67,7 +67,7 @@ afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe('控制台只绑回环', () => {
+describe('WebUI 只绑回环', () => {
   it('缺省绑 127.0.0.1,回环连得上', async () => {
     expect(app.boundAddress).toBe('127.0.0.1');
     expect(await reachable('127.0.0.1')).toBe(true);

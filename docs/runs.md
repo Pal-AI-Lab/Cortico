@@ -18,18 +18,18 @@
 | `incidents/` | 事故包 |
 
 `data/` 根下与 run 无关的:`session-main.jsonl`、`usage.jsonl`、`core-state.json`(投递水位、
-模型停滞、Persona 的不透明状态、World 可见性)、`timers.json`、`instance.lock`、`web-auth.key`(控制台登录令牌的随机盐,设了访问密码才生成)。
+模型停滞、Persona 的不透明状态、World 可见性)、`timers.json`、`instance.lock`、`web-auth.key`(WebUI 登录令牌的随机盐,设了访问密码才生成)。
 
 ## 日志格式
 
 `log.jsonl` 一行一个 `LogRecord`:`ts`(部署时区的 ISO,毫秒)、`run`、`seq`、`level`、
-`area`(`core.loop`、`worlds.minecraft`、`console`…)、`event?`、`msg`、`durMs?`、
+`area`(`core.loop`、`worlds.minecraft`、`webui`…)、`event?`、`msg`、`durMs?`、
 `repeat?`（折叠汇总）、`data?`、`err?`。关联字段 `sess` / `round` / `resp` / `call` / `ev` /
 `task` 分别标识 session、轮次、模型调用、工具调用、事件和任务；这些字段由 AsyncLocalStorage
 在轮次与工具调用边界设置，写入日志时读取。子进程通过 IPC 发送使用自身时钟的 `LogNote`，
 由父进程写入日志；sidecar 的 stdout / stderr 归入 `<world>.stdio`。
 
-级别热改:`logging.file`、`logging.console`、`logging.areas`(按区域前缀最长匹配)都是热改项,
+级别热改:`logging.file`、`logging.stdout`、`logging.areas`(按区域前缀最长匹配)都是热改项,
 每次写入现读。30 秒内重复的行折叠成一条带 `repeat` 的汇总。
 
 ## 查询

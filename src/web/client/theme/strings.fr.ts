@@ -9,7 +9,7 @@ export const S: Partial<typeof en> = {
   groupPaper: "Couches d'arrière-plan",
   groupInk: 'Texte et bordures',
   groupState: 'Interaction et état',
-  groupTimeline: 'Chronologie du terminal',
+  groupTimeline: 'Chronologie de la console',
   groupChart: 'Séries de graphiques',
   token: {
     paper: 'Fond de page',

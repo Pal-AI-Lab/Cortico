@@ -171,7 +171,7 @@ export interface LoopStatus {
   batchesHandled: number;
   roundsLastBatch: number;
   lastTruncateAt: string | null;
-  /** 人工暂停中(控制台;事件照常落库排队,不投递) */
+  /** 人工暂停中(WebUI;事件照常落库排队,不投递) */
   paused: boolean;
   /** 当前是否安装了 DeliveryGate。 */
   scheduleBlocked: boolean;
@@ -358,7 +358,7 @@ export class MainLoop {
     deps.session.onReset(() => { this.anchor = null; });
   }
 
-  /** 控制台订阅 RunPhase 变化;与 World.onRunPhase 同时、同步调用。 */
+  /** WebUI 订阅 RunPhase 变化;与 World.onRunPhase 同时、同步调用。 */
   onRunPhase(listener: (phase: RunPhase) => void): void {
     this.phaseListeners.push(listener);
   }
@@ -553,7 +553,7 @@ export class MainLoop {
   }
 
   /**
-   * 比较当前 World 可见性及工具名称与构建前缀时的记录，供控制台提示重载。
+   * 比较当前 World 可见性及工具名称与构建前缀时的记录，供 WebUI 提示重载。
    * 工具名可同步读取，因此用它检测 World 功能变化，不直接读取异步环境模板。
    */
   modulePrefixDrift(): string[] {
@@ -1034,7 +1034,7 @@ export class MainLoop {
         if (got === 'stop' || !this.running) break;
         const batch = got;
 
-        // 空闲时由控制台触发的截断/前缀重载可能仍在收尾；新 batch 等维护完成再投递。
+        // 空闲时由 WebUI 触发的截断/前缀重载可能仍在收尾；新 batch 等维护完成再投递。
         await this.maintenanceChain;
         if (!this.active(generation)) break;
         this.processingBatch = true;
@@ -1882,7 +1882,7 @@ export class MainLoop {
   /**
    * 最老的待投递外部事件等待超过 WATERMARK_STALL_MS 时报告 error，不自动修复。
    * 人工暂停或投递 gate 生效时不告警；仅含内部事件或 archive-only 原文的积压不触发该告警。等待 projector 的原文仍须由连续水位规则保护。
-   * 公开入口供巡查、测试与控制台调用。
+   * 公开入口供巡查、测试与 WebUI 调用。
    */
   auditDeliveryWatermark(): void {
     if (!this.activeNow()) return;
@@ -1994,7 +1994,7 @@ export class MainLoop {
     return { event };
   }
 
-  /** 当前工具 schema，供模型与控制台使用；run() 前为空。tags 保留声明方的分类。 */
+  /** 当前工具 schema，供模型与 WebUI 使用；run() 前为空。tags 保留声明方的分类。 */
   getToolSchemas(): Array<ToolSchema & { tags: readonly ToolTag[] }> {
     return this.toolDefs.map(({ name, description, parameters, tags }) => ({
       name, description, parameters, tags,

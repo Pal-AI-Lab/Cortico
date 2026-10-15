@@ -1,9 +1,9 @@
 /** 有行数上限的滚动日志；超出时删除最早行。仅在贴底时随新增内容滚动，上翻后暂停，返回底部后恢复。 */
 
 import type {
-  ConsoleLog,
-  ConsoleLogOptions,
-  ConsoleLogTone,
+  WebUiLog,
+  WebUiLogOptions,
+  WebUiLogTone,
 } from '../../shared/client-panel.ts';
 import { h } from './dom.ts';
 
@@ -29,11 +29,11 @@ export function shouldStick(
 }
 
 /** tone → class。`plain` 与不给一样落中性 `.logline`。 */
-function lineClass(tone?: ConsoleLogTone): string {
+function lineClass(tone?: WebUiLogTone): string {
   return tone && tone !== 'plain' ? 'logline ' + tone : 'logline';
 }
 
-export function log(doc: Document, signal: AbortSignal, opts?: ConsoleLogOptions): ConsoleLog {
+export function log(doc: Document, signal: AbortSignal, opts?: WebUiLogOptions): WebUiLog {
   const o = opts ?? {};
   const max = Math.max(1, Math.floor(o.max ?? LOG_MAX_LINES));
   const threshold = o.stickThreshold ?? LOG_STICK_PX;

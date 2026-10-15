@@ -3,7 +3,7 @@ import { messages as legacyMessages } from '../core/fixture-protocol.ts';
 import { WEB_PASSWORD_SECRET } from '../../src/bot.ts';
 /**
  * 真实 CortiV / WebApp / 事件总线，只替换模型与 B 站长连。
- * 同一进程串起弹幕合批、付费插队、控制台输入、工作区写入、热配置与关机。
+ * 同一进程串起弹幕合批、付费插队、WebUI 输入、工作区写入、热配置与关机。
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ import { createBot, type Bot } from '../../src/bot.ts';
 import type { LoadedConfig } from '../../src/core/config.ts';
 import { BilibiliWorld, type LiveHandlers } from '../../src/worlds/bilibili/world.ts';
 import type { LiveStatus } from '../../src/worlds/bilibili/client.ts';
-import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
+import { panelStreamRoute } from '../../src/web/shared/webui-protocol.ts';
 import { FakeLLM, makeTmpDir, sleep, toolReply } from '../core/helpers.ts';
 
 const builtinWorlds = await loadBuiltinWorlds();
@@ -58,7 +58,7 @@ describe.sequential('CortiV 集成测试', () => {
   let feedBilibili: (message: Record<string, unknown>) => void;
   let port = 0;
   let ws: WebSocket;
-  const terminalMessages: Array<Record<string, unknown>> = [];
+  const consoleMessages: Array<Record<string, unknown>> = [];
 
   beforeAll(async () => {
     const config = structuredClone(definition.defaults());
@@ -68,7 +68,7 @@ describe.sequential('CortiV 集成测试', () => {
     config.batching.quietGapMs = 40;
     config.batching.maxBatchAgeMs = 300;
     config.tick.intervalMinutes = null;
-    config.worlds.terminal.enabled = true;
+    config.worlds.console.enabled = true;
     config.worlds.bilibili.enabled = true;
     config.worlds.bilibili.roomId = 6;
     config.worlds.minecraft.enabled = false;
@@ -117,8 +117,8 @@ describe.sequential('CortiV 集成测试', () => {
     port = (await bot.start()).port as number;
     await waitFor(() => llm.calls.length > 0 && legacyMessages(bot.core.session.records).length >= 3);
 
-    ws = new WebSocket(`ws://127.0.0.1:${port}${panelStreamRoute('world:terminal', 'chat')}`);
-    ws.on('message', (data) => terminalMessages.push(JSON.parse(String(data))));
+    ws = new WebSocket(`ws://127.0.0.1:${port}${panelStreamRoute('world:console', 'chat')}`);
+    ws.on('message', (data) => consoleMessages.push(JSON.parse(String(data))));
     await new Promise<void>((resolve, reject) => {
       ws.once('open', resolve);
       ws.once('error', reject);
@@ -165,18 +165,18 @@ describe.sequential('CortiV 集成测试', () => {
       && event.text.includes('看过 288429'))).toBe(true);
   });
 
-  it('控制台输入能即时唤醒、调用发送工具并回到同一个 WebSocket', async () => {
+  it('WebUI 输入能即时唤醒、调用发送工具并回到同一个 WebSocket', async () => {
     llm.script(toolReply([
-      { name: 'terminal_send', args: { text: '我收到了，试播控制台链路正常。' } },
+      { name: 'console_send', args: { text: '我收到了，试播 WebUI 链路正常。' } },
     ]));
-    ws.send(JSON.stringify({ type: 'msg', text: '试播检查：现在能看到控制台吗？' }));
+    ws.send(JSON.stringify({ type: 'msg', text: '试播检查：现在能看到 WebUI 吗？' }));
 
-    await waitFor(() => terminalMessages.some((message) =>
+    await waitFor(() => consoleMessages.some((message) =>
       message.type === 'msg' && String(message.text).includes('我收到了')));
     expect(bot.core.store.range({}).some((event) =>
-      event.type === 'terminal.message' && event.text.includes('试播检查'))).toBe(true);
+      event.type === 'console.message' && event.text.includes('试播检查'))).toBe(true);
     expect(bot.core.store.range({}).some((event) =>
-      event.type === 'terminal.self' && event.text.includes('试播控制台链路正常'))).toBe(true);
+      event.type === 'console.self' && event.text.includes('试播 WebUI 链路正常'))).toBe(true);
   });
 
   it('真实工作区覆写会保留历史，并把异常缩短警告回给主 session', async () => {
@@ -197,7 +197,7 @@ describe.sequential('CortiV 集成测试', () => {
       message.role === 'tool' && /缩水提示/.test(message.content)));
 
     const history = await fetch(
-      `http://127.0.0.1:${port}/api/console/providers/memory%3Acortiv/panels/workspace/history`,
+      `http://127.0.0.1:${port}/api/webui/providers/memory%3Acortiv/panels/workspace/history`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -213,7 +213,7 @@ describe.sequential('CortiV 集成测试', () => {
       groups: Array<{ group: { id: string } }>;
     };
     expect(groups.groups.map((entry) => entry.group.id)).toEqual(expect.arrayContaining([
-      'cortiv', 'cortiv-cognition', 'world:bilibili', 'world:terminal',
+      'cortiv', 'cortiv-cognition', 'world:bilibili', 'world:console',
     ]));
 
     const set = (group: string, values: Record<string, unknown>) => fetch(

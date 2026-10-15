@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  World, WorldHost, WorldConsoleDecl, WorldPanelDecl, EventTag, StoragePart, ToolCallContext,
+  World, WorldHost, WorldWebUiDecl, WorldPanelDecl, EventTag, StoragePart, ToolCallContext,
   ToolDef, ToolOutcome, TriggerMode,
 } from '../../core/types.ts';
 import { MAP_SIZE, exploredShare, mapStateOf, renderMapPng } from './map-view.ts';
@@ -261,7 +261,7 @@ interface WorldGenChoice {
  * 挂载面板「服务器」一行的状态。`reachable` 只说端口能否建立 TCP 连接;bot 是否登录并
  * 进入世界只看 `link.phase`。
  */
-export interface MinecraftServerConsoleState extends MinecraftServerState {
+export interface MinecraftServerWebUiState extends MinecraftServerState {
   /** bot 要不要连着:启动/连接置真,停止/断开置假 */
   wanted: boolean;
   mode: MinecraftServerMode;
@@ -287,7 +287,7 @@ export interface MinecraftWorldState {
   serverDir: string;
   /** 服务器正跑着(含外部起的):只有难度与默认游戏模式能热改 */
   live: boolean;
-  /** 是否由 World 托管；仅托管进程提供控制台 stdin。 */
+  /** 是否由 World 托管；仅托管进程提供服务器控制台 stdin。 */
   hosted: boolean;
   worlds: WorldInfo[];
   settings: GameSettings;
@@ -315,7 +315,7 @@ export interface MinecraftAccessState {
   serverDir: string;
   /** 服务器正跑着(含外部起的) */
   live: boolean;
-  /** 由 World 托管:跑着的时候也能经控制台 op/deop */
+  /** 由 World 托管:跑着的时候也能经服务器控制台 op/deop */
   hosted: boolean;
   /** worlds.minecraft.local.cheats:启动前自动补名单 */
   autoOp: boolean;
@@ -358,10 +358,10 @@ const CAMERA_NOTE_FILE = fileURLToPath(new URL('./ENV_PROMPT_CAMERA.md', import.
 
 
 /**
- * 控制台面板的声明:**局部 id + 真标题**,渲染在 `src/worlds/minecraft/console/` 的
+ * WebUI 面板的声明:**局部 id + 真标题**,渲染在 `src/worlds/minecraft/webui/` 的
  * 自有浏览器插件里(键就是这里的 id),中央前端不认识这几个名字。
  *
- * 代理与真 World 共用这一份。控制台隔着子进程代理看到的表面必须与直连时一模一样
+ * 代理与真 World 共用这一份。WebUI 隔着子进程代理看到的表面必须与直连时一模一样
  * ——面板 id 两边一旦不同,浏览器插件那几个键就只在其中一条路上对得上。
  */
 export function minecraftPanelDecls(language: Language): readonly WorldPanelDecl[] {
@@ -418,7 +418,7 @@ interface PwsrTableDecl<T> {
 
 /**
  * 按 realmKey 隔离的内存暂态表；切换世界保留旧命名空间，切回时恢复访问。
- * 注册的表自动进入公告、现状行与控制台存储项。
+ * 注册的表自动进入公告、现状行与 WebUI 存储项。
  */
 export class PwsrTables {
   /** 当前命名空间键;空串 = 还没认过世界(她在连上之前就登记的东西落在这里) */
@@ -474,7 +474,7 @@ export class PwsrTables {
       + `${hints.length > 0 ? `(${hints.join('、')})` : ''}`;
   }
 
-  /** 控制台存储项的规模一行 */
+  /** WebUI 存储项的规模一行 */
   stat(): string {
     const space = this.space(this.current);
     const here = this.decls.map((d) => d.status(this.dataOf(space, d))).join('、') || '没有登记表';
@@ -2505,7 +2505,7 @@ export class MinecraftWorld implements World {
   private cameraDown = false;
   /** 上次进服的世界身份落盘处;进服时对账,换了世界必须当场说 */
   private readonly worldFile: string | null;
-  /** host 挂载前也能用的日志转发器(控制台先于 start 用到管理器) */
+  /** host 挂载前也能用的日志转发器(WebUI 先于 start 用到管理器) */
   private readonly fallbackLog: import('../../core/types.ts').Logger;
   /** 任务号:排进队列的每一件事领一个,回报时认它 */
   private taskSeq = 0;
@@ -2550,7 +2550,7 @@ export class MinecraftWorld implements World {
     this.works = new WorksBook(ledger('minecraft-works.json'));
     this.policy = new PolicyBook(ledger('minecraft-policy.json'));
     this.worldFile = ledger('minecraft-world.json');
-    // host 挂载在 start();管理器可能在此之前被控制台使用,日志经转发器现取
+    // host 挂载在 start();管理器可能在此之前被 WebUI 使用,日志经转发器现取
     const fwd: import('../../core/types.ts').Logger = {
       child: () => fwd,
       trace: (m, d) => this.host?.log.trace(m, d),
@@ -2702,9 +2702,9 @@ export class MinecraftWorld implements World {
    * 挂载面板「服务器」那一行。本地托管时启动/停止管受管服务器与 bot 连接;外部服务器时
    * 启动/停止/重连只管 bot 的连接,不碰对方的服务器进程。
    */
-  serverConsole(language: Language = 'zh'): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerConsoleState>> {
-    const report = async (state?: MinecraftServerState): Promise<MinecraftServerConsoleState> =>
-      this.serverConsoleState(state ?? await this.mcServer.state());
+  serverWebUi(language: Language = 'zh'): Record<'state' | 'start' | 'stop' | 'reconnect', () => Promise<MinecraftServerWebUiState>> {
+    const report = async (state?: MinecraftServerState): Promise<MinecraftServerWebUiState> =>
+      this.serverWebUiState(state ?? await this.mcServer.state());
     // 每次操作前先让配置里的连接方式落地(断开旧连接排进队列),这次操作的 serverWanted 按新方式设
     const reconcile = (): void => {
       if (this.serverLifecycleActive) void this.syncManagedServerLifecycle();
@@ -2745,7 +2745,7 @@ export class MinecraftWorld implements World {
     };
   }
 
-  private serverConsoleState(state: MinecraftServerState): MinecraftServerConsoleState {
+  private serverWebUiState(state: MinecraftServerState): MinecraftServerWebUiState {
     const link = this.bridge?.link;
     const target = this.linkTarget();
     const configured = this.configuredTarget();
@@ -2860,7 +2860,7 @@ export class MinecraftWorld implements World {
           // 停的是受管进程时由服务器相位事件投递世界下线;其余情况在这里投递断开
           const hosting = this.mcServer.hosting;
           const address = targetAddress(this.linkTarget());
-          this.endConnection(managed ? '受管服务器已停止' : '控制台断开了连接');
+          this.endConnection(managed ? '受管服务器已停止' : '操作员从 WebUI 断开了连接');
           const stopped = await Promise.allSettled([
             this.bridge?.stop() ?? Promise.resolve(),
             managed || hosting ? this.mcServer.stop() : Promise.resolve(),
@@ -2870,14 +2870,14 @@ export class MinecraftWorld implements World {
             throw new AggregateError(failures.map((failure) => failure.reason), '服务器连接关闭不完整');
           }
           if (wasLinked && !hosting) {
-            this.emit('minecraft.event', `[Minecraft] 控制台断开了与 ${address} 的连接;重新连接之前,游戏里的动作都不会生效。`, true);
+            this.emit('minecraft.event', `[Minecraft] WebUI 断开了与 ${address} 的连接;重新连接之前,游戏里的动作都不会生效。`, true);
           }
           return;
         }
         if (!this.serverWanted) return;
         this.applyConfiguredTarget();
         if (!managed) {
-          if (this.bridge?.active) this.bridge.reconnectNow('控制台连接');
+          if (this.bridge?.active) this.bridge.reconnectNow('WebUI 连接');
           else this.bridge?.start();
           return;
         }
@@ -2899,7 +2899,7 @@ export class MinecraftWorld implements World {
     return this.enqueueLifecycle(async () => {
       if (!this.serverLifecycleActive || !this.serverWanted || this.managedLocalServer()) return;
       if (this.bridge?.active) {
-        this.endConnection('控制台重新连接');
+        this.endConnection('操作员从 WebUI 重新连接');
         await this.bridge.stop();
       }
       this.applyConfiguredTarget();
@@ -2936,14 +2936,14 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 控制台「存档与玩法」面板。
+   * WebUI「存档与玩法」面板。
    *
    * server.properties 改动按服务器状态分两种时机:
    * 停着的时候写文件(什么都能改,下次启动生效);跑着的时候只有难度和默认游戏
-   * 模式能经控制台指令当场改,且不落盘——那会儿写文件既不生效,还可能被服务端
+   * 模式能经服务器控制台指令当场改,且不落盘——那会儿写文件既不生效,还可能被服务端
    * 自己的存盘盖掉。
    */
-  worldConsole(language: Language = 'zh'): {
+  worldWebUi(language: Language = 'zh'): {
     state(): Promise<MinecraftWorldState>;
     select(name: string): Promise<MinecraftWorldState>;
     create(name: string, gen: WorldGenChoice): Promise<MinecraftWorldState>;
@@ -3037,7 +3037,7 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 控制台「权限与作弊」面板。
+   * WebUI「权限与作弊」面板。
    *
    * 专用服没有单人存档那个「开作弊」开关:能不能下 /tp、/gamemode、/spectate,
    * 全看名字在不在 ops.json 里(以及 op 拿到第几级)。 World 经托管服务器的 stdin
@@ -3046,12 +3046,12 @@ export class MinecraftWorld implements World {
    *
    * 时机与「存档与玩法」同一条规则,只是这里有两份文件:
    *  - **停着**:直接改 ops.json 与 server.properties,下次启动生效。
-   *  - **跑着且是托管的**:名单走控制台 op/deop 当场生效(服务端自己写回文件);
+   *  - **跑着且是托管的**:名单走服务器控制台 op/deop 当场生效(服务端自己写回文件);
    *    properties 那几项一概要停机。
    *  - **跑着但是外部起的**:没有 stdin,什么都改不了——这会儿写 ops.json 只会
    *    被服务端退出时的整份写回盖掉,所以宁可拒绝也不假装成功。
    */
-  accessConsole(language: Language = 'zh'): {
+  accessWebUi(language: Language = 'zh'): {
     state(): Promise<MinecraftAccessState>;
     setOp(name: string, on: boolean): Promise<MinecraftAccessState>;
     apply(patch: Partial<AccessSettings>): Promise<MinecraftAccessState>;
@@ -3116,7 +3116,7 @@ export class MinecraftWorld implements World {
     };
   }
 
-  clientConsole(): {
+  clientWebUi(): {
     state(): Promise<ClientState>;
     start(): Promise<ClientState>;
     stop(): Promise<ClientState>;
@@ -3124,7 +3124,7 @@ export class MinecraftWorld implements World {
     return {
       state: () => this.client.state(),
       start: () => {
-        this.host?.log.info('观察者客户端由控制台面板启动');
+        this.host?.log.info('观察者客户端由 WebUI 面板启动');
         return this.client.start();
       },
       stop: () => this.client.stop(),
@@ -3132,12 +3132,12 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 控制台「挂载」里的玩家客户端那一行。
+   * WebUI「挂载」里的玩家客户端那一行。
    *
    * `teleport` 是手动补一次传送:自动那次挂在"这个名字进服了"这个时刻上,
    * 而人中途死了、回主菜单再进、或者自己开的客户端都够不着那一刻。
    */
-  playerConsole(language: Language = 'zh'): {
+  playerWebUi(language: Language = 'zh'): {
     state(): Promise<ClientState>;
     start(): Promise<ClientState>;
     stop(): Promise<ClientState>;
@@ -3169,13 +3169,13 @@ export class MinecraftWorld implements World {
     };
   }
 
-  /** 控制台露出,文案按这次请求的界面语言;面板调用的回执与错误也按它。 */
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  /** WebUI 露出,文案按这次请求的界面语言;面板调用的回执与错误也按它。 */
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = text(language);
     const link = this.bridge?.link ?? null;
     const online = link?.phase === 'online';
     const address = targetAddress(this.linkTarget());
-    // 没在连:World 没起或本地服务器没开是「未启动」,外部服务器被控制台断开是「已断开」
+    // 没在连:World 没起或本地服务器没开是「未启动」,外部服务器被 WebUI 断开是「已断开」
     const off = !this.bridge
       ? t.notStarted
       : !this.serverWanted
@@ -3184,7 +3184,7 @@ export class MinecraftWorld implements World {
     const task = this.executor?.current;
     // 给人看的画面从哪来:观察者客户端窗口出来了就是它,否则 viewer 网页,都没有就没有
     const origin = this.client.windowHint() ? 'client' : this.bridge?.viewerUrl ? 'viewer' : null;
-    const badges: WorldConsoleDecl['badges'] = [
+    const badges: WorldWebUiDecl['badges'] = [
       off
         ? { label: t.server, value: off, tone: 'off' }
         : online
@@ -3262,9 +3262,9 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 面板通用调用面:控制台按 (panel, method, args) 透传到这里。
+   * 面板通用调用面:WebUI 按 (panel, method, args) 透传到这里。
    *
-   * `panel` 是 `console()` 里声明的**局部 id**(mount / skin / world / access / log)。
+   * `panel` 是 `webUi()` 里声明的**局部 id**(mount / skin / world / access / log)。
    * 「挂载」一屏管三条链路(server / client / player),它们在服务端仍是三份各自
    * 的控制面,方法名与语义一字未改;`mount` 的方法名把是哪一条缀在前面
    * (`server.state` / `client.stop` / `player.teleport`),再分派回下面那三支。
@@ -3287,27 +3287,27 @@ export class MinecraftWorld implements World {
         return this.invokePanel(lane, method.slice(dot + 1), args, language);
       }
       case 'server':
-        return call(this.serverConsole(language) as unknown as Record<string, unknown>, ['state', 'start', 'stop', 'reconnect']);
+        return call(this.serverWebUi(language) as unknown as Record<string, unknown>, ['state', 'start', 'stop', 'reconnect']);
       case 'client':
-        return call(this.clientConsole() as unknown as Record<string, unknown>, ['state', 'start', 'stop']);
+        return call(this.clientWebUi() as unknown as Record<string, unknown>, ['state', 'start', 'stop']);
       case 'player':
         return call(
-          this.playerConsole(language) as unknown as Record<string, unknown>,
+          this.playerWebUi(language) as unknown as Record<string, unknown>,
           ['state', 'start', 'stop', 'teleport'],
         );
       case 'world':
-        return call(this.worldConsole(language) as unknown as Record<string, unknown>, ['state', 'select', 'create', 'apply']);
+        return call(this.worldWebUi(language) as unknown as Record<string, unknown>, ['state', 'select', 'create', 'apply']);
       case 'access':
-        return call(this.accessConsole(language) as unknown as Record<string, unknown>, ['state', 'setOp', 'apply']);
+        return call(this.accessWebUi(language) as unknown as Record<string, unknown>, ['state', 'setOp', 'apply']);
       case 'skin':
         return call(
-          this.skinConsole(language) as unknown as Record<string, unknown>,
+          this.skinWebUi(language) as unknown as Record<string, unknown>,
           ['state', 'set', 'clear', 'file'],
         );
       case 'log': {
         if (method !== 'entries') throw new Error(t.unknownMethod(panel, method));
         const after = typeof args[0] === 'number' ? args[0] : 0;
-        return { entries: this.logConsole().entries(after) };
+        return { entries: this.logWebUi().entries(after) };
       }
       default:
         throw new Error(t.unknownPanel(panel));
@@ -3315,12 +3315,12 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 控制台「皮肤」面板:她和玩家各选一张 PNG。
+   * WebUI「皮肤」面板:她和玩家各选一张 PNG。
    *
    * 选中即铺:字节按账号名进两份游戏目录,由客户端侧的 CustomSkinLoader 读。
    * 服务器一侧什么都不做——离线服的玩家档案里根本没有材质这一格。
    */
-  skinConsole(language: Language = 'zh'): {
+  skinWebUi(language: Language = 'zh'): {
     state(): Promise<MinecraftSkinState>;
     set(role: string, base64: string): Promise<MinecraftSkinState>;
     clear(role: string): Promise<MinecraftSkinState>;
@@ -3598,7 +3598,7 @@ export class MinecraftWorld implements World {
   }
 
   /** World 日志跨进程持久化。 */
-  private storageParts(language: Language): NonNullable<WorldConsoleDecl['storage']> {
+  private storageParts(language: Language): NonNullable<WorldWebUiDecl['storage']> {
     const impl: Record<string, Pick<StoragePart, 'stat' | 'clear'>> = {
       'minecraft-chests': {
         stat: () => this.chests.stat(),
@@ -3646,7 +3646,7 @@ export class MinecraftWorld implements World {
     return minecraftStorageDecls(language).map((d) => ({ ...d, ...impl[d.key]! }));
   }
 
-  logConsole(): { entries(after?: number): MinecraftLogEntry[] } {
+  logWebUi(): { entries(after?: number): MinecraftLogEntry[] } {
     return { entries: (after = 0) => this.diag.after(after) };
   }
 
@@ -5523,8 +5523,8 @@ export class MinecraftWorld implements World {
   }
 
   /**
-   * 把玩家客户端那个人传送到 bot 旁边。托管服务器走控制台 stdin;外部服务器
-   * 借 bot 的聊天权限(需要 op)。返回一句给控制台看的回执。
+   * 把玩家客户端那个人传送到 bot 旁边。托管服务器走服务器控制台 stdin;外部服务器
+   * 借 bot 的聊天权限(需要 op)。返回一句给 WebUI 看的回执。
    */
   private teleportPlayer(reason: string, language: Language = 'zh'): string {
     const t = text(language);

@@ -14,10 +14,10 @@ pnpm start cormini
 
 Needs an API key for the active endpoint: `DEEPSEEK_API_KEY` for the seeded DeepSeek
 instance, in the process environment or in the endpoint's `.env` under
-`<deployment root>/providers/<endpoint>/` (the console's provider page can write it there).
+`<deployment root>/providers/<endpoint>/` (the WebUI's provider page can write it there).
 The package holds no deployment; see
 [`bots/README.md`](../README.md) for what lives where.
-Open `http://127.0.0.1:7788/` and talk to it in the terminal view.
+Open `http://127.0.0.1:7788/` and talk to it in the console view.
 
 ## What it does
 
@@ -33,7 +33,7 @@ Open `http://127.0.0.1:7788/` and talk to it in the terminal view.
 - **One session by default.** `declareSessions()` returns a single persistent session that
   receives events. `onHandoff()` returns `tail: null`, handing the rebuild back to
   the Core (the recent tail carries over mechanically).
-- **Terminal only.** No platform adapters.
+- **Console only.** No platform adapters.
 - **Soft-boundary jot warning.** At batch end it checks `sessionInfo` token gauges
   against a fixed 0.85 ratio: one warning round to write things down, then it requests
   the handoff itself (the Core keeps only the over-budget hard clamp).
@@ -50,9 +50,9 @@ layered memory (MEMORY 0–4) · subconscious paths (association / rumination / 
 proposals and constitutional review · draft-then-confirm gates · platform worlds ·
 version history and checkpoints · usage accounting
 
-## Framework-derived console
+## Framework-derived WebUI
 
-`index.ts` contributes only its own Console Provider (model tiers); the terminal chat panel
-comes from the terminal module's own provider. `createBot()` derives events, logs, sessions, status,
-storage, pause/resume, configuration, tool-library, and IO-module console surfaces from
+`index.ts` contributes only its own WebUI Provider (model tiers); the console chat panel
+comes from the console module's own provider. `createBot()` derives events, logs, sessions, status,
+storage, pause/resume, configuration, tool-library, and IO-module WebUI surfaces from
 the Core fields.

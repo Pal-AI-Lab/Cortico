@@ -97,7 +97,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: 'Comprueba si el servicio externo correspondiente se detuvo.',
     llm: 'Detener las instancias de proveedor',
     flush: 'Guardar el estado de Core',
-    web: 'Cerrar la consola',
+    web: 'Cerrar la WebUI',
     summarySkipped: 'Pasos de apagado local incompletos',
     summaryComplete: 'Apagado local terminado: se completaron todos los pasos',
     summaryUnverified: (items: string[]) => `El apagado local terminó, pero no se confirmó que el estado externo haya terminado: ${items.join(', ')} (requiere confirmación manual)`,

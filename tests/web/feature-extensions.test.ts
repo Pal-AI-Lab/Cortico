@@ -11,7 +11,7 @@ const EXTENSIONS = '../../src/web/client/features/extensions/index.ts';
 
 type Any = any;
 
-const { createConsoleUi } = (await import(UI)) as Any;
+const { createWebUi } = (await import(UI)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE)) as Any;
 const { Router } = (await import(ROUTER)) as Any;
 const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns } = (await import(EXTENSIONS)) as Any;
@@ -21,11 +21,11 @@ const flush = async (n = 30): Promise<void> => { for (let i = 0; i < n; i++) awa
 const LIST = {
   dir: 'C:/repo/extensions',
   extensions: [
-    { name: 'alpha-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, consoleClient: true, console: 'served', loaded: true, worldId: 'alpha', label: '甲扩展', state: 'loaded' },
-    { name: 'beta-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, consoleClient: true, console: 'missing', loaded: false, reason: '默认导出不是 WorldDefinition', state: 'failed' },
-    { name: 'gamma-prov', spec: '^2.0.0', version: '2.0.0', kind: 'provider', api: 3, consoleClient: false, console: 'none', loaded: false, state: 'pending-restart', description: '丙' },
-    { name: 'delta-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, consoleClient: false, console: 'none', loaded: true, worldId: 'delta', state: 'removed' },
-    { name: 'epsilon-mod', spec: '^1.0.0', version: '1.0.0', consoleClient: false, loaded: false, reason: 'package.json 缺少 cortico 块(至少要 kind 与 api)。', state: 'failed' },
+    { name: 'alpha-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, webUiClient: true, webUi: 'served', loaded: true, worldId: 'alpha', label: '甲扩展', state: 'loaded' },
+    { name: 'beta-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, webUiClient: true, webUi: 'missing', loaded: false, reason: '默认导出不是 WorldDefinition', state: 'failed' },
+    { name: 'gamma-prov', spec: '^2.0.0', version: '2.0.0', kind: 'provider', api: 3, webUiClient: false, webUi: 'none', loaded: false, state: 'pending-restart', description: '丙' },
+    { name: 'delta-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', api: 3, webUiClient: false, webUi: 'none', loaded: true, worldId: 'delta', state: 'removed' },
+    { name: 'epsilon-mod', spec: '^1.0.0', version: '1.0.0', webUiClient: false, loaded: false, reason: 'package.json 缺少 cortico 块(至少要 kind 与 api)。', state: 'failed' },
   ],
 };
 
@@ -50,7 +50,7 @@ const DETAIL = {
   created: '2025-12-01T00:00:00.000Z',
   versionCount: 4,
   history: [{ version: '3.1.0', date: '2026-09-18T00:00:00.000Z' }, { version: '3.0.0', date: '2026-07-01T00:00:00.000Z' }],
-  manifest: { kind: 'world', api: 4, consoleClient: 'dist/console.js' },
+  manifest: { kind: 'world', api: 4, webUiClient: 'dist/webui.js' },
   warnings: [],
   frameworkApi: 4,
   engines: '>=22',
@@ -101,7 +101,7 @@ function mkCtx(caps: Record<string, boolean> = { extensions: true, restart: true
   const root = document.createElement('div');
   document.body.appendChild(root);
   const lifecycle = new Lifecycle(() => {});
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: { get: () => null, set: () => {} },
     overlayHost: document.body,
     signal: lifecycle.signal,

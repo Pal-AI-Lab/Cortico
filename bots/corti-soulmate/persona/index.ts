@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  CoreApi, World, MemoryAssemblyContext, PersonaConsoleDecl,
+  CoreApi, World, MemoryAssemblyContext, PersonaWebUiDecl,
   SessionDecl, SystemPrefixContext, ToolDef, ToolSpec, ContextHandoffResult,
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
@@ -20,7 +20,7 @@ import { Cormini, MAIN, type CorminiOptions } from '../../cormini/persona/person
 import { WorkspaceError, normalizeWorkspacePath } from '../../cormini/persona/memory.ts';
 import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceGit.ts';
 import { MemoTiers } from './memoTiers.ts';
-import { personaConsoleDecl } from './consoleSurface.ts';
+import { personaWebUiDecl } from './webUiSurface.ts';
 import { memoryVars } from './memory.ts';
 import { memoCapGuard, moveFileTool, scheduleWakeSpec, toolUsageText } from './tools.ts';
 import { asPersonaRole, checkAccess } from './permissions.ts';
@@ -42,7 +42,7 @@ export const WORKSPACE_DIRS = [
   'people', 'memo', 'memo/active', 'memo/archived',
 ] as const;
 
-/** 仅供控制台显示的段名，不写入前缀。 */
+/** 仅供 WebUI 显示的段名，不写入前缀。 */
 const SEGMENT_TITLES: Record<string, string> = {
   'persona.orientation': 'ORIENTATION',
   'persona.constitution': '宪法',
@@ -50,7 +50,7 @@ const SEGMENT_TITLES: Record<string, string> = {
   'memory.all': '记忆',
 };
 
-/** 段 → 可编辑源的 key。没列的段(工具用法)是代码拼的,控制台标只读。 */
+/** 段 → 可编辑源的 key。没列的段(工具用法)是代码拼的,WebUI 标只读。 */
 const SEGMENT_SOURCES: Record<string, string> = {
   'persona.orientation': 'orientation',
   'persona.constitution': 'constitution',
@@ -67,7 +67,7 @@ export interface CortiSoulmateOptions {
   firstTurnDir?: string;
   /**
    * 部署侧的人格文本覆盖目录(这份部署的 `prompts/`)。ORIENTATION / PREFIX / ENV_SECTION /
-   * MEMORY / CORE 五份,同名文件存在即整份替换包内默认;控制台保存只写这里。
+   * MEMORY / CORE 五份,同名文件存在即整份替换包内默认;WebUI 保存只写这里。
    */
   promptsDir?: string;
 }
@@ -146,7 +146,7 @@ export class CortiSoulmate extends Cormini {
     });
   }
 
-  /** 已接线的梦(控制台的强制入梦、状态仪表用) */
+  /** 已接线的梦(WebUI 的强制入梦、状态仪表用) */
   get dream(): Dream {
     if (!this.dreamer) throw new Error('Persona尚未 attach 到 core');
     return this.dreamer;
@@ -208,7 +208,7 @@ export class CortiSoulmate extends Cormini {
     };
   }
 
-  /** 供控制台工具编辑器列 schema:主 session 之外还有梦那一面。 */
+  /** 供 WebUI 工具编辑器列 schema:主 session 之外还有梦那一面。 */
   primitiveToolSpecs(): ToolSpec[] {
     return [scheduleWakeSpec()];
   }
@@ -241,7 +241,7 @@ export class CortiSoulmate extends Cormini {
     return override && existsSync(override) ? override : join(MODULE_DIR, name);
   }
 
-  /** 控制台保存人格文本落到哪:部署 `prompts/`;没给部署目录就写包内那份。 */
+  /** WebUI 保存人格文本落到哪:部署 `prompts/`;没给部署目录就写包内那份。 */
   textWritePath(name: string): string {
     return this.promptsDir ? join(this.promptsDir, name) : join(MODULE_DIR, name);
   }
@@ -286,7 +286,7 @@ export class CortiSoulmate extends Cormini {
     });
   }
 
-  /** 各模板占位符此刻的值(纯展示,控制台的旁注用)。`worlds.*` 那几个由各 World 自报。 */
+  /** 各模板占位符此刻的值(纯展示,WebUI 的旁注用)。`worlds.*` 那几个由各 World 自报。 */
   override promptVarValues(ctx: { now: Date; timezone: string }): Record<string, string> {
     return {
       ...this.prefixVars({ ...ctx, worlds: [] }),
@@ -353,12 +353,12 @@ export class CortiSoulmate extends Cormini {
   }
 
   // ---------------------------------------------------------------------------
-  // 控制台
+  // WebUI
   // ---------------------------------------------------------------------------
 
-  /** 工作区、Memory 分层、版本历史三块归 Memory 页,模板归 Persona 页;部署级控制在 console-page.ts。工作区排除在统一清除清单外。 */
-  override console(language: Language = 'zh'): PersonaConsoleDecl {
-    const { panels, ...decl } = personaConsoleDecl({
+  /** 工作区、Memory 分层、版本历史三块归 Memory 页,模板归 Persona 页;部署级控制在 webui-page.ts。工作区排除在统一清除清单外。 */
+  override webUi(language: Language = 'zh'): PersonaWebUiDecl {
+    const { panels, ...decl } = personaWebUiDecl({
       memory: this.memory,
       memo: this.memo,
       emergences: () => this.emergences(),

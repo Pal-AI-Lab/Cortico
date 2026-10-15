@@ -1,6 +1,6 @@
 /** @vitest-environment jsdom */
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { createConsoleUi } from '../../src/web/client/ui/index.ts';
+import { createWebUi } from '../../src/web/client/ui/index.ts';
 import { Lifecycle } from '../../src/web/client/core/lifecycle.ts';
 import { Router } from '../../src/web/client/core/router.ts';
 import type { FeatureContext } from '../../src/web/client/features/feature.ts';
@@ -20,7 +20,7 @@ it('lists every language by its own name, marks the current one, and keeps it on
   const { mountGeneral } = await import('../../src/web/client/features/settings/general.ts');
   const root = document.createElement('div');
   document.body.append(root);
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: { get: (_key, fallback) => fallback, set: () => {} },
     overlayHost: document.body, signal: lifecycle.signal, doc: document,
   });

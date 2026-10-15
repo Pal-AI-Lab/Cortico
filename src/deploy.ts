@@ -1,7 +1,7 @@
 /**
  * 部署配置按顺序深合并：BotDefinition.defaults()、包内 World 覆盖、共享端点表、部署 config.json。
  * 部署文件中的 providers 字段不参与合并。Core、Persona 与 World 的默认值由各自所有者提供。
- * 运行时共享合并后的配置对象，控制台和调参工具原位更新。
+ * 运行时共享合并后的配置对象，WebUI 和调参工具原位更新。
  */
 import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
@@ -28,12 +28,12 @@ export function listBots(root = deploymentRoot()): string[] {
 export const DEFAULT_DEPLOYMENT = { name: 'mybot', bot: 'cormini' } as const;
 
 /**
- * 开场引导的一次性标记，放在部署目录下。自建部署时写入，控制台见到它才给引导，操作员
+ * 开场引导的一次性标记，放在部署目录下。自建部署时写入，WebUI 见到它才给引导，操作员
  * 开口或按下那颗按钮后删除。手动建的部署没有这个文件，也就不会看到引导。
  */
 export const ONBOARDING_FLAG_FILE = '.onboarding';
 
-/** 部署根下的 bot 头像,PNG;控制台的 `/api/avatar` 读写它。 */
+/** 部署根下的 bot 头像,PNG;WebUI 的 `/api/avatar` 读写它。 */
 export const AVATAR_FILE = 'avatar.png';
 
 /** 部署根下另有用途的目录名，不能拿来当部署名。 */
@@ -51,7 +51,7 @@ export function deploymentNameProblem(name: string, taken: readonly string[]): s
 
 /**
  * 建一份空白部署：`deployment.json` 指向代码包，加上开场引导的标记；给了展示名就写一份
- * 只有 `displayName` 的 `config.json`。端点与其余设置在控制台里配。
+ * 只有 `displayName` 的 `config.json`。端点与其余设置在 WebUI 里配。
  */
 export function createDeployment(
   options: { name: string; bot: string; displayName?: string; root?: string; avatarFrom?: string },

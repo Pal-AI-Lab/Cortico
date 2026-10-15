@@ -1,4 +1,4 @@
-/** 控制台入口：贡献页路由交给 ConsolePageHost，框架路由交给对应 feature；空路由默认打开终端。 */
+/** WebUI 入口：贡献页路由交给 WebUiPageHost，框架路由交给对应 feature；空路由默认打开控制台。 */
 
 import { fetchManifest, get } from './core/api.ts';
 import { withLanguage } from './core/language.ts';
@@ -6,10 +6,10 @@ import { Lifecycle } from './core/lifecycle.ts';
 import { Router, type Route } from './core/router.ts';
 import type { SocketLike } from './core/stream.ts';
 import { wsUrlOf } from './core/websocket.ts';
-import { BUILTIN_PANELS } from './console-pages/builtins.ts';
-import { ConsolePageHost, PROVIDER_ROUTE } from './console-pages/host.ts';
-import { ConsolePageLoader } from './console-pages/loader.ts';
-import { createConsoleUi } from './ui/index.ts';
+import { BUILTIN_PANELS } from './webui-pages/builtins.ts';
+import { WebUiPageHost, PROVIDER_ROUTE } from './webui-pages/host.ts';
+import { WebUiPageLoader } from './webui-pages/loader.ts';
+import { createWebUi } from './ui/index.ts';
 import { subscribeLamps } from './ui/lamp.ts';
 import { applyStoredTheme } from './theme/studio.ts';
 import { createShell } from './shell/index.ts';
@@ -24,10 +24,10 @@ import { extensionsFeature } from './features/extensions/index.ts';
 import { appearanceFeature } from './features/appearance/index.ts';
 import { promptsFeature } from './features/prompts/index.ts';
 import { settingsFeature } from './features/settings/index.ts';
-import type { ConsoleMemo } from '../shared/client-panel.ts';
+import type { WebUiMemo } from '../shared/client-panel.ts';
 
 /**
- * 控制台自己的页面。与贡献方的页无关——那一路完全由 manifest 驱动。
+ * WebUI 自己的页面。与贡献方的页无关——那一路完全由 manifest 驱动。
  *
  * 顺序即左栏顺序。`hidden` 的页面(外观)不进左栏,
  * 但仍要在这张表里:路由分派只认这张表,设置页里嵌着它的同时,直达链接也要能开。
@@ -39,7 +39,7 @@ export const FEATURES: readonly FrameworkFeature[] = [
 ];
 
 /** localStorage 后端；无痕模式下静默降级成内存，不抛。 */
-export function createMemo(prefix: string): ConsoleMemo {
+export function createMemo(prefix: string): WebUiMemo {
   const fallback = new Map<string, unknown>();
   return {
     get<T>(key: string, dflt: T): T {
@@ -67,7 +67,7 @@ export function boot(doc: Document = document): { dispose(): void } {
   // 首次渲染前应用主题。
   try {
     applyStoredTheme(doc);
-  } catch { /* 主题读坏了不该拦住整个控制台 */ }
+  } catch { /* 主题读坏了不该拦住整个 WebUI */ }
 
   // 首屏提示已经完成使命——内核跑起来了。摘不掉它才说明脚本没起来。
   doc.getElementById('boot-note')?.remove();
@@ -79,21 +79,21 @@ export function boot(doc: Document = document): { dispose(): void } {
     doc.body.appendChild(root);
   }
   /**
-   * 贡献方的页与 framework feature 各自拥有独立根容器。ConsolePageHost.unmount() 清空其根节点时，不得影响 feature 的 DOM。
+   * 贡献方的页与 framework feature 各自拥有独立根容器。WebUiPageHost.unmount() 清空其根节点时，不得影响 feature 的 DOM。
    */
   const pageRoot = doc.createElement('div');
   const featureRoot = doc.createElement('div');
   root.replaceChildren(pageRoot, featureRoot);
 
   const onError = (err: unknown): void => {
-    console.error('[console]', err);
+    console.error('[WebUI]', err);
   };
 
-  const loader = new ConsolePageLoader({
+  const loader = new WebUiPageLoader({
     importModule: (url) => import(/* @vite-ignore */ url),
     styleHost: doc.head,
     createLink: () => doc.createElement('link'),
-    log: (msg, detail) => console.warn('[console]', msg, detail ?? ''),
+    log: (msg, detail) => console.warn('[WebUI]', msg, detail ?? ''),
   });
 
   const router = new Router({
@@ -116,10 +116,10 @@ export function boot(doc: Document = document): { dispose(): void } {
     wsUrl: (path: string) => wsUrlOf(location, withLanguage(path)),
     onError,
   };
-  const host = new ConsolePageHost({ ...hostDeps, root: pageRoot });
+  const host = new WebUiPageHost({ ...hostDeps, root: pageRoot });
   /** 框架页里嵌别的页的面板用的宿主:同一套加载器与 memo,只换容器与路由前缀。 */
-  const consolePageHost: NonNullable<FeatureContext['consolePageHost']> = (opts) =>
-    new ConsolePageHost({ ...hostDeps, root: opts.root, route: opts.route });
+  const webUiPageHost: NonNullable<FeatureContext['webUiPageHost']> = (opts) =>
+    new WebUiPageHost({ ...hostDeps, root: opts.root, route: opts.route });
 
   /**
    * 左栏外壳。它自己不探活、不认识任何具体 World:框架页那段由 FEATURES 按
@@ -128,7 +128,7 @@ export function boot(doc: Document = document): { dispose(): void } {
   const shellLife = new Lifecycle(onError);
   const shell = createShell({
     doc,
-    ui: createConsoleUi({ memo, overlayHost: doc.body, signal: shellLife.signal, doc }),
+    ui: createWebUi({ memo, overlayHost: doc.body, signal: shellLife.signal, doc }),
     router,
     features: FEATURES,
     onError,
@@ -174,12 +174,12 @@ export function boot(doc: Document = document): { dispose(): void } {
     slot.className = `featureslot featureslot-${feature.route}`;
     featureRoot.appendChild(slot);
 
-    const ui = createConsoleUi({ memo, overlayHost: doc.body, signal: lifecycle.signal, doc });
+    const ui = createWebUi({ memo, overlayHost: doc.body, signal: lifecycle.signal, doc });
     void (async () => {
       try {
         const out = await feature.mount({
           root: slot, lifecycle, signal: lifecycle.signal, ui, router, route,
-          capabilities, onError, consolePageHost,
+          capabilities, onError, webUiPageHost,
           refreshNav: () => host.refresh(),
         });
         if (gen !== generation) {
@@ -203,7 +203,7 @@ export function boot(doc: Document = document): { dispose(): void } {
     shell.setRoute(route);
     // 页面加载依赖完整的 capabilities；就绪后重新应用当前路由。
     if (!ready) return;
-    // 空路由替换为终端页，不增加历史条目。
+    // 空路由替换为控制台页，不增加历史条目。
     if (route.segments.length === 0) {
       router.replace(['live']);
       return;

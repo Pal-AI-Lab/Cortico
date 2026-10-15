@@ -295,14 +295,14 @@ async function flush(times = 6): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
-  const { createConsoleUi } = (await import(UI)) as Any;
+  const { createWebUi } = (await import(UI)) as Any;
   const { Lifecycle } = (await import(LIFECYCLE)) as Any;
   const doc = new FakeDoc();
   const root = doc.createElement('div');
   doc.body.appendChild(root);
   const lifecycle = new Lifecycle();
   const guards: Array<() => string | null> = [];
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: fakeMemo(), overlayHost: doc.body, doc, signal: lifecycle.signal,
   });
   const ctx = {

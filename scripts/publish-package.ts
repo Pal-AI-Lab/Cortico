@@ -12,7 +12,7 @@ export const PACKAGE_NAME = 'cortico';
 
 /**
  * 发布清单声明的依赖,覆盖 {@link contractEntries} 的闭包。TypeScript 会跟着相对 import 解析到
- * `src/web/` 的服务端类型与控制台组件,所以带类型包的依赖连同 `@types/*` 一起声明。版本取自仓库根清单。
+ * `src/web/` 的服务端类型与 WebUI 组件,所以带类型包的依赖连同 `@types/*` 一起声明。版本取自仓库根清单。
  */
 export const PUBLISHED_DEPENDENCIES = [
   '@types/express',
@@ -29,7 +29,7 @@ export const PUBLISHED_DEPENDENCIES = [
   'ws',
 ] as const;
 
-/** 扩展的控制台面板用框架的 UI 套件渲染,测试里也会加载它;模板不碰控制台,闭包追不到。 */
+/** 扩展的 WebUI 面板用框架的 UI 套件渲染,测试里也会加载它;模板不碰 WebUI,闭包追不到。 */
 const HOST_ENTRIES = ['web/client/ui/index.ts'] as const;
 
 export interface RootPackageJson {

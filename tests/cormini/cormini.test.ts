@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Core } from "../core/fixture-core.ts";
 import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
 import type { CoreConfig } from '../../src/core/types.ts';
-import { TerminalWorld } from '../../src/worlds/terminal/world.ts';
+import { ConsoleWorld } from '../../src/worlds/console/world.ts';
 import { Cormini } from '../../bots/cormini/persona/persona.ts';
 import { makeCfg, FakeLLM, toolReply, sleep } from '../core/helpers.ts';
 
@@ -46,17 +46,17 @@ beforeAll(async () => {
     dataDir: join(dir, 'data'),
   };
 
-  const terminal = new TerminalWorld({ timezone: config.timezone, botName: 'Cormini' });
+  const consoleWorld = new ConsoleWorld({ timezone: config.timezone, botName: 'Cormini' });
   persona = new Cormini({
     memoryDir,
-    worlds: [terminal],
+    worlds: [consoleWorld],
   });
   writeFileSync(join(memoryDir, 'CONSTITUTION.md'), '# Who I am\n\nI am Cormini, a test.\n', 'utf8');
 
   llm = new FakeLLM();
   core = new Core(loaded, {
     persona: persona,
-    worlds: [terminal],
+    worlds: [consoleWorld],
     llm,
   });
   await core.start();
@@ -90,11 +90,11 @@ describe('Cormini', () => {
     llm.script(
       toolReply([{ name: 'write_file', args: { path: 'notes/first.md', content: 'remembered\n' } }]),
     );
-    // urgent 终端消息立即投递。
+    // urgent 控制台消息立即投递。
     core.store.append({
-      type: 'terminal.message',
+      type: 'console.message',
       ts: new Date().toISOString(),
-      source: 'terminal',
+      source: 'console',
       origin: 'external',
       text: '[10:00] tester: remember this',
     });
@@ -107,7 +107,7 @@ describe('Cormini', () => {
   it('工具集=文件工具 + 已挂载 IO 工具 + end_turn,没有 fork、也没有保留帧名', () => {
     const names = persona.declareSessions()[0].tools().map((t) => t.name).sort();
     expect(names).toEqual([
-      'append_file', 'delete_file', 'edit_file', 'end_turn', 'glob_files', 'grep_files', 'list_files', 'read_file', 'save_blob', 'terminal_send', 'write_file',
+      'append_file', 'console_send', 'delete_file', 'edit_file', 'end_turn', 'glob_files', 'grep_files', 'list_files', 'read_file', 'save_blob', 'write_file',
     ]);
     expect(names).not.toContain('fork');
     // 外部正文由 core 以保留帧投递;session 不声明同名(含旧名)工具。

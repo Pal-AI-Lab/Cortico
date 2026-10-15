@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * 控制台产物是否可用：清单、样式表和清单引用到的每个文件都在，且构建时记下的源文件至今未变。
+ * WebUI 产物是否可用：清单、样式表和清单引用到的每个文件都在，且构建时记下的源文件至今未变。
  * `bin/cortico.mjs` 在依赖装好之前就要用它，因此不得依赖第三方包。
  */
 import { createHash } from 'node:crypto';
@@ -66,7 +66,7 @@ function changedSources(root, sources) {
 }
 
 /**
- * 控制台产物为什么不能用。可用回 null，否则回一句原因。
+ * WebUI 产物为什么不能用。可用回 null，否则回一句原因。
  *
  * @param {string} root 仓库根目录；产物在它的 `dist/web`
  * @returns {string | null}

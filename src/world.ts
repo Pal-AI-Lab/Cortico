@@ -54,8 +54,8 @@ export interface WorldDefinition<S extends WorldSection = WorldSection> {
   preflight?(ctx: WorldContext<S>): void;
   /**
    * 返回 x-options 的完整选项表，包含按请求语言生成的固定项。
-   * 未知 kind 返回空数组，框架继续查询其他 World；当前值不在表中时由控制台补入。
-   * Persona 的选项由 Bot ConsoleContribution 提供。
+   * 未知 kind 返回空数组，框架继续查询其他 World；当前值不在表中时由 WebUI 补入。
+   * Persona 的选项由 Bot WebUiContribution 提供。
    */
   configOptions?(kind: string, language: Language): Array<{ value: string; label: string }>;
   create(ctx: WorldContext<S>): World;
@@ -123,7 +123,7 @@ export interface MissingWorld {
 }
 
 export interface PrebuiltOptions {
-  /** 控制台显示名;缺省用 id。 */
+  /** WebUI 显示名;缺省用 id。 */
   labels?: Record<string, string>;
   /** 按 bot 声明的渠道算(缺省)还是按部署侧选配算。 */
   declared?: boolean;
@@ -286,7 +286,7 @@ export class WorldAssembly {
     return slot;
   }
 
-  /** 所有槽位的实例(含未挂载的),给控制台拼面板、提示词文档与配置组用。 */
+  /** 所有槽位的实例(含未挂载的),给 WebUI 拼面板、提示词文档与配置组用。 */
   instances(): World[] {
     return this.slots.map((s) => s.instance);
   }
@@ -296,14 +296,14 @@ export class WorldAssembly {
   }
 
   /**
-   * `language` 下的显示名,每次现取:实例的 `console(language).label`,其次定义的 `label`;
+   * `language` 下的显示名,每次现取:实例的 `webUi(language).label`,其次定义的 `label`;
    * 预建实例与只有声明的缺失项用装配时记下的名字。
    */
   labelIn(id: string, language: Language): string {
     const slot = this.slots.find((s) => s.id === id);
     let declared: string | undefined;
     try {
-      declared = slot?.instance.console?.(language)?.label;
+      declared = slot?.instance.webUi?.(language)?.label;
     } catch {
       declared = undefined;
     }

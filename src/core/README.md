@@ -23,7 +23,7 @@ Core 管理 session、事件流与模型调用的生命周期，包括事件投�
 | `prefix.ts`、`template.ts` | system 前缀装配、环境提示词三层覆盖、模板渲染 |
 | `truncate.ts`、`markers.ts`、`blobs.ts` | 上下文压缩、结构记号、附件句柄(`log:` / `mem:`) |
 | `config.ts`、`config-schema.ts` | `CORE_DEFAULTS`、深合并、配置项声明 |
-| `instance-lock.ts`、`language.ts`、`secrets.ts` | 单实例锁、控制台语言、按名取密钥 |
+| `instance-lock.ts`、`language.ts`、`secrets.ts` | 单实例锁、WebUI 语言、按名取密钥 |
 | `log-context.ts`、`ipc-logger.ts`、`util.ts` | 日志关联字段、子进程日志回传、Logger 与 token 估算 |
 
 ## Core 类
@@ -64,7 +64,7 @@ piggyback 只入队，随后续唤醒一起投递。
 每次唤醒处理一批事件，可进行多轮模型调用。`SessionDecl.rounds()` 提供
 `{ soft, hard, softHint? }`：到 soft 轮时将 `softHint` 追加到最后一条工具回执；到 hard 轮时
 记录 warn 并结束本批。`endsTurn` 工具和自然结束共用结束处理；本批结束时尚未处理的事件
-退回总线，进入下一批。控制台的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
+退回总线，进入下一批。WebUI 的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。
 
 `preempt` 取消尚未外化的模型轮,`interrupt` 取消模型轮(已外化的输出保留)或停止 `interruptible`
@@ -81,7 +81,7 @@ piggyback 只入队，随后续唤醒一起投递。
 `MainLoop` 维护 `RunPhase`:`delivering`(写入一批事件,含等待 `onDelivery`)、`model`、`tools`、
 `backoff`(带 `retryAt`)、`handoff`,其余时刻是 `idle`;一批的轮次结束即回到 `idle`,批末钩子在
 `idle` 下运行。`running` 按开始顺序列出执行中的工具,含流式提前执行的调用。state 或 round 改变、
-工具开始或结束时同步通知可见 World 的 `onRunPhase` 与控制台的订阅,异常记 warn;`getStatus().phase`
+工具开始或结束时同步通知可见 World 的 `onRunPhase` 与 WebUI 的订阅,异常记 warn;`getStatus().phase`
 返回当前值。暂停与投递闸门不进入 `RunPhase`,由 `paused`、`scheduleBlocked` 报告。
 
 参数不是合法 JSON 时返回 `TOOL_FAILED_BAD_ARGS`，不执行工具；未知工具返回 `UNKNOWN_TOOL`；
@@ -106,7 +106,7 @@ handler 抛错，或返回值既不是字符串也不是带字符串 text 的对
 装配层将 World 构造失败限制在该 World。`start()` 抛错时不挂载；`stop()` 失败或超时会记录
 结果并继续卸载。`onOpening`、`onDelivery`、`onBatchEnd`、`onTurnEnded`、`onIdle` 异常记录
 warn；`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
-读取 `console()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 error
+读取 `webUi()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 error
 并停止定时器。启动器处理未捕获的进程异常并执行关机流程。
 
 `instanceIsRunning(dataDir)` 只读检查实例锁对应进程是否存活，沿用锁接管时的陈旧记录判定(开机时刻、可执行文件名)，不获取或更改锁。

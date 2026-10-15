@@ -4,7 +4,7 @@
  */
 import type { LogNote } from '../../core/ipc-logger.ts';
 import type {
-  CognitionRequest, CognitionResult, EventEnvelope, EventTag, LLMUsage, WorldConsoleDecl,
+  CognitionRequest, CognitionResult, EventEnvelope, EventTag, LLMUsage, WorldWebUiDecl,
   PushOptions, TriggerMode,
 } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
@@ -82,7 +82,7 @@ export type EngineNote =
   | {
       kind: 'status';
       /** 灯、徽标、链接的中英两份;代理按请求的界面语言取一份。 */
-      decl: Record<'zh' | 'en', Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>>;
+      decl: Record<'zh' | 'en', Pick<WorldWebUiDecl, 'lamps' | 'badges' | 'links'>>;
       /** 环境提示词的世界身份一行,按当前连接的目标算 */
       worldLine: string;
       storage: StorageStat[];

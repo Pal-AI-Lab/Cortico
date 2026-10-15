@@ -261,14 +261,14 @@ async function flush(times = 16): Promise<void> {
 }
 
 async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
-  const { createConsoleUi } = (await import(UI)) as Any;
+  const { createWebUi } = (await import(UI)) as Any;
   const { Lifecycle } = (await import(LIFECYCLE)) as Any;
   const doc = new FakeDoc();
   const root = doc.createElement('div');
   doc.body.appendChild(root);
   const lifecycle = new Lifecycle();
   const navigated: Array<{ segments: string[]; query?: Record<string, string> }> = [];
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: fakeMemo(), overlayHost: doc.body, doc, signal: lifecycle.signal,
   });
   const ctx = {
@@ -369,7 +369,7 @@ describe('World 页的三态卡片', () => {
     const card = cardOf(root, '甲渠道');
     expect(card.findTag('h3')!.textContent).toContain('alpha · 2 个工具');
     const pills = card.findAll('pill').map((p: FakeEl) => p.textContent);
-    expect(pills).toContain('连接 已连接');   // 徽标：控制台不解释语义，原样摆
+    expect(pills).toContain('连接 已连接');   // 徽标：WebUI 不解释语义，原样摆
     expect(pills).toContain('对 agent 可见');
     expect(pills).toContain('Persona定义');
     expect(card.find('kvtable')!.textContent).toContain('alpha_send、alpha_read');

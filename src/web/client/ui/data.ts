@@ -3,19 +3,19 @@
  */
 
 import type {
-  ConsoleCell,
-  ConsoleKvRow,
-  ConsoleProgress,
-  ConsoleProgressOptions,
-  ConsoleStat,
-  ConsoleTable,
-  ConsoleTableOptions,
+  WebUiCell,
+  WebUiKvRow,
+  WebUiProgress,
+  WebUiProgressOptions,
+  WebUiStat,
+  WebUiTable,
+  WebUiTableOptions,
 } from '../../shared/client-panel.ts';
 import { h } from './dom.ts';
-import { consoleFormat } from './format.ts';
+import { webUiFormat } from './format.ts';
 
 /** 一格 → `<td>`。 */
-function cell(doc: Document, spec: ConsoleCell): HTMLTableCellElement {
+function cell(doc: Document, spec: WebUiCell): HTMLTableCellElement {
   const td = h(doc, 'td');
   if (spec == null) return td;
   if (typeof spec === 'string' || typeof spec === 'number') {
@@ -47,7 +47,7 @@ function isCellSpec(
 }
 
 /** 数据表。 */
-export function table(doc: Document, opts?: ConsoleTableOptions): ConsoleTable {
+export function table(doc: Document, opts?: WebUiTableOptions): WebUiTable {
   const head = opts?.head ?? [];
   const el = h(doc, 'div', 'tablewrap');
   // 外框限高才会滚,表头的 position:sticky 也才有意义;不给就让它自然铺开
@@ -87,7 +87,7 @@ export function table(doc: Document, opts?: ConsoleTableOptions): ConsoleTable {
 }
 
 /** 键值表无表头；tr 直接挂在 table 下。 */
-export function kv(doc: Document, rows: readonly ConsoleKvRow[]): HTMLTableElement {
+export function kv(doc: Document, rows: readonly WebUiKvRow[]): HTMLTableElement {
   const el = h(doc, 'table', 'kvtable');
   for (const row of rows) {
     const tr = h(doc, 'tr');
@@ -104,7 +104,7 @@ export function kv(doc: Document, rows: readonly ConsoleKvRow[]): HTMLTableEleme
 }
 
 /** 概览读数。`.k` 小标题 + `.v` 大数字（`unit` 落成 `.v` 里的 `<small>`）。 */
-export function stat(doc: Document, item: ConsoleStat): HTMLDivElement {
+export function stat(doc: Document, item: WebUiStat): HTMLDivElement {
   const el = h(doc, 'div', item.accent ? 'stat accent' : 'stat');
   el.appendChild(h(doc, 'div', 'k', item.k));
   const v = h(doc, 'div', 'v');
@@ -116,7 +116,7 @@ export function stat(doc: Document, item: ConsoleStat): HTMLDivElement {
 }
 
 /** 读数网格。`items` 可以不给（先建空网格，之后自己往里 append）。 */
-export function statgrid(doc: Document, items?: readonly ConsoleStat[]): HTMLDivElement {
+export function statgrid(doc: Document, items?: readonly WebUiStat[]): HTMLDivElement {
   const el = h(doc, 'div', 'statgrid');
   for (const it of items ?? []) el.appendChild(stat(doc, it));
   return el;
@@ -137,7 +137,7 @@ function fillRatio(value: number, max: number): number {
 }
 
 /** 占比条通过 role=progressbar 与 aria-value* 提供无障碍读数。 */
-export function progress(doc: Document, opts?: ConsoleProgressOptions): ConsoleProgress {
+export function progress(doc: Document, opts?: WebUiProgressOptions): WebUiProgress {
   const o = opts ?? {};
   const cls =
     o.tone === 'warn' ? 'progress warnc' : o.tone === 'accent' ? 'progress dreamc' : 'progress';
@@ -154,7 +154,7 @@ export function progress(doc: Document, opts?: ConsoleProgressOptions): ConsoleP
 
   let max = normMax(o.max);
   let value = Number.isFinite(o.value) ? (o.value as number) : 0;
-  const fmt = o.format ?? ((v: number, m: number): string => consoleFormat.percent(v / m));
+  const fmt = o.format ?? ((v: number, m: number): string => webUiFormat.percent(v / m));
 
   const paint = (): void => {
     fill.setAttribute('style', 'width:' + (fillRatio(value, max) * 100).toFixed(1) + '%');

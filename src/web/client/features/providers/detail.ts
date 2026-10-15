@@ -5,7 +5,7 @@ import { configField, type ConfigGroup } from '../config/view.ts';
 import { validateProviderName } from '../../../../providers/name.ts';
 import { connectionPath, type Detail, type Editing, type ListedModel, type Module } from './types.ts';
 import { LANGUAGE } from '../../core/language.ts';
-import { pricingEditor } from '../../console-pages/builtins/llm-settings/pricing-panel.ts';
+import { pricingEditor } from '../../webui-pages/builtins/llm-settings/pricing-panel.ts';
 import type { Disposable } from '../../../shared/client-panel.ts';
 import { S } from './strings.ts';
 
@@ -45,7 +45,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
   let rendering = 0;
   let saving = false;
   const panelHandles: Disposable[] = [];
-  let panelHost: ReturnType<NonNullable<FeatureContext['consolePageHost']>> | null = null;
+  let panelHost: ReturnType<NonNullable<FeatureContext['webUiPageHost']>> | null = null;
   /** The model block's way of showing a spec a module panel changed. */
   let syncSpec: (() => void) | null = null;
   /** A saved connection shows the discard button only while the form differs from what is saved. */
@@ -317,8 +317,8 @@ export async function mountDetail(options: Options): Promise<DetailController> {
         default: pending.push({ section, host: block(box, section, true) });
       }
     }
-    if (!pending.length || !ctx.consolePageHost) return;
-    panelHost ??= ctx.consolePageHost({ root: ui.h('div'), route: () => ['providers', saved?.name ?? ''] });
+    if (!pending.length || !ctx.webUiPageHost) return;
+    panelHost ??= ctx.webUiPageHost({ root: ui.h('div'), route: () => ['providers', saved?.name ?? ''] });
     await panelHost.load();
     if (gen !== rendering || lifecycle.disposed) return;
     for (const { section, host } of pending) {

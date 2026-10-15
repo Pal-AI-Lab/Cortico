@@ -2,8 +2,8 @@ import type { ProviderHubApi as ProviderHub } from '../providers/hub-api.ts';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import type { EnvPromptOrigin } from '../core/prefix.ts';
 /**
- * WebApp 是独立于 agent 的控制台服务。Express、HTTP 与
- * WebSocket 共用端口；聊天协议由终端对话 World 实现。
+ * WebApp 是独立于 agent 的 WebUI 服务。Express、HTTP 与
+ * WebSocket 共用端口；聊天协议由控制台对话 World 实现。
  *
  * 依赖通过本文件的窄接口注入，WebApp 不导入 core。
  */
@@ -20,7 +20,7 @@ import express, { type Request, type Response } from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   EventEnvelope, EventRangeQuery, EventStoreReader, Logger,
-  ConfigGroup, ConfigValues, WorldConsoleDecl,
+  ConfigGroup, ConfigValues, WorldWebUiDecl,
   LogRecord, OwnedStoragePart, StoragePart, ToolSchema, RunPhase,
 } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
@@ -31,19 +31,19 @@ import { coerceGroupValues } from '../core/config-schema.ts';
 import { isLanguage, languageTag, LocalizedError, systemLanguage, type Language } from '../core/language.ts';
 import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
-import { AUTH_KEY_FILE, ConsoleAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
+import { AUTH_KEY_FILE, WebUiAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
 import { buildDiagnostics, DIAGNOSTICS_TAIL, type DiagnosticsEndpoint } from './diagnostics.ts';
-import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from './console-pages.ts';
+import { WebUiAssets, WebUiPageRegistry, type WebUiPageSource } from './webui-pages.ts';
 import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-store.ts';
 import { checkFrameworkRelease } from './framework-release.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
-import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionConsoleAsset } from '../extensions/manifest.ts';
+import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionWebUiAsset } from '../extensions/manifest.ts';
 import {
-  CONSOLE_AUTH_HEADER, CONSOLE_LAMPS_ROUTE, CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY, CONSOLE_PROTOCOL_VERSION,
+  WEBUI_AUTH_HEADER, WEBUI_LAMPS_ROUTE, WEBUI_LANGUAGE_HEADER, WEBUI_LANGUAGE_QUERY, WEBUI_PROTOCOL_VERSION,
   PROVIDERS_LAMP_ID,
   isBinaryResult, isFileResult,
-  type ConsoleFileResult, type ConsoleLamp, type ConsoleStream,
-} from './shared/console-protocol.ts';
+  type WebUiFileResult, type WebUiLamp, type WebUiStream,
+} from './shared/webui-protocol.ts';
 import {
   PATH_PICKER_ROUTE,
   type PathPicker,
@@ -93,7 +93,7 @@ export interface WebAppSessionsDeps {
 export type { OwnedStoragePart, StoragePart };
 
 export interface WorldInfo {
-  /** Worldid(装配层给的那个,如 terminal) */
+  /** Worldid(装配层给的那个,如 console) */
   id: string;
   /** 已挂载到 core 并在当前进程运行。 */
   status: 'active';
@@ -115,12 +115,12 @@ export interface WorldInfo {
   /** World 工具名清单 */
   tools: string[];
   /**
-   * World 声明的控制台表面：状态灯、徽标、专用面板、链接和可调配置组。
-   * 控制台路由不依赖 World id。
+   * World 声明的 WebUI 表面：状态灯、徽标、专用面板、链接和可调配置组。
+   * WebUI 路由不依赖 World id。
    */
-  lamps?: WorldConsoleDecl['lamps'];
-  badges?: WorldConsoleDecl['badges'];
-  links?: WorldConsoleDecl['links'];
+  lamps?: WorldWebUiDecl['lamps'];
+  badges?: WorldWebUiDecl['badges'];
+  links?: WorldWebUiDecl['links'];
 }
 
 /**
@@ -135,7 +135,7 @@ export interface InactiveWorldInfo {
   declared: boolean;
 }
 
-/** Persona已声明、但当前部署未提供实现的 World。仅出现在控制台目录中。 */
+/** Persona已声明、但当前部署未提供实现的 World。仅出现在 WebUI 目录中。 */
 export interface UnavailableWorldInfo {
   id: string;
   status: 'missing';
@@ -145,7 +145,7 @@ export interface UnavailableWorldInfo {
   reason: string;
 }
 
-export type ConsoleWorldInfo = WorldInfo | InactiveWorldInfo | UnavailableWorldInfo;
+export type WebUiWorldInfo = WorldInfo | InactiveWorldInfo | UnavailableWorldInfo;
 
 /**
  * 一个装在 `extensions/` 下的包。`state` 是启动时的加载结果对照此刻磁盘:
@@ -165,9 +165,9 @@ export interface ExtensionInfo {
   /** 扩展声明的契约版本 */
   api?: number;
   /** 包声明了浏览器端产物 */
-  consoleClient: boolean;
+  webUiClient: boolean;
   /** 浏览器端产物:没声明 / 在发 / 声明了但文件不在 */
-  console?: 'none' | 'served' | 'missing';
+  webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   reason?: string;
   worldId?: string;
@@ -240,7 +240,7 @@ export interface ExtensionPackageDetail {
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;
   /** package.json 的 cortico 块解析通过时给出 */
-  manifest?: { kind: 'world' | 'provider' | 'bot'; api: number; consoleClient?: string; consoleStyle?: string };
+  manifest?: { kind: 'world' | 'provider' | 'bot'; api: number; webUiClient?: string; webUiStyle?: string };
   /** 解析不通过的理由,与本机装载时用的是同一套判据 */
   problems?: string[];
   warnings: string[];
@@ -290,7 +290,7 @@ export interface WebAppExtensionDeps {
    * 已加载扩展的浏览器端产物。服务端据此把页 id 映到 `/assets/extensions/<包>/<版本>/<文件>`
    * 并只发这几个文件;缺席 = 没有扩展带面板。
    */
-  consoleAssets?(): readonly ExtensionConsoleAsset[];
+  webUiAssets?(): readonly ExtensionWebUiAsset[];
   /** 返回一句结果描述(含 pnpm 输出尾部) */
   install(target: ExtensionInstallTarget, language: Language): Promise<string>;
   uninstall(name: string, language: Language): Promise<string>;
@@ -366,7 +366,7 @@ export interface PrefixSegmentView {
 export interface WebAppPromptDeps {
   /** 标题与说明按 `language`;key、内容与 revision 不随语言变。 */
   list(language: Language): PromptDocument[] | Promise<PromptDocument[]>;
-  /** 回执按 `language`。`baseRevision` 过期时抛 `PromptRevisionConflict`,控制台据此回 409。 */
+  /** 回执按 `language`。`baseRevision` 过期时抛 `PromptRevisionConflict`,WebUI 据此回 409。 */
   write(key: string, content: string, baseRevision: string | undefined, language: Language): string;
   /** 删除部署覆盖，回落到 bot 包覆盖或 World 默认。 */
   reset?(key: string, language: Language): string;
@@ -395,18 +395,18 @@ export interface WebAppSessionControlDeps {
   reloadPrefix(language: Language): Promise<string>;
 }
 
-/** `WebAppPromptDeps.write` 在 `baseRevision` 过期时抛的错;控制台回 409 并标 conflict。 */
+/** `WebAppPromptDeps.write` 在 `baseRevision` 过期时抛的错;WebUI 回 409 并标 conflict。 */
 export class PromptRevisionConflict extends Error {
   override readonly name = 'PromptRevisionConflict';
 }
 
 /**
- * 控制台展示带版本历史的记忆介质时需要的三个形状。
+ * WebUI 展示带版本历史的记忆介质时需要的三个形状。
  *
- * 控制台只约束历史记录的展示形状;git、快照或无历史由人格实现选择。
+ * WebUI 只约束历史记录的展示形状;git、快照或无历史由人格实现选择。
  * TypeScript 结构化类型允许实现侧的既有类型直接满足这些接口。
  */
-export interface ConsoleHistoryEntry {
+export interface WebUiHistoryEntry {
   hash: string;
   fullHash: string;
   author: string;
@@ -415,26 +415,26 @@ export interface ConsoleHistoryEntry {
   message: string;
 }
 
-export interface ConsoleCheckpointEntry {
+export interface WebUiCheckpointEntry {
   name: string;
   message: string;
   hash: string;
   date: string;
 }
 
-export interface ConsoleMediumStatus {
+export interface WebUiMediumStatus {
   available: boolean;
   repo: boolean;
   /** 工作区有未提交改动 */
   dirty: boolean;
   head: string | null;
-  lastCommit: ConsoleHistoryEntry | null;
+  lastCommit: WebUiHistoryEntry | null;
   tags: string[];
 }
 
 /** 存档点管理 */
 export interface WebAppCheckpointDeps {
-  list(): ConsoleCheckpointEntry[];
+  list(): WebUiCheckpointEntry[];
   /** 新建:提交当前 + 打标记,返回结果描述 */
   create(name: string, note: string): string;
   /** 删除标记 */
@@ -450,7 +450,7 @@ export interface WebAppUsageDeps {
 
 
 /**
- * 一组可调配置项的读写(所有者声明 schema,控制台通用渲染)。
+ * 一组可调配置项的读写(所有者声明 schema,WebUI 通用渲染)。
  * 声明来自 core / Persona / 各 World,装配层收集后交进来。
  */
 export interface WebAppConfigDeps {
@@ -463,9 +463,9 @@ export interface WebAppConfigDeps {
 }
 
 /**
- * 框架级控制台契约。bot 专用的控制面由控制台页(Console Page)提供。
+ * 框架级 WebUI 契约。bot 专用的控制面由 WebUI 页(WebUI Page)提供。
  */
-export interface ConsoleSurface {
+export interface WebUiSurface {
   /** 事件流(只读) */
   store: EventStoreReader;
   /** persona/工作区绝对路径(工作区浏览) */
@@ -477,17 +477,17 @@ export interface ConsoleSurface {
   /** 按附件句柄取字节与 MIME;认不出或已不在时返回 null。未提供时 `/api/blob` 一律 404。 */
   blob?(handle: string): { bytes: Uint8Array; mime: string } | null;
   /**
-   * 控制台的默认语言:印在 `<html lang>` 上,也是没带语言的请求用的那种。缺省按进程读一次
-   * 系统语言。每个请求可以经 `CONSOLE_LANGUAGE_HEADER`(WebSocket 握手经
-   * `CONSOLE_LANGUAGE_QUERY`)带自己的语言,服务端给控制台的文案按它取。
+   * WebUI 的默认语言:印在 `<html lang>` 上,也是没带语言的请求用的那种。缺省按进程读一次
+   * 系统语言。每个请求可以经 `WEBUI_LANGUAGE_HEADER`(WebSocket 握手经
+   * `WEBUI_LANGUAGE_QUERY`)带自己的语言,服务端给 WebUI 的文案按它取。
    */
   language?: Language;
   /**
-   * 部署的默认配色方案 id。`theme.json` 还没有记录时用它；认不出的 id 由控制台落到框架默认方案。
+   * 部署的默认配色方案 id。`theme.json` 还没有记录时用它；认不出的 id 由 WebUI 落到框架默认方案。
    */
   defaultScheme?: string;
   /**
-   * 监听地址。缺省 `127.0.0.1`:控制台没有身份认证,默认不对局域网露面。
+   * 监听地址。缺省 `127.0.0.1`:WebUI 没有身份认证,默认不对局域网露面。
    * 要放到反向代理后面或有意让别的机器访问,才显式换成 `0.0.0.0`。
    */
   host?: string;
@@ -512,7 +512,7 @@ export interface ConsoleSurface {
   /** 本机路径选择器。测试与嵌入环境可替换；缺省使用当前平台的原生对话框。 */
   pathPicker?: PathPicker;
   /** 已挂载 World 清单(可选;不挂载时 /api/worlds 空)。async:envPrompt可能异步。显示名与理由按 `language` */
-  worlds?: (language: Language) => Promise<ConsoleWorldInfo[]> | ConsoleWorldInfo[];
+  worlds?: (language: Language) => Promise<WebUiWorldInfo[]> | WebUiWorldInfo[];
   /** World 对 agent 的可见性开关(可选;不挂载时 /api/worlds/visibility 503) */
   worldVisibility?: WebAppWorldVisibilityDeps;
   /** World 激活开关(可选;不挂载时 /api/worlds/activation 503) */
@@ -523,7 +523,7 @@ export interface ConsoleSurface {
   toolSchemas?: WebAppToolSchemasDeps;
   /** 当前 session 的非破坏性前缀重载。 */
   sessionControl?: WebAppSessionControlDeps;
-  /** 开场引导的一次性标记；缺席时控制台不给引导。 */
+  /** 开场引导的一次性标记；缺席时 WebUI 不给引导。 */
   onboarding?: {
     /** 删除标记；已经删过时不报错。 */
     dismiss(): void;
@@ -551,23 +551,23 @@ export interface ConsoleSurface {
   /** 扩展装卸(可选;不挂载时 /api/extensions* 503)。 */
   extensions?: WebAppExtensionDeps;
   /**
-   * 控制台页的贡献来源(World 与 bot 各自的控制面)。装配层决定收什么;
+   * WebUI 页的贡献来源(World 与 bot 各自的控制面)。装配层决定收什么;
    * WebApp 只负责聚合、校验与转交,不认识任何具体的一页。
-   * 不挂载时 /api/console/manifest 返回一份只有 framework 能力的空 manifest。
+   * 不挂载时 /api/webui/manifest 返回一份只有 framework 能力的空 manifest。
    */
-  consolePageSources?: () => ConsolePageSource[];
+  webUiPageSources?: () => WebUiPageSource[];
   /**
    * 有没有一个可用的端点。缺省不挂:「模型提供商」那一行不点灯。
    */
   providers?: ProviderHub;
-  providersLamp?: (language: Language) => ConsoleLamp;
+  providersLamp?: (language: Language) => WebUiLamp;
   /**
    * 浏览器端构建产物目录(含 asset-manifest.json)。缺省取仓库的 `dist/web`。
-   * 没构建过不是错误——控制台照常起,只是没有任何页扩展。
+   * 没构建过不是错误——WebUI 照常起,只是没有任何页扩展。
    */
   webDistDir?: string;
   /**
-   * 控制台页流的心跳间隔(毫秒),缺省 30 秒。
+   * WebUI 页流的心跳间隔(毫秒),缺省 30 秒。
    * 反向代理的空闲超时比这短时要调小;测试里调到很小以便验证半开连接被清掉。
    */
   streamHeartbeatMs?: number;
@@ -575,10 +575,10 @@ export interface ConsoleSurface {
 }
 
 /**
- * 服务端注入面。bot 专属的控制面**全部**走控制台页(`consolePageSources`),
+ * 服务端注入面。bot 专属的控制面**全部**走 WebUI 页(`webUiPageSources`),
  * 框架不再有任何具名扩展槽位。
  */
-export type WebAppDeps = ConsoleSurface;
+export type WebAppDeps = WebUiSurface;
 
 
 const FILE_MAX_BYTES = 1024 * 1024; // 1MB
@@ -629,7 +629,7 @@ const barePort = (h: string): string => h.replace(/:\d+$/, '');
 /** 按 Host 校验 Origin；缺失 Origin 时放行，null、非法或主机不匹配时拒绝。 */
 function isForeignOrigin(origin: unknown, hostHeader: unknown, allowedHosts: readonly string[] = []): boolean {
   if (typeof origin !== 'string' || origin === '') return false;
-  if (origin === 'null') return true; // 沙箱 iframe / file:// 一类,不是本控制台
+  if (origin === 'null') return true; // 沙箱 iframe / file:// 一类,不是本 WebUI
   let originHost: string;
   try {
     originHost = new URL(origin).host;
@@ -678,7 +678,7 @@ function isAllowedHost(hostHeader: unknown, listenHost: string, allowedHosts: re
 }
 
 /**
- * 控制台页流式通道的 WS 路径:`/ws/providers/<page>/panels/<panel>`
+ * WebUI 页流式通道的 WS 路径:`/ws/providers/<page>/panels/<panel>`
  * (与 `panelStreamRoute` 同一形状;路径里的 `providers` 段是线协议形状,未随类型改名)。
  * 两段都是 `encodeURIComponent` 过的——
  * page id 必含冒号,在 URL 里是 `%3A`,所以这里必须解码回来再去注册表查。
@@ -717,7 +717,7 @@ const STREAM_PREBUFFER = 64;
 const STREAM_HEARTBEAT_MS = 30_000;
 
 /**
- * 把一条真 ws 连接包成协议里的 `ConsoleStream` 交给那一页。
+ * 把一条真 ws 连接包成协议里的 `WebUiStream` 交给那一页。
  *
  * 这层适配是**故意**的:协议里那个接口不认识 ws(它同时被浏览器端 import,
  * 而跑在子进程里的贡献方也要能实现它),所以宿主细节全压在这个函数里。
@@ -727,7 +727,7 @@ const STREAM_HEARTBEAT_MS = 30_000;
  *    (那一页可能挂着定时器等这个回调来清理)
  *  - socket 出错时 `terminate()` 兜底,不留半死连接
  */
-function toConsoleStream(ws: WebSocket, log: Logger, heartbeatMs: number): ConsoleStream {
+function toWebUiStream(ws: WebSocket, log: Logger, heartbeatMs: number): WebUiStream {
   const messageCbs: Array<(text: string) => void> = [];
   const closeCbs: Array<() => void> = [];
   const pending: string[] = [];
@@ -814,7 +814,7 @@ function toConsoleStream(ws: WebSocket, log: Logger, heartbeatMs: number): Conso
 
 
 export class WebApp {
-  /** 每个进程一个;控制台据此认出重启后回来的是新进程。 */
+  /** 每个进程一个;WebUI 据此认出重启后回来的是新进程。 */
   private readonly bootId = randomUUID();
   private ready = false;
   /** 启动流程走完(World 挂好、Core 起来)后调用;之前 `/api/run/lifecycle` 的 `ready` 为 false。 */
@@ -823,12 +823,12 @@ export class WebApp {
   private readonly app: express.Express;
   private readonly listenHost: string;
   private readonly allowedHosts: readonly string[];
-  private readonly auth: ConsoleAuth;
-  /** 控制台页聚合。没挂 consolePageSources 时它也在,只是永远收到空清单。 */
-  private readonly consolePages: ConsolePageRegistry;
-  private readonly assets: ConsoleAssets;
+  private readonly auth: WebUiAuth;
+  /** WebUI 页聚合。没挂 webUiPageSources 时它也在,只是永远收到空清单。 */
+  private readonly webUiPages: WebUiPageRegistry;
+  private readonly assets: WebUiAssets;
   /** 已加载扩展的浏览器端产物。进程生命期内不变(加载新扩展要重启),构造时算一次。 */
-  private readonly extensionAssets: readonly ExtensionConsoleAsset[];
+  private readonly extensionAssets: readonly ExtensionWebUiAsset[];
   private readonly webDistDir: string;
   /** 默认语言:印在 `<html lang>` 上,没带语言的请求也用它。构造时定死。 */
   private readonly language: Language;
@@ -843,13 +843,13 @@ export class WebApp {
     this.deps = deps;
     this.listenHost = deps.host ?? '127.0.0.1';
     this.allowedHosts = deps.allowedHosts ?? [];
-    this.auth = new ConsoleAuth(deps.password ?? '', join(deps.dataDir, AUTH_KEY_FILE), deps.failedLoginDelayMs);
+    this.auth = new WebUiAuth(deps.password ?? '', join(deps.dataDir, AUTH_KEY_FILE), deps.failedLoginDelayMs);
     this.language = deps.language ?? systemLanguage();
     this.webDistDir = deps.webDistDir ?? fileURLToPath(new URL('../../dist/web', import.meta.url));
-    this.extensionAssets = deps.extensions?.consoleAssets?.() ?? [];
-    this.assets = new ConsoleAssets(this.webDistDir, deps.log, this.extensionAssets);
-    this.consolePages = new ConsolePageRegistry({
-      sources: () => deps.consolePageSources?.() ?? [],
+    this.extensionAssets = deps.extensions?.webUiAssets?.() ?? [];
+    this.assets = new WebUiAssets(this.webDistDir, deps.log, this.extensionAssets);
+    this.webUiPages = new WebUiPageRegistry({
+      sources: () => deps.webUiPageSources?.() ?? [],
       capabilities: () => this.frameworkCapabilities(),
       assets: this.assets,
       log: deps.log,
@@ -884,22 +884,22 @@ export class WebApp {
   }
 
   /**
-   * 框架级表面挂没挂。同时供 `/api/capabilities` 与 `/api/console/manifest` 使用,
+   * 框架级表面挂没挂。同时供 `/api/capabilities` 与 `/api/webui/manifest` 使用,
    * 两处必须是同一份事实。
    *
    * 这里**只有框架级表面**。各页自己的能力("有没有模型档位面板"这种)由
    * manifest 里有没有对应的页回答,不在中央留一份知识。
    */
   /**
-   * 这个请求的界面语言:HTTP 看 `CONSOLE_LANGUAGE_HEADER`,WebSocket 握手看 URL 里的
-   * `CONSOLE_LANGUAGE_QUERY`;缺席或不认识 = 默认语言。
+   * 这个请求的界面语言:HTTP 看 `WEBUI_LANGUAGE_HEADER`,WebSocket 握手看 URL 里的
+   * `WEBUI_LANGUAGE_QUERY`;缺席或不认识 = 默认语言。
    */
   private languageOf(req: { headers: Record<string, unknown>; url?: string }): Language {
-    const header = req.headers[CONSOLE_LANGUAGE_HEADER];
+    const header = req.headers[WEBUI_LANGUAGE_HEADER];
     if (isLanguage(header)) return header;
     let fromQuery: string | null = null;
     try {
-      fromQuery = new URL(req.url ?? '', 'http://localhost').searchParams.get(CONSOLE_LANGUAGE_QUERY);
+      fromQuery = new URL(req.url ?? '', 'http://localhost').searchParams.get(WEBUI_LANGUAGE_QUERY);
     } catch { /* 坏 URL:当没带 */ }
     return isLanguage(fromQuery) ? fromQuery : this.language;
   }
@@ -1015,7 +1015,7 @@ export class WebApp {
   private async sendVerifiedFile(
     req: Request,
     res: Response,
-    file: ConsoleFileResult['$file'],
+    file: WebUiFileResult['$file'],
     t: ReturnType<typeof serverText>,
   ): Promise<void> {
     const handle = await openFile(file.path, 'r');
@@ -1133,10 +1133,10 @@ export class WebApp {
   }
 
   /** 通道不可用时先发送错误帧，再关闭连接：no-surface 使用 1013，其余使用 1008。 */
-  private handleConsolePageStream(ws: WebSocket, pageId: string, panelId: string, language: Language): void {
+  private handleWebUiPageStream(ws: WebSocket, pageId: string, panelId: string, language: Language): void {
     // 先包再解析:解析要 await,期间对端可能已经发帧,适配器会替那一页攒着
-    const socket = toConsoleStream(ws, this.deps.log, this.deps.streamHeartbeatMs ?? STREAM_HEARTBEAT_MS);
-    void this.consolePages.resolveStream(pageId, panelId, language).then(
+    const socket = toWebUiStream(ws, this.deps.log, this.deps.streamHeartbeatMs ?? STREAM_HEARTBEAT_MS);
+    void this.webUiPages.resolveStream(pageId, panelId, language).then(
       (out) => {
         if (!out.ok) {
           this.closeStreamWith(
@@ -1150,7 +1150,7 @@ export class WebApp {
         try {
           out.open(socket);
         } catch (err) {
-          // 那一页的 stream() 抛错只关这一条连接:一个面板炸了不该带走控制台
+          // 那一页的 stream() 抛错只关这一条连接:一个面板炸了不该带走 WebUI
           this.deps.log.error(`provider 流式面抛错 ${pageId}/${panelId}`, { error: String(err) });
           this.closeStreamWith(ws, serverText(language).streamFailed(String(err)), 1011, 'stream error');
         }
@@ -1230,7 +1230,7 @@ export class WebApp {
         try {
           pathname = new URL(req.url ?? '', 'http://localhost').pathname;
         } catch { /* 保持空串 */ }
-        // 框架自己的两条固定路径 + 通用控制台页流式通道(路径带 page/panel 两段)
+        // 框架自己的两条固定路径 + 通用 WebUI 页流式通道(路径带 page/panel 两段)
         const stream = parseStreamPath(pathname);
         const framework = pathname === '/ws/debug' || pathname === '/ws/sessions';
         if (!framework && !stream) {
@@ -1260,7 +1260,7 @@ export class WebApp {
         wss.handleUpgrade(req, socket, head, (ws) => {
           const language = this.languageOf(req);
           if (stream) {
-            this.handleConsolePageStream(ws, stream.pageId, stream.panelId, language);
+            this.handleWebUiPageStream(ws, stream.pageId, stream.panelId, language);
             return;
           }
           if (pathname === '/ws/debug') {
@@ -1326,7 +1326,7 @@ export class WebApp {
     const actual = (server.address() as AddressInfo).port;
     this.deps.log.info(`web面板已启动 http://${this.listenHost}:${actual}/`);
     if (!LOOPBACK_HOSTS.has(this.listenHost) && this.listenHost !== '::1' && !this.auth.enabled) {
-      this.deps.log.warn('控制台监听在非回环地址且没有设访问密码,能连到这个端口的人都能操作 bot', { host: this.listenHost });
+      this.deps.log.warn('WebUI 监听在非回环地址且没有设访问密码,能连到这个端口的人都能操作 bot', { host: this.listenHost });
     }
     return actual;
   }
@@ -1372,7 +1372,7 @@ export class WebApp {
       res.status(421).json({ error: serverText(this.languageOf(req)).hostRejected });
     });
 
-    // 写操作的同源闸门:控制台的每个 POST 都是真副作用(改配置、删存储、回滚人格),
+    // 写操作的同源闸门:WebUI 的每个 POST 都是真副作用(改配置、删存储、回滚人格),
     // 别的站点的页面能凭浏览器自动发这些请求,拦这一下就断了。读接口不设闸——
     // 跨站读本来就拿不到响应体(没有一个 CORS 头放开过)。
     app.use((req, res, next) => {
@@ -1412,12 +1412,12 @@ export class WebApp {
         }
         const candidate = (req.body as { password?: unknown } | undefined)?.password;
         if (typeof candidate !== 'string' || !(await this.auth.login(candidate))) {
-          this.deps.log.warn('控制台登录失败', { from: req.socket.remoteAddress });
+          this.deps.log.warn('WebUI 登录失败', { from: req.socket.remoteAddress });
           res.status(401).json({ error: serverText(this.languageOf(req)).wrongPassword });
           return;
         }
         res.setHeader('Set-Cookie', this.sessionCookie(this.auth.issue(), SESSION_COOKIE_MAX_AGE_SEC, req));
-        this.deps.log.info('控制台登录', { from: req.socket.remoteAddress });
+        this.deps.log.info('WebUI 登录', { from: req.socket.remoteAddress });
         res.json({ ok: true });
       })().catch((err: unknown) => {
         if (!res.headersSent) res.status(500).json({ error: String(err) });
@@ -1430,7 +1430,7 @@ export class WebApp {
     app.use((req, res, next) => {
       if (this.authorized(req)) { next(); return; }
       if (req.method === 'GET' && (req.path === '/' || req.path === '/index.html')) { this.serveLogin(res); return; }
-      res.setHeader(CONSOLE_AUTH_HEADER, 'required');
+      res.setHeader(WEBUI_AUTH_HEADER, 'required');
       res.status(401).json({ error: serverText(this.languageOf(req)).loginRequired });
     });
 
@@ -1513,7 +1513,7 @@ export class WebApp {
       const dir = this.deps.botDir;
       if (!dir) { res.status(503).json({ error: serverText(this.languageOf(req)).themeUnavailable }); return; }
       const theme = writeDeploymentTheme(dir, req.body);
-      this.deps.log.info('控制台配色已更新', { scheme: theme.selectedId, mode: theme.mode });
+      this.deps.log.info('WebUI 配色已更新', { scheme: theme.selectedId, mode: theme.mode });
       res.json({ ok: true, theme });
     }));
 
@@ -1657,7 +1657,7 @@ export class WebApp {
       })();
     });
 
-    // 开场引导只出现一次:控制台在操作员开口或按下那颗按钮时销掉标记。
+    // 开场引导只出现一次:WebUI 在操作员开口或按下那颗按钮时销掉标记。
     app.post('/api/onboarding/dismiss', wrap((req, res) => {
       const src = this.deps.onboarding;
       if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).onboardingUnavailable }); return; }
@@ -1997,18 +1997,18 @@ export class WebApp {
       })();
     });
 
-    // ---- Console Page API:World 与 bot 的控制面唯一通道。----
+    // ---- WebUI Page API:World 与 bot 的控制面唯一通道。----
 
-    app.get('/api/console/manifest', (req: Request, res: Response) => {
-      void this.consolePages.manifest(this.languageOf(req)).then(
+    app.get('/api/webui/manifest', (req: Request, res: Response) => {
+      void this.webUiPages.manifest(this.languageOf(req)).then(
         (manifest) => { if (!res.headersSent) res.json(manifest); },
         (err) => {
-          this.deps.log.error('API错误 /api/console/manifest', { error: String(err) });
+          this.deps.log.error('API错误 /api/webui/manifest', { error: String(err) });
           if (!res.headersSent) {
             // manifest 是开页第一个请求;彻底失败也要给一份结构完整的空壳,
             // 否则前端只能把错误当界面显示。
             res.status(500).json({
-              protocolVersion: CONSOLE_PROTOCOL_VERSION,
+              protocolVersion: WEBUI_PROTOCOL_VERSION,
               providers: [],
               framework: { capabilities: {} },
               error: String(err),
@@ -2024,15 +2024,15 @@ export class WebApp {
      *
      * 失败给 200 + 空表:一次取灯失败不该让导航变成一排问号,下一拍自然会补上。
      */
-    app.get(CONSOLE_LAMPS_ROUTE, (req: Request, res: Response) => {
+    app.get(WEBUI_LAMPS_ROUTE, (req: Request, res: Response) => {
       const language = this.languageOf(req);
       const framework = this.deps.providersLamp
         ? { [PROVIDERS_LAMP_ID]: [this.deps.providersLamp(language)] }
         : {};
-      void this.consolePages.lamps(language).then(
+      void this.webUiPages.lamps(language).then(
         (lamps) => { if (!res.headersSent) res.json({ lamps: { ...framework, ...lamps } }); },
         (err) => {
-          this.deps.log.error(`API错误 ${CONSOLE_LAMPS_ROUTE}`, { error: String(err) });
+          this.deps.log.error(`API错误 ${WEBUI_LAMPS_ROUTE}`, { error: String(err) });
           if (!res.headersSent) res.json({ lamps: {} });
         },
       );
@@ -2042,12 +2042,12 @@ export class WebApp {
      * Panel RPC。解析失败(没这一页 / 没声明这个面板 / 没有数据面)与
      * 那一页自己抛错是两回事:前者 404/503,后者 500。
      */
-    const invokeConsolePagePanel = (req: Request, res: Response, args: unknown[]): void => {
+    const invokeWebUiPagePanel = (req: Request, res: Response, args: unknown[]): void => {
       const page = String(req.params.provider ?? '');
       const panel = String(req.params.panel ?? '');
       const method = String(req.params.method ?? '');
       const transport = req.method === 'GET' || req.method === 'HEAD' ? 'get' : 'post';
-      void this.consolePages.invoke(page, panel, method, args, transport, this.languageOf(req)).then(
+      void this.webUiPages.invoke(page, panel, method, args, transport, this.languageOf(req)).then(
         async (out) => {
           if (res.headersSent) return;
           if (!out.ok) {
@@ -2072,15 +2072,15 @@ export class WebApp {
     };
 
     // GET:轮询读 + <audio src> 这类只能带 URL 的场合。args 经 query 传 JSON 数组。
-    app.get('/api/console/providers/:provider/panels/:panel/:method', wrap((req, res) => {
+    app.get('/api/webui/providers/:provider/panels/:panel/:method', wrap((req, res) => {
       const args = parseQueryArgs(req.query.args, serverText(this.languageOf(req)));
       if ('error' in args) { res.status(400).json({ error: args.error }); return; }
-      invokeConsolePagePanel(req, res, args.args);
+      invokeWebUiPagePanel(req, res, args.args);
     }));
 
     // POST:带参调用。base64 音频/图片会经这里,limit 放宽。
     app.post(
-      '/api/console/providers/:provider/panels/:panel/:method',
+      '/api/webui/providers/:provider/panels/:panel/:method',
       express.json({ limit: '64mb' }),
       wrap((req, res) => {
         const body = (req.body ?? {}) as { args?: unknown };
@@ -2088,7 +2088,7 @@ export class WebApp {
           res.status(400).json({ error: serverText(this.languageOf(req)).argsNotArray });
           return;
         }
-        invokeConsolePagePanel(req, res, (body.args as unknown[] | undefined) ?? []);
+        invokeWebUiPagePanel(req, res, (body.args as unknown[] | undefined) ?? []);
       }),
     );
 
@@ -2162,7 +2162,7 @@ export class WebApp {
       const entry = src.groups(language).find((g) => g.group.id === groupId);
       if (!entry) { res.status(400).json({ error: serverText(language).unknownConfigGroup(groupId) }); return; }
       const values = (body.values ?? {}) as Record<string, unknown>;
-      // 校验完全按声明走:schema 里没声明的键一律忽略,控制台不能靠猜往配置里塞东西
+      // 校验完全按声明走:schema 里没声明的键一律忽略,WebUI 不能靠猜往配置里塞东西
       const parsed = coerceGroupValues(entry.group, values, language);
       if ('error' in parsed) { res.status(400).json({ error: parsed.error }); return; }
       const result = src.set(groupId, parsed.values, language);

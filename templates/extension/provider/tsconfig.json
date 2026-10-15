@@ -1,5 +1,5 @@
 {
-  // 只有 Node 侧代码,lib 里不放 DOM。要加控制台面板时,面板源码另立一份带 DOM 的配置。
+  // 只有 Node 侧代码,lib 里不放 DOM。要加 WebUI 面板时,面板源码另立一份带 DOM 的配置。
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

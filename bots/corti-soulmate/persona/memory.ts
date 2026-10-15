@@ -10,7 +10,7 @@ import type { GitWorkspaceMemory } from '../../cormini/persona/memory.ts';
 import { MemoTiers } from './memoTiers.ts';
 import { buildRoster } from './roster.ts';
 
-/** 控制台展示的模板变量说明。 */
+/** WebUI 展示的模板变量说明。 */
 export const MEMORY_VAR_DECLS: readonly PromptVarDecl[] = [
   { name: 'memory.tree', description: 'persona/ 最外层目录清单(只一层,目录带 /)。', multiline: true },
   { name: 'memory.playbooks', description: 'note/playbook/ 下的手册名,每行一条。', multiline: true },

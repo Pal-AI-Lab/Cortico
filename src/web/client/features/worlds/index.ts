@@ -1,21 +1,21 @@
 /**
  * 按 /api/worlds 展示 active、inactive、missing 状态及声明信息。
  * visibility 改变 agent 可见性，World 继续运行；restart 重建实例以应用构造时参数。
- * activation 写入 worlds.<id>.enabled 并挂载或卸载。详情由各 World 的控制台页提供。
+ * activation 写入 worlds.<id>.enabled 并挂载或卸载。详情由各 World 的 WebUI 页提供。
  */
 
-import { pageIdFor } from '../../../shared/console-protocol.ts';
-import type { ConsoleBadge, ConsoleLamp, ConsoleLink } from '../../../shared/console-protocol.ts';
+import { pageIdFor } from '../../../shared/webui-protocol.ts';
+import type { WebUiBadge, WebUiLamp, WebUiLink } from '../../../shared/webui-protocol.ts';
 import { get, post } from '../../core/api.ts';
-import { PROVIDER_ROUTE } from '../../console-pages/host.ts';
-import { resolveConsoleLinkHref } from '../../theme/handoff.ts';
-import { icon, type ConsoleIconName } from '../../ui/icons.ts';
+import { PROVIDER_ROUTE } from '../../webui-pages/host.ts';
+import { resolveWebUiLinkHref } from '../../theme/handoff.ts';
+import { icon, type WebUiIconName } from '../../ui/icons.ts';
 import { lampRow, paintLamps, subscribeLamps } from '../../ui/lamp.ts';
 import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { S } from './strings.ts';
 
-/** World 控制台页 id 使用 world:<id>。 */
+/** World WebUI 页 id 使用 world:<id>。 */
 const WORLD_PAGE_KIND = 'world';
 
 /** 某个 World 那一页的路由:`#/provider/<kind>:<id>`。 */
@@ -24,14 +24,14 @@ function worldPageId(id: string): string {
 }
 
 /**
- * 清单里的一条。字段与 `src/web/server.ts` 的 `ConsoleWorldInfo` 同形——那是三个
+ * 清单里的一条。字段与 `src/web/server.ts` 的 `WebUiWorldInfo` 同形——那是三个
  * 接口的联合,这里摊平成一个可选字段都全的形状:这一页按 `status` 分支渲染。
  */
 export interface WorldView {
   id: string;
   status: 'active' | 'inactive' | 'missing';
   /** World 自报的状态灯,一条链路一颗(仅 active 有意义)。 */
-  lamps?: ConsoleLamp[];
+  lamps?: WebUiLamp[];
   /** 人类可读名;没有就退回 id。 */
   label?: string;
   /** Persona定义的渠道;false = 部署侧选配的外挂;undefined = 没说。 */
@@ -44,8 +44,8 @@ export interface WorldView {
   reason?: string;
   workspace?: string;
   tools?: string[];
-  badges?: ConsoleBadge[];
-  links?: ConsoleLink[];
+  badges?: WebUiBadge[];
+  links?: WebUiLink[];
 }
 
 function errText(err: unknown): string {
@@ -221,7 +221,7 @@ export function mountWorlds(ctx: FeatureContext): void {
 
   /** 卡角上的一颗图标键:只有图形,名字在 title / aria-label 上。 */
   function iconButton(
-    name: ConsoleIconName,
+    name: WebUiIconName,
     label: string,
     cls: string,
     onClick: (btn: HTMLButtonElement) => void,
@@ -235,7 +235,7 @@ export function mountWorlds(ctx: FeatureContext): void {
     return btn;
   }
 
-  /** World 自己声明的徽标,原样摆上去,控制台不解释语义。 */
+  /** World 自己声明的徽标,原样摆上去,WebUI 不解释语义。 */
   function badgePills(m: WorldView): HTMLSpanElement[] {
     return (m.badges ?? []).map((b) => ui.pill(`${b.label} ${b.value}`, b.tone));
   }
@@ -265,7 +265,7 @@ export function mountWorlds(ctx: FeatureContext): void {
         size: 'sm',
         variant: 'primary',
         onClick: () => {
-          view?.open(resolveConsoleLinkHref(ctx.root.ownerDocument, link), '_blank', 'noopener');
+          view?.open(resolveWebUiLinkHref(ctx.root.ownerDocument, link), '_blank', 'noopener');
         },
       }));
     }

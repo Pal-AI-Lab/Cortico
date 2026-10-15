@@ -46,7 +46,7 @@ describe('独立页面主题交接', () => {
       },
     };
     const href = '/editor?room=7#section';
-    expect(handoff.resolveConsoleLinkHref(doc, { label: '打开', href })).toBe(href);
+    expect(handoff.resolveWebUiLinkHref(doc, { label: '打开', href })).toBe(href);
   });
 
   it('已有 fragment 的主题链接保持其既有页面协议', () => {
@@ -56,7 +56,7 @@ describe('独立页面主题交接', () => {
       },
     };
     const href = '/editor?room=7#section';
-    expect(handoff.resolveConsoleLinkHref(doc, { label: '打开', href, inheritTheme: true })).toBe(href);
+    expect(handoff.resolveWebUiLinkHref(doc, { label: '打开', href, inheritTheme: true })).toBe(href);
   });
 
   it('深色自定义主题保留原 query，并编码为 URL-safe 的完整词表快照', () => {
@@ -65,7 +65,7 @@ describe('独立页面主题交接', () => {
       values[`--${token.key}`] = index === 0 ? '  #A1B2C3  ' : '#123456';
     }
     const href = 'http://127.0.0.1:9000/editor?room=7&mode=custom';
-    const out = handoff.resolveConsoleLinkHref(
+    const out = handoff.resolveWebUiLinkHref(
       fakeDocument('dark', values),
       { label: '打开', href, inheritTheme: true },
     );
@@ -91,7 +91,7 @@ describe('独立页面主题交接', () => {
       '--rogue': '#010101',
     };
     const link = { label: '打开', href: '/editor?keep=1', inheritTheme: true };
-    const out = handoff.resolveConsoleLinkHref(fakeDocument('light', values), link);
+    const out = handoff.resolveWebUiLinkHref(fakeDocument('light', values), link);
 
     expect(decodePayload(out)).toEqual({
       v: 1,
@@ -100,11 +100,11 @@ describe('独立页面主题交接', () => {
     });
     expect(out).not.toContain('rgb');
     expect(out).not.toContain('rogue');
-    expect(handoff.resolveConsoleLinkHref(fakeDocument('system', values), link)).toBe(link.href);
+    expect(handoff.resolveWebUiLinkHref(fakeDocument('system', values), link)).toBe(link.href);
   });
 });
 
-/** 独立页面与控制台需使用相同的主题 fragment 常量。 */
+/** 独立页面与 WebUI 需使用相同的主题 fragment 常量。 */
 describe('收方与发方用同一个 fragment 键', () => {
   it('B 站 Overlay 编辑器读的键 = handoff 写的键', async () => {
     const { readFileSync } = await import('node:fs');

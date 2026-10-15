@@ -688,7 +688,7 @@ describe('data/ 缓存与两层世界性', () => {
   it('「清除所有数据」清得掉缓存文件', async () => {
     const r = rig();
     await r.bp({ save: floorSubmission() });
-    const part = (r.m.console().storage ?? []).find((p) => p.key === 'minecraft-blueprints')!;
+    const part = (r.m.webUi().storage ?? []).find((p) => p.key === 'minecraft-blueprints')!;
     expect(part.stat()).toContain('1 份');
     expect(await part.clear()).toContain('已清空');
     expect(readFileSync(join(r.dir, 'minecraft-blueprints.json'), 'utf8')).not.toContain('home-v2');

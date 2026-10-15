@@ -407,7 +407,7 @@ export class MinecraftServerManager {
   private saveOnHardSignal(): void {
     const proc = this.proc;
     if (!proc || proc.exitCode !== null) return;
-    this.opts.log.warn('收到硬关信号:先给 MC 服务器补一次 save-all + stop(兜底,正门是控制台关机键)');
+    this.opts.log.warn('收到硬关信号:先给 MC 服务器补一次 save-all + stop(兜底,正门是 WebUI 的关机键)');
     this.command('save-all flush');
     this.command('stop');
   }

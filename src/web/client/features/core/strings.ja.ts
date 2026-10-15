@@ -48,7 +48,7 @@ export const S: Partial<typeof en> = {
   statRounds: 'このバッチのラウンド数',
   statBatches: '累計バッチ数',
   statEvents: '最新のイベントカーソル',
-  statOnline: 'ターミナル接続中',
+  statOnline: 'コンソール接続中',
   statRun: '実行',
   unitMsgs: '件',
   unitPeople: '人',

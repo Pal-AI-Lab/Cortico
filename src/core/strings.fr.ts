@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: 'Nom affiché',
-    description: "Utilisé pour le titre de la console et comme nom d'expéditeur des messages envoyés par le bot. La console l'applique immédiatement ; un World monté le fait au redémarrage de ce World.",
+    description: "Utilisé pour le titre de la WebUI et comme nom d'expéditeur des messages envoyés par le bot. La WebUI l'applique immédiatement ; un World monté le fait au redémarrage de ce World.",
   },
   quietGap: {
     title: 'Fenêtre de calme',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Seuil du fichier journal',
     description: "Les entrées sous ce niveau ne sont pas écrites dans data/runs/<run>/log.jsonl.",
   },
-  logConsole: {
+  logStdout: {
     title: "Seuil d'affichage du journal",
-    description: "Les entrées sous ce niveau ne sont pas affichées dans la fenêtre de console.",
+    description: "Les entrées sous ce niveau ne sont pas écrites sur la sortie standard.",
   },
   logAreas: {
     title: 'Seuils fichier par zone',

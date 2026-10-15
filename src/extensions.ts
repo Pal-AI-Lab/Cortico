@@ -1,6 +1,6 @@
 /**
  * 扩展是 extensions/ 下的 npm 包，manifest.kind 为 world、provider 或 bot。
- * 启动时读取直接依赖并分别校验 manifest、默认导出、id 命名空间与控制台页前缀。
+ * 启动时读取直接依赖并分别校验 manifest、默认导出、id 命名空间与 WebUI 页前缀。
  * 单包失败不阻止其他包加载；安装或卸载后需重启进程，ESM 模块不会在运行时替换。
  * 仅导入 deployment.json 选定的 bot；其他 bot 包记为 idle，仓内同名 bot 优先。
  * 扩展包目录只读，避免修改 pnpm store 的硬链接文件；模板写入规则见 src/bot.ts。
@@ -27,17 +27,17 @@ import {
   EXTENSION_KEYWORDS,
   ICON_TYPES,
   parseExtensionManifest,
-  type ExtensionConsoleAsset,
+  type ExtensionWebUiAsset,
   type ExtensionKind,
   type ExtensionPackageJson,
 } from './extensions/manifest.ts';
 import { registerFrameworkResolver } from './extensions/runtime.ts';
 import { text } from './extensions/strings.ts';
-import { pageIdFor, type ContributingKind } from './web/shared/console-protocol.ts';
+import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
 
-/** 每类扩展的控制台页前缀。 */
+/** 每类扩展的 WebUI 页前缀。 */
 export const EXTENSION_PAGE_KIND: Readonly<Record<ExtensionKind, ContributingKind>> = {
   world: 'world',
   provider: 'llm',
@@ -56,10 +56,10 @@ export interface ExtensionRecord {
   kind?: ExtensionKind;
   /** 扩展声明的契约版本(`cortico.api`)。 */
   api?: number;
-  /** 包声明了浏览器端产物(`cortico.consoleClient`)。 */
-  consoleClient: boolean;
+  /** 包声明了浏览器端产物(`cortico.webUiClient`)。 */
+  webUiClient: boolean;
   /** 浏览器产物状态：none=未声明，served=文件可提供，missing=声明的文件不存在。 */
-  console?: 'none' | 'served' | 'missing';
+  webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   /** bot 包装了但这份部署没引用它:没有 import,不算失败。 */
   idle?: true;
@@ -76,7 +76,7 @@ export interface ExtensionSet {
   worlds: WorldDefinition<WorldSection>[];
   providers: ProviderModule[];
   /** 已加载的扩展里带浏览器端产物的那些;服务端据此分配 URL 并只发这几个文件。 */
-  consoleAssets: ExtensionConsoleAsset[];
+  webUiAssets: ExtensionWebUiAsset[];
   /** 这份部署的 bot 来自扩展包时是它;仓内 bot 则缺席。 */
   bot?: ActiveBotPackage;
 }
@@ -177,7 +177,7 @@ export function extensionPackageFile(pkgDir: string, relative: string): string |
   return existsSync(abs) ? abs : null;
 }
 
-/** 包声明的图标文件:`cortico.icon` 解析得出且文件在包目录里;否则 null,控制台显示默认头像。 */
+/** 包声明的图标文件:`cortico.icon` 解析得出且文件在包目录里;否则 null,WebUI 显示默认头像。 */
 export function extensionIconFile(pkgDir: string, pkg: ExtensionPackageJson): { file: string; type: string } | null {
   const parsed = parseExtensionManifest(pkg);
   const icon = parsed.ok ? parsed.manifest.icon : undefined;
@@ -217,7 +217,7 @@ export function locateBotPackage(repoRoot: string, ref: string, treeDir: string)
 
 /**
  * import 定位到的 bot 包并校验默认导出。扩展来源的 bot 其 id 不得与仓内 `bots/` 任一目录同名:
- * 控制台按 `persona:<id>` 找面板产物,构建产物表里同 key 的仓内页优先,撞名会拿到仓内那份面板。
+ * WebUI 按 `persona:<id>` 找面板产物,构建产物表里同 key 的仓内页优先,撞名会拿到仓内那份面板。
  */
 export async function importBotDefinition(
   location: BotPackageLocation,
@@ -231,7 +231,7 @@ export async function importBotDefinition(
       : `扩展「${location.name}」${extensionShapeMismatch('bot')}`);
   }
   if (location.source === 'extension' && opts.treeHas(mod.default.id)) {
-    throw new Error(`扩展「${location.name}」的 bot id「${mod.default.id}」与仓内 bots/${mod.default.id}/ 撞名;控制台面板产物按 persona:<id> 找,会拿到仓内那份。换一个 id。`);
+    throw new Error(`扩展「${location.name}」的 bot id「${mod.default.id}」与仓内 bots/${mod.default.id}/ 撞名;WebUI 面板产物按 persona:<id> 找,会拿到仓内那份。换一个 id。`);
   }
   return mod.default;
 }
@@ -253,7 +253,7 @@ export async function loadExtensions(
   const records: ExtensionRecord[] = [];
   const worlds: WorldDefinition<WorldSection>[] = [];
   const providers: ProviderModule[] = [];
-  const consoleAssets: ExtensionConsoleAsset[] = [];
+  const webUiAssets: ExtensionWebUiAsset[] = [];
   for (const { name, spec } of readInstalled(dir)) {
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
     const pkg = readPackageJson(join(pkgDir, 'package.json'));
@@ -261,7 +261,7 @@ export async function loadExtensions(
       name,
       spec,
       version: pkg?.version ?? null,
-      consoleClient: false,
+      webUiClient: false,
       loaded: false,
       ...(pkg?.description ? { description: pkg.description } : {}),
     };
@@ -279,25 +279,25 @@ export async function loadExtensions(
       };
       continue;
     }
-    const { kind, api, consoleClient, consoleStyle } = parsed.manifest;
+    const { kind, api, webUiClient, webUiStyle } = parsed.manifest;
     record.kind = kind;
     record.api = api;
-    record.consoleClient = consoleClient !== undefined;
+    record.webUiClient = webUiClient !== undefined;
 
     // 缺少面板产物不阻止定义加载。
-    const jsFile = consoleClient === undefined ? null : extensionPackageFile(pkgDir, consoleClient);
-    record.console = consoleClient === undefined ? 'none' : jsFile ? 'served' : 'missing';
-    if (consoleClient !== undefined && !jsFile) {
-      opts.log?.warn(`扩展声明的控制台产物不在: ${name} — ${consoleClient}`);
+    const jsFile = webUiClient === undefined ? null : extensionPackageFile(pkgDir, webUiClient);
+    record.webUi = webUiClient === undefined ? 'none' : jsFile ? 'served' : 'missing';
+    if (webUiClient !== undefined && !jsFile) {
+      opts.log?.warn(`扩展声明的 WebUI 产物不在: ${name} — ${webUiClient}`);
     }
-    const cssFile = consoleStyle !== undefined && jsFile ? extensionPackageFile(pkgDir, consoleStyle) : null;
-    if (consoleStyle !== undefined && jsFile && !cssFile) {
-      opts.log?.warn(`扩展声明的控制台样式不在,面板按无样式发: ${name} — ${consoleStyle}`);
+    const cssFile = webUiStyle !== undefined && jsFile ? extensionPackageFile(pkgDir, webUiStyle) : null;
+    if (webUiStyle !== undefined && jsFile && !cssFile) {
+      opts.log?.warn(`扩展声明的 WebUI 样式不在,面板按无样式发: ${name} — ${webUiStyle}`);
     }
 
     const serveAsset = (id: string): void => {
       if (!jsFile) return;
-      consoleAssets.push({
+      webUiAssets.push({
         pageId: pageIdFor(EXTENSION_PAGE_KIND[kind], id),
         packageName: name,
         version: pkg.version ?? '0',
@@ -364,10 +364,10 @@ export async function loadExtensions(
     serveAsset(id);
   }
   const bot = opts.activeBot && records.some((r) => r.loaded && r.kind === 'bot') ? opts.activeBot : undefined;
-  return { dir, records, worlds, providers, consoleAssets, ...(bot ? { bot } : {}) };
+  return { dir, records, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
 }
 
-// 装卸与搜索(控制台那一面)
+// 装卸与搜索(WebUI 那一面)
 
 /** npm 包名。与 npm 自己的校验同形;不含任何 shell 元字符。 */
 const PACKAGE_NAME = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
@@ -652,8 +652,8 @@ export class ExtensionManager {
     return pkg ? extensionIconFile(pkgDir, pkg) : null;
   }
 
-  consoleAssets(): readonly ExtensionConsoleAsset[] {
-    return this.booted.consoleAssets;
+  webUiAssets(): readonly ExtensionWebUiAsset[] {
+    return this.booted.webUiAssets;
   }
 
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
@@ -691,9 +691,9 @@ export class ExtensionManager {
         spec,
         version: pkg?.version ?? null,
         installedVersion: pkg?.version ?? null,
-        consoleClient: manifest?.consoleClient !== undefined,
+        webUiClient: manifest?.webUiClient !== undefined,
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
-        ...(manifest && manifest.consoleClient === undefined ? { console: 'none' as const } : {}),
+        ...(manifest && manifest.webUiClient === undefined ? { webUi: 'none' as const } : {}),
         loaded: false,
         state: 'pending-restart',
         ...(pkg?.description ? { description: pkg.description } : {}),
@@ -734,7 +734,7 @@ export class ExtensionManager {
   /**
    * 列出 npm 上带这一类关键字的全部包。**不接文本查询**:registry 的 `text=` 在
    * `keywords:` 过滤之下只影响排序不缩小结果(实测 `keywords:cortico-world 任意词`
-   * 仍返回同样 8 条),筛选交给控制台在整份结果上做。
+   * 仍返回同样 8 条),筛选交给 WebUI 在整份结果上做。
    * `keywords:` 查询一个包都没回时，再按关键字本身做文本搜索(不认 `keywords:` 的 registry 对它回空列表);
    * 两种查询的结果都只留带这个关键字的包。
    */
@@ -850,9 +850,9 @@ export class ExtensionManager {
   }
 
   /**
-   * 一个包的详情。控制台在操作员点开某张卡片时才调，因此这里取整份包文档
+   * 一个包的详情。WebUI 在操作员点开某张卡片时才调，因此这里取整份包文档
    * (`GET /<name>`，比搜索结果多出 cortico 声明、许可证、体积与版本史)。
-   * readme 不回传：一份 30KB 以上的 markdown，控制台也不渲染它。
+   * readme 不回传：一份 30KB 以上的 markdown，WebUI 也不渲染它。
    */
   async packageInfo(name: string, version?: string, language: Language = 'zh'): Promise<ExtensionPackageDetail> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));

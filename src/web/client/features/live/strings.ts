@@ -11,15 +11,15 @@ import { S as ru } from './strings.ru.ts';
 
 const zh = {
   // index.ts
-  navLabel: '终端',
+  navLabel: '控制台',
   currentProvider: '当前模型供应商',
   noProvider: '未选择模型供应商',
   ctxOpenAria: '查看 token 分类',
   ctxPanelAria: 'Token 分类',
-  netConnecting: '控制台连接中…',
-  netOnline: '控制台已连接',
-  netOffline: '控制台已断开',
-  composerLabel: '终端消息输入',
+  netConnecting: 'WebUI 连接中…',
+  netOnline: 'WebUI 已连接',
+  netOffline: 'WebUI 已断开',
+  composerLabel: '控制台消息输入',
   composerPlaceholder: "输入消息…",
   exportDiagnostics: '导出诊断',
   exportFailed: '诊断包取不回来',
@@ -27,7 +27,7 @@ const zh = {
   exportConfirmBody: '诊断包包含对话、提示词、事件、工具调用、用量和运行日志。配置里的密钥已脱敏，其余内容原样写出。分享前请检查其中的私人信息。',
   composerFork: '正在查看后台会话；这里发出的消息仍送到主会话',
   composerNoProvider: '当前模型供应商不可用，请前往「模型供应商」页设置',
-  composerQueued: '终端通道正在重连，消息已排队',
+  composerQueued: '控制台通道正在重连，消息已排队',
   emptyConnecting: '连接调试通道中…',
   ctxTitle: (total: string, max: string | null) =>
     `上下文 ${total}${max !== null ? ` / ${max}` : ''} tok · 点击查看分类`,
@@ -37,7 +37,7 @@ const zh = {
   debugNotMounted: "调试通道不可用，无法显示时间线。",
 
   // status.ts
-  docTitle: (name: string) => `控制台 · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: '未连接',
   chipMsgs: ' 条',
   chipCache: '缓存 ',
@@ -138,7 +138,7 @@ const zh = {
   obProvider: '首先，请配置模型提供商：',
   obProviderNone: '尚未配置可用的模型提供商',
   obProviderReady: '模型提供商已配置',
-  obWorlds: '接下来，请启用并配置你的 Bot 接入的外部环境模组（Cortico World）。也可以先仅启用终端对话。',
+  obWorlds: '接下来，请启用并配置你的 Bot 接入的外部环境模组（Cortico World）。也可以先仅启用控制台对话。',
   obWorldsState: (labels: readonly string[]) => `当前已经启用了 ${labels.length} 个外部环境：${labels.join('、')}`,
   obPrompts: '最后，你可以在这里方便地编辑系统提示词，来提供人格描述、行为规范、语言风格等定制化内容！',
   obReady: '准备就绪！',
@@ -149,15 +149,15 @@ const zh = {
 
 export const en: typeof zh = {
   // index.ts
-  navLabel: 'Terminal',
+  navLabel: 'Console',
   currentProvider: 'Current model provider',
   noProvider: 'No provider selected',
   ctxOpenAria: 'View token breakdown',
   ctxPanelAria: 'Token breakdown',
-  netConnecting: 'Console connecting…',
-  netOnline: 'Console connected',
-  netOffline: 'Console disconnected',
-  composerLabel: 'Terminal message input',
+  netConnecting: 'WebUI connecting…',
+  netOnline: 'WebUI connected',
+  netOffline: 'WebUI disconnected',
+  composerLabel: 'Console message input',
   composerPlaceholder: "Enter a message…",
   exportDiagnostics: 'Export diagnostics',
   exportFailed: 'The diagnostics bundle could not be fetched',
@@ -165,7 +165,7 @@ export const en: typeof zh = {
   exportConfirmBody: 'The bundle contains conversations, prompts, events, tool calls, usage and run logs. Secrets in the config are redacted; everything else is written as is. Check it for private information before sharing.',
   composerFork: 'Viewing a background session; messages sent here still go to the main session',
   composerNoProvider: 'No usable provider. Set one up on the Model connections page.',
-  composerQueued: 'Terminal channel is reconnecting; message queued',
+  composerQueued: 'Console channel is reconnecting; message queued',
   emptyConnecting: 'Connecting to the debug channel…',
   ctxTitle: (total: string, max: string | null) =>
     `Context ${total}${max !== null ? ` / ${max}` : ''} tok · click for breakdown`,
@@ -175,7 +175,7 @@ export const en: typeof zh = {
   debugNotMounted: "Debug channel unavailable; the timeline cannot be displayed.",
 
   // status.ts
-  docTitle: (name: string) => `Console · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: 'Disconnected',
   chipMsgs: ' msgs',
   chipCache: 'cache ',
@@ -276,7 +276,7 @@ export const en: typeof zh = {
   obProvider: 'First, configure a model provider:',
   obProviderNone: 'No usable model provider yet',
   obProviderReady: 'Model provider configured',
-  obWorlds: 'Next, enable and configure the external environments your bot reaches (Cortico Worlds). Terminal chat alone is a fine start.',
+  obWorlds: 'Next, enable and configure the external environments your bot reaches (Cortico Worlds). Console chat alone is a fine start.',
   obWorldsState: (labels: readonly string[]) =>
     `Currently ${labels.length} external environment${labels.length === 1 ? '' : 's'} enabled: ${labels.join(', ')}`,
   obPrompts: 'Finally, the system prompt is edited here: who it is, how it behaves, how it talks.',

@@ -1027,7 +1027,7 @@ describe('事件面板', () => {
     total: number;
   };
   const list = (conv: string): Promise<EventList> =>
-    mod.console().invoke!('events', 'list', [{ conv, limit: 100 }]) as Promise<EventList>;
+    mod.webUi().invoke!('events', 'list', [{ conv, limit: 100 }]) as Promise<EventList>;
 
   it('会话计数与总条数包含启动后新落库的事件,选中会话只列该会话的事件', async () => {
     mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', text: '群里第一句' });
@@ -1051,9 +1051,9 @@ describe('事件面板', () => {
   });
 });
 
-describe('控制台文案', () => {
-  it('英文界面的 console() 展示文案与面板调用错误不含中文', async () => {
-    const decl = mod.console('en');
+describe('WebUI 文案', () => {
+  it('英文界面的 webUi() 展示文案与面板调用错误不含中文', async () => {
+    const decl = mod.webUi('en');
     const shown = JSON.stringify(decl, (k, v) => (k === 'path' ? undefined : v));
     expect(shown).not.toMatch(/[一-鿿]/);
     await expect(decl.invoke!('events', 'nope', [])).rejects.toThrow(/^[^一-鿿]*$/);

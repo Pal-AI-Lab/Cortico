@@ -97,7 +97,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: 'Verifique se o serviço externo correspondente parou.',
     llm: 'Parar as instâncias de provedor',
     flush: 'Salvar o estado do Core',
-    web: 'Fechar o console',
+    web: 'Fechar a WebUI',
     summarySkipped: 'Etapas de desligamento local incompletas',
     summaryComplete: 'Desligamento local concluído: todas as etapas foram concluídas',
     summaryUnverified: (items: string[]) => `O desligamento local terminou, mas não foi confirmado que o estado externo terminou: ${items.join(', ')} (requer confirmação manual)`,

@@ -1,5 +1,5 @@
 /**
- * 浏览器端入口发现只认目录约定:World 把 client.ts 放进自己的 console/ 就被收进
+ * 浏览器端入口发现只认目录约定:World 把 client.ts 放进自己的 webui/ 就被收进
  * 构建,构建脚本里不存在任何 World 名单。asset key 由目录名推导,World 无法自选。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -22,9 +22,9 @@ const put = (rel: string) => {
 beforeAll(() => {
   root = mkdtempSync(join(tmpdir(), 'cortico-web-discovery-'));
   put('src/web/client/main.ts');
-  put('src/worlds/fake/console/client.ts');
-  put('bots/fake/console/client.ts');
-  // 没有 console/client.ts 的 World 不该被收进来。
+  put('src/worlds/fake/webui/client.ts');
+  put('bots/fake/webui/client.ts');
+  // 没有 webui/client.ts 的 World 不该被收进来。
   mkdirSync(join(root, 'src', 'worlds', 'headless', 'core'), { recursive: true });
   mkdirSync(join(root, 'bots', 'headless', 'core'), { recursive: true });
 });
@@ -40,12 +40,12 @@ describe('discoverEntries', () => {
     expect(entries.map((e) => e.key)).toEqual(['core', 'persona:fake', 'world:fake']);
     expect(entries.map((e) => e.entry)).toEqual([
       join(root, 'src/web/client/main.ts'),
-      join(root, 'bots/fake/console/client.ts'),
-      join(root, 'src/worlds/fake/console/client.ts'),
+      join(root, 'bots/fake/webui/client.ts'),
+      join(root, 'src/worlds/fake/webui/client.ts'),
     ]);
   });
 
-  it('没有 console/client.ts 的 World 目录不产生入口', () => {
+  it('没有 webui/client.ts 的 World 目录不产生入口', () => {
     const keys = discoverEntries(root).map((e) => e.key);
     expect(keys).not.toContain('world:headless');
     expect(keys).not.toContain('persona:headless');
@@ -67,7 +67,7 @@ describe('buildWeb', () => {
     const repo = mkdtempSync(join(tmpdir(), 'cortico-web-build-'));
     try {
       mkdirSync(join(repo, 'src', 'web', 'client'), { recursive: true });
-      writeFileSync(join(repo, 'src', 'web', 'client', 'main.ts'), "import { x } from './dep.ts';\nconsole.log(x);\n", 'utf8');
+      writeFileSync(join(repo, 'src', 'web', 'client', 'main.ts'), "import { x } from './dep.ts';\nwebui.log(x);\n", 'utf8');
       writeFileSync(join(repo, 'src', 'web', 'client', 'dep.ts'), 'export const x = 1;\n', 'utf8');
       const manifest = await buildWeb(repo);
       expect(Object.keys(manifest.sources ?? {})).toEqual(['src/web/client/dep.ts', 'src/web/client/main.ts']);

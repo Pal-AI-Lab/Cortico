@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { buildWeb } from '../../scripts/build-web.ts';
 import { discoverProviderModules, ProviderRegistry } from '../../src/providers/registry.ts';
-import { ProviderSettings } from '../../src/providers/console/settings.ts';
+import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import { BaseProvider } from '../../src/providers/base.ts';
 import { WebApp } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
@@ -33,7 +33,7 @@ describe('LLM Provider directory extension', () => {
     let app: WebApp | undefined;
     try {
       const moduleDir = join(temp.dir, 'src/providers/fixture');
-      mkdirSync(join(moduleDir, 'console'), { recursive: true });
+      mkdirSync(join(moduleDir, 'webui'), { recursive: true });
       const baseUrl = pathToFileURL(resolve('src/providers/base.ts')).href;
       writeFileSync(
         join(moduleDir, 'index.ts'),
@@ -41,13 +41,13 @@ describe('LLM Provider directory extension', () => {
 class Fixture extends BaseProvider {async respond(){throw new Error('fixture has no inference transport');}}
 export default {id:'fixture',title:'Fixture',reasoningTiers:[{id:'off',label:'Off',thinking:false}],serviceTiers:[],
  create(name,entry,host){return {client:new Fixture(),control:host.resource('counter',()=>({count:0}))};},
- console(host){return {panels:[{id:'counter',title:'Counter',getMethods:['state']}],invoke(panel,method,args){
+ webUi(host){return {panels:[{id:'counter',title:'Counter',getMethods:['state']}],invoke(panel,method,args){
   const state=host.instance('test').control;if(panel!=='counter')throw new Error('wrong panel');
   if(method==='increment')state.count++;else if(method!=='state')throw new Error('wrong method');return state.count;
  }}}};`,
       );
       writeFileSync(
-        join(moduleDir, 'console/client.ts'),
+        join(moduleDir, 'webui/client.ts'),
         `export default {panels:{counter:{async mount(ctx){ctx.root.textContent=String(await ctx.invoke('state'));}}}};`,
       );
       const worlds = await discoverProviderModules(join(temp.dir, 'src/providers'));
@@ -81,17 +81,17 @@ export default {id:'fixture',title:'Fixture',reasoningTiers:[{id:'off',label:'Of
         webDistDir: join(temp.dir, 'dist/web'),
         getStatus: () => ({}),
         log: nullLogger(),
-        consolePageSources: () => settings.sources(),
+        webUiPageSources: () => settings.sources(),
       });
       const base = `http://127.0.0.1:${await app.start(0)}`;
-      const manifest = (await (await fetch(base + '/api/console/manifest')).json()) as any;
+      const manifest = (await (await fetch(base + '/api/webui/manifest')).json()) as any;
       const provider = manifest.providers.find((p: any) => p.id === 'llm:fixture');
       // An extension that places none of the editor's blocks gets the default order, its own sections between model and pricing.
       expect(provider.panels.map((p: any) => p.id)).toEqual(['settings', 'endpoint', 'model', 'counter', 'pricing', 'protocol']);
       expect((await fetch(base + assets.providers['llm:fixture'].js)).status).toBe(200);
       async function invoke(method: string) {
         return (
-          await fetch(base + '/api/console/providers/llm%3Afixture/panels/counter/' + method, {
+          await fetch(base + '/api/webui/providers/llm%3Afixture/panels/counter/' + method, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ args: [] }),

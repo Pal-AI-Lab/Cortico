@@ -6,8 +6,8 @@ import { networkInterfaces, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
 import { WebApp } from '../../src/web/server.ts';
-import { ConsoleAuth, SALT_BYTES, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from '../../src/web/auth.ts';
-import { CONSOLE_AUTH_HEADER } from '../../src/web/shared/console-protocol.ts';
+import { WebUiAuth, SALT_BYTES, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from '../../src/web/auth.ts';
+import { WEBUI_AUTH_HEADER } from '../../src/web/shared/webui-protocol.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { Logger } from '../../src/core/types.ts';
 import { FakeStore } from './fakes.ts';
@@ -50,47 +50,47 @@ function sessionOf(reply: Reply): string {
   return header.split(';')[0];
 }
 
-describe('ConsoleAuth', () => {
+describe('WebUiAuth', () => {
   let dir = '';
   afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }); dir = ''; });
   const keyFile = () => join((dir = dir || mkdtempSync(join(tmpdir(), 'web-auth-unit-'))), 'web-auth.key');
 
   it('密码为空时不启用', () => {
-    expect(new ConsoleAuth('', keyFile()).enabled).toBe(false);
-    expect(new ConsoleAuth('x', keyFile()).enabled).toBe(true);
+    expect(new WebUiAuth('', keyFile()).enabled).toBe(false);
+    expect(new WebUiAuth('x', keyFile()).enabled).toBe(true);
   });
 
   it('令牌认密码与数据目录:同目录同密码的新实例认它,被改动、换了密码或换了目录都不认', () => {
     const file = keyFile();
-    const auth = new ConsoleAuth('first', file);
+    const auth = new WebUiAuth('first', file);
     const token = auth.issue();
     expect(auth.verify(token)).toBe(true);
-    expect(new ConsoleAuth('first', file).verify(token)).toBe(true);
+    expect(new WebUiAuth('first', file).verify(token)).toBe(true);
     expect(auth.verify(`${token}0`)).toBe(false);
     expect(auth.verify('')).toBe(false);
     expect(auth.verify(null)).toBe(false);
-    expect(new ConsoleAuth('second', file).verify(token)).toBe(false);
-    expect(new ConsoleAuth('first', join(dir, 'other.key')).verify(token)).toBe(false);
+    expect(new WebUiAuth('second', file).verify(token)).toBe(false);
+    expect(new WebUiAuth('first', join(dir, 'other.key')).verify(token)).toBe(false);
   });
 
   it('盐文件被截空或改坏时重新生成:令牌不退化成只由密码决定,文件换成新盐', () => {
     const file = keyFile();
-    const good = new ConsoleAuth('pw', file).issue();
+    const good = new WebUiAuth('pw', file).issue();
     // 0 字节盐算出的令牌
     const weak = createHmac('sha256', createHmac('sha256', Buffer.alloc(0)).update('pw', 'utf8').digest())
       .update(SESSION_COOKIE, 'utf8').digest('hex');
     for (const broken of ['', 'zz\n']) {
       writeFileSync(file, broken);
-      const auth = new ConsoleAuth('pw', file);
+      const auth = new WebUiAuth('pw', file);
       expect(auth.verify(weak)).toBe(false);
       expect(auth.verify(good)).toBe(false);
       expect(readFileSync(file, 'utf8').trim()).toMatch(new RegExp(`^[0-9a-f]{${SALT_BYTES * 2}}$`));
-      expect(new ConsoleAuth('pw', file).verify(auth.issue())).toBe(true);
+      expect(new WebUiAuth('pw', file).verify(auth.issue())).toBe(true);
     }
   });
 
   it('错误的登录串行等待:三次并发失败耗时不少于三个延迟,正确的密码不排队', async () => {
-    const auth = new ConsoleAuth('right', keyFile(), 40);
+    const auth = new WebUiAuth('right', keyFile(), 40);
     const started = Date.now();
     const wrong = Promise.all([auth.login('a'), auth.login('b'), auth.login('c')]);
     expect(await auth.login('right')).toBe(true);
@@ -141,7 +141,7 @@ describe('WebApp 访问密码', () => {
     expect(home.body).toContain('id="login"');
     const api = await call(port, { path: '/api/status' });
     expect(api.status).toBe(401);
-    expect(api.headers[CONSOLE_AUTH_HEADER]).toBe('required');
+    expect(api.headers[WEBUI_AUTH_HEADER]).toBe('required');
     expect((await call(port, { path: '/login.html' })).status).toBe(401);
     expect(JSON.parse((await call(port, { path: '/api/auth/status' })).body)).toEqual({ required: true, authenticated: false });
     expect(await socketOpens(`ws://127.0.0.1:${port}/ws/sessions`)).toBe(false);
@@ -149,7 +149,7 @@ describe('WebApp 访问密码', () => {
 
   it('未登录的大请求体在解析之前就被 401 挡下', async () => {
     const port = await start('open sesame');
-    const reply = await call(port, { method: 'POST', path: '/api/console/providers/x/panels/y/z', raw: '{"args":[' });
+    const reply = await call(port, { method: 'POST', path: '/api/webui/providers/x/panels/y/z', raw: '{"args":[' });
     expect(reply.status).toBe(401);
   });
 

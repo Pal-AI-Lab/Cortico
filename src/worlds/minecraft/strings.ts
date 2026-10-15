@@ -1,8 +1,8 @@
 import { pick, type Language } from '../../core/language.ts';
 
-/** 给操作员看的文案:控制台露出、配置组、面板回执、世界生成词表。 */
+/** 给操作员看的文案:WebUI 露出、配置组、面板回执、世界生成词表。 */
 const zh = {
-  // ── console():显示名、灯、徽标、链接 ───────────────────────────────
+  // ── webUi():显示名、灯、徽标、链接 ───────────────────────────────
   label: 'Minecraft',
   server: '服务器',
   task: '任务',
@@ -92,13 +92,13 @@ const zh = {
   defaultGamemode: '默认游戏模式',
   list: (items: string[]) => items.join('、'),
   liveHostedOnly: '服务器跑着,只有难度和默认游戏模式能当场改;别的要先停机',
-  liveExternal: '服务器是外部起的,没有控制台可用;要改就先停机改文件',
+  liveExternal: '服务器是外部起的,没有服务器控制台可用;要改就先停机改文件',
   appliedLive: (items: string) => `${items}已当场生效(只对本轮有效,没写进 server.properties)`,
   needName: '要先写个名字',
   badName: '游戏名里不会有空格或引号,确认一下',
-  liveExternalOps: '服务器是外部起的,没有控制台可用;要改名单就先停机',
+  liveExternalOps: '服务器是外部起的,没有服务器控制台可用;要改名单就先停机',
   opSent: (on: boolean, who: string) => `已让服务器${on ? '授权' : '收回'} ${who} 的作弊权限(当场生效)`,
-  consoleWriteFailed: '控制台写不进去,试试重启服务器',
+  consoleWriteFailed: '服务器控制台写不进去,试试重启服务器',
   opUnchanged: (on: boolean, who: string) => `${who} 本来就${on ? '有' : '没有'}作弊权限`,
   opWritten: (on: boolean, who: string) => `${on ? '已授权' : '已收回'} ${who} 的作弊权限,下次启动生效`,
   stopForProperties: '这几项服务器只在启动时读,要先把它停下来',
@@ -393,11 +393,11 @@ export const en: typeof zh = {
   defaultGamemode: 'Default game mode',
   list: (items) => items.join(', '),
   liveHostedOnly: 'The server is running: only difficulty and default game mode can change now; stop it for the rest',
-  liveExternal: 'The server was started outside this World and has no console; stop it and edit the file',
+  liveExternal: 'The server was started outside this World and has no server console; stop it and edit the file',
   appliedLive: (items) => `${items} applied now (this run only, not written to server.properties)`,
   needName: 'Enter a name first',
   badName: 'Game names cannot contain spaces or quotes',
-  liveExternalOps: 'The server was started outside this World and has no console; stop it to change the list',
+  liveExternalOps: 'The server was started outside this World and has no server console; stop it to change the list',
   opSent: (on, who) => (on
     ? `Server granted cheat permissions to ${who} (effective now)`
     : `Server revoked cheat permissions from ${who} (effective now)`),

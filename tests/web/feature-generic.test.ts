@@ -262,14 +262,14 @@ async function flush(times = 16): Promise<void> {
 }
 
 async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
-  const { createConsoleUi } = (await import(UI)) as Any;
+  const { createWebUi } = (await import(UI)) as Any;
   const { Lifecycle } = (await import(LIFECYCLE)) as Any;
   const doc = new FakeDoc();
   const root = doc.createElement('div');
   doc.body.appendChild(root);
   const lifecycle = new Lifecycle();
   const guards: Array<() => string | null> = [];
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: fakeMemo(), overlayHost: doc.body, doc, signal: lifecycle.signal,
   });
   const ctx = {
@@ -440,7 +440,7 @@ describe('configField 的取值归一', () => {
   });
 
   it('x-options 整张表来自声明方（含它自己的固定项），已选值即使不在表里也保留', async () => {
-    // 控制台不认识任何 kind:"系统默认 / 静音"这类固定项也由声明该 kind 的 World 随表给出。
+    // WebUI 不认识任何 kind:"系统默认 / 静音"这类固定项也由声明该 kind 的 World 随表给出。
     stubFetch({
       '/api/config/options/playback-primary': {
         options: [

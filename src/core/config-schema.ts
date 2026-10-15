@@ -1,5 +1,5 @@
 /**
- * Core、Persona 和 World 用 JSON Schema 声明配置，控制台读取声明生成表单。
+ * Core、Persona 和 World 用 JSON Schema 声明配置，WebUI 读取声明生成表单。
  * 支持 integer、number、boolean、string（含 enum / x-options）与二元数组
  * （prefixItems，或 items + minItems=maxItems=2）；其他类型只读。
  * 扩展属性：
@@ -29,7 +29,7 @@ export interface ConfigProperty {
   'x-scale'?: number;
   'x-suffix'?: string;
   'x-hot'?: boolean;
-  /** 动态下拉的选项源 id;控制台打开下拉前现探 */
+  /** 动态下拉的选项源 id;WebUI 打开下拉前现探 */
   'x-options'?: string;
   /** 字符串路径的本机选择器。推荐目录只作部署提示与对话框起始位置。 */
   'x-path'?: {

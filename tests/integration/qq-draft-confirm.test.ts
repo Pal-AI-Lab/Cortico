@@ -48,7 +48,7 @@ describe('QQ 草稿确认集成', () => {
       privates: [],
       token: '',
     };
-    cfg.worlds.terminal.enabled = false;
+    cfg.worlds.console.enabled = false;
     cfg.batching.quietGapMs = 40;
     cfg.batching.maxBatchAgeMs = 400;
     cfg.tick.dayIntervalMinutes = [999, 999];

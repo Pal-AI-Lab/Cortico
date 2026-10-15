@@ -13,7 +13,7 @@ import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
-import { announceDataDir, consoleUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
+import { announceDataDir, webUiUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
 import { extensionIconFile, extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
 import { parseExtensionManifest } from './extensions/manifest.ts';
 import { withWorlds } from './world.ts';
@@ -45,7 +45,7 @@ async function loadBotDefinition(
   };
 }
 
-/** 浏览器启动失败时保留终端已输出的地址。 */
+/** 浏览器启动失败时保留命令行已输出的地址。 */
 function openBrowser(url: string): void {
   try {
     const p = process.platform;
@@ -54,7 +54,7 @@ function openBrowser(url: string): void {
       : p === 'darwin' ? ['open', [url]]
       : ['xdg-open', [url]];
     spawn(cmd as string, args as string[], { detached: true, stdio: 'ignore' }).unref();
-  } catch { /* 地址已在终端输出。 */ }
+  } catch { /* 地址已在命令行输出。 */ }
 }
 
 function pickBotName(): string {
@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   const botName = pickBotName();
 
   // 与启动并行查最新 Release;查完时摘要还没打印就并进摘要,打印过了就单独补一行。
-  // 查询失败不提示，与控制台字标下的更新提示一致。
+  // 查询失败不提示，与 WebUI 字标下的更新提示一致。
   let summaryPrinted = false;
   let releaseNotice: string | null = null;
   void checkFrameworkRelease().then(({ currentVersion, update }) => {
@@ -226,12 +226,12 @@ async function main(): Promise<void> {
   const { port } = await bot.start();
 
   console.log(`\n  Bot:       ${botName}${cfg.displayName && cfg.displayName !== botName ? ` (${cfg.displayName})` : ''}`);
-  const consoleUrl = port === null ? null : consoleUrlOf(bot.webApp?.boundAddress ?? null, port);
+  const webUiUrl = port === null ? null : webUiUrlOf(bot.webApp?.boundAddress ?? null, port);
   if (port !== null) {
-    console.log(`  控制台:    ${consoleUrl}${listensOnEveryInterface(bot.webApp?.boundAddress ?? null) ? `(监听 ${bot.webApp?.boundAddress},所有网卡)` : ''}`);
+    console.log(`  WebUI:    ${webUiUrl}${listensOnEveryInterface(bot.webApp?.boundAddress ?? null) ? `(监听 ${bot.webApp?.boundAddress},所有网卡)` : ''}`);
     const assetsProblem = webAssetsProblem(fileURLToPath(new URL('..', import.meta.url)));
     if (assetsProblem) {
-      console.log(`  ⚠ 控制台产物需要重建(${assetsProblem});停止 bot 后运行 pnpm build:web`);
+      console.log(`  ⚠ WebUI 产物需要重建(${assetsProblem});停止 bot 后运行 pnpm build:web`);
     }
   }
   for (const slot of bot.assembly.slots) {
@@ -247,11 +247,11 @@ async function main(): Promise<void> {
         ? `  扩展:      ${ext.name}@${ext.version} · bot 包,本部署未引用`
         : `  扩展:      ${ext.name} 未加载: ${ext.reason}`);
   }
-  console.log(`  主模型:    ${activeProvider?.spec?.model || '未配置；请在控制台「模型供应商」页选择连接与模型'}`);
+  console.log(`  主模型:    ${activeProvider?.spec?.model || '未配置；请在 WebUI「模型供应商」页选择连接与模型'}`);
   if (missingSecret && endpointDir) {
     const envFile = resolve(endpointDir, '.env');
     const where = existsSync(envFile) ? `${envFile} 里也没有` : `${envFile} 不存在`;
-    console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在控制台「模型提供商」页修改密钥变量名或补填密钥`);
+    console.log(`  ⚠ 缺少 ${missingSecret}:进程环境里没有,${where}；可在 WebUI「模型提供商」页修改密钥变量名或补填密钥`);
   }
   if (releaseNotice) console.log(releaseNotice);
   if (paused) {
@@ -264,7 +264,7 @@ async function main(): Promise<void> {
     process.env.CORTICO_OPEN_BROWSER === '1' ||
     process.env.CORTICO_OPEN_BROWSER === 'true' ||
     process.argv.includes('--open');
-  if (openBrowserFlag && consoleUrl !== null) openBrowser(consoleUrl);
+  if (openBrowserFlag && webUiUrl !== null) openBrowser(webUiUrl);
 
   // 此时限覆盖整个关机流程；各步骤的时限由 bot.shutdown() 管理。
   const SHUTDOWN_GRACE_MS = 35_000;

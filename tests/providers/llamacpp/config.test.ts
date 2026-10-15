@@ -5,7 +5,7 @@ import { afterEach, expect, it } from 'vitest';
 import { CORE_DEFAULTS } from '../../../src/core/config.ts';
 import type { CoreConfig } from '../../../src/core/types.ts';
 import { nullLogger } from '../../../src/core/util.ts';
-import { ProviderSettings } from '../../../src/providers/console/settings.ts';
+import { ProviderSettings } from '../../../src/providers/webui/settings.ts';
 import { ProviderRegistry } from '../../../src/providers/registry.ts';
 import module from '../../../src/providers/llamacpp/index.ts';
 import { LAUNCH_DEFAULTS } from '../../../src/providers/llamacpp/options.ts';

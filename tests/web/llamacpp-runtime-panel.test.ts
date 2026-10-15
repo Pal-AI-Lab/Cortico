@@ -3,7 +3,7 @@ import { LAUNCH_DEFAULTS } from '../../src/providers/llamacpp/options.ts';
 import { change, doc, flush, mountSettings } from './provider-settings-fixture.ts';
 
 const UI = '../../src/web/client/ui/index.ts';
-const PANEL = '../../src/providers/llamacpp/console/runtime-panel.ts';
+const PANEL = '../../src/providers/llamacpp/webui/runtime-panel.ts';
 type Any = any;
 
 /** 挂一次运行时面板;`state` 覆盖 state 回执里那几位。回执的配置组取真的声明与真的值。 */
@@ -20,9 +20,9 @@ async function mountRuntimePanel(
   const controller = new doc.defaultView.AbortController();
   const root = doc.createElement('div');
   doc.body.append(root);
-  const { createConsoleUi } = await import(UI) as Any;
+  const { createWebUi } = await import(UI) as Any;
   const { runtimePanel } = await import(PANEL) as Any;
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: { get: (_key: string, fallback: unknown) => fallback, set: () => {} },
     overlayHost: doc.body, signal: controller.signal, doc,
   });

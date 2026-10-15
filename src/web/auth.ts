@@ -1,5 +1,5 @@
 /**
- * 控制台访问密码。密码为空时不启用，所有请求照常放行。
+ * WebUI 访问密码。密码为空时不启用，所有请求照常放行。
  * 登录令牌无状态：由密码与数据目录里的随机盐导出的 HMAC，进程重启后仍有效，改密码使它失效；
  * 令牌自身不设到期，有效到改密码或退出登录为止。令牌放在 HttpOnly Cookie 里，
  * WebSocket 升级与只能带 URL 的 GET 调用随之携带。
@@ -36,7 +36,7 @@ export function cookieValue(header: unknown, name: string): string | null {
   return null;
 }
 
-export class ConsoleAuth {
+export class WebUiAuth {
   private token: string | null = null;
   private failures: Promise<void> = Promise.resolve();
 

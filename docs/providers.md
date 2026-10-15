@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
 
 # Provider
 
@@ -29,7 +29,7 @@ provider 模块不预设任何模型名;端点
 `config.json` 和存放密钥的 `.env`，同名密钥优先读取进程环境。目录内其余文件由 provider
 模块管理。各部署在自己的 `config.json` 中设置 `activeProvider`。
 
-## 控制台
+## WebUI
 
 模型供应商页列出共享端点,一次编辑其中一条。选中一条不改变 `activeProvider`,「设为当前」只写
 当前部署的那一项。字段改动随手暂存在浏览器,切走再回来接着编,「放弃更改」丢掉暂存;保存时整条端点
@@ -37,7 +37,7 @@ provider 模块不预设任何模型名;端点
 已被别处改过就返回 409,重新加载后再保存。改名连带目录和部署根内各部署的 `activeProvider` 引用一起改;
 还被引用的端点不能删。`kind` 保存后不可更改。
 
-编辑页的段落顺序由模块声明:模块在 `console()` 的 `panels` 里把编辑页自带的
+编辑页的段落顺序由模块声明:模块在 `webUi()` 的 `panels` 里把编辑页自带的
 四块(`connection-endpoint` 地址与密钥、`connection-model` 模型与生成、`connection-pricing` 计价、
 `connection-protocol` 协议,默认文案由 `connectionBlocks` 给)与自己的面板排成一列,标题与说明可改;
 一块都不声明的模块得到默认顺序,自家面板排在模型与计价之间。`openai-responses-compat` 是
@@ -50,7 +50,7 @@ provider 模块不预设任何模型名;端点
 选一项等同手填它的 id:该项的 `contextWindow` 填进上下文上限,`inputImages` 设定图像开关,
 `maxOutputTokens` 只显示,不改最大输出。列表外的 id 照样可以手填。
 
-控制台保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
+WebUI 保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 只填密钥值未填变量名时,默认名按端点名派生:`CORTICO_KEY_<端点名>`,`-` 折成 `_`。
 从磁盘直接加载的名字按字面匹配;密钥值写入端点 `.env` 的同名项。
 
@@ -60,7 +60,7 @@ provider 模块不预设任何模型名;端点
 也满足。判断只看本地状态,不连上游——探活是操作员按出来的另一件事。模块的那部分由
 `ProviderModule.availability` 回答,不实现就只有通用条件(`llamacpp` 用它回答托管运行时装没装)。
 
-终端页从状态帧读取当前端点的名称、模型、模块与地址,点开就是那条端点;一条都不可用时,输入框
+控制台页从状态帧读取当前端点的名称、模型、模块与地址,点开就是那条端点;一条都不可用时,输入框
 的灰字写明去哪儿设置。
 
 ## 内建 openai-responses-compat
@@ -98,7 +98,7 @@ provider 模块不预设任何模型名;端点
   读上下文窗口、`/models` 列模型(带加载状态与输入模态,输入模态给出列表项的 `inputImages`)。
 - **托管**:端点页的运行时段落点「开启托管」后,`options.runtime` 记版本 tag 与后端,`options.launch`
   记 `-c` / `-ngl` / `--parallel` 与附加参数,`options.autoStart` 决定 bot 启动时是否一并起。
-  运行时和启动配置由模块的 `ConfigGroup` 声明,端点面板复用控制台 schema 渲染器,
+  运行时和启动配置由模块的 `ConfigGroup` 声明,端点面板复用 WebUI schema 渲染器,
   修改经 `setConfig` 校验并保存。
   「下载并安装」把所选官方 release 解压到 `<部署根>/runtimes/llama.cpp/<tag>/<平台-后端-架构>/`;
   「启动」以 router 模式起 llama-server,不带模型,`LLAMA_CACHE` 与 `--models-dir` 指向
@@ -124,7 +124,7 @@ router 自动加载。
 ## 计价
 
 每次请求尝试按价目中声明的计量项计费,包括输入、输出、缓存命中与推理用量等,币种默认 USD,写入
-`data/usage.jsonl`;控制台「用量」页与 `/api/usage` 聚合。所选币种没有原价的调用按 Core 配置 `usage.rates` 从别的币种换算(见 [configuration.md](configuration.md))。模块自带价目,端点条目的 `pricing`
+`data/usage.jsonl`;WebUI「用量」页与 `/api/usage` 聚合。所选币种没有原价的调用按 Core 配置 `usage.rates` 从别的币种换算(见 [configuration.md](configuration.md))。模块自带价目,端点条目的 `pricing`
 按成本基准覆盖。`pricing` 为空时仍使用模块价目;两者都没有适用价目时,调用只记用量,
 不记金额。缺少所需计量的费用项记为未知。
 

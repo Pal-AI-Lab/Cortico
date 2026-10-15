@@ -215,7 +215,7 @@ export class JsonlEventStore implements EventStore {
     return envelope;
   }
 
-  /** 事件追加订阅，供控制台实时观察。 */
+  /** 事件追加订阅，供 WebUI 实时观察。 */
   onAppend(cb: (e: EventEnvelope) => void): void {
     this.appendListeners.push(cb);
   }

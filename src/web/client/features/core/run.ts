@@ -2,12 +2,12 @@
  * 运行态概览。只读——暂停/继续那颗按钮在顶栏,这里不重复一份。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { loopOf, type StatusSnapshot } from '../live/protocol.ts';
 import { S } from './strings.ts';
 
 export interface RunViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
 }
 
 export interface RunView {
@@ -53,7 +53,7 @@ export function createRunView(deps: RunViewDeps): RunView {
         { k: S.statMessages, v: loop.messageCount ?? '—', unit: S.unitMsgs },
         { k: S.statRounds, v: loop.roundsLastBatch ?? '—' },
         { k: S.statBatches, v: loop.batchesHandled ?? '—' },
-        { k: S.statOnline, v: st.terminalOnline ?? '—', unit: S.unitPeople },
+        { k: S.statOnline, v: st.consoleOnline ?? '—', unit: S.unitPeople },
       ];
       for (const c of cards) grid.appendChild(ui.stat(c));
     },

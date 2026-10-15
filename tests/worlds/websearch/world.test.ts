@@ -122,9 +122,9 @@ describe('WebSearchWorld', () => {
     expect(out).toContain('[search failed]');
   });
 
-  it('英文界面的 console() 展示文案不含中文', () => {
+  it('英文界面的 webUi() 展示文案不含中文', () => {
     for (const apiKey of ['k', '']) {
-      const shown = JSON.stringify(new WebSearchWorld({ apiKey }).console('en'), (k, v) => (k === 'path' ? undefined : v));
+      const shown = JSON.stringify(new WebSearchWorld({ apiKey }).webUi('en'), (k, v) => (k === 'path' ? undefined : v));
       expect(shown).not.toMatch(/[一-鿿]/);
     }
   });

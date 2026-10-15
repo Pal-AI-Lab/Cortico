@@ -427,7 +427,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
   activeSpec(): ModelSpec {
     const { name, entry } = this.activeProviderEntry();
     if (!entry.spec) {
-      throw new Error(`LLM provider ${name} 还没选模型(去控制台该 Provider 的「实例与模型」面板填模型名并保存)`);
+      throw new Error(`LLM provider ${name} 还没选模型(去 WebUI 该 Provider 的「实例与模型」面板填模型名并保存)`);
     }
     return entry.spec;
   }

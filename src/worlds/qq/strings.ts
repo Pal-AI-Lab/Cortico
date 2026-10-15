@@ -19,7 +19,7 @@ const zh = {
   maxImageBytesDescription: '超过这个大小的图不下载、不识别。',
   timeoutTitle: '图片与 VLM 请求超时',
   timeoutDescription: '图片下载和辅助视觉请求均使用此超时；修改后需重启生效。',
-  // ── 控制台露出:灯、徽标、面板、模板、存储 ──────────────────────────
+  // ── WebUI 露出:灯、徽标、面板、模板、存储 ──────────────────────────
   moduleLabel: 'QQ',
   endpoint: '协议端',
   gateClosed: '接入门关闭',

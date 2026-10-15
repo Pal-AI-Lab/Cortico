@@ -2,7 +2,7 @@
  * 面板的 WebSocket 流客户端。断线后退避重连，CONNECTING 期间的 send 排队；unmount 关闭连接并取消待执行的重连定时器。
  */
 
-import type { ConsoleStreamHandle, ConsoleStreamHandlers } from '../../shared/client-panel.ts';
+import type { WebUiStreamHandle, WebUiStreamHandlers } from '../../shared/client-panel.ts';
 
 /** 只用到 WebSocket 的这几样；注入假件即可测。 */
 export interface SocketLike {
@@ -17,7 +17,7 @@ export interface SocketLike {
 
 export interface StreamOptions {
   url: string;
-  handlers: ConsoleStreamHandlers;
+  handlers: WebUiStreamHandlers;
   /** 面板的 signal。abort = 连同重连一起停。 */
   signal: AbortSignal;
   createSocket(url: string): SocketLike;
@@ -31,7 +31,7 @@ const OPEN = 1;
 const BACKOFF_START_MS = 500;
 const BACKOFF_MAX_MS = 15_000;
 
-export function openStream(opts: StreamOptions): ConsoleStreamHandle {
+export function openStream(opts: StreamOptions): WebUiStreamHandle {
   /** 连上之前攒着的帧。 */
   const outbox: string[] = [];
   let socket: SocketLike | null = null;
@@ -134,7 +134,7 @@ export function openStream(opts: StreamOptions): ConsoleStreamHandle {
     connect();
   }
 
-  const handle: ConsoleStreamHandle = {
+  const handle: WebUiStreamHandle = {
     send(text: string): void {
       if (stopped) return;
       const s = socket;

@@ -27,12 +27,12 @@ const pickerRequests: PathPickerOptions[] = [];
 const store = new FakeStore();
 const promptDocs = new Map([
   ['orientation', { key: 'orientation', title: 'ORIENTATION', scope: 'persona' as const, description: '核心说明', content: '旧定向', revision: 'r1' }],
-  ['worlds.terminal.envPrompt', { key: 'worlds.terminal.envPrompt', title: '终端 · 环境提示词', scope: 'world' as const, description: '终端环境', content: '旧环境', revision: 'r2' }],
+  ['worlds.console.envPrompt', { key: 'worlds.console.envPrompt', title: '控制台 · 环境提示词', scope: 'world' as const, description: '控制台环境', content: '旧环境', revision: 'r2' }],
 ]);
 let prefixReloads = 0;
 const baseToolSchemas: Array<ToolSchema & { owner: ToolOwner }> = [{
-  name: 'terminal_send',
-  description: '向终端发送文本。',
+  name: 'console_send',
+  description: '向控制台发送文本。',
   parameters: {
     type: 'object',
     required: ['text'],
@@ -40,7 +40,7 @@ const baseToolSchemas: Array<ToolSchema & { owner: ToolOwner }> = [{
       text: { type: 'string', description: '要发送的正文。' },
     },
   },
-  owner: { kind: 'world', id: 'terminal', label: '终端对话' },
+  owner: { kind: 'world', id: 'console', label: '控制台对话' },
 }];
 
 const base = () => `http://127.0.0.1:${port}`;
@@ -74,12 +74,12 @@ beforeAll(async () => {
   mkdirSync(join(dataDir, 'runs', 'r-20260717-100000-0001'), { recursive: true });
   writeFileSync(join(dataDir, 'runs', 'r-20260717-100000-0001', 'log.jsonl'), runlogLines.join('\n') + '\n', 'utf8');
 
-  // 事件fixture:10条,terminal/qq交替
+  // 事件fixture:10条,console/qq交替
   for (let i = 1; i <= 10; i++) {
     store.append({
-      type: i % 2 === 0 ? 'qq.message' : 'terminal.message',
+      type: i % 2 === 0 ? 'qq.message' : 'console.message',
       ts: `2026-07-17T09:0${i - 1 < 10 ? i - 1 : 9}:00+08:00`,
-      source: i % 2 === 0 ? 'qq' : 'terminal',
+      source: i % 2 === 0 ? 'qq' : 'console',
       origin: 'external',
       text: `[09:0${i - 1}] 某人: 消息${i}`,
       senderKey: i % 2 === 0 ? '10001' : '阿明',
@@ -97,7 +97,7 @@ beforeAll(async () => {
     blob: (handle) => blobScheme(handle) === 'log' ? logBlobs.read(handle) : memBlobs.get(handle),
     getStatus: () => ({ session: { tokens: 1234, messages: 56 }, dream: 'idle', onboardingPending: onboardingFlag }),
     onboarding: { dismiss: () => { onboardingFlag = false; } },
-    // World 自己声明控制台露出:badges,控制台不按 id 分支
+    // World 自己声明 WebUI 露出:badges,WebUI 不按 id 分支
     worlds: () => [
       {
         id: 'qq', status: 'active' as const,
@@ -105,8 +105,8 @@ beforeAll(async () => {
         badges: [{ label: '协议端', value: '已连接', tone: 'on' as const }],
       },
       {
-        id: 'terminal', status: 'active' as const,
-        envPrompt: '你连接着一个终端对话界面。', workspace: 'worlds/terminal', tools: ['terminal_send'],
+        id: 'console', status: 'active' as const,
+        envPrompt: '你连接着一个控制台对话界面。', workspace: 'worlds/console', tools: ['console_send'],
         badges: [{ label: '在线', value: '2 人', tone: 'on' as const }],
       },
     ],
@@ -312,7 +312,7 @@ describe('/api/worlds', () => {
     expect(d.worlds[0]).toMatchObject({ id: 'qq', workspace: 'worlds/qq' });
     expect(d.worlds[0].tools).toContain('qq_draft');
     expect(d.worlds[0].badges).toEqual([{ label: '协议端', value: '已连接', tone: 'on' }]);
-    expect(d.worlds[1]).toMatchObject({ id: 'terminal', workspace: 'worlds/terminal' });
+    expect(d.worlds[1]).toMatchObject({ id: 'console', workspace: 'worlds/console' });
     expect(d.worlds[1].badges).toEqual([{ label: '在线', value: '2 人', tone: 'on' }]);
   });
 });
@@ -378,8 +378,8 @@ describe('/api/prompts 与 session 前缀重载', () => {
 describe('/api/tool-schemas', () => {
   it('只读返回完整工具说明、参数结构与约束', async () => {
     const data = await getJson(base() + '/api/tool-schemas');
-    expect(data.tools[0].name).toBe('terminal_send');
-    expect(data.tools[0].description).toBe('向终端发送文本。');
+    expect(data.tools[0].name).toBe('console_send');
+    expect(data.tools[0].description).toBe('向控制台发送文本。');
     expect(data.tools[0].parameters.required).toEqual(['text']);
     expect(data.tools[0].parameters.properties.text.description).toBe('要发送的正文。');
   });
@@ -388,7 +388,7 @@ describe('/api/tool-schemas', () => {
     const response = await fetch(base() + '/api/tool-schemas', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: 'terminal_send', descriptions: { '/description': '修改' } }),
+      body: JSON.stringify({ name: 'console_send', descriptions: { '/description': '修改' } }),
     });
     expect(response.status).toBe(404);
   });
@@ -429,15 +429,15 @@ describe('/api/events', () => {
     expect(d.events.map((e: { cursor: number }) => e.cursor)).toEqual([3, 4, 5]);
   });
 
-  it('source=terminal → 只剩终端来源', async () => {
-    const d = await getJson(base() + '/api/events?source=terminal');
+  it('source=console → 只剩控制台来源', async () => {
+    const d = await getJson(base() + '/api/events?source=console');
     expect(d.events.length).toBe(5);
-    for (const e of d.events) expect(e.source).toBe('terminal');
+    for (const e of d.events) expect(e.source).toBe('console');
   });
 });
 
 /**
- * 摄取刻的原始归档(archive-only)与发车刻的投影是同一件事的两条记录。控制台默认
+ * 摄取刻的原始归档(archive-only)与发车刻的投影是同一件事的两条记录。WebUI 默认
  * 只展示投影,否则每条弹幕都是双份;`archive=1` 仍能把归档看全,库里一条不删。
  */
 describe('/api/events 的 archive-only 展示口径', () => {
@@ -553,7 +553,7 @@ describe('/api/diagnostics', () => {
     expect(b.status).toMatchObject({ dream: 'idle' });
     expect(b.events.items).toHaveLength(10);
     expect(b.events.latestCursor).toBe(10);
-    expect(b.worlds.map((w: any) => w.id)).toEqual(['qq', 'terminal']);
+    expect(b.worlds.map((w: any) => w.id)).toEqual(['qq', 'console']);
     expect(b.truncated).toEqual([]);
   });
 });

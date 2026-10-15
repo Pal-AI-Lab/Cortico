@@ -1,4 +1,4 @@
-/** 扫描控制台代码的 import、领域词、目录发现与资源归属；例外必须使用带理由的 arch-allow。 */
+/** 扫描 WebUI 代码的 import、领域词、目录发现与资源归属；例外必须使用带理由的 arch-allow。 */
 import { describe, it, expect } from 'vitest';
 import { existsSync, mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve } from 'node:path';
 
 const REPO = resolve(import.meta.dirname, '../..');
 const WEB_CORE_ROOTS = ['src/web/client', 'src/web/shared'];
-const WEB_CORE_FILES = ['src/web/server.ts', 'src/web/strings.ts', 'src/web/console-pages.ts', 'src/web/files.ts'];
+const WEB_CORE_FILES = ['src/web/server.ts', 'src/web/strings.ts', 'src/web/webui-pages.ts', 'src/web/files.ts'];
 
 const toPosix = (p: string): string => p.replaceAll('\\', '/');
 
@@ -114,10 +114,10 @@ function findDomainWords(files: string[], read: (f: string) => string[] = readLi
 // ── Guard E:provider 目录约定发现 ──────────────────────────────────────
 
 /**
- * 纯目录扫描找出所有 provider 控制台入口:src/worlds/<World>/console/client.ts
- * 与 bots/<人格>/console/client.ts。没有任何写死的 World/人格名单。
+ * 纯目录扫描找出所有 provider WebUI 入口:src/worlds/<World>/webui/client.ts
+ * 与 bots/<人格>/webui/client.ts。没有任何写死的 World/人格名单。
  */
-export function findProviderConsoleClients(base = REPO): string[] {
+export function findProviderWebUiClients(base = REPO): string[] {
   const groups: Array<{ parent: string; dirMatch: (name: string) => boolean }> = [
     { parent: 'src/worlds', dirMatch: () => true },
     { parent: 'bots', dirMatch: () => true },
@@ -128,7 +128,7 @@ export function findProviderConsoleClients(base = REPO): string[] {
     if (!existsSync(parentAbs)) continue;
     for (const entry of readdirSync(parentAbs, { withFileTypes: true })) {
       if (!entry.isDirectory() || !dirMatch(entry.name)) continue;
-      const rel = `${parent}/${entry.name}/console/client.ts`;
+      const rel = `${parent}/${entry.name}/webui/client.ts`;
       if (existsSync(resolve(base, rel))) found.push(rel);
     }
   }
@@ -153,7 +153,7 @@ describe('Web Core 架构护栏', () => {
 
   it('管辖区包含 server.ts 与 providers.ts', () => {
     expect(webCoreFiles).toContain('src/web/server.ts');
-    expect(webCoreFiles).toContain('src/web/console-pages.ts');
+    expect(webCoreFiles).toContain('src/web/webui-pages.ts');
   });
 
 });
@@ -229,14 +229,14 @@ describe('护栏自检(合成样本)', () => {
   it('Guard E 的发现逻辑不依赖写死名单:临时目录里造个没人听过的 World 也能找到', () => {
     const dir = mkdtempSync(join(tmpdir(), 'arch-guard-'));
     try {
-      for (const rel of ['src/worlds/zzz-imaginary/console', 'bots/nobody-knows-me/console', 'src/worlds/no-console/core']) {
+      for (const rel of ['src/worlds/zzz-imaginary/webui', 'bots/nobody-knows-me/webui', 'src/worlds/no-webui/core']) {
         mkdirSync(join(dir, rel), { recursive: true });
       }
-      writeFileSync(join(dir, 'src/worlds/zzz-imaginary/console/client.ts'), 'export default {};', 'utf8');
-      writeFileSync(join(dir, 'bots/nobody-knows-me/console/client.ts'), 'export default {};', 'utf8');
-      expect(findProviderConsoleClients(dir)).toEqual([
-        'bots/nobody-knows-me/console/client.ts',
-        'src/worlds/zzz-imaginary/console/client.ts',
+      writeFileSync(join(dir, 'src/worlds/zzz-imaginary/webui/client.ts'), 'export default {};', 'utf8');
+      writeFileSync(join(dir, 'bots/nobody-knows-me/webui/client.ts'), 'export default {};', 'utf8');
+      expect(findProviderWebUiClients(dir)).toEqual([
+        'bots/nobody-knows-me/webui/client.ts',
+        'src/worlds/zzz-imaginary/webui/client.ts',
       ]);
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -249,7 +249,7 @@ describe('护栏自检(合成样本)', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Guard F:扩展不得绕过 ConsolePanelContext
+// Guard F:扩展不得绕过 WebUiPanelContext
 // ---------------------------------------------------------------------------
 
 /** 扫描扩展浏览器代码中的裸网络、定时器与无 signal 监听；带理由的 arch-allow 行可豁免。 */
@@ -264,7 +264,7 @@ const BYPASS_RULES: Array<{ why: string; re: RegExp }> = [
 
 /** provider 浏览器端代码的全部文件(client.ts 及其同目录兄弟)。 */
 function providerClientFiles(base = REPO): string[] {
-  const dirs = new Set(findProviderConsoleClients(base).map((rel) => rel.replace(/\/client\.ts$/, '')));
+  const dirs = new Set(findProviderWebUiClients(base).map((rel) => rel.replace(/\/client\.ts$/, '')));
   const out: string[] = [];
   for (const d of dirs) out.push(...walk(d, base).filter((f) => f.endsWith('.ts')));
   return out.sort();
@@ -314,20 +314,20 @@ function findCtxBypasses(files: string[], read: (f: string) => string[] = readLi
   return out;
 }
 
-describe('Guard F:扩展不得绕过 ConsolePanelContext', () => {
+describe('Guard F:扩展不得绕过 WebUiPanelContext', () => {
   it('provider 的浏览器端代码里没有裸 fetch / 定时器 / WebSocket / document.body / window.__', () => {
     expect(findCtxBypasses(providerClientFiles())).toEqual([]);
   });
 
   it('护栏自检:合成样本里的绕过都能抓到,经 ctx 的写法不误伤', () => {
     const files = {
-      'src/worlds/x/console/bad.ts': [
+      'src/worlds/x/webui/bad.ts': [
         'const r = await fetch("/api/x");',
         'setInterval(tick, 1000);',
         'const ws = new WebSocket(url);',
         'document.body.appendChild(el);',
       ].join('\n'),
-      'src/worlds/x/console/good.ts': [
+      'src/worlds/x/webui/good.ts': [
         '/* 本扩展没有 fetch、没有 document.body、没有裸 setInterval。 */',
         '// 行注释里提到 fetch( 也不算',
         'const r = await ctx.invoke("state");',
@@ -340,8 +340,8 @@ describe('Guard F:扩展不得绕过 ConsolePanelContext', () => {
     const read = (f: string): string[] => (files[f as keyof typeof files] ?? '').split('\n');
     const hits = findCtxBypasses(Object.keys(files), read);
     expect(hits.map((h) => h.split('  ')[0])).toEqual([
-      'src/worlds/x/console/bad.ts:1', 'src/worlds/x/console/bad.ts:2',
-      'src/worlds/x/console/bad.ts:3', 'src/worlds/x/console/bad.ts:4',
+      'src/worlds/x/webui/bad.ts:1', 'src/worlds/x/webui/bad.ts:2',
+      'src/worlds/x/webui/bad.ts:3', 'src/worlds/x/webui/bad.ts:4',
     ]);
   });
 });

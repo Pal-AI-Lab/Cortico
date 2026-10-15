@@ -1,5 +1,5 @@
 /**
- * 检查扩展的 manifest、入口导入、导出结构、控制台产物与构造契约。
+ * 检查扩展的 manifest、入口导入、导出结构、WebUI 产物与构造契约。
  * 有检查失败时退出码为 1;不启动扩展或验证外部服务。
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -30,7 +30,7 @@ import {
   extensionShapeMismatch,
   resolveExtensionEntry,
 } from '../src/extensions.ts';
-import { pageIdFor } from '../src/web/shared/console-protocol.ts';
+import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 
 const builtinWorlds = await loadBuiltinWorlds();
 
@@ -115,27 +115,27 @@ async function main(): Promise<void> {
   ok(`默认导出符合 ${manifest.kind} 的形状;id = ${id}`);
   if (manifest.kind === 'bot') {
     console.log('    bot id 不得与仓内 bots/ 下任一目录同名;deployment.json 的 bot 字段填包名即启用。');
-    console.log('    包目录只读:promptDocs 里没给 deploymentPath 的模板在控制台里显示但不能保存。');
+    console.log('    包目录只读:promptDocs 里没给 deploymentPath 的模板在 WebUI 里显示但不能保存。');
   } else {
     console.log(`    ${noun} id 在整份部署里唯一,与内建的或别的扩展同名时无法加载。`);
     const builtin = manifest.kind === 'world' ? builtinWorlds.map((w) => w.id) : providerModules.map((p) => p.id);
     if (builtin.includes(id)) fail(`${noun} id「${id}」与内建的撞名,装载器拒绝加载。`);
   }
 
-  if (manifest.consoleClient === undefined) {
-    ok('没有声明浏览器端产物(cortico.consoleClient),控制台按框架给的通用面板显示。');
+  if (manifest.webUiClient === undefined) {
+    ok('没有声明浏览器端产物(cortico.webUiClient),WebUI 按框架给的通用面板显示。');
   } else {
-    const js = extensionPackageFile(pkgDir, manifest.consoleClient);
+    const js = extensionPackageFile(pkgDir, manifest.webUiClient);
     if (!js) {
-      fail(`cortico.consoleClient 指的 ${manifest.consoleClient} 不在包里:先 build,再确认它落在 files / .npmignore 允许的范围内。${noun}本体照常加载,只是控制台没有这一块面板。`);
+      fail(`cortico.webUiClient 指的 ${manifest.webUiClient} 不在包里:先 build,再确认它落在 files / .npmignore 允许的范围内。${noun}本体照常加载,只是 WebUI 没有这一块面板。`);
     } else {
-      ok(`浏览器端产物: ${manifest.consoleClient}`);
-      console.log(`    控制台页 id: ${pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id)}`);
-      console.log(`    发布后的 URL: ${extensionAssetUrl(pkg.name ?? '', pkg.version ?? '0', basename(manifest.consoleClient))}`);
+      ok(`浏览器端产物: ${manifest.webUiClient}`);
+      console.log(`    WebUI 页 id: ${pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id)}`);
+      console.log(`    发布后的 URL: ${extensionAssetUrl(pkg.name ?? '', pkg.version ?? '0', basename(manifest.webUiClient))}`);
     }
-    if (manifest.consoleStyle !== undefined) {
-      if (extensionPackageFile(pkgDir, manifest.consoleStyle)) ok(`浏览器端样式: ${manifest.consoleStyle}`);
-      else warn(`cortico.consoleStyle 指的 ${manifest.consoleStyle} 不在包里:面板按无样式发。`);
+    if (manifest.webUiStyle !== undefined) {
+      if (extensionPackageFile(pkgDir, manifest.webUiStyle)) ok(`浏览器端样式: ${manifest.webUiStyle}`);
+      else warn(`cortico.webUiStyle 指的 ${manifest.webUiStyle} 不在包里:面板按无样式发。`);
     }
   }
 
@@ -148,7 +148,7 @@ async function main(): Promise<void> {
       scratchDir,
       packageDir: pkgDir,
       repoRoot: resolve(import.meta.dirname, '..'),
-      hasConsoleClient: manifest.consoleClient !== undefined,
+      hasWebUiClient: manifest.webUiClient !== undefined,
     };
     let report: DryMountReport;
     if (manifest.kind === 'world') {

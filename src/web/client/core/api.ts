@@ -1,17 +1,17 @@
 /**
- * 控制台 HTTP 接口；面板通过 ctx.invoke、invokeBinary、pickPath、setConfig 调用。
+ * WebUI HTTP 接口；面板通过 ctx.invoke、invokeBinary、pickPath、setConfig 调用。
  * 请求携带界面语言并接受取消信号；panelRoute 负责 page id 的编码。
- * 非 2xx 与解析失败抛 ConsoleInvokeError，消息优先使用服务端 error，附带响应片段。
+ * 非 2xx 与解析失败抛 WebUiInvokeError，消息优先使用服务端 error，附带响应片段。
  * AbortError 原样抛出；空成功响应返回 null，二进制接口返回 Blob。
  */
 
 import {
-  CONSOLE_AUTH_HEADER,
-  CONSOLE_MANIFEST_ROUTE,
+  WEBUI_AUTH_HEADER,
+  WEBUI_MANIFEST_ROUTE,
   panelRoute,
-  type ConsoleManifest,
-} from '../../shared/console-protocol.ts';
-import { ConsoleInvokeError } from '../../shared/client-panel.ts';
+  type WebUiManifest,
+} from '../../shared/webui-protocol.ts';
+import { WebUiInvokeError } from '../../shared/client-panel.ts';
 import type { ConfigValue } from '../../../core/config-schema.ts';
 import {
   PATH_PICKER_ROUTE,
@@ -40,11 +40,11 @@ function isAbortError(err: unknown): boolean {
   return (err as { name?: unknown } | null)?.name === 'AbortError';
 }
 
-/** 把任意异常收敛成 `ConsoleInvokeError`；abort 与已经归一化过的原样放行。 */
+/** 把任意异常收敛成 `WebUiInvokeError`；abort 与已经归一化过的原样放行。 */
 function normalizeError(err: unknown, status: number): never {
   if (isAbortError(err)) throw err;
-  if (err instanceof ConsoleInvokeError) throw err;
-  throw new ConsoleInvokeError(String(err), status);
+  if (err instanceof WebUiInvokeError) throw err;
+  throw new WebUiInvokeError(String(err), status);
 }
 
 async function send(path: string, init: RequestInit, opts?: RequestOptions): Promise<Response> {
@@ -56,7 +56,7 @@ async function send(path: string, init: RequestInit, opts?: RequestOptions): Pro
       ...(opts?.keepalive ? { keepalive: true } : {}),
     });
     // 登录态失效:重新载入入口页,服务端在那里给出登录页。
-    if (res.status === 401 && res.headers.get(CONSOLE_AUTH_HEADER) !== null) location.reload();
+    if (res.status === 401 && res.headers.get(WEBUI_AUTH_HEADER) !== null) location.reload();
     return res;
   } catch (err) {
     // fetch reject = 网络层没走到 HTTP，没有状态码可言，记 0。
@@ -84,10 +84,10 @@ async function throwHttpError(res: Response): Promise<never> {
   } catch {
     if (text.trim() !== '') message = S.httpStatus(res.status, snippet(text));
   }
-  throw new ConsoleInvokeError(message, res.status);
+  throw new WebUiInvokeError(message, res.status);
 }
 
-/** 成功响应解析为 JSON；204 或空正文返回 null，解析失败抛 ConsoleInvokeError。 */
+/** 成功响应解析为 JSON；204 或空正文返回 null，解析失败抛 WebUiInvokeError。 */
 async function readJson<T>(res: Response): Promise<T> {
   if (!res.ok) await throwHttpError(res);
   if (res.status === 204) return null as T;
@@ -96,7 +96,7 @@ async function readJson<T>(res: Response): Promise<T> {
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new ConsoleInvokeError(S.notJson(res.status, snippet(text)), res.status);
+    throw new WebUiInvokeError(S.notJson(res.status, snippet(text)), res.status);
   }
 }
 
@@ -149,7 +149,7 @@ export async function pickPath(options: PathPickerOptions, opts?: RequestOptions
   return response.path;
 }
 
-/** 控制台页面板写配置的窄入口；服务端仍按组 schema 校验。 */
+/** WebUI 页面板写配置的窄入口；服务端仍按组 schema 校验。 */
 export async function setConfig(
   groupId: string,
   values: Record<string, ConfigValue>,
@@ -160,11 +160,11 @@ export async function setConfig(
 }
 
 // ---------------------------------------------------------------------------
-// Console 协议
+// WebUI 协议
 // ---------------------------------------------------------------------------
 
-export async function fetchManifest(opts?: RequestOptions): Promise<ConsoleManifest> {
-  return get<ConsoleManifest>(CONSOLE_MANIFEST_ROUTE, opts);
+export async function fetchManifest(opts?: RequestOptions): Promise<WebUiManifest> {
+  return get<WebUiManifest>(WEBUI_MANIFEST_ROUTE, opts);
 }
 
 /** 面板数据面调用。走 POST，body 形如 `{"args":[...]}`。 */

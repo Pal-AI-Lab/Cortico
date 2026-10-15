@@ -1,6 +1,6 @@
 import { itemText, type ContextRecord } from './context.ts';
 
-/** Approximate context occupancy shared by runtime and console; excludes native wire overhead. */
+/** Approximate context occupancy shared by runtime and WebUI; excludes native wire overhead. */
 export function estimateTokens(text: string): number {
   let cjk = 0;
   let other = 0;

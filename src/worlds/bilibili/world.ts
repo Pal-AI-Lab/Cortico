@@ -7,7 +7,7 @@ import type {
   CandidateProjector,
   World,
   WorldHost,
-  WorldConsoleDecl,
+  WorldWebUiDecl,
   WorldPanelDecl,
   ShutdownExternalCheck,
   ToolDef,
@@ -43,7 +43,7 @@ const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url
 
 const PANEL_LOG = 'log';
 
-/** 开发控制台复用此面板声明。 */
+/** 开发 WebUI 复用此面板声明。 */
 export function bilibiliPanelDecls(language: Language): readonly WorldPanelDecl[] {
   const t = text(language);
   return [
@@ -266,7 +266,7 @@ export class BilibiliWorld implements World {
   }
 
   /** 文案按这次请求的界面语言;编辑器链接用 `lang` 带上同一语言。 */
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = text(language);
     const s = this.status;
     const phase = s?.phase ?? 'stopped';

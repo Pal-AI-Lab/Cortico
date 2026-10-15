@@ -40,7 +40,7 @@ describe('QQ 语音转写集成', () => {
       privates: [],
       token: '',
     };
-    cfg.worlds.terminal.enabled = false;
+    cfg.worlds.console.enabled = false;
     cfg.batching.quietGapMs = 40;
     cfg.batching.maxBatchAgeMs = MAX_BATCH_AGE_MS;
     cfg.tick.dayIntervalMinutes = [999, 999];

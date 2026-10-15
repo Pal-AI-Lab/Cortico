@@ -1,4 +1,4 @@
-/** Model choices are bot-owned; framework console surfaces are derived by `createBot`. */
+/** Model choices are bot-owned; framework WebUI surfaces are derived by `createBot`. */
 import { resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
@@ -6,7 +6,7 @@ import type { CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { WorldDeclaration } from 'cortico/world.ts';
-import type { TerminalConfigSection } from 'cortico/worlds/terminal/config.ts';
+import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
 import { CORMINI_CONTEXT_DEFAULTS, Cormini, type ContextStagePolicy } from './persona/persona.ts';
 import { contextStageConfigGroup } from './persona/config.ts';
 
@@ -19,12 +19,12 @@ export interface CorminiConfig extends CoreConfig {
   /** null disables baseline wakeups. */
   tick: { intervalMinutes: number | null };
   worlds: {
-    terminal: TerminalConfigSection;
+    console: ConsoleConfigSection;
   };
 }
 
-/** 这个Persona为之设计的渠道:只有终端。 */
-const DECLARES: readonly WorldDeclaration[] = ['terminal'];
+/** 这个Persona为之设计的渠道:只有控制台。 */
+const DECLARES: readonly WorldDeclaration[] = ['console'];
 
 function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<CorminiConfig> {
   const cfg = loaded.config;
@@ -35,11 +35,11 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
     rounds: { ...cfg.rounds },
     seedConstitution: readFileSync(resolve(HERE, 'persona/CONSTITUTION.seed.md'), 'utf8'),
     worlds: worlds,
-    // 部署侧的自述覆盖:存在就用它,控制台保存也落到那边(见 PromptDocDecl.deploymentPath)。
+    // 部署侧的自述覆盖:存在就用它,WebUI 保存也落到那边(见 PromptDocDecl.deploymentPath)。
     orientationOverrideFile: resolve(loaded.rootDir, 'prompts', 'ORIENTATION.md'),
     // 首轮对话是部署者自己写的,与 ORIENTATION 覆盖同住 prompts/;代码包不带。
     firstTurnDir: resolve(loaded.rootDir, 'prompts'),
-    // Read per wakeup so console changes take effect immediately.
+    // Read per wakeup so WebUI changes take effect immediately.
     tickDelayMs: () =>
       cfg.tick.intervalMinutes === null ? null : cfg.tick.intervalMinutes * 60_000,
   });
@@ -52,9 +52,9 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
     onStop: () => {
       persona.stopRhythm();
     },
-    console: {
+    webUi: {
       configGroups: [contextStageConfigGroup('cormini')],
-      // 阶段预算与软预警线(终端页上下文圈的分母与黄线);计数与物理上限由 core 报
+      // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },
   };

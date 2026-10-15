@@ -1,6 +1,6 @@
 /**
  * 扩展包来源的 bot:框架从不往包目录写。Persona 的提示词模板没给 `deploymentPath` 的在
- * 控制台里能读不能存;给了的照常写到部署侧。仓内 bot 不受影响(tests/cormini/definition.test.ts)。
+ * WebUI 里能读不能存;给了的照常写到部署侧。仓内 bot 不受影响(tests/cormini/definition.test.ts)。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -50,8 +50,8 @@ beforeAll(async () => {
       return {
         ...parts,
         llm: new FakeLLM(),
-        console: {
-          ...parts.console,
+        webUi: {
+          ...parts.webUi,
           promptDocs: [
             { key: 'packed', title: '包内模板', description: '没给 deploymentPath。', path: packedFile },
             { key: 'overridable', title: '可覆盖模板', description: '给了 deploymentPath。', path: packedFile, deploymentPath: overrideFile },
@@ -65,7 +65,7 @@ beforeAll(async () => {
       records: [],
       worlds: [],
       providers: [],
-      consoleAssets: [],
+      webUiAssets: [],
       bot: { name: 'cortico-bot-fixture', id: definition.id },
     },
   });

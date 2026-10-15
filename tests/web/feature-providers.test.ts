@@ -3,7 +3,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 const UI = '../../src/web/client/ui/index.ts';
 const LIFE = '../../src/web/client/core/lifecycle.ts';
 const FEATURE = '../../src/web/client/features/providers/index.ts';
-const { createConsoleUi } = await import(UI);
+const { createWebUi } = await import(UI);
 const { Lifecycle } = await import(LIFE);
 const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
@@ -30,7 +30,7 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sec
   });
   const root = document.createElement('div'); document.body.append(root);
   const lifecycle = new Lifecycle(() => {}); lifecycles.push(lifecycle);
-  const ui = createConsoleUi({ memo: { get: (_: string, fallback: unknown) => fallback, set: () => {} }, overlayHost: document.body, signal: lifecycle.signal, doc: document });
+  const ui = createWebUi({ memo: { get: (_: string, fallback: unknown) => fallback, set: () => {} }, overlayHost: document.body, signal: lifecycle.signal, doc: document });
   const ctx = { root, ui, lifecycle, signal: lifecycle.signal, route: { segments: ['providers'] }, router: { addLeaveDecision: () => ({ dispose() {} }), onChange: () => ({ dispose() {} }) }, onError: (error: unknown) => { throw error; }, capabilities: {} };
   await mountProviders(ctx); await flush(); return { root, calls, ctx };
 }

@@ -1,16 +1,16 @@
 import { pick, type Language } from 'cortico/core/language.ts';
-import { consoleText as consoleZhHant, panelText as panelZhHant } from './strings.zh-Hant.ts';
-import { consoleText as consoleJa, panelText as panelJa } from './strings.ja.ts';
-import { consoleText as consoleKo, panelText as panelKo } from './strings.ko.ts';
-import { consoleText as consoleFr, panelText as panelFr } from './strings.fr.ts';
-import { consoleText as consoleDe, panelText as panelDe } from './strings.de.ts';
-import { consoleText as consoleEs419, panelText as panelEs419 } from './strings.es-419.ts';
-import { consoleText as consolePtBR, panelText as panelPtBR } from './strings.pt-BR.ts';
-import { consoleText as consoleIt, panelText as panelIt } from './strings.it.ts';
-import { consoleText as consoleRu, panelText as panelRu } from './strings.ru.ts';
+import { webUiText as webUiZhHant, panelText as panelZhHant } from './strings.zh-Hant.ts';
+import { webUiText as webUiJa, panelText as panelJa } from './strings.ja.ts';
+import { webUiText as webUiKo, panelText as panelKo } from './strings.ko.ts';
+import { webUiText as webUiFr, panelText as panelFr } from './strings.fr.ts';
+import { webUiText as webUiDe, panelText as panelDe } from './strings.de.ts';
+import { webUiText as webUiEs419, panelText as panelEs419 } from './strings.es-419.ts';
+import { webUiText as webUiPtBR, panelText as panelPtBR } from './strings.pt-BR.ts';
+import { webUiText as webUiIt, panelText as panelIt } from './strings.it.ts';
+import { webUiText as webUiRu, panelText as panelRu } from './strings.ru.ts';
 
-/** persona.ts 给控制台的文案。 */
-const consoleZh = {
+/** persona.ts 给 WebUI 的文案。 */
+const webUiZh = {
   orientation: 'Persona的存在方式与元认知说明。',
   constitution: 'Persona 的长期原则。重载系统前缀或开始新上下文后生效。',
   memoryNote: '记忆约定:bot 的档案怎么存、什么时候会自动浮现。',
@@ -25,7 +25,7 @@ const consoleZh = {
   firstTurnReply: '首轮·回复',
   firstTurnReplyDesc: '合成首轮对话的 assistant 回复正文。',
 };
-export const consoleEn: typeof consoleZh = {
+export const webUiEn: typeof webUiZh = {
   orientation: 'How the Persona exists and its metacognition notes.',
   constitution: 'The Persona\'s long-term principles. Changes take effect after a system prefix reload or when a new context starts.',
   memoryNote: 'Memory conventions: how the bot\'s files are stored and when they surface on their own.',
@@ -40,13 +40,13 @@ export const consoleEn: typeof consoleZh = {
   firstTurnReply: 'First turn · reply',
   firstTurnReplyDesc: 'The assistant reply text of the synthesized first turn.',
 };
-export const consoleText = (language: Language) => pick(language, {
-  zh: consoleZh, en: consoleEn, 'zh-Hant': consoleZhHant, ja: consoleJa, ko: consoleKo,
-  fr: consoleFr, de: consoleDe, 'es-419': consoleEs419, 'pt-BR': consolePtBR, it: consoleIt,
-  ru: consoleRu,
+export const webUiText = (language: Language) => pick(language, {
+  zh: webUiZh, en: webUiEn, 'zh-Hant': webUiZhHant, ja: webUiJa, ko: webUiKo,
+  fr: webUiFr, de: webUiDe, 'es-419': webUiEs419, 'pt-BR': webUiPtBR, it: webUiIt,
+  ru: webUiRu,
 });
 
-/** consoleSurface.ts 的面板标题、说明、读写回执与报错。 */
+/** webUiSurface.ts 的面板标题、说明、读写回执与报错。 */
 const panelZh = {
   workspace: '工作区',
   workspaceDesc: '保存时以 operator 署名提交到工作区的 Git 仓库。',

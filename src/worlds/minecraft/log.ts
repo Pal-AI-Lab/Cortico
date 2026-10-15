@@ -1,6 +1,6 @@
 /**
  * Minecraft 日志保存到 data/runs/<run>/log.jsonl，area 为 worlds.minecraft。
- * 引擎子进程的日志上下文补充轮次和工具调用 ID；环形缓冲供控制台按 seq 增量读取。
+ * 引擎子进程的日志上下文补充轮次和工具调用 ID；环形缓冲供 WebUI 按 seq 增量读取。
  */
 import type { Logger, LogLevel } from '../../core/types.ts';
 import { nowIso, nullLogger, SYSTEM_TIMEZONE } from '../../core/util.ts';
@@ -89,7 +89,7 @@ interface MinecraftLogOptions {
   /** World 的 logger(区域 worlds.minecraft);不给就只进环形缓冲 */
   log?: Logger;
   timezone?: string;
-  /** 环形缓冲容量(控制台面板读它) */
+  /** 环形缓冲容量(WebUI 面板读它) */
   ring?: number;
 }
 

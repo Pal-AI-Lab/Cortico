@@ -1,6 +1,6 @@
-import type { consoleEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn } from './strings.ts';
 
-export const consoleText: Partial<typeof consoleEn> = {
+export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Persona의 존재 방식과 메타인지에 대한 설명.',
   constitution: 'Persona의 장기 원칙. 시스템 프리픽스를 다시 불러오거나 새 컨텍스트를 시작하면 적용됩니다.',
   memoryNote: '기억 규칙: 봇의 파일이 어떻게 저장되고 언제 저절로 떠오르는지.',

@@ -8,8 +8,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
 import type { Language } from 'cortico/core/language.ts';
-import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './consoleSurface.ts';
-import { consoleText } from './strings.ts';
+import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './webUiSurface.ts';
+import { webUiText } from './strings.ts';
 import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
 import { saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
@@ -23,7 +23,7 @@ import type {
   World,
   WorldLifecycleEvent,
   OutputTap,
-  PersonaConsoleDecl,
+  PersonaWebUiDecl,
   Persona,
   PrefixSegment,
   PromptDocDecl,
@@ -35,7 +35,7 @@ import type {
 } from 'cortico/core/types.ts';
 import { defaultExternalizes } from 'cortico/core/types.ts';
 
-/** 默认的存在方式自述源文件;bot 不覆盖 orientation 时读它,控制台可编辑同一份。 */
+/** 默认的存在方式自述源文件;bot 不覆盖 orientation 时读它,WebUI 可编辑同一份。 */
 /** 前缀装配模板与 World 段模板住在软件包里(跟着代码走),不在人格工作区。 */
 export const CORE_DIR = dirname(fileURLToPath(import.meta.url));
 export const CORMINI_ORIENTATION_FILE = join(CORE_DIR, 'ORIENTATION.md');
@@ -50,7 +50,7 @@ export const FIRST_TURN_FILES = {
   reply: 'FIRST_TURN_REPLY.md',
 } as const;
 
-/** 控制台段名与可编辑源映射，不写入前缀。 */
+/** WebUI 段名与可编辑源映射，不写入前缀。 */
 const CORMINI_SEGMENT_TITLES: Record<string, string> = {
   'persona.orientation': 'ORIENTATION',
   'persona.constitution': 'CONSTITUTION',
@@ -102,7 +102,7 @@ export const CORMINI_CONTEXT_DEFAULTS: ContextStagePolicy = { maxTokens: 64000, 
 export interface CorminiOptions {
   /** 工作区目录 = 记忆。不存在则创建。 */
   memoryDir: string;
-  /** 上下文阶段裁量。每次现读,控制台改了即生效;不给=CORMINI_CONTEXT_DEFAULTS。 */
+  /** 上下文阶段裁量。每次现读,WebUI 改了即生效;不给=CORMINI_CONTEXT_DEFAULTS。 */
   context?: () => ContextStagePolicy;
   /**
    * 工作区还没有宪法时写进去的初始文本(出厂内容)。
@@ -118,7 +118,7 @@ export interface CorminiOptions {
   worlds?: World[];
   /**
    * 覆盖默认的存在方式自述(direct 投递的分叉换成直投口径)。不给=读
-   * orientationFile。传函数则每次拼系统前缀时重取——源文件在控制台
+   * orientationFile。传函数则每次拼系统前缀时重取——源文件在 WebUI
    * 改过后,重载前缀即生效。
    */
   orientation?: string | (() => string);
@@ -129,13 +129,13 @@ export interface CorminiOptions {
    */
   orientationFile?: string;
   /**
-   * 这份自述在**部署侧**的覆盖文件。存在就用它(前缀与控制台读同一份),不存在则用
-   * 包里那份;控制台保存一律写到这里——部署者微调出来的提示词是私有资产,不进代码包。
+   * 这份自述在**部署侧**的覆盖文件。存在就用它(前缀与 WebUI 读同一份),不存在则用
+   * 包里那份;WebUI 保存一律写到这里——部署者微调出来的提示词是私有资产,不进代码包。
    */
   orientationOverrideFile?: string;
   /**
    * 首轮对话(风格锚)三份源文件所在目录,即这份部署的 `prompts/`。
-   * 不给 = 这个Persona没有首轮对话(不注入,控制台也不列源)。
+   * 不给 = 这个Persona没有首轮对话(不注入,WebUI 也不列源)。
    */
   firstTurnDir?: string;
   /**
@@ -174,7 +174,7 @@ export class Cormini implements Persona {
     this.memory = new GitWorkspaceMemory({
       memoryDir: opts.memoryDir,
       ...(opts.blobsDir !== undefined ? { blobsDir: opts.blobsDir } : {}),
-      // attach 前使用 console；闭包在调用时选择当前日志入口。
+      // attach 前使用 WebUI；闭包在调用时选择当前日志入口。
       warn: (msg, data) => {
         if (this.core) this.core.log.warn(msg, data);
         else console.warn(`[workspaceGit] ${msg}`, data ?? '');
@@ -222,9 +222,9 @@ export class Cormini implements Persona {
       : this.orientationFile;
   }
 
-  /** 按界面语言声明控制台文案；源 key、路径与清除动作保持一致。 */
-  console(language: Language = 'zh'): PersonaConsoleDecl {
-    const t = consoleText(language);
+  /** 按界面语言声明 WebUI 文案；源 key、路径与清除动作保持一致。 */
+  webUi(language: Language = 'zh'): PersonaWebUiDecl {
+    const t = webUiText(language);
     return {
       promptDocs: [
         {
@@ -349,7 +349,7 @@ export class Cormini implements Persona {
     };
   }
 
-  /** 段名 → 控制台标签(不进前缀)。 */
+  /** 段名 → WebUI 标签(不进前缀)。 */
   protected segmentTitles(): Record<string, string> {
     return CORMINI_SEGMENT_TITLES;
   }
@@ -422,11 +422,11 @@ export class Cormini implements Persona {
     return items;
   }
 
-  /** 首轮对话三份源文件的控制台声明(Persona 页提示词页签经 /api/prompts 读写)。 */
+  /** 首轮对话三份源文件的 WebUI 声明(Persona 页提示词页签经 /api/prompts 读写)。 */
   protected firstTurnDocs(language: Language = 'zh'): PromptDocDecl[] {
     const dir = this.firstTurnDir;
     if (!dir) return [];
-    const t = consoleText(language);
+    const t = webUiText(language);
     return [
       {
         key: 'firstTurn.user',
@@ -449,7 +449,7 @@ export class Cormini implements Persona {
     ];
   }
 
-  /** 各模板占位符此刻的值(纯展示,控制台旁注用)。 */
+  /** 各模板占位符此刻的值(纯展示,WebUI 旁注用)。 */
   promptVarValues(_ctx?: { now: Date; timezone: string }): Record<string, string> {
     return {
       'persona.orientation': this.orientation(),

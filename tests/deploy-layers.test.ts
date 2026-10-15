@@ -18,7 +18,7 @@ function defaults(): TestConfig {
     paths: { memory: 'memory', data: 'data' },
     worlds: {
       minecraft: { enabled: true, username: 'World 默认名', port: 25565, nested: { a: 1, b: 2 } },
-      terminal: { enabled: true },
+      console: { enabled: true },
     },
   } as unknown as TestConfig;
 }
@@ -155,7 +155,7 @@ describe('第一次上手:部署根空着时自建一份', () => {
   });
 });
 
-describe('在终端里建一份空白部署', () => {
+describe('在命令行里建一份空白部署', () => {
   const homes: string[] = [];
   const home = (): string => {
     const dir = mkdtempSync(join(tmpdir(), 'deploy-new-'));

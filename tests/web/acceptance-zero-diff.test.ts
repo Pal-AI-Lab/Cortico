@@ -8,10 +8,10 @@ import { tmpdir } from 'node:os';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { buildWeb, discoverEntries } from '../../scripts/build-web.ts';
-import type { ConsoleAssetManifest } from '../../src/web/shared/console-protocol.ts';
+import type { WebUiAssetManifest } from '../../src/web/shared/webui-protocol.ts';
 import { WebApp, type WebAppDeps } from '../../src/web/server.ts';
 import {
-  deriveConsolePageSources,
+  deriveWebUiPageSources,
   ioPageContribution,
   mergePersonaContributions,
   personaPageContribution,
@@ -21,13 +21,13 @@ import {
   panelRoute,
   pageIdFor,
   validateContributions,
-  type ConsoleManifest,
-  type ConsolePageContribution,
-} from '../../src/web/shared/console-protocol.ts';
+  type WebUiManifest,
+  type WebUiPageContribution,
+} from '../../src/web/shared/webui-protocol.ts';
 import type {
-  World, WorldConsoleDecl, PersonaConsoleDecl, Persona, ToolDef,
+  World, WorldWebUiDecl, PersonaWebUiDecl, Persona, ToolDef,
 } from '../../src/core/types.ts';
-import { ConsoleFixtureWorld } from '../../src/worlds/console-fixture/world.ts';
+import { WebUiFixtureWorld } from '../../src/worlds/webui-fixture/world.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -38,12 +38,12 @@ const IO_NAME = 'zzz-acceptance';
 const BOT_NAME = 'zzz-acceptance';
 const IO_PROVIDER = pageIdFor('world', IO_NAME);
 const PERSONA_PROVIDER = pageIdFor('persona', BOT_NAME);
-const FIXTURE_PROVIDER = pageIdFor('world', 'console-fixture');
+const FIXTURE_PROVIDER = pageIdFor('world', 'webui-fixture');
 
 const IO_DIR = join(REPO, 'src', 'worlds', IO_NAME);
 const BOT_DIR = join(REPO, 'bots', BOT_NAME);
-const IO_ENTRY = join(IO_DIR, 'console', 'client.ts');
-const BOT_ENTRY = join(BOT_DIR, 'console', 'client.ts');
+const IO_ENTRY = join(IO_DIR, 'webui', 'client.ts');
+const BOT_ENTRY = join(BOT_DIR, 'webui', 'client.ts');
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -53,12 +53,12 @@ const bundleSource = (contractPath: string, mark: string): string =>
  * 临时验收 provider 的浏览器扩展。由 tests/web/acceptance-zero-diff.test.ts 造出来，
  * 跑完即删。它不属于任何 bot，也不会被激活。
  */
-import type { ConsoleClientBundle, ConsolePanelContext } from '${contractPath}';
+import type { WebUiClientBundle, WebUiPanelContext } from '${contractPath}';
 
-const bundle: ConsoleClientBundle = {
+const bundle: WebUiClientBundle = {
   panels: {
     hello: {
-      mount(ctx: ConsolePanelContext) {
+      mount(ctx: WebUiPanelContext) {
         ctx.root.appendChild(ctx.ui.msgline('${mark}'));
       },
     },
@@ -110,10 +110,10 @@ const expectWebUntouched = (): void => {
 
 /** 真实发现的入口在临时根构建，避免覆盖仓库 dist/web。 */
 let buildRoot: string;
-let built: ConsoleAssetManifest;
+let built: WebUiAssetManifest;
 const builtDist = (): string => join(buildRoot, 'dist', 'web');
 
-async function buildDiscovered(keys: Set<string>): Promise<ConsoleAssetManifest> {
+async function buildDiscovered(keys: Set<string>): Promise<WebUiAssetManifest> {
   for (const e of discoverEntries(REPO)) {
     if (!keys.has(e.key)) continue;
     const dest = join(buildRoot, relative(REPO, e.entry));
@@ -142,7 +142,7 @@ afterAll(() => {
 });
 
 // ---------------------------------------------------------------------------
-// 起一个只挂 consolePageSources 的最小控制台(与 tests/web/providers.test.ts 同款)
+// 起一个只挂 webUiPageSources 的最小 WebUI(与 tests/web/providers.test.ts 同款)
 // ---------------------------------------------------------------------------
 
 async function withApp(
@@ -169,12 +169,12 @@ async function withApp(
   }
 }
 
-const manifestOf = async (base: string): Promise<ConsoleManifest> =>
-  (await (await fetch(`${base}/api/console/manifest`)).json()) as ConsoleManifest;
+const manifestOf = async (base: string): Promise<WebUiManifest> =>
+  (await (await fetch(`${base}/api/webui/manifest`)).json()) as WebUiManifest;
 
-const byId = (m: ConsoleManifest, id: string) => m.providers.find((p) => p.id === id);
+const byId = (m: WebUiManifest, id: string) => m.providers.find((p) => p.id === id);
 
-/** `deriveConsolePageSources` 只要 core 的可见性事实。 */
+/** `deriveWebUiPageSources` 只要 core 的可见性事实。 */
 const facts = (visibility: Record<string, boolean> = {}) => ({
   worldVisibility: () => ({ visibility, driftedWorlds: [] as string[] }),
 });
@@ -183,7 +183,7 @@ const facts = (visibility: Record<string, boolean> = {}) => ({
 const NEW_IO_TEMPLATE = join(mkdtempSync(join(tmpdir(), 'zzz-worlds-tpl-')), 'ENV_PROMPT.md');
 writeFileSync(NEW_IO_TEMPLATE, '一个刚被装上的 World。', 'utf8');
 
-/** 一个新 World 该写的全部东西:契约方法 + 一份 `console()` 声明。 */
+/** 一个新 World 该写的全部东西:契约方法 + 一份 `webUi()` 声明。 */
 class NewWorld implements World {
   readonly id = IO_NAME;
   calls: Array<{ panel: string; method: string; args: unknown[] }> = [];
@@ -196,7 +196,7 @@ class NewWorld implements World {
     return [];
   }
 
-  console(): WorldConsoleDecl {
+  webUi(): WorldWebUiDecl {
     return {
       badges: [{ label: '状态', value: '刚装上', tone: 'on' }],
       panels: [{ id: 'hello', title: '打招呼', description: '新 World 自带的面板' }],
@@ -239,7 +239,7 @@ describe('新增一个 IO,src/web/** 零 diff', () => {
     expectWebUntouched();
   });
 
-  it('第 3 步 · 装配适配:console() 声明变成一份合法贡献,协议校验干净', () => {
+  it('第 3 步 · 装配适配:webui() 声明变成一份合法贡献,协议校验干净', () => {
     const c = ioPageContribution(
       IO_NAME,
       '新 World',
@@ -259,12 +259,12 @@ describe('新增一个 IO,src/web/** 零 diff', () => {
     expectWebUntouched();
   });
 
-  it('第 4 步 · 真控制台:manifest 里出现它,面板/徽标/扩展资源一并到位', async () => {
+  it('第 4 步 · 真 WebUI:manifest 里出现它,面板/徽标/扩展资源一并到位', async () => {
     const mod = new NewWorld();
-    const sources = deriveConsolePageSources(facts({ [IO_NAME]: true }), {
+    const sources = deriveWebUiPageSources(facts({ [IO_NAME]: true }), {
       assembly: WorldAssembly.ofInstances([mod], { labels: { [IO_NAME]: '新 World' }, declared: false }),
     });
-    await withApp({ consolePageSources: sources }, async (base) => {
+    await withApp({ webUiPageSources: sources }, async (base) => {
       const p = byId(await manifestOf(base), IO_PROVIDER);
       expect(p?.kind).toBe('world');
       expect(p?.label).toBe('新 World');
@@ -278,8 +278,8 @@ describe('新增一个 IO,src/web/** 零 diff', () => {
 
   it('第 5 步 · 面板真能调用:POST 直达 World 自己的 invoke', async () => {
     const mod = new NewWorld();
-    const sources = deriveConsolePageSources(facts({ [IO_NAME]: true }), { assembly: WorldAssembly.ofInstances([mod]) });
-    await withApp({ consolePageSources: sources }, async (base) => {
+    const sources = deriveWebUiPageSources(facts({ [IO_NAME]: true }), { assembly: WorldAssembly.ofInstances([mod]) });
+    await withApp({ webUiPageSources: sources }, async (base) => {
       const r = await fetch(`${base}${panelRoute(IO_PROVIDER, 'hello', 'ping')}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -303,19 +303,19 @@ describe('新增一个 IO,src/web/** 零 diff', () => {
 
 // 新增一个 Persona
 
-/** Persona.console 与 ConsoleContribution.consolePages 使用同一个 persona:<bot> id，并合并为一页。 */
+/** Persona.webUi 与 WebUiContribution.webUiPages 使用同一个 persona:<bot> id，并合并为一页。 */
 describe('新增一个 Persona,src/web/** 零 diff', () => {
   const cognitiveHalf = (): Persona => {
-    const decl: PersonaConsoleDecl = {
+    const decl: PersonaWebUiDecl = {
       badges: [{ label: '记忆', value: '3 层', tone: 'plain' }],
       panels: [{ id: 'memory', title: '记忆视图' }],
       invoke: async (panel, method) => ({ half: 'core', panel, method }),
     };
-    return { console: () => decl } as unknown as Persona;
+    return { webUi: () => decl } as unknown as Persona;
   };
 
-  /** 部署绑定那半:装配层经 `consolePages()` 交出来的。 */
-  const deploymentHalf = (): ConsolePageContribution => ({
+  /** 部署绑定那半:装配层经 `webUiPages()` 交出来的。 */
+  const deploymentHalf = (): WebUiPageContribution => ({
     id: PERSONA_PROVIDER,
     kind: 'persona',
     label: 'ZZZ 验收人格',
@@ -366,14 +366,14 @@ describe('新增一个 Persona,src/web/** 零 diff', () => {
     expectWebUntouched();
   });
 
-  it('第 5 步 · 真控制台:manifest 里出现 persona provider,两半的面板都在,扩展资源到位', async () => {
-    const sources = deriveConsolePageSources(
+  it('第 5 步 · 真 WebUI:manifest 里出现 persona provider,两半的面板都在,扩展资源到位', async () => {
+    const sources = deriveWebUiPageSources(
       facts(),
       { assembly: WorldAssembly.ofInstances([]), persona: cognitiveHalf() },
       { id: BOT_NAME, label: 'ZZZ 验收人格' },
       () => [deploymentHalf()],
     );
-    await withApp({ consolePageSources: sources }, async (base) => {
+    await withApp({ webUiPageSources: sources }, async (base) => {
       const m = await manifestOf(base);
       const p = byId(m, PERSONA_PROVIDER);
       expect(p?.kind).toBe('persona');
@@ -396,14 +396,14 @@ describe('新增一个 Persona,src/web/** 零 diff', () => {
 });
 
 // ===========================================================================
-// 活体验收件:src/worlds/console-fixture 真的进得了构建
+// 活体验收件:src/worlds/webui-fixture 真的进得了构建
 // ===========================================================================
 
-describe('活体验收件 · src/worlds/console-fixture 的贯通', () => {
-  it('构建按目录约定发现它,key 是 worlds:console-fixture', () => {
+describe('活体验收件 · src/worlds/webui-fixture 的贯通', () => {
+  it('构建按目录约定发现它,key 是 worlds:webui-fixture', () => {
     const mine = discoverEntries(REPO).find((e) => e.key === FIXTURE_PROVIDER);
     expect(mine).toBeDefined();
-    expect(mine!.entry).toBe(join(REPO, 'src', 'worlds', 'console-fixture', 'console', 'client.ts'));
+    expect(mine!.entry).toBe(join(REPO, 'src', 'worlds', 'webui-fixture', 'webui', 'client.ts'));
   });
 
   it('它真能打出 asset 条目(不是"源码在那儿"而已)', () => {
@@ -413,15 +413,15 @@ describe('活体验收件 · src/worlds/console-fixture 的贯通', () => {
   });
 
   it('World 这一侧同样贯通:声明 → 贡献 → manifest → 调用', async () => {
-    const mod = new ConsoleFixtureWorld();
-    const c = ioPageContribution(mod.id, '控制台验收件', undefined, mod);
+    const mod = new WebUiFixtureWorld();
+    const c = ioPageContribution(mod.id, 'WebUI 验收件', undefined, mod);
     expect(c.panels?.map((p) => p.id)).toEqual(['hello', 'echo']);
     expect(validateContributions([c])).toEqual([]);
 
-    const sources = deriveConsolePageSources(facts({ [mod.id]: true }), {
-      assembly: WorldAssembly.ofInstances([mod], { labels: { [mod.id]: '控制台验收件' }, declared: false }),
+    const sources = deriveWebUiPageSources(facts({ [mod.id]: true }), {
+      assembly: WorldAssembly.ofInstances([mod], { labels: { [mod.id]: 'WebUI 验收件' }, declared: false }),
     });
-    await withApp({ consolePageSources: sources }, async (base) => {
+    await withApp({ webUiPageSources: sources }, async (base) => {
       const p = byId(await manifestOf(base), FIXTURE_PROVIDER);
       expect(p?.panels?.map((x) => x.id)).toEqual(['hello', 'echo']);
       expect(p?.client?.js).toBe(built.providers[FIXTURE_PROVIDER]!.js);
@@ -438,7 +438,7 @@ describe('活体验收件 · src/worlds/console-fixture 的贯通', () => {
     ).href;
     const bundle = ((await import(FIXTURE_BUNDLE)) as any).default;
     const declared = ioPageContribution(
-      'console-fixture', '控制台验收件', undefined, new ConsoleFixtureWorld(),
+      'webui-fixture', 'WebUI 验收件', undefined, new WebUiFixtureWorld(),
     ).panels!.map((p) => p.id);
     expect(Object.keys(bundle.panels).sort()).toEqual([...declared].sort());
     for (const id of declared) expect(typeof bundle.panels[id].mount).toBe('function');
@@ -451,13 +451,13 @@ describe('活体验收件 · src/worlds/console-fixture 的贯通', () => {
 
 /** 真实 Host 配合最小 DOM、假 manifest 与 import，验证坏声明不影响其他面板。 */
 
-const HOST_SPEC = '../../src/web/client/console-pages/host.ts';
-const LOADER_SPEC = '../../src/web/client/console-pages/loader.ts';
+const HOST_SPEC = '../../src/web/client/webui-pages/host.ts';
+const LOADER_SPEC = '../../src/web/client/webui-pages/loader.ts';
 
 type Any = any;
 
-const { ConsolePageHost } = (await import(HOST_SPEC)) as Any;
-const { ConsolePageLoader } = (await import(LOADER_SPEC)) as Any;
+const { WebUiPageHost } = (await import(HOST_SPEC)) as Any;
+const { WebUiPageLoader } = (await import(LOADER_SPEC)) as Any;
 
 type Listener = (ev: Any) => void;
 interface ListenOptions { signal?: AbortSignal; once?: boolean }
@@ -558,14 +558,14 @@ interface BadStage {
   text(): string;
 }
 
-/** 一个真 `ConsolePageHost` + 真 `ConsolePageLoader`，只有取 manifest 与 import 是假的。 */
+/** 一个真 `WebUiPageHost` + 真 `WebUiPageLoader`，只有取 manifest 与 import 是假的。 */
 function stageWith(providers: unknown[]): BadStage {
   const doc = new FakeDoc();
   const root = doc.createElement('div');
   const overlayHost = doc.createElement('div');
   doc.body.append(root, overlayHost);
   const errors: unknown[] = [];
-  const loader = new ConsolePageLoader({
+  const loader = new WebUiPageLoader({
     importModule: async () => ({
       default: {
         panels: {
@@ -576,7 +576,7 @@ function stageWith(providers: unknown[]): BadStage {
     styleHost: { appendChild: () => {} },
     createLink: () => ({ rel: '', href: '', dataset: {} as Record<string, string> }),
   });
-  const host = new ConsolePageHost({
+  const host = new WebUiPageHost({
     doc,
     root,
     overlayHost,
@@ -659,7 +659,7 @@ describe('前端对结构性坏 manifest 的容忍', () => {
   });
 
   /**
-   * ConsolePageHost.show() 的异常隔离涵盖页头渲染、面板解析和扩展挂载。
+   * WebUiPageHost.show() 的异常隔离涵盖页头渲染、面板解析和扩展挂载。
    * manifest 形状无效时也须呈现错误卡，避免调用点产生未处理的 rejection。
    */
   it('没有任何坏形状能让 show() 抛出去', async () => {

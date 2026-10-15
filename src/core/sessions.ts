@@ -2,7 +2,7 @@ import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import type { ProviderAttempt } from './generation.ts';
 import { usageCounters } from '../protocol/open-responses/context-helpers.ts';
 /**
- * 控制台使用的 session 统计与消息引用，注册表仅驻留内存。
+ * WebUI 使用的 session 统计与消息引用，注册表仅驻留内存。
  * role 使用 Persona 声明的 session id；open 返回的实例 id 也传给模型调用。
  * 消息通过保存的引用在读取时序列化；重启清空统计。
  */

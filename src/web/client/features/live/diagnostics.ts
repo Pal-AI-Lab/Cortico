@@ -1,4 +1,4 @@
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
 import { S } from './strings.ts';
 
@@ -24,7 +24,7 @@ export function downloadJson(doc: Document, name: string, data: unknown): void {
 }
 
 export interface DiagnosticsDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   doc: Document;
   signal: AbortSignal;
 }

@@ -1,6 +1,6 @@
 /**
  * 内核页面表(`main.ts` 的 `FEATURES`)必须收录 `features/<dir>/index.ts` 导出的每一个
- * framework feature。路由分派只认这张表:漏掉一项,那一页就从控制台上消失——
+ * framework feature。路由分派只认这张表:漏掉一项,那一页就从 WebUI 上消失——
  * `hidden` 的页面(设置页里嵌着的那几节)也不例外,它们的直达路由同样靠这张表。
  */
 import { readdirSync } from 'node:fs';

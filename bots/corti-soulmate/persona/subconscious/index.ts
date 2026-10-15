@@ -47,7 +47,7 @@ export class Dream {
     return { dreaming: this.dreaming };
   }
 
-  /** 控制台工具编辑器用的梦侧工具 schema。 */
+  /** WebUI 工具编辑器用的梦侧工具 schema。 */
   getBaseToolSchemas(): Array<{ name: string; description: string; parameters: Record<string, unknown> }> {
     const defs = [...this.d.dreamTools(), this.makeSurfaceTool({ text: null })];
     const seen = new Set<string>();

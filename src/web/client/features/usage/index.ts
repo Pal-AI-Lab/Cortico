@@ -3,9 +3,9 @@
  * 状态属于本次 mount；定时器使用 lifecycle.interval，监听绑定 signal，tooltip 挂在本页 root。领域图表由 chart.ts 提供。
  */
 
-import type { ConsoleUi, Disposable } from '../../../shared/client-panel.ts';
+import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import { get, setConfig } from '../../core/api.ts';
-import { consoleFormat } from '../../ui/format.ts';
+import { webUiFormat } from '../../ui/format.ts';
 import { pageIntro } from '../../ui/page.ts';
 import { getThemeStudio } from '../../theme/studio.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
@@ -49,7 +49,7 @@ const METRICS: ReadonlyArray<{ value: UsageMetric; label: string }> = [
 function costText(amount: number, a: Partial<UsageAccum>, cur: string): string {
   const unpriced = a.unpricedCalls || 0;
   if (unpriced > 0 && !(a.pricedCalls || 0) && !amount) return S.unknown;
-  return consoleFormat.money(amount, cur) + (unpriced > 0 ? S.partialMark : '');
+  return webUiFormat.money(amount, cur) + (unpriced > 0 ? S.partialMark : '');
 }
 
 function errText(err: unknown): string {
@@ -62,7 +62,7 @@ function isAbort(err: unknown): boolean {
 }
 
 /** 一行工具条（`.usagebar`）。与 `ui.rowbar()` 的差别只在版式，这一页有自己的一套。 */
-function usagebar(ui: ConsoleUi): HTMLDivElement {
+function usagebar(ui: WebUi): HTMLDivElement {
   return ui.h('div', 'usagebar');
 }
 
@@ -274,10 +274,10 @@ export function mountUsage(ctx: FeatureContext): void {
       { k: S.cardKnownCost, v: costText(t.cost || 0, t, cur), accent: true },
       { k: S.cardCoverage, v: `${t.pricedCalls || 0} / ${calls}`, unit: S.unpriced(t.unpricedCalls || 0) },
       { k: S.cardCalls, v: calls.toLocaleString() },
-      { k: S.cardInput, v: consoleFormat.count(t.promptTokens || 0), unit: S.hitRate(consoleFormat.percent(t.cacheHitRate)) },
-      { k: S.cardOutput, v: consoleFormat.count(t.completionTokens || 0), unit: S.reasoningShare(consoleFormat.percent(rShare)) },
-      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(consoleFormat.count(Math.round(avgTok))) : '' },
-      { k: S.cardCacheRate, v: consoleFormat.percent(t.cacheHitRate) },
+      { k: S.cardInput, v: webUiFormat.count(t.promptTokens || 0), unit: S.hitRate(webUiFormat.percent(t.cacheHitRate)) },
+      { k: S.cardOutput, v: webUiFormat.count(t.completionTokens || 0), unit: S.reasoningShare(webUiFormat.percent(rShare)) },
+      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(webUiFormat.count(Math.round(avgTok))) : '' },
+      { k: S.cardCacheRate, v: webUiFormat.percent(t.cacheHitRate) },
       { k: S.cardPeak, v: peak ? costText(peak.cost || 0, peak, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
     ];
     // 失败消耗是总消耗的子集。
@@ -285,7 +285,7 @@ export function mountUsage(ctx: FeatureContext): void {
     if ((f.calls || 0) > 0) {
       items.push({
         k: S.cardFailed, v: S.failedCalls((f.calls || 0).toLocaleString()),
-        unit: S.burned(consoleFormat.count((f.promptTokens || 0) + (f.completionTokens || 0))),
+        unit: S.burned(webUiFormat.count((f.promptTokens || 0) + (f.completionTokens || 0))),
       });
     }
     for (const item of items) cards.appendChild(ui.stat(item));
@@ -312,7 +312,7 @@ export function mountUsage(ctx: FeatureContext): void {
       const seg = ui.h('div', 'compseg');
       seg.style.width = (p.val / total) * 100 + '%';
       seg.style.background = p.color;
-      seg.title = `${p.label} ${consoleFormat.money(p.val, cur)}`;
+      seg.title = `${p.label} ${webUiFormat.money(p.val, cur)}`;
       bar.appendChild(seg);
     }
     const leg = ui.h('div', 'compleg');
@@ -323,8 +323,8 @@ export function mountUsage(ctx: FeatureContext): void {
       it.append(
         sw,
         ui.h('span', null, p.label),
-        ui.h('span', 'compamt', consoleFormat.money(p.val, cur)),
-        ui.h('span', 'comppct', `(${consoleFormat.percent(p.val / total)})`),
+        ui.h('span', 'compamt', webUiFormat.money(p.val, cur)),
+        ui.h('span', 'comppct', `(${webUiFormat.percent(p.val / total)})`),
       );
       leg.appendChild(it);
     }
@@ -334,10 +334,10 @@ export function mountUsage(ctx: FeatureContext): void {
 
   /**
    * 首列印的是**声明方给的名字**，后面跟 id 原文；给不出名字就只印 id。角色 id 由Persona定义、
-   * 模型名由供应商定义，控制台两边都不认识，也就不为任何一边备一张翻译表。
+   * 模型名由供应商定义，WebUI 两边都不认识，也就不为任何一边备一张翻译表。
    */
   function renderGroup(
-    table: ReturnType<ConsoleUi['table']>,
+    table: ReturnType<WebUi['table']>,
     groups: readonly UsageGroupStat[],
     cur: string,
   ): void {
@@ -350,9 +350,9 @@ export function mountUsage(ctx: FeatureContext): void {
       table.addRow([
         name,
         { text: g.calls || 0, cls: 'mono' },
-        { text: consoleFormat.count(g.promptTokens), cls: 'mono' },
-        { text: consoleFormat.count(g.completionTokens), cls: 'mono' },
-        { text: consoleFormat.percent(g.cacheHitRate), cls: 'mono' },
+        { text: webUiFormat.count(g.promptTokens), cls: 'mono' },
+        { text: webUiFormat.count(g.completionTokens), cls: 'mono' },
+        { text: webUiFormat.percent(g.cacheHitRate), cls: 'mono' },
         { text: costText(g.cost || 0, g, cur), cls: 'mono' },
         { text: costText(avg, g, cur), cls: 'mono' },
       ]);

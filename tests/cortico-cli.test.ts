@@ -27,7 +27,7 @@ import {
   renderLine,
 } from '../bin/menu.mjs';
 
-/** 假终端要在 Readable 上补 isTTY / setRawMode,类型上没有这两项。 */
+/** 假命令行要在 Readable 上补 isTTY / setRawMode,类型上没有这两项。 */
 type Any = any;
 
 /** 送进输入流的按键。 */
@@ -125,12 +125,12 @@ describe('chooseBot', () => {
     expect(out.kind === 'error' && out.message).toContain('a / b');
   });
 
-  it('交互终端一份也弹菜单:新建那一项要够得着', () => {
+  it('交互式命令行一份也弹菜单:新建那一项要够得着', () => {
     expect(chooseBot({ bot: null, available: ['only'], interactive: true })).toEqual({ kind: 'ask' });
     expect(chooseBot({ bot: null, available: ['a', 'b'], interactive: true })).toEqual({ kind: 'ask' });
   });
 
-  it('非交互终端只有一份就用它', () => {
+  it('非交互环境只有一份就用它', () => {
     expect(chooseBot({ bot: null, available: ['only'], interactive: false })).toEqual({ kind: 'run', bot: 'only' });
   });
 
@@ -148,7 +148,7 @@ describe('chooseBot', () => {
 });
 
 describe('promptChoice', () => {
-  /** 一个可写可读的假终端:记下每次 raw 模式切换。 */
+  /** 一个可写可读的假命令行:记下每次 raw 模式切换。 */
   function fakeTty(): { stream: Any; modes: boolean[] } {
     const stream = new PassThrough() as Any;
     const modes: boolean[] = [];
@@ -175,7 +175,7 @@ describe('promptChoice', () => {
     expect(process.listenerCount('exit')).toBe(exitListeners);
   });
 
-  it('菜单开着时进程退出:exit 监听把终端从 raw 模式带回来', async () => {
+  it('菜单开着时进程退出:exit 监听把命令行从 raw 模式带回来', async () => {
     const { stream: input, modes } = fakeTty();
     const picked = promptChoice(rows(), { out: new PassThrough() as Any, input });
     const restore = process.listeners('exit').at(-1) as () => void;

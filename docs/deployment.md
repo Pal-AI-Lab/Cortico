@@ -28,7 +28,7 @@ pnpm start mybot
 ```
 
 部署根下一份部署都没有时，`pnpm start` 自己建一份 `mybot`(引用 `cormini`)再启动它，写下
-`deployment.json` 与开场引导的标记 `.onboarding`；端点与其余设置在控制台里配。已有任何一份部署时
+`deployment.json` 与开场引导的标记 `.onboarding`；端点与其余设置在 WebUI 里配。已有任何一份部署时
 不会发生这件事，手动建的部署也不带那个标记。
 
 `deployment.json` 只有一个字段 `bot`:引用哪个代码包。仓内 `bots/<名>/` 有它就是那个,否则是
@@ -41,10 +41,10 @@ pnpm start mybot
 | `memory/` | Memory。目录名由 Persona 的 `paths.memory` 定(Cormini 与 CortiV 用 `workspace/`) |
 | `data/` | 事件、会话、用量和进程状态等运行数据；删除后可重新启动，但原有记录无法恢复 |
 | `prompts/` | Persona 文本的部署侧覆盖:`ORIENTATION.md`;`FIRST_TURN_{USER,THINKING,REPLY}.md` 只有这一层 |
-| `worlds/<id>/ENV_PROMPT.md` | 某个 World 环境提示词的部署侧覆盖,整份替换。控制台编辑写入此文件,「移除部署覆盖」删除此文件 |
-| `theme.json` | 控制台外观页的选择:方案 id、明暗挡位与自定义调色板。没有这个文件时用 `web.theme` |
+| `worlds/<id>/ENV_PROMPT.md` | 某个 World 环境提示词的部署侧覆盖,整份替换。WebUI 编辑写入此文件,「移除部署覆盖」删除此文件 |
+| `theme.json` | WebUI 外观页的选择:方案 id、明暗挡位与自定义调色板。没有这个文件时用 `web.theme` |
 | `avatar.png`、`voices/` | 头像与参考声线 |
-| `.onboarding` | 开场引导的一次性标记,自建部署时写下;控制台见到它才给引导,操作员开口或按下那颗按钮后删除 |
+| `.onboarding` | 开场引导的一次性标记,自建部署时写下;WebUI 见到它才给引导,操作员开口或按下那颗按钮后删除 |
 
 启动时读取的部署配置、共享端点配置与包内 World 配置支持 UTF-8、带 BOM 的 UTF-8 和 UTF-16 LE。
 
@@ -64,27 +64,27 @@ pnpm start <部署名>
 | 参数 / 变量 | 作用 |
 |---|---|
 | `--list`(`pnpm bots`) | 列出部署根下每个含 `deployment.json` 的目录 |
-| `--new` | 在终端里建一份空白部署再启动它:选代码包(仓内 `bots/` 与已装的 bot 类扩展)、起目录名、取个名字;bot 扩展声明了 png 图标时复制成部署的 `avatar.png` |
-| 不给名字 | 取 `CORTICO_BOT`;交互终端弹菜单,非交互终端只有一份部署时可省略 |
+| `--new` | 在命令行里建一份空白部署再启动它:选代码包(仓内 `bots/` 与已装的 bot 类扩展)、起目录名、取个名字;bot 扩展声明了 png 图标时复制成部署的 `avatar.png` |
+| 不给名字 | 取 `CORTICO_BOT`;交互式命令行弹菜单,非交互环境只有一份部署时可省略 |
 | `--paused`、`CORTICO_START_PAUSED=1` | 启动时暂停事件投递，事件仍写入事件库并排队 |
-| `--open`、`CORTICO_OPEN_BROWSER=1` | 启动后打开控制台 |
-| `--host=<地址>`、`--port=<端口>` | 控制台监听地址与端口,覆盖 `config.json` 的 `web.host` / `web.port`,不写回 |
+| `--open`、`CORTICO_OPEN_BROWSER=1` | 启动后打开 WebUI |
+| `--host=<地址>`、`--port=<端口>` | WebUI 监听地址与端口,覆盖 `config.json` 的 `web.host` / `web.port`,不写回 |
 | `--log-level=<级别>`、`CORTICO_LOG` | 写入日志文件的最低级别，覆盖 `config.json` |
 | `--force-second-instance` | 绕过单实例锁 |
 
-`activeProvider` 为空或选中连接尚未配置模型时允许启动，可进入控制台完成配置。非空名称必须在端点表里，不在则退出。连接声明的 `secret` 读不到(进程环境
-或 `providers/<端点名>/.env`)只警告，允许启动。可在控制台「模型提供商」页修改密钥变量名或补填密钥，
+`activeProvider` 为空或选中连接尚未配置模型时允许启动，可进入 WebUI 完成配置。非空名称必须在端点表里，不在则退出。连接声明的 `secret` 读不到(进程环境
+或 `providers/<端点名>/.env`)只警告，允许启动。可在 WebUI「模型提供商」页修改密钥变量名或补填密钥，
 保存后下一次模型调用生效，不必重启。
 
-`pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在控制台产物缺失、不完整或落后于源码时构建，
-在一份部署都没有时建一份、在交互终端上提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
+`pnpm start`、`start.bat` 与 `start.sh` 都调用 `bin/cortico.mjs`。它安装缺失的依赖、在 WebUI 产物缺失、不完整或落后于源码时构建，
+在一份部署都没有时建一份、在交互式命令行上提供方向键菜单，并创建和监管 bot 子进程。子进程设置 `CORTICO_SUPERVISED=1`；
 `CORTICO_START_PAUSED` 未设置时默认为 `1`,重启也走这条路,所以重启回来时事件投递同样是暂停的,
-重启回执里写明了这一点。首次启动默认打开控制台，
-`CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。控制台的「重启进程」由此启动器执行。
+重启回执里写明了这一点。首次启动默认打开 WebUI，
+`CORTICO_OPEN_BROWSER=0` 可关闭此行为；重启不再打开浏览器。WebUI 的「重启进程」由此启动器执行。
 
-菜单里一份部署占两行:相对部署根的路径,以及 `bot id - 名字`;颜色取这份部署控制台里的配色方案
+菜单里一份部署占两行:相对部署根的路径,以及 `bot id - 名字`;颜色取这份部署 WebUI 里的配色方案
 (`theme.json`,没有则 `web.theme`),选中的那行路径更亮。末项「新建部署」与 `--new` 是同一条路。
-终端不认色时(非 TTY、`NO_COLOR`、`FORCE_COLOR=0`)只出文字。
+命令行不认色时(非 TTY、`NO_COLOR`、`FORCE_COLOR=0`)只出文字。
 
 `tsx src/launcher.ts <部署名>` 直接运行 bot 进程本身：不装依赖、不建产物、不重启。
 
@@ -97,8 +97,8 @@ pnpm start <部署名>
 ## 关机
 
 SIGINT / SIGTERM / SIGHUP（Windows 另加 SIGBREAK）和未捕获异常触发分步关机，
-总时限为 35 秒。Windows 关闭终端窗口的处理时限通常为 5 秒，可能不足以完成关机；
-正常退出使用控制台的「关机」。系统时限见 [Windows 控制台文档](https://learn.microsoft.com/en-us/windows/console/handlerroutine)。
+总时限为 35 秒。Windows 关闭命令行窗口的处理时限通常为 5 秒，可能不足以完成关机；
+正常退出使用 WebUI 的「关机」。系统时限见 [Windows Console 文档](https://learn.microsoft.com/en-us/windows/console/handlerroutine)。
 
 ## 多份部署
 

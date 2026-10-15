@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 
-import type { BotDefinition, BotParts, ConsoleContribution } from 'cortico/bot.ts';
+import type { BotDefinition, BotParts, WebUiContribution } from 'cortico/bot.ts';
 import type { World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
@@ -9,16 +9,16 @@ import type { WebAppCheckpointDeps } from 'cortico/web/server.ts';
 
 import { CortiSoulmate } from './persona/index.ts';
 import {
-  cortiConsolePages,
+  cortiWebUiPages,
   type CortiResetDeps,
-} from './console-page.ts';
+} from './webui-page.ts';
 import { AUTHOR_OPERATOR } from '../cormini/persona/workspaceGit.ts';
 import { PERSONA_CONFIG_GROUP, PERSONA_DEFAULTS } from './persona/config.ts';
 import type { PersonaConfig } from './persona/config.ts';
 
 import { type QQConfigSection } from 'cortico/worlds/qq/config.ts';
-import type { TerminalConfigSection } from 'cortico/worlds/terminal/config.ts';
-import type { TerminalWorld } from 'cortico/worlds/terminal/world.ts';
+import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
+import type { ConsoleWorld } from 'cortico/worlds/console/world.ts';
 import { type WebSearchConfigSection } from 'cortico/worlds/websearch/config.ts';
 import type { CoreConfig } from 'cortico/core/types.ts';
 
@@ -37,13 +37,13 @@ export interface BotConfig extends CoreConfig {
   dream: PersonaConfig['dream'];
   worlds: {
     qq: QQConfigSection;
-    terminal: TerminalConfigSection;
+    console: ConsoleConfigSection;
     websearch: WebSearchConfigSection;
   };
 }
 
 /** 这个Persona为之设计的渠道,默认启用。 */
-const DECLARES: readonly WorldDeclaration[] = ['qq', 'terminal', 'websearch'];
+const DECLARES: readonly WorldDeclaration[] = ['qq', 'console', 'websearch'];
 
 /** 层1+层2:框架默认 ← Persona的建议。World 段由启动器补。 */
 export function composeDefaults(): BotConfig {
@@ -84,25 +84,25 @@ export function build(loaded: LoadedConfig<BotConfig>, worlds: World[]): BotPart
     onStop: () => {
       persona.stopRhythm();
     },
-    console: consoleContribution(loaded, { persona, worlds }),
+    webUi: webUiContribution(loaded, { persona, worlds }),
   };
 }
 
 
-interface ConsoleParts {
+interface WebUiParts {
   persona: CortiSoulmate;
   /** 挂载表的活引用 */
   worlds: World[];
 }
 
-function consoleContribution(loaded: LoadedConfig<BotConfig>, p: ConsoleParts): ConsoleContribution {
+function webUiContribution(loaded: LoadedConfig<BotConfig>, p: WebUiParts): WebUiContribution {
   const cfg = loaded.config;
   const { persona, worlds } = p;
-  // 梦在 core attach 后创建;控制台通过闭包延迟取值。
+  // 梦在 core attach 后创建;WebUI 通过闭包延迟取值。
   const dream = () => persona.dream;
-  const terminal = (): TerminalWorld | undefined => worlds.find((m) => m.id === 'terminal') as TerminalWorld | undefined;
+  const consoleWorld = (): ConsoleWorld | undefined => worlds.find((m) => m.id === 'console') as ConsoleWorld | undefined;
 
-  // 各 World 的环境提示词由 World 自报(console().promptDocs);这里只声明Persona自己那份。
+  // 各 World 的环境提示词由 World 自报(webUi().promptDocs);这里只声明Persona自己那份。
   const promptDocs = [{
     key: 'orientation',
     title: 'ORIENTATION',
@@ -165,28 +165,28 @@ function consoleContribution(loaded: LoadedConfig<BotConfig>, p: ConsoleParts): 
     status: () => ({
       // 「梦」是人格概念,框架不认识它:自报成一枚通用筹码,状态条照文本画。
       chips: dream().getStatus().dreaming ? [{ label: '梦中', tone: 'accent' }] : [],
-      terminalOnline: terminal()?.onlineCount() ?? 0,
+      consoleOnline: consoleWorld()?.onlineCount() ?? 0,
       memo: { residentCap: cfg.memo.residentCap, activeCap: cfg.memo.activeCap },
-      // Persona的阶段预算与软预警线(终端页上下文圈的分母与黄线);计数与物理上限由 core 报
+      // Persona的阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       context: {
         maxTokens: cfg.context.maxTokens,
         softRatio: cfg.context.softRatio,
       },
     }),
     /**
-     * bot 级控制台页(部署绑定的三块:存档点 / 统一重置 / 梦)。
+     * bot 级 WebUI 页(部署绑定的三块:存档点 / 统一重置 / 梦)。
      *
      * 认知绑定的三块(工作区 / Memory / 版本历史)不在这里,由Persona自报
-     * (`CortiSoulmate.console()`)。
+     * (`CortiSoulmate.webUi()`)。
      */
-    consolePages: (ctx) => cortiConsolePages({
+    webUiPages: (ctx) => cortiWebUiPages({
       name: definition.id,
       label: `${cfg.displayName || definition.id} · 部署`,
       checkpoints: checkpointDeps,
       status: () => persona.git.status(),
       reset: resetDeps,
       // 框架在问这一页时把**权威**清单交进来(core 派生 + 各 World
-      // console().storage + 本 bot 追加),与 /api/storage 看到的是同一批对象。
+      // webUi().storage + 本 bot 追加),与 /api/storage 看到的是同一批对象。
       // 统一重置要清的正是它们;bot 自己再拼一份就是两套实现。
       storage: () => [...ctx.storage],
       dream: dreamDeps,

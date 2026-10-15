@@ -1,0 +1,9 @@
+{
+  "name": "cortico-fixture-world-webui-missing",
+  "version": "1.0.0",
+  "description": "声明了浏览器端产物但没 build",
+  "type": "module",
+  "main": "./index.js",
+  "keywords": ["cortico-world"],
+  "cortico": { "kind": "world", "api": 6, "webUiClient": "dist/webui.js" }
+}

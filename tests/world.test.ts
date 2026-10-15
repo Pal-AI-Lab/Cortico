@@ -270,10 +270,10 @@ describe('激活 / 停用 / 重启', () => {
 
 describe('显示名', () => {
   const labelled = (id: string, labels: Partial<Record<Language, string>>) => probeDefinition(id, {
-    create: (ctx) => Object.assign(new Probe(id, ctx), { console: (language: Language) => ({ label: labels[language] }) }),
+    create: (ctx) => Object.assign(new Probe(id, ctx), { webUi: (language: Language) => ({ label: labels[language] }) }),
   });
 
-  it('按请求语言现取:实例 console().label,其次定义的 label', () => {
+  it('按请求语言现取:实例 webUi().label,其次定义的 label', () => {
     let current = '启动时的名字';
     const live = Object.defineProperty(probeDefinition('live'), 'label', { get: () => current });
     const { assembly } = assemblyOf([labelled('decl', { en: 'Declared' }), live], []);

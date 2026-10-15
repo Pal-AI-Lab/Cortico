@@ -1,6 +1,6 @@
 /**
  * 对话输入器:表单壳、自适应高度的 textarea、附图钮、发送钮与图片托盘。一个 React 根挂进
- * 控制台面板,`promptInput()` 把它包成 ConsolePromptInput。
+ * WebUI 面板,`promptInput()` 把它包成 WebUiPromptInput。
  *
  * 图片在进托盘时就归一化成 base64,提交时与文本一并交出。拖入、粘贴、选择三条入口共用
  * addFiles:超出张数整批拒,单张失败只报那一张。
@@ -10,9 +10,9 @@ import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import TextareaAutosize from 'react-textarea-autosize';
 import type {
-  ConsoleImageAttachment,
-  ConsolePromptInput,
-  ConsolePromptInputOptions,
+  WebUiImageAttachment,
+  WebUiPromptInput,
+  WebUiPromptInputOptions,
 } from '../../shared/client-panel.ts';
 import { IMAGE_DEFAULTS, isImageFile, normalizeImage } from './images.ts';
 import { S } from './strings.ts';
@@ -21,17 +21,17 @@ interface ComposerHandle {
   focus(): void;
   setDisabled(disabled: boolean): void;
   setPlaceholder(text: string | null): void;
-  restore(text: string, images: readonly ConsoleImageAttachment[]): void;
+  restore(text: string, images: readonly WebUiImageAttachment[]): void;
 }
 
 /** 托盘里的一张:归一化结果 + 同一份字节的 data URL 缩略图。 */
 interface Attached {
   id: number;
-  image: ConsoleImageAttachment;
+  image: WebUiImageAttachment;
   src: string;
 }
 
-function sizeCaption(image: ConsoleImageAttachment): string {
+function sizeCaption(image: WebUiImageAttachment): string {
   const kb = image.bytes / 1024;
   const size = kb >= 1024 ? `${(kb / 1024).toFixed(1)}MB` : `${Math.round(kb)}KB`;
   return `${size} · ${image.width}×${image.height}`;
@@ -111,7 +111,7 @@ function Thumbnail({ item, onRemove }: { item: Attached; onRemove(): void }): Re
   );
 }
 
-const PromptComposer = React.forwardRef<ComposerHandle, { opts: ConsolePromptInputOptions }>(
+const PromptComposer = React.forwardRef<ComposerHandle, { opts: WebUiPromptInputOptions }>(
   ({ opts }, ref) => {
     const [value, setValue] = React.useState('');
     const [disabled, setDisabled] = React.useState(opts.disabled ?? false);
@@ -315,8 +315,8 @@ PromptComposer.displayName = 'PromptComposer';
 export function promptInput(
   doc: Document,
   signal: AbortSignal,
-  opts: ConsolePromptInputOptions,
-): ConsolePromptInput {
+  opts: WebUiPromptInputOptions,
+): WebUiPromptInput {
   const el = doc.createElement('div');
   el.className = 'prompt-input-host';
   const handle = React.createRef<ComposerHandle>();

@@ -78,12 +78,12 @@ beforeAll(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'webdebug-data-'));
   session = new SessionLog(dataDir);
   store = new JsonlEventStore({ dataDir, run: 'r-20260101-000000-0001' });
-  runlog = new Runlog(join(dataDir, 'runlog.jsonl'), { console: false });
+  runlog = new Runlog(join(dataDir, 'runlog.jsonl'), { webUi: false });
 
   // 种子数据(在WebApp构造前:hello快照必须能读到)
   session.append(sysMsg);
   session.append(asstMsg);
-  store.append({ type: 'terminal.message', ts: '2026-07-17T09:00:00+08:00', source: 'terminal', origin: 'external', text: '[09:00] 阿明: 在吗', senderKey: '阿明' });
+  store.append({ type: 'console.message', ts: '2026-07-17T09:00:00+08:00', source: 'console', origin: 'external', text: '[09:00] 阿明: 在吗', senderKey: '阿明' });
   store.append({ type: 'qq.message', ts: '2026-07-17T09:01:00+08:00', source: 'qq', origin: 'external', text: '[09:01] 小北: 早', senderKey: '10001' });
   runlog.write({ ts: '2026-07-17T09:00:01+08:00', level: 'info', area: 'loop', msg: '唤醒' });
   runlog.write({ ts: '2026-07-17T09:00:02+08:00', level: 'error', area: 'worlds.qq', msg: '断线', data: { code: 1006 } });
@@ -101,7 +101,7 @@ beforeAll(async () => {
     store,
     memoryDir,
     dataDir,
-    getStatus: () => ({ loop: { estTokens: 42, messageCount: session.messages.length, paused }, terminalOnline: 0 }),
+    getStatus: () => ({ loop: { estTokens: 42, messageCount: session.messages.length, paused }, consoleOnline: 0 }),
     run: { pause: () => { paused = true; }, resume: () => { paused = false; }, isPaused: () => paused },
     debug,
     log: nullLogger(),
@@ -148,7 +148,7 @@ describe('/ws/debug 实时推送', () => {
     await a.q.nextOfType('hello');
     await b.q.nextOfType('hello');
 
-    const ev = store.append({ type: 'terminal.message', ts: '2026-07-17T09:02:00+08:00', source: 'terminal', origin: 'external', text: '[09:02] 阿明: 还在吗', senderKey: '阿明' });
+    const ev = store.append({ type: 'console.message', ts: '2026-07-17T09:02:00+08:00', source: 'console', origin: 'external', text: '[09:02] 阿明: 还在吗', senderKey: '阿明' });
     for (const c of [a, b]) {
       const f = await c.q.nextOfType('event');
       expect((f.envelope as { cursor: number }).cursor).toBe(ev.cursor);

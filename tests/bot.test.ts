@@ -13,8 +13,8 @@ import { providerModules } from '../src/providers/registry.ts';
 import { repoRoot } from '../src/paths.ts';
 import type { World, WorldHost } from '../src/core/types.ts';
 import type { Language } from '../src/core/language.ts';
-import { TERMINAL } from '../src/worlds/terminal/definition.ts';
-import { text as terminalText } from '../src/worlds/terminal/strings.ts';
+import { CONSOLE } from '../src/worlds/console/definition.ts';
+import { text as consoleText } from '../src/worlds/console/strings.ts';
 import { makeCfg } from './core/helpers.ts';
 
 let dir: string;
@@ -38,7 +38,7 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(defs, []) } as never) }, dir, dir);
   const assembly = new WorldAssembly(loaded, defs, []);
   assembly.bind({ mount: async (world: World) => { await world.start({} as WorldHost); }, unmount: async () => {} });
-  const set = { dir, records: [], worlds: [fromExtension], providers: [providerModules[0]], consoleAssets: [] };
+  const set = { dir, records: [], worlds: [fromExtension], providers: [providerModules[0]], webUiAssets: [] };
 
   const decorate = extensionRuntimeState(assembly, (id) => id !== running);
   const entries = builtinExtensions(assembly, set, 'en').map((entry) => decorate(entry, 'en'));
@@ -54,25 +54,25 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   for (const entry of entries) expect(entry).toMatchObject({ builtin: true, version, location: repoRoot(), name: `builtin:${entry.kind}:${entry.worldId}` });
 });
 
-it('World names follow the request language: the terminal World, a definition whose label getter changed after assembly, and the same World loaded from an extension', () => {
+it('World names follow the request language: the console World, a definition whose label getter changed after assembly, and the same World loaded from an extension', () => {
   let current = 'name at startup';
   const live: WorldDefinition<WorldSection> = { ...probe('live'), get label() { return current; } };
-  const defs = [TERMINAL as unknown as WorldDefinition<WorldSection>, live];
+  const defs = [CONSOLE as unknown as WorldDefinition<WorldSection>, live];
   const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(defs, []) } as never) }, dir, dir);
   const assembly = new WorldAssembly(loaded, defs, []);
   current = 'name now';
-  const set = { dir, records: [], worlds: [], providers: [], consoleAssets: [] };
+  const set = { dir, records: [], worlds: [], providers: [], webUiAssets: [] };
   const labels = (language: Language) => Object.fromEntries(builtinExtensions(assembly, set, language)
     .filter((entry) => entry.kind === 'world').map((entry) => [entry.worldId, entry.label]));
-  expect(labels('en')).toEqual({ terminal: terminalText('en').moduleLabel, live: 'name now' });
-  expect(labels('pt-BR').terminal).toBe(terminalText('pt-BR').moduleLabel);
-  const installed = { name: 'cortico-world-live', spec: '^1.0.0', version: '1.0.0', kind: 'world' as const, worldId: 'live', label: 'name at startup', consoleClient: false, loaded: true, state: 'loaded' as const };
+  expect(labels('en')).toEqual({ console: consoleText('en').moduleLabel, live: 'name now' });
+  expect(labels('pt-BR').console).toBe(consoleText('pt-BR').moduleLabel);
+  const installed = { name: 'cortico-world-live', spec: '^1.0.0', version: '1.0.0', kind: 'world' as const, worldId: 'live', label: 'name at startup', webUiClient: false, loaded: true, state: 'loaded' as const };
   expect(extensionRuntimeState(assembly, () => true)(installed, 'en').label).toBe('name now');
 });
 
 it('removed entries are never enabled', () => {
   const loaded = loadDeployment({ defaults: () => makeCfg() }, dir, dir);
   const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true);
-  const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, consoleClient: false, loaded: true, state: 'removed' as const };
+  const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, webUiClient: false, loaded: true, state: 'removed' as const };
   expect(decorate(removed, 'en').enabled).toBe(false);
 });

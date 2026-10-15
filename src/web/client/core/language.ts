@@ -1,18 +1,18 @@
 /**
- * The console's language on the browser side. The server stamps its default on `<html lang>`;
+ * The WebUI's language on the browser side. The server stamps its default on `<html lang>`;
  * a preference saved in this browser overrides it. Strings are selected at module load time,
  * so changing the preference reloads the page. Every request and every WebSocket handshake
  * carries the value back (`languageHeaders` / `withLanguage`), and the server renders its own
- * console text in it.
+ * WebUI text in it.
  */
 import {
   isLanguage, languageOfLocale, languageTag, pick as pickFor, type Language, type LanguageTable,
 } from '../../../core/language.ts';
-import { CONSOLE_LANGUAGE_HEADER, CONSOLE_LANGUAGE_QUERY } from '../../shared/console-protocol.ts';
+import { WEBUI_LANGUAGE_HEADER, WEBUI_LANGUAGE_QUERY } from '../../shared/webui-protocol.ts';
 
 export type { Language };
 
-const STORAGE_KEY = 'cortico.console.language';
+const STORAGE_KEY = 'cortico.webui.language';
 
 export function saveLanguage(language: Language, storage: Pick<Storage, 'setItem'>): void {
   storage.setItem(STORAGE_KEY, language);
@@ -47,10 +47,10 @@ export function pick<T>(table: LanguageTable<T>): T {
 
 /** The header every HTTP request carries. */
 export function languageHeaders(): Record<string, string> {
-  return { [CONSOLE_LANGUAGE_HEADER]: LANGUAGE };
+  return { [WEBUI_LANGUAGE_HEADER]: LANGUAGE };
 }
 
 /** A WebSocket path with the language attached as a query parameter (the handshake cannot carry headers). */
 export function withLanguage(path: string): string {
-  return `${path}${path.includes('?') ? '&' : '?'}${CONSOLE_LANGUAGE_QUERY}=${LANGUAGE}`;
+  return `${path}${path.includes('?') ? '&' : '?'}${WEBUI_LANGUAGE_QUERY}=${LANGUAGE}`;
 }

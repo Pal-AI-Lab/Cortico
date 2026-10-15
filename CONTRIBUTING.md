@@ -17,7 +17,7 @@ with a coding agent. Pull requests that fail this requirement are closed.
 
 ## What is accepted
 
-- Bug fixes in the runtime, the console, the extension loader and the bundled Worlds and
+- Bug fixes in the runtime, the WebUI, the extension loader and the bundled Worlds and
   providers, with a test that fails before the fix.
 - Boundary fixes: removing bot-specific semantics from `src/core`, moving a default to its
   owner.

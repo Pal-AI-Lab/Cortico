@@ -1,4 +1,4 @@
-/** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、控制台及存储请求，并每秒推送配置。 */
+/** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、WebUI 及存储请求，并每秒推送配置。 */
 import { fork, type ChildProcess } from 'node:child_process';
 import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
 import { emitLogNote, logChildStdio } from '../../core/ipc-logger.ts';
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import type {
   World,
   WorldHost,
-  WorldConsoleDecl,
+  WorldWebUiDecl,
   StoragePart,
   ToolDef,
   ToolOutcome,
@@ -76,7 +76,7 @@ export class MinecraftWorldProxy implements World {
   private stopping = false;
   private nextReqId = 1;
   private readonly pending = new Map<number, PendingRpc>();
-  private declCache: Record<'zh' | 'en', Pick<WorldConsoleDecl, 'lamps' | 'badges' | 'links'>> = { zh: {}, en: {} };
+  private declCache: Record<'zh' | 'en', Pick<WorldWebUiDecl, 'lamps' | 'badges' | 'links'>> = { zh: {}, en: {} };
   /** 子进程按当前连接目标算的世界身份行;子进程没起时按配置算 */
   private worldLineCache: string | null = null;
   private storageCache: StorageStat[] = [];
@@ -125,7 +125,7 @@ export class MinecraftWorldProxy implements World {
   }
 
   /** 灯、徽标、链接取子进程按这次请求的界面语言报上的那份;面板调用把语言带给子进程。 */
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = text(language);
     const cached = pick(language, this.declCache);
     return {

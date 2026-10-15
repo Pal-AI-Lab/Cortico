@@ -1,17 +1,17 @@
 /**
- * 控制台外壳管理左栏导航和品牌区域；host 与 feature 管理右侧内容。
+ * WebUI 外壳管理左栏导航和品牌区域；host 与 feature 管理右侧内容。
  * 框架页来自 FrameworkFeature[]，贡献方的页来自 manifest；只展示可用 feature 与 availability 为 active 的页，不内置具体 World 或 bot 名称。
- * 外壳不探测整站可达性，单个接口失败不代表整站状态。DOM 复用 ConsoleUi 与现存样式，窄屏折叠交给 CSS。
+ * 外壳不探测整站可达性，单个接口失败不代表整站状态。DOM 复用 WebUi 与现存样式，窄屏折叠交给 CSS。
  */
 
 import { get, post, setConfig } from '../core/api.ts';
 import { buildHash, type Route, type Router } from '../core/router.ts';
 import { featureAvailable, type FrameworkFeature } from '../features/feature.ts';
-import { PROVIDER_ROUTE } from '../console-pages/host.ts';
-import { icon, wordmark, type ConsoleIconName } from '../ui/icons.ts';
+import { PROVIDER_ROUTE } from '../webui-pages/host.ts';
+import { icon, wordmark, type WebUiIconName } from '../ui/icons.ts';
 import { lampRow, paintLamps } from '../ui/lamp.ts';
-import type { ConsoleUi } from '../../shared/client-panel.ts';
-import type { ConsoleLamp, ConsolePageManifest } from '../../shared/console-protocol.ts';
+import type { WebUi } from '../../shared/client-panel.ts';
+import type { WebUiLamp, WebUiPageManifest } from '../../shared/webui-protocol.ts';
 import { createAvatarControl } from './avatar.ts';
 import { S } from './strings.ts';
 
@@ -25,21 +25,21 @@ const GROUP_WORLDS = S.groupWorlds;
 export interface ShellDeps {
   doc: Document;
   /** UI 原语。DOM 只经它造，外壳不手搓 class。 */
-  ui: ConsoleUi;
+  ui: WebUi;
   /** 跳转经它——`location.hash` 只有 router 能写。 */
   router: Router;
-  /** 控制台自己的页面。顺序即左栏顺序。 */
+  /** WebUI 自己的页面。顺序即左栏顺序。 */
   features?: readonly FrameworkFeature[];
   /** 框架级表面的挂载情况。晚到就先传空，之后 `setCapabilities` 补。 */
   capabilities?: Record<string, boolean>;
-  /** 控制台页清单（`/api/console/manifest`）。晚到就之后 `setPages` 补。 */
-  pages?: readonly ConsolePageManifest[];
+  /** WebUI 页清单（`/api/webui/manifest`）。晚到就之后 `setPages` 补。 */
+  pages?: readonly WebUiPageManifest[];
   /** 外壳的生命周期。abort 等同于 `dispose()`。 */
   signal?: AbortSignal;
   onError?(err: unknown): void;
 }
 
-export interface ConsoleShell {
+export interface WebUiShell {
   /** 整个左栏（`#rail`）。调用方把它插进 `body` 的最前面。 */
   readonly el: HTMLElement;
   /** 当前路由变了。驱动高亮，不做别的。 */
@@ -49,12 +49,12 @@ export interface ConsoleShell {
   /** 能力清单到齐/变了，重排框架页那一段。 */
   setCapabilities(capabilities: Record<string, boolean>): void;
   /** manifest 到齐/变了，重排贡献方那一段。 */
-  setPages(pages: readonly ConsolePageManifest[]): void;
+  setPages(pages: readonly WebUiPageManifest[]): void;
   /**
-   * 灯的新读数（`/api/console/lamps` 的一拍）。只改灯，不碰导航结构——
+   * 灯的新读数（`/api/webui/lamps` 的一拍）。只改灯，不碰导航结构——
    * 这是每秒两次的调用，重排一次 DOM 就是每秒两次重排。
    */
-  setLamps(lamps: Record<string, ConsoleLamp[]>): void;
+  setLamps(lamps: Record<string, WebUiLamp[]>): void;
   dispose(): void;
 }
 
@@ -81,7 +81,7 @@ function matches(entry: NavEntry, route: Route | null): boolean {
   return entry.segments.every((s, i) => route.segments[i] === s);
 }
 
-export function createShell(deps: ShellDeps): ConsoleShell {
+export function createShell(deps: ShellDeps): WebUiShell {
   const { doc, ui, router } = deps;
 
   /** 外壳自己的账本。`dispose()` 与传进来的 signal 都收敛到这里。 */
@@ -96,14 +96,14 @@ export function createShell(deps: ShellDeps): ConsoleShell {
 
   const features: readonly FrameworkFeature[] = deps.features ?? [];
   let capabilities: Record<string, boolean> = deps.capabilities ?? {};
-  let consolePages: readonly ConsolePageManifest[] = deps.pages ?? [];
+  let webUiPages: readonly WebUiPageManifest[] = deps.pages ?? [];
   let route: Route | null = null;
   let entries: NavEntry[] = [];
   /**
    * 灯的当茬读数。`setLamps` 写它，导航重排时再照它把灯补回去——否则一次
    * `setPages` 会让所有灯退回 manifest 那一帧的旧值。
    */
-  let lamps: Record<string, ConsoleLamp[]> = {};
+  let lamps: Record<string, WebUiLamp[]> = {};
   /**
    * 每次重排换一茬监听。挂在外壳总 signal 上的话，反复 `setPages` 会在
    * 已经摘掉的节点上攒下一堆永不触发、也永不回收的监听。
@@ -278,14 +278,14 @@ export function createShell(deps: ShellDeps): ConsoleShell {
   // ---- 导航 -------------------------------------------------------------
 
   /** 某一页此刻该点哪盏灯。轮询的读数优先于 manifest 那一帧。 */
-  const lampsFor = (pageId: string): readonly ConsoleLamp[] =>
-    lamps[pageId] ?? consolePages.find((p) => p.id === pageId)?.lamps ?? [];
+  const lampsFor = (pageId: string): readonly WebUiLamp[] =>
+    lamps[pageId] ?? webUiPages.find((p) => p.id === pageId)?.lamps ?? [];
 
   const addItem = (
     parent: HTMLElement,
     opts: {
       label: string;
-      icon?: ConsoleIconName;
+      icon?: WebUiIconName;
       /** 带灯的行（贡献方的页）。给了就画灯，`null` 是"还没报"的空位。 */
       pageId?: string;
       segments: readonly string[];
@@ -382,7 +382,7 @@ export function createShell(deps: ShellDeps): ConsoleShell {
     // 只列已装配的:左栏是"能去的地方",不是全量清单。未装配的仍由各自的
     // 总览页负责露面(那里才有"为什么没装上"的位置)。供应模块(kind `llm`)不在
     // 这里逐个列出:它们的入口是框架的「模型提供商」页,模块清单是那一页里的次级菜单。
-    const listed = consolePages.filter((p) => p.availability === 'active');
+    const listed = webUiPages.filter((p) => p.availability === 'active');
     // Persona 页在前,它的 Memory 页跟在后面,再是归这一组的框架页(系统提示词),同一组。
     const personas = [
       ...listed.filter((page) => page.kind === 'persona'),
@@ -531,11 +531,11 @@ export function createShell(deps: ShellDeps): ConsoleShell {
       renderPower();
       renderNav();
     },
-    setPages(next: readonly ConsolePageManifest[]): void {
-      consolePages = next;
+    setPages(next: readonly WebUiPageManifest[]): void {
+      webUiPages = next;
       renderNav();
     },
-    setLamps(next: Record<string, ConsoleLamp[]>): void {
+    setLamps(next: Record<string, WebUiLamp[]>): void {
       lamps = next;
       for (const entry of entries) {
         if (entry.lamps && entry.pageId) paintLamps(entry.lamps, lampsFor(entry.pageId));

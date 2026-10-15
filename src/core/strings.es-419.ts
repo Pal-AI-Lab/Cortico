@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: 'Nombre visible',
-    description: 'Se usa como título de la consola y como nombre del remitente en los mensajes que envía el bot. La consola lo aplica de inmediato; un World montado lo aplica cuando ese World se reinicia.',
+    description: 'Se usa como título de la WebUI y como nombre del remitente en los mensajes que envía el bot. La WebUI lo aplica de inmediato; un World montado lo aplica cuando ese World se reinicia.',
   },
   quietGap: {
     title: 'Ventana de silencio',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Umbral del archivo de registro',
     description: 'Los registros por debajo de este nivel no se escriben en data/runs/<run>/log.jsonl.',
   },
-  logConsole: {
+  logStdout: {
     title: 'Umbral de impresión de registros',
-    description: 'Los registros por debajo de este nivel no se imprimen en la ventana de la consola.',
+    description: 'Los registros por debajo de este nivel no se imprimen en la salida estándar.',
   },
   logAreas: {
     title: 'Umbrales de archivo por área',

@@ -14,7 +14,7 @@
     'accent', 'accent-2', 'on-accent', 'danger',
   ];
 
-  /** 页面语言来自控制台链接的 `lang`:zh 与 zh-Hant 用中文,其他语言用英文,缺省用中文。 */
+  /** 页面语言来自 WebUI 链接的 `lang`:zh 与 zh-Hant 用中文,其他语言用英文,缺省用中文。 */
   const REQUESTED_LANG = new URLSearchParams(location.search).get('lang');
   const LANG = !REQUESTED_LANG || REQUESTED_LANG === 'zh' || REQUESTED_LANG === 'zh-Hant' ? 'zh' : 'en';
   const STRINGS = {

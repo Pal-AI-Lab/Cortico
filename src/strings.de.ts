@@ -95,7 +95,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: 'Prüfe, ob der zugehörige externe Dienst gestoppt ist.',
     llm: 'Anbieter-Instanzen stoppen',
     flush: 'Core-Zustand speichern',
-    web: 'Konsole schließen',
+    web: 'WebUI schließen',
     summarySkipped: 'Lokale Schritte zum Herunterfahren unvollständig',
     summaryComplete: 'Lokales Herunterfahren beendet: alle Schritte erledigt',
     summaryUnverified: (items: string[]) => `Lokales Herunterfahren beendet, aber das Ende des externen Zustands ist nicht bestätigt: ${items.join(', ')} (manuelle Bestätigung nötig)`,

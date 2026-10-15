@@ -252,7 +252,7 @@ describe('成本三格表', () => {
         models: ['*'],
         currency: 'USD',
         basis: 'marginal',
-        source: 'console',
+        source: 'webui',
         rules: [
           { meter: 'cachedInput', perMillion: 0 },
           { meter: 'uncachedInput', perMillion: 0 },
@@ -281,7 +281,7 @@ describe('成本三格表', () => {
     const server = fakeSettings([
       instance({}, {
         pricing: [{
-          models: ['*'], currency: 'USD', basis: 'marginal', source: 'console',
+          models: ['*'], currency: 'USD', basis: 'marginal', source: 'webui',
           rules: [
             { meter: 'cachedInput', perMillion: 1 },
             { meter: 'uncachedInput', perMillion: 2 },
@@ -304,7 +304,7 @@ describe('成本三格表', () => {
         models: ['*'],
         currency: 'CNY',
         basis: 'marginal',
-        source: 'console',
+        source: 'webui',
         rules: [
           { meter: 'uncachedInput', perMillion: 2 },
           { meter: 'cachedInput', perMillion: 0.5 },

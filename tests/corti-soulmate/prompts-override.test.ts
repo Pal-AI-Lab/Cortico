@@ -1,6 +1,6 @@
 /**
  * CortiSoulmate 的人格文本分两层:包内默认(bots/corti-soulmate/persona/*.md)与部署侧
- * `prompts/` 覆盖,同名文件存在即整份替换。五份都走同一条解析;控制台保存只落部署侧。
+ * `prompts/` 覆盖,同名文件存在即整份替换。五份都走同一条解析;WebUI 保存只落部署侧。
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -36,7 +36,7 @@ describe('人格文本的部署侧覆盖', () => {
       expect(core.textFile(name)).toBe(join(CORE, name));
       expect(core.textWritePath(name)).toBe(join(prompts, name));
     }
-    const docs = core.console().promptDocs ?? [];
+    const docs = core.webUi().promptDocs ?? [];
     for (const key of ['persona.prefix', 'persona.envSection', 'persona.memory']) {
       const doc = docs.find((d) => d.key === key)!;
       expect(doc.path.startsWith(CORE)).toBe(true);

@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: 'Терминал',
+  navLabel: 'Консоль',
   currentProvider: 'Текущий провайдер модели',
   noProvider: 'Провайдер не выбран',
   ctxOpenAria: 'Показать разбивку token',
   ctxPanelAria: 'Разбивка token',
-  netConnecting: 'Подключение консоли…',
-  netOnline: 'Консоль подключена',
-  netOffline: 'Консоль отключена',
-  composerLabel: 'Ввод сообщения терминала',
+  netConnecting: 'Подключение WebUI…',
+  netOnline: 'WebUI подключён',
+  netOffline: 'WebUI отключён',
+  composerLabel: 'Ввод сообщения консоли',
   composerPlaceholder: 'Введите сообщение…',
   exportDiagnostics: 'Экспорт диагностики',
   exportFailed: 'Не удалось получить пакет диагностики',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: 'Пакет содержит разговоры, промпты, события, вызовы инструментов, расход и журналы запуска. Секреты в конфигурации скрываются; всё остальное записывается как есть. Перед тем как делиться пакетом, проверьте его на личные данные.',
   composerFork: 'Вы просматриваете фоновую сессию; отправленные здесь сообщения всё равно уходят в основную сессию',
   composerNoProvider: 'Нет доступного провайдера. Настройте его на странице «Подключения к моделям».',
-  composerQueued: 'Канал терминала переподключается; сообщение поставлено в очередь',
+  composerQueued: 'Канал консоли переподключается; сообщение поставлено в очередь',
   emptyConnecting: 'Подключение к отладочному каналу…',
   ctxTitle: (total: string, max: string | null) =>
     `Контекст ${total}${max !== null ? ` / ${max}` : ''} tok · нажмите для разбивки`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: 'Отладочный канал недоступен; ленту нельзя показать.',
 
   // status.ts
-  docTitle: (name: string) => `Консоль · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: 'Отключено',
   chipMsgs: ' сообщ.',
   chipCache: 'кэш ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: 'Сначала настройте провайдера модели:',
   obProviderNone: 'Доступного провайдера модели пока нет',
   obProviderReady: 'Провайдер модели настроен',
-  obWorlds: 'Затем включите и настройте внешние окружения, с которыми работает ваш бот (Cortico Worlds). Для начала достаточно и чата в терминале.',
+  obWorlds: 'Затем включите и настройте внешние окружения, с которыми работает ваш бот (Cortico Worlds). Для начала достаточно и чата в консоли.',
   obWorldsState: (labels: readonly string[]) =>
     `Сейчас включено внешних окружений: ${labels.length} (${labels.join(', ')})`,
   obPrompts: 'И наконец, здесь редактируется системный промпт: кто бот, как он себя ведёт и как говорит.',

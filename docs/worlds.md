@@ -12,11 +12,11 @@ World 不直接访问 Memory 或调用 Persona 的工具。
 
 | 成员 | 含义 |
 |---|---|
-| `id` | 同时用于配置段 `worlds.<id>` 和控制台页 `world:<id>` |
+| `id` | 同时用于配置段 `worlds.<id>` 和 WebUI 页 `world:<id>` |
 | `envPromptVars()` | 环境提示词模板的当前占位符值。返回 `null` 时省略整段,`{}` 时使用无变量模板;前缀重建时重新调用 |
 | `tools()` | 这个 World 暴露的工具 |
 | `start(host)` / `stop()` | 启动与停止;运行中挂载时先调用 `start`,成功后加入挂载表 |
-| `console?()` | 控制台页声明(见 [console.md](console.md)) |
+| `webUi?()` | WebUI 页声明(见 [webui.md](webui.md)) |
 | `outputTap?()` | 主 session 输出流的接收器(演出、字幕);这一刻没有接收器时返回 `undefined` |
 | `onHandoffEnded?()`、`onTurnEnded?()` | 交接结束与主循环一轮结束的通知;隐藏的 World 不接收 |
 | `onEventsSettled?(events, outcome)` | 本 World 的事件写入主 session(`delivered`)或被操作者清空队列丢弃(`discarded`) |
@@ -73,9 +73,9 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 `enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`。
 `WorldContext` 向 `create` 提供:`cfg`(共享配置对象)、`timezone`、`botName`、`botDir` /
 `packageDir` / `dataDir` / `repoRoot`、`secret()` / `storeSecret()`、`persist()`(写回
-`worlds.<id>`)、`restart()`。界面语言不在其中:它是每个请求的属性,`console(language)` 与
-`configOptions(kind, language)` 每次传入(见 [console.md](console.md))。控制台里的 World 名取
-`console(language).label`,没有时取定义的 `label`,两者都按请求现读。
+`worlds.<id>`)、`restart()`。界面语言不在其中:它是每个请求的属性,`webUi(language)` 与
+`configOptions(kind, language)` 每次传入(见 [webui.md](webui.md))。WebUI 里的 World 名取
+`webUi(language).label`,没有时取定义的 `label`,两者都按请求现读。
 
 仓内定义列在 `src/worlds/index.ts`,由 `loadBuiltinWorlds(ids?)` 按 id 动态导入 `src/worlds/<id>/definition.ts`;
 不给 `ids` 时带上全部(`BUILTIN_WORLD_IDS`),有不认识的 id 时抛错。启动器带上全部仓内 World,与扩展定义
@@ -84,7 +84,7 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 自己写装配入口的下游产品(调 `loadDeployment()`、`createBot()` 的应用)传 `ids` 选要带的仓内 World:
 
 ```ts
-const builtin = await loadBuiltinWorlds(['terminal']);
+const builtin = await loadBuiltinWorlds(['console']);
 const extensions = await loadExtensions(repoRoot(), { reserved: builtin.map((w) => w.id), /* … */ });
 const definition = withWorlds(bot, [...builtin, ...extensions.worlds]);
 ```
@@ -151,12 +151,12 @@ Minecraft 的 `PwsrTables` 管理目标、路标及蓝图的 realm 视图,空间
 
 | id | 是什么 |
 |---|---|
-| `terminal` | 控制台里的对话通道,与 QQ 同层级的外部平台 |
+| `console` | WebUI 里的对话通道,与 QQ 同层级的外部平台 |
 | `qq` | 连接 OneBot v11 协议端(推荐 SnowLuma),只监听名单里的群与私聊;起草-确认门 |
 | `bilibili` | B 站直播间只读接入与本机 Overlay |
 | `minecraft` | mineflayer 客户端,观察 = 结构化文本、动作 = 异步执行器;子进程 |
 | `websearch` | 只有请求 / 响应工具,不产事件 |
-| `console-fixture` | 开发控制台与验收测试使用的 World |
+| `webui-fixture` | 开发 WebUI 与验收测试使用的 World |
 
 `vtuber`、`asr`、`pvz`、`canvas` 是扩展包(见 [extensions.md](extensions.md))。`qq`、`bilibili` 与
 `minecraft` 各有自己的 README;`src/worlds/websearch/` 最短,`src/worlds/minecraft/` 最全。
@@ -164,6 +164,6 @@ Minecraft 的 `PwsrTables` 管理目标、路标及蓝图的 realm 视图,空间
 ## 添加 World
 
 从 `WorldDefinition` 起:`defaults()` 定配置段,`create()` 返回实现 `World` 的实例;有自定义面板就加
-`console/client.ts`;有环境描述就加 `ENV_PROMPT.md`。测试用 `tests/helpers/fake-host.ts` 的
+`webui/client.ts`;有环境描述就加 `ENV_PROMPT.md`。测试用 `tests/helpers/fake-host.ts` 的
 `FakeHost` 记录推送。放进仓库的在 `src/worlds/index.ts` 的 id 表里登记 id 与定义的导出名;放进仓库还是做成扩展,判据在
 [CONTRIBUTING.md](../CONTRIBUTING.md)。

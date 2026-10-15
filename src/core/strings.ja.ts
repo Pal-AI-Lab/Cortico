@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: '表示名',
-    description: 'コンソールのタイトルと、ボットが送るメッセージの送信者名に使います。コンソールにはすぐ反映され、マウント済みの World にはその World の再起動後に反映されます。',
+    description: 'WebUI のタイトルと、ボットが送るメッセージの送信者名に使います。WebUI にはすぐ反映され、マウント済みの World にはその World の再起動後に反映されます。',
   },
   quietGap: {
     title: '静止ウィンドウ',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'ログのファイル出力しきい値',
     description: 'このレベル未満の記録は data/runs/<run>/log.jsonl に書き込みません。',
   },
-  logConsole: {
+  logStdout: {
     title: 'ログの表示しきい値',
-    description: 'このレベル未満の記録はコンソールウィンドウに表示しません。',
+    description: 'このレベル未満の記録は標準出力に出力しません。',
   },
   logAreas: {
     title: '領域ごとのファイル出力しきい値の上書き',

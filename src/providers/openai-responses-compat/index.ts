@@ -6,9 +6,9 @@ import { REASONING_REPLAYS, type ReasoningReplay } from '../transport/responses-
 import { ModelCatalog, ResponsesProvider, type ResponsesProviderOptions } from './native.ts';
 import { text } from './strings.ts';
 import { protocolConfig } from './config.ts';
-import { compatConsole } from './console/server.ts';
+import { compatWebUi } from './webui/server.ts';
 
-/** Suggested base URLs for the console field; operators may enter other URLs. */
+/** Suggested base URLs for the WebUI field; operators may enter other URLs. */
 const BASE_URLS: readonly string[] = [
   'https://api.openai.com/v1',
   'https://api.deepseek.com',
@@ -16,7 +16,7 @@ const BASE_URLS: readonly string[] = [
   'https://api.x.ai/v1',
 ];
 
-/** Reasoning-effort choices used by the console. */
+/** Reasoning-effort choices used by the WebUI. */
 const EFFORTS: readonly string[] = ['none', 'low', 'medium', 'high', 'xhigh'];
 
 export interface CompatOptions {
@@ -40,7 +40,7 @@ export interface CompatControl {
   probeClient(replay: ReasoningReplay): ResponseClient;
 }
 
-/** Empty strings and empty objects are the console's "unset"; they do not reach the wire. */
+/** Empty strings and empty objects are the WebUI's "unset"; they do not reach the wire. */
 function normalizeCompat(entry: LLMProviderEntry): LLMProviderEntry {
   const options: Record<string, unknown> = { ...entry.options };
   for (const key of ['endpointPath', 'reasoningReplay', 'syntheticReasoningText'] as const) if (options[key] === '') delete options[key];
@@ -64,7 +64,7 @@ export default {
   baseUrlSuggestions: BASE_URLS,
   normalize: normalizeCompat,
   config: protocolConfig,
-  console: compatConsole,
+  webUi: compatWebUi,
   reasoningTiers: [],
   effortSuggestions: EFFORTS,
   serviceTiers: [],

@@ -212,7 +212,7 @@ describe('主题词表', () => {
   it('groupedThemeTokens：按 group 归并且保持词表出现顺序', () => {
     const groups = registry.groupedThemeTokens();
     expect(groups.map((g: Any) => g.group)).toEqual([
-      '背景层级', '文字与边界', '交互与状态', '终端时间线', '图表系列',
+      '背景层级', '文字与边界', '交互与状态', '控制台时间线', '图表系列',
     ]);
     expect(groups.reduce((n: number, g: Any) => n + g.tokens.length, 0)).toBe(registry.THEME_TOKENS.length);
     expect(groups[0].tokens[0].key).toBe('paper');
@@ -747,7 +747,7 @@ describe('部署默认方案', () => {
     expect(ids.slice(1)).toEqual(['mint', 'navigator', 'crab-daisy']);
   });
 
-  it('终端页当前端点那块徽标只用主题变量取色,换方案跟着走', async () => {
+  it('控制台页当前端点那块徽标只用主题变量取色,换方案跟着走', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(new URL('../../src/web/public/styles.css', import.meta.url), 'utf8');
     const rule = /^\.live-connection-value \{([^}]*)\}/m.exec(css);

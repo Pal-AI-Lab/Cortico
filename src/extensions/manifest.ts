@@ -1,7 +1,7 @@
 /**
  * 解析 package.json 的 cortico 扩展声明，不访问文件系统；装载器与 check:extension 共用。
  * kind 必须为 world、provider 或 bot；api 必须等于这一类的契约版本。
- * consoleClient 和 consoleStyle 是预构建产物的包内相对路径；服务端分配 URL。
+ * webUiClient 和 webUiStyle 是预构建产物的包内相对路径；服务端分配 URL。
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
  */
 
@@ -14,13 +14,13 @@ export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', '
 /**
  * 三类扩展各自的契约版本。一类的接口不兼容变更只递增这一类:
  * world 看 `WorldDefinition`,provider 看 `ProviderModule`,bot 看 `BotDefinition`
- * (连同 `BotParts`、`Persona`、`LoadedConfig`);`ConsolePanelContext` 与其余共用接口
+ * (连同 `BotParts`、`Persona`、`LoadedConfig`);`WebUiPanelContext` 与其余共用接口
  * 变更时三类一起加一。同一次发布里的多处变更合计加一。
  */
 export const EXTENSION_API_VERSIONS: Readonly<Record<ExtensionKind, number>> = {
-  world: 5,
-  provider: 5,
-  bot: 6,
+  world: 6,
+  provider: 6,
+  bot: 7,
 };
 
 /** npm 上按类发现用的关键字。 */
@@ -37,16 +37,16 @@ export const FRAMEWORK_SPECIFIER = 'cortico';
 export const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png', '.webp': 'image/webp', '.svg': 'image/svg+xml' };
 
 export interface ExtensionManifest {
-  /** 控制台卡片与详情的标题;缺席时用包名。读它不需要导入包代码。 */
+  /** WebUI 卡片与详情的标题;缺席时用包名。读它不需要导入包代码。 */
   displayName?: string;
-  /** 包内相对路径,`.png` / `.webp` / `.svg`;控制台卡片的头像。bot 包的 png 图标还是新建部署的初始头像。 */
+  /** 包内相对路径,`.png` / `.webp` / `.svg`;WebUI 卡片的头像。bot 包的 png 图标还是新建部署的初始头像。 */
   icon?: string;
   kind: ExtensionKind;
   api: number;
   /** 包内相对路径,`.js` / `.mjs`。 */
-  consoleClient?: string;
-  /** 包内相对路径,`.css`。要有 `consoleClient` 才有意义。 */
-  consoleStyle?: string;
+  webUiClient?: string;
+  /** 包内相对路径,`.css`。要有 `webUiClient` 才有意义。 */
+  webUiStyle?: string;
 }
 
 /** package.json 里我们会看的字段。 */
@@ -120,7 +120,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
     reasons.push(t.apiTooNew(kind as string, api, expected));
   }
 
-  const client = m.consoleClient;
+  const client = m.webUiClient;
   if (client !== undefined) {
     if (!isSafeRelativeFile(client)) {
       reasons.push(t.clientPath(JSON.stringify(client)));
@@ -128,7 +128,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
       reasons.push(t.clientNotJs);
     }
   }
-  const style = m.consoleStyle;
+  const style = m.webUiStyle;
   if (style !== undefined) {
     if (client === undefined) {
       reasons.push(t.styleWithoutClient);
@@ -155,8 +155,8 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
       ...(icon ? { icon } : {}),
       kind: kind as ExtensionKind,
       api: api as number,
-      ...(typeof client === 'string' ? { consoleClient: client } : {}),
-      ...(typeof style === 'string' ? { consoleStyle: style } : {}),
+      ...(typeof client === 'string' ? { webUiClient: client } : {}),
+      ...(typeof style === 'string' ? { webUiStyle: style } : {}),
     },
   };
 }
@@ -164,10 +164,10 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
 // 浏览器端产物:服务端分配 URL
 
 /**
- * pageId 是控制台产物键，格式为 world:<id>、llm:<id> 或 persona:<id>。
+ * pageId 是 WebUI 产物键，格式为 world:<id>、llm:<id> 或 persona:<id>。
  * 版本写入 URL，使新版本使用新的 ESM 模块地址。服务端仅提供所列绝对文件路径。
  */
-export interface ExtensionConsoleAsset {
+export interface ExtensionWebUiAsset {
   pageId: string;
   packageName: string;
   version: string;

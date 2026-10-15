@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: '顯示名稱',
-    description: '控制台標題與 bot 發出的訊息用這個名字。控制台立刻跟上;已經掛載的 World 在自己重新啟動後才跟上。',
+    description: 'WebUI 標題與 bot 發出的訊息用這個名字。WebUI 立刻跟上;已經掛載的 World 在自己重新啟動後才跟上。',
   },
   quietGap: {
     title: '安靜視窗',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: '日誌寫入磁碟門檻',
     description: '低於此層級的記錄不寫入 data/runs/<run>/log.jsonl。',
   },
-  logConsole: {
+  logStdout: {
     title: '日誌列印門檻',
-    description: '低於這一級的記錄不印到控制台視窗。',
+    description: '低於這一級的記錄不印到標準輸出。',
   },
   logAreas: {
     title: '依區域覆蓋寫入磁碟門檻',

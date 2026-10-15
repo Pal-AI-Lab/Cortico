@@ -9,7 +9,7 @@ import { serverText as ptBR } from './strings.pt-BR.ts';
 import { serverText as it } from './strings.it.ts';
 import { serverText as ru } from './strings.ru.ts';
 
-/** 服务端回给控制台的文案:运行控制回执、关机账、接口报错与本机路径选择器,按请求的界面语言。 */
+/** 服务端回给 WebUI 的文案:运行控制回执、关机账、接口报错与本机路径选择器,按请求的界面语言。 */
 const zh = {
   paused: '已暂停:事件照常落库排队,不投递唤醒',
   resumed: '已继续:积压事件一次性投递',
@@ -70,7 +70,7 @@ const zh = {
   fileSizeMismatch: 'provider 文件大小与声明不匹配',
   fileTruncated: 'provider 文件在校验期间被截断',
   fileHashMismatch: 'provider 文件 hash 与声明不匹配',
-  // console-pages.ts
+  // webui-pages.ts
   noPage: (pageId: string) => `没有这个 provider: ${pageId}`,
   noPanel: (pageId: string, panelId: string) => `provider ${pageId} 没有声明面板: ${panelId}`,
   postOnly: (panelId: string, method: string) => `面板 ${panelId} 的方法 ${method} 只允许 POST`,

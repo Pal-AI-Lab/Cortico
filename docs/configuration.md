@@ -13,7 +13,7 @@
 
 后三层的 JSON 按 BOM 解码:UTF-8、带 BOM 的 UTF-8 与 UTF-16 LE 都读得出来。
 
-运行时各模块共享合并后的配置对象。控制台热改先修改对象,再写回部署 `config.json`。
+运行时各模块共享合并后的配置对象。WebUI 热改先修改对象,再写回部署 `config.json`。
 写回时先读取原文件并生成临时文件,再将原文件改名为备份、临时文件改名为配置文件;
 替换失败则恢复备份。原文件解析失败时拒绝写回。
 
@@ -21,22 +21,22 @@
 
 | 键 | 默认 | 含义 |
 |---|---|---|
-| `displayName` | `Cortico Bot` | 控制台标题与终端消息的 bot 名称 |
+| `displayName` | `Cortico Bot` | WebUI 标题与控制台消息的 bot 名称 |
 | `timezone` | 本机时区 | 时间戳与时刻表用的时区(IANA 名,如 `Asia/Shanghai`) |
 | `providers` | 空表 | 共享端点配置,从部署根 `providers/` 读取(见 [providers.md](providers.md)) |
 | `activeProvider` | 空字符串 | 当前端点 |
-| `web.port` | `7777` | 控制台端口;三个参考 bot 各自改成 7777 / 7788 / 7789 |
-| `web.host` | `127.0.0.1` | 控制台监听地址;`0.0.0.0` 或 `::` 监听所有网卡。`--host=` 覆盖本次运行 |
+| `web.port` | `7777` | WebUI 端口;三个参考 bot 各自改成 7777 / 7788 / 7789 |
+| `web.host` | `127.0.0.1` | WebUI 监听地址;`0.0.0.0` 或 `::` 监听所有网卡。`--host=` 覆盖本次运行 |
 | `web.allowedHosts` | `[]` | 回环名与监听地址之外还接受的 Host 名(域名、反向代理对外的名字),可带端口;作 Origin 时同样放行 |
-| `web.password` | 空 | 控制台访问密码;空时不要求登录。密钥 `CORTICO_WEB_PASSWORD` 非空时优先。不进控制台的配置表单(见 [console.md](console.md)) |
-| `web.theme` | `mint` | 控制台默认配色方案 id(`mint` / `navigator` / `crab-daisy`);外观页选过一次之后以 `theme.json` 为准 |
+| `web.password` | 空 | WebUI 访问密码;空时不要求登录。密钥 `CORTICO_WEB_PASSWORD` 非空时优先。不进 WebUI 的配置表单(见 [webui.md](webui.md)) |
+| `web.theme` | `mint` | WebUI 默认配色方案 id(`mint` / `navigator` / `crab-daisy`);外观页选过一次之后以 `theme.json` 为准 |
 | `paths.memory`、`paths.data` | `memory`、`data` | Memory 与运行数据目录,相对部署目录 |
 | `batching` | `quietGapMs 2500`、`minBatchAgeMs 0`、`maxBatchAgeMs 15000`、`maxBatchSize 100` | 事件合批投递 |
 | `context` | `keepPastThinking true` | 发给模型前的处理;阶段预算与首轮对话开关归 Persona 的段 |
-| `logging` | `file debug`、`console info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
+| `logging` | `file debug`、`stdout info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
 | `usage.rates.<币种>` | CNY、EUR、JPY、KRW、TWD、BRL、RUB 各取 2026-10-10 的中间价 | 1 USD 合多少该币种;用量报告在 USD 与该币种之间换算都用它,0 表示该币种不参与换算。只认这七种,热改 |
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
-| `language` | 系统区域 | 控制台默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [console.md](console.md)) |
+| `language` | 系统区域 | WebUI 默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [webui.md](webui.md)) |
 
 `language` 与环境变量 `CORTICO_LANGUAGE` 须与 `LANGUAGES` 中的代码完全一致(区分大小写,如 `pt-BR`、`zh-Hant`),
 其他值当作未设置:`language` 落到 `CORTICO_LANGUAGE`,再落到系统区域。
@@ -47,7 +47,7 @@ Persona 自己的段(如 CortiV 的 `context.maxTokens`、`context.firstTurn`、
 ## 声明配置项
 
 每个可调项在所属模块的 `ConfigGroup` 中声明为 JSON Schema 属性,键使用点分路径。
-控制台按 schema 渲染表单。owner 是 `core`、`persona`、`world:<id>` 或 `provider:<kind>`。
+WebUI 按 schema 渲染表单。owner 是 `core`、`persona`、`world:<id>` 或 `provider:<kind>`。
 支持的类型:integer、number、boolean、string(可 enum)、二元数组;其余降级为只读。扩展键:
 
 | 键 | 作用 |

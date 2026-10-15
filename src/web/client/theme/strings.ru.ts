@@ -9,7 +9,7 @@ export const S: Partial<typeof en> = {
   groupPaper: 'Слои фона',
   groupInk: 'Текст и границы',
   groupState: 'Взаимодействие и состояние',
-  groupTimeline: 'Лента терминала',
+  groupTimeline: 'Лента консоли',
   groupChart: 'Серии диаграмм',
   token: {
     paper: 'Фон страницы',

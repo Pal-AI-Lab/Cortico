@@ -2,7 +2,7 @@
   "name": "cortico-bot-example",
   "version": "0.1.0",
   "type": "module",
-  "description": "Cortico bot template: one Persona, one session, terminal only, a MEMORY.md as Memory",
+  "description": "Cortico bot template: one Persona, one session, console only, a MEMORY.md as Memory",
   "license": "MIT",
   "keywords": [
     "cortico-bot",
@@ -15,7 +15,7 @@
   "main": "./index.ts",
   "cortico": {
     "kind": "bot",
-    "api": 6
+    "api": 7
   },
   "files": [
     "index.ts",

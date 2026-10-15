@@ -14,12 +14,12 @@
   // 覆盖根配置排除的浏览器文件;未列入的文件仅在被导入时参与检查。
   "include": [
     "src/web/client/**/*.ts",
-    "src/providers/*/console/client.ts",
-    "src/providers/*/console/*-panel.ts",
+    "src/providers/*/webui/client.ts",
+    "src/providers/*/webui/*-panel.ts",
     "src/web/client/**/*.tsx",
     "src/web/shared/**/*.ts",
-    "src/worlds/*/console/**/*.ts",
-    "bots/*/console/**/*.ts",
+    "src/worlds/*/webui/**/*.ts",
+    "bots/*/webui/**/*.ts",
     // jsdom 测试使用 DOM 类型。
     "tests/web/feature-prompts.test.ts",
     "tests/web/client-main.test.ts",

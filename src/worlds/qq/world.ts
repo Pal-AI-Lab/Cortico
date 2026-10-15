@@ -11,7 +11,7 @@
 import { createHash } from 'node:crypto';
 import type {
   EventEnvelope,
-  WorldConsoleDecl,
+  WorldWebUiDecl,
   World,
   WorldHost,
   Logger,
@@ -245,7 +245,7 @@ export class QQWorld implements World {
   }
 
   /**
-   * 连接与身份快照(web「QQ 接入」控制台的连接状态卡数据源)。
+   * 连接与身份快照(web「QQ 接入」WebUI 的连接状态卡数据源)。
    * 断线期间 connected=false,但 selfId/群名沿用上次身份;私聊名字随消息填充。
    */
   getConnection(): {
@@ -354,10 +354,10 @@ export class QQWorld implements World {
   }
 
   /**
-   * 控制台里露出什么:连接状态徽标 + 本 World 的三个专用面板 + 视觉旋钮。
-   * 控制台不认识 'qq' 这个 id,它只照这份声明渲染。
+   * WebUI 里露出什么:连接状态徽标 + 本 World 的三个专用面板 + 视觉旋钮。
+   * WebUI 不认识 'qq' 这个 id,它只照这份声明渲染。
    */
-  console(language: Language = 'zh'): WorldConsoleDecl {
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
     const t = text(language);
     const conn = this.getConnection();
     return {
@@ -394,8 +394,8 @@ export class QQWorld implements World {
         },
         { label: t.watch, value: t.watchCounts(conn.groups.length, conn.privates.length) },
       ],
-      // 局部 id + 真标题(控制台把 title 画成面板切换页签);渲染在
-      // src/worlds/qq/console/ 的自有浏览器扩展里,中央前端不认识这三个名字。
+      // 局部 id + 真标题(WebUI 把 title 画成面板切换页签);渲染在
+      // src/worlds/qq/webui/ 的自有浏览器扩展里,中央前端不认识这三个名字。
       panels: [
         { id: 'gate', title: t.gatePanelTitle, description: t.gatePanelDescription },
         { id: 'roster', title: t.rosterPanelTitle, description: t.rosterPanelDescription },
@@ -442,7 +442,7 @@ export class QQWorld implements World {
   }
 
   /**
-   * 面板调用按 (panel, method, args) 透传；panel 为 console() 声明中的局部 id。
+   * 面板调用按 (panel, method, args) 透传；panel 为 webUi() 声明中的局部 id。
    */
   private async invokePanel(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {
     const t = text(language);

@@ -1,4 +1,4 @@
-/** 装配 Core、Persona、World 与控制台；具体 bot 的配置和行为由 BotDefinition 提供。 */
+/** 装配 Core、Persona、World 与 WebUI；具体 bot 的配置和行为由 BotDefinition 提供。 */
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
@@ -32,8 +32,8 @@ import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource,
 import { aggregateUsage } from './core/cost.ts';
 import { DeadlineError, nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
-import { ProviderHub } from './providers/console/hub.ts';
-import { ProviderSettings } from './providers/console/settings.ts';
+import { ProviderHub } from './providers/webui/hub.ts';
+import { ProviderSettings } from './providers/webui/settings.ts';
 import { providerModules } from './providers/registry.ts';
 import { repoRoot } from './paths.ts';
 import { isConfigGroup, readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
@@ -41,7 +41,7 @@ import type { ConfigValues } from './core/config-schema.ts';
 import {
   PromptRevisionConflict,
   WebApp,
-  type ConsoleWorldInfo,
+  type WebUiWorldInfo,
   type ExtensionInfo,
   type WorldInfo,
   type PromptDocument,
@@ -50,18 +50,18 @@ import {
   type ToolOwner,
   type WebAppPromptDeps,
 } from './web/server.ts';
-import type { ConsolePageSource } from './web/console-pages.ts';
+import type { WebUiPageSource } from './web/webui-pages.ts';
 import {
   pageIdFor,
-  type ConsolePageContribution,
-} from './web/shared/console-protocol.ts';
+  type WebUiPageContribution,
+} from './web/shared/webui-protocol.ts';
 
-/** 控制台访问密码的密钥名;进程环境或部署 .env 里非空时优先于 web.password。 */
+/** WebUI 访问密码的密钥名;进程环境或部署 .env 里非空时优先于 web.password。 */
 export const WEB_PASSWORD_SECRET = 'CORTICO_WEB_PASSWORD';
 
 /** 启动器使用的 bot 包装配契约。 */
 export interface BotDefinition<C extends CoreConfig = CoreConfig> {
-  /** 控制台页 id `persona:<id>` 与产物键取它;仓内包的 id 与目录同名。 */
+  /** WebUI 页 id `persona:<id>` 与产物键取它;仓内包的 id 与目录同名。 */
   id: string;
   /** Memory 系统的名字,作 Memory 页的标题;缺省回落到 persona.memory 的类名,再缺省是 Memory。 */
   memoryName?: string;
@@ -78,7 +78,7 @@ export interface BotDefinition<C extends CoreConfig = CoreConfig> {
 export interface BotStartContext<C extends CoreConfig> {
   core: Core<C>;
   loaded: LoadedConfig<C>;
-  /** 控制台实际监听的端口;不起控制台时为 null */
+  /** WebUI 实际监听的端口;不起 WebUI 时为 null */
   port: number | null;
 }
 
@@ -87,14 +87,14 @@ export interface BotParts<C extends CoreConfig = CoreConfig> {
   /** 预建实例替换同 id 的定义实例，初始挂载；重启复用该实例，停用后不能通过 activate 重新挂载。 */
   worlds?: World[];
   llm?: ResponseClient;
-  console?: ConsoleContribution;
+  webUi?: WebUiContribution;
   onStart?(ctx: BotStartContext<C>): void | Promise<void>;
   onStop?(): void | Promise<void>;
 }
 
-/** bot 提供的控制台声明，补充 Core 与 World 的通用页面。 */
-export interface ConsoleContribution {
-  /** false = 完全不起控制台(无头运行) */
+/** bot 提供的 WebUI 声明，补充 Core 与 World 的通用页面。 */
+export interface WebUiContribution {
+  /** false = 完全不起 WebUI(无头运行) */
   enabled?: boolean;
   /** 追加的可调配置组(Persona那组;core 与各 World 的由框架收拢) */
   configGroups?: ConfigGroup[];
@@ -109,12 +109,12 @@ export interface ConsoleContribution {
    * 每个 session 的声明方负责在此补充其工具。
    */
   extraToolSchemas?(): ToolSchema[];
-  /** 需要部署配置或跨模块操作的控制台页；Persona.console() 声明 Persona 自身的操作。 */
-  consolePages?(ctx: ConsolePageBuildContext): ConsolePageContribution[];
+  /** 需要部署配置或跨模块操作的 WebUI 页；Persona.webUi() 声明 Persona 自身的操作。 */
+  webUiPages?(ctx: WebUiPageBuildContext): WebUiPageContribution[];
 }
 
-/** 装配层向 bot 控制台声明函数提供的共享数据。 */
-export interface ConsolePageBuildContext {
+/** 装配层向 bot WebUI 声明函数提供的共享数据。 */
+export interface WebUiPageBuildContext {
   /** 与 /api/storage 共用同一批对象的存储清单，文案使用请求语言。 */
   storage: readonly StoragePart[];
   /** 发起这次请求的浏览器的界面语言。 */
@@ -145,7 +145,7 @@ export interface Bot<C extends CoreConfig = CoreConfig> {
   /** World 槽位表:挂载表、未激活槽位与缺失声明。 */
   assembly: WorldAssembly;
   webApp: WebApp | null;
-  /** 启动全部;返回控制台端口(未起控制台=null) */
+  /** 启动全部;返回 WebUI 端口(未起 WebUI=null) */
   start(): Promise<{ port: number | null }>;
   stop(): Promise<void>;
   /** 分步关机并返回结果。步骤失败或超时后继续，不调用 process.exit。 */
@@ -298,13 +298,13 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
 }
 
 /**
- * 环境提示词按 World、bot 包、部署的顺序覆盖，控制台只写部署覆盖文件。
+ * 环境提示词按 World、bot 包、部署的顺序覆盖，WebUI 只写部署覆盖文件。
  * Persona 声明 deploymentPath 时写该路径，否则读写 path；扩展包中的模板只读，避免修改 pnpm store 的硬链接。
  */
 function derivePrompts<C extends CoreConfig>(
   parts: BotParts<C>,
   assembly: WorldAssembly,
-  contribution: ConsoleContribution,
+  contribution: WebUiContribution,
   timezone: string,
   dirs: EnvPromptDirs,
   packageReadOnly: boolean,
@@ -315,10 +315,10 @@ function derivePrompts<C extends CoreConfig>(
     const seen = new Set<string>();
     return [
       ...(contribution.promptDocs ?? []).map((d) => ({ ...d, scope: 'persona' as const })),
-      ...(parts.persona.console?.(language)?.promptDocs ?? []).map((d) => ({ ...d, scope: 'persona' as const })),
+      ...(parts.persona.webUi?.(language)?.promptDocs ?? []).map((d) => ({ ...d, scope: 'persona' as const })),
 
       ...assembly.instances()
-        .flatMap((m) => (m.console?.(language)?.promptDocs ?? []).map((d) => ({ ...d, scope: 'world' as const, worldId: m.id }))),
+        .flatMap((m) => (m.webUi?.(language)?.promptDocs ?? []).map((d) => ({ ...d, scope: 'world' as const, worldId: m.id }))),
     ].filter((d) => (seen.has(d.key) ? false : (seen.add(d.key), true)));
   };
   type Doc = ReturnType<typeof docsOf>[number];
@@ -436,10 +436,10 @@ function derivePrompts<C extends CoreConfig>(
 
 type WorldVisibilityFacts = Pick<Core<CoreConfig>, 'worldVisibility'>;
 
-/** 控制台状态清单不渲染环境模板；需要环境正文的调用方使用 deriveWorldInfo。 */
+/** WebUI 状态清单不渲染环境模板；需要环境正文的调用方使用 deriveWorldInfo。 */
 export type WorldFacts =
   | Omit<WorldInfo, 'envPrompt'>
-  | Extract<ConsoleWorldInfo, { status: 'inactive' | 'missing' }>;
+  | Extract<WebUiWorldInfo, { status: 'inactive' | 'missing' }>;
 
 /** 挂载为 active，有实例但未挂载为 inactive，无法建立可用实例为 missing。 */
 export function deriveWorldFacts(
@@ -453,7 +453,7 @@ export function deriveWorldFacts(
 
     let decl;
     try {
-      decl = m.console?.(language);
+      decl = m.webUi?.(language);
     } catch {
       decl = undefined;
     }
@@ -490,7 +490,7 @@ async function deriveWorldInfo(
   assembly: WorldAssembly,
   dirs: EnvPromptDirs,
   language: Language,
-): Promise<ConsoleWorldInfo[]> {
+): Promise<WebUiWorldInfo[]> {
   return Promise.all(deriveWorldFacts(core, assembly, language).map(async (facts) => {
     if (facts.status !== 'active') return facts;
     return { ...facts, envPrompt: (await renderWorldEnvPrompt(assembly.slot(facts.id).instance, dirs)).text };
@@ -508,7 +508,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
   const pkg = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as ExtensionPackageJson;
   const version = pkg.version ?? null;
   const common = {
-    spec: 'builtin', version, installedVersion: version, consoleClient: false, builtin: true,
+    spec: 'builtin', version, installedVersion: version, webUiClient: false, builtin: true,
     author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg), location: repoRoot(),
   } as const;
   const external = new Set(set.worlds.map((world) => world.id));
@@ -562,9 +562,9 @@ export function extensionRuntimeState(
 
 function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedStoragePart[] {
   return assembly.slots.flatMap((slot) =>
-    (slot.instance.console?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
+    (slot.instance.webUi?.(language)?.storage ?? []).map((part): OwnedStoragePart => {
       const current = (): StoragePart => {
-        const found = slot.instance.console?.(language)?.storage?.find((p) => p.key === part.key);
+        const found = slot.instance.webUi?.(language)?.storage?.find((p) => p.key === part.key);
         if (!found) throw new Error(botText(language).storagePartGone(slot.id, part.key));
         return found;
       };
@@ -574,7 +574,7 @@ function deriveSlotStorage(assembly: WorldAssembly, language: Language): OwnedSt
 }
 
 // 面板 id 在各页内唯一，转发时保持声明方提供的局部 id。
-// 控制台声明异常由 ConsolePageRegistry 按来源隔离。
+// WebUI 声明异常由 WebUiPageRegistry 按来源隔离。
 function normalizePanelDecls(
   panels: readonly WorldPanelDecl[],
 ): Array<{ id: string; title: string; description?: string; getMethods?: readonly string[] }> {
@@ -592,10 +592,10 @@ export function ioPageContribution(
   info: WorldFacts | undefined,
   mod: World | undefined,
   language: Language = 'zh',
-): ConsolePageContribution {
-  const decl = mod?.console?.(language);
+): WebUiPageContribution {
+  const decl = mod?.webUi?.(language);
   const declaredPanels = decl?.panels ?? [];
-  const out: ConsolePageContribution = {
+  const out: WebUiPageContribution = {
     id: pageIdFor('world', worldId),
     kind: 'world',
     label: decl?.label ?? label,
@@ -633,11 +633,11 @@ export function personaPageContribution(
   label: string,
   core: Persona,
   language: Language = 'zh',
-): ConsolePageContribution | null {
-  const decl = core.console?.(language);
+): WebUiPageContribution | null {
+  const decl = core.webUi?.(language);
   if (!decl) return null;
   const declaredPanels = decl.panels ?? [];
-  const out: ConsolePageContribution = {
+  const out: WebUiPageContribution = {
     id: pageIdFor('persona', botId),
     kind: 'persona',
     label,
@@ -662,14 +662,14 @@ export function memoryPageContribution(
   label: string,
   persona: Persona,
   language: Language = 'zh',
-): ConsolePageContribution | null {
-  const decl = persona.console?.(language)?.memory;
+): WebUiPageContribution | null {
+  const decl = persona.webUi?.(language)?.memory;
   if (!decl) return null;
   const panels = decl.panels ?? [];
   const promptDocs = decl.promptDocs ?? [];
   const storage = decl.storage ?? [];
   if (!panels.length && !promptDocs.length && !storage.length) return null;
-  const out: ConsolePageContribution = {
+  const out: WebUiPageContribution = {
     id: pageIdFor('memory', botId),
     kind: 'memory',
     label,
@@ -678,7 +678,7 @@ export function memoryPageContribution(
   if (panels.length) out.panels = normalizePanelDecls(panels);
   if (promptDocs.length) out.promptDocs = promptDocs;
   if (storage.length) out.storage = storage;
-  const invoke = persona.console?.(language)?.invoke;
+  const invoke = persona.webUi?.(language)?.invoke;
   if (invoke) out.invoke = (panel, method, args) => invoke(panel, method, args);
   return out;
 }
@@ -699,15 +699,15 @@ function personaClassName(persona: Persona): string | null {
 export function mergePersonaContributions(
   id: string,
   label: string,
-  core: ConsolePageContribution | null,
-  extras: readonly ConsolePageContribution[],
+  core: WebUiPageContribution | null,
+  extras: readonly WebUiPageContribution[],
   language: Language = 'zh',
-): ConsolePageContribution | null {
-  const parts = [core, ...extras].filter((c): c is ConsolePageContribution => !!c);
+): WebUiPageContribution | null {
+  const parts = [core, ...extras].filter((c): c is WebUiPageContribution => !!c);
   if (parts.length === 0) return null;
   if (parts.length === 1 && parts[0]) return parts[0];
 
-  const out: ConsolePageContribution = {
+  const out: WebUiPageContribution = {
     id,
     kind: 'persona',
     label: parts.find((p) => p.label)?.label ?? label,
@@ -727,7 +727,7 @@ export function mergePersonaContributions(
   const panels = parts.flatMap((p) => p.panels ?? []);
   if (panels.length) out.panels = panels;
 
-  const owner = new Map<string, ConsolePageContribution>();
+  const owner = new Map<string, WebUiPageContribution>();
   for (const p of parts) {
     for (const panel of p.panels ?? []) {
       if (!owner.has(panel.id)) owner.set(panel.id, p);
@@ -750,7 +750,7 @@ export function mergePersonaContributions(
   return out;
 }
 
-export function deriveConsolePageSources(
+export function deriveWebUiPageSources(
   core: WorldVisibilityFacts,
 
   parts: { assembly: WorldAssembly; persona?: Persona },
@@ -760,8 +760,8 @@ export function deriveConsolePageSources(
    */
   bot?: { id: string; label: string; memoryName?: string; configGroups?: readonly ConfigGroup[] },
 
-  extra?: (language: Language) => ConsolePageContribution[],
-): () => ConsolePageSource[] {
+  extra?: (language: Language) => WebUiPageContribution[],
+): () => WebUiPageSource[] {
   const { assembly } = parts;
   return () => {
     // 每次枚举按语言缓存状态，供同一批 contribute() 调用共享。
@@ -776,7 +776,7 @@ export function deriveConsolePageSources(
     };
     const instances = new Map<string, World>(assembly.slots.map((s) => [s.id, s.instance]));
     const ids = [...assembly.slots.map((s) => s.id), ...assembly.missing.map((m) => m.id)];
-    const sources: ConsolePageSource[] = ids.map((id) => ({
+    const sources: WebUiPageSource[] = ids.map((id) => ({
       id: pageIdFor('world', id),
       contribute: (language) => {
         const info = infos(language).get(id);
@@ -787,8 +787,8 @@ export function deriveConsolePageSources(
     const persona = parts.persona;
     const selfId = bot ? pageIdFor('persona', bot.id) : null;
 
-    const extrasByLanguage = new Map<Language, ConsolePageContribution[]>();
-    const extrasOf = (language: Language): ConsolePageContribution[] => {
+    const extrasByLanguage = new Map<Language, WebUiPageContribution[]>();
+    const extrasOf = (language: Language): WebUiPageContribution[] => {
       let list = extrasByLanguage.get(language);
       if (!list) {
         list = extra?.(language) ?? [];
@@ -803,7 +803,7 @@ export function deriveConsolePageSources(
       // Persona 页写 Persona 的名字:一台 bot 的展示名是部署给的,类名才是这一层的身份。
       const personaLabel = (persona && personaClassName(persona)) || bot.label;
       const claimedGroups = [...(bot.configGroups ?? [])];
-      const botConfig: ConsolePageContribution[] = claimedGroups.length
+      const botConfig: WebUiPageContribution[] = claimedGroups.length
         ? [{ id: selfId, kind: 'persona', label: personaLabel, config: claimedGroups }]
         : [];
       sources.push({
@@ -841,7 +841,7 @@ export function createBot<C extends CoreConfig>(
   opts: { extensions?: ExtensionSet } = {},
 ): Bot<C> {
   const cfg = loaded.config;
-  // 环境模板允许包和部署覆盖，控制台仅写部署层。
+  // 环境模板允许包和部署覆盖，WebUI 仅写部署层。
   const promptDirs: EnvPromptDirs = {
     packageDir: loaded.packageDir ?? loaded.rootDir,
     deploymentDir: loaded.rootDir,
@@ -852,7 +852,7 @@ export function createBot<C extends CoreConfig>(
   const assembly = new WorldAssembly(loaded, definition.worlds ?? [], definition.declares ?? []);
   const parts = definition.build(loaded, assembly.mounted);
   if (parts.worlds?.length) assembly.addPrebuilt(parts.worlds);
-  const contribution = parts.console ?? {};
+  const contribution = parts.webUi ?? {};
 
   const core = new Core<C>(loaded, {
     persona: parts.persona,
@@ -886,7 +886,7 @@ export function createBot<C extends CoreConfig>(
   const configGroups = (language: Language): ConfigGroup[] => [
     coreConfigGroup(language),
     ...wellFormedGroups('persona', contribution.configGroups ?? []),
-    ...assembly.instances().flatMap((m) => wellFormedGroups(`worlds.${m.id}`, m.console?.(language)?.config ?? [])),
+    ...assembly.instances().flatMap((m) => wellFormedGroups(`worlds.${m.id}`, m.webUi?.(language)?.config ?? [])),
   ];
 
   // 共享端点配置位于部署根的 providers/；activeProvider 属于当前部署。
@@ -897,14 +897,14 @@ export function createBot<C extends CoreConfig>(
 
   let webApp: WebApp | null = null;
 
-  /** 控制台与启动器共用一次关机操作，重复调用返回同一 Promise。 */
+  /** WebUI 与启动器共用一次关机操作，重复调用返回同一 Promise。 */
   let shutdownOnce: Promise<ShutdownReport> | null = null;
   let coreStopOnce: Promise<void> | null = null;
   const stopCore = (): Promise<void> => {
     coreStopOnce ??= (async () => { await parts.onStop?.(); })();
     return coreStopOnce;
   };
-  // start() 在启动控制台、Provider 和 World 之前获取单实例锁。
+  // start() 在启动 WebUI、Provider 和 World 之前获取单实例锁。
   let instanceLock: InstanceLock | null = null;
 
   const beginShutdown = (
@@ -925,7 +925,7 @@ export function createBot<C extends CoreConfig>(
       instanceLock?.release();
       instanceLock = null;
       if (opts.exit) {
-      // 先发送关机结果，再关闭控制台并退出进程。
+      // 先发送关机结果，再关闭 WebUI 并退出进程。
 
         setTimeout(() => {
           void Promise.resolve(webApp?.stop()).finally(() => {
@@ -942,11 +942,11 @@ export function createBot<C extends CoreConfig>(
   if (contribution.enabled !== false) {
     const startedAt = new Date().toISOString();
     /**
-     * 可清除存储清单在装配期生成一次，/api/storage 与 bot 的 consolePages 共用这些对象;归属按来源盖章。
-     * 贡献方须在 console().storage 中声明全部项目；stat 和 clear 可延迟执行，子进程代理也须在装配期提供完整声明。
+     * 可清除存储清单在装配期生成一次，/api/storage 与 bot 的 webUiPages 共用这些对象;归属按来源盖章。
+     * 贡献方须在 webUi().storage 中声明全部项目；stat 和 clear 可延迟执行，子进程代理也须在装配期提供完整声明。
      */
-    const consoleStorage = (language: Language): OwnedStoragePart[] => {
-      const decl = parts.persona.console?.(language);
+    const webUiStorage = (language: Language): OwnedStoragePart[] => {
+      const decl = parts.persona.webUi?.(language);
       return [
         ...deriveStorage(core, loaded.dataDir, language).map((p): OwnedStoragePart => ({ ...p, owner: 'core' })),
         ...(decl?.storage ?? []).map((p): OwnedStoragePart => ({ ...p, owner: 'persona' })),
@@ -966,7 +966,7 @@ export function createBot<C extends CoreConfig>(
       password: loaded.secret(WEB_PASSWORD_SECRET) || (cfg.web.password ?? ''),
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
-      storage: consoleStorage,
+      storage: webUiStorage,
       usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates: usageRates(core.config) }), status: () => core.usageLog.status() },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
@@ -991,7 +991,7 @@ export function createBot<C extends CoreConfig>(
       },
       worlds: async (language) => deriveWorldInfo(core, assembly, promptDirs, language),
 
-      consolePageSources: () => [...deriveConsolePageSources(
+      webUiPageSources: () => [...deriveWebUiPageSources(
         core,
         { assembly, persona: parts.persona },
         {
@@ -1001,8 +1001,8 @@ export function createBot<C extends CoreConfig>(
 
           ...(contribution.configGroups?.length ? { configGroups: contribution.configGroups } : {}),
         },
-        contribution.consolePages
-          ? (language) => contribution.consolePages!({ storage: consoleStorage(language), language })
+        contribution.webUiPages
+          ? (language) => contribution.webUiPages!({ storage: webUiStorage(language), language })
           : undefined,
       )(),...providerSettings.sources()],
       providers: providerHub,
@@ -1027,11 +1027,11 @@ export function createBot<C extends CoreConfig>(
         resume: () => core.bus.setPaused(false),
         isPaused: () => core.bus.isPaused(),
 
-        shutdown: (language) => beginShutdown('控制台关机键', { closeWeb: false, exit: true, language }),
+        shutdown: (language) => beginShutdown('WebUI 关机键', { closeWeb: false, exit: true, language }),
     // 重启请求先于关机写入，供监督进程在子进程退出后读取。
         restart: (language) => {
           requestRestart(loaded.dataDir);
-          return beginShutdown('控制台重启键', { closeWeb: false, exit: true, language });
+          return beginShutdown('WebUI 重启键', { closeWeb: false, exit: true, language });
         },
         supervised: isSupervised(),
         startsPaused: startsPaused(),
@@ -1093,7 +1093,7 @@ export function createBot<C extends CoreConfig>(
         onboardingPending: existsSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)),
         ...(contribution.status?.() ?? {}),
       }),
-      log: core.runlog.logger('console'),
+      log: core.runlog.logger('webui'),
       prompts: derivePrompts(parts, assembly, contribution, cfg.timezone, promptDirs, opts.extensions?.bot !== undefined),
 
       worldActivation: {
@@ -1149,7 +1149,7 @@ async function runShutdown<C extends CoreConfig>(ctx: {
   llmManagers: Map<string, {stop():Promise<unknown>}>;
   webApp: WebApp | null;
   log: Logger;
-  /** 步骤名和总结使用控制台请求语言。 */
+  /** 步骤名和总结使用 WebUI 请求语言。 */
   language: Language;
 }): Promise<ShutdownReport> {
   const t = botText(ctx.language).shutdown;

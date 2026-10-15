@@ -5,7 +5,7 @@ import { isContextOverflow } from '../transport/errors.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
 import { runtimeConfig } from './config.ts';
-import { llamacppConsole } from './console/server.ts';
+import { llamacppWebUi } from './webui/server.ts';
 import { LlamaCppProvider } from './native.ts';
 import { backendChoices, llamacppOptions, normalizeLlamaCpp } from './options.ts';
 import { LlamaRuntime } from './runtime.ts';
@@ -28,7 +28,7 @@ export default {
   defaultBaseUrl: 'http://127.0.0.1:8090/v1',
   baseUrlSuggestions: ['http://127.0.0.1:8090/v1', 'http://127.0.0.1:8080/v1'],
   normalize: normalizeLlamaCpp,
-  console: llamacppConsole,
+  webUi: llamacppWebUi,
   config: runtimeConfig,
   reasoningTiers: reasoningTiers('zh'),
   localize: (language) => ({ description: text(language).description, reasoningTiers: reasoningTiers(language) }),

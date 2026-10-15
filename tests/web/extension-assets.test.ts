@@ -10,10 +10,10 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type WebAppDeps, type WebAppExtensionDeps } from '../../src/web/server.ts';
-import { ConsoleAssets, type ConsolePageSource } from '../../src/web/console-pages.ts';
+import { WebUiAssets, type WebUiPageSource } from '../../src/web/webui-pages.ts';
 import type { Logger } from '../../src/core/types.ts';
-import type { ConsoleManifest } from '../../src/web/shared/console-protocol.ts';
-import { extensionAssetUrl, type ExtensionConsoleAsset } from '../../src/extensions/manifest.ts';
+import type { WebUiManifest } from '../../src/web/shared/webui-protocol.ts';
+import { extensionAssetUrl, type ExtensionWebUiAsset } from '../../src/extensions/manifest.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -34,8 +34,8 @@ beforeAll(() => {
   pkgDist = join(dir, 'pkg-dist');
   mkdirSync(emptyDist, { recursive: true });
   mkdirSync(pkgDist, { recursive: true });
-  writeFileSync(join(pkgDist, 'console.js'), JS_BODY, 'utf8');
-  writeFileSync(join(pkgDist, 'console.css'), CSS_BODY, 'utf8');
+  writeFileSync(join(pkgDist, 'webui.js'), JS_BODY, 'utf8');
+  writeFileSync(join(pkgDist, 'webui.css'), CSS_BODY, 'utf8');
   // 同目录下的第三个文件:产物表里没有它,于是 URL 也取不到它
   writeFileSync(join(pkgDist, 'secret.js'), 'const token = "hunter2";\n', 'utf8');
 });
@@ -45,25 +45,25 @@ afterAll(() => {
 });
 
 /** 产物表里那一条。`pkgDist` 在 beforeAll 里才有值,所以按需算。 */
-const asset = (): ExtensionConsoleAsset => ({
+const asset = (): ExtensionWebUiAsset => ({
   pageId: 'world:demo',
   packageName: PKG,
   version: VERSION,
-  jsFile: join(pkgDist, 'console.js'),
-  cssFile: join(pkgDist, 'console.css'),
+  jsFile: join(pkgDist, 'webui.js'),
+  cssFile: join(pkgDist, 'webui.css'),
 });
 
-const extensionDeps = (assets: readonly ExtensionConsoleAsset[]): WebAppExtensionDeps => ({
+const extensionDeps = (assets: readonly ExtensionWebUiAsset[]): WebAppExtensionDeps => ({
   list: () => ({ dir: '/repo/extensions', extensions: [] }),
   updates: async () => ({ updates: [], errors: [] }),
   search: async () => [],
   packageInfo: async () => { throw new Error('这个用例不取包详情'); },
-  consoleAssets: () => assets,
+  webUiAssets: () => assets,
   install: async () => '',
   uninstall: async () => '',
 });
 
-const soleSource = (): ConsolePageSource[] => [
+const soleSource = (): WebUiPageSource[] => [
   { id: 'world:demo', contribute: () => ({ id: 'world:demo', kind: 'world' as const, label: '样例 World' }) },
 ];
 
@@ -74,7 +74,7 @@ async function withApp(extra: Partial<WebAppDeps>, fn: (base: string) => Promise
     dataDir: dir,
     webDistDir: emptyDist,
     getStatus: () => ({}),
-    consolePageSources: soleSource,
+    webUiPageSources: soleSource,
     log: nullLogger(),
     ...extra,
   });
@@ -87,7 +87,7 @@ async function withApp(extra: Partial<WebAppDeps>, fn: (base: string) => Promise
 }
 
 const clientOf = async (base: string): Promise<{ js: string; css?: string } | undefined> => {
-  const m = (await (await fetch(`${base}/api/console/manifest`)).json()) as ConsoleManifest;
+  const m = (await (await fetch(`${base}/api/webui/manifest`)).json()) as WebUiManifest;
   return m.providers.find((p) => p.id === 'world:demo')?.client;
 };
 
@@ -95,21 +95,21 @@ describe('扩展产物的 URL 分配', () => {
   it('manifest 里那一页的 client 是服务端分配的 /assets/extensions/ 路径', async () => {
     await withApp({ extensions: extensionDeps([asset()]) }, async (base) => {
       expect(await clientOf(base)).toEqual({
-        js: '/assets/extensions/acme__cortico-world-demo/1.2.3/console.js',
-        css: '/assets/extensions/acme__cortico-world-demo/1.2.3/console.css',
+        js: '/assets/extensions/acme__cortico-world-demo/1.2.3/webui.js',
+        css: '/assets/extensions/acme__cortico-world-demo/1.2.3/webui.css',
       });
     });
   });
 
   it('那两条 URL 取回的就是包里的字节,且按 immutable 缓存', async () => {
     await withApp({ extensions: extensionDeps([asset()]) }, async (base) => {
-      const js = await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'console.js')}`);
+      const js = await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'webui.js')}`);
       expect(js.status).toBe(200);
       expect(await js.text()).toBe(JS_BODY);
       expect(js.headers.get('content-type')).toContain('javascript');
       expect(js.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
 
-      const css = await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'console.css')}`);
+      const css = await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'webui.css')}`);
       expect(css.status).toBe(200);
       expect(await css.text()).toBe(CSS_BODY);
       expect(css.headers.get('content-type')).toContain('text/css');
@@ -122,10 +122,10 @@ describe('扩展产物的 URL 分配', () => {
       const cases = [
         ['同目录另一个文件', '/assets/extensions/acme__cortico-world-demo/1.2.3/secret.js'],
         ['编码回溯', '/assets/extensions/acme__cortico-world-demo/1.2.3/%2e%2e%2fsecret.js'],
-        ['包名段回溯', '/assets/extensions/%2e%2e/1.2.3/console.js'],
-        ['版本段回溯', '/assets/extensions/acme__cortico-world-demo/%2e%2e/console.js'],
-        ['错版本', '/assets/extensions/acme__cortico-world-demo/9.9.9/console.js'],
-        ['未规整的包名', '/assets/extensions/@acme/cortico-world-demo/1.2.3/console.js'],
+        ['包名段回溯', '/assets/extensions/%2e%2e/1.2.3/webui.js'],
+        ['版本段回溯', '/assets/extensions/acme__cortico-world-demo/%2e%2e/webui.js'],
+        ['错版本', '/assets/extensions/acme__cortico-world-demo/9.9.9/webui.js'],
+        ['未规整的包名', '/assets/extensions/@acme/cortico-world-demo/1.2.3/webui.js'],
       ];
       for (const [name, path] of cases) {
         const r = await fetch(`${base}${path}`);
@@ -137,7 +137,7 @@ describe('扩展产物的 URL 分配', () => {
   it('没有扩展产物时那一页照常在 manifest 里,只是没有 client', async () => {
     await withApp({ extensions: extensionDeps([]) }, async (base) => {
       expect(await clientOf(base)).toBeUndefined();
-      expect((await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'console.js')}`)).status).toBe(404);
+      expect((await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'webui.js')}`)).status).toBe(404);
     });
   });
 
@@ -148,14 +148,14 @@ describe('扩展产物的 URL 分配', () => {
   it('分配不出合法 /assets/ 路径的产物被拒,并记一条 error', () => {
     const errors: string[] = [];
     const log = { error: (msg: string) => { errors.push(msg); } } as unknown as Logger;
-    const assets = new ConsoleAssets(emptyDist, log, [
-      { pageId: 'world:noname', packageName: '@', version: VERSION, jsFile: join(pkgDist, 'console.js') },
-      { pageId: 'world:nover', packageName: PKG, version: '', jsFile: join(pkgDist, 'console.js') },
-      { pageId: 'world:ok', packageName: PKG, version: VERSION, jsFile: join(pkgDist, 'console.js') },
+    const assets = new WebUiAssets(emptyDist, log, [
+      { pageId: 'world:noname', packageName: '@', version: VERSION, jsFile: join(pkgDist, 'webui.js') },
+      { pageId: 'world:nover', packageName: PKG, version: '', jsFile: join(pkgDist, 'webui.js') },
+      { pageId: 'world:ok', packageName: PKG, version: VERSION, jsFile: join(pkgDist, 'webui.js') },
     ]);
     expect(assets.forPage('world:noname')).toBeUndefined();
     expect(assets.forPage('world:nover')).toBeUndefined();
-    expect(assets.forPage('world:ok')).toEqual({ js: extensionAssetUrl(PKG, VERSION, 'console.js') });
+    expect(assets.forPage('world:ok')).toEqual({ js: extensionAssetUrl(PKG, VERSION, 'webui.js') });
     expect(errors.length).toBe(2);
   });
 
@@ -167,7 +167,7 @@ describe('扩展产物的 URL 分配', () => {
       join(webDistDir, 'asset-manifest.json'),
       JSON.stringify({
         protocolVersion: 1,
-        core: '/assets/console.js',
+        core: '/assets/webui.js',
         providers: { 'world:demo': { js: '/assets/worlds/demo/client.a1b2.js' } },
       }),
       'utf8',
@@ -175,7 +175,7 @@ describe('扩展产物的 URL 分配', () => {
     await withApp({ extensions: extensionDeps([asset()]), webDistDir }, async (base) => {
       expect(await clientOf(base)).toEqual({ js: '/assets/worlds/demo/client.a1b2.js' });
       // 路由与 manifest 是两件事:文件照发,只是没有一页引用它
-      expect((await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'console.js')}`)).status).toBe(200);
+      expect((await fetch(`${base}${extensionAssetUrl(PKG, VERSION, 'webui.js')}`)).status).toBe(200);
     });
   });
 });

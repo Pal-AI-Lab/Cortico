@@ -16,7 +16,7 @@
 
 ```
 definition.ts / config.ts / world.ts  World 定义、配置段与 World 本体(事件面、工具面、
-                 console 自报、世界变化节流、摄像机编排、PWSR 三张表)
+                 webUi 自报、世界变化节流、摄像机编排、PWSR 三张表)
 proxy.ts / engine-child.ts / engine-ipc.ts  主进程代理、引擎子进程与两者之间的协议
 
 连上去
@@ -81,11 +81,11 @@ map-view.ts      地图像素包按编号缓存,渲成 PNG(mc_view_map)
 search-observation.ts / round.ts / show.ts / readouts.ts / log.ts
                  find 的短期观察、同轮重复查询、容器演出节拍、三份读数、日志转发
 
-console/         控制台面板两侧:服务器、存档、权限、客户端、皮肤、日志
+webui/         WebUI 面板两侧:服务器、存档、权限、客户端、皮肤、日志
   (Minecraft 客户端、服务端与启动器放在仓库外,不进 Git)
 ```
 
-客户端与服务端的固定来源在控制台对应面板上给出，本仓库不含它们；这些路径没有
+客户端与服务端的固定来源在 WebUI 对应面板上给出，本仓库不含它们；这些路径没有
 默认值，配置留空即未配置。
 
 ## 版本约定:1.20.6 + Java 21
@@ -129,12 +129,12 @@ console/         控制台面板两侧:服务器、存档、权限、客户端�
 }
 ```
 
-也可以在控制台的 Minecraft 配置里填写同样的项，再在「挂载」面板选择「外部服务器」并点击「连接」。
+也可以在 WebUI 的 Minecraft 配置里填写同样的项，再在「挂载」面板选择「外部服务器」并点击「连接」。
 
 - **版本**：`version` 必须与服务器的协议版本一致。不一致时服务器在登录阶段断开，失败原因标「版本」，原文带服务器要求的版本号。
 - **认证**：bot 以离线账号登录（mineflayer `auth: 'offline'`），服务器须设 `online-mode=false`，或经允许离线账号的代理进入。开着正版验证时失败原因标「认证」（`multiplayer.disconnect.unverified_username`）。
 - **白名单与封禁**：服务器开着白名单时，`username` 要先加入名单；被拒时失败原因标「白名单」或「封禁」。`username` 与已在线的玩家同名时标「同名在线」。
-- **服务器权限**：外部服务器没有控制台 stdin，World 需要发送的指令（观察者附身的 `gamemode`/`spectate`、玩家传送的 `tp`、逃生传送）都由 bot 在聊天里发出，需要服务器管理员给 bot 的账号 op 权限；没有权限时这些指令被服务器拒绝，连接本身不受影响。存档、难度和 ops 名单由那台服务器的管理员管理，「存档与玩法」「权限与作弊」面板不可用。
+- **服务器权限**：外部服务器没有服务器控制台 stdin，World 需要发送的指令（观察者附身的 `gamemode`/`spectate`、玩家传送的 `tp`、逃生传送）都由 bot 在聊天里发出，需要服务器管理员给 bot 的账号 op 权限；没有权限时这些指令被服务器拒绝，连接本身不受影响。存档、难度和 ops 名单由那台服务器的管理员管理，「存档与玩法」「权限与作弊」面板不可用。
 - **观察者与玩家客户端**：可选，连接同一个地址和端口，账号名同样要满足离线登录、白名单与 op 的要求。
 
 ## 画面:viewer 还是主视角
@@ -175,18 +175,18 @@ SpectatorPlus 的 `config/spectatorplus/client.json`。客户端启动时读取�
 需要保留目录原有设置时，关闭 `client.noPauseOnLostFocus`。两份客户端共用目录时共享
 `options.txt`，退出时各自按内存设置写回；需要独立设置时应使用不同 `gameDir`。
 
-## 控制台面板(自有面板 bundle)
+## WebUI 面板(自有面板 bundle)
 
-五个面板在 `console/` 里各占一个文件，`console/client.ts` 是装配口(default
-export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载、
+五个面板在 `webui/` 里各占一个文件，`webui/client.ts` 是装配口(default
+export 的 `panels` 键就是服务端 `webUi().panels[].id`)：`mount` 挂载、
 `skin` 皮肤、`world` 存档与玩法、`access` 权限与作弊、`log` World 日志。数据面一律走
 `ctx.invoke / invokeBinary`，DOM 一律用 `ctx.ui` 原语，定时器一律 `ctx.interval`。
 
 面板 id 与标题由 `minecraftPanelDecls(language)` 一处给出，真 World 与子进程代理共用——
-控制台隔着代理看到的表面必须与直连时一模一样。
+WebUI 隔着代理看到的表面必须与直连时一模一样。
 
-给操作员看的文案只有中英两份:服务端的(控制台露出、配置组、面板回执、世界生成词表)在
-`strings.ts`，浏览器面板的在 `console/strings.ts`(按 `ctx.language` 取)。`console(language)`
+给操作员看的文案只有中英两份:服务端的(WebUI 露出、配置组、面板回执、世界生成词表)在
+`strings.ts`，浏览器面板的在 `webui/strings.ts`(按 `ctx.language` 取)。`webUi(language)`
 每次请求重算;隔着代理时，灯、徽标、链接由子进程每秒按中英各算一份报上来，代理按请求语言取一份，
 面板调用把 `language` 带给子进程。
 
@@ -203,7 +203,7 @@ export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载
 - **观察者客户端**：窗口出现表示客户端进程已就绪，进服和附身另按玩家列表确认。`client.enabled=false` 时仍可手动启停；World 启动及一键挂载不自动启动它。
 - **玩家客户端**：与观察者使用独立进程和账号，共用 `GameClient` 实现；附身与传送由 World 编排。默认继承观察者的游戏目录和版本，`worlds.minecraft.player.*` 可覆盖。仅在共用游戏目录时，将 `chatVisibility` 设为 FULL，以允许打开聊天框和命令行；不应用观察者的其他启动设置。
 - 服务器健康探测独立于托管进程，已运行的外部服务器显示为外部实例。World 停止时终止其托管进程。
-- 接口为 `mount.{server,client,player}.{state,start,stop}`、`mount.server.reconnect`（仅外部服务器）与 `mount.player.teleport`。兼容路由 `/api/console/providers/world%3Aminecraft/panels/{server,client}/{state,start,stop}` 调用相同实现，World 未挂载时返回 503。
+- 接口为 `mount.{server,client,player}.{state,start,stop}`、`mount.server.reconnect`（仅外部服务器）与 `mount.player.teleport`。兼容路由 `/api/webui/providers/world%3Aminecraft/panels/{server,client}/{state,start,stop}` 调用相同实现，World 未挂载时返回 503。
 
 #### 玩家传送
 
@@ -217,7 +217,7 @@ export 的 `panels` 键就是服务端 `console().panels[].id`)：`mount` 挂载
 
 ### 存档与玩法(world) / 权限与作弊(access) / World 日志(log)
 
-存档和权限见下文对应章节。日志通过 `log.entries(after)` 按 seq 增量读取，每 2 秒轮询一次；`WorldConsoleDecl` 未声明流式接口。
+存档和权限见下文对应章节。日志通过 `log.entries(after)` 按 seq 增量读取，每 2 秒轮询一次；`WorldWebUiDecl` 未声明流式接口。
 
 ## 皮肤
 
@@ -733,14 +733,14 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 
 ## 存档与玩法
 
-控制台面板 `world`（`worldConsole()` → `world.{state,select,create,apply}`）：换存档、
+WebUI 面板 `world`（`worldWebUi()` → `world.{state,select,create,apply}`）：换存档、
 开新世界、调游戏模式与难度、极限/PVP/刷怪。
 
 改动落在 `server.properties`，而 Minecraft 只在**启动时**读它一次，所以时机分两种：
 
 - **停着**：写文件，什么都能改，下次启动生效。开新存档只是把 `level-name` 写成一个
   不存在的名字（可带 `level-seed`），世界由服务器下次启动时生成。
-- **跑着**（含外部起的）：只有难度与默认游戏模式能经控制台指令当场改，且**不落盘**。
+- **跑着**（含外部起的）：只有难度与默认游戏模式能经服务器控制台指令当场改，且**不落盘**。
   那会儿写文件既不生效，还可能被服务端自己的存盘盖掉，所以面板把其余项禁掉。
   外部起的服务器没有 stdin，连这两项也改不了，回执直说。
 
@@ -783,7 +783,7 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 `op-permission-level`（op 拿到第几级，4 才够全部指令）。
 
 吃这份名单的是 **bot 与人在游戏里打的命令**：`mc_escape` 的 `/tp`、把玩家传送到她
-旁边、摄像机附身。服务器由 World 托管时它们优先走控制台 stdin（天生 4 级，不看名单）；
+旁边、摄像机附身。服务器由 World 托管时它们优先走服务器控制台 stdin（天生 4 级，不看名单）；
 外部起的服务器没有 stdin，那条退路就是全部——名字不在名单里，这些动作会被服务端
 静默拒绝。
 
@@ -792,10 +792,10 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 读它之前——那份文件和 `server.properties` 一样只在启动时读一次。关掉这个开关则完全
 不碰名单。
 
-控制台面板 `access`（`accessConsole()` → `access.{state,setOp,apply}`）：
+WebUI 面板 `access`（`accessWebUi()` → `access.{state,setOp,apply}`）：
 
 - **停着**：直接改 `ops.json` 与 `server.properties`，下次启动生效。
-- **跑着且是托管的**：名单走控制台 `op` / `deop` 当场生效（服务端自己把新名单写回
+- **跑着且是托管的**：名单走服务器控制台 `op` / `deop` 当场生效（服务端自己把新名单写回
   文件）；`server.properties` 那几项一概要停机。
 - **跑着但是外部起的**：什么都改不了。这会儿写 `ops.json` 只会被服务端退出时的整份
   写回盖掉，所以回执直说"先停机"，不假装成功。
@@ -876,7 +876,7 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 时直接撤退；其余受击进场仍须达到 `fleeHealth`。血线不足时转撤退并播报。环境占用、
 冷却和不可交战目标等闸门继续生效；`fight` 三档均不意味着挨打一律还手。
 
-控制台的 `reflex.fightBack` 控制反射层的受击反击；关闭它仍允许低血逃离。受击会先
+WebUI 的 `reflex.fightBack` 控制反射层的受击反击；关闭它仍允许低血逃离。受击会先
 尝试交给战斗会话处理，未被接手时才进入此反射开关控制的降级路径。战斗会话由
 `combat.enabled` 总开关控制。
 
@@ -884,7 +884,7 @@ World 真的做完了 `GOAL_STALE_TASKS`（3）件活——三条都成立才发
 
 `{{minecraft.policy}}` 在环境提示词中列出非默认设置，全为默认值时返回空串；连入服务器时也报告非默认项。策略不进入周期世界快照。
 
-策略保存在 `data/minecraft-policy.json`，可通过 `console().storage` 清除。跨进程时，代理的 `envPromptVars()` 读取该文件。
+策略保存在 `data/minecraft-policy.json`，可通过 `webUi().storage` 清除。跨进程时，代理的 `envPromptVars()` 读取该文件。
 
 ## 战斗模式(档 1:常驻夜间自保)
 
@@ -980,7 +980,7 @@ interest/danger 图，硬约束通过 masking 执行。
 
 Minecraft 日志通过 `WorldHost.log` 写入 `<dataDir>/runs/<run>/log.jsonl`，写入级别由 `logging` 配置控制。文件超过 64 MiB 后，于下次写入前轮换为 `log.1.jsonl`，已有轮换文件依次编号。
 
-控制台读取最近 2,000 条内存记录，可按 `lane` 筛选。面板记录使用 `MinecraftLogEntry`：`{seq, ts, lane, event, taskId?, durMs?, msg, data}`；落盘记录使用 Core 的 `LogRecord`，其中 `taskId` 对应 `task`。当前 World 的日志转发器忽略 `child(lane)`，落盘 `area` 为 `worlds.minecraft`，类别仅保留在面板记录中。
+WebUI 读取最近 2,000 条内存记录，可按 `lane` 筛选。面板记录使用 `MinecraftLogEntry`：`{seq, ts, lane, event, taskId?, durMs?, msg, data}`；落盘记录使用 Core 的 `LogRecord`，其中 `taskId` 对应 `task`。当前 World 的日志转发器忽略 `child(lane)`，落盘 `area` 为 `worlds.minecraft`，类别仅保留在面板记录中。
 
 | 类别 | 内容 |
 | --- | --- |
@@ -1004,7 +1004,7 @@ Minecraft 日志通过 `WorldHost.log` 写入 `<dataDir>/runs/<run>/log.jsonl`�
 - **`reflex/lava-clear` 记录进出计次**（`data.bout`）：连续 600ms 无危险接触且熄火才
   结算，驻留期间不交还执行权；从第 2 次起点明本轮脱离次数。
 
-`MinecraftLog.clear()` 只清除面板缓冲，不删除运行日志文件。容器等账本由 World 通过 `console().storage` 声明各自的清除操作。
+`MinecraftLog.clear()` 只清除面板缓冲，不删除运行日志文件。容器等账本由 World 通过 `webUi().storage` 声明各自的清除操作。
 
 ## 死亡账本
 
@@ -1012,7 +1012,7 @@ Minecraft 日志通过 `WorldHost.log` 写入 `<dataDir>/runs/<run>/log.jsonl`�
 
 ## 配置
 
-控制台里分成四组：**连接**（连接方式即时生效，连接目标在下次连接时采用）、**节奏与反射**（全热改）、
+WebUI 里分成四组：**连接**（连接方式即时生效，连接目标在下次连接时采用）、**节奏与反射**（全热改）、
 **观察者客户端**、**玩家客户端**。技能表由
 `skills.ts` 注册表提供,并直接进入 `mc_do` 的参数说明。
 

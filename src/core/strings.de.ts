@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: 'Anzeigename',
-    description: 'Wird als Konsolentitel und als Absendername der Nachrichten des Bots verwendet. Die Konsole übernimmt ihn sofort; eine eingehängte World erst bei ihrem Neustart.',
+    description: 'Wird als WebUI-Titel und als Absendername der Nachrichten des Bots verwendet. Die WebUI übernimmt ihn sofort; eine eingehängte World erst bei ihrem Neustart.',
   },
   quietGap: {
     title: 'Ruhefenster',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Schwelle für Logdatei',
     description: 'Einträge unter dieser Stufe werden nicht in data/runs/<run>/log.jsonl geschrieben.',
   },
-  logConsole: {
+  logStdout: {
     title: 'Schwelle für Log-Ausgabe',
-    description: 'Einträge unter dieser Stufe werden nicht im Konsolenfenster ausgegeben.',
+    description: 'Einträge unter dieser Stufe werden nicht auf der Standardausgabe ausgegeben.',
   },
   logAreas: {
     title: 'Dateischwellen je Bereich',

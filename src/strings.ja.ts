@@ -95,7 +95,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: '対応する外部サービスが停止しているか確認してください。',
     llm: 'プロバイダーインスタンスを停止',
     flush: 'Core の状態を保存',
-    web: 'コンソールを閉じる',
+    web: 'WebUI を閉じる',
     summarySkipped: 'ローカルのシャットダウン手順が一部完了していません',
     summaryComplete: 'ローカルのシャットダウン手順がすべて完了しました',
     summaryUnverified: (items: string[]) => `ローカルのシャットダウンは完了しましたが、外部状態の終了は確認できていません：${items.join('、')}（手動での確認が必要）`,

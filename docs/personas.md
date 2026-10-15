@@ -27,7 +27,7 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 `onWorldLifecycle(event)`、`sessionHead()`(合成开头:置于 system 之后、持久历史之前的 item 列表,每次请求现取,不落盘)、
 `onHandoff(snapshot, { hardTokens })`(回 `{ tail, trim? }`)、`promptVarValues(ctx)`、
 `ownToolNames()`(自有工具名,装配层据此拒绝工具名冲突的 World;未提供时仅告警并保留先注册的工具)、
-`cognition`(处理 World 的后台认知请求)、`console()`(Persona 页的声明;其中 `memory` 子声明是
+`cognition`(处理 World 的后台认知请求)、`webUi()`(Persona 页的声明;其中 `memory` 子声明是
 Memory 页的面板、模板与存储项)。
 Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefinition.memoryName`,
 没给就取 `Persona.memory` 的类名,两者都没有时是 `Memory`。
@@ -54,12 +54,12 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 | `memoryName` | 可选,Memory 页的标题 |
 | `defaults()` | bot 默认配置,可包含 World 段。启动器用 `withWorlds()` 补充内建与扩展 World 中缺失的默认段,保留此处已有的段 |
 | `declares` | 默认启用的 World id;未安装时显示为不可用。已安装但未声明的 World 默认关闭,部署可自行启用 |
-| `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, console? }` |
+| `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, webUi? }` |
 
 `createBot()` 的顺序:算提示词覆盖目录 → 定默认语言 → `WorldAssembly` → `build()` → `Core` →
 装配层绑定挂载钩子 → 收配置组(含未激活槽位)→ provider 设置页与端点编辑 → `WebApp`。
-`start()`:单实例锁 → 控制台 → 启动 active provider → `onStart` → `core.start()`。
-`activeProvider` 为空或指向不存在的端点时跳过这一步,控制台照常起来,由操作员在模型供应商页
+`start()`:单实例锁 → WebUI → 启动 active provider → `onStart` → `core.start()`。
+`activeProvider` 为空或指向不存在的端点时跳过这一步,WebUI 照常起来,由操作员在模型供应商页
 配置;状态里的 `modelConnection` 报当前端点。
 
 ## 包里有什么
@@ -68,7 +68,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 |---|---|
 | `index.ts` | `BotDefinition`,声明包 id、默认配置与装配方法 |
 | `persona/` | Persona 代码与它的提示词模板(`PREFIX.md`、`ENV_SECTION.md`、`CORE.md`…) |
-| `console/client.ts` | Persona 页的面板 bundle(可选) |
+| `webui/client.ts` | Persona 页的面板 bundle(可选) |
 | `worlds/<id>/config.json`、`worlds/<id>/ENV_PROMPT.md` | 对某个 World 的默认配置与环境提示词覆盖 |
 | `vtuber-pack/` | 挂 `cortico-world-vtuber` 的包才有:演出词表、曲线、参数集 |
 
@@ -79,7 +79,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 | 包 | Persona | 一句话 | 端口 | Memory |
 |---|---|---|---|---|
 | `corti-soulmate` | `CortiSoulmate` | 分层记忆、交接后并行梦、QQ 起草-确认门、宪法归梦修订 | 7777 | `memory/` |
-| `cormini` | `Cormini` | 最小完整实现:工作区即记忆、宪法即前缀、一个 session、只有终端 | 7788 | `workspace/` |
+| `cormini` | `Cormini` | 最小完整实现:工作区即记忆、宪法即前缀、一个 session、只有控制台 | 7788 | `workspace/` |
 | `cortiv` | `CortiV` | AI VTuber 实时系统:演出舞台、B 站直播间、游戏 | 7789 | `workspace/` |
 
 ## 添加 Bot
@@ -89,4 +89,4 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 - 复制:要改记忆结构或 session 形态时,复制 `bots/cormini/` 整个目录再改 `persona/`。
 
 修改 `index.ts` 中的 `id` 与 `web.port`,再在部署根下创建引用此包的部署。
-框架提供通用控制台页,专有面板通过 `console` 声明。
+框架提供通用 WebUI 页,专有面板通过 `webUi()` 声明。

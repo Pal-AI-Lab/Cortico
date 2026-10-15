@@ -1,5 +1,5 @@
 import { messages as legacyMessages } from '../core/fixture-protocol.ts';
-/** 通过临时部署与脚本化模型验证终端 WebSocket、事件存储、工具调用和控制台 API。 */
+/** 通过临时部署与脚本化模型验证控制台 WebSocket、事件存储、工具调用和 WebUI API。 */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -9,7 +9,7 @@ import { PERSONA_CONFIG_GROUP } from '../../bots/corti-soulmate/persona/config.t
 import { FakeLLM, makeCfg, makeLoaded, makeTmpDir, toolReply, sleep } from '../core/helpers.ts';
 import { validatePairing } from "../core/fixture-truncate.ts";
 import { providerAtBoot } from '../../src/boot.ts';
-import { panelStreamRoute } from '../../src/web/shared/console-protocol.ts';
+import { panelStreamRoute } from '../../src/web/shared/webui-protocol.ts';
 import { MockOneBot } from '../helpers/mock-onebot.ts';
 
 async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
@@ -20,7 +20,7 @@ async function waitFor(cond: () => boolean, timeoutMs = 5000): Promise<void> {
   }
 }
 
-describe('全系统集成(终端对话链路)', () => {
+describe('全系统集成(控制台对话链路)', () => {
   const tmp = makeTmpDir();
   let bot: AssembledBot;
   let llm: FakeLLM;
@@ -48,7 +48,7 @@ describe('全系统集成(终端对话链路)', () => {
     cfg.batching.quietGapMs = 40;
     cfg.batching.maxBatchAgeMs = 500;
     cfg.worlds.qq.enabled = false;
-    cfg.worlds.terminal.enabled = true;
+    cfg.worlds.console.enabled = true;
     cfg.web.port = 0;
 
     const loaded = makeLoaded({
@@ -86,7 +86,7 @@ describe('全系统集成(终端对话链路)', () => {
   });
 
   it('WS对话:用户消息→回复→客户端收到广播', async () => {
-    ws = new WebSocket(`ws://127.0.0.1:${port}${panelStreamRoute('world:terminal', 'chat')}`);
+    ws = new WebSocket(`ws://127.0.0.1:${port}${panelStreamRoute('world:console', 'chat')}`);
     ws.on('message', (data) => received.push(JSON.parse(String(data))));
     await new Promise<void>((res, rej) => {
       ws.once('open', res);
@@ -96,21 +96,21 @@ describe('全系统集成(终端对话链路)', () => {
 
 
     llm.script(
-      toolReply([{ name: 'terminal_send', args: { text: '你好phantivia!我能看到这条消息。' } }]),
+      toolReply([{ name: 'console_send', args: { text: '你好phantivia!我能看到这条消息。' } }]),
     );
     ws.send(JSON.stringify({ type: 'msg', text: '在吗,bot?' }));
 
     await waitFor(() =>
       received.some((m) => m.type === 'msg' && String(m.from).includes('Yukima') && String(m.text).includes('你好phantivia')),
     );
-    // 等terminal.message确实落库(与广播之间没有顺序保证)
-    await waitFor(() => bot.core.store.range({}).some((e) => e.type === 'terminal.message'));
+    // 等console.message确实落库(与广播之间没有顺序保证)
+    await waitFor(() => bot.core.store.range({}).some((e) => e.type === 'console.message'));
   });
 
-  it('事件库:terminal.message与terminal.self都落库,terminal.self不投递', () => {
+  it('事件库:console.message与console.self都落库,console.self不投递', () => {
     const events = bot.core.store.range({});
-    const userMsg = events.find((e) => e.type === 'terminal.message');
-    const selfMsg = events.find((e) => e.type === 'terminal.self');
+    const userMsg = events.find((e) => e.type === 'console.message');
+    const selfMsg = events.find((e) => e.type === 'console.self');
     expect(userMsg).toBeTruthy();
     expect(userMsg!.text).toContain('在吗,bot?');
     expect(selfMsg).toBeTruthy();
@@ -122,16 +122,16 @@ describe('全系统集成(终端对话链路)', () => {
     const issues = validatePairing(msgs);
     expect(issues).toEqual([]);
     const sendCall = msgs.find(
-      (m) => m.role === 'assistant' && m.tool_calls?.some((tc) => tc.function.name === 'terminal_send'),
+      (m) => m.role === 'assistant' && m.tool_calls?.some((tc) => tc.function.name === 'console_send'),
     );
     expect(sendCall).toBeTruthy();
-    // Terminal 的内部事件进入 user 消息。
+    // Console 的内部事件进入 user 消息。
 
     expect(msgs.some((m) => m.role === 'user' && m.content.includes('在吗,bot?'))).toBe(true);
     expect(msgs.some((m) => m.role === 'tool' && m.content.includes('在吗,bot?'))).toBe(false);
   });
 
-  it('控制台 API 返回状态、事件与文件内容', async () => {
+  it('WebUI API 返回状态、事件与文件内容', async () => {
     const status = (await (await fetch(`http://127.0.0.1:${port}/api/status`)).json()) as Record<string, unknown>;
     expect(status).toHaveProperty('loop');
     expect(status).toHaveProperty('chips');
@@ -141,7 +141,7 @@ describe('全系统集成(终端对话链路)', () => {
     };
     expect(events.events.length).toBeGreaterThanOrEqual(2);
 
-    const file = await fetch(`http://127.0.0.1:${port}/api/console/providers/memory%3Acorti-soulmate/panels/workspace/read`, {
+    const file = await fetch(`http://127.0.0.1:${port}/api/webui/providers/memory%3Acorti-soulmate/panels/workspace/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ args: ['CONSTITUTION.md'] }),
@@ -162,7 +162,7 @@ describe('全系统集成(终端对话链路)', () => {
   it('Provider 面板保存端点模型配置', async () => {
     const originalLocal = structuredClone(bot.core.config.providers.local);
     const setModel = (spec: Record<string, unknown>) => fetch(
-      `http://127.0.0.1:${port}/api/console/providers/llm%3Aopenai-responses-compat/panels/settings/save`,
+      `http://127.0.0.1:${port}/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/save`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -204,7 +204,7 @@ describe('全系统集成(终端对话链路)', () => {
 
     expect(g.groups.map((x) => x.group.id)).toEqual([
       'core', PERSONA_CONFIG_GROUP.id,
-      'world:terminal', 'world:qq', 'world:bilibili',
+      'world:console', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft:rhythm', 'world:minecraft:client', 'world:minecraft:player',
       'world:websearch',
       ...endpointGroups.map(group => group.id),
@@ -212,7 +212,7 @@ describe('全系统集成(终端对话链路)', () => {
     // id 标识具体实例；owner 标识与实例无关的架构角色。
     expect(g.groups.map((x) => x.group.owner)).toEqual([
       'core', 'persona',
-      'world:terminal', 'world:qq', 'world:bilibili',
+      'world:console', 'world:qq', 'world:bilibili',
       'world:minecraft', 'world:minecraft', 'world:minecraft', 'world:minecraft',
       'world:websearch',
       ...endpointGroups.map(group => group.owner),
@@ -276,7 +276,7 @@ describe('全系统集成(终端对话链路)', () => {
   });
 });
 
-it.each(['empty', 'unselected', 'modelless'] as const)('控制台在供应商 %s 状态下可启动', async (state) => {
+it.each(['empty', 'unselected', 'modelless'] as const)('WebUI 在供应商 %s 状态下可启动', async (state) => {
   const tmp = makeTmpDir();
   const cfg = makeCfg();
   cfg.providers = state === 'empty' ? {} : {

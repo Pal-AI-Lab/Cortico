@@ -26,7 +26,7 @@ export const S: Partial<typeof en> = {
 
   providerManagement: 'Le estensioni provider servono i bot che usano questo ambiente condiviso.',
   idleManagement: 'Attiva o disattiva i World nella pagina World. Le estensioni integrate non possono essere eliminate.',
-  createBody: 'Apri un terminale nel progetto Cortico sul suo host, esegui pnpm start --new, poi seleziona questo template di bot per creare una nuova istanza.',
+  createBody: 'Apri una riga di comando nel progetto Cortico sul suo host, esegui pnpm start --new, poi seleziona questo template di bot per creare una nuova istanza.',
 
   restartConfirmTitle: 'Riavviare il processo?',
   restartNoLoopTitle: 'Avvio manuale necessario',
@@ -38,12 +38,12 @@ export const S: Partial<typeof en> = {
   resultDefault: 'Passaggi di arresto eseguiti.',
   reloadWait: 'In attesa che un nuovo processo di questo bot sia pronto…',
   otherBot: 'Un altro bot usa questa porta. Ripristino interrotto.',
-  restartManual: 'Il processo è terminato. Avvialo manualmente nel terminale; questa pagina attenderà che sia pronto.',
+  restartManual: 'Il processo è terminato. Avvialo manualmente dalla riga di comando; questa pagina attenderà che sia pronto.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: 'Aggiorna',
   updateCheckFailed: (detail: string) => `Controllo aggiornamenti non riuscito: ${detail}`,
-  noteConsoleMissing: "Bundle del browser mancante. Esegui la build nella directory dell'estensione e riavvia il processo.",
+  noteWebUiMissing: "Bundle del browser mancante. Esegui la build nella directory dell'estensione e riavvia il processo.",
   noExtensions: 'Ancora nessuna estensione installata',
   listLoadFailed: (msg: string) => `Caricamento dell'elenco delle estensioni non riuscito: ${msg}`,
 

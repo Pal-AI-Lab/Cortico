@@ -1,6 +1,6 @@
 /** 可编辑提示词模板的共享视图。统一管理页、core 与 provider 归属页复用同一实现。 */
 
-import type { ConsoleUi, Disposable } from '../../../shared/client-panel.ts';
+import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import { get, post } from '../../core/api.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { S } from './strings.ts';
@@ -29,7 +29,7 @@ export interface PromptDoc {
 }
 
 export interface PromptsViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   lifecycle: Lifecycle;
   signal: AbortSignal;
   addLeaveGuard(fn: () => string | null): Disposable;
@@ -69,7 +69,7 @@ export function varWarnings(template: string, vars: readonly PromptVar[]): strin
 }
 
 /** 占位符旁注:名字 + 说明 + **此刻会填进去的东西**(比说明直观)。 */
-function renderVarPanel(ui: ConsoleUi, vars: readonly PromptVar[], onInsert?: (name: string) => void): HTMLElement {
+function renderVarPanel(ui: WebUi, vars: readonly PromptVar[], onInsert?: (name: string) => void): HTMLElement {
   const box = ui.h('div', 'prompt-vars');
   box.appendChild(ui.h('b', null, S.varPanelTitle));
   for (const v of vars) {

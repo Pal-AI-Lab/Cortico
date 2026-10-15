@@ -35,7 +35,7 @@ const zh = {
 
   providerManagement: '供应商扩展供共享环境中的 Bot 使用。',
   idleManagement: '在 World 页启用或停用 World；内置扩展不能删除。',
-  createBody: '在运行 Cortico 的电脑上打开项目终端，执行 pnpm start --new，选择此 Bot 模板并创建新实例。',
+  createBody: '在运行 Cortico 的电脑上打开项目目录下的命令行，执行 pnpm start --new，选择此 Bot 模板并创建新实例。',
 
   restartConfirmTitle: '重启进程？',
   restartNoLoopTitle: '需要手动启动',
@@ -47,12 +47,12 @@ const zh = {
   resultDefault: '关闭步骤已执行。',
   reloadWait: '等待当前 Bot 的新进程就绪…',
   otherBot: '此端口已由另一 Bot 使用，已停止恢复。',
-  restartManual: '进程已退出，请在终端手动启动；此页面会等待就绪。',
+  restartManual: '进程已退出，请在命令行手动启动；此页面会等待就绪。',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: '更新',
   updateCheckFailed: (detail: string) => `更新检查失败： ${detail}`,
-  noteConsoleMissing: '缺少浏览器构建产物。请在扩展目录构建，再重启进程。',
+  noteWebUiMissing: '缺少浏览器构建产物。请在扩展目录构建，再重启进程。',
   noExtensions: '还没装任何扩展',
   listLoadFailed: (msg: string) => `扩展清单加载失败： ${msg}`,
 
@@ -176,7 +176,7 @@ export const en: typeof zh = {
 
   providerManagement: 'Provider extensions serve the Bots using this shared environment.',
   idleManagement: 'Enable or disable Worlds on the World page. Built-in extensions cannot be deleted.',
-  createBody: 'Open a terminal in the Cortico project on its host, run pnpm start --new, then select this Bot template to create a new instance.',
+  createBody: 'Open a command line in the Cortico project directory on its host, run pnpm start --new, then select this Bot template to create a new instance.',
 
   restartConfirmTitle: 'Restart the process?',
   restartNoLoopTitle: 'Manual startup required',
@@ -188,12 +188,12 @@ export const en: typeof zh = {
   resultDefault: 'Shutdown steps executed.',
   reloadWait: 'Waiting for a new process of this Bot to become ready…',
   otherBot: 'Another Bot is using this port. Recovery stopped.',
-  restartManual: 'The process exited. Start it manually in the terminal; this page will wait for readiness.',
+  restartManual: 'The process exited. Start it manually from the command line; this page will wait for readiness.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: 'Update',
   updateCheckFailed: (detail: string) => `Update check failed: ${detail}`,
-  noteConsoleMissing: 'Browser bundle missing. Build in the extension directory and restart the process.',
+  noteWebUiMissing: 'Browser bundle missing. Build in the extension directory and restart the process.',
   noExtensions: 'No extensions installed yet',
   listLoadFailed: (msg: string) => `Extension list failed to load: ${msg}`,
 

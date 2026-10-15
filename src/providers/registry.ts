@@ -68,7 +68,7 @@ export class ProviderRegistry {
 
   /**
    * A registry over one detached entry. Its instances never enter the live cache; `secrets`
-   * are the values the console holds but has not written to the endpoint's `.env`.
+   * are the values the WebUI holds but has not written to the endpoint's `.env`.
    */
   previewRegistry(name: string, entry: LLMProviderEntry, secrets: Readonly<Record<string, string>> = {}): ProviderRegistry {
     return new ProviderRegistry(() => ({ [name]: entry }), this.host, this.modules, secrets);

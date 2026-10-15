@@ -1,12 +1,12 @@
 /**
  * 新部署的开场引导：四条 Cortico 署名的气泡，用 assistant 直接输出那套气泡样式。
- * 端点状态由终端页从 providers 灯推进来，已启用的 World 在挂载时读一次接口。
- * 是否显示由终端页判定，这里只画。
+ * 端点状态由控制台页从 providers 灯推进来，已启用的 World 在挂载时读一次接口。
+ * 是否显示由控制台页判定，这里只画。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
-import { brandMark, icon, type ConsoleIconName } from '../../ui/icons.ts';
+import { brandMark, icon, type WebUiIconName } from '../../ui/icons.ts';
 import { S } from './strings.ts';
 
 /** 这一页用得到的 `/api/worlds` 字段。 */
@@ -16,10 +16,10 @@ interface WorldRow {
 }
 
 export interface OnboardingDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   doc: Document;
   signal: AbortSignal;
-  /** 跳到控制台的另一页。 */
+  /** 跳到 WebUI 的另一页。 */
   go(segments: readonly string[]): void;
   /** 继续运行并请对方开口；`label` 是这颗按钮上的字，逐字进事件正文。 */
   start(label: string): void;
@@ -55,7 +55,7 @@ export function createOnboarding(deps: OnboardingDeps): OnboardingView {
 
   const bubble = (
     line: string,
-    action?: { label: string; icon?: ConsoleIconName; accent?: boolean; onClick(): void },
+    action?: { label: string; icon?: WebUiIconName; accent?: boolean; onClick(): void },
   ): Bubble => {
     const box = ui.h('div', 'monolog');
     box.appendChild(ui.h('div', 'monolog-body', line));

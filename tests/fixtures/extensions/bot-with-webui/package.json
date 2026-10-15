@@ -1,0 +1,13 @@
+{
+  "name": "cortico-fixture-bot-webui",
+  "version": "2.4.0",
+  "description": "带浏览器端产物的 bot 包",
+  "type": "module",
+  "main": "./index.js",
+  "keywords": ["cortico-bot"],
+  "cortico": {
+    "kind": "bot",
+    "api": 7,
+    "webUiClient": "dist/webui.js"
+  }
+}

@@ -1,6 +1,6 @@
 import type { Language } from '../../core/language.ts';
 
-/** 浏览器控制台发起的一次主机原生路径选择。 */
+/** 浏览器 WebUI 发起的一次主机原生路径选择。 */
 export interface PathPickerOptions {
   kind: 'file' | 'directory';
   /** 原生对话框标题。 */

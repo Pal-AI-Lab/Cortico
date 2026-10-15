@@ -1,5 +1,5 @@
 /**
- * World 模板占位符、控制台变量声明与运行时取值保持一致。
+ * World 模板占位符、WebUI 变量声明与运行时取值保持一致。
  */
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -10,11 +10,11 @@ import { envPromptDocOf, renderWorldEnvPrompt } from '../src/core/prefix.ts';
 import { templateVarNames, unknownVarNames } from '../src/core/template.ts';
 import type { World } from '../src/core/types.ts';
 import { BilibiliWorld } from '../src/worlds/bilibili/world.ts';
-import { ConsoleFixtureWorld } from '../src/worlds/console-fixture/world.ts';
+import { WebUiFixtureWorld } from '../src/worlds/webui-fixture/world.ts';
 import { MinecraftWorld } from '../src/worlds/minecraft/world.ts';
 import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
 import { QQWorld } from '../src/worlds/qq/world.ts';
-import { TerminalWorld } from '../src/worlds/terminal/world.ts';
+import { ConsoleWorld } from '../src/worlds/console/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
 
 const mcCfg = structuredClone({ ...MINECRAFT_DEFAULTS, enabled: true }) as MinecraftConfigSection;
@@ -22,10 +22,10 @@ const mcCfg = structuredClone({ ...MINECRAFT_DEFAULTS, enabled: true }) as Minec
 /** 只构造 World，不启动外部连接。 */
 const MODULES: Array<() => World> = [
   () => new BilibiliWorld({ roomId: 0 }),
-  () => new ConsoleFixtureWorld(),
+  () => new WebUiFixtureWorld(),
   () => new MinecraftWorld({ cfg: mcCfg }),
   () => new QQWorld({ wsUrl: 'ws://127.0.0.1:1', groups: [], privates: [], token: '' }),
-  () => new TerminalWorld(),
+  () => new ConsoleWorld(),
   () => new WebSearchWorld({ apiKey: 'k' }),
 ];
 
@@ -62,7 +62,7 @@ describe('环境提示词模板契约', () => {
     const mod: World = {
       id: 'nullprompt',
       envPromptVars: () => null,
-      console: () => ({
+      webUi: () => ({
         promptDocs: [
           { key: 'worlds.nullprompt.envPrompt', title: 'nullprompt · 环境提示词', description: '测试模板', path, role: 'envPrompt' },
         ],

@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: '터미널',
+  navLabel: '콘솔',
   currentProvider: '현재 모델 공급자',
   noProvider: '선택된 모델 공급자 없음',
   ctxOpenAria: 'token 구성 보기',
   ctxPanelAria: 'token 구성',
-  netConnecting: '콘솔 연결 중…',
-  netOnline: '콘솔 연결됨',
-  netOffline: '콘솔 연결 끊김',
-  composerLabel: '터미널 메시지 입력',
+  netConnecting: 'WebUI 연결 중…',
+  netOnline: 'WebUI 연결됨',
+  netOffline: 'WebUI 연결 끊김',
+  composerLabel: '콘솔 메시지 입력',
   composerPlaceholder: '메시지 입력…',
   exportDiagnostics: '진단 내보내기',
   exportFailed: '진단 패키지를 가져오지 못했습니다',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: '진단 패키지에는 대화, 프롬프트, 이벤트, 도구 호출, 사용량, 실행 로그가 들어 있습니다. 설정의 비밀 값은 가려지며 나머지는 그대로 기록됩니다. 공유하기 전에 개인 정보가 있는지 확인하세요.',
   composerFork: '백그라운드 세션을 보는 중입니다. 여기서 보낸 메시지는 기본 세션으로 갑니다',
   composerNoProvider: '현재 모델 공급자를 사용할 수 없습니다. "모델 연결" 페이지에서 설정하세요',
-  composerQueued: '터미널 채널이 다시 연결하는 중이라 메시지를 대기열에 넣었습니다',
+  composerQueued: '콘솔 채널이 다시 연결하는 중이라 메시지를 대기열에 넣었습니다',
   emptyConnecting: '디버그 채널에 연결하는 중…',
   ctxTitle: (total: string, max: string | null) =>
     `컨텍스트 ${total}${max !== null ? ` / ${max}` : ''} tok · 클릭하여 구성 보기`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: '디버그 채널을 사용할 수 없어 타임라인을 표시할 수 없습니다.',
 
   // status.ts
-  docTitle: (name: string) => `콘솔 · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: '연결 안 됨',
   chipMsgs: '개',
   chipCache: '캐시 ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: '먼저 모델 공급자를 설정하세요:',
   obProviderNone: '아직 사용할 수 있는 모델 공급자가 없습니다',
   obProviderReady: '모델 공급자 설정 완료',
-  obWorlds: '다음으로, 봇이 연결할 외부 환경 모듈(Cortico World)을 활성화하고 설정하세요. 처음에는 터미널 대화만 활성화해도 됩니다.',
+  obWorlds: '다음으로, 봇이 연결할 외부 환경 모듈(Cortico World)을 활성화하고 설정하세요. 처음에는 콘솔 대화만 활성화해도 됩니다.',
   obWorldsState: (labels: readonly string[]) => `현재 외부 환경 ${labels.length}개가 활성화되어 있습니다: ${labels.join(', ')}`,
   obPrompts: '마지막으로, 여기서 시스템 프롬프트를 편집해 인격 설명, 행동 규칙, 말투 등을 원하는 대로 정할 수 있습니다!',
   obReady: '준비 완료!',

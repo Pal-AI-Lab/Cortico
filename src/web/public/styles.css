@@ -1011,7 +1011,7 @@
     flex-direction: column;
     min-width: 0;
     min-height: 0;
-    container: console-content / inline-size;
+    container: webui-content / inline-size;
     overflow-x: hidden;
     overflow-y: auto;
     padding: 30px var(--page-gutter) 56px;
@@ -1643,7 +1643,7 @@
   .settings-section-body > .sheet:first-child { padding-top: 0; border-top: 0; }
   .settings-section-body > .prompt-toolbar:first-child { margin-top: 0; }
 
-  /* Provider 页:左侧次级菜单是供应模块清单,右侧是嵌入的控制台页宿主(页头 + 面板槽)。
+  /* Provider 页:左侧次级菜单是供应模块清单,右侧是嵌入的 WebUI 页宿主(页头 + 面板槽)。
      宿主自带的整页内边距与滚动在这里让位给外层页面。 */
   .providerhub-jump { display: flex; align-items: center; gap: 8px; }
   .providerhub-jump .lbl { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1705,7 +1705,7 @@
     .prompt-input-host { margin-top: 14px; }
   }
 
-  @container console-content (max-width: 720px) {
+  @container webui-content (max-width: 720px) {
     .statgrid,
     .usagecards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
@@ -1714,7 +1714,7 @@
     .theme-bench-sample { position: static; }
   }
 
-  @container console-content (max-width: 560px) {
+  @container webui-content (max-width: 560px) {
     .iogrid { grid-template-columns: minmax(0, 1fr); }
 
     .tool-schema-summary { grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; }
@@ -1762,12 +1762,12 @@
     .usagebar > .grow { display: none; }
   }
 
-  @container console-content (max-width: 380px) {
+  @container webui-content (max-width: 380px) {
     .statgrid,
     .usagecards { grid-template-columns: minmax(0, 1fr); }
   }
 
-  /* 开场引导:终端页时间线上方那一组 Cortico 气泡。 */
+  /* 开场引导:控制台页时间线上方那一组 Cortico 气泡。 */
   .onboarding { padding: 4px 0 14px; }
   .ob-grid {
     display: grid;

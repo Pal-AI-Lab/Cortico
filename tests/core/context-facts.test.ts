@@ -71,7 +71,7 @@ describe('Core · 生效窗口', () => {
   });
 
   it('上游自报与手填取小;单轮生成上限从窗口里扣掉;两者都没有则没有物理上限', async () => {
-    // 上游自报来自模型目录(OpenRouter 的 context_length);目录只在控制台取列表时拉。
+    // 上游自报来自模型目录(OpenRouter 的 context_length);目录只在 WebUI 取列表时拉。
     vi.stubGlobal('fetch', vi.fn(async (url: string) =>
       String(url).endsWith('/models')
         ? new Response(JSON.stringify({ data: [{ id: 'local', context_length: 16384 }] }), { status: 200 })

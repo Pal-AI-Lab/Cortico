@@ -6,7 +6,7 @@
  * x-options 动态获取候选；x-path 选择服务器本机路径；x-download 提供浏览器下载链接。
  */
 
-import type { ConsoleUi, Disposable } from '../../../shared/client-panel.ts';
+import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import { get, pickPath, post } from '../../core/api.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { icon } from '../../ui/icons.ts';
@@ -45,7 +45,7 @@ type OptionItem = { value: string; label: string };
 
 /**
  * `/api/config/options/:kind` 给的整张表原样画;当前值不在表里也留下,避免写不回。
- * "系统默认 / 静音"这类固定项也由声明该 kind 的一方随表给出——控制台不认识任何 kind。
+ * "系统默认 / 静音"这类固定项也由声明该 kind 的一方随表给出——WebUI 不认识任何 kind。
  */
 function mergeOptionList(live: OptionItem[], current: string): OptionItem[] {
   const seen = new Set<string>();
@@ -60,7 +60,7 @@ function mergeOptionList(live: OptionItem[], current: string): OptionItem[] {
   return out;
 }
 
-function fillSelect(ui: ConsoleUi, sel: HTMLSelectElement, items: OptionItem[], current: string): void {
+function fillSelect(ui: WebUi, sel: HTMLSelectElement, items: OptionItem[], current: string): void {
   sel.replaceChildren();
   for (const item of items) {
     const opt = ui.h('option', null, item.label);
@@ -114,7 +114,7 @@ function isAbort(err: unknown): boolean {
  * pointerdown/focus 再探,给下次打开用。探测失败只留当前值。
  */
 function optionsField(
-  ui: ConsoleUi,
+  ui: WebUi,
   kind: string,
   current: string,
   onChange: () => void,
@@ -156,7 +156,7 @@ function httpDownloadHref(raw: string): string | null {
 }
 
 function pathField(
-  ui: ConsoleUi,
+  ui: WebUi,
   prop: ConfigProperty,
   current: string,
   onChange: () => void,
@@ -217,7 +217,7 @@ function pathField(
 
 /** 渲染属性并返回存储单位的取值器；值变化经 onChange 提交。 */
 export function configField(
-  ui: ConsoleUi,
+  ui: WebUi,
   prop: ConfigProperty,
   val: unknown,
   onChange?: () => void,
@@ -294,7 +294,7 @@ export function configField(
 }
 
 export interface ConfigViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   lifecycle: Lifecycle;
   signal: AbortSignal;
   /**

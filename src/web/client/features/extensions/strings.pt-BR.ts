@@ -26,7 +26,7 @@ export const S: Partial<typeof en> = {
 
   providerManagement: 'As extensões de provedor atendem aos Bots que usam este ambiente compartilhado.',
   idleManagement: 'Ative ou desative Worlds na página de World. Extensões integradas não podem ser excluídas.',
-  createBody: 'Abra um terminal no projeto Cortico no host dele, execute pnpm start --new e selecione este modelo de Bot para criar uma nova instância.',
+  createBody: 'Abra uma linha de comando no projeto Cortico no host dele, execute pnpm start --new e selecione este modelo de Bot para criar uma nova instância.',
 
   restartConfirmTitle: 'Reiniciar o processo?',
   restartNoLoopTitle: 'Inicialização manual necessária',
@@ -38,12 +38,12 @@ export const S: Partial<typeof en> = {
   resultDefault: 'Etapas de desligamento executadas.',
   reloadWait: 'Aguardando um novo processo deste Bot ficar pronto…',
   otherBot: 'Outro Bot está usando esta porta. A recuperação foi interrompida.',
-  restartManual: 'O processo foi encerrado. Inicie-o manualmente no terminal; esta página vai aguardar até que esteja pronto.',
+  restartManual: 'O processo foi encerrado. Inicie-o manualmente pela linha de comando; esta página vai aguardar até que esteja pronto.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: 'Atualizar',
   updateCheckFailed: (detail: string) => `Falha ao verificar atualizações: ${detail}`,
-  noteConsoleMissing: 'Pacote do navegador ausente. Compile no diretório da extensão e reinicie o processo.',
+  noteWebUiMissing: 'Pacote do navegador ausente. Compile no diretório da extensão e reinicie o processo.',
   noExtensions: 'Nenhuma extensão instalada ainda',
   listLoadFailed: (msg: string) => `Falha ao carregar a lista de extensões: ${msg}`,
 

@@ -278,7 +278,7 @@ describe('BilibiliWorld', () => {
     sourceState.handlers?.onStatus(STATUS);
 
     expect((module as unknown as { status: LiveStatus | null }).status).toBeNull();
-    expect(module.console().badges?.[0]).toMatchObject({ value: '未接入', tone: 'off' });
+    expect(module.webUi().badges?.[0]).toMatchObject({ value: '未接入', tone: 'off' });
   });
 
   it('只在 source.stop 完成后读取关机核验 hook', async () => {
@@ -613,7 +613,7 @@ describe('BilibiliWorld', () => {
       '[弹幕|乙] 二',
       '[弹幕|丙] 三',
     ]);
-    const state = await module.console().invoke?.('log', 'state', []) as {
+    const state = await module.webUi().invoke?.('log', 'state', []) as {
       coalescing: { capacityFlushes: number; pendingItems: number };
     };
     expect(state.coalescing).toMatchObject({ capacityFlushes: 1, pendingItems: 0 });
@@ -734,7 +734,7 @@ describe('BilibiliWorld', () => {
     feed({ cmd: 'INTERACT_WORD_V2', data: {} });
     expect(host.deferred).toHaveLength(1);
 
-    // 控制台「清空待投递」把挂单抽走了,render 一次都没跑 —— 复位点随之消失
+    // WebUI「清空待投递」把挂单抽走了,render 一次都没跑 —— 复位点随之消失
     host.deferred.length = 0;
 
     // 窗口内不重挂:安静期不该堆一叠陈旧观察
@@ -782,7 +782,7 @@ describe('BilibiliWorld', () => {
     await module.stop();
   });
 
-  it('最近一窗弹幕全无 uid 时,控制台把脱敏标出来', async () => {
+  it('最近一窗弹幕全无 uid 时,WebUI 把脱敏标出来', async () => {
     vi.useFakeTimers();
     const { module, host, feed } = await mount();
     feed(danmaku(42, '阿明', '有身份'));
@@ -871,11 +871,11 @@ describe('BilibiliWorld', () => {
     expect((drops[0].data as { dropped: number }).dropped).toBeGreaterThan(0);
   });
 
-  it('控制台面板给最近事件与 cmd 计数(没见过的 cmd 也在)', async () => {
+  it('WebUI 面板给最近事件与 cmd 计数(没见过的 cmd 也在)', async () => {
     const { module, feed } = await mount();
     feed(danmaku(42, '阿明', '你好'));
     feed({ cmd: 'SOME_NEW_CMD_2030', data: {} });
-    const decl = module.console();
+    const decl = module.webUi();
     const state = (await decl.invoke?.('log', 'state', [])) as {
       recent: string[];
       counts: Array<[string, number]>;
@@ -900,7 +900,7 @@ describe('BilibiliWorld', () => {
     });
     await module.start(new FakeHost());
     try {
-      const links = module.console().links ?? [];
+      const links = module.webUi().links ?? [];
       const editorLink = links.find((link) => link.label.includes('编辑器'));
       const editorUrl = editorLink?.href;
       expect(editorLink?.inheritTheme).toBe(true);
@@ -1001,7 +1001,7 @@ describe('BilibiliWorld', () => {
     });
     await module.start(new FakeHost());
     try {
-      const editorUrl = module.console().links?.find((link) => link.label.includes('编辑器'))?.href;
+      const editorUrl = module.webUi().links?.find((link) => link.label.includes('编辑器'))?.href;
       const baseUrl = new URL(editorUrl!).origin;
       const png = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3]).toString('base64');
       const upload = await fetch(`${baseUrl}/api/editor/assets`, {
@@ -1072,11 +1072,11 @@ describe('BilibiliWorld', () => {
   it('total 数的是记过的总条数,被上限挤掉的也算在内', async () => {
     const { module, feed } = await mount();
     const state = async (): Promise<{ recent: string[]; total: number }> =>
-      (await module.console().invoke!('log', 'state', [])) as { recent: string[]; total: number };
+      (await module.webUi().invoke!('log', 'state', [])) as { recent: string[]; total: number };
 
     for (let i = 0; i < 250; i++) feed(danmaku(42, '阿明', `第 ${i} 条`));
     const st = await state();
-    // 控制台按 total 的差值补新行,所以它不能跟着 recent 一起被上限截住
+    // WebUI 按 total 的差值补新行,所以它不能跟着 recent 一起被上限截住
     expect(st.total).toBe(250);
     expect(st.recent).toHaveLength(200);
     expect(st.recent[0]).toBe('[弹幕|阿明] 第 249 条');
@@ -1286,7 +1286,7 @@ describe('BilibiliWorld', () => {
   // phase 离开 connected 超过 60 秒才成文一次、告警并亮红灯；恢复事件带中断时长，60 秒内抖动不推送。
   describe('弹幕接入中断成文', () => {
     const feedEvents = (host: FakeHost) => host.events.filter((e) => e.type === 'bilibili.feed');
-    const lamp = (module: BilibiliWorld) => module.console().lamps?.find((l) => l.label === '接入');
+    const lamp = (module: BilibiliWorld) => module.webUi().lamps?.find((l) => l.label === '接入');
 
     it('中断超过 60 秒成文一次(flush)+ warn + 灯转红;往复重连不重复推;恢复补一条带中断时长', async () => {
       vi.useFakeTimers();
@@ -1305,8 +1305,8 @@ describe('BilibiliWorld', () => {
       expect(warns).toHaveLength(1);
       expect(warns[0].data).toMatchObject({ outageSec: 60, phase: 'connecting' });
       expect(lamp(module)).toMatchObject({ state: 'error', hint: expect.stringContaining('弹幕接入中断') });
-      // 控制台面板也收到这一条
-      const state = await module.console().invoke?.('log', 'state', []) as { recent: string[] };
+      // WebUI 面板也收到这一条
+      const state = await module.webUi().invoke?.('log', 'state', []) as { recent: string[] };
       expect(state.recent[0]).toContain('弹幕接入中断');
 
       // 继续在 connecting/retrying 之间往复,再等多久都只有那一条
@@ -1349,6 +1349,6 @@ describe('BilibiliWorld', () => {
 });
 
 function badge(module: BilibiliWorld, label: string): string {
-  const found = module.console().badges?.find((b) => b.label === label);
+  const found = module.webUi().badges?.find((b) => b.label === label);
   return String(found?.value ?? '');
 }

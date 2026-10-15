@@ -126,7 +126,7 @@ const ROTATE_BYTES = 64 * 1024 * 1024;
 
 export interface RunlogLevels {
   file: LogLevel;
-  console: LogLevel;
+  stdout: LogLevel;
   areas: string;
 }
 
@@ -138,10 +138,10 @@ export interface RunlogOptions {
   /** error 记录的上下文快照目录；未提供时不写快照。 */
   incidentsDir?: string | null;
   /** 是否同时打到 stdout(测试关掉) */
-  console?: boolean;
+  webUi?: boolean;
 }
 
-const DEFAULT_LEVELS: RunlogLevels = { file: 'debug', console: 'info', areas: '' };
+const DEFAULT_LEVELS: RunlogLevels = { file: 'debug', stdout: 'info', areas: '' };
 
 export function normalizeError(value: unknown): LogError {
   if (value instanceof Error) {
@@ -224,7 +224,7 @@ export class Runlog {
     this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.levels = opts.levels ?? (() => DEFAULT_LEVELS);
     this.incidentsDir = opts.incidentsDir ?? null;
-    this.echo = opts.console ?? true;
+    this.echo = opts.webUi ?? true;
     if (file) {
       try { this.bytes = existsSync(file) ? statSync(file).size : 0; } catch { this.bytes = 0; }
     }
@@ -233,7 +233,7 @@ export class Runlog {
   get path(): string | null { return this.file; }
   get runId(): string { return this.run; }
 
-  /** 日志追加订阅，供控制台实时观察。 */
+  /** 日志追加订阅，供 WebUI 实时观察。 */
   onWrite(cb: (entry: LogRecord) => void): void {
     this.writeListeners.push(cb);
   }
@@ -253,11 +253,11 @@ export class Runlog {
   write(input: LogInput): LogRecord | null {
     const rank = LOG_LEVEL_RANK[input.level];
     const toFile = rank >= LOG_LEVEL_RANK[this.fileThreshold(input.area)];
-    const toConsole = this.echo && rank >= LOG_LEVEL_RANK[this.levels().console];
-    if (!toFile && !toConsole) return null;
+    const toStdout = this.echo && rank >= LOG_LEVEL_RANK[this.levels().stdout];
+    if (!toFile && !toStdout) return null;
     const record = this.build(input);
     if (rank >= LOG_LEVEL_RANK.warn && this.fold(record)) return null;
-    this.commit(record, toFile, toConsole);
+    this.commit(record, toFile, toStdout);
     if (record.level === 'error') this.incident(record);
     return record;
   }
@@ -301,7 +301,7 @@ export class Runlog {
     return false;
   }
 
-  private commit(record: LogRecord, toFile: boolean, toConsole: boolean): void {
+  private commit(record: LogRecord, toFile: boolean, toStdout: boolean): void {
     this.ring.push(record);
     if (this.ring.length > RING_SIZE) this.ring.shift();
     if (toFile && this.file) {
@@ -317,7 +317,7 @@ export class Runlog {
     for (const cb of this.writeListeners) {
       try { cb(record); } catch { /* 观察者异常不影响日志 */ }
     }
-    if (!toConsole) return;
+    if (!toStdout) return;
     const clock = record.ts.slice(11, 23);
     const tag = record.event ? `${record.area}/${record.event}` : record.area;
     const line = `[${clock}] ${record.level.toUpperCase().padEnd(5)} ${tag}: ${record.msg}${record.repeat ? ` (×${record.repeat + 1})` : ''}`;

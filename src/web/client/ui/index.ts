@@ -1,8 +1,8 @@
-/** 每次面板挂载创建 ConsoleUi，绑定 memo 命名空间、signal 与浮层宿主。 */
+/** 每次面板挂载创建 WebUi，绑定 memo 命名空间、signal 与浮层宿主。 */
 
-import type { ConsoleMemo, ConsoleUi, Disposable } from '../../shared/client-panel.ts';
+import type { WebUiMemo, WebUi, Disposable } from '../../shared/client-panel.ts';
 import { esc, h } from './dom.ts';
-import { consoleFormat } from './format.ts';
+import { webUiFormat } from './format.ts';
 import { kv, progress, statgrid, stat, table } from './data.ts';
 import { checkbox, field, input, segmented, select, textarea } from './fields.ts';
 import { copyButton, disable } from './actions.ts';
@@ -23,9 +23,9 @@ import {
 import type { Overlay, OverlayEnv } from './overlay.ts';
 import { busy, confirm, drawer, lightbox, noopDisposable, toast } from './overlay.ts';
 
-export interface ConsoleUiDeps {
+export interface WebUiDeps {
   /** 面板局部持久化。`foldSheet` 的展开状态存这儿。 */
-  memo: ConsoleMemo;
+  memo: WebUiMemo;
   /**
    * toast / confirm / drawer 的挂载点。host 传 `document.body` 或一个专用容器。
    * **不能是面板的 `root`**——那个在 unmount 时会被清空。
@@ -37,7 +37,7 @@ export interface ConsoleUiDeps {
   doc?: Document;
 }
 
-export function createConsoleUi(deps: ConsoleUiDeps): ConsoleUi {
+export function createWebUi(deps: WebUiDeps): WebUi {
   const doc = deps.doc ?? deps.overlayHost.ownerDocument;
   const signal = deps.signal;
   const env: OverlayEnv = { doc, host: deps.overlayHost, signal };
@@ -83,7 +83,7 @@ export function createConsoleUi(deps: ConsoleUiDeps): ConsoleUi {
     lightbox: (src, alt) => lightbox(env, src, alt),
     busy: (title, text) => busy(env, title, text),
     disable: (...els) => disable(els),
-    fmt: consoleFormat,
+    fmt: webUiFormat,
   };
 }
 

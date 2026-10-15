@@ -42,14 +42,14 @@ describe('llamacpp 条目', () => {
   it('端点页的运行时段落:开启托管、逐格改参数、清空自备目录都只写这一条端点', async () => {
     const saved: LLMProviderEntry[] = [];
     let current = entry();
-    const console = module.console!({
+    const WebUI = module.webUi!({
       language: 'zh',
       entries: () => [{ name: 'local', entry: current }],
       instance: () => { throw new Error('这几个方法不该去要实例'); },
       save: (_name, next) => { saved.push(next); current = next; },
     });
     const call = (method: string, body: Record<string, unknown>) =>
-      console.invoke!('runtime', method, [{ name: 'local', ...body }]);
+      WebUI.invoke!('runtime', method, [{ name: 'local', ...body }]);
 
     await call('enable', { backend: defaultBackend() });
     expect(llamacppOptions(current).launch).toEqual(LAUNCH_DEFAULTS);

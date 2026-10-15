@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: 'Nome de exibição',
-    description: 'Usado no título do console e como nome do remetente nas mensagens que o bot envia. O console aplica na hora; um World montado aplica quando esse World reinicia.',
+    description: 'Usado no título da WebUI e como nome do remetente nas mensagens que o bot envia. A WebUI aplica na hora; um World montado aplica quando esse World reinicia.',
   },
   quietGap: {
     title: 'Janela de silêncio',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: 'Limite do arquivo de log',
     description: 'Registros abaixo deste nível não são gravados em data/runs/<run>/log.jsonl.',
   },
-  logConsole: {
+  logStdout: {
     title: 'Limite de impressão de logs',
-    description: 'Registros abaixo deste nível não são impressos na janela do console.',
+    description: 'Registros abaixo deste nível não são impressos na saída padrão.',
   },
   logAreas: {
     title: 'Limites de arquivo por área',

@@ -229,11 +229,11 @@ interface Made {
 }
 
 async function mkShell(over: Record<string, unknown> = {}): Promise<Made> {
-  const { createConsoleUi } = (await import(UI)) as Any;
+  const { createWebUi } = (await import(UI)) as Any;
   const { createShell } = (await import(SHELL)) as Any;
   const doc = new FakeDoc();
   const life = new AbortController();
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: fakeMemo(), overlayHost: doc.body, doc, signal: life.signal,
   });
   const navigated: string[][] = [];
@@ -265,21 +265,21 @@ describe('框架页那一段', () => {
     stubStatus({});
     const { nav } = await mkShell({
       features: [
-        feature('live', '终端', undefined, '系统'),
+        feature('live', '控制台', undefined, '系统'),
         feature('config', '配置', undefined, '管理'),
         feature('usage', '用量', undefined, '系统'),
       ],
     });
     const groups = nav.findAll('navgroup');
     expect(groups.map((g) => g.find('stacklabel')!.textContent)).toEqual(['系统', '管理']);
-    expect(groups.map((g) => labels(g))).toEqual([['终端', '用量'], ['配置']]);
+    expect(groups.map((g) => labels(g))).toEqual([['控制台', '用量'], ['配置']]);
   });
 
-  it('终端是一级入口,World 总览是实例树入口;系统提示词归 Persona & Memory 组,hidden 的页不占行', async () => {
+  it('控制台是一级入口,World 总览是实例树入口;系统提示词归 Persona & Memory 组,hidden 的页不占行', async () => {
     stubStatus({});
     const { nav, navigated } = await mkShell({
       features: [
-        feature('live', '终端', undefined, undefined, 'primary'),
+        feature('live', '控制台', undefined, undefined, 'primary'),
         feature('core', '运行诊断', undefined, 'Core'),
         feature('usage', '用量', undefined, 'Core'),
         feature('providers', '语言模型', undefined, 'Core'),
@@ -294,7 +294,7 @@ describe('框架页那一段', () => {
 
     expect(nav.children.length).toBe(4);
     expect(nav.children[0].classList.contains('navgroup-primary')).toBe(true);
-    expect(labels(nav.children[0])).toEqual(['终端']);
+    expect(labels(nav.children[0])).toEqual(['控制台']);
     const core = nav.children[1];
     expect(core.find('stacklabel')!.textContent).toBe('Core');
     // 组内按声明顺序;设置与外观是 hidden,入口在底栏,不占左栏的行
@@ -492,7 +492,7 @@ describe('provider 那一段', () => {
   it('框架页与人格入口带图标， World 实例保持纯文字', async () => {
     stubStatus({});
     const { nav } = await mkShell({
-      features: [{ ...feature('live', '终端', undefined, '系统'), icon: 'terminal' }],
+      features: [{ ...feature('live', '控制台', undefined, '系统'), icon: 'console' }],
       pages: providers,
     });
     const items = nav.findAll('navitem');
@@ -732,7 +732,7 @@ describe('bot 实例名', () => {
     expect(el.find('rail-name')!.textContent).toBe('示例');
     // 悬停说的是这一下能做什么;全名在改名框里。
     expect(el.find('rail-name')!.title).toBe('点击改名');
-    expect(doc.title).toBe('控制台 · 示例');
+    expect(doc.title).toBe('WebUI · 示例');
   });
 
   it('左上角是框架字标,不随 bot 改', async () => {
@@ -895,7 +895,7 @@ describe('就地改名', () => {
 
     expect(el.find('rail-rename')).toBe(null);
     expect(el.find('rail-name')!.textContent).toBe('新名字');
-    expect(doc.title).toBe('控制台 · 新名字');
+    expect(doc.title).toBe('WebUI · 新名字');
     expect(posts.at(-1)).toMatchObject({
       url: '/api/config',
       body: { group: 'core', values: { displayName: '新名字' } },

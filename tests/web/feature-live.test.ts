@@ -1,5 +1,5 @@
 /**
- * 终端页使用变量形式的动态 import，避免根 tsconfig 将 DOM 代码拉入 Node 检查；浏览器类型由 tsconfig.web.json 检查。
+ * 控制台页使用变量形式的动态 import，避免根 tsconfig 将 DOM 代码拉入 Node 检查；浏览器类型由 tsconfig.web.json 检查。
  * 迷你 DOM 实现 addEventListener 的 signal 选项，保证卸载后的监听计数有效。
  * WebSocket 及其退避定时器、fetch 和 fork 轮询时钟均可控。
  */
@@ -20,7 +20,7 @@ const FEATURE_ENTRY = '../../src/web/client/features/feature.ts';
 
 type Any = any;
 
-const { createConsoleUi } = (await import(UI_ENTRY)) as Any;
+const { createWebUi } = (await import(UI_ENTRY)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE_ENTRY)) as Any;
 const { Router, parseHash } = (await import(ROUTER_ENTRY)) as Any;
 const live = (await import(LIVE_ENTRY)) as Any;
@@ -352,7 +352,7 @@ function mkCtx(capabilities: Record<string, boolean>, hash = '#/live'): Ctx {
       store[k] = v;
     },
   };
-  const ui = createConsoleUi({ memo, overlayHost: doc.body, doc, signal: lifecycle.signal });
+  const ui = createWebUi({ memo, overlayHost: doc.body, doc, signal: lifecycle.signal });
   ui.promptInput = (opts: Any): Any => {
     const el = ui.h('div', 'prompt-input-host');
     el.appendChild(ui.h('textarea', 'prompt-textarea'));
@@ -530,7 +530,7 @@ describe('诊断导出 · 文件名', () => {
 describe('live feature 声明', () => {
   it('认领 live 路由,两条通道任一挂着就有意义', () => {
     expect(live.liveFeature.route).toBe('live');
-    expect(live.liveFeature.label).toBe('终端');
+    expect(live.liveFeature.label).toBe('控制台');
     expect([...live.liveFeature.needsAny]).toEqual(['debug', 'sessions']);
     expect(featureAvailable(live.liveFeature, { debug: true, sessions: false })).toBe(true);
     expect(featureAvailable(live.liveFeature, { debug: false, sessions: true })).toBe(true);
@@ -556,7 +556,7 @@ describe('live feature 挂载', () => {
     expect(root.find('tlinner')).not.toBe(null);
     expect(sockets.map((socket) => socket.url)).toEqual([
       'ws://test/ws/debug',
-      'ws://test/ws/providers/world%3Aterminal/panels/chat',
+      'ws://test/ws/providers/world%3Aconsole/panels/chat',
     ]);
   });
 
@@ -619,7 +619,7 @@ describe('live feature 挂载', () => {
 
     expect((root.find('sesscards') as FakeEl).children.length).toBe(2);
     // 展示名来自部署配置,只落在标题上(品牌名归外壳)
-    expect(doc.title).toBe('控制台 · 某某');
+    expect(doc.title).toBe('WebUI · 某某');
   });
 
   it('时间线下方那行只按 core 的运行阶段显示:追加 user 消息不显示,phase 帧给出轮次与工具名,idle 收起', () => {
@@ -763,7 +763,7 @@ describe('live feature 挂载', () => {
         functionCall('evf_1', 'external_event_frame', '{}'),
         functionResult('evf_1', '[1 new events]\n[直播间] 看过 481'),
       ],
-      toolSchemas: [{ name: 'terminal_send', tags: ['speak'] }, { name: 'inspect', tags: ['read'] }],
+      toolSchemas: [{ name: 'console_send', tags: ['speak'] }, { name: 'inspect', tags: ['read'] }],
       status: { displayName: 'Yukima' },
     });
     // 带 speak 标签的工具不再画成气泡,和别的工具一样是工具卡;回执照样填回槽位
@@ -771,7 +771,7 @@ describe('live feature 挂载', () => {
     const cards = root.findAll('toolcall');
     // 卡头是 tool_name / call_id 两只键值框:键名在 kv-k,值全文在 kv-v
     const kvv = (card: FakeEl, key: string): string | null => card.find(`kv-${key}`)?.find('kv-v')?.textContent ?? null;
-    expect(cards.map((c) => kvv(c, 'tool_name'))).toEqual(['inspect', 'terminal_send', 'external_event_frame']);
+    expect(cards.map((c) => kvv(c, 'tool_name'))).toEqual(['inspect', 'console_send', 'external_event_frame']);
     expect(cards.map((c) => kvv(c, 'call_id'))).toEqual(['inspect_1', 'send_1', 'evf_1']);
     expect(cards[0].find('kv-tool_name')!.find('kv-k')!.textContent).toBe('tool_name');
     expect(cards[1].find('toolresult')!.textContent).toContain('已发送');
@@ -870,10 +870,10 @@ describe('live feature 挂载', () => {
     expect(blocks[4].findAll('think-label').map((label) => label.textContent)).toEqual(['可见思考 12 字', '加密思考 16 字符', '摘要']);
     expect(blocks[4].findAll('think-body').map((body) => body.textContent)).toEqual(['保留当前结果用于下一步。', '已完成状态核对。']);
     expect(blocks[0].findAll('think-label').map((label) => label.textContent)).toEqual(['可见思考 19 字']);
-    // 工具调用一律是工具卡,terminal_send 也不例外;气泡只留给模型的直接输出
+    // 工具调用一律是工具卡,console_send 也不例外;气泡只留给模型的直接输出
     expect(blocks[3].className).toContain('toolcall');
     expect(blocks[3].className).not.toContain('evframe');
-    expect(blocks[3].find('kv-tool_name')!.find('kv-v')!.textContent).toBe('terminal_send');
+    expect(blocks[3].find('kv-tool_name')!.find('kv-v')!.textContent).toBe('console_send');
     expect(root.find('bubblewrap')).toBeNull();
     expect(blocks[5].find('monolog-label')!.textContent).toContain('commentary');
     const answer = blocks.slice(6);
@@ -951,7 +951,7 @@ describe('live feature 挂载', () => {
 
     expect(sockets.map((s) => s.url)).toEqual([
       'ws://test/ws/sessions',
-      'ws://test/ws/providers/world%3Aterminal/panels/chat',
+      'ws://test/ws/providers/world%3Aconsole/panels/chat',
     ]);
     expect(fetched).toEqual(['/api/status']);
     expect((root.find('tlinner') as FakeEl).textContent).toContain('调试通道不可用');
@@ -966,24 +966,24 @@ describe('live feature 挂载', () => {
     expect((root.find('sesscards') as FakeEl).children.length).toBe(1);
   });
 
-  it('两条观察通道都没挂时只保留终端发送通道', () => {
+  it('两条观察通道都没挂时只保留控制台发送通道', () => {
     stubFetch(() => ({}));
     const { env, sockets } = fakeEnv();
     const { ctx } = mkCtx({ debug: false, sessions: false });
     live.createLiveFeature({ env }).mount(ctx);
     expect(sockets.map((socket) => socket.url)).toEqual([
-      'ws://test/ws/providers/world%3Aterminal/panels/chat',
+      'ws://test/ws/providers/world%3Aconsole/panels/chat',
     ]);
   });
 
-  it('终端 World 拒收的帧弹出原因;问候这类普通系统提示不弹', () => {
+  it('控制台 World 拒收的帧弹出原因;问候这类普通系统提示不弹', () => {
     stubFetch(() => ({}));
     const { env, sockets } = fakeEnv();
     const { ctx, doc } = mkCtx({ debug: false, sessions: false });
     live.createLiveFeature({ env }).mount(ctx);
     const chat = sockets[0];
     chat.up();
-    chat.emitRaw(JSON.stringify({ type: 'sys', text: '你好,控制台。' }));
+    chat.emitRaw(JSON.stringify({ type: 'sys', text: '你好,WebUI。' }));
     expect(doc.body.findAll('toast')).toHaveLength(0);
     chat.emitRaw(JSON.stringify({ type: 'sys', kind: 'rejected', text: 'bot尚未连接,消息未送达' }));
     const toasts = doc.body.findAll('toast');
@@ -1309,7 +1309,7 @@ describe('开场引导', () => {
     expect(fetched).toContain('/api/onboarding/dismiss');
   });
 
-  it('按下按钮:先让运行继续,再把按钮上的字送上终端通道,然后收起', async () => {
+  it('按下按钮:先让运行继续,再把按钮上的字送上控制台通道,然后收起', async () => {
     stubFetch(() => ({}));
     const { root, sockets } = mountWith(fresh);
     const sent: string[] = [];

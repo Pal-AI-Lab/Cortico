@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/console/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/console/settings.ts, src/providers/console/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
 
 # src/providers
 
@@ -14,7 +14,7 @@
 | `registry.ts` | 目录扫描发现内建模块、`registerProviderModules()` 收扩展、实例缓存与 `bind()` |
 | `configuration.ts` | `validateSpec` / `validateEntry`:外部配置校验 |
 | `pricebook.ts` | 价目定义、快照、报价合并 |
-| `console/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活) |
+| `webui/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活) |
 | `openai-responses-compat/` | 内建模块:Responses 协议客户端与模型目录 |
 | `llamacpp/` | 内建模块:llama-server 的 Chat 客户端、router 目录、官方 release 的下载安装与进程托管 |
 | `transport/` | HTTP/SSE 引擎、Chat 与 Responses 请求转换、事件装配、计量、错误 |
@@ -24,14 +24,14 @@
 `id` 必须等于目录名(扩展包里则是包声明的 id)。必填:`title`、`reasoningTiers`(空表 = 开放,
 effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`description`、`defaultBaseUrl` 与
 `baseUrlSuggestions`、`effortSuggestions`、`temperatureNote`、`localize()`、`normalize()`、
-`validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `console()`
+`validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `webUi()`
 (附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
 
-地址、密钥变量名与图像开关不归模块:框架在 `console/config.ts` 里为每个端点声明这一组,
+地址、密钥变量名与图像开关不归模块:框架在 `webui/config.ts` 里为每个端点声明这一组,
 扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,模块的面板作为端点编辑页的段落
-用控制台的 schema 渲染器画同一份声明、经 `ctx.setConfig` 暂存到连接草稿——内建 llamacpp 的运行时与启动
-两段走的是这条。段落顺序由 `console()` 的 `panels` 定:编辑页自带的四块(`console/config.ts` 的
-`connectionBlocks`)与模块自己的面板排成一列。`console()` 显式给空 `config` 表示这一页不另开配置页签,
+用 WebUI 的 schema 渲染器画同一份声明、经 `ctx.setConfig` 暂存到连接草稿——内建 llamacpp 的运行时与启动
+两段走的是这条。段落顺序由 `webUi()` 的 `panels` 定:编辑页自带的四块(`webui/config.ts` 的
+`connectionBlocks`)与模块自己的面板排成一列。`webUi()` 显式给空 `config` 表示这一页不另开配置页签,
 声明仍参与服务端校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
@@ -52,7 +52,7 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 下一次解析重建),填 `stateDir` 与 `secret`。
 `bind(name)` 在实例外包一层:注入 `quote`(报价快照)与 `origin`(实例、模块、模型、
 `compatibilityDomain` = sha256(kind + baseUrl + `compatibilityKey()`))。Responses 历史推理仅在实例、
-模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,控制台保存端点后调用;`.env` 变更经缓存键在下一次解析生效。
+模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,WebUI 保存端点后调用;`.env` 变更经缓存键在下一次解析生效。
 
 ## 配置形状
 
@@ -96,7 +96,7 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 
 ## 端点配置接口
 
-`console/hub.ts` 的 `ProviderHub` 是控制台改端点的唯一入口,`hub-api.ts` 把它接到
+`webui/hub.ts` 的 `ProviderHub` 是 WebUI 改端点的唯一入口,`hub-api.ts` 把它接到
 `/api/providers`(聚合、按名读取、保存、删除、设为当前、测试、模型列表)与
 `/api/provider-modules`(已注册模块)。列表保留 `kind` 没有对应模块的端点,active 与可用性
 分别报告;状态帧的 `modelConnection` 带当前端点的名称、模型、模块与地址。
@@ -111,7 +111,7 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 接口不返回密钥值。写完清掉本进程的实例缓存,已绑定的请求与 fork 保持原客户端;其他进程在下次
 重读共享配置时跟上。
 
-`ProviderConsoleHost.editing` 表示这个实例来自还没保存的表单,模块据此拒绝运行时副作用,
+`ProviderWebUiHost.editing` 表示这个实例来自还没保存的表单,模块据此拒绝运行时副作用,
 `host.save` 把配置交回浏览器暂存。`ProviderRegistry.previewRegistry` 按一份条目造注册表,实例不进
 运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
 `{ entry, secretValue }` 时走它。

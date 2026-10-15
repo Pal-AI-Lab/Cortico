@@ -10,12 +10,12 @@
 pnpm start corti-soulmate
 ```
 
-默认控制台地址:`http://127.0.0.1:7777/`。
+默认 WebUI 地址:`http://127.0.0.1:7777/`。
 
 ## World
 
-默认启用 `qq`、`terminal`、`websearch`。
+默认启用 `qq`、`console`、`websearch`。
 
-## 控制台
+## WebUI
 
-Persona 自报工作区、Memory 与版本历史三块;`console-page.ts` 另外贡献存档点、统一重置与强制入梦三块,与 Persona 那半合成同一页。
+Persona 自报工作区、Memory 与版本历史三块;`webui-page.ts` 另外贡献存档点、统一重置与强制入梦三块,与 Persona 那半合成同一页。

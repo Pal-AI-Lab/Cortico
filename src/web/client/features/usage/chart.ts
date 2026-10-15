@@ -3,8 +3,8 @@
  * 组合、取值、配色、格式化和桶标签均为独立导出的纯函数；renderChart 仅操作自身创建的 SVG。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
-import { consoleFormat } from '../../ui/format.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
+import { webUiFormat } from '../../ui/format.ts';
 import { esc } from '../../ui/dom.ts';
 import { clampNumber, hexToHsl, hslCss } from '../../theme/palette.ts';
 import { U_PALETTE, U_TYPES } from './labels.ts';
@@ -193,16 +193,16 @@ export function compositeColors(
 
 /** 读数：成本带币种、调用带"次"、token 带 "tok"。 */
 export function fmtMetric(v: number, metric: UsageMetric, cur?: string): string {
-  if (metric === 'cost') return consoleFormat.money(v, cur);
+  if (metric === 'cost') return webUiFormat.money(v, cur);
   if (metric === 'calls') return Math.round(v).toLocaleString() + S.callsUnit;
-  return consoleFormat.count(Math.round(v)) + ' tok';
+  return webUiFormat.count(Math.round(v)) + ' tok';
 }
 
 /** 纵轴刻度：比读数短一截，不带单位。 */
 export function fmtAxis(v: number, metric: UsageMetric): string {
   if (metric === 'cost') return v < 1 ? v.toFixed(3) : v.toFixed(1);
   if (metric === 'calls') return String(Math.round(v));
-  return consoleFormat.count(Math.round(v));
+  return webUiFormat.count(Math.round(v));
 }
 
 /** 缓存命中率。分母为 0 时是 `null`（不是 0）——"没有输入"与"一次没命中"不是一回事。 */
@@ -284,8 +284,8 @@ export function uTipHtml(
   }
   s += `<div class="tt-extra">${S.tipFoot(
     p.calls || 0,
-    consoleFormat.percent(cacheRateOf(p)),
-    consoleFormat.count(p.reasoningTokens || 0),
+    webUiFormat.percent(cacheRateOf(p)),
+    webUiFormat.count(p.reasoningTokens || 0),
   )}</div>`;
   if (o.metric === 'cost' && (p.unpricedCalls || 0) > 0) s += `<div class="tt-extra">${S.tipUnpriced(p.unpricedCalls || 0)}</div>`;
   return s;
@@ -312,7 +312,7 @@ function mkSvgEl(
 
 export interface ChartDeps {
   doc: Document;
-  ui: ConsoleUi;
+  ui: WebUi;
   /** 图画在这里。宽度取它的 `clientWidth`。 */
   box: HTMLElement;
   /** 图例容器；不拆分时清空后留白。 */

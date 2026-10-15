@@ -135,14 +135,14 @@ describe('MinecraftWorldProxy(引擎子进程)', () => {
   });
 
   it('面板调用过界:server.state 报未配置目录', async () => {
-    const invoke = proxy.console().invoke!;
+    const invoke = proxy.webUi().invoke!;
     const st = (await invoke('server', 'state', [])) as { phase: string; configured: boolean };
     expect(st.configured).toBe(false);
   });
 
   it('面板调用前同步刚写入的路径配置', async () => {
     cfg.local.serverDir = dir;
-    const st = await proxy.console().invoke!('server', 'state', []) as { serverDir: string };
+    const st = await proxy.webUi().invoke!('server', 'state', []) as { serverDir: string };
     expect(st.serverDir).toBe(dir);
     cfg.local.serverDir = '';
   });
@@ -150,9 +150,9 @@ describe('MinecraftWorldProxy(引擎子进程)', () => {
   it('状态推送填充徽标与存储统计;账本可跨界清除', async () => {
     // 灯与徽标同批跨界。等的是**灯变了**:徽标与存储在子进程报上来之前就有占位值,
     // 拿它们当"报上来了"的判据等于没等。
-    await waitFor(() => proxy.console().lamps?.[0]?.label !== '引擎');
-    expect((proxy.console().badges?.length ?? 0) > 0 && (proxy.console().storage?.length ?? 0) > 0).toBe(true);
-    const storage = proxy.console().storage!;
+    await waitFor(() => proxy.webUi().lamps?.[0]?.label !== '引擎');
+    expect((proxy.webUi().badges?.length ?? 0) > 0 && (proxy.webUi().storage?.length ?? 0) > 0).toBe(true);
+    const storage = proxy.webUi().storage!;
     const chests = storage.find((s) => s.key === 'minecraft-chests');
     expect(chests).toBeTruthy();
     expect(typeof chests!.stat()).toBe('string');
@@ -312,7 +312,7 @@ describe('MinecraftWorldProxy(子进程未起时的存储面)', () => {
       const chestsFile = join(dir, 'minecraft-chests.json');
       writeFileSync(chestsFile, JSON.stringify({ chests: [{ pos: [1, 2, 3] }] }), 'utf8');
       const cold = new MinecraftWorldProxy({ cfg, dataDir: dir });
-      const storage = cold.console().storage ?? [];
+      const storage = cold.webUi().storage ?? [];
       expect(storage.map((s) => s.key))
         .toEqual([
           'minecraft-chests', 'minecraft-deaths', 'minecraft-explored', 'minecraft-works',

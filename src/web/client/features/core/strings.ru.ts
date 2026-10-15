@@ -48,7 +48,7 @@ export const S: Partial<typeof en> = {
   statRounds: 'Раунды в этом пакете',
   statBatches: 'Всего пакетов',
   statEvents: 'Курсор последнего события',
-  statOnline: 'В сети в терминале',
+  statOnline: 'В сети в консоли',
   statRun: 'Запуск',
   unitMsgs: 'сообщ.',
   unitPeople: 'польз.',

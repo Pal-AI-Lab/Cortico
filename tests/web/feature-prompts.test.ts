@@ -9,7 +9,7 @@ const UI = '../../src/web/client/ui/index.ts';
 const LIFECYCLE = '../../src/web/client/core/lifecycle.ts';
 const ROUTER = '../../src/web/client/core/router.ts';
 const PROMPTS = '../../src/web/client/features/prompts/index.ts';
-import { CONSOLE_PROTOCOL_VERSION } from '../../src/web/shared/console-protocol.ts';
+import { WEBUI_PROTOCOL_VERSION } from '../../src/web/shared/webui-protocol.ts';
 
 const STRINGS = '../../src/web/client/features/prompts/strings.ts';
 const { S } = await import(STRINGS);
@@ -17,7 +17,7 @@ const EDITOR = '../../src/web/client/features/prompts/editor.ts';
 
 type Any = any;
 
-const { createConsoleUi } = (await import(UI)) as Any;
+const { createWebUi } = (await import(UI)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE)) as Any;
 const { Router } = (await import(ROUTER)) as Any;
 const prompts = (await import(PROMPTS)) as Any;
@@ -62,7 +62,7 @@ function stub(reply?: (url: string, method: string) => unknown): void {
     const u = String(url);
     const method = String(init?.method ?? 'GET');
     calls.push({ url: u, body: init?.body ? JSON.parse(String(init.body)) : undefined });
-    const body = u === '/api/console/manifest' ? { protocolVersion: CONSOLE_PROTOCOL_VERSION, providers: [] } : reply
+    const body = u === '/api/webui/manifest' ? { protocolVersion: WEBUI_PROTOCOL_VERSION, providers: [] } : reply
       ? reply(u, method)
       : method === 'POST' ? { ok: true, result: '已保存', revision: 'r-new' }
         : u === '/api/prompts' ? DOCS
@@ -79,7 +79,7 @@ function mkCtx(caps: Record<string, boolean> = { prompts: true }): Any {
   document.body.appendChild(root);
   const lifecycle = new Lifecycle(() => {});
   mounted.push(lifecycle);
-  const ui = createConsoleUi({
+  const ui = createWebUi({
     memo: { get: () => null, set: () => {} },
     overlayHost: document.body,
     signal: lifecycle.signal,
@@ -663,7 +663,7 @@ beforeEach(() => {
   saveGate = sessionGate = null; configAvailable = true; failures = new Set();
   history.replaceState(null, '', '/#/prompts');
   vi.stubGlobal('fetch', async (path: string, options: Any) => {
-    if (path === '/api/console/manifest') return json({ protocolVersion: CONSOLE_PROTOCOL_VERSION, framework: { capabilities: { config: configAvailable } }, providers: [
+    if (path === '/api/webui/manifest') return json({ protocolVersion: WEBUI_PROTOCOL_VERSION, framework: { capabilities: { config: configAvailable } }, providers: [
       { id: 'world:fixture', kind: 'world', label: 'Fixture World', availability: 'active', configGroups: ['worlds.fixture'], prompts: [{ key: worldKey }] },
     ] });
     if (path === '/api/prompts/prefix') return json({ segments: prefix() });
@@ -694,7 +694,7 @@ async function mountPage() {
   mounted.push(life);
   const root = document.createElement('div');
   document.body.append(root);
-  const ui = createConsoleUi({ doc: document, overlayHost: document.body, signal: life.signal, memo: { get: (_: unknown, fallback: unknown) => fallback, set() {} } });
+  const ui = createWebUi({ doc: document, overlayHost: document.body, signal: life.signal, memo: { get: (_: unknown, fallback: unknown) => fallback, set() {} } });
   const router = new Router({ win: window, confirmLeave: (body: string) => ui.confirm({ title: 'Leave', body }) });
   life.own(router.start());
   await prompts.mountPrompts({ root, ui, router, route: router.route, signal: life.signal, lifecycle: life, capabilities: { prompts: true, storage: true, sessionControl: true }, onError() {} });

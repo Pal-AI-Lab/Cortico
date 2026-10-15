@@ -22,8 +22,8 @@ export interface ExtensionView {
   description?: string;
   kind?: ExtensionKindView;
   api?: number;
-  consoleClient: boolean;
-  console?: 'none' | 'served' | 'missing';
+  webUiClient: boolean;
+  webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   reason?: string;
   worldId?: string;
@@ -82,7 +82,7 @@ export interface PackageDetailView {
   versionCount: number;
   history: Array<{ version: string; date: string }>;
   deprecated?: string;
-  manifest?: { kind: ExtensionKindView; api: number; consoleClient?: string; consoleStyle?: string };
+  manifest?: { kind: ExtensionKindView; api: number; webUiClient?: string; webUiStyle?: string };
   problems?: string[];
   warnings: string[];
   frameworkApi: number;
@@ -470,7 +470,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       box.replaceChildren(ui.h('h4', '', S.introduction), ui.h('p', '', item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'), ui.h('h4', '', S.information));
       const feedback = ui.msgline(); feedback.classList.add('extension-operation-feedback'); feedback.setAttribute('role', 'status'); box.append(feedback);
       if (item?.reason) box.append(ui.msgline(item.reason, true));
-      if (item?.console === 'missing') box.append(ui.msgline(S.noteConsoleMissing, true));
+      if (item?.webUi === 'missing') box.append(ui.msgline(S.noteWebUiMissing, true));
       for (const text of [...data.problems ?? [], ...data.warnings]) box.append(ui.msgline(text, true));
       if (data.deprecated) box.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [

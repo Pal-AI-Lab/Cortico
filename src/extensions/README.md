@@ -3,9 +3,9 @@
 # src/extensions
 
 扩展是装在 `extensions/` 下的 npm 包,给框架补一个 World、一个 provider 或一个 bot。
-三类使用相同的 manifest 和加载流程,按 `kind` 校验默认导出结构、id 命名空间与控制台页前缀。
+三类使用相同的 manifest 和加载流程,按 `kind` 校验默认导出结构、id 命名空间与 WebUI 页前缀。
 `pnpm check:extension` 使用 `dry-mount.ts` 在假部署中验证构造与声明接口:
-World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot 调用 `build()`;
+World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot 调用 `build()`;
 不调用 `start()`。
 
 ## manifest
@@ -19,10 +19,10 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
   "keywords": ["cortico-world"],          // npm 搜索按类关键字:cortico-world / cortico-provider / cortico-bot
   "cortico": {
     "kind": "world",                      // world | provider | bot
-    "api": 5,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载
-    "displayName": "VTuber",              // 可选:控制台里的名称;不合格时 warning 并忽略
-    "consoleClient": "dist/console.js",   // 可选:预构建的面板 bundle,包内相对路径
-    "consoleStyle": "dist/console.css"    // 可选:随 bundle 注入的样式
+    "api": 6,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载
+    "displayName": "VTuber",              // 可选:WebUI 里的名称;不合格时 warning 并忽略
+    "webUiClient": "dist/webui.js",   // 可选:预构建的面板 bundle,包内相对路径
+    "webUiStyle": "dist/webui.css"    // 可选:随 bundle 注入的样式
   }
 }
 ```
@@ -32,7 +32,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 
 `EXTENSION_API_VERSIONS` 按 kind 各记一个版本:`WorldDefinition` 不兼容变更只加 world,
 `ProviderModule` 只加 provider,`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;
-`ConsolePanelContext` 与其余共用接口变更时三类一起加一。同一次发布里的多处变更合计加一。
+`WebUiPanelContext` 与其余共用接口变更时三类一起加一。同一次发布里的多处变更合计加一。
 
 ## 装载
 
@@ -40,7 +40,7 @@ World 调用 `create()` / `tools()` / `console()`,provider 调用 `create()`,bot
 `extensions/node_modules/<包>/` import 入口(`exports` → `module` → `main` → `index.js`),
 按 `kind` 校验默认导出:
 
-| kind | 默认导出 | 命名空间 | 控制台页 |
+| kind | 默认导出 | 命名空间 | WebUI 页 |
 |---|---|---|---|
 | `world` | `WorldDefinition`(`id` / `label` / `defaults()` / `create()`) | 与内建 World 共用 | `world:<id>` |
 | `provider` | `ProviderModule`(`id` / `title` / `reasoningTiers` / `serviceTiers` / `create()`) | 与内建 provider 共用 | `llm:<id>` |
@@ -54,7 +54,7 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 `importBotDefinition()` 导入该包,再作为 `activeBot` 交给 `loadExtensions()` 标记加载状态:
 同名记录记 loaded,其余 bot 包记 `idle`。`ExtensionSet.bot` 说明这份部署的 bot 来自扩展包,
 `createBot` 据此把已安装扩展包内的提示词模板设为只读,pnpm 安装的文件可能硬链接到 store。结果 `ExtensionSet` 里 `worlds` 由启动器接在仓内目录(`src/worlds/index.ts`)之后,整张表经
-`withWorlds()` 交给 bot 定义；它仅补充缺失的 World 配置段，已有段保持原值，新增段的 `enabled` 取决于 bot 是否声明该 World。`providers` 交给 `registerProviderModules()`，`consoleAssets` 交给控制台。
+`withWorlds()` 交给 bot 定义；它仅补充缺失的 World 配置段，已有段保持原值，新增段的 `enabled` 取决于 bot 是否声明该 World。`providers` 交给 `registerProviderModules()`，`webUiAssets` 交给 WebUI。
 
 新装或卸掉的包要重启进程:ESM 模块缓存不支持运行中换代码。
 
@@ -66,7 +66,7 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 
 浏览器侧(面板 bundle)对 `cortico/*` 只允许 `import type`;bundle 里要用的运行时值由包自带。
 
-## 控制台接口
+## WebUI 接口
 
 `ExtensionManager` 提供扩展页接口:`list(language)` 比较启动时的加载结果与当前安装状态
 (`loaded` / `failed` / `pending-restart` / `removed` / `idle`),带上本机 package.json 的 `metadata` 与 `author`,

@@ -220,22 +220,22 @@ function fakeMemo(seed: Record<string, unknown> = {}) {
  * "面板 unmount"都写成 `ac.abort()`。
  */
 async function mkUi(seed: Record<string, unknown> = {}) {
-  const { createConsoleUi } = await loadUi();
+  const { createWebUi } = await loadUi();
   const doc = new FakeDoc();
   const host = doc.createElement('div');
   doc.body.appendChild(host);
   const memo = fakeMemo(seed);
   const ac = new AbortController();
-  const ui = createConsoleUi({ memo, overlayHost: host, doc, signal: ac.signal }) as Any;
+  const ui = createWebUi({ memo, overlayHost: host, doc, signal: ac.signal }) as Any;
   return { doc, host, memo, ui, ac };
 }
 
 // ---------------------------------------------------------------------------
-// ConsoleFormat —— 纯函数，口径钉死在这里
+// WebUiFormat —— 纯函数，口径钉死在这里
 // ---------------------------------------------------------------------------
 
-describe('ConsoleFormat', () => {
-  const load = async (): Promise<Any> => (await import(FORMAT_ENTRY)).consoleFormat;
+describe('WebUiFormat', () => {
+  const load = async (): Promise<Any> => (await import(FORMAT_ENTRY)).webUiFormat;
 
   it('count：满 10000 才转 k', async () => {
     const fmt = await load();
@@ -1268,7 +1268,7 @@ describe('面板 unmount 的收尾', () => {
     await expect(p).resolves.toBe(false);
   });
 
-  it('abort 撤掉 busy：面板都卸了还盖着一层，就是把控制台锁死了', async () => {
+  it('abort 撤掉 busy：面板都卸了还盖着一层，就是把 WebUI 锁死了', async () => {
     const { ui, host, ac } = await mkUi();
     ui.busy('重启中', '正在重启……');
     expect(host.children).toHaveLength(1);

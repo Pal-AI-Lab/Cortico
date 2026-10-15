@@ -5,10 +5,10 @@ import type { ContextRecord } from '../../../../protocol/open-responses/context.
  */
 
 import type {
-  ConsoleStreamHandle,
+  WebUiStreamHandle,
   Disposable,
 } from '../../../shared/client-panel.ts';
-import { panelStreamRoute } from '../../../shared/console-protocol.ts';
+import { panelStreamRoute } from '../../../shared/webui-protocol.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { get, post } from '../../core/api.ts';
 import { openStream } from '../../core/stream.ts';
@@ -44,7 +44,7 @@ export function createLiveFeature(opts: LiveFeatureOptions = {}): FrameworkFeatu
   return {
     route: 'live',
     label: S.navLabel,
-    icon: 'terminal',
+    icon: 'console',
     navMode: 'primary',
     // 两条通道任一挂着这一页就有意义;都没有的话导航里根本不出现它。
     needsAny: ['debug', 'sessions'],
@@ -258,7 +258,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const hello = JSON.stringify({ type: 'hello', name: '控制台' });
-  let chatStream: ConsoleStreamHandle | null = null;
+  let chatStream: WebUiStreamHandle | null = null;
 
   // ── fork 视图 ─────────────────────────────────────────────────────
   const fork = createForkView({
@@ -427,14 +427,14 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   }
 
   chatStream = ctx.lifecycle.own(openStream({
-    url: env.wsUrl(panelStreamRoute('world:terminal', 'chat')),
+    url: env.wsUrl(panelStreamRoute('world:console', 'chat')),
     signal: ctx.signal,
     createSocket: env.createSocket,
     setTimer: env.setTimer,
     clearTimer: env.clearTimer,
     onError: (err) => ctx.onError(err),
     handlers: {
-      // 时间线由调试通道画;这条流上只读终端 World 对本连接所发帧的拒收与附带说明。
+      // 时间线由调试通道画;这条流上只读控制台 World 对本连接所发帧的拒收与附带说明。
       message: (raw) => {
         let frame: unknown;
         try {

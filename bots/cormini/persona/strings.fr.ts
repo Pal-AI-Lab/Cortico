@@ -1,6 +1,6 @@
-import type { consoleEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn } from './strings.ts';
 
-export const consoleText: Partial<typeof consoleEn> = {
+export const webUiText: Partial<typeof webUiEn> = {
   orientation: "Mode d'existence de la Persona et notes de métacognition.",
   constitution: "Principes à long terme de la Persona. Les modifications prennent effet après un rechargement du préfixe système ou au début d'un nouveau contexte.",
   memoryNote: "Conventions de Memory : comment les fichiers du bot sont stockés et quand ils remontent d'eux-mêmes.",

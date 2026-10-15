@@ -26,7 +26,7 @@ export const S: Partial<typeof en> = {
 
   providerManagement: 'Les extensions de fournisseur servent les bots qui utilisent cet environnement partagé.',
   idleManagement: 'Activez ou désactivez les World sur la page World. Les extensions intégrées ne peuvent pas être supprimées.',
-  createBody: 'Ouvrez un terminal dans le projet Cortico sur sa machine hôte, lancez pnpm start --new, puis sélectionnez ce modèle de bot pour créer une nouvelle instance.',
+  createBody: 'Ouvrez une ligne de commande dans le projet Cortico sur sa machine hôte, lancez pnpm start --new, puis sélectionnez ce modèle de bot pour créer une nouvelle instance.',
 
   restartConfirmTitle: 'Redémarrer le processus ?',
   restartNoLoopTitle: 'Démarrage manuel requis',
@@ -38,12 +38,12 @@ export const S: Partial<typeof en> = {
   resultDefault: "Étapes d'arrêt exécutées.",
   reloadWait: "En attente qu'un nouveau processus de ce bot soit prêt…",
   otherBot: 'Un autre bot utilise ce port. Récupération arrêtée.',
-  restartManual: "Le processus est terminé. Démarrez-le manuellement dans le terminal ; cette page attendra qu'il soit prêt.",
+  restartManual: "Le processus est terminé. Démarrez-le manuellement en ligne de commande ; cette page attendra qu'il soit prêt.",
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: 'Mettre à jour',
   updateCheckFailed: (detail: string) => `Échec de la vérification des mises à jour : ${detail}`,
-  noteConsoleMissing: "Bundle navigateur manquant. Compilez dans le répertoire de l'extension et redémarrez le processus.",
+  noteWebUiMissing: "Bundle navigateur manquant. Compilez dans le répertoire de l'extension et redémarrez le processus.",
   noExtensions: 'Aucune extension installée',
   listLoadFailed: (msg: string) => `Échec du chargement de la liste des extensions : ${msg}`,
 

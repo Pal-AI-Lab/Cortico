@@ -29,7 +29,7 @@ export interface PersonaConfig {
 }
 
 /**
- * 这份Persona声明的可调项。控制台只按 JSON Schema 渲染,不解释
+ * 这份Persona声明的可调项。WebUI 只按 JSON Schema 渲染,不解释
  * "memo 三级缓存""梦"等人格概念。
  *
  * 模型不归Persona:用哪个模型、怎么想整组归 Provider,它拿不到也不问。

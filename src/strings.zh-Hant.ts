@@ -95,7 +95,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: '請檢查對應外部服務是否已停止。',
     llm: '停止 Provider 實例',
     flush: '儲存 Core 狀態',
-    web: '關閉控制台',
+    web: '關閉 WebUI',
     summarySkipped: '本機關機步驟未全部完成',
     summaryComplete: '本機關機步驟全部完成',
     summaryUnverified: (items: string[]) => `本機關機完成,但外部狀態未確認結束:${items.join('、')}(需人工確認)`,

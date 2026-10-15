@@ -5,7 +5,7 @@
  * 实时日志帧只在查看当前 run 时触发重查；重查在途时到达的帧合并成结束后的一次。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
 import { shouldStick } from '../../ui/index.ts';
 import { S } from './strings.ts';
@@ -44,7 +44,7 @@ function truncate(s: string, n: number): string {
 }
 
 export interface RunlogViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   signal: AbortSignal;
   onNet(online: boolean): void;
   onError(err: unknown): void;

@@ -47,5 +47,5 @@ jobs:
       - name: Tests
         run: pnpm test
 
-      - name: Build console bundle
+      - name: Build WebUI bundle
         run: pnpm run build:web

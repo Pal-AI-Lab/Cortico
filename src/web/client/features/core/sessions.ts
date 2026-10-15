@@ -2,7 +2,7 @@
  * 主 session 与 fork 本次运行的 token、缓存统计。数据来自 /ws/debug 的 sessions 帧或 /api/sessions；表格经 ui.table.addRow 写入文本，不将 session label 解析为 HTML。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import type { SessionStat } from '../live/protocol.ts';
 import { S } from './strings.ts';
 
@@ -11,7 +11,7 @@ export interface SessionTable {
   render(list: readonly SessionStat[]): void;
 }
 
-export function createSessionTable(ui: ConsoleUi): SessionTable {
+export function createSessionTable(ui: WebUi): SessionTable {
   const sheet = ui.sheet({
     title: S.sessionsTitle,
     en: 'usage / cache',

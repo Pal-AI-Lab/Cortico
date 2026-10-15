@@ -18,7 +18,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'wsgit-'));
   w('CONSTITUTION.md', '# 宪法\n第一版\n');
   w('note/a.md', 'note a\n');
-  g = new WorkspaceGit(dir, () => { /* 测试里不往控制台喊 */ });
+  g = new WorkspaceGit(dir, () => { /* 测试里不往 WebUI 喊 */ });
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -72,8 +72,8 @@ describe.skipIf(!gitAvailable)('WorkspaceGit', () => {
     const h1 = g.commitAll('本轮记忆改动', AUTHOR_SELF);
     expect(h1).toBeTruthy();
     expect(g.commitAll('空', AUTHOR_SELF)).toBeNull(); // 无改动
-    w('note/a.md', 'note a\n控制台加的一行\n');
-    const h2 = g.commitAll('控制台编辑', AUTHOR_OPERATOR);
+    w('note/a.md', 'note a\nWebUI 加的一行\n');
+    const h2 = g.commitAll('WebUI 编辑', AUTHOR_OPERATOR);
     expect(h2).toBeTruthy();
 
     // 署名对照导出的常量:两类来源可分辨才是契约,具体字符串不是

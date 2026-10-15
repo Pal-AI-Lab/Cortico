@@ -4,7 +4,7 @@ import type { ListedModel, ProviderAvailability, ProviderInstance, ProviderModul
 import { validatePrices } from './pricebook.ts';
 import { text } from './strings.ts';
 
-/** `language` only picks the wording of the thrown message; the console passes its own. */
+/** `language` only picks the wording of the thrown message; the WebUI passes its own. */
 export function validateSpec(
   module: ProviderModule,
   entry: LLMProviderEntry,

@@ -25,7 +25,7 @@ const fakeDoc = (hidden = false): Any => {
   return doc;
 };
 
-/** 每个用例一份新模块:轮询状态是模块级的(一个控制台只该有一个节拍)。 */
+/** 每个用例一份新模块:轮询状态是模块级的(一个 WebUI 只该有一个节拍)。 */
 async function loadLamp(): Promise<Any> {
   vi.resetModules();
   return import(LAMP_ENTRY);

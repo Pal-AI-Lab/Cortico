@@ -1,6 +1,6 @@
 /**
  * 主题的数据与纯函数：token 词表、内置调色板、部署主题记录的规范化。
- * 浏览器、控制台服务端与启动器共用这一份；不依赖 DOM，token 的中文标签由浏览器侧贴。
+ * 浏览器、WebUI 服务端与启动器共用这一份；不依赖 DOM，token 的中文标签由浏览器侧贴。
  */
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -237,7 +237,7 @@ export function parseStoredTheme(raw: string | null | undefined): StoredTheme {
 
 /**
  * 记录里选中的那份调色板。选中的自定义方案被删掉、或 id 认不出时落到默认方案。
- * `mode` 为 `system` 时由调用方决定明暗：浏览器问系统，终端按深色。
+ * `mode` 为 `system` 时由调用方决定明暗：浏览器问系统，命令行按深色。
  */
 export function resolvePalette(state: StoredTheme, appearance: ThemeAppearance): ThemePalette {
   const custom = state.custom.find((s) => s.id === state.selectedId);

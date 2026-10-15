@@ -7,7 +7,7 @@
  * 打字机由 lifecycle.frame 管理，监听使用 signal，滚动保持由 shouldStick 判断。
  */
 
-import type { ConsoleUi, Disposable } from '../../../shared/client-panel.ts';
+import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { shouldStick } from '../../ui/index.ts';
 import { estTok } from './context.ts';
@@ -75,7 +75,7 @@ interface Turn {
 type Ordinal = number | null;
 
 export interface TimelineDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   lifecycle: Lifecycle;
   signal: AbortSignal;
 }

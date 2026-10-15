@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: 'ターミナル',
+  navLabel: 'コンソール',
   currentProvider: '現在のモデルプロバイダー',
   noProvider: 'モデルプロバイダーが選択されていません',
   ctxOpenAria: 'token の内訳を表示',
   ctxPanelAria: 'token の内訳',
-  netConnecting: 'コンソールに接続中…',
-  netOnline: 'コンソールに接続済み',
-  netOffline: 'コンソールの接続が切れました',
-  composerLabel: 'ターミナルのメッセージ入力',
+  netConnecting: 'WebUI に接続中…',
+  netOnline: 'WebUI に接続済み',
+  netOffline: 'WebUI の接続が切れました',
+  composerLabel: 'コンソールのメッセージ入力',
   composerPlaceholder: 'メッセージを入力…',
   exportDiagnostics: '診断をエクスポート',
   exportFailed: '診断パッケージを取得できませんでした',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: '診断パッケージには会話、プロンプト、イベント、ツール呼び出し、使用量、実行ログが含まれます。設定内の秘密情報はマスクされ、それ以外はそのまま書き出されます。共有する前に個人情報が含まれていないか確認してください。',
   composerFork: 'バックグラウンドセッションを表示中です。ここで送信したメッセージはメインセッションに届きます',
   composerNoProvider: '現在のモデルプロバイダーを利用できません。「モデル接続」ページで設定してください',
-  composerQueued: 'ターミナルのチャネルが再接続中のため、メッセージをキューに入れました',
+  composerQueued: 'コンソールのチャネルが再接続中のため、メッセージをキューに入れました',
   emptyConnecting: 'デバッグチャネルに接続中…',
   ctxTitle: (total: string, max: string | null) =>
     `コンテキスト ${total}${max !== null ? ` / ${max}` : ''} tok · クリックで内訳を表示`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: 'デバッグチャネルを利用できないため、タイムラインを表示できません。',
 
   // status.ts
-  docTitle: (name: string) => `コンソール · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: '未接続',
   chipMsgs: ' 件',
   chipCache: 'キャッシュ ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: 'まず、モデルプロバイダーを設定してください：',
   obProviderNone: '利用できるモデルプロバイダーがまだ設定されていません',
   obProviderReady: 'モデルプロバイダーを設定しました',
-  obWorlds: '次に、ボットが接続する外部環境モジュール（Cortico World）を有効にして設定してください。最初はターミナルでの会話だけを有効にしてもかまいません。',
+  obWorlds: '次に、ボットが接続する外部環境モジュール（Cortico World）を有効にして設定してください。最初はコンソールでの会話だけを有効にしてもかまいません。',
   obWorldsState: (labels: readonly string[]) => `現在 ${labels.length} 個の外部環境が有効です：${labels.join('、')}`,
   obPrompts: '最後に、ここでシステムプロンプトを編集して、人格の説明、振る舞いのルール、話し方などをカスタマイズできます！',
   obReady: '準備完了！',

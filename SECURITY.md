@@ -15,7 +15,7 @@ patched.
 
 ## Scope
 
-In scope: everything in this repository, including the launcher, Core, the console, the
+In scope: everything in this repository, including the launcher, Core, the WebUI, the
 extension loader, the bundled Worlds and providers, and the `cortico` npm package.
 
 Out of scope:

@@ -1,5 +1,5 @@
 /**
- * Lifecycle、Router、ConsolePageLoader 的行为测试。
+ * Lifecycle、Router、WebUiPageLoader 的行为测试。
  * 变量形式的动态 import 避免根 tsconfig 将 DOM 代码纳入 Node 检查；浏览器类型由 tsconfig.web.json 检查。
  * 夹具注入窗口和加载依赖，并接管 RAF 与定时器。
  */
@@ -8,13 +8,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const LIFECYCLE_SPEC = '../../src/web/client/core/lifecycle.ts';
 const ROUTER_SPEC = '../../src/web/client/core/router.ts';
-const LOADER_SPEC = '../../src/web/client/console-pages/loader.ts';
+const LOADER_SPEC = '../../src/web/client/webui-pages/loader.ts';
 
 type Any = any;
 
 const { Lifecycle } = (await import(LIFECYCLE_SPEC)) as Any;
 const { Router, parseHash, buildHash } = (await import(ROUTER_SPEC)) as Any;
-const { ConsolePageLoader, PanelBundleError } = (await import(LOADER_SPEC)) as Any;
+const { WebUiPageLoader, PanelBundleError } = (await import(LOADER_SPEC)) as Any;
 
 /** 断言抛错并把错误取回来（`rejects.toThrow` 拿不到自定义字段）。 */
 async function catchErr(p: Promise<unknown>): Promise<Any> {
@@ -900,7 +900,7 @@ describe('Router —— 与地址栏保持同步', () => {
 });
 
 // ===========================================================================
-// ConsolePageLoader
+// WebUiPageLoader
 // ===========================================================================
 
 interface FakeLink {
@@ -927,7 +927,7 @@ function makeLoader(importModule: Any): LoaderHarness {
     appendChild: (node: unknown) => { appended.push(node as FakeLink); },
     querySelector,
   };
-  const loader = new ConsolePageLoader({ importModule, styleHost, createLink, log });
+  const loader = new WebUiPageLoader({ importModule, styleHost, createLink, log });
   return { loader, importModule, createLink, querySelector, log, appended };
 }
 
@@ -940,7 +940,7 @@ function makeBundle(...panelIds: string[]): Any {
   return { panels };
 }
 
-describe('ConsolePageLoader —— 加载与去重', () => {
+describe('WebUiPageLoader —— 加载与去重', () => {
   it('正常加载：拿到 default export 的扩展', async () => {
     const bundle = makeBundle('gate');
     const h = makeLoader(vi.fn(async () => ({ default: bundle })));
@@ -1033,7 +1033,7 @@ describe('ConsolePageLoader —— 加载与去重', () => {
   });
 });
 
-describe('ConsolePageLoader —— 拒绝的输入', () => {
+describe('WebUiPageLoader —— 拒绝的输入', () => {
   it('asset 为 undefined → PanelBundleError，消息里提到 pnpm build:web', async () => {
     const h = makeLoader(vi.fn());
     const err = await catchErr(h.loader.load('world:chat', undefined));
@@ -1080,7 +1080,7 @@ describe('ConsolePageLoader —— 拒绝的输入', () => {
   });
 });
 
-describe('ConsolePageLoader —— resolvePanel', () => {
+describe('WebUiPageLoader —— resolvePanel', () => {
   it('取到存在的面板', async () => {
     const bundle = makeBundle('gate', 'voice');
     const h = makeLoader(vi.fn(async () => ({ default: bundle })));
@@ -1114,7 +1114,7 @@ describe('ConsolePageLoader —— resolvePanel', () => {
   });
 });
 
-describe('ConsolePageLoader —— 样式注入', () => {
+describe('WebUiPageLoader —— 样式注入', () => {
   it('有 asset.css 时创建 link，设好 rel/href/dataset.provider 并 append', async () => {
     const h = makeLoader(vi.fn(async () => ({ default: makeBundle('gate') })));
     await h.loader.load('world:chat', { js: JS_URL, css: CSS_URL });

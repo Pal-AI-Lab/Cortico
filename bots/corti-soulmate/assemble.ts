@@ -7,7 +7,7 @@ import { loadDeployment, type LoadedConfig } from 'cortico/deploy.ts';
 import { withWorlds } from 'cortico/world.ts';
 import { loadBuiltinWorlds } from 'cortico/worlds/index.ts';
 import { QQWorld } from 'cortico/worlds/qq/world.ts';
-import { TerminalWorld } from 'cortico/worlds/terminal/world.ts';
+import { ConsoleWorld } from 'cortico/worlds/console/world.ts';
 import { WebSearchWorld } from 'cortico/worlds/websearch/world.ts';
 import type { CortiSoulmate } from './persona/index.ts';
 import type { Dream } from './persona/subconscious/index.ts';
@@ -36,7 +36,7 @@ export interface AssembledBot extends Bot<BotConfig> {
   persona: CortiSoulmate;
   dream: Dream;
   qqWorld: QQWorld | null;
-  terminalWorld: TerminalWorld | null;
+  consoleWorld: ConsoleWorld | null;
   webSearchWorld: WebSearchWorld | null;
 }
 
@@ -55,7 +55,7 @@ export function assembleBot(
     persona,
     dream: persona.dream,
     qqWorld: find(QQWorld),
-    terminalWorld: find(TerminalWorld),
+    consoleWorld: find(ConsoleWorld),
     webSearchWorld: find(WebSearchWorld),
   });
 }

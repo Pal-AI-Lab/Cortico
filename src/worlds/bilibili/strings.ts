@@ -44,7 +44,7 @@ const zh = {
   noticeMaxTitle: 'Agent 公告字数上限',
   suffixChars: '字',
   noticeMaxDescription: 'Agent 公告工具写入纯文本时的 Unicode 字符上限。',
-  // ── 控制台露出:灯、徽标、面板、链接、模板 ──────────────────────────
+  // ── WebUI 露出:灯、徽标、面板、链接、模板 ──────────────────────────
   label: 'B 站直播间',
   panelLogTitle: '直播间事件',
   panelLogDescription: '直播间事件与各 cmd 计数。',

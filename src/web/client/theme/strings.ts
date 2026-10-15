@@ -18,7 +18,7 @@ const zh = {
   groupPaper: "背景层级",
   groupInk: '文字与边界',
   groupState: '交互与状态',
-  groupTimeline: '终端时间线',
+  groupTimeline: '控制台时间线',
   groupChart: '图表系列',
   token: {
     paper: '页面背景',
@@ -78,7 +78,7 @@ export const en: typeof zh = {
   groupPaper: "Background layers",
   groupInk: 'Text & borders',
   groupState: 'Interaction & state',
-  groupTimeline: 'Terminal timeline',
+  groupTimeline: 'Console timeline',
   groupChart: 'Chart series',
   token: {
     paper: 'Page background',

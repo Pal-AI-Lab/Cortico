@@ -15,7 +15,7 @@ const zh = {
   safesearchDescription: '过滤强度。',
   timeoutTitle: '请求超时',
   timeoutDescription: '单次搜索请求的超时。',
-  // ── 控制台露出 ─────────────────────────────────────────────────────
+  // ── WebUI 露出 ─────────────────────────────────────────────────────
   moduleLabel: 'WebSearch',
   key: '密钥',
   keySet: '已配置',

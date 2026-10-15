@@ -1,12 +1,12 @@
 import type { ConfigGroup } from 'cortico/core/types.ts';
 
 /**
- * 上下文阶段三个裁量与首轮对话开关(`ContextStagePolicy`)的控制台配置组。归属 `persona`:
+ * 上下文阶段三个裁量与首轮对话开关(`ContextStagePolicy`)的 WebUI 配置组。归属 `persona`:
  * 容量与首轮对话都是 Persona 的参数,core 只持 `hardTokens` 物理钳制与 keepPastThinking。渲染在
  * Persona 页的配置页签。
  *
  * 每个以 Cormini 为骨架的 bot 各声明一次,`id` 按 bot 取;没有这一组的 bot,这三个数在
- * 控制台上没有位置,只能改 config.json。
+ * WebUI 上没有位置,只能改 config.json。
  */
 export function contextStageConfigGroup(id: string): ConfigGroup {
   return {

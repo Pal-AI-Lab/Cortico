@@ -31,7 +31,7 @@ describe('启动即暂停', () => {
     cfg.batching.quietGapMs = 20;
     cfg.batching.maxBatchAgeMs = 200;
     cfg.worlds.qq.enabled = false;
-    cfg.worlds.terminal.enabled = true;
+    cfg.worlds.console.enabled = true;
     cfg.web.port = 0;
     const loaded = makeLoaded({
       config: cfg, rootDir: tmp.dir, memoryDir, dataDir: join(tmp.dir, 'data'),

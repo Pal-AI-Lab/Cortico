@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 export const VIEWERS_DIR = 'viewers';
 
 /**
- * 前缀 MEMORY 段的模板(机制说明,不是花名册)。散文归可编辑文件——控制台
+ * 前缀 MEMORY 段的模板(机制说明,不是花名册)。散文归可编辑文件——WebUI
  * 「系统提示词」里点得进去改,与 ORIENTATION/宪法同一条路。
  */
 export const VIEWER_MEMORY_NOTE_FILE = join(
@@ -14,7 +14,7 @@ export const VIEWER_MEMORY_NOTE_FILE = join(
   'MEMORY_NOTE.md',
 );
 
-/** 此刻的说明文本;前缀与控制台记忆面板共读这一份。 */
+/** 此刻的说明文本;前缀与 WebUI 记忆面板共读这一份。 */
 export function viewerMemoryNote(): string {
   return readFileSync(VIEWER_MEMORY_NOTE_FILE, 'utf8').trim();
 }

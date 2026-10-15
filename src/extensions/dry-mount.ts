@@ -1,6 +1,6 @@
 /**
  * 在临时部署中检查扩展构造与声明接口，不调用 start()。
- * World 使用默认配置、无密钥，检查 create、tools、envPromptVars、console、工具名冲突与配置路径；
+ * World 使用默认配置、无密钥，检查 create、tools、envPromptVars、WebUI、工具名冲突与配置路径；
  * provider 使用测试端点 create 并检查配置路径，bot 使用测试部署 build。
  * World 构造失败为错误；provider 仅在绑定端点时构造，测试条目不完整导致的失败记为警告。
  * 临时文件位于 scratchDir，调用方负责创建与清理。
@@ -41,13 +41,13 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 
 /**
  * 声明过的每个配置路径都要落在 prefix 指的段内;给了 `defaults` 时还要在里面有对应项。
- * 缺默认值时控制台照样渲染旋钮、也照样写回 config.json,而读到的是代码里另一处的兜底值。
+ * 缺默认值时 WebUI 照样渲染旋钮、也照样写回 config.json,而读到的是代码里另一处的兜底值。
  * provider 的旋钮写进端点条目而不是 `defaults()`,所以只核对段。
  */
 function configPathProblems(group: ConfigGroup, prefix: string, defaults?: Record<string, unknown>): string[] {
   if (!isConfigGroup(group)) {
     const fields = isPlainObject(group) ? Object.keys(group).join(', ') : typeof group;
-    return [`有一个配置组缺 id、owner 或 schema.properties(实际字段: ${fields}):控制台会跳过它。`];
+    return [`有一个配置组缺 id、owner 或 schema.properties(实际字段: ${fields}):WebUI 会跳过它。`];
   }
   const problems: string[] = [];
   for (const path of Object.keys(group.schema.properties ?? {})) {
@@ -62,7 +62,7 @@ function configPathProblems(group: ConfigGroup, prefix: string, defaults?: Recor
   return problems;
 }
 
-/** 面板 id 的形状:控制台一页内的局部 id。 */
+/** 面板 id 的形状:WebUI 一页内的局部 id。 */
 const PANEL_ID = /^[a-z0-9-]+$/;
 /** 工具名带前缀:`<短名>_` 起头。 */
 const TOOL_PREFIX = /^[a-z0-9]+_/;
@@ -118,7 +118,7 @@ export function collectToolNames(
 
 export interface WorldDryMountOptions extends DryMountOptions {
   /** manifest 声明了浏览器端产物;声明了面板却没有产物只是警告。 */
-  hasConsoleClient?: boolean;
+  hasWebUiClient?: boolean;
   /** 已被别的 World 占用的工具名 → 占用者。 */
   takenToolNames?: ReadonlyMap<string, string>;
 }
@@ -196,21 +196,21 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
     failures.push(`envPromptVars() 抛错: ${message(error)}`);
   }
 
-  if (typeof world.console === 'function') {
+  if (typeof world.webUi === 'function') {
     try {
-      const decl = world.console(opts.language ?? 'zh');
+      const decl = world.webUi(opts.language ?? 'zh');
       const panels = decl.panels ?? [];
       const panelIds = new Set<string>();
       for (const panel of panels) {
-        if (!PANEL_ID.test(panel.id)) failures.push(`面板 id「${panel.id}」不合形状:控制台一页内的局部 id,只用 [a-z0-9-]。`);
+        if (!PANEL_ID.test(panel.id)) failures.push(`面板 id「${panel.id}」不合形状:WebUI 一页内的局部 id,只用 [a-z0-9-]。`);
         if (panelIds.has(panel.id)) failures.push(`面板 id 重复: ${panel.id}。`);
         panelIds.add(panel.id);
       }
-      if (panels.length && !opts.hasConsoleClient) {
-        warnings.push(`console() 声明了 ${panels.length} 个面板，未声明 cortico.consoleClient；使用自定义面板时需提供浏览器产物。`);
+      if (panels.length && !opts.hasWebUiClient) {
+        warnings.push(`webUi() 声明了 ${panels.length} 个面板，未声明 cortico.webUiClient；使用自定义面板时需提供浏览器产物。`);
       }
       if ((decl.lamps?.length ?? 0) > MODULE_LAMP_MAX) {
-        warnings.push(`console().lamps 有 ${decl.lamps?.length} 颗,控制台最多画 ${MODULE_LAMP_MAX} 颗。`);
+        warnings.push(`webUi().lamps 有 ${decl.lamps?.length} 颗,WebUI 最多画 ${MODULE_LAMP_MAX} 颗。`);
       }
       for (const group of decl.config ?? []) {
         if (group.owner !== `world:${def.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,World 的配置组 owner 应为 world:${def.id}。`);
@@ -224,18 +224,18 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
           warnings.push(`环境提示词模板 ${doc.path} 不在:这个 World 的段会是空的。`);
         }
       }
-      ok.push(`console(): ${panels.length} 个面板,${decl.config?.length ?? 0} 个配置组,${decl.promptDocs?.length ?? 0} 份提示词文档。`);
+      ok.push(`webUi(): ${panels.length} 个面板,${decl.config?.length ?? 0} 个配置组,${decl.promptDocs?.length ?? 0} 份提示词文档。`);
     } catch (error) {
-      failures.push(`console() 抛错: ${message(error)}`);
+      failures.push(`webUi() 抛错: ${message(error)}`);
     }
   } else {
-    ok.push('没有 console():控制台按通用信息显示。');
+    ok.push('没有 webUi():WebUI 按通用信息显示。');
   }
   return report;
 }
 
 export interface ProviderDryMountOptions extends DryMountOptions {
-  hasConsoleClient?: boolean;
+  hasWebUiClient?: boolean;
 }
 
 /** 假端点的名字;模块声明的配置路径按它组成 `providers.<端点名>.options.`。 */
@@ -319,9 +319,9 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
     }
   }
 
-  if (mod.console) {
+  if (mod.webUi) {
     try {
-      const contribution = mod.console({
+      const contribution = mod.webUi({
         language,
         entries: () => [],
         instance: () => { throw new Error("构造检查不提供实际端点实例"); },
@@ -331,12 +331,12 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
       for (const panel of panels) {
         if (!PANEL_ID.test(panel.id)) failures.push(`面板 id「${panel.id}」不合形状:只用 [a-z0-9-]。`);
       }
-      if (panels.length && !opts.hasConsoleClient) {
-        warnings.push(`console() 声明了 ${panels.length} 个面板，未声明 cortico.consoleClient；使用自定义面板时需提供浏览器产物。`);
+      if (panels.length && !opts.hasWebUiClient) {
+        warnings.push(`webUi() 声明了 ${panels.length} 个面板，未声明 cortico.webUiClient；使用自定义面板时需提供浏览器产物。`);
       }
-      ok.push(`console(): ${panels.length} 个面板。`);
+      ok.push(`webUi(): ${panels.length} 个面板。`);
     } catch (error) {
-      failures.push(`console() 抛错: ${message(error)}`);
+      failures.push(`webUi() 抛错: ${message(error)}`);
     }
   }
   return report;
@@ -414,7 +414,7 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   }
   if (prebuilt.length) ok.push(`预建 World: ${[...ids].join(', ')}（预建实例重启时复用原对象）。`);
 
-  for (const group of parts.console?.configGroups ?? []) {
+  for (const group of parts.webUi?.configGroups ?? []) {
     if (group.owner !== 'persona') warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,Persona 的配置组 owner 应为 persona。`);
     failures.push(...configPathProblems(group, '', config));
   }

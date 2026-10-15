@@ -45,7 +45,7 @@ describe('renderTemplate', () => {
   });
 
   it('没有占位符的模板原样返回', () => {
-    expect(renderTemplate('你连接着一个终端对话界面。', {})).toBe('你连接着一个终端对话界面。');
+    expect(renderTemplate('你连接着一个控制台对话界面。', {})).toBe('你连接着一个控制台对话界面。');
   });
 });
 

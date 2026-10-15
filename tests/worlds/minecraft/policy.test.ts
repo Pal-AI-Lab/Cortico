@@ -155,8 +155,8 @@ describe('mc_policy 回读契约', () => {
 
   // 总开关是人的兜底,她那一侧的表达由 fight:"off" 承担:两者不是同一件事,
   // 关着的时候不假装这一格设上了
-  it('控制台把战斗总开关关着时,回执照实说这一格不起作用', () => {
-    expect(receipt({ fight: 'off' }, true)).toContain('战斗总开关在控制台关着,主动动手这一格现在不起作用');
+  it('WebUI 把战斗总开关关着时,回执照实说这一格不起作用', () => {
+    expect(receipt({ fight: 'off' }, true)).toContain('战斗总开关在 WebUI 关着,主动动手这一格现在不起作用');
     expect(receipt({ fight: 'off' }, false)).not.toContain('总开关');
   });
 });

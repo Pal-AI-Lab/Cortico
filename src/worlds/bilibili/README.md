@@ -19,9 +19,9 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 | [`gift-frame.ts`](gift-frame.ts) | `SEND_GIFT_V2` 的 pb blob → V1 字段形状。两种帧共用下游 |
 | [`coalescing-buffer.ts`](coalescing-buffer.ts) | 相同弹幕与常规礼物进入事件总线前的固定窗归并 |
 | [`audience-admission.ts`](audience-admission.ts) | 按 UID 记录优先资格，以高能榜和批次预算决定是否筛选，并分配三类事件的上下文额度 |
-| [`world.ts`](world.ts) | 投递分档、人流聚合、公告工具、控制台数据面与 Overlay 接线 |
+| [`world.ts`](world.ts) | 投递分档、人流聚合、公告工具、WebUI 数据面与 Overlay 接线 |
 | [`overlay/`](overlay/) | 设计模型、用户组匹配、原始事件显示、素材、公告持久化、loopback HTTP/SSE、运行页与独立编辑器 |
-| [`console/`](console/) | 直播间入站诊断 `log`；Overlay 编辑入口由 World 链接提供 |
+| [`webui/`](webui/) | 直播间入站诊断 `log`；Overlay 编辑入口由 World 链接提供 |
 
 帧压缩使用 `node:zlib`，WBI 签名使用 `node:crypto` 的 md5，WebSocket 使用 `ws`。protobuf 读取器按已核对的字段编号解析；本项目没有官方 `.proto` schema。
 
@@ -48,7 +48,7 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 
 `worlds.bilibili.sessdata` 保存浏览器登录后的 SESSDATA cookie，位于部署的 `config.json`，不进入版本控制。匿名连接仍可接收弹幕；已观测到匿名响应将观众 uid 置为 0，并对昵称脱敏。`uid=0` 时不生成 `senderKey`，昵称不作为稳定身份键。
 
-已有弹幕且最近至多 20 条均缺少有效 uid 时,控制台显示「近期弹幕缺少观众 uid」。
+已有弹幕且最近至多 20 条均缺少有效 uid 时,WebUI 显示「近期弹幕缺少观众 uid」。
 
 登录态以服务端返回的 `LiveStatus.selfUid` 为准，0 表示匿名。已配置 `sessdata` 但仍为匿名时，每次接入至多记录一次 error。
 
@@ -79,7 +79,7 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 
 进场、点赞和免费礼物累计次数；看过、在线、人气与粉丝数记录接收时的读数。它们在 World 内累积，经 `pushDeferred` 随下一批事件投递，并在渲染正文后清零。待投递期间不重复登记；超过 5 分钟未渲染时允许重新登记。
 
-`normalize.ts` 的 `IGNORED` 列出不投递的 cmd，包括运营挂件、连麦玩法、全站广播及自身语音转写。未识别的 cmd 仍按原名称计数，并显示在控制台。
+`normalize.ts` 的 `IGNORED` 列出不投递的 cmd，包括运营挂件、连麦玩法、全站广播及自身语音转写。未识别的 cmd 仍按原名称计数，并显示在 WebUI。
 
 ## 相同消息归并
 
@@ -89,9 +89,9 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 
 弹幕以「稳定 UID + 去掉首尾空白后的正文」逐字匹配，大小写、内部空白和 Unicode 形式均不改写；**不同观众发同一句话不合并**。礼物只合并礼物流中连续出现的同一稳定 UID、同一礼物名和单价，累计笔数、件数与金额；另一位送礼人或另一种礼物结束该连续段，普通弹幕不打断礼物段。无稳定 UID 的礼物逐笔投递，不凭昵称猜身份。匿名接入时弹幕没有稳定身份键，按正文合并。
 单件仍使用原正文、昵称和 `senderKey`；两件以上写成 `[弹幕×N|昵称] 正文`；礼物写成 `[礼物×N笔 ¥合计|昵称] 礼物×总件数`，保留送礼人姓名与组级 `senderKey`。昵称必须进入归并正文，因为私有 `meta` 不渲染给 agent。
-参与者的稳定 `senderKey`、昵称与原始条数保留在组级私有 `meta`，供人物档案逐人召回。Overlay 与控制台日志在原始消息到达时逐条更新，不等待归并窗。
+参与者的稳定 `senderKey`、昵称与原始条数保留在组级私有 `meta`，供人物档案逐人召回。Overlay 与 WebUI 日志在原始消息到达时逐条更新，不等待归并窗。
 
-控制台 `log.state.coalescing` 报告输入量、输出量、已合并量、冲刷次数、容量冲刷次数与当前池内条数。`worlds.bilibili.coalesceWindowMs` 和 `worlds.bilibili.coalesceMaxItems` 支持热改；窗口设为 0 时关闭等待，逐条输出。
+WebUI `log.state.coalescing` 报告输入量、输出量、已合并量、冲刷次数、容量冲刷次数与当前池内条数。`worlds.bilibili.coalesceWindowMs` 和 `worlds.bilibili.coalesceMaxItems` 支持热改；窗口设为 0 时关闭等待，逐条输出。
 
 ## 重要观众与实时限流
 
@@ -107,7 +107,7 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 - `important`：任一参与者具有优先资格的合并组整体归入此组。按跨批等待计数分配，最多使用所配置行数和 token 预算的 50%，同时受全批剩余额度限制。
 - `ordinary`：其余事件按持久保存的私有盐确定性抽样，使用剩余额度。
 
-原始事件均以 `archive-only` 保存，供历史查询；筛选结果进入 Agent 上下文。控制台报告高能榜、拥挤与限流状态、重要观众数和累计筛除量。
+原始事件均以 `archive-only` 保存，供历史查询；筛选结果进入 Agent 上下文。WebUI 报告高能榜、拥挤与限流状态、重要观众数和累计筛除量。
 
 ## Overlay
 
@@ -144,9 +144,9 @@ WebP 与 GIF，单文件上限 8 MiB。Agent 公告单独原子保存到
 正在滚动的弹幕。公告内容在下一次主会话前缀重建时通过 `ENV_PROMPT.md` 占位符同步； World 不会
 为了每次公告写入强制重建前缀。
 
-## 控制台
+## WebUI
 
-控制台提供直播间事件诊断和独立 Overlay 编辑器入口。样式、组件与布局编辑共享草稿、撤销历史和保存操作。草稿预览复用 OBS 渲染器，支持拖动、八向缩放、网格、画布与组件吸附、层级、可见性和锁定；编辑控件与选择框不进入 `/overlay` 输出。
+WebUI 提供直播间事件诊断和独立 Overlay 编辑器入口。样式、组件与布局编辑共享草稿、撤销历史和保存操作。草稿预览复用 OBS 渲染器，支持拖动、八向缩放、网格、画布与组件吸附、层级、可见性和锁定；编辑控件与选择框不进入 `/overlay` 输出。
 
 从主 Web 页面打开编辑器时，语义调色板通过 URL fragment 传递。编辑器内置浅色和深色默认调色板，主 Web 停止后仍可通过独立 URL 打开。画布背景的浅深设置只保存在本机，不写入设计数据。
 
@@ -156,7 +156,7 @@ WebP 与 GIF，单文件上限 8 MiB。Agent 公告单独原子保存到
 日志面板每 2 秒轮询 `log.state`。`total` 是累计记录数，包括已超出 `RECENT_CAP` 而从缓冲移除的记录；客户端按差值追加新行，保留滚动位置。
 
 目录名 `worlds/bilibili` 的末段必须与 World id `bilibili` 对得上:浏览器产物的 asset key 由目录名推导
-(`src/worlds/<x>/console/client.ts` → `world:<x>`),而控制台按 provider id `world:bilibili` 去取它。
+(`src/worlds/<x>/webui/client.ts` → `world:<x>`),而 WebUI 按 provider id `world:bilibili` 去取它。
 两边对不上时页面上出现的是"声明了面板,但没有构建出浏览器扩展"。
 
 ## 字段待校
@@ -173,4 +173,4 @@ WebP 与 GIF，单文件上限 8 MiB。Agent 公告单独原子保存到
 
 - 握手失败后按指数退避重连，等待从 2 秒起加倍，最多 60 秒。状态轮询遇到 HTTP 412 时将下一次轮询延后 10 分钟。412 / -352 作为风控错误报告。
 - 连接看门狗在平台开播时检查 `connecting`，以及没有重试定时器的 `retrying` 状态；持续 60 秒无结果后重新连接。它不检查 `connected` 状态下长期收不到业务消息的情况。
-- Web 协议字段可能变化；`IGNORED` 之外的新 cmd 会显示在控制台计数中。
+- Web 协议字段可能变化；`IGNORED` 之外的新 cmd 会显示在 WebUI 计数中。

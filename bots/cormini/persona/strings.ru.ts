@@ -1,4 +1,4 @@
-import type { consoleEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn } from './strings.ts';
 
 const pluralRules = new Intl.PluralRules('ru');
 const plural = (n: number, one: string, few: string, many: string) => {
@@ -6,7 +6,7 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return form === 'one' ? one : form === 'many' ? many : few;
 };
 
-export const consoleText: Partial<typeof consoleEn> = {
+export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Способ существования Persona и пояснения о её метапознании.',
   constitution: 'Долгосрочные принципы Persona. Изменения вступают в силу после перезагрузки системного префикса или с началом нового контекста.',
   memoryNote: 'Соглашения о памяти: как хранятся файлы бота и когда они всплывают сами.',

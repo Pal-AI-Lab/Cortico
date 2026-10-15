@@ -58,13 +58,13 @@ export function listensOnEveryInterface(bound: string | null): boolean {
   return bound === '0.0.0.0' || bound === '::';
 }
 
-/** 本机打得开的控制台地址:监听所有网卡时给回环地址,IPv6 加方括号。 */
-export function consoleUrlOf(bound: string | null, port: number): string {
+/** 本机打得开的 WebUI 地址:监听所有网卡时给回环地址,IPv6 加方括号。 */
+export function webUiUrlOf(bound: string | null, port: number): string {
   const host = bound === null || listensOnEveryInterface(bound) ? '127.0.0.1' : bound.includes(':') ? `[${bound}]` : bound;
   return `http://${host}:${port}/`;
 }
 
-/** 空选择允许进入控制台完成配置；非空名称必须引用已有连接。 */
+/** 空选择允许进入 WebUI 完成配置；非空名称必须引用已有连接。 */
 export function providerAtBoot(config: Pick<CoreConfig, 'activeProvider' | 'providers'>): LLMProviderEntry | undefined {
   if (!config.activeProvider) return undefined;
   const entry = config.providers[config.activeProvider];

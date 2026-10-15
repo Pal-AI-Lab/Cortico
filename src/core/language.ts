@@ -1,10 +1,10 @@
 /**
- * Console text uses the language supplied with each browser request.
+ * WebUI text uses the language supplied with each browser request.
  * The initial default uses a recognized config.language, then CORTICO_LANGUAGE,
  * then the system locale mapped by languageOfLocale; an unavailable locale falls back to zh.
  * The environment/locale result is cached once.
  * The browser can override the initial <html lang> value and sends its choice in the
- * console language header or query parameter. Panels receive ConsolePanelContext.language.
+ * WebUI language header or query parameter. Panels receive WebUiPanelContext.language.
  * Owners render request text in that language through pick.
  * This setting does not select or translate model-facing text.
  */

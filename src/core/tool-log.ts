@@ -70,7 +70,7 @@ export class ToolCallLog {
     return entry;
   }
 
-  /** 控制台存储清单的规模描述 */
+  /** WebUI 存储清单的规模描述 */
   stat(): string {
     const size = this.bytes();
     return `${this.seq}条 / ${size === null ? '(无文件)' : `${(size / 1024).toFixed(1)}KB`}`;

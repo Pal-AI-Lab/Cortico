@@ -1,8 +1,8 @@
 /** 操作期间禁用控件，以及复制文本并报告结果。 */
 
 import type {
-  ConsoleCopyOptions,
-  ConsoleDisablable,
+  WebUiCopyOptions,
+  WebUiDisablable,
   Disposable,
 } from '../../shared/client-panel.ts';
 import { toDisposable } from '../../shared/client-panel.ts';
@@ -13,7 +13,7 @@ import { drawer } from './overlay.ts';
 import { S } from './strings.ts';
 
 /** 临时禁用控件；dispose 恢复各自原值。重复控件只记录第一次的值。 */
-export function disable(els: readonly ConsoleDisablable[]): Disposable {
+export function disable(els: readonly WebUiDisablable[]): Disposable {
   const saved: { el: { disabled: boolean }; was: boolean }[] = [];
   const seen = new Set<object>();
   for (const el of els) {
@@ -79,7 +79,7 @@ export function copyButton(
   env: OverlayEnv,
   show: (text: string, tone?: 'ok' | 'bad') => void,
   text: string | (() => string),
-  opts?: ConsoleCopyOptions,
+  opts?: WebUiCopyOptions,
 ): HTMLButtonElement {
   const o = opts ?? {};
   const label = o.label ?? S.copy;

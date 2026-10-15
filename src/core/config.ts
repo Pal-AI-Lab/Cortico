@@ -95,12 +95,12 @@ export function coreConfigGroup(language: Language): ConfigGroup {
           'x-hot': true,
           description: t.logFile.description,
         },
-        'logging.console': {
+        'logging.stdout': {
           type: 'string',
-          title: t.logConsole.title,
+          title: t.logStdout.title,
           enum: ['trace', 'debug', 'info', 'warn', 'error'],
           'x-hot': true,
-          description: t.logConsole.description,
+          description: t.logStdout.description,
         },
         'logging.areas': {
           type: 'string',
@@ -118,7 +118,7 @@ export function coreConfigGroup(language: Language): ConfigGroup {
 export const CORE_CONFIG_GROUP: ConfigGroup = coreConfigGroup('zh');
 
 export const CORE_DEFAULTS = {
-  /** 用于控制台标题和终端消息的发送方名称。 */
+  /** 用于 WebUI 标题和控制台消息的发送方名称。 */
   displayName: 'Cortico Bot',
   timezone: SYSTEM_TIMEZONE,
   providers: {} as Record<string, import('./types.ts').LLMProviderEntry>,
@@ -127,7 +127,7 @@ export const CORE_DEFAULTS = {
   paths: { memory: 'memory', data: 'data' },
   batching: { quietGapMs: 2500, minBatchAgeMs: 0, maxBatchAgeMs: 15000, maxBatchSize: 100 },
   context: { keepPastThinking: true },
-  logging: { file: 'debug' as const, console: 'info' as const, areas: '' },
+  logging: { file: 'debug' as const, stdout: 'info' as const, areas: '' },
   usage: { rates: USAGE_RATES },
 } as const;
 

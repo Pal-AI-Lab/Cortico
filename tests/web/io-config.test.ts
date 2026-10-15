@@ -38,7 +38,7 @@ const qq = new QQWorld(
 );
 
 const invoke = (panel: string, method: string, args: unknown[] = []): Promise<any> =>
-  Promise.resolve(qq.console().invoke!(panel, method, args)) as Promise<any>;
+  Promise.resolve(qq.webUi().invoke!(panel, method, args)) as Promise<any>;
 const setRoster = (groups: unknown, privates: unknown) =>
   invoke('roster', 'set', [groups, privates]);
 

@@ -16,8 +16,8 @@ const jsonl = (file: string, rows: readonly unknown[]): void => {
 };
 
 const event = (cursor: number, text: string): EventEnvelope => ({
-  cursor, run: RUN, type: 'terminal.message', ts: '2026-09-17T10:45:00+08:00',
-  source: 'terminal', origin: 'external', text,
+  cursor, run: RUN, type: 'console.message', ts: '2026-09-17T10:45:00+08:00',
+  source: 'console', origin: 'external', text,
 });
 
 function sources(over: Partial<DiagnosticsSources> = {}): DiagnosticsSources {
@@ -28,10 +28,10 @@ function sources(over: Partial<DiagnosticsSources> = {}): DiagnosticsSources {
     status: { paused: false },
     session: { messages: [message('system', '前缀'), message('user', '在吗')], head: [message('assistant', '开头')] },
     sessions: [],
-    toolSchemas: [{ name: 'terminal_send', description: '发送文本', parameters: { type: 'object' } }],
+    toolSchemas: [{ name: 'console_send', description: '发送文本', parameters: { type: 'object' } }],
     events: [event(1, '第一条'), event(2, '第二条')],
     latestCursor: 2,
-    worlds: [{ id: 'terminal', status: 'active' }],
+    worlds: [{ id: 'console', status: 'active' }],
     usage: { currency: 'USD', totals: null },
     endpoint: null,
     ...over,
@@ -48,7 +48,7 @@ beforeAll(() => {
     providers: { grok: { apiKey: 'xai-真钥匙', baseUrl: 'https://api.example.test' } },
     worlds: { bilibili: { rooms: [{ id: 1, accessToken: '别写出去' }] } },
   }), 'utf8');
-  writeFileSync(join(runDir, 'run.json'), JSON.stringify({ run: RUN, worlds: ['terminal'] }), 'utf8');
+  writeFileSync(join(runDir, 'run.json'), JSON.stringify({ run: RUN, worlds: ['console'] }), 'utf8');
   jsonl(join(dataDir, 'runs', 'index.jsonl'), [
     { run: 'r-old', startedAt: '2026-09-16T10:00:00+08:00' },
     { run: RUN, startedAt: '2026-09-17T10:44:02+08:00' },
@@ -56,11 +56,11 @@ beforeAll(() => {
   ]);
   jsonl(join(runDir, 'log.jsonl'), [
     { ts: '2026-09-17T10:45:00+08:00', run: RUN, seq: 1, level: 'info', area: 'core.loop', msg: '第一轮' },
-    { ts: '2026-09-17T10:46:00+08:00', run: RUN, seq: 2, level: 'warn', area: 'worlds.terminal', msg: '重连' },
+    { ts: '2026-09-17T10:46:00+08:00', run: RUN, seq: 2, level: 'warn', area: 'worlds.console', msg: '重连' },
     { ts: '2026-09-17T10:47:00+08:00', run: RUN, seq: 3, level: 'error', area: 'core.loop', msg: '流式卡死' },
   ]);
   jsonl(join(runDir, 'toolcalls.jsonl'), [
-    { seq: 1, ts: '2026-09-17T10:45:10+08:00', run: RUN, role: 'main', tool: 'terminal_send', args: {}, durMs: 12, chars: 3, receipt: '已发送' },
+    { seq: 1, ts: '2026-09-17T10:45:10+08:00', run: RUN, role: 'main', tool: 'console_send', args: {}, durMs: 12, chars: 3, receipt: '已发送' },
   ]);
   jsonl(join(runDir, 'transcript.jsonl'), [
     { kind: 'item', ts: '2026-09-17T10:45:00+08:00', run: RUN, index: 0, item: { type: 'message', role: 'user' }, context: {} },
@@ -84,7 +84,7 @@ describe('诊断包', () => {
     expect(b.run.id).toBe(RUN);
     // index 的开机行与关机行合成一行
     expect(b.run.index).toMatchObject({ run: RUN, startedAt: '2026-09-17T10:44:02+08:00', complete: true });
-    expect(b.run.manifest).toEqual({ run: RUN, worlds: ['terminal'] });
+    expect(b.run.manifest).toEqual({ run: RUN, worlds: ['console'] });
     expect(b.log.warn.map((r) => r.msg)).toEqual(['重连', '流式卡死']);
     expect(b.log.tail.map((r) => r.msg)).toEqual(['第一轮', '重连', '流式卡死']);
     expect(b.toolcalls).toHaveLength(1);

@@ -9,7 +9,7 @@ export const S: Partial<typeof en> = {
   groupPaper: '배경 계층',
   groupInk: '텍스트와 테두리',
   groupState: '상호작용과 상태',
-  groupTimeline: '터미널 타임라인',
+  groupTimeline: '콘솔 타임라인',
   groupChart: '차트 계열',
   token: {
     paper: '페이지 배경',

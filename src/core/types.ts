@@ -400,7 +400,7 @@ export interface RoundCaps {
  */
 export interface SessionDecl {
   id: string;
-  /** 控制台与日志中的显示名。 */
+  /** WebUI 与日志中的显示名。 */
   label: string;
   rounds: () => RoundCaps;
   /** 是否持久化；false 用于临时 fork。 */
@@ -722,7 +722,7 @@ export interface StoragePart {
   kind: 'disk' | 'memory';
   /** 磁盘位置说明；内存存储省略。 */
   location?: string;
-  /** 清除不可恢复的记录时设置；控制台要求额外确认。 */
+  /** 清除不可恢复的记录时设置；WebUI 要求额外确认。 */
   danger?: boolean;
   /** 清除后果。 */
   note?: string;
@@ -734,7 +734,7 @@ export interface StoragePart {
   clear(): Promise<string> | string;
 }
 
-/** 存储项的归属。装配层按声明来源盖章,控制台按它把项分到 Core、Persona、Memory 与各 World 的页面。 */
+/** 存储项的归属。装配层按声明来源盖章,WebUI 按它把项分到 Core、Persona、Memory 与各 World 的页面。 */
 export type StorageOwner = 'core' | 'persona' | 'memory' | `world:${string}`;
 
 export interface OwnedStoragePart extends StoragePart {
@@ -742,7 +742,7 @@ export interface OwnedStoragePart extends StoragePart {
 }
 
 /**
- * 须与 src/web/shared/console-protocol.ts 的 ConsolePanelDecl 保持结构和字段语义一致。
+ * 须与 src/web/shared/webui-protocol.ts 的 WebUiPanelDecl 保持结构和字段语义一致。
  * 类型分别定义以保持 Core 的依赖方向。id 在页面内唯一。
  */
 export interface WorldPanelDecl {
@@ -754,14 +754,14 @@ export interface WorldPanelDecl {
   getMethods?: readonly string[];
 }
 
-/** 提示词模板占位符；控制台展示声明及当前展开值。 */
+/** 提示词模板占位符；WebUI 展示声明及当前展开值。 */
 export interface PromptVarDecl {
   /** 包含命名空间的占位符名称。 */
   name: string;
   /** 占位符对应的运行时内容。 */
   description: string;
   /**
-   * 值是否可能换行；控制台据此建议独占一行。
+   * 值是否可能换行；WebUI 据此建议独占一行。
    * 模板渲染不对续行追加缩进或列表符号。
    */
   multiline?: boolean;
@@ -798,7 +798,7 @@ export interface PromptDocDecl {
  * - loading：正在连接、启动或预热。
  * - error：已启用但无法工作。
  * - offline：未启用或缺少配置。
- * 控制台按 state 显示，不从其他状态标签推断。
+ * WebUI 按 state 显示，不从其他状态标签推断。
  */
 export interface WorldLamp {
   /** 组件名称，用于悬停说明。 */
@@ -811,10 +811,10 @@ export interface WorldLamp {
 /** 每个 World 在导航中最多显示的状态灯数量，超出部分截断。 */
 export const MODULE_LAMP_MAX = 7;
 
-/** World 提供的控制台页面内容，按声明的面板 id 路由。 */
-export interface WorldConsoleDecl {
+/** World 提供的 WebUI 页面内容，按声明的面板 id 路由。 */
+export interface WorldWebUiDecl {
   /**
-   * 按 console(language) 生成的显示名；缺省使用 WorldDefinition.label。
+   * 按 webUi(language) 生成的显示名；缺省使用 WorldDefinition.label。
    * 装配层状态和操作结果仍使用定义中的 label。
    */
   label?: string;
@@ -838,7 +838,7 @@ export interface WorldConsoleDecl {
   storage?: StoragePart[];
   /**
    * 独立页面链接；inheritTheme 表示打开时附带当前主题快照。
-   * 控制台不解释 href 的路径语义。
+   * WebUI 不解释 href 的路径语义。
    */
   links?: Array<{ label: string; href: string; inheritTheme?: boolean }>;
   config?: ConfigGroup[];
@@ -886,10 +886,10 @@ export interface World {
   /** 工具定义和用法由 World 提供；使用时机与跨工具指导写入环境提示词。 */
   tools(): ToolDef[];
   /**
-   * 每次控制台请求按浏览器 language 生成声明和响应文案，省略时为中文。
+   * 每次 WebUI 请求按浏览器 language 生成声明和响应文案，省略时为中文。
    * 语言不缓存，不影响发给模型的文本；未实现时仅显示通用信息。
    */
-  console?(language?: Language): WorldConsoleDecl;
+  webUi?(language?: Language): WorldWebUiDecl;
   /**
    * 主 session 的输出流接收器；装配层合并已挂载 World 的接收器，随挂载变化更新。
    * 这一刻没有接收器（未连接、模式关着）时返回 undefined，合并侧跳过。
@@ -930,7 +930,7 @@ export interface World {
 export interface PrefixSegment {
   title: string;
   text: string;
-  /** 来源模板的 promptDoc key；缺省时控制台只读。 */
+  /** 来源模板的 promptDoc key；缺省时 WebUI 只读。 */
   sourceKey?: string;
 }
 
@@ -957,7 +957,7 @@ export interface MemoryAssemblyContext {
   timezone: string;
 }
 
-/** 一个 World 的挂载或可见状态被装配层改变。`label` 是控制台显示名。 */
+/** 一个 World 的挂载或可见状态被装配层改变。`label` 是 WebUI 显示名。 */
 export type WorldLifecycleEvent =
   | { kind: 'mounted' | 'unmounted' | 'restarted'; id: string; label: string }
   | { kind: 'visibility'; id: string; label: string; visible: boolean };
@@ -969,7 +969,7 @@ export type WorldLifecycleEvent =
 export interface Persona {
   /** system 前缀的有序段；Core 按序拼接 text。 */
   systemSegments(ctx: SystemPrefixContext): Promise<PrefixSegment[]>;
-  /** 控制台预览使用的模板变量当前值；未实现时仅显示占位符声明。 */
+  /** WebUI 预览使用的模板变量当前值；未实现时仅显示占位符声明。 */
   promptVarValues?(ctx: { now: Date; timezone: string }):
     | Record<string, string>
     | Promise<Record<string, string>>;
@@ -1006,7 +1006,7 @@ export interface Persona {
    * 计入 hardTokens。内容只应随 Persona 自己的输入变化;每次不同就每次打穿前缀缓存。
    */
   sessionHead?(): Item[];
-  /** Memory 实例。Core 不读它的内容;bot 没给 memoryName 时控制台以它的类名作 Memory 页标题。 */
+  /** Memory 实例。Core 不读它的内容;bot 没给 memoryName 时 WebUI 以它的类名作 Memory 页标题。 */
   memory?: object;
   /** Memory 目录的绝对路径。 */
   memoryDir: string;
@@ -1028,14 +1028,14 @@ export interface Persona {
    */
   cognition?: PersonaCognition;
   /**
-   * Persona 的控制台页面声明；Memory 和认知操作归此接口，跨组件部署操作归装配层。
-   * 面板 id 在页内唯一、不带前缀；page id 由装配层生成。language 与 World.console 相同。
+   * Persona 的 WebUI 页面声明；Memory 和认知操作归此接口，跨组件部署操作归装配层。
+   * 面板 id 在页内唯一、不带前缀；page id 由装配层生成。language 与 World.webUi 相同。
    */
-  console?(language?: Language): PersonaConsoleDecl;
+  webUi?(language?: Language): PersonaWebUiDecl;
 }
 
 /**
- * 与 src/web/shared/console-protocol.ts 的 ConsoleStream 保持结构和语义一致。
+ * 与 src/web/shared/webui-protocol.ts 的 WebUiStream 保持结构和语义一致。
  * 类型分别定义以保持 Core 的依赖方向，修改时须同步。
  */
 export interface WorldStreamSocket {
@@ -1048,7 +1048,7 @@ export interface WorldStreamSocket {
   readonly open: boolean;
 }
 
-export interface PersonaConsoleDecl {
+export interface PersonaWebUiDecl {
   badges?: Array<{ label: string; value: string | number; tone?: 'on' | 'off' | 'plain' }>;
   panels?: WorldPanelDecl[];
   invoke?(panel: string, method: string, args: unknown[]): Promise<unknown>;
@@ -1163,11 +1163,11 @@ export interface LLMProviderEntry {
  * 模型设置归 provider，session 轮数及上下文阶段预算归 Persona。
  */
 export interface CoreConfig {
-  /** 控制台和终端使用的显示名。 */
+  /** WebUI 和控制台使用的显示名。 */
   displayName: string;
   timezone: string;
   /**
-   * 进程启动时确定的控制台默认语言；缺省按环境变量或系统区域选择。
+   * 进程启动时确定的 WebUI 默认语言；缺省按环境变量或系统区域选择。
    * 浏览器可单独保存语言选择，不影响模型文本。
    */
   language?: Language;
@@ -1193,7 +1193,7 @@ export interface CoreConfig {
   };
   web: {
     port: number;
-    /** 控制台监听地址；缺省 127.0.0.1。`0.0.0.0` 或 `::` 监听所有网卡。 */
+    /** WebUI 监听地址；缺省 127.0.0.1。`0.0.0.0` 或 `::` 监听所有网卡。 */
     host?: string;
     /**
      * 回环名与监听地址之外还接受的 Host 名（域名、反向代理对外的名字），同时放行以它为
@@ -1201,11 +1201,11 @@ export interface CoreConfig {
      */
     allowedHosts?: string[];
     /**
-     * 控制台访问密码；缺省或空串时不要求登录。密钥 `CORTICO_WEB_PASSWORD`（进程环境或部署
+     * WebUI 访问密码；缺省或空串时不要求登录。密钥 `CORTICO_WEB_PASSWORD`（进程环境或部署
      * `.env`）非空时优先于此键。
      */
     password?: string;
-    /** 控制台配色方案 id；浏览器没有保存过选择时用它，认不出的 id 落到框架默认方案。 */
+    /** WebUI 配色方案 id；浏览器没有保存过选择时用它，认不出的 id 落到框架默认方案。 */
     theme: string;
   };
   paths: {
@@ -1222,7 +1222,7 @@ export interface CoreConfig {
     /** 低于此级别的记录不写入 log.jsonl。 */
     file: LogLevel;
     /** stdout 日志的最低级别。 */
-    console: LogLevel;
+    stdout: LogLevel;
     /** 逗号分隔的 area=level；区域可带 * 后缀，按最长前缀匹配。 */
     areas: string;
   };

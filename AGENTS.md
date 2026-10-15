@@ -25,17 +25,19 @@ handed context. Two of its rules settle most design questions:
 | World | `src/worlds/<id>/`, listed in `src/worlds/index.ts`; external ones are extensions | `World`, `WorldHost`, `WorldDefinition`, `WorldContext` |
 | Bot | `bots/<name>/index.ts` | `BotDefinition`, `createBot()` |
 
-Core-side facilities, not layers: providers (`src/providers/`, `ProviderModule`), the console
+Core-side facilities, not layers: providers (`src/providers/`, `ProviderModule`), the WebUI
 (`src/web/`), the extension loader (`src/extensions/`). An extension is an npm package that
 supplies one World, one provider or one bot; those three are the extension points. A deployment
 (`deployments/<name>/`) holds one bot's config, secrets, Memory and run data; none of it is
 tracked.
 
-One name all the way through: a World's config section is `worlds.<id>`, its console page id
+One name all the way through: a World's config section is `worlds.<id>`, its WebUI page id
 `world:<id>`, its manifest `kind` is `world`; packages are `cortico-world-*`,
 `cortico-provider-*`, `cortico-bot-*`. Chinese UI text keeps Core, Persona, Memory and World
 as proper nouns, calls an extension 扩展, and calls a config value 配置. 参数 is reserved for
-a tool call's arguments.
+a tool call's arguments. The browser UI is WebUI in every language (`WebUi`/`webUi` in identifiers,
+`webui` in paths and routes); its chat page and the `console` World are 控制台 / Console. 终端 is not
+used; the operating system's one is 命令行, and English "terminal" means only that.
 
 Conventions that hold across the repository:
 
@@ -56,11 +58,11 @@ Conventions that hold across the repository:
   `Dir`, a file in `File`; a component's switch is `enabled` inside that component's object; other
   booleans are affirmative verb phrases; caps are `max<Noun>`.
 - **Types**: `Options` never `Opts`, `Context` never `Ctx`. `Definition` is what an extension point
-  exports; `Decl` is what a World or Persona declares to the console; `*Host` is the surface Core
+  exports; `Decl` is what a World or Persona declares to the WebUI; `*Host` is the surface Core
   hands a collaborator, `*Api` the surface a Persona uses on Core. Discriminant field is `kind`,
   except the event envelope's `type`. Timestamps are `*At` (ISO) or `*AtMs`; durations `*Ms`.
 - **Verbs**: runtime objects `start/stop`; Core attaching a World `mount/unmount`; the assembly
-  layer `activate/deactivate`; console client objects `mount/dispose`. Factories are `create*`.
+  layer `activate/deactivate`; WebUI client objects `mount/dispose`. Factories are `create*`.
   Hooks are `on<Moment>`; a World hook never shares a Persona hook's name with a different
   signature. Abbreviations allowed in locals: `req rep msg err opts cfg ctx`; one style per World.
 - **Environment variables** are `CORTICO_*`. npm scripts are `<verb>:<object>`. `tests/<layer>/`
@@ -80,12 +82,12 @@ Conventions that hold across the repository:
    defaults; a deployment overrides everything. The model behind an endpoint belongs to the
    provider entry and is invisible to the Persona.
 5. **Tunables are declared, never hand-built.** A knob is a JSON Schema property in its owner's
-   `ConfigGroup`; the console renders it. Adding a World or a Persona leaves `src/web/**`
+   `ConfigGroup`; the WebUI renders it. Adding a World or a Persona leaves `src/web/**`
    byte-identical, and `tests/web/acceptance-zero-diff.test.ts` enforces that.
-6. **The console web UI is a developer tool shipped with Cortico.** A downstream product (a
+6. **The WebUI is a developer tool shipped with Cortico.** A downstream product (a
    repository that assembles Cortico into an application) builds its own frontend, and that frontend
-   reaches Core only through the public console HTTP API listed in
-   [docs/console.md](docs/console.md); it does not depend on the web UI's pages, DOM, class names or
+   reaches Core only through the public WebUI HTTP API listed in
+   [docs/webui.md](docs/webui.md); it does not depend on the web UI's pages, DOM, class names or
    `src/web/client/` modules. A UI change from a product may be proposed upstream and is judged on
    whether it improves Cortico's own web UI.
 
@@ -155,9 +157,9 @@ that cannot be inferred from the code.
 - `pnpm test` and `pnpm run typecheck` are green before every commit; browser code is checked by
   `pnpm typecheck:web`.
 - `pnpm build:web` after changing `src/web/client/`, `src/web/shared/` or any
-  `console/client.ts`. Never while a bot process is alive on this machine: the running console
+  `webui/client.ts`. Never while a bot process is alive on this machine: the running WebUI
   serves the bundle being overwritten.
-- Never start a real bot to verify a change. Use tests, `pnpm dev:console` (fake data) or a
+- Never start a real bot to verify a change. Use tests, `pnpm dev:webui` (fake data) or a
   script under `scratch/`.
 - `pnpm logq` queries run logs; `pnpm check:extension <dir>` validates an extension package;
   `pnpm audit:release` runs the release audit.
@@ -205,7 +207,7 @@ Commits made before this rule do not follow it and are not rewritten.
 | `revert` | subject repeats the reverted subject, body is `This reverts commit <sha>.` |
 
 The scope is the unit the change lives in, written as its path with `src/` dropped: `core`,
-`worlds/pvz`, `providers/llamacpp`, `extensions`, `bots/cortiv`, `console` for `src/web/`. A
+`worlds/pvz`, `providers/llamacpp`, `extensions`, `bots/cortiv`, `webui` for `src/web/`. A
 one-file change may use the file's own name (`package.json`, `ci.yml`). Omit the scope only for
 a repository-wide change; a commit that wants two scopes is two commits.
 
@@ -214,8 +216,8 @@ trailing period. Its language is free; the type and the scope stay English. Body
 what the diff does not show: the rejected alternative, the invariant relied on, what the tests
 now cover.
 
-A change to an on-disk layout, to a config key, to a public console HTTP route listed in
-[docs/console.md](docs/console.md) or to the meaning of already written content
+A change to an on-disk layout, to a config key, to a public WebUI HTTP route listed in
+[docs/webui.md](docs/webui.md) or to the meaning of already written content
 takes a `!` before the colon and a `BREAKING CHANGE:` footer naming the migration that ships
 with it.
 

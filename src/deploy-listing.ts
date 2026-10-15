@@ -62,7 +62,7 @@ export interface ListingSource {
   defaultsOf(bot: string): Promise<BotDefaults>;
 }
 
-/** 终端按深色底算；部署把明暗钉在浅色时才取浅色那份。 */
+/** 命令行按深色底算；部署把明暗钉在浅色时才取浅色那份。 */
 function appearanceOf(mode: string): ThemeAppearance {
   return mode === 'light' ? 'light' : 'dark';
 }
@@ -78,7 +78,7 @@ function readJson(file: string): Record<string, unknown> | null {
 }
 
 /**
- * 颜色：控制台存过的那套赢过代码包与部署配置里的默认方案 id；认不出的方案 id 落到框架
+ * 颜色：WebUI 存过的那套赢过代码包与部署配置里的默认方案 id；认不出的方案 id 落到框架
  * 默认方案。dir 为 null = 还没有部署目录（新建流程里的代码包），只看方案 id。
  */
 export function colorsOf(dir: string | null, defaultScheme: string): RowColors {

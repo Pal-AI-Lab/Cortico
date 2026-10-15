@@ -1,0 +1,617 @@
+/**
+ * 控制台对话 World ConsoleWorld。
+ *
+ * 定位:和QQ客户端同层级的外部平台。
+ * 职责边界:Worldowns聊天协议(JSON行),不监听端口——连接由外面交进来。
+ *
+ * **唯一入口**:`stream(panel, socket)` —— 通用 WebUI 页流式通道
+ * (`WebUiPageContribution.stream`)。对话在框架眼里只是"一个带流的普通
+ * WebUI 页",框架不认识"聊天",也不为它留具名槽位。
+ *
+ * 连接宿主的形状压在 `ChatPeer` 这层薄适配上(文件末尾的 `streamPeer`),协议解析、
+ * 名单、广播、历史回放都在这一份实现里。
+ *
+ * 事件词表:
+ *   console.message  操作员消息, origin:'internal' + trigger:'flush'(跳过合批安静窗口)
+ *   (进出控制台不投递事件:presence 噪音多次被判定不值得打扰bot)
+ *   console.self     自己发出的消息回录, deliver:false
+ *   console.invite   操作员按下控制台页那颗按钮, origin:'internal' + trigger:'flush'
+ *
+ * 控制台通道的两条纪律:
+ *   - 投递按 `internal`:这条通道装的不是"外面发生了什么",是操作员直接对她说话。
+ *     loop 把 internal 项并进 user 消息,角色上高于落在工具回执区的外部事件。
+ *     代价是 internal 项不参与重启补投(loop 只补 external),掉线期间的后台话不补看。
+ *   - 配了口令就每条消息自带 `[控制台|PIN:******]` 标记,同一串数字经环境提示词模板
+ *     进前缀供她比对。冒充控制台口吻的弹幕因此当场露馅。
+ *
+ * 语言分两层。给操作员看的(WebUI 声明、流上的系统提示、面板调用面的错误)按发起
+ * 请求的界面语言取:`webUi(language)` 每次请求重算,每条流按握手时的语言记在
+ * `ChatClient.language` 上,同一场对话里两个人可以各看各的语言。给模型看的(口令标记
+ * `[console|PIN:******]`、回录正文、附件的文本形态、`console_send` 的回执、环境提示词
+ * 模板 `ENV_PROMPT.md`)固定英文,不随任何设置变。
+ *
+ * 聊天协议(JSON行):
+ *   客户端→ {type:'hello', name}                报名字(必须先于msg)
+ *          {type:'msg', text, images?}         发消息;images 为 [{mime, base64, name?}],
+ *                                              text 与 images 至少一样非空
+ *          {type:'greet', label}               按下控制台页那颗按钮;label 是按钮上当时显示的字
+ *   服务端→ {type:'msg', from, text, ts, images?}  广播(用户消息回显+bot消息);
+ *                                              images 为 [{ref, mime, name?}](ref 是附件句柄)
+ *          {type:'sys', text, kind?}           系统提示;kind 'rejected' = 这一帧没有被接收,
+ *                                              'warning' = 已接收但有附带说明
+ *
+ * 图片进媒体库(core data/media/),事件只带引用;正文末尾标注张数,模型不接受
+ * 图像时标注里同时写明她看不到,不让她对着一句"附图"猜内容。
+ */
+import { fileURLToPath } from 'node:url';
+import type { BlobInput, EventEnvelope, World, WorldHost, WorldWebUiDecl, ToolDef } from '../../core/types.ts';
+import type { ConfigGroup } from '../../core/config-schema.ts';
+import type { WebUiStream } from '../../web/shared/webui-protocol.ts';
+import { nowIso, shortTime, SYSTEM_TIMEZONE } from '../../core/util.ts';
+import type { Language } from '../../core/language.ts';
+import { CONSOLE_DEFAULTS, type ConsoleConfigSection } from './config.ts';
+import { text } from './strings.ts';
+
+/** 环境提示词模板。给模型的文本,固定英文。 */
+const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
+
+/** 本 World 唯一的面板局部 id(一页内唯一即可,不带 World 名前缀)。 */
+const PANEL_CHAT = 'chat';
+
+/** 口令的形状:六位数字,别的一律当没配置。 */
+const PIN_SHAPE = /^\d{6}$/;
+
+/**
+ * 模型可见的文本,固定英文:口令标记、回录正文、附件的文本形态、`console_send` 的回执。
+ * 口令标记写在正文最前面,与普通行(`[HH:MM] 名字: …`)不同形,不易混淆。
+ *
+ * `invite` 引号里的按钮标签是例外:它逐字取自按下时界面上显示的字,随对方的界面语言走。
+ * 被引用的标签是这件事的事实内容,和口令标记里的数字同类。
+ */
+const MODEL_TEXT = {
+  pinMark: (pin: string) => `[console|PIN:${pin}]`,
+  selfLine: (time: string, text: string) => `[${time}] you: ${text}`,
+  inviteLine: (time: string, name: string, label: string, spokenBefore: boolean) =>
+    `[${time}] ${name} pressed the "${label}" button on the console.`
+    + (spokenBefore ? '' : ' No speech is recorded in the retained console history.'),
+  imageFallback: (from: string, i: number, total: number) => `image ${i}/${total} from ${from}`,
+  deliveredTo: (delivered: number, names: string[]) =>
+    `Sent to the chat channel on the WebUI's "Console" page; ${delivered} connection${delivered === 1 ? '' : 's'} online right now`
+    + (names.length ? ` (${names.join(', ')})` : ''),
+  deliveredToNobody:
+    'Sent to the chat channel on the WebUI\'s "Console" page; no connection is open right now, so nobody sees this at the moment; '
+    + 'it is stored and will show up in the history for whoever connects next',
+  sinceLastSend: (minutes: number, since: number) =>
+    `The previous one went out ${minutes} minute${minutes === 1 ? '' : 's'} ago; since then `
+    + (since === 0 ? 'nobody has said anything on the console' : `${since} message${since === 1 ? '' : 's'} from people arrived on the console`),
+  joinFacts: (facts: string[]) => `${facts.join('; ')}.`,
+};
+
+type ConsoleText = ReturnType<typeof text>;
+
+/** 口令配置组,文案按界面语言给;id / owner / 键与取值规则各语言完全一致。 */
+export function consoleConfigGroup(language: Language): ConfigGroup {
+  const t = text(language);
+  return {
+    id: 'world:console',
+    owner: 'world:console',
+    schema: {
+      type: 'object',
+      title: t.configTitle,
+      description: t.configDescription,
+      properties: {
+        'worlds.console.pin': {
+          type: 'string',
+          title: t.pinTitle,
+          'x-hot': true,
+          description: t.pinDescription,
+        },
+      },
+    },
+  };
+}
+
+/**
+ * 一条对话连接的宿主适配。
+ *
+ * 存在的理由只有一个:让协议逻辑不知道自己跑在 `ws.WebSocket` 上还是跑在
+ * `WebUiStream` 上。两个实现都在本文件底部,各自五行。
+ */
+interface ChatPeer {
+  /** 还能收发吗。已关/正在关一律 false。 */
+  readonly open: boolean;
+  /** 推一帧原始文本。可能抛(调用方按"发不出去即掉线"处理)。 */
+  send(raw: string): void;
+  /** 正常关闭,`reason` 尽量带给对端。 */
+  close(reason: string): void;
+  /** 出错时立刻掐断,不走挥手。 */
+  drop(): void;
+}
+
+interface ChatClient {
+  peer: ChatPeer;
+  /** hello 完成前为 null,完成后为客户端声明的名称。 */
+  name: string | null;
+  /** 这条连接握手时的界面语言;流上给它的系统提示按此取。 */
+  language: Language;
+}
+
+
+
+interface ConsoleWorldOptions {
+  /** 渲染[HH:MM]用的时区,默认本机时区 */
+  timezone?: string;
+  /** 出方消息的 from 字段;取部署配置的 displayName */
+  botName?: string;
+  /** 配置节;不给 = 按默认值(口令未配置)。 */
+  cfg?: ConsoleConfigSection;
+}
+
+const NAME_MAX = 32;
+const TEXT_MAX = 4000;
+/** 按钮标签进事件正文前的长度上限。 */
+const LABEL_MAX = 40;
+
+/** 一条消息最多带几张图,单张解码后的字节上限。与面板侧的上限一致。 */
+const IMAGES_MAX = 8;
+const IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+/** 接收的图片格式:媒体库认得扩展名、主流多模态模型都吃的那几种。 */
+const IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/** 回显/回放帧里的一张图:ref 是附件句柄,字节经 WebUI 的 `/api/blob?handle=` 取。 */
+interface WireImage {
+  ref: string;
+  mime: string;
+  name?: string;
+}
+
+/** 一条事件落库后的图片附件 → 回显/回放帧里的 images。 */
+function wireImagesOf(e: EventEnvelope): WireImage[] {
+  return (e.blobs ?? [])
+    .filter((b) => b.mime.startsWith('image/'))
+    .map((b) => ({ ref: b.handle, mime: b.mime, ...(b.name ? { name: b.name } : {}) }));
+}
+
+/** `{type:'msg'}` 里 images 的解析结果:要么整批合法,要么一句拒收理由。 */
+type ParsedImages =
+  | { ok: true; images: Array<{ bytes: Buffer; mime: string; name?: string }> }
+  | { ok: false; reason: string };
+
+function parseImages(raw: unknown, t: ConsoleText): ParsedImages {
+  if (raw === undefined) return { ok: true, images: [] };
+  if (!Array.isArray(raw)) return { ok: false, reason: t.imagesNotArray };
+  if (raw.length > IMAGES_MAX) return { ok: false, reason: t.tooManyImages(IMAGES_MAX) };
+  const images: Array<{ bytes: Buffer; mime: string; name?: string }> = [];
+  for (const item of raw) {
+    const img = (item ?? {}) as { mime?: unknown; base64?: unknown; name?: unknown };
+    if (typeof img.mime !== 'string' || !IMAGE_MIMES.has(img.mime)) {
+      return { ok: false, reason: t.unsupportedImage(String(img.mime)) };
+    }
+    if (typeof img.base64 !== 'string' || !img.base64) return { ok: false, reason: t.imageNoBase64 };
+    const bytes = Buffer.from(img.base64, 'base64');
+    if (bytes.length === 0) return { ok: false, reason: t.imageEmpty };
+    if (bytes.length > IMAGE_MAX_BYTES) {
+      return { ok: false, reason: t.imageTooLarge(IMAGE_MAX_BYTES / 1024 / 1024) };
+    }
+    const name = typeof img.name === 'string' && img.name.trim() ? img.name.trim().slice(0, 120) : undefined;
+    images.push({ bytes, mime: img.mime, ...(name ? { name } : {}) });
+  }
+  return { ok: true, images };
+}
+
+export class ConsoleWorld implements World {
+  readonly id = 'console';
+  private host: WorldHost | null = null;
+  private readonly clients = new Set<ChatClient>();
+  private readonly timezone: string;
+  private readonly botName: string;
+  private readonly cfg: ConsoleConfigSection;
+  /** 上一条 console_send 的时刻;null = 本场还没发过 */
+  private lastSendAt: number | null = null;
+  /** 本场收到的操作员消息条数,以及上一条 console_send 发出时的读数 */
+  private operatorMessages = 0;
+  private operatorMessagesAtLastSend = 0;
+
+  constructor(opts: ConsoleWorldOptions = {}) {
+    this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
+    this.botName = opts.botName ?? 'bot';
+    this.cfg = opts.cfg ?? { ...CONSOLE_DEFAULTS };
+  }
+
+  /** 生效中的口令;形状不对当没配置(模板的缺省文案会接管那一行)。 */
+  private activePin(): string {
+    const pin = this.cfg.pin.trim();
+    return PIN_SHAPE.test(pin) ? pin : '';
+  }
+
+  /** 文本归 ENV_PROMPT.md，这里只报口令这一个值。 */
+  envPromptVars(): Record<string, string> {
+    return { 'console.pin': this.activePin() };
+  }
+
+  /** WebUI 露出:在线人数与口令状态 + 一个通往对话页的面板。文案按这次请求的界面语言。 */
+  webUi(language: Language = 'zh'): WorldWebUiDecl {
+    const t = text(language);
+    const online = this.onlineCount();
+    const pin = this.activePin();
+    // 形状不对时静默当未配置会让人以为口令已经生效,所以这里把两种"没生效"分开说。
+    const pinState = pin ? t.pinEnabled : this.cfg.pin.trim() ? t.pinMalformed : t.pinUnset;
+    return {
+      label: t.moduleLabel,
+      // 一条链路:这个渠道不连外部任何东西,挂上了就是通的。没人在线不是故障——
+      // 灯报的是"能不能说上话",不是"此刻有没有人在说"。
+      lamps: [{
+        label: t.lampLabel,
+        state: 'online',
+        hint: online > 0 ? t.lampOnline(online) : t.lampNobody,
+      }],
+      badges: [
+        { label: t.badgeOnline, value: t.badgeOnlineValue(online), tone: online > 0 ? 'on' : 'off' },
+        // 口令本身不进徽标:WebUI 页面会被投屏、被截图。
+        { label: t.badgePin, value: pinState, tone: pin ? 'on' : 'off' },
+      ],
+      // 流式面:控制台页经 /ws/providers/world%3Aconsole/panels/chat 接进来。这一页没有自己的面板,
+      // 对话只在控制台页;这里只剩配置、模板、徽标与灯。
+      stream: (panel, socket) => this.stream(panel, socket, language),
+      promptDocs: [
+        {
+          key: 'worlds.console.envPrompt',
+          title: t.promptDocTitle,
+          description: t.promptDocDescription,
+          // bot 侧的覆盖文件(worlds/console/ENV_PROMPT.md)整份优先。
+          path: ENV_PROMPT_FILE,
+          role: 'envPrompt',
+          vars: [{
+            name: 'console.pin',
+            description: t.pinVarDescription,
+          }],
+        },
+      ],
+      config: [consoleConfigGroup(language)],
+    };
+  }
+
+  async start(host: WorldHost): Promise<void> {
+    this.host = host;
+  }
+
+  async stop(): Promise<void> {
+    // 关闭连接前清除 host，禁止 close 回调继续投递 presence 事件。
+    this.host = null;
+    for (const c of [...this.clients]) {
+      try { c.peer.close(text(c.language).botOffline); } catch { /* ignore */ }
+    }
+    this.clients.clear();
+  }
+
+  /**
+   * console_send 回执报告目标、当前连接者、距上次发送的时间及其后是否收到控制台发言。没有已读回执，不能判断消息是否被阅读；控制台 World 不推断其他 World 的直播状态，也不附加建议。
+   */
+  private deliveryFacts(delivered: number): string {
+    const t = MODEL_TEXT;
+    const facts: string[] = [];
+    const names = [...this.clients]
+      .filter((c) => c.peer.open && c.name !== null)
+      .map((c) => c.name as string);
+    facts.push(delivered > 0 ? t.deliveredTo(delivered, names) : t.deliveredToNobody);
+    if (this.lastSendAt !== null) {
+      const minutes = Math.round((Date.now() - this.lastSendAt) / 60_000);
+      const since = this.operatorMessages - this.operatorMessagesAtLastSend;
+      facts.push(t.sinceLastSend(minutes, since));
+    }
+    return t.joinFacts(facts);
+  }
+
+  /** 当前仍打开的客户端数(面板status可用) */
+  onlineCount(): number {
+    let n = 0;
+    for (const c of this.clients) if (c.peer.open) n++;
+    return n;
+  }
+
+  /**
+   * 通用流式通道的入口。WebUI 把 `/ws/providers/worlds:console/panels/chat` 的连接
+   * 包成 `WebUiStream` 交进来,World 从这里接管整条连接的生命周期。
+   *
+   * 扇出语义由协议定死:**一条连接一次调用**,框架不广播也不去重——所以本 World
+   * 自己持一个 `clients` 集合,同时在场的人在同一个对话里,互相看得见。
+   *
+   * 未知面板抛错:服务端会只关这一条连接并把措辞带给对端(1011)。
+   * `language` 是握手那一刻浏览器的界面语言,这条流上的系统提示都按它给。
+   */
+  stream(panel: string, socket: WebUiStream, language: Language = 'zh'): void {
+    if (panel !== PANEL_CHAT) throw new Error(text(language).unknownPanel(panel));
+    const client = this.attach(streamPeer(socket), language);
+    socket.onMessage((text) => this.onFrame(client, text));
+    socket.onClose(() => this.detach(client));
+    this.greet(client);
+  }
+
+  tools(): ToolDef[] {
+    return [
+      {
+        // 固定叫 console_send,与前缀文档里的「控制台」同名
+        name: 'console_send',
+        description: 'Send text to everyone connected to the console.',
+        tags: ['speak'],
+        parameters: {
+          type: 'object',
+          properties: {
+            text: { type: 'string', description: 'Text to send.' },
+          },
+          required: ['text'],
+        },
+        handler: async (args) => {
+          const text = typeof args.text === 'string' ? args.text.trim() : '';
+          if (!text) return '[send failed] text must not be empty';
+          if (!this.host) return '[send failed] console module not started';
+          const delivered = this.broadcast({
+            type: 'msg',
+            from: this.botName,
+            text,
+            ts: nowIso(this.timezone),
+          });
+          // 自己的消息回录:只落库不投递(不会把自己吵醒)
+          this.host.pushEvent(
+            {
+              type: 'console.self',
+              ts: nowIso(this.timezone),
+              source: this.id,
+              text: MODEL_TEXT.selfLine(shortTime(this.timezone), text),
+              meta: { from: this.botName, body: text },
+            },
+            { deliver: false },
+          ).catch((e) => this.host?.log.warn('自录事件落库失败', { err: String(e) }));
+          const receipt = `[sent] ${this.deliveryFacts(delivered)}`;
+          this.lastSendAt = Date.now();
+          this.operatorMessagesAtLastSend = this.operatorMessages;
+          return receipt;
+        },
+      },
+    ];
+  }
+
+  // ── 连接生命周期(两条入口共用) ───────────────────────────────────────
+
+  /** 登记一条新连接。回调的挂接归各自入口,因为那是宿主 API 唯一不同的地方。 */
+  private attach(peer: ChatPeer, language: Language): ChatClient {
+    const client: ChatClient = { peer, name: null, language };
+    this.clients.add(client);
+    return client;
+  }
+
+  /** 开场白在全部回调挂载后发送。 */
+  private greet(client: ChatClient): void {
+    this.sendJson(client.peer, { type: 'sys', text: text(client.language).greeting });
+  }
+
+  /** 连接结束:出名单、给还在场的人一句提示。进出不打扰bot。 */
+  private detach(client: ChatClient): void {
+    this.clients.delete(client);
+    if (client.name === null || !this.host) return;
+    const name = client.name;
+    this.broadcastSys((t) => t.left(name), null);
+  }
+
+  /** 这一帧没有被接收,原因写在 text 里。 */
+  private reject(client: ChatClient, reason: string): void {
+    this.sendJson(client.peer, { type: 'sys', kind: 'rejected', text: reason });
+  }
+
+  /** 给在场的每条流一句系统提示,各按自己的语言;`except` 那条不发。 */
+  private broadcastSys(line: (t: ConsoleText) => string, except: ChatClient | null): void {
+    for (const c of [...this.clients]) {
+      if (c === except || !c.peer.open) continue;
+      this.sendJson(c.peer, { type: 'sys', text: line(text(c.language)) });
+    }
+  }
+
+  // ── 协议(两条入口共用的唯一一份) ───────────────────────────────────
+
+  /**
+   * 收到一帧原始文本。**这是协议解析的唯一入口**——`/ws/chat` 的 `RawData` 与
+   * 流式通道的 `string` 在各自入口就已经归一成文本,到这里两条路完全同一份代码。
+   */
+  private onFrame(client: ChatClient, raw: string): void {
+    const t = text(client.language);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      this.reject(client, t.notJson);
+      return;
+    }
+    if (parsed === null || typeof parsed !== 'object') {
+      this.reject(client, t.malformed);
+      return;
+    }
+    const msg = parsed as Record<string, unknown>;
+
+    if (msg.type === 'hello') {
+      const name = typeof msg.name === 'string' ? msg.name.trim().slice(0, NAME_MAX) : '';
+      if (!name) {
+        this.reject(client, t.emptyName);
+        return;
+      }
+      const firstHello = client.name === null;
+      client.name = name;
+      this.sendJson(client.peer, { type: 'sys', text: t.hello(name) });
+      if (firstHello) this.replayHistory(client);
+      // 给其他在场客户端一条提示;进出不打扰bot
+      if (firstHello) this.broadcastSys((tt) => tt.joined(name), client);
+      return;
+    }
+
+    if (msg.type === 'msg') {
+      if (client.name === null) {
+        this.reject(client, t.helloFirst);
+        return;
+      }
+      const text = typeof msg.text === 'string' ? msg.text.trim().slice(0, TEXT_MAX) : '';
+      const parsed = parseImages(msg.images, t);
+      if (!parsed.ok) {
+        this.reject(client, t.imagesRejected(parsed.reason));
+        return;
+      }
+      if (!text && parsed.images.length === 0) return; // 空消息静默忽略
+      if (!this.host) {
+        this.reject(client, t.botNotConnected);
+        return;
+      }
+      // 图片随事件落库:core 分配句柄并把每张的文本形态接在正文后;回显与回放只带句柄。
+      const visible = parsed.images.length > 0 && this.host.modelFacts.accepts(parsed.images[0].mime);
+      const total = parsed.images.length;
+      const from = client.name;
+      const blobs: BlobInput[] = parsed.images.map((img, i) => ({
+        bytes: img.bytes,
+        mime: img.mime,
+        ...(img.name ? { name: img.name } : {}),
+        fallbackText: MODEL_TEXT.imageFallback(from, i + 1, total),
+      }));
+      // 操作员消息:落库 + internal 投递(进 user 区)+ flush(跳过合批安静窗口)。
+      // 口令标记由 World 加,操作员不打;meta.from/body 供 hello 时历史回放还原,图片从落库的 blobs 取。
+      const pin = this.activePin();
+      const line = `[${shortTime(this.timezone)}] ${client.name}: ${text}`;
+      // console_send 回执要报"上一条发出之后控制台上有没有人说过话",按条数记比
+      // 按时间戳比更准:事件库的 ts 只到秒,同秒的消息分不出先后。
+      this.operatorMessages += 1;
+      const host = this.host;
+      host.pushEvent(
+        {
+          type: 'console.message',
+          ts: nowIso(this.timezone),
+          source: this.id,
+          origin: 'internal',
+          text: pin ? `${MODEL_TEXT.pinMark(pin)} ${line}` : line,
+          senderKey: client.name,
+          meta: { from: client.name, body: text },
+          ...(blobs.length ? { blobs } : {}),
+        },
+        { trigger: 'flush' },
+      ).then((envelope) => {
+        // 回显广播给所有客户端(含发送者本人——前端以回显为准渲染);句柄在落库后才有。
+        const wireImages = wireImagesOf(envelope);
+        this.broadcast({
+          type: 'msg', from: client.name, text, ts: envelope.ts,
+          ...(wireImages.length ? { images: wireImages } : {}),
+        });
+      }).catch((e) => {
+        host.log.warn('消息事件投递失败', { err: String(e) });
+        this.reject(client, t.deliveryFailed(String(e)));
+      });
+      if (total > 0 && !visible) {
+        this.sendJson(client.peer, { type: 'sys', kind: 'warning', text: t.modelBlind(host.modelFacts.model()) });
+      }
+      return;
+    }
+
+    if (msg.type === 'greet') {
+      if (client.name === null) {
+        this.reject(client, t.helloFirst);
+        return;
+      }
+      if (!this.host) {
+        this.reject(client, t.botNotConnected);
+        return;
+      }
+      // 标签逐字进事件正文,所以压成一行并截断;没有标签就没有可引用的事实,这一帧作废。
+      const label = typeof msg.label === 'string' ? msg.label.replace(/\s+/g, ' ').trim().slice(0, LABEL_MAX) : '';
+      if (!label) return;
+      const host = this.host;
+      host.pushEvent(
+        {
+          type: 'console.invite',
+          ts: nowIso(this.timezone),
+          source: this.id,
+          origin: 'internal',
+          text: MODEL_TEXT.inviteLine(shortTime(this.timezone), client.name, label, this.spokenBefore()),
+          senderKey: client.name,
+          meta: { from: client.name, label },
+        },
+        { trigger: 'flush' },
+      ).catch((e) => {
+        host.log.warn('按钮事件投递失败', { err: String(e) });
+        this.reject(client, t.deliveryFailed(String(e)));
+      });
+      return;
+    }
+
+    this.reject(client, t.unknownType(String(msg.type)));
+  }
+
+  /** 已保存的控制台事件里有没有人说过话;从最新往前逐页读,读到一条发言即止。 */
+  private spokenBefore(): boolean {
+    if (!this.host) return false;
+    const store = this.host.store;
+    // 每页条数只决定往前读几次,不影响结果
+    const pageSize = 100;
+    for (let toCursor = store.latestCursor(); ;) {
+      const page = store.range({ source: this.id, toCursor, limit: pageSize });
+      if (page.some((e) => e.type === 'console.message' || e.type === 'console.self')) return true;
+      if (page.length < pageSize) return false;
+      toCursor = page[0].cursor - 1;
+    }
+  }
+
+  /** hello 后回放最近的对话历史;发言人与正文读本 World 落库时写下的 meta.from/body。 */
+  private replayHistory(client: ChatClient): void {
+    if (!this.host) return;
+    const events = this.host.store
+      .range({ source: this.id, limit: 60 })
+      .filter((e) => e.type === 'console.message' || e.type === 'console.self')
+      .slice(-30);
+    for (const e of events) {
+      const { from, body } = e.meta as { from: string; body: string };
+      const images = wireImagesOf(e);
+      this.sendJson(client.peer, {
+        type: 'msg', from, text: body, ts: e.ts, history: true,
+        ...(images.length ? { images } : {}),
+      });
+    }
+  }
+
+  /** 返回实际送达的客户端数，并移除已关闭的连接。 */
+  private broadcast(payload: unknown): number {
+    const raw = JSON.stringify(payload);
+    let n = 0;
+    for (const c of [...this.clients]) {
+      if (c.peer.open) {
+        try {
+          c.peer.send(raw);
+          n++;
+        } catch {
+          this.clients.delete(c);
+          c.peer.drop();
+        }
+      } else {
+        // close 回调迟到前先移除已关闭的连接。
+        this.clients.delete(c);
+      }
+    }
+    return n;
+  }
+
+  private sendJson(peer: ChatPeer, payload: unknown): void {
+    if (!peer.open) return;
+    try { peer.send(JSON.stringify(payload)); } catch { /* ignore */ }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 宿主适配:把流式连接对象包成 ChatPeer
+// ---------------------------------------------------------------------------
+
+/**
+ * 通用流式通道。
+ *
+ * `WebUiStream` 的 `send` 已经保证"已关时静默丢弃、不抛",`close` 也不抛,
+ * 所以这层几乎是恒等映射;`drop` 没有对应物(协议里没有 terminate),退成 close。
+ */
+function streamPeer(socket: WebUiStream): ChatPeer {
+  return {
+    get open(): boolean { return socket.open; },
+    send(raw: string): void { socket.send(raw); },
+    close(reason: string): void { socket.close(reason); },
+    drop(): void { try { socket.close('connection error'); } catch { /* ignore */ } },
+  };
+}

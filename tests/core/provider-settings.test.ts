@@ -3,8 +3,8 @@ import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from './helpers.ts';
 import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
-import { ProviderSettings } from '../../src/providers/console/settings.ts';
-import { text as providerText } from '../../src/providers/console/strings.ts';
+import { ProviderSettings } from '../../src/providers/webui/settings.ts';
+import { text as providerText } from '../../src/providers/webui/strings.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { loadDeployment } from '../../src/deploy.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
@@ -204,7 +204,7 @@ describe('Provider 配置事务', () => {
       }),
     ).toThrow('非负');
   });
-  it("端点表使用控制台内建面板，模块提供操作接口", () => {
+  it("端点表使用 WebUI 内建面板，模块提供操作接口", () => {
     const { settings } = fixture();
     for (const source of settings.sources()) {
       const panel = source.contribute('zh').panels!.find((p) => p.id === 'settings')!;
@@ -363,7 +363,7 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
   it("模型列表来自实例；probe 返回状态、耗时、用量和报价，404 提示检查地址与路径", async () => {
     const { cfg, settings } = fixture();
     cfg.providers.cloud.spec = { model: 'deepseek-flash', thinking: true, reasoningEffort: 'low', maxTokens: 4096 };
-    cfg.providers.cloud.pricing = [{ models: ['*'], currency: 'USD', basis: 'marginal', source: 'console', rules: [{ meter: 'input', perMillion: 1 }, { meter: 'output', perMillion: 2 }] }];
+    cfg.providers.cloud.pricing = [{ models: ['*'], currency: 'USD', basis: 'marginal', source: 'webui', rules: [{ meter: 'input', perMillion: 1 }, { meter: 'output', perMillion: 2 }] }];
     let status = 200;
     const bodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {

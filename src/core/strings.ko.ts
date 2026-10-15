@@ -5,7 +5,7 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
   description: '',
   displayName: {
     title: '표시 이름',
-    description: '콘솔 제목과 봇이 보내는 메시지의 보낸 사람 이름으로 쓰입니다. 콘솔에는 바로 반영되고, 마운트된 World에는 그 World가 재시작된 뒤 반영됩니다.',
+    description: 'WebUI 제목과 봇이 보내는 메시지의 보낸 사람 이름으로 쓰입니다. WebUI에는 바로 반영되고, 마운트된 World에는 그 World가 재시작된 뒤 반영됩니다.',
   },
   quietGap: {
     title: '조용한 구간',
@@ -32,9 +32,9 @@ export const coreGroupText: Partial<typeof coreGroupEn> = {
     title: '로그 파일 기록 기준',
     description: '이 수준보다 낮은 기록은 data/runs/<run>/log.jsonl에 쓰지 않습니다.',
   },
-  logConsole: {
+  logStdout: {
     title: '로그 출력 기준',
-    description: '이 수준보다 낮은 기록은 콘솔 창에 출력하지 않습니다.',
+    description: '이 수준보다 낮은 기록은 표준 출력에 출력하지 않습니다.',
   },
   logAreas: {
     title: '영역별 파일 기록 기준 재정의',

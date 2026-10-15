@@ -1,7 +1,7 @@
 /**
  * 把内建 World 生成 npm 扩展包 `dist/worlds/cortico-world-<id>/`,供不带这些 World 的发行版安装。
  * 包与框架同版本:源码照 `src/worlds/<id>/` 原样复制,跳出 World 目录的相对 import 改写成
- * `cortico/<src 下路径>`,面板打成 `dist/console.js`(+ `.css`)。框架里已内建同 id 的 World 时,
+ * `cortico/<src 下路径>`,面板打成 `dist/webui.js`(+ `.css`)。框架里已内建同 id 的 World 时,
  * 装上的包按 id 冲突不加载。
  *
  * 默认只生成目录;--pack 产出 tarball,--publish 发布。参数里列出 id 时只处理这几个。
@@ -61,7 +61,7 @@ const SRC_DIR = join(REPO_ROOT, 'src');
 const OUT_ROOT = join(REPO_ROOT, 'dist', 'worlds');
 const REPO_URL = 'https://github.com/Pal-AI-Lab/Cortico';
 /** 面板源码只进 bundle,不随包发。 */
-const CONSOLE_DIR = 'console';
+const WEBUI_DIR = 'webui';
 
 export const packageNameOf = (id: string): string => `cortico-world-${id}`;
 
@@ -97,12 +97,12 @@ function packageOf(spec: string): string {
 /** 读 `src/worlds/<id>/` 的 `.ts`,改写跳出目录的 import,并收集第三方包。 */
 export function planWorldPackage(id: string): WorldPackagePlan {
   const worldDir = join(SRC_DIR, 'worlds', id);
-  const consoleDir = join(worldDir, CONSOLE_DIR);
+  const webUiDir = join(worldDir, WEBUI_DIR);
   const sources = new Map<string, string>();
   const externals = new Set<string>();
   const problems: string[] = [];
   for (const file of walk(worldDir)) {
-    if (!file.endsWith('.ts') || file.startsWith(consoleDir + sep)) continue;
+    if (!file.endsWith('.ts') || file.startsWith(webUiDir + sep)) continue;
     const rel = posix(relative(worldDir, file));
     const text = readFileSync(file, 'utf8').replace(RELATIVE_RE, (whole, head: string, quote: string, spec: string) => {
       const target = resolve(dirname(file), spec);
@@ -169,7 +169,7 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
   rmSync(out, { recursive: true, force: true });
   cpSync(worldDir, join(out, 'src'), {
     recursive: true,
-    filter: (src) => src !== join(worldDir, CONSOLE_DIR) && !src.endsWith('.ts'),
+    filter: (src) => src !== join(worldDir, WEBUI_DIR) && !src.endsWith('.ts'),
   });
   for (const [rel, text] of plan.sources) {
     const target = join(out, 'src', rel);
@@ -184,10 +184,10 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
   writeFileSync(join(out, 'src', 'index.ts'), `export { ${exportName} as default } from './definition.ts';\n`);
 
   const cortico: Record<string, unknown> = { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: definition.label };
-  const consoleEntry = join(worldDir, CONSOLE_DIR, 'client.ts');
-  if (existsSync(consoleEntry)) {
+  const webUiEntry = join(worldDir, WEBUI_DIR, 'client.ts');
+  if (existsSync(webUiEntry)) {
     await esbuild.build({
-      entryPoints: [{ in: consoleEntry, out: 'console' }],
+      entryPoints: [{ in: webUiEntry, out: 'webui' }],
       outdir: join(out, 'dist'),
       bundle: true,
       format: 'esm',
@@ -198,8 +198,8 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
       sourcemap: true,
       logLevel: 'warning',
     });
-    cortico.consoleClient = 'dist/console.js';
-    if (existsSync(join(out, 'dist', 'console.css'))) cortico.consoleStyle = 'dist/console.css';
+    cortico.webUiClient = 'dist/webui.js';
+    if (existsSync(join(out, 'dist', 'webui.css'))) cortico.webUiStyle = 'dist/webui.css';
   }
 
   const manifest = {

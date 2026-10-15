@@ -1,0 +1,9 @@
+{
+  "name": "cortico-fixture-provider-webui",
+  "version": "0.4.2",
+  "description": "带浏览器端产物的 provider 扩展",
+  "type": "module",
+  "main": "./index.js",
+  "keywords": ["cortico-provider"],
+  "cortico": { "kind": "provider", "api": 6, "webUiClient": "dist/panel.js" }
+}

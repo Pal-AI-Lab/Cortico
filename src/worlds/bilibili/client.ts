@@ -73,7 +73,7 @@ interface LiveClientOptions {
   /** 登录 cookie;空串=匿名连接(收得到弹幕,但认不出人) */
   sessdata: string;
   onCmd: (msg: Record<string, unknown>) => void;
-  /** 状态变化(控制台徽标据此刷新) */
+  /** 状态变化(WebUI 徽标据此刷新) */
   onStatus?: (status: LiveStatus) => void;
   log: Logger;
 }

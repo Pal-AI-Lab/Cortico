@@ -1291,7 +1291,7 @@ interface ExecutorOptions {
   ranged?: TaskRangedActions;
   /**
    * 前置试算开关(默认开)。返回 false 时受理刻不试算、出队刻不闸 —— 台架做 A/B 用,
-   * 也留给控制台在判据出问题时一键退回旧行为。
+   * 也留给 WebUI 在判据出问题时一键退回旧行为。
    */
   precheck?: () => boolean;
   /**
@@ -3163,7 +3163,7 @@ export class Executor {
   }
 }
 
-/** 反射层的阈值与开关。一律现读,控制台热改即生效。 */
+/** 反射层的阈值与开关。一律现读,WebUI 热改即生效。 */
 interface ReflexOptions {
   getBot: () => Bot | null;
   report: (r: TaskReport) => void;

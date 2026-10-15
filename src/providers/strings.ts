@@ -9,7 +9,7 @@ import { text as ptBR } from './strings.pt-BR.ts';
 import { text as it } from './strings.it.ts';
 import { text as ru } from './strings.ru.ts';
 
-/** Validation errors that reach the console as `{ error }` from the provider settings. */
+/** Validation errors that reach the WebUI as `{ error }` from the provider settings. */
 const zh = {
   profileObject: '模型配置必须是对象',
   modelRequired: '模型名不能为空',

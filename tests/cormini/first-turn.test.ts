@@ -69,7 +69,7 @@ describe('Cormini 首轮对话', () => {
     const ftDir = join(dir, 'ft5');
     mkdirSync(ftDir, { recursive: true });
     const p = new Cormini({ memoryDir: join(dir, 'ws5'), firstTurnDir: ftDir });
-    const docs = p.console().promptDocs ?? [];
+    const docs = p.webUi().promptDocs ?? [];
     const keys = docs.map((d) => d.key);
     expect(keys).toContain('firstTurn.user');
     expect(keys).toContain('firstTurn.thinking');
@@ -82,15 +82,15 @@ describe('Cormini 首轮对话', () => {
 
   it('不传 firstTurnDir = 没有首轮对话:不自报源', () => {
     const p = new Cormini({ memoryDir: join(dir, 'ws6') });
-    expect((p.console().promptDocs ?? []).some((d) => d.key.startsWith('firstTurn.'))).toBe(false);
+    expect((p.webUi().promptDocs ?? []).some((d) => d.key.startsWith('firstTurn.'))).toBe(false);
   });
 
-  it('目录给了但文件还没写:回空,源照常自报好让控制台能创建它们', () => {
+  it('目录给了但文件还没写:回空,源照常自报好让 WebUI 能创建它们', () => {
     const ftDir = join(dir, 'ft7');
     const p = new Cormini({ memoryDir: join(dir, 'ws7'), firstTurnDir: ftDir, context: on });
     expect(existsSync(ftDir)).toBe(false);
     expect(p.sessionHead()).toEqual([]);
-    const docs = (p.console().promptDocs ?? []).filter((d) => d.key.startsWith('firstTurn.'));
+    const docs = (p.webUi().promptDocs ?? []).filter((d) => d.key.startsWith('firstTurn.'));
     expect(docs).toHaveLength(3);
     for (const d of docs) expect(d.path.startsWith(ftDir)).toBe(true);
   });

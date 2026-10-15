@@ -1,5 +1,5 @@
 /**
- * 部署的控制台配色记录：`<部署>/theme.json`。控制台读写，启动器只读。
+ * 部署的 WebUI 配色记录：`<部署>/theme.json`。WebUI 读写，启动器只读。
  * 文件内容就是浏览器侧的主题记录形状，写入前逐个 token 规范化。
  */
 import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';

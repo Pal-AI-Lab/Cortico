@@ -5,12 +5,12 @@
  * 布局的稳定挂点，供等高卡片把动作区压到下沿。
  */
 
-import type { ConsoleBadge } from '../../shared/console-protocol.ts';
+import type { WebUiBadge } from '../../shared/webui-protocol.ts';
 import type {
-  ConsoleChipTone,
-  ConsoleMemo,
-  ConsoleSheet,
-  ConsoleSheetOptions,
+  WebUiChipTone,
+  WebUiMemo,
+  WebUiSheet,
+  WebUiSheetOptions,
 } from '../../shared/client-panel.ts';
 import { h } from './dom.ts';
 
@@ -28,8 +28,8 @@ function descLine(doc: Document, body: HTMLElement, text?: string): HTMLElement 
   return el;
 }
 
-/** 档案卡。控制台的基本视觉单元。 */
-export function sheet(doc: Document, opts: ConsoleSheetOptions): ConsoleSheet {
+/** 档案卡。WebUI 的基本视觉单元。 */
+export function sheet(doc: Document, opts: WebUiSheetOptions): WebUiSheet {
   const el = h(doc, 'div', 'sheet tabbed');
   const note = h(doc, 'span', 'foldnote hidden');
   const body = h(doc, 'div', 'sheetbody');
@@ -44,11 +44,11 @@ export function sheet(doc: Document, opts: ConsoleSheetOptions): ConsoleSheet {
 /** 折叠状态通过面板 memo 存取，键由面板命名空间隔离。 */
 export function foldSheet(
   doc: Document,
-  memo: ConsoleMemo,
+  memo: WebUiMemo,
   signal: AbortSignal,
   id: string,
-  opts: ConsoleSheetOptions & { defaultOpen?: boolean },
-): ConsoleSheet {
+  opts: WebUiSheetOptions & { defaultOpen?: boolean },
+): WebUiSheet {
   const el = h(doc, 'details', 'sheet tabbed fold');
   el.open = memo.get<boolean>(foldKey(id), !!opts.defaultOpen);
   const sum = h(doc, 'summary');
@@ -109,13 +109,13 @@ export function button(
  * 药丸。三态各有配色：`on` 用 `--ok`，`off` 用 `--ink-dim`（比中性态更淡的"关闭/静默"），
  * `plain` 与不给 tone 一样落中性 `.pill`。
  */
-export function pill(doc: Document, text: string, tone?: ConsoleBadge['tone']): HTMLSpanElement {
+export function pill(doc: Document, text: string, tone?: WebUiBadge['tone']): HTMLSpanElement {
   const cls = tone === 'on' ? 'pill on' : tone === 'off' ? 'pill off' : 'pill';
   return h(doc, 'span', cls, text);
 }
 
 /** 筹码。等宽小字的读数标签，`warn` / `accent` 对应既有的 `warnc` / `dreamc` 两个配色。 */
-export function chip(doc: Document, text: string, tone?: ConsoleChipTone): HTMLSpanElement {
+export function chip(doc: Document, text: string, tone?: WebUiChipTone): HTMLSpanElement {
   const cls = tone === 'warn' ? 'chip warnc' : tone === 'accent' ? 'chip dreamc' : 'chip';
   return h(doc, 'span', cls, text);
 }

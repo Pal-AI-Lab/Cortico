@@ -3,7 +3,7 @@
  * 按页面协议选择 ws/wss；文本帧解析为 JSON，坏帧报告 onError 后丢弃；网络状态通过回调交给调用方呈现。
  */
 
-import type { ConsoleStreamHandle } from '../../shared/client-panel.ts';
+import type { WebUiStreamHandle } from '../../shared/client-panel.ts';
 import { withLanguage } from './language.ts';
 import type { Lifecycle } from './lifecycle.ts';
 import { openStream, type SocketLike } from './stream.ts';
@@ -51,7 +51,7 @@ export interface FrameworkSocketOptions {
 }
 
 /** 返回的通道句柄已登记在 lifecycle，可提前 dispose。 */
-export function openFrameworkSocket(opts: FrameworkSocketOptions): ConsoleStreamHandle {
+export function openFrameworkSocket(opts: FrameworkSocketOptions): WebUiStreamHandle {
   const { env } = opts;
   const handle = openStream({
     url: env.wsUrl(opts.path),

@@ -27,7 +27,7 @@ export interface AssembleSystemDeps {
  * World 环境模板按以下顺序覆盖，同名文件整份替换：
  * src/worlds/<id>/ENV_PROMPT.md → <代码包>/worlds/<id>/ENV_PROMPT.md
  * → <部署>/worlds/<id>/ENV_PROMPT.md。
- * 部署文件不进版本控制；控制台仅写入部署覆盖，删除后回退到代码包或 World 模板。
+ * 部署文件不进版本控制；WebUI 仅写入部署覆盖，删除后回退到代码包或 World 模板。
  */
 export interface EnvPromptDirs {
   /** bot 代码包目录。 */
@@ -64,14 +64,14 @@ export type EnvPromptOrigin = 'deployment' | 'package' | 'module';
 export function envPromptDocOf(mod: World): PromptDocDecl | undefined {
   let decl;
   try {
-    decl = mod.console?.();
+    decl = mod.webUi?.();
   } catch {
-    return undefined; // 控制台声明异常时省略该 World 的模板。
+    return undefined; // WebUI 声明异常时省略该 World 的模板。
   }
   return decl?.promptDocs?.find((doc) => doc.role === 'envPrompt');
 }
 
-/** 读取模板并代入 World 当前值；前缀组装与控制台预览共用。 */
+/** 读取模板并代入 World 当前值；前缀组装与 WebUI 预览共用。 */
 export async function renderWorldEnvPrompt(
   mod: World,
   dirs?: EnvPromptDirs,
@@ -104,7 +104,7 @@ export async function collectWorldContexts(
   );
 }
 
-/** 供控制台观察:前缀的分段视图(与实际发出的前缀同一来源) */
+/** 供 WebUI 观察:前缀的分段视图(与实际发出的前缀同一来源) */
 export async function assembleSystemSegments(deps: AssembleSystemDeps): Promise<PrefixSegment[]> {
   const { persona, worlds, now, timezone, dirs } = deps;
   return persona.systemSegments({

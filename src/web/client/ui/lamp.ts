@@ -3,10 +3,10 @@
 import { get } from '../core/api.ts';
 import { toDisposable, type Disposable } from '../../shared/client-panel.ts';
 import {
-  CONSOLE_LAMPS_ROUTE,
-  type ConsoleLamp,
-  type ConsoleLampsResponse,
-} from '../../shared/console-protocol.ts';
+  WEBUI_LAMPS_ROUTE,
+  type WebUiLamp,
+  type WebUiLampsResponse,
+} from '../../shared/webui-protocol.ts';
 import { h } from './dom.ts';
 import { S } from './strings.ts';
 
@@ -14,7 +14,7 @@ import { S } from './strings.ts';
 const LAMP_POLL_MS = 500;
 
 /** state → class。`offline` 不加修饰，就是 `.navdot` 本体那个灰。 */
-const LAMP_CLASS: Record<ConsoleLamp['state'], string> = {
+const LAMP_CLASS: Record<WebUiLamp['state'], string> = {
   online: 'navdot on',
   loading: 'navdot warn',
   error: 'navdot bad',
@@ -22,7 +22,7 @@ const LAMP_CLASS: Record<ConsoleLamp['state'], string> = {
 };
 
 /** 悬停时的状态词。 */
-const LAMP_WORD: Record<ConsoleLamp['state'], string> = {
+const LAMP_WORD: Record<WebUiLamp['state'], string> = {
   online: S.lamp.online,
   loading: S.lamp.loading,
   error: S.lamp.error,
@@ -35,18 +35,18 @@ const LAMP_WORD: Record<ConsoleLamp['state'], string> = {
  * 导航上只有这一处读得到 `label`，所以它必须先回答"这是谁"，再回答"它怎么了"
  * ——一排七个同样大小的点，颜色说得清严重程度，说不清是哪条链路。
  */
-function lampTitle(lamp: ConsoleLamp): string {
+function lampTitle(lamp: WebUiLamp): string {
   const head = `${lamp.label} ${LAMP_WORD[lamp.state]}`;
   return lamp.hint ? `${head} · ${lamp.hint}` : head;
 }
 
-function paintDot(el: HTMLElement, lamp: ConsoleLamp): void {
+function paintDot(el: HTMLElement, lamp: WebUiLamp): void {
   el.className = LAMP_CLASS[lamp.state];
   el.title = lampTitle(lamp);
   el.setAttribute('aria-label', el.title);
 }
 
-function makeDot(doc: Document, lamp: ConsoleLamp): HTMLSpanElement {
+function makeDot(doc: Document, lamp: WebUiLamp): HTMLSpanElement {
   const el = h(doc, 'span', 'navdot');
   el.setAttribute('role', 'img');
   paintDot(el, lamp);
@@ -59,7 +59,7 @@ function makeDot(doc: Document, lamp: ConsoleLamp): HTMLSpanElement {
  *
  * 数目没变就地改颜色，变了才重排子节点——这是每半秒一次的操作，没必要每次重建。
  */
-export function paintLamps(host: HTMLElement, lamps: readonly ConsoleLamp[]): void {
+export function paintLamps(host: HTMLElement, lamps: readonly WebUiLamp[]): void {
   const dots = [...host.children] as HTMLElement[];
   if (dots.length === lamps.length) {
     lamps.forEach((lamp, i) => paintDot(dots[i], lamp));
@@ -70,7 +70,7 @@ export function paintLamps(host: HTMLElement, lamps: readonly ConsoleLamp[]): vo
 }
 
 /** 新造一排灯。给不出灯就得到一个藏起来的空容器（之后轮询可以点亮它）。 */
-export function lampRow(doc: Document, lamps: readonly ConsoleLamp[]): HTMLSpanElement {
+export function lampRow(doc: Document, lamps: readonly WebUiLamp[]): HTMLSpanElement {
   const host = h(doc, 'span', 'navlamps');
   paintLamps(host, lamps);
   return host;
@@ -80,7 +80,7 @@ export function lampRow(doc: Document, lamps: readonly ConsoleLamp[]): HTMLSpanE
 // 取数
 // ---------------------------------------------------------------------------
 
-type LampListener = (lamps: Record<string, ConsoleLamp[]>) => void;
+type LampListener = (lamps: Record<string, WebUiLamp[]>) => void;
 
 const listeners = new Set<LampListener>();
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -91,7 +91,7 @@ let pending = false;
 function tick(): void {
   if (pending || doc?.hidden !== false) return; // 后台标签页里没人看那排灯
   pending = true;
-  void get<ConsoleLampsResponse>(CONSOLE_LAMPS_ROUTE)
+  void get<WebUiLampsResponse>(WEBUI_LAMPS_ROUTE)
     .then(
       (out) => {
         const lamps = out?.lamps ?? {};
@@ -103,7 +103,7 @@ function tick(): void {
 }
 
 /**
- * 订阅状态灯。第一个订阅者把轮询打开，最后一个走掉时关掉——控制台整页没有一颗
+ * 订阅状态灯。第一个订阅者把轮询打开，最后一个走掉时关掉——WebUI 整页没有一颗
  * 灯在看的时候，不该还有一个定时器在敲后端。
  *
  * `ownerDoc` 只用来问"页面还看得见吗"，第一个订阅者带进来的那份作数。

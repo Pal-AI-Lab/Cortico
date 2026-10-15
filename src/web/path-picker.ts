@@ -157,7 +157,7 @@ function titleOf(options: PathPickerOptions, t: Text): string {
 }
 
 const WINDOWS_SCRIPT = String.raw`
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+[WebUI]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Windows.Forms
 $title = $env:CORTICO_PICKER_TITLE
 $initial = $env:CORTICO_PICKER_INITIAL
@@ -179,9 +179,9 @@ if ($env:CORTICO_PICKER_KIND -eq 'directory') {
 }
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   if ($env:CORTICO_PICKER_KIND -eq 'directory') {
-    [Console]::Out.Write($dialog.SelectedPath)
+    [WebUI]::Out.Write($dialog.SelectedPath)
   } else {
-    [Console]::Out.Write($dialog.FileName)
+    [WebUI]::Out.Write($dialog.FileName)
   }
 }
 $dialog.Dispose()

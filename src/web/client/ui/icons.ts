@@ -1,7 +1,7 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-export type ConsoleIconName =
-  | 'terminal'
+export type WebUiIconName =
+  | 'console'
   | 'message'
   | 'activity'
   | 'chart'
@@ -25,8 +25,8 @@ export type ConsoleIconName =
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect' | 'line', attrs: Readonly<Record<string, string>>];
 
-const SHAPES: Readonly<Record<ConsoleIconName, readonly Shape[]>> = {
-  terminal: [
+const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
+  console: [
     ['path', { d: 'm4 17 6-6-6-6' }],
     ['path', { d: 'M12 19h8' }],
   ],
@@ -186,7 +186,7 @@ export function brandMark(doc: Document, cls = 'brandmark'): SVGSVGElement {
   return svg;
 }
 
-export function icon(doc: Document, name: ConsoleIconName, cls = 'icon'): SVGSVGElement {
+export function icon(doc: Document, name: WebUiIconName, cls = 'icon'): SVGSVGElement {
   const svg = doc.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'none');

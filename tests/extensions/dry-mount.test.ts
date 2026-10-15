@@ -91,16 +91,16 @@ describe("World 构造检查", () => {
   });
 
   it('声明了面板但 manifest 没有浏览器端产物是警告;有产物就不警告', async () => {
-    const def = worldDef('alpha', [], { console: () => ({ panels: [{ id: 'main', title: '主' }] }) });
+    const def = worldDef('alpha', [], { webUi: () => ({ panels: [{ id: 'main', title: '主' }] }) });
     const without = await dryMountWorld(def, { scratchDir });
-    expect(without.warnings.join('\n')).toContain('consoleClient');
-    const withClient = await dryMountWorld(def, { scratchDir, hasConsoleClient: true });
+    expect(without.warnings.join('\n')).toContain('webUiClient');
+    const withClient = await dryMountWorld(def, { scratchDir, hasWebUiClient: true });
     expect(withClient.warnings).toEqual([]);
   });
 
   it('面板 id 不合形状是失败', async () => {
-    const def = worldDef('alpha', [], { console: () => ({ panels: [{ id: 'Main Panel', title: '主' }] }) });
-    const report = await dryMountWorld(def, { scratchDir, hasConsoleClient: true });
+    const def = worldDef('alpha', [], { webUi: () => ({ panels: [{ id: 'Main Panel', title: '主' }] }) });
+    const report = await dryMountWorld(def, { scratchDir, hasWebUiClient: true });
     expect(report.failures.join('\n')).toContain('「Main Panel」');
   });
 
@@ -116,11 +116,11 @@ describe("World 构造检查", () => {
       owner: 'world:alpha',
       schema: { type: 'object', title: 'alpha', properties: { 'worlds.alpha.retries': { type: 'integer', title: '重试次数' } } },
     };
-    const def = worldDef('alpha', [], { console: () => ({ config: [group] }) });
+    const def = worldDef('alpha', [], { webUi: () => ({ config: [group] }) });
     const report = await dryMountWorld(def, { scratchDir });
     expect(report.failures.join('\n')).toContain('worlds.alpha.retries');
 
-    const withDefault = worldDef('alpha', [], { console: () => ({ config: [group] }) }, { enabled: false, retries: 3 });
+    const withDefault = worldDef('alpha', [], { webUi: () => ({ config: [group] }) }, { enabled: false, retries: 3 });
     expect((await dryMountWorld(withDefault, { scratchDir })).failures).toEqual([]);
   });
 
@@ -130,7 +130,7 @@ describe("World 构造检查", () => {
       owner: 'world:alpha',
       schema: { type: 'object', title: 'alpha', properties: { 'batching.quietGapMs': { type: 'integer', title: '安静窗口' } } },
     };
-    const report = await dryMountWorld(worldDef('alpha', [], { console: () => ({ config: [group] }) }), { scratchDir });
+    const report = await dryMountWorld(worldDef('alpha', [], { webUi: () => ({ config: [group] }) }), { scratchDir });
     expect(report.failures.join('\n')).toContain('worlds.alpha. 段');
   });
 
@@ -206,7 +206,7 @@ describe("Bot 构造检查", () => {
   it('cormini 在假部署下 build() 得出来,契约必填项都在', () => {
     const report = dryMountBot(cormini as unknown as BotDefinition<CoreConfig>, { scratchDir, packageDir });
     expect(report.failures).toEqual([]);
-    expect(report.ok.join('\n')).toContain('declares: terminal');
+    expect(report.ok.join('\n')).toContain('declares: console');
     expect(report.warnings.join('\n')).not.toContain('memoryName');
   });
 

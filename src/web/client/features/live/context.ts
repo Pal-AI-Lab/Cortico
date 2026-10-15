@@ -1,7 +1,7 @@
 /** 使用运行时 token 估算口径，将标准 Item 按显示类别汇总。 */
 
 import { itemText, type ContextRecord } from '../../../../protocol/open-responses/context.ts';
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { estimateMessagesTokens } from '../../../../protocol/open-responses/tokens.ts';
 import {
   contextOf,
@@ -193,7 +193,7 @@ export function computeCtx(input: ContextInput): ContextBreakdown | null {
 // ---------------------------------------------------------------------------
 
 /** 一行脚注:纯文本片段与要加粗的片段交替。 */
-function footLine(ui: ConsoleUi, parts: readonly (string | { b: string })[]): HTMLDivElement {
+function footLine(ui: WebUi, parts: readonly (string | { b: string })[]): HTMLDivElement {
   const line = ui.h('div');
   line.appendChild(ui.h('span', null, '· '));
   for (const p of parts) {
@@ -204,9 +204,9 @@ function footLine(ui: ConsoleUi, parts: readonly (string | { b: string })[]): HT
 }
 
 /**
- * 分类分布面板。定位由终端输入器里的 `.ctxanchor` 提供。
+ * 分类分布面板。定位由控制台输入器里的 `.ctxanchor` 提供。
  */
-export function buildCtxPanel(ui: ConsoleUi, d: ContextBreakdown | null): HTMLElement {
+export function buildCtxPanel(ui: WebUi, d: ContextBreakdown | null): HTMLElement {
   const box = ui.h('div', 'ctxpanel');
   if (!d || !d.total) {
     box.appendChild(ui.h('div', 'cx-sub', S.ctxNone));

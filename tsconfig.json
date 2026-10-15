@@ -27,8 +27,8 @@
     "node_modules",
     "dist",
     "src/web/client/**",
-    "src/providers/*/console/client.ts",
-    "src/providers/*/console/*-panel.ts",
+    "src/providers/*/webui/client.ts",
+    "src/providers/*/webui/*-panel.ts",
     "src/web/shared/**",
     // 以下 jsdom 测试由浏览器配置检查。
     "tests/web/feature-prompts.test.ts",
@@ -37,7 +37,7 @@
     "tests/web/settings-general.test.ts",
     "tests/web/feature-providers.test.ts",
     "tests/web/feature-extensions.test.ts",
-    "src/worlds/*/console/**",
-    "bots/*/console/**"
+    "src/worlds/*/webui/**",
+    "bots/*/webui/**"
   ]
 }

@@ -14,8 +14,8 @@ export interface ExampleConfig extends CoreConfig {
   rounds: { soft: number; hard: number };
 }
 
-/** 这个 Persona 为之设计的渠道:只有终端。有实现没声明的 World 是部署侧选配,默认关。 */
-const DECLARES: readonly WorldDeclaration[] = ['terminal'];
+/** 这个 Persona 为之设计的渠道:只有控制台。有实现没声明的 World 是部署侧选配,默认关。 */
+const DECLARES: readonly WorldDeclaration[] = ['console'];
 
 function build(loaded: LoadedConfig<ExampleConfig>, worlds: World[]): BotParts<ExampleConfig> {
   const cfg = loaded.config;

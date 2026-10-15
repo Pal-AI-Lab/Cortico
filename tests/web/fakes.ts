@@ -73,7 +73,7 @@ export class FakeHost implements WorldHost {
   pushed: PushedRecord[] = [];
   pushDeferred(): void {}
   store = new FakeStore();
-  /** 内存附件库:pushEvent 落库时按内容哈希发 `log:` 句柄,blob() 回同一份字节(终端取图走这里)。 */
+  /** 内存附件库:pushEvent 落库时按内容哈希发 `log:` 句柄,blob() 回同一份字节(控制台取图走这里)。 */
   private readonly blobBytes = new Map<string, { bytes: Uint8Array; mime: string }>();
   internBlobs(inputs: BlobInput[] | undefined): BlobRef[] | undefined {
     if (!inputs?.length) return undefined;

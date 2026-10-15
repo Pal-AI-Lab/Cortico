@@ -33,7 +33,7 @@
 
 Cortico is an agent harness designed around an event stream, built for autonomous, continuously running agents with mixed real-time input. It suits persona bots, AI streamers, roleplay, companionship, and many other downstream tasks. A Cortico bot is far more than a chat bot: with an extensible agent system designed around the event stream, Cortico helps you build persistent AI agents capable of handling complex inputs. It supports flexible external extensions, allowing a single bot to simultaneously observe and act across multiple environments—including chat platforms, live games, and even physical environments. Cortico's goal: bring your AI to the world!
 
-**Languages**: the web console is in 简体中文, 繁體中文, English, 日本語, 한국어, Français, Deutsch, Español (Latinoamérica), Português (Brasil), Italiano and Русский. The console language does not change what the model reads; text Core adds to the model context is in English.
+**Languages**: the WebUI is in 简体中文, 繁體中文, English, 日本語, 한국어, Français, Deutsch, Español (Latinoamérica), Português (Brasil), Italiano and Русский. The WebUI language does not change what the model reads; text Core adds to the model context is in English.
 
 ## Features
 
@@ -62,7 +62,7 @@ How to use: first, clone the repository from [https://github.com/Pal-AI-Lab/Cort
 3. No coding experience or knowledge needed.
 4. Once the extension is finished, publish it to npm to share it with everyone~
 
-npm packages with the `cortico-world`, `cortico-provider` or `cortico-bot` keyword are listed on the console's Extensions page with their total, 30-day and 7-day downloads from npm.
+npm packages with the `cortico-world`, `cortico-provider` or `cortico-bot` keyword are listed on the WebUI's Extensions page with their total, 30-day and 7-day downloads from npm.
 
 <sub>Cortina is designed on the [TINA (There Is No App) Spec](https://github.com/Pal-AI-Lab/ThereIsNoApp) proposed by Pal AI Lab. There is no app here: language is the code, the agent is the runtime.</sub>
 
@@ -75,14 +75,14 @@ corepack pnpm install
 pnpm start
 ```
 
-### 1. First Launch & Web Console
-On your first launch with an empty deployment directory, Cortico automatically initializes a default deployment named `mybot` (using the reference bot `cormini` with terminal chat enabled) and spins up the web console at:
+### 1. First Launch & WebUI
+On your first launch with an empty deployment directory, Cortico automatically initializes a default deployment named `mybot` (using the reference bot `cormini` with console chat enabled) and spins up the WebUI at:
 
 **`http://127.0.0.1:7788/`**
 
-The terminal page opens with three onboarding steps: configure a model endpoint, inspect active Worlds, and adjust the system prompt. Once an endpoint is configured, click **Say hello** to let the bot initiate conversation. All endpoints, credentials, and runtime parameters can be adjusted directly from the console; saved changes apply to the next request, and a managed runtime's launch parameters apply on its next start.
+The console page opens with three onboarding steps: configure a model endpoint, inspect active Worlds, and adjust the system prompt. Once an endpoint is configured, click **Say hello** to let the bot initiate conversation. All endpoints, credentials, and runtime parameters can be adjusted directly from the WebUI; saved changes apply to the next request, and a managed runtime's launch parameters apply on its next start.
 
-The console starts in `language` from `config.json`, else `CORTICO_LANGUAGE`, else the system locale (Simplified Chinese when no locale is available). Settings → General switches it for the current browser without restarting the bot.
+The WebUI starts in `language` from `config.json`, else `CORTICO_LANGUAGE`, else the system locale (Simplified Chinese when no locale is available). Settings → General switches it for the current browser without restarting the bot.
 
 ### 2. Managing Deployments
 Each deployment is an isolated configuration directory inside `deployments/` (see [deployment.md](docs/deployment.md)). To add another one:
@@ -91,13 +91,13 @@ Each deployment is an isolated configuration directory inside `deployments/` (se
 pnpm start --new
 ```
 
-Pick a bot package, a directory name and a display name; the new deployment starts right away, with endpoints and everything else configured from the console. To start a specific deployment by name:
+Pick a bot package, a directory name and a display name; the new deployment starts right away, with endpoints and everything else configured from the WebUI. To start a specific deployment by name:
 
 ```bash
 pnpm start second
 ```
 
-The launcher scripts (`pnpm start`, `./start.sh`, and `start.bat` on Windows) automatically install missing dependencies, build web console assets when they are missing or older than the source, list every deployment for selection on an interactive terminal (including an entry for creating a new one), and restart processes on request from the console.
+The launcher scripts (`pnpm start`, `./start.sh`, and `start.bat` on Windows) automatically install missing dependencies, build WebUI assets when they are missing or older than the source, list every deployment for selection on an interactive terminal (including an entry for creating a new one), and restart processes on request from the WebUI.
 
 ## The Four Layers
 
@@ -119,7 +119,7 @@ Cortico strictly separates concerns across four distinct layers:
 | [configuration.md](docs/configuration.md) | Four-layer config cascading, configuration groups, and hot reload |
 | [providers.md](docs/providers.md) | Provider modules, model catalogs, endpoint configurations, and pricing |
 | [runtimes.md](docs/runtimes.md) | Local runtimes and model files for `llamacpp` |
-| [console.md](docs/console.md) | Console architecture, live monitoring, and custom module pages |
+| [webui.md](docs/webui.md) | WebUI architecture, live monitoring, and custom module pages |
 | [sessions.md](docs/sessions.md) | Session lifecycle, token capacity management, and context handoff |
 | [runs.md](docs/runs.md) | Runtime directories, structured logs, and `pnpm logq` CLI |
 | [personas.md](docs/personas.md) | Persona lifecycle hooks, Memory architecture, and bot assembly |
@@ -134,7 +134,7 @@ Cortico strictly separates concerns across four distinct layers:
 
 | World | ID | Integration & Capabilities |
 |---|---|---|
-| Terminal | `terminal` | Interactive two-way conversation within the web console |
+| Console | `console` | Interactive two-way conversation within the WebUI |
 | QQ | `qq` | Multi-group and direct message channels with optional vision model transcription |
 | Bilibili Live | `bilibili` | Real-time danmaku, superchats, gifts, guards, and viewer traffic monitoring with local OBS overlay |
 | Minecraft | `minecraft` | Mineflayer client for vanilla servers: game state observations and high-level autonomous action dispatch |
@@ -165,7 +165,7 @@ We welcome issues and pull requests!
 * Please read [CONTRIBUTING.md](CONTRIBUTING.md) for architectural guidelines and code separation rules.
 * Refer to [AGENTS.md](AGENTS.md) for our engineering conventions and code review checklist.
 * AI-assisted contributions are welcome, provided the author thoroughly understands and can explain all submitted logic.
-* Console text lives in `strings.ts` (complete in `zh` and `en`) with each other language in `strings.<lang>.ts` beside it; a key a translation leaves out falls back to `zh` for `zh-Hant` and to `en` for the rest. See the language section of [console.md](docs/console.md#语言).
+* WebUI text lives in `strings.ts` (complete in `zh` and `en`) with each other language in `strings.<lang>.ts` beside it; a key a translation leaves out falls back to `zh` for `zh-Hant` and to `en` for the rest. See the language section of [webui.md](docs/webui.md#语言).
 
 Run automated verifications before submitting:
 

@@ -53,7 +53,7 @@ describe('boot', () => {
       if (u.includes('/api/capabilities')) {
         return gate.then(() => json({ capabilities: { debug: true, sessions: true } }));
       }
-      if (u.includes('/api/console/manifest')) {
+      if (u.includes('/api/webui/manifest')) {
         return gate.then(() => json({ protocolVersion: 1, providers: [], framework: { capabilities: {} } }));
       }
       return Promise.resolve(json({}));
@@ -64,7 +64,7 @@ describe('boot', () => {
     app.dispose();
     release();
     await flush();
-    // 没 dispose 的话空路由会被换成终端页,hash 变成 #/live,并在已清空的根里挂页。
+    // 没 dispose 的话空路由会被换成控制台页,hash 变成 #/live,并在已清空的根里挂页。
     expect(window.location.hash).toBe('');
     expect(document.getElementById('kernel-root')!.textContent).toBe('');
   });

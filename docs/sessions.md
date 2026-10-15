@@ -43,13 +43,13 @@ Core 重建 system 前缀、按容量截断保留内容并重置 session。
 或端点配置改变上限时恢复。服务拒绝超长输入与手动交接照常进行,不计入也不清除这条连续记录。
 
 阶段预算(`context.maxTokens`、`softRatio`、`keepRatio`)是 Persona 自己的配置,不在 Core 里。
-Cormini 一系的默认:64000 / 0.85 / 1/3;终端页上下文圈的分母与黄线读的是这几个数。
+Cormini 一系的默认:64000 / 0.85 / 1/3;控制台页上下文圈的分母与黄线读的是这几个数。
 
 ## fork
 
 `ForkOptions { id, messages, tools?, stopWhen?, wrapUpHint?, capNote?, nudge? }` 创建临时 session，
 运行独立的工具循环。World 发起的认知任务（cognition）及 Persona 的梦、潜意识任务使用此接口。
-Core 记录并发数，控制台「运行诊断 → 会话统计」显示各 session 的用量。
+Core 记录并发数，WebUI「运行诊断 → 会话统计」显示各 session 的用量。
 
 ## 持久化
 

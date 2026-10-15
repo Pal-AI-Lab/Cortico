@@ -1,5 +1,5 @@
 /**
- * 控制台默认语言依次读取 config.language、进程环境和系统 locale。
+ * WebUI 默认语言依次读取 config.language、进程环境和系统 locale。
  * locale 按 languageOfLocale 归到受支持的语言，缺失时用中文；请求可另行选择语言。
  */
 import { describe, it, expect } from 'vitest';

@@ -1,6 +1,6 @@
-import type { consoleEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn } from './strings.ts';
 
-export const consoleText: Partial<typeof consoleEn> = {
+export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Persona的存在方式與後設認知說明。',
   constitution: 'Persona 的長期原則。重新載入系統前綴或開始新上下文後生效。',
   memoryNote: '記憶約定:bot 的檔案怎麼存、什麼時候會自動浮現。',

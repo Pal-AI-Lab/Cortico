@@ -1,5 +1,5 @@
 /**
- * 按 manifest.kind 验证导出结构、id 命名空间和控制台页前缀。
+ * 按 manifest.kind 验证导出结构、id 命名空间和 WebUI 页前缀。
  * 测试包从 tests/fixtures/extensions 复制到临时依赖目录后导入。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -104,15 +104,15 @@ describe('bot 包', () => {
   });
 
   it('loadExtensions:被引用的 bot 包记 loaded、面板按 persona:<id> 发;其余 bot 包记 idle,入口不 import', async () => {
-    installFixture(root, 'bot-with-console');
+    installFixture(root, 'bot-with-webui');
     const other = installFixture(root, 'bot-ok', { as: 'other-bot' });
     writeFileSync(join(other, 'index.js'), 'throw new Error("must not be imported");');
-    const { set, records } = await byName({ activeBot: { name: 'bot-with-console', id: 'fixture-bot-console' } });
-    expect(records['bot-with-console']).toMatchObject({ kind: 'bot', api: EXTENSION_API_VERSIONS.bot, loaded: true, worldId: 'fixture-bot-console', console: 'served' });
+    const { set, records } = await byName({ activeBot: { name: 'bot-with-webui', id: 'fixture-bot-webui' } });
+    expect(records['bot-with-webui']).toMatchObject({ kind: 'bot', api: EXTENSION_API_VERSIONS.bot, loaded: true, worldId: 'fixture-bot-webui', webUi: 'served' });
     expect(records['other-bot']).toMatchObject({ kind: 'bot', loaded: false, idle: true });
     expect(records['other-bot'].reason).toBeUndefined();
-    expect(set.consoleAssets.map((a) => a.pageId)).toEqual(['persona:fixture-bot-console']);
-    expect(set.bot).toEqual({ name: 'bot-with-console', id: 'fixture-bot-console' });
+    expect(set.webUiAssets.map((a) => a.pageId)).toEqual(['persona:fixture-bot-webui']);
+    expect(set.bot).toEqual({ name: 'bot-with-webui', id: 'fixture-bot-webui' });
   });
 
   it('loadExtensions:仓内 bot 的部署(没有 activeBot)→ 所有 bot 包 idle,set.bot 缺席', async () => {
@@ -235,53 +235,53 @@ describe('id 命名空间', () => {
 describe('浏览器端产物', () => {
   it("面板状态：未声明为 none，文件存在为 served，文件缺失为 missing", async () => {
     installFixture(root, 'world-ok');
-    installFixture(root, 'world-with-console');
-    installFixture(root, 'world-console-missing');
+    installFixture(root, 'world-with-webui');
+    installFixture(root, 'world-webui-missing');
     const { set, records } = await byName();
-    expect(records['world-ok']).toMatchObject({ consoleClient: false, console: 'none' });
-    expect(records['world-with-console']).toMatchObject({ consoleClient: true, console: 'served' });
+    expect(records['world-ok']).toMatchObject({ webUiClient: false, webUi: 'none' });
+    expect(records['world-with-webui']).toMatchObject({ webUiClient: true, webUi: 'served' });
     // 缺少面板文件不影响 World 定义加载。
-    expect(records['world-console-missing']).toMatchObject({ consoleClient: true, console: 'missing', loaded: true });
-    expect(set.consoleAssets.map((a) => a.pageId)).toEqual(['world:with-console']);
+    expect(records['world-webui-missing']).toMatchObject({ webUiClient: true, webUi: 'missing', loaded: true });
+    expect(set.webUiAssets.map((a) => a.pageId)).toEqual(['world:with-webui']);
   });
 
   it('asset 的 pageId 按 kind 取前缀,文件是绝对路径,URL 由服务端按包名与版本分配', async () => {
-    installFixture(root, 'world-with-console');
-    installFixture(root, 'provider-with-console');
+    installFixture(root, 'world-with-webui');
+    installFixture(root, 'provider-with-webui');
     const { set } = await byName();
-    expect(set.consoleAssets).toEqual([
+    expect(set.webUiAssets).toEqual([
       {
-        pageId: 'world:with-console',
-        packageName: 'world-with-console',
+        pageId: 'world:with-webui',
+        packageName: 'world-with-webui',
         version: '3.1.0',
-        jsFile: join(root, 'extensions/node_modules/world-with-console/dist/console.js'),
-        cssFile: join(root, 'extensions/node_modules/world-with-console/dist/console.css'),
+        jsFile: join(root, 'extensions/node_modules/world-with-webui/dist/webui.js'),
+        cssFile: join(root, 'extensions/node_modules/world-with-webui/dist/webui.css'),
       },
       {
         pageId: 'llm:panelled',
-        packageName: 'provider-with-console',
+        packageName: 'provider-with-webui',
         version: '0.4.2',
-        jsFile: join(root, 'extensions/node_modules/provider-with-console/dist/panel.js'),
+        jsFile: join(root, 'extensions/node_modules/provider-with-webui/dist/panel.js'),
       },
     ]);
-    const asset = set.consoleAssets[0];
-    expect(extensionAssetUrl(asset.packageName, asset.version, 'console.js'))
-      .toBe(`${EXTENSION_ASSET_PREFIX}world-with-console/3.1.0/console.js`);
+    const asset = set.webUiAssets[0];
+    expect(extensionAssetUrl(asset.packageName, asset.version, 'webui.js'))
+      .toBe(`${EXTENSION_ASSET_PREFIX}world-with-webui/3.1.0/webui.js`);
   });
 
   it("缺少样式文件不将面板标为 missing，也不影响 World 定义加载", async () => {
-    const pkgDir = installFixture(root, 'world-with-console');
-    rmSync(join(pkgDir, 'dist/console.css'));
+    const pkgDir = installFixture(root, 'world-with-webui');
+    rmSync(join(pkgDir, 'dist/webui.css'));
     const { set, records } = await byName();
-    expect(records['world-with-console']).toMatchObject({ console: 'served', loaded: true });
-    expect(set.consoleAssets[0].cssFile).toBeUndefined();
+    expect(records['world-with-webui']).toMatchObject({ webUi: 'served', loaded: true });
+    expect(set.webUiAssets[0].cssFile).toBeUndefined();
   });
 
   it('加载失败的包不进 asset 表', async () => {
-    const pkgDir = installFixture(root, 'world-with-console');
+    const pkgDir = installFixture(root, 'world-with-webui');
     writeFileSync(join(pkgDir, 'index.js'), 'export default { id: "x" };');
     const { set } = await byName();
-    expect(set.consoleAssets).toEqual([]);
+    expect(set.webUiAssets).toEqual([]);
   });
 });
 
@@ -289,16 +289,16 @@ describe("ExtensionManager 安装与加载状态", () => {
   const manager = (booted: Awaited<ReturnType<typeof loadExtensions>>) =>
     new ExtensionManager(root, booted, { run: async () => ({ code: 0, output: '' }), fetchJson: async () => ({}) });
 
-  it('consoleAssets() 给出启动时那一份;list() 带上 kind / api / 面板状态', async () => {
-    installFixture(root, 'world-with-console');
+  it('webUiAssets() 给出启动时那一份;list() 带上 kind / api / 面板状态', async () => {
+    installFixture(root, 'world-with-webui');
     const booted = await loadExtensions(root);
     // 新装包只报告 manifest，产物状态在下一次加载时检查。
     installFixture(root, 'provider-ok');
     const mgr = manager(booted);
-    expect(mgr.consoleAssets()).toBe(booted.consoleAssets);
+    expect(mgr.webUiAssets()).toBe(booted.webUiAssets);
     const extensions = Object.fromEntries(mgr.list().extensions.map((p) => [p.name, p]));
-    expect(extensions['world-with-console']).toMatchObject({ state: 'loaded', kind: 'world', api: EXTENSION_API_VERSIONS.world, console: 'served' });
-    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: EXTENSION_API_VERSIONS.provider, console: 'none' });
+    expect(extensions['world-with-webui']).toMatchObject({ state: 'loaded', kind: 'world', api: EXTENSION_API_VERSIONS.world, webUi: 'served' });
+    expect(extensions['provider-ok']).toMatchObject({ state: 'pending-restart', kind: 'provider', api: EXTENSION_API_VERSIONS.provider, webUi: 'none' });
   });
 });
 

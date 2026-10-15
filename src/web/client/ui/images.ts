@@ -1,11 +1,11 @@
 /** 归一化输入图片：只缩不放，合规原文件保持原字节。缩放后超限时改用 JPEG，仍超限或解码失败则拒收。 */
 
-import type { ConsoleImageAttachment, ConsolePromptImagesOptions } from '../../shared/client-panel.ts';
+import type { WebUiImageAttachment, WebUiPromptImagesOptions } from '../../shared/client-panel.ts';
 import { S } from './strings.ts';
 
 export const IMAGE_MIMES: readonly string[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-export const IMAGE_DEFAULTS: Required<ConsolePromptImagesOptions> = {
+export const IMAGE_DEFAULTS: Required<WebUiPromptImagesOptions> = {
   max: 8,
   maxEdge: 2048,
   maxBytes: 6 * 1024 * 1024,
@@ -56,8 +56,8 @@ function encode(bitmap: ImageBitmap, width: number, height: number, mime: string
  */
 export async function normalizeImage(
   file: File,
-  opts: ConsolePromptImagesOptions = {},
-): Promise<ConsoleImageAttachment> {
+  opts: WebUiPromptImagesOptions = {},
+): Promise<WebUiImageAttachment> {
   const { maxEdge, maxBytes } = { ...IMAGE_DEFAULTS, ...opts };
   if (!isImageFile(file)) throw new Error(S.notImage(file.name || S.fileFallback));
   let bitmap: ImageBitmap;

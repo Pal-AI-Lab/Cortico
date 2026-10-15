@@ -1,5 +1,5 @@
 /**
- * 控制台 listen:固定端口被占时顺延到下一个空闲端口。
+ * WebUI listen:固定端口被占时顺延到下一个空闲端口。
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 /** listen 的旁观钩子:指定端口报 EACCES。node 内建模块的属性不可重定义,只能整 module 代理一次。 */
@@ -28,7 +28,7 @@ import { WebApp } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
-// 占位服务器绑同一个地址(控制台只绑回环):不同地址不算冲突,顺延也就不会触发
+// 占位服务器绑同一个地址(WebUI 只绑回环):不同地址不算冲突,顺延也就不会触发
 function listen(server: Server, port = 0): Promise<number> {
   return new Promise((resolve, reject) => {
     server.once('error', reject);

@@ -35,7 +35,7 @@ export interface UsagePoint extends UsageAccum {
  * 按 role / model 分组的合计。
  *
  * `key` 是不透明 id（角色 id 由Persona定义，模型名由供应商定义），
- * `label` 是**声明方随数据给的人话名**。控制台不为任何一个 id 备一张中文名表——
+ * `label` 是**声明方随数据给的人话名**。WebUI 不为任何一个 id 备一张中文名表——
  * 备了就等于把某个具体 bot 的角色集写进了框架。给不出 label 时原样显示 `key`。
  */
 export interface UsageGroupStat extends UsageAccum {

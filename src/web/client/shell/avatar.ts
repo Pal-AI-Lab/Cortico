@@ -1,4 +1,4 @@
-import type { ConsoleUi } from '../../shared/client-panel.ts';
+import type { WebUi } from '../../shared/client-panel.ts';
 import { postBlob } from '../core/api.ts';
 import { icon } from '../ui/icons.ts';
 import { S } from './strings.ts';
@@ -13,7 +13,7 @@ export interface AvatarControl {
 
 export function createAvatarControl(opts: {
   doc: Document;
-  ui: ConsoleUi;
+  ui: WebUi;
   signal: AbortSignal;
   onError(err: unknown): void;
 }): AvatarControl {

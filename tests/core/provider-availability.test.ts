@@ -8,7 +8,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from './helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { endpointAvailability } from '../../src/providers/configuration.ts';
-import { ProviderSettings } from '../../src/providers/console/settings.ts';
+import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import { ProviderRegistry } from '../../src/providers/registry.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import type { LLMProviderEntry } from '../../src/core/types.ts';

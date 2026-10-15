@@ -2,7 +2,7 @@
 
 Owner: `index.ts`
 
-最小完整的 bot:一个 Persona、一个常驻 session、只有终端。Memory 是部署目录下的 `memory/`:
+最小完整的 bot:一个 Persona、一个常驻 session、只有控制台。Memory 是部署目录下的 `memory/`:
 `MEMORY.md` 整份进 system 前缀,`memory_write` 往里追加一行,`blobs/` 收二进制。Core 只通知时机,
 前缀的每个字来自 `persona/PREFIX.md`。扩展 bot 不能 import 仓内的 `bots/cormini`,要更完整的
 参考实现就复制那个目录再改。

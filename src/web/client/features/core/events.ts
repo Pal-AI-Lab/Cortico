@@ -5,7 +5,7 @@
  * 来源框可输入任意来源；候选项取自已加载的事件，不代表事件库里的全部来源。
  */
 
-import type { ConsoleUi, ConsoleTable, Disposable } from '../../../shared/client-panel.ts';
+import type { WebUi, WebUiTable, Disposable } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { shouldStick } from '../../ui/index.ts';
@@ -34,7 +34,7 @@ const EVENT_POLL_MS = 3000;
 const STICK_PX = 60;
 
 export interface EventsViewDeps {
-  ui: ConsoleUi;
+  ui: WebUi;
   lifecycle: Lifecycle;
   signal: AbortSignal;
   /** 网络状态回报(与调试通道共用同一处显示) */
@@ -101,7 +101,7 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
   const more = ui.button(S.loadEarlier, { size: 'sm', onClick: () => void loadEarlier() });
   bar.append(desc, sourceIn, sourceList, archiveToggle.el, more);
 
-  const table: ConsoleTable = ui.table({
+  const table: WebUiTable = ui.table({
     head: ['#', S.evHeadTime, S.evHeadSource, S.evHeadType, S.evHeadText],
     maxHeight: 'calc(100vh - 300px)',
   });
@@ -109,7 +109,7 @@ export function createEventsView(deps: EventsViewDeps): EventsView {
   const el = ui.h('div');
   el.append(bar, table.el);
 
-  const rowCells = (e: EventRow): Parameters<ConsoleTable['addRow']>[0] => [
+  const rowCells = (e: EventRow): Parameters<WebUiTable['addRow']>[0] => [
     { text: `#${e.cursor}`, cls: 'mono' },
     { text: ui.fmt.clock(e.ts), cls: 'mono' },
     { text: e.source, cls: 'mono' },

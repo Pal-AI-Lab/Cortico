@@ -95,7 +95,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: '해당 외부 서비스가 중지되었는지 확인하세요.',
     llm: '공급자 인스턴스 중지',
     flush: 'Core 상태 저장',
-    web: '콘솔 닫기',
+    web: 'WebUI 닫기',
     summarySkipped: '로컬 종료 단계 중 일부가 완료되지 않음',
     summaryComplete: '로컬 종료 완료: 모든 단계 완료',
     summaryUnverified: (items: string[]) => `로컬 종료는 끝났지만 외부 상태의 종료가 확인되지 않았습니다: ${items.join(', ')}(직접 확인 필요)`,

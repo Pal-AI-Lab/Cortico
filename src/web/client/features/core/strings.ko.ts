@@ -48,7 +48,7 @@ export const S: Partial<typeof en> = {
   statRounds: '이번 배치 라운드',
   statBatches: '누적 배치',
   statEvents: '최신 이벤트 커서',
-  statOnline: '터미널 접속',
+  statOnline: '콘솔 접속',
   statRun: '실행',
   unitMsgs: '개',
   unitPeople: '명',

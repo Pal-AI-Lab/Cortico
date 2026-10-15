@@ -104,7 +104,7 @@ describe('认知外包受理 · 全局开关', () => {
     expect(rig().persona.cognition.enabled!()).toBe(true);
   });
 
-  it('每次现读:控制台上关掉立即生效', () => {
+  it('每次现读:WebUI 上关掉立即生效', () => {
     let on = true;
     const { persona } = rig({ enabled: () => on });
     expect(persona.cognition.enabled!()).toBe(true);
@@ -273,7 +273,7 @@ describe('认知外包受理 · 四条路的返回', () => {
     expect(out).toHaveProperty('error');
   });
 
-  it('控制台上有这一格:归Persona、跟人格页走、默认开、读的是真配置', () => {
+  it('WebUI 上有这一格:归Persona、跟人格页走、默认开、读的是真配置', () => {
     const prop = CORTIV_COGNITION_CONFIG_GROUP.schema.properties['cognition.enabled'];
     expect(prop?.type).toBe('boolean');
     expect(prop.title).toContain('请托');

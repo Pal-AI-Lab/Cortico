@@ -361,7 +361,7 @@ export function renderPolicy(
     s.reserve.length === 0 ? '没有收着不用的家伙什' : `${namesText(s.reserve)}收着不主动拿`,
     FIGHT_ZH[s.fight],
   ];
-  if (combatOff) parts.push('战斗总开关在控制台关着,主动动手这一格现在不起作用');
+  if (combatOff) parts.push('战斗总开关在 WebUI 关着,主动动手这一格现在不起作用');
   // 蓝图预留是当下的现场状况,不是第七格规矩:另起一句,不混进六格那一串
   const held = blueprintHeld.length > 0 ? blueprintHeldText(blueprintHeld) : '';
   return `现在生效的规矩:${parts.join(';')}。${held}`;

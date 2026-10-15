@@ -7,8 +7,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ConsoleAssets, ConsolePageRegistry, type ConsolePageSource } from '../../src/web/console-pages.ts';
-import { CONSOLE_PROTOCOL_VERSION, type ConsolePageContribution } from '../../src/web/shared/console-protocol.ts';
+import { WebUiAssets, WebUiPageRegistry, type WebUiPageSource } from '../../src/web/webui-pages.ts';
+import { WEBUI_PROTOCOL_VERSION, type WebUiPageContribution } from '../../src/web/shared/webui-protocol.ts';
 import type { Logger } from '../../src/core/types.ts';
 
 let dir: string;
@@ -53,9 +53,9 @@ function distWith(raw: unknown): string {
   return d;
 }
 
-function assetsWith(raw: unknown): { assets: ConsoleAssets; log: RecLogger } {
+function assetsWith(raw: unknown): { assets: WebUiAssets; log: RecLogger } {
   const log = recLogger();
-  return { assets: new ConsoleAssets(distWith(raw), log), log };
+  return { assets: new WebUiAssets(distWith(raw), log), log };
 }
 
 const GOOD = '/assets/worlds/demo/client.a1b2c3.js';
@@ -96,19 +96,19 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
   it('合法条目照常放行（对照组：闸门不是"一律拒"）', () => {
     const { assets, log } = assetsWith({
       protocolVersion: 1,
-      core: '/assets/console.f00d.js',
+      core: '/assets/webui.f00d.js',
       providers: { 'world:demo': { js: GOOD, css: '/assets/worlds/demo/client.a1b2c3.css' } },
     });
     expect(assets.forPage('world:demo')).toEqual({
       js: GOOD,
       css: '/assets/worlds/demo/client.a1b2c3.css',
     });
-    expect(assets.core()).toBe('/assets/console.f00d.js');
+    expect(assets.core()).toBe('/assets/webui.f00d.js');
     expect(log.errors).toEqual([]);
   });
 
-  it.each([undefined, CONSOLE_PROTOCOL_VERSION + 1])('协议版本 %s 拒绝整张资产表', (protocolVersion) => {
-    const { assets, log } = assetsWith({ protocolVersion, core: '/assets/console.js', providers: { 'world:demo': { js: GOOD } } });
+  it.each([undefined, WEBUI_PROTOCOL_VERSION + 1])('协议版本 %s 拒绝整张资产表', (protocolVersion) => {
+    const { assets, log } = assetsWith({ protocolVersion, core: '/assets/webui.js', providers: { 'world:demo': { js: GOOD } } });
     expect(assets.core()).toBeNull();
     expect(assets.forPage('world:demo')).toBeUndefined();
     expect(log.errors).toHaveLength(1);
@@ -160,7 +160,7 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
   it('core 不合法 → core() 给 null 并记一条日志', () => {
     const { assets, log } = assetsWith({
       protocolVersion: 1,
-      core: 'http://evil.example/console.js',
+      core: 'http://evil.example/webui.js',
       providers: {},
     });
     expect(assets.core()).toBeNull();
@@ -222,7 +222,7 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
     }
   });
 
-  it('文件是坏 JSON → 全表作废并记日志，控制台照常起（不抛）', () => {
+  it('文件是坏 JSON → 全表作废并记日志，WebUI 照常起（不抛）', () => {
     const { assets, log } = assetsWith('{ 这不是 JSON');
     expect(assets.core()).toBeNull();
     expect(assets.forPage('world:demo')).toBeUndefined();
@@ -234,7 +234,7 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
     const empty = join(dir, `no-dist-${seq++}`);
     mkdirSync(empty, { recursive: true });
     const log = recLogger();
-    const assets = new ConsoleAssets(empty, log);
+    const assets = new WebUiAssets(empty, log);
     expect(assets.core()).toBeNull();
     expect(assets.forPage('world:demo')).toBeUndefined();
     expect(log.errors).toEqual([]);
@@ -243,7 +243,7 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
   it('reload() 重读文件：坏的换成好的之后当场生效', () => {
     const d = distWith({ protocolVersion: 1, core: null, providers: { 'world:demo': { js: 'http://evil/x.js' } } });
     const log = recLogger();
-    const assets = new ConsoleAssets(d, log);
+    const assets = new WebUiAssets(d, log);
     expect(assets.forPage('world:demo')).toBeUndefined();
 
     writeFileSync(
@@ -260,11 +260,11 @@ describe('asset-manifest 被改坏时的拒绝面', () => {
 // 端到端：坏 asset 之后 provider 在 manifest 里还剩什么
 // ---------------------------------------------------------------------------
 
-function sourceOf(c: ConsolePageContribution): ConsolePageSource {
+function sourceOf(c: WebUiPageContribution): WebUiPageSource {
   return { id: c.id, contribute: () => c };
 }
 
-const DEMO: ConsolePageContribution = {
+const DEMO: WebUiPageContribution = {
   id: 'world:demo',
   kind: 'world',
   label: '验收 Demo',
@@ -272,10 +272,10 @@ const DEMO: ConsolePageContribution = {
   panels: [{ id: 'gate', title: '接入' }, { id: 'echo', title: '回声' }],
 };
 
-function registryWith(raw: unknown): { registry: ConsolePageRegistry; log: RecLogger } {
+function registryWith(raw: unknown): { registry: WebUiPageRegistry; log: RecLogger } {
   const log = recLogger();
-  const assets = new ConsoleAssets(distWith(raw), log);
-  const registry = new ConsolePageRegistry({
+  const assets = new WebUiAssets(distWith(raw), log);
+  const registry = new WebUiPageRegistry({
     sources: () => [sourceOf(DEMO), sourceOf({ id: 'world:other', kind: 'world', label: '另一个' })],
     capabilities: () => ({}),
     assets,

@@ -26,7 +26,7 @@ export const S: Partial<typeof en> = {
 
   providerManagement: '공급자 확장은 이 공유 환경을 쓰는 봇에 제공됩니다.',
   idleManagement: 'World는 World 페이지에서 활성화하거나 비활성화하세요. 기본 제공 확장은 삭제할 수 없습니다.',
-  createBody: 'Cortico를 실행하는 컴퓨터에서 프로젝트 터미널을 열고 pnpm start --new를 실행한 뒤, 이 봇 템플릿을 선택해 새 인스턴스를 만드세요.',
+  createBody: 'Cortico를 실행하는 컴퓨터에서 프로젝트에서 명령줄을 열고 pnpm start --new를 실행한 뒤, 이 봇 템플릿을 선택해 새 인스턴스를 만드세요.',
 
   restartConfirmTitle: '프로세스를 재시작하시겠습니까?',
   restartNoLoopTitle: '수동 시작 필요',
@@ -38,12 +38,12 @@ export const S: Partial<typeof en> = {
   resultDefault: '종료 단계를 실행했습니다.',
   reloadWait: '이 봇의 새 프로세스가 준비되기를 기다리는 중…',
   otherBot: '다른 봇이 이 포트를 사용 중이어서 복구를 중단했습니다.',
-  restartManual: '프로세스가 종료되었습니다. 터미널에서 직접 시작하세요. 이 페이지는 준비될 때까지 기다립니다.',
+  restartManual: '프로세스가 종료되었습니다. 명령줄에서 직접 시작하세요. 이 페이지는 준비될 때까지 기다립니다.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: '업데이트',
   updateCheckFailed: (detail: string) => `업데이트 확인 실패: ${detail}`,
-  noteConsoleMissing: '브라우저 빌드 결과물이 없습니다. 확장 디렉터리에서 빌드한 뒤 프로세스를 재시작하세요.',
+  noteWebUiMissing: '브라우저 빌드 결과물이 없습니다. 확장 디렉터리에서 빌드한 뒤 프로세스를 재시작하세요.',
   noExtensions: '아직 설치된 확장이 없습니다',
   listLoadFailed: (msg: string) => `확장 목록을 불러오지 못했습니다: ${msg}`,
 

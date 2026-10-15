@@ -31,7 +31,7 @@ const postJ = async (p: string, body?: any): Promise<{ status: number; body: any
   return { status: r.status, body: (await r.json()) as any };
 };
 
-// 拿真声明 + 真 BotConfig,验证控制台按 schema 读写活配置
+// 拿真声明 + 真 BotConfig,验证 WebUI 按 schema 读写活配置
 // 深拷贝:composeDefaults 里若干段是默认值对象的直接引用,测试要就地热改不能污染它们
 const cfg: BotConfig = JSON.parse(JSON.stringify(composeDefaults())) as BotConfig;
 cfg.dream.maxRounds = 6;

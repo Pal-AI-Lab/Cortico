@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * 启动前准备依赖与控制台产物，选择部署并监管 src/launcher.ts 子进程。
+ * 启动前准备依赖与 WebUI 产物，选择部署并监管 src/launcher.ts 子进程。
  * 此入口需要在 node_modules 不存在时运行，不得依赖第三方包。
  */
 import { spawnSync, fork } from 'node:child_process';
@@ -64,7 +64,7 @@ export function parseRequest(argv, env) {
 }
 
 /**
- * 未指定部署时,交互终端返回 ask,非交互终端只有一份就用它、多份返回错误与可选项。
+ * 未指定部署时,交互式命令行返回 ask,非交互环境只有一份就用它、多份返回错误与可选项。
  *
  * @param {{ bot: string | null, available: readonly string[], interactive: boolean }} input
  * @returns {{ kind: 'run', bot: string } | { kind: 'ask' } | { kind: 'error', message: string }}
@@ -78,12 +78,12 @@ export function chooseBot(input) {
     if (available.includes(bot)) return { kind: 'run', bot };
     return { kind: 'error', message: `没有这个部署: ${bot}。可选:${available.join(' / ')}` };
   }
-  // 交互终端上一份部署也弹菜单:「新建部署」那一项始终够得着。
+  // 交互式命令行上一份部署也弹菜单:「新建部署」那一项始终够得着。
   if (interactive) return { kind: 'ask' };
   if (available.length === 1) return { kind: 'run', bot: available[0] };
   return {
     kind: 'error',
-    message: `有多份部署,非交互终端上要指定启动哪一个:${available.join(' / ')}`,
+    message: `有多份部署,非交互环境上要指定启动哪一个:${available.join(' / ')}`,
   };
 }
 
@@ -113,7 +113,7 @@ function onPath(cmd) {
 }
 
 /**
- * 同步执行 pnpm 命令并继承终端输入输出。
+ * 同步执行 pnpm 命令并继承命令行的输入输出。
  * @param {{ command: string, prefix: string[] }} pnpm
  * @param {string[]} args
  */
@@ -193,7 +193,7 @@ function menuHead(root) {
 }
 
 /**
- * 在终端里建一份空白部署:选代码包、起目录名、取个名字。返回新部署名;中途取消返回 null。
+ * 在命令行里建一份空白部署:选代码包、起目录名、取个名字。返回新部署名;中途取消返回 null。
  *
  * @param {Listing} listing
  * @returns {Promise<string | null>}
@@ -310,10 +310,10 @@ async function main() {
     if (code !== 0) return code;
   }
 
-  // 控制台产物不纳入版本控制;不完整或落后于源码的产物按没有算。
+  // WebUI 产物不纳入版本控制;不完整或落后于源码的产物按没有算。
   const assetsProblem = webAssetsProblem(REPO_ROOT);
   if (assetsProblem) {
-    console.log(`正在构建控制台: pnpm build:web ...(${assetsProblem})\n`);
+    console.log(`正在构建 WebUI: pnpm build:web ...(${assetsProblem})\n`);
     const code = runPnpm(pnpm, ['build:web']);
     if (code !== 0) return code;
   }
@@ -325,7 +325,7 @@ async function main() {
     return 0;
   }
 
-  // 一份部署都没有 = 第一次上手。建一份再启动,端点与其余设置在控制台里配。
+  // 一份部署都没有 = 第一次上手。建一份再启动,端点与其余设置在 WebUI 里配。
   if (available.length === 0 && request.kind === 'run') {
     const created = readPnpm(pnpm, ['--silent', 'bots', '--create-default']).trim();
     if (created) {
@@ -338,7 +338,7 @@ async function main() {
   const interactive = process.stdin.isTTY === true;
   if (request.kind === 'create') {
     if (!interactive) {
-      console.error('--new 要在交互终端上用。');
+      console.error('--new 要在交互式命令行上用。');
       return 1;
     }
     const created = await createDeployment(listing);

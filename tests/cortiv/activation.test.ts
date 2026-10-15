@@ -44,7 +44,7 @@ afterEach(async () => {
 describe('CortiV 的 World 激活开关(热生效)', () => {
   it('激活直播间:写回 config.json 并挂进挂载表,不重启进程', async () => {
     const a = assemble({
-      terminal: { enabled: true },
+      console: { enabled: true },
       minecraft: { enabled: false }, bilibili: { enabled: false },
     });
     expect(a.assembly.mounted.map((m) => m.id)).not.toContain('bilibili');
@@ -56,7 +56,7 @@ describe('CortiV 的 World 激活开关(热生效)', () => {
 
   it('房间号与凭证已经填过时,开关只动 enabled', async () => {
     const a = assemble({
-      terminal: { enabled: true },
+      console: { enabled: true },
       bilibili: { enabled: false, roomId: 7734200, sessdata: 'abc' },
     });
     await a.assembly.activate('bilibili');
@@ -65,30 +65,30 @@ describe('CortiV 的 World 激活开关(热生效)', () => {
 
   it('停用写回 enabled=false 并撤出挂载表;停最后一个也允许', async () => {
     const a = assemble({
-      terminal: { enabled: true },
+      console: { enabled: true },
       minecraft: { enabled: false }, bilibili: { enabled: false },
     });
-    for (const id of a.assembly.mounted.map((m) => m.id).filter((id) => id !== 'terminal')) {
+    for (const id of a.assembly.mounted.map((m) => m.id).filter((id) => id !== 'console')) {
       await a.assembly.deactivate(id);
     }
-    expect(a.assembly.mounted.map((m) => m.id)).toEqual(['terminal']);
-    expect(await a.assembly.deactivate('terminal')).toContain('已停用');
-    expect(a.config().worlds.terminal.enabled).toBe(false);
+    expect(a.assembly.mounted.map((m) => m.id)).toEqual(['console']);
+    expect(await a.assembly.deactivate('console')).toContain('已停用');
+    expect(a.config().worlds.console.enabled).toBe(false);
     expect(a.assembly.mounted).toEqual([]);
     // 停用后槽位上是一个全新实例,再激活按当前配置重建
-    await a.assembly.activate('terminal');
-    expect(a.assembly.mounted.map((m) => m.id)).toEqual(['terminal']);
+    await a.assembly.activate('console');
+    expect(a.assembly.mounted.map((m) => m.id)).toEqual(['console']);
   });
 
   it('声明过但没装实现的 World 进 missing,不是激活开关的作用域', async () => {
-    const a = assemble({ terminal: { enabled: true }, bilibili: { enabled: false } });
+    const a = assemble({ console: { enabled: true }, bilibili: { enabled: false } });
     // vtuber、asr、pvz、canvas 的实现都是扩展包,这里没装。
     await expect(a.assembly.activate('vtuber')).rejects.toThrow('未知 World');
     expect(a.assembly.missing.map((m) => m.id)).toEqual(['vtuber', 'asr', 'pvz', 'canvas']);
   });
 
   it('仓内有实现但 Persona 没声明的 World 是部署侧选配:有槽位、默认不挂', () => {
-    const a = assemble({ terminal: { enabled: true } });
+    const a = assemble({ console: { enabled: true } });
     expect(a.assembly.slot('qq')).toMatchObject({ mounted: false, declared: false });
     expect(a.assembly.mounted.map((m) => m.id)).not.toContain('qq');
   });

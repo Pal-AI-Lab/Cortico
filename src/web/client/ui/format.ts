@@ -1,15 +1,15 @@
 /**
- * ConsoleFormat 提供不依赖 DOM 的纯格式化函数，供各控制台面板使用统一显示口径。
+ * WebUiFormat 提供不依赖 DOM 的纯格式化函数，供各 WebUI 面板使用统一显示口径。
  */
 
-import type { ConsoleFormat } from '../../shared/client-panel.ts';
+import type { WebUiFormat } from '../../shared/client-panel.ts';
 
 /** 补零到两位。`4` → `04` */
 function pad2(n: number): string {
   return n < 10 ? '0' + n : String(n);
 }
 
-export const consoleFormat: ConsoleFormat = {
+export const webUiFormat: WebUiFormat = {
   /** **满 10000 才转 k**（9999 仍是 9999，不是 10.0k） */
   count(n) {
     return n == null ? '—' : n >= 10000 ? (n / 1000).toFixed(1) + 'k' : String(n);

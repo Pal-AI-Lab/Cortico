@@ -48,7 +48,7 @@ export const S: Partial<typeof en> = {
   statRounds: '本批輪數',
   statBatches: '累計批次',
   statEvents: '最新事件游標',
-  statOnline: '終端在線',
+  statOnline: '控制台在線',
   statRun: '執行',
   unitMsgs: '則',
   unitPeople: '人',

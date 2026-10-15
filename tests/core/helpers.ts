@@ -52,7 +52,7 @@ export function makeLoaded(opts: {
 }): LoadedConfig<BotConfig> {
   return {
     config: opts.config,
-    // 测试部署不设控制台访问密码;其余密钥名默认返回同一假密钥。
+    // 测试部署不设 WebUI 访问密码;其余密钥名默认返回同一假密钥。
     secret: (name) => opts.secrets?.[name] ?? (opts.secrets || name === WEB_PASSWORD_SECRET ? '' : 'fake-key'),
     rootDir: opts.rootDir,
     memoryDir: opts.memoryDir,
@@ -422,7 +422,7 @@ export function makeFakeIO(id: string, tools: ToolDef[] = [], staticText = ''): 
   return {
     id,
     envPromptVars: () => ({}),
-    console: () => ({
+    webUi: () => ({
       promptDocs: [
         { key: `worlds.${id}.envPrompt`, title: `${id} · 环境提示词`, description: '测试模板', path, role: 'envPrompt' as const },
       ],
@@ -435,7 +435,7 @@ export function makeFakeIO(id: string, tools: ToolDef[] = [], staticText = ''): 
 
 /** 修改假 World 的环境模板文件。 */
 export function rewriteFakeIOTemplate(mod: World, text: string): void {
-  const doc = mod.console?.()?.promptDocs?.find((d) => d.role === 'envPrompt');
+  const doc = mod.webUi?.()?.promptDocs?.find((d) => d.role === 'envPrompt');
   if (!doc) throw new Error(`${mod.id} 没有环境提示词模板`);
   writeFileSync(doc.path, text, 'utf8');
 }

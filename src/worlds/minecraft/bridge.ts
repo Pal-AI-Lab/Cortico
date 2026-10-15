@@ -424,7 +424,7 @@ export class Bridge {
     this.opts.log.error(`minecraft 连续 ${n} 次被 ${where} 拒连:连接被拒绝`);
     this.opts.onAlarm?.(
       this.opts.managedServer?.()
-        ? `连着 ${n} 次连不上 ${where},端口上根本没有进程在听 —— MC 服务器没在跑,去控制台的 Minecraft 面板把它启动起来;` +
+        ? `连着 ${n} 次连不上 ${where},端口上根本没有进程在听 —— MC 服务器没在跑,去 WebUI 的 Minecraft 面板把它启动起来;` +
           '在那之前我进不了游戏,做不了任何事。'
         : `连着 ${n} 次连不上 ${where},对面端口没有进程在听 —— 那台服务器没在跑。`,
     );

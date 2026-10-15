@@ -28,7 +28,7 @@ export interface ClientState {
   username: string;
   /** 游戏目录与版本齐备 */
   configured: boolean;
-  /** 供控制台预览的命令行;解析失败时为 null。 */
+  /** 供 WebUI 预览的命令行;解析失败时为 null。 */
   command: string | null;
 }
 

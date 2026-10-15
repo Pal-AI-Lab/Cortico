@@ -1,4 +1,4 @@
-/** 验证 QQ 接收控制的控制台调用与配置。 */
+/** 验证 QQ 接收控制的 WebUI 调用与配置。 */
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import { QQWorld } from '../../src/worlds/qq/world.ts';
 import { FakeStore } from './fakes.ts';
@@ -30,18 +30,18 @@ const qq = new QQWorld(
     },
   },
 );
-const invoke = qq.console().invoke!;
+const invoke = qq.webUi().invoke!;
 afterEach(() => { vi.useRealTimers(); });
 
 
 beforeAll(() => {
-  // 事件库:两个群 + 一个私聊的 qq 事件,外加一条终端事件(应被 source 过滤排除)
+  // 事件库:两个群 + 一个私聊的 qq 事件,外加一条控制台事件(应被 source 过滤排除)
   const seed = (source: string, type: string, text: string, conv?: { kind: string; id: number }, ts?: string) =>
     store.append({ type, ts: ts ?? '2026-07-19T15:00:00+08:00', source, origin: 'external', text, ...(conv ? { meta: { conv } } : {}) });
   seed('qq', 'qq.message', '[群「茶话会」] a', { kind: 'group', id: 111 }, '2026-07-19T15:01:00+08:00');
   seed('qq', 'qq.message', '[群「茶话会」] b', { kind: 'group', id: 111 }, '2026-07-19T15:02:00+08:00');
   seed('qq', 'qq.message', '[群「学习组」] c', { kind: 'group', id: 333 }, '2026-07-19T15:03:00+08:00');
-  seed('terminal', 'terminal.message', '[终端] 访客', undefined, '2026-07-19T15:04:00+08:00');
+  seed('console', 'console.message', '[控制台] 访客', undefined, '2026-07-19T15:04:00+08:00');
   seed('qq', 'qq.message', '[私聊] d', { kind: 'private', id: 222 }, '2026-07-19T15:05:00+08:00');
   // events 面板只用 host.store;不为它起整条协议端连接,直接塞一个只有 store 的宿主
   (qq as any).host = { store };
@@ -62,7 +62,7 @@ describe('gate.state', () => {
 describe('events.list', () => {
   it('只取 source=qq,按会话分组、最近在前', async () => {
     const d = (await invoke('events', 'list', [{}])) as any;
-    expect(d.total).toBe(4); // 4 条 qq,终端那条被排除
+    expect(d.total).toBe(4); // 4 条 qq,控制台那条被排除
     expect(d.events.length).toBe(4);
     // 会话按 lastTs 倒序:私聊222(15:05) → 群333(15:03) → 群111(15:02)
     expect(d.conversations.map((c: any) => `${c.kind}:${c.id}:${c.count}`)).toEqual([
@@ -126,7 +126,7 @@ describe('gate.setConnection', () => {
 describe('gate 数据面未接线', () => {
   it('gate/roster 面板报不可用', async () => {
     const bare = new QQWorld({ wsUrl: 'ws://x', groups: [], privates: [], token: '' });
-    const inv = bare.console().invoke!;
+    const inv = bare.webUi().invoke!;
     await expect(inv('gate', 'state', [])).rejects.toThrow('不可用');
     await expect(inv('roster', 'get', [])).rejects.toThrow('不可用');
   });

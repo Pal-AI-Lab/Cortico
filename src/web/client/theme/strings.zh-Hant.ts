@@ -9,7 +9,7 @@ export const S: Partial<typeof en> = {
   groupPaper: '背景層級',
   groupInk: '文字與邊界',
   groupState: '互動與狀態',
-  groupTimeline: '終端時間軸',
+  groupTimeline: '控制台時間軸',
   groupChart: '圖表系列',
   token: {
     paper: '頁面背景',

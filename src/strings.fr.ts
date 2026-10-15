@@ -95,7 +95,7 @@ export const botText: Partial<typeof botEn> = {
     manualCheck: "Vérifiez si le service externe correspondant s'est arrêté.",
     llm: 'Arrêter les instances de fournisseur',
     flush: "Enregistrer l'état du Core",
-    web: 'Fermer la console',
+    web: 'Fermer la WebUI',
     summarySkipped: "Étapes d'arrêt local incomplètes",
     summaryComplete: 'Arrêt local terminé : toutes les étapes sont faites',
     summaryUnverified: (items: string[]) => `Arrêt local terminé, mais la fin de l'état externe n'est pas confirmée : ${items.join(', ')} (confirmation manuelle requise)`,

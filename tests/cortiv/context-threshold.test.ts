@@ -1,5 +1,5 @@
 /**
- * 上下文交接阈值的部署覆盖、控制台声明与读取路径。
+ * 上下文交接阈值的部署覆盖、WebUI 声明与读取路径。
  */
 import { describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -33,7 +33,7 @@ describe('上下文交接阈值', () => {
     expect(cfg.context.firstTurn).toBe(definition.defaults().context.firstTurn);
   });
 
-  it('控制台有位置改它:CortiV 声明了这一组,且 96000 落在声明的取值区间里', () => {
+  it('WebUI 有位置改它:CortiV 声明了这一组,且 96000 落在声明的取值区间里', () => {
     const prop = CORTIV_CONTEXT_CONFIG_GROUP.schema.properties['context.maxTokens'];
     expect(prop).toBeTruthy();
     expect(prop.type).toBe('integer');
@@ -46,7 +46,7 @@ describe('上下文交接阈值', () => {
     try {
       writeFileSync(join(dir, 'config.json'), JSON.stringify({ context: { maxTokens: 96000 } }), 'utf8');
       const built = definition.build(loadDeployment(definition, dir, REPO_ROOT), []);
-      const ids = (built.console?.configGroups ?? []).map((g) => g.id);
+      const ids = (built.webUi?.configGroups ?? []).map((g) => g.id);
       expect(ids).toContain(CORTIV_CONTEXT_CONFIG_GROUP.id);
     } finally {
       rmSync(dir, { recursive: true, force: true });

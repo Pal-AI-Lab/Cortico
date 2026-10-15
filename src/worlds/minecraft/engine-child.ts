@@ -166,8 +166,8 @@ function storageStats(parts: StoragePart[]): StorageStat[] {
 
 function pushStatus(): void {
   if (!mod) return;
-  const zh = mod.console('zh');
-  const en = mod.console('en');
+  const zh = mod.webUi('zh');
+  const en = mod.webUi('en');
   const note = {
     kind: 'status' as const,
     decl: {
@@ -224,11 +224,11 @@ async function handleRequest(req: EngineRequest): Promise<unknown> {
     return toolOutcomeOverIpc(out);
   }
   if (req.kind === 'storage-clear') {
-    const part = (mod.console().storage ?? []).find((p) => p.key === req.key);
+    const part = (mod.webUi().storage ?? []).find((p) => p.key === req.key);
     if (!part) throw new Error(`未知存储部分: ${req.key}`);
     return part.clear();
   }
-  const invoke = mod.console(req.language).invoke;
+  const invoke = mod.webUi(req.language).invoke;
   if (!invoke) throw new Error('World 没有面板调用面');
   return invoke(req.panel, req.method, req.args);
 }

@@ -5,7 +5,7 @@ import type { ConfigGroup, CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import type { WorldDeclaration, WorldSection } from 'cortico/world.ts';
-import type { TerminalConfigSection } from 'cortico/worlds/terminal/config.ts';
+import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
 import type { BilibiliConfigSection } from 'cortico/worlds/bilibili/config.ts';
 import type { MinecraftConfigSection } from 'cortico/worlds/minecraft/config.ts';
 import { CortiV } from './persona/persona.ts';
@@ -14,17 +14,17 @@ import { contextStageConfigGroup } from '../cormini/persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
 
-/** 存在方式自述的源文件;控制台「Persona」页可编辑,重载前缀即生效。 */
+/** 存在方式自述的源文件;WebUI「Persona」页可编辑,重载前缀即生效。 */
 const ORIENTATION_FILE = resolve(HERE, 'persona/ORIENTATION.md');
 
 /**
  * 这个Persona为之设计的渠道。实现由启动器并进来(仓内目录加扩展),哪些挂载由 config.json 的
- * `worlds.<id>.enabled` 决定,控制台可热切;`vtuber` 与 `asr` 是扩展包,没装时是灰卡。
+ * `worlds.<id>.enabled` 决定,WebUI 可热切;`vtuber` 与 `asr` 是扩展包,没装时是灰卡。
  */
-const DECLARES: readonly WorldDeclaration[] = ['terminal', 'vtuber', 'bilibili', 'asr', 'minecraft', 'pvz', 'canvas'];
+const DECLARES: readonly WorldDeclaration[] = ['console', 'vtuber', 'bilibili', 'asr', 'minecraft', 'pvz', 'canvas'];
 
 /**
- * 上下文与交接容量配置归Persona，控制台表单与 bots/cormini/persona/config.ts 共用。
+ * 上下文与交接容量配置归Persona，WebUI 表单与 bots/cormini/persona/config.ts 共用。
  */
 export const CORTIV_CONTEXT_CONFIG_GROUP: ConfigGroup = contextStageConfigGroup('cortiv');
 
@@ -62,7 +62,7 @@ export interface CortiVConfig extends CoreConfig {
     intervalMinutes: number | null;
   };
   worlds: {
-    terminal: TerminalConfigSection;
+    console: ConsoleConfigSection;
     /** 外部包 `cortico-world-vtuber` 的段:形状归那个包,Persona只知道它在。 */
     vtuber: WorldSection & Record<string, unknown>;
     bilibili: BilibiliConfigSection;
@@ -89,11 +89,11 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
     worlds: worlds,
     // Persona把它自报为可编辑的静态前缀源(Persona卡),前缀也从它现读。
     orientationFile: ORIENTATION_FILE,
-    // 部署侧的自述覆盖:存在就用它,控制台保存也落到那边(见 PromptDocDecl.deploymentPath)。
+    // 部署侧的自述覆盖:存在就用它,WebUI 保存也落到那边(见 PromptDocDecl.deploymentPath)。
     orientationOverrideFile: resolve(loaded.rootDir, 'prompts', 'ORIENTATION.md'),
     // 首轮对话是部署者自己写的,与 ORIENTATION 覆盖同住 prompts/;代码包不带。
     firstTurnDir: resolve(loaded.rootDir, 'prompts'),
-    // 现读:控制台上关掉,下一次 World 来请托时句柄就已经不在了(不用重启)。
+    // 现读:WebUI 上关掉,下一次 World 来请托时句柄就已经不在了(不用重启)。
     cognitionEnabled: () => cfg.cognition.enabled,
     tickDelayMs: () =>
       cfg.tick.intervalMinutes === null ? null : cfg.tick.intervalMinutes * 60_000,
@@ -107,9 +107,9 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
     onStop: () => {
       persona.stopRhythm();
     },
-    console: {
+    webUi: {
       configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
-      // 阶段预算与软预警线(终端页上下文圈的分母与黄线);计数与物理上限由 core 报
+      // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },
   };
@@ -129,7 +129,7 @@ const definition: BotDefinition<CortiVConfig> = {
     paths: { memory: 'workspace', data: 'data' },
     batching: { ...CORE_DEFAULTS.batching },
     // 交接阈值(塞满多少就交接)。这只是**层 2 建议值** —— config.json 的 context 段
-    // 压过它(deploy.ts 的四层深合并),控制台「可缇Corti → 参数」改的也是那一份。
+    // 压过它(deploy.ts 的四层深合并),WebUI「可缇Corti → 参数」改的也是那一份。
     // 别把它跟 provider 那份 spec 的 contextWindow(模型物理窗口)或 maxTokens
     // (单轮生成上限)搞混:那两样归 provider,Persona拿不到。
     context: { maxTokens: 64000, keepRatio: 1 / 4, softRatio: 0.85, firstTurn: false, ...CORE_DEFAULTS.context },

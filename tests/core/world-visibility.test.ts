@@ -28,7 +28,7 @@ class ProbeWorld implements World {
   envPromptVars(): Record<string, string> | null {
     return this.featureOff ? null : {};
   }
-  console() {
+  webUi() {
     return {
       promptDocs: [
         {

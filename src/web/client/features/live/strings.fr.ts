@@ -2,15 +2,15 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
-  navLabel: 'Terminal',
+  navLabel: 'Console',
   currentProvider: 'Fournisseur de modèle actuel',
   noProvider: 'Aucun fournisseur sélectionné',
   ctxOpenAria: 'Voir la répartition des tokens',
   ctxPanelAria: 'Répartition des tokens',
-  netConnecting: 'Connexion de la console…',
-  netOnline: 'Console connectée',
-  netOffline: 'Console déconnectée',
-  composerLabel: 'Saisie de message du terminal',
+  netConnecting: 'Connexion de la WebUI…',
+  netOnline: 'WebUI connectée',
+  netOffline: 'WebUI déconnectée',
+  composerLabel: 'Saisie de message de la console',
   composerPlaceholder: 'Saisissez un message…',
   exportDiagnostics: 'Exporter le diagnostic',
   exportFailed: 'Impossible de récupérer le paquet de diagnostic',
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   exportConfirmBody: "Le paquet contient les conversations, prompts, événements, appels d'outils, l'utilisation et les journaux d'exécution. Les secrets de la configuration sont masqués ; tout le reste est écrit tel quel. Vérifiez qu'il ne contient pas d'informations privées avant de le partager.",
   composerFork: "Affichage d'une session d'arrière-plan ; les messages envoyés ici vont toujours à la session principale",
   composerNoProvider: 'Aucun fournisseur utilisable. Configurez-en un sur la page « Connexions de modèles ».',
-  composerQueued: 'Le canal du terminal se reconnecte ; message mis en file',
+  composerQueued: 'Le canal de la console se reconnecte ; message mis en file',
   emptyConnecting: 'Connexion au canal de débogage…',
   ctxTitle: (total: string, max: string | null) =>
     `Contexte ${total}${max !== null ? ` / ${max}` : ''} tok · cliquez pour la répartition`,
@@ -28,7 +28,7 @@ export const S: Partial<typeof en> = {
   debugNotMounted: 'Canal de débogage indisponible ; la chronologie ne peut pas être affichée.',
 
   // status.ts
-  docTitle: (name: string) => `Console · ${name}`,
+  docTitle: (name: string) => `WebUI · ${name}`,
   chipDisconnected: 'Déconnecté',
   chipMsgs: ' msg',
   chipCache: 'cache ',
@@ -129,7 +129,7 @@ export const S: Partial<typeof en> = {
   obProvider: 'Commencez par configurer un fournisseur de modèle :',
   obProviderNone: 'Aucun fournisseur de modèle utilisable pour le moment',
   obProviderReady: 'Fournisseur de modèle configuré',
-  obWorlds: 'Ensuite, activez et configurez les environnements externes auxquels votre bot accède (World Cortico). Commencer avec la seule discussion du terminal convient aussi.',
+  obWorlds: 'Ensuite, activez et configurez les environnements externes auxquels votre bot accède (World Cortico). Commencer avec la seule discussion de la console convient aussi.',
   obWorldsState: (labels: readonly string[]) =>
     `${labels.length} environnement${labels.length > 1 ? 's' : ''} externe${labels.length > 1 ? 's' : ''} actuellement activé${labels.length > 1 ? 's' : ''} : ${labels.join(', ')}`,
   obPrompts: 'Enfin, le prompt système se modifie ici : qui il est, comment il se comporte, comment il parle.',

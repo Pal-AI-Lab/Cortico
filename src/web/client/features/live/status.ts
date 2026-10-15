@@ -1,15 +1,15 @@
 /**
- * 终端页只读状态条，使用 ui.chip 的统一 tone。控制动作归其他控制页；本 feature 仅更新 document.title，品牌名与面包屑由 host 根据状态渲染。
+ * 控制台页只读状态条，使用 ui.chip 的统一 tone。控制动作归其他控制页；本 feature 仅更新 document.title，品牌名与面包屑由 host 根据状态渲染。
  */
 
-import type { ConsoleUi } from '../../../shared/client-panel.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
 import { chipsOf, loopOf, type RunPhase, type StatusSnapshot } from './protocol.ts';
 import { S } from './strings.ts';
 
 /** 一枚 chip:纯文本片段与要加粗的读数交替。 */
 type ChipPart = string | { b: string | number };
 
-function chipOf(ui: ConsoleUi, parts: readonly ChipPart[]): HTMLElement {
+function chipOf(ui: WebUi, parts: readonly ChipPart[]): HTMLElement {
   const c = ui.chip('');
   for (const p of parts) {
     if (typeof p === 'string') c.appendChild(ui.h('span', null, p));
@@ -29,7 +29,7 @@ export function applyDisplayName(doc: Document, name: string | undefined, curren
 }
 
 /** 主循环运行阶段的一行说明;idle 或没有阶段时为 null。 */
-export function phaseLabel(ui: ConsoleUi, phase: RunPhase | null): string | null {
+export function phaseLabel(ui: WebUi, phase: RunPhase | null): string | null {
   if (!phase) return null;
   let head: string;
   switch (phase.state) {
@@ -51,7 +51,7 @@ export interface StatusBand {
   render(st: StatusSnapshot | null): void;
 }
 
-export function createStatusBand(ui: ConsoleUi): StatusBand {
+export function createStatusBand(ui: WebUi): StatusBand {
   const el = ui.h('div', 'chips');
   return {
     el,
@@ -82,7 +82,7 @@ export function createStatusBand(ui: ConsoleUi): StatusBand {
       if (loop.batchesHandled != null) {
         el.appendChild(chipOf(ui, [S.chipBatchesPre, { b: loop.batchesHandled }, S.chipBatchesPost]));
       }
-      if (st.terminalOnline != null) el.appendChild(chipOf(ui, [S.chipOnline, { b: st.terminalOnline }]));
+      if (st.consoleOnline != null) el.appendChild(chipOf(ui, [S.chipOnline, { b: st.consoleOnline }]));
     },
   };
 }

@@ -160,7 +160,7 @@ export class WakeBus {
     return true;
   }
 
-  /** 人工暂停/继续(控制台);继续时积压一次性投递 */
+  /** 人工暂停/继续(WebUI);继续时积压一次性投递 */
   setPaused(v: boolean): void {
     if (v !== this.paused) this.log.emit('info', v ? '总线已暂停:事件照常落库,不投递' : '总线继续', { event: v ? 'paused' : 'resumed', data: { queued: this.queue.length } });
     this.paused = v;
@@ -205,7 +205,7 @@ export class WakeBus {
     return this.gate !== null;
   }
 
-  /** 当前积压条数(控制台可见性;含尚未成文的投递成文项) */
+  /** 当前积压条数(WebUI 可见性;含尚未成文的投递成文项) */
   pending(): number {
     return this.queue.length;
   }

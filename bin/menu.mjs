@@ -33,7 +33,7 @@ export function colorEnabled(out, env) {
 }
 
 /**
- * `#rrggbb` → 24 位真彩转义。16 色表由终端调色板决定，画不出方案本身的颜色。
+ * `#rrggbb` → 24 位真彩转义。16 色表由命令行窗口的调色板决定，画不出方案本身的颜色。
  *
  * @param {string} text
  * @param {string | undefined} color
@@ -48,7 +48,7 @@ export function paint(text, color, enabled) {
 }
 
 /**
- * 终端列宽：CJK 与全角标点占两列。
+ * 命令行列宽：CJK 与全角标点占两列。
  *
  * @param {string} text
  */

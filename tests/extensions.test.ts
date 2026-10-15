@@ -53,7 +53,7 @@ describe('loadExtensions', () => {
     expect(set.records).toEqual([]);
     expect(set.worlds).toEqual([]);
     expect(set.providers).toEqual([]);
-    expect(set.consoleAssets).toEqual([]);
+    expect(set.webUiAssets).toEqual([]);
     expect(set.dir).toBe(join(root, 'extensions'));
   });
 
@@ -63,7 +63,7 @@ describe('loadExtensions', () => {
     expect(set.worlds.map((m) => m.id)).toEqual(['alpha']);
     expect(set.records).toEqual([{
       name: '@acme/cortico-world-alpha', spec: '^1.0.0', version: '1.2.3', description: '甲',
-      kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: false, console: 'none',
+      kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: false, webUi: 'none',
       loaded: true, worldId: 'alpha', label: 'alpha 扩展',
     }]);
     // 定义是活的:defaults / create 都能调
@@ -86,33 +86,33 @@ describe('loadExtensions', () => {
   });
 
   it('与内建同 id 的扩展不装;两个扩展同 id 先到的赢', async () => {
-    installFake('clash-builtin', { body: definitionSource('terminal-like') });
+    installFake('clash-builtin', { body: definitionSource('console-like') });
     installFake('first', { body: definitionSource('dup') });
     installFake('second', { body: definitionSource('dup') });
-    const set = await loadExtensions(root, { reserved: ['terminal-like'] });
+    const set = await loadExtensions(root, { reserved: ['console-like'] });
     expect(set.worlds.map((m) => m.id)).toEqual(['dup']);
     const byName = Object.fromEntries(set.records.map((r) => [r.name, { ...r, reason: r.reason?.('zh') }]));
-    expect(byName['clash-builtin']).toMatchObject({ loaded: false, worldId: 'terminal-like', reason: expect.stringContaining('占用') });
+    expect(byName['clash-builtin']).toMatchObject({ loaded: false, worldId: 'console-like', reason: expect.stringContaining('占用') });
     expect(byName.first.loaded).toBe(true);
     expect(byName.second).toMatchObject({ loaded: false, worldId: 'dup' });
   });
 
-  it('入口按 exports(字符串 / "." 的 import)解析;cortico.consoleClient 标出来', async () => {
+  it('入口按 exports(字符串 / "." 的 import)解析;cortico.webUiClient 标出来', async () => {
     installFake('exp-str', { pkg: { main: undefined, exports: './entry.js' }, body: 'nope' });
     writeFileSync(join(root, 'extensions/node_modules/exp-str/entry.js'), definitionSource('es'));
     installFake('exp-obj', {
       pkg: {
         main: undefined,
         exports: { '.': { import: './esm.js', require: './cjs.js' } },
-        cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/client.js' },
+        cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: 'dist/client.js' },
       },
       body: 'nope',
     });
     writeFileSync(join(root, 'extensions/node_modules/exp-obj/esm.js'), definitionSource('eo'));
     const set = await loadExtensions(root);
     expect(set.worlds.map((m) => m.id)).toEqual(['es', 'eo']);
-    expect(set.records.find((r) => r.name === 'exp-obj')?.consoleClient).toBe(true);
-    expect(set.records.find((r) => r.name === 'exp-str')?.consoleClient).toBe(false);
+    expect(set.records.find((r) => r.name === 'exp-obj')?.webUiClient).toBe(true);
+    expect(set.records.find((r) => r.name === 'exp-str')?.webUiClient).toBe(false);
   });
 });
 
@@ -123,7 +123,7 @@ describe('ExtensionManager', () => {
     let release: (() => void) | null = null;
     const urls: string[] = [];
     const set: ExtensionSet = {
-      dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [], ...booted,
+      dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], ...booted,
     };
     const mgr = new ExtensionManager(root, set, {
       run: (args, cwd) => {
@@ -259,7 +259,7 @@ describe('ExtensionManager', () => {
     installFake('mounted-world', { body: definitionSource('mounted-world') });
     installFake('parked-world', { body: definitionSource('parked-world') });
     const booted = await loadExtensions(root);
-    const builtin = { name: 'builtin:world:example', spec: 'builtin', version: '1.0.0', consoleClient: false, loaded: true, state: 'loaded' as const, builtin: true as const };
+    const builtin = { name: 'builtin:world:example', spec: 'builtin', version: '1.0.0', webUiClient: false, loaded: true, state: 'loaded' as const, builtin: true as const };
     const mgr = new ExtensionManager(root, booted, { builtins: () => [builtin], decorate: (item) => ({ ...item, enabled: item.worldId === 'mounted-world' }) });
     const extensions = mgr.list().extensions;
     expect(extensions.at(-1)).toEqual({ ...builtin, enabled: false });
@@ -307,7 +307,7 @@ describe('ExtensionManager', () => {
       })),
     };
     const urls: string[] = [];
-    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
     const mgr = new ExtensionManager(root, set, {
       run: async () => ({ code: 0, output: '' }),
       registry: 'https://registry.example.invalid',
@@ -323,7 +323,7 @@ describe('ExtensionManager', () => {
   });
 
   it('search:下载量问 npm 下载统计,带 scope 的逐个问,累计往前加到一整段没下载为止', async () => {
-    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
     // 每个包按时间倒序各段的下载量,没列出的段是 0;c-mod 统计里查不到
     const windows: Record<string, number[]> = { 'a-mod': [10, 5], '@s/b-mod': [4] };
     const asked: Record<string, number> = {};
@@ -367,7 +367,7 @@ describe('ExtensionManager', () => {
   it('search:下载统计迟迟不回,列表照样出,只有搜索端点的月数', async () => {
     vi.useFakeTimers();
     try {
-      const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] };
+      const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
       const mgr = new ExtensionManager(root, set, {
         run: async () => ({ code: 0, output: '' }),
         registry: 'https://registry.example.invalid',
@@ -436,7 +436,7 @@ describe('ExtensionManager', () => {
   it('registry 取 pnpm 配置的那个:搜索与详情都用它,pnpm 只问一次', async () => {
     const runs: string[][] = [];
     const urls: string[] = [];
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
       run: async (args) => { runs.push(args); return { code: 0, output: 'WARN some notice\nhttps://mirror.example.invalid/npm/\n' }; },
       fetchJson: async (url) => {
         urls.push(url);
@@ -459,7 +459,7 @@ describe('ExtensionManager', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(npmrc, '@acme:registry=https://scoped.example.invalid/\r\nregistry=https://old.example.invalid/\r\nstrict-ssl=false\r\n');
     const hosts: string[] = [];
-    const mgr = new ExtensionManager(root, { dir, records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir, records: [], worlds: [], providers: [], webUiAssets: [] }, {
       // 与 pnpm 一样读 cwd 的 .npmrc,没有 registry 行时是官方源
       run: async (_args, cwd) => {
         const file = join(cwd, '.npmrc');
@@ -481,7 +481,7 @@ describe('ExtensionManager', () => {
 
   it('search:registry 不认 keywords: 写法(空列表)时按关键字文本搜,只留带关键字的包', async () => {
     const queries: string[] = [];
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
       registry: 'https://mirror.example.invalid',
       fetchJson: async (url) => {
         if (!url.includes('/-/v1/search')) return {};
@@ -500,7 +500,7 @@ describe('ExtensionManager', () => {
 
   it('pnpm 读不出 registry 时查询报 pnpm 的错误,下次再问', async () => {
     let calls = 0;
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
       run: async () => (++calls === 1 ? { code: 1, output: 'ERR_PNPM_SOMETHING broken config' } : { code: 0, output: 'https://mirror.example.invalid/' }),
       fetchJson: async () => ({ objects: [] }),
     });
@@ -515,7 +515,7 @@ describe('ExtensionManager', () => {
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const { port } = server.address() as AddressInfo;
     await new Promise((done) => server.close(done));
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, { registry: `http://127.0.0.1:${port}` });
     const { errors } = await mgr.updates();
     expect(errors).toHaveLength(1);
     expect(errors[0].error).toContain(`127.0.0.1:${port}: fetch failed`);
@@ -537,7 +537,7 @@ describe('ExtensionManager', () => {
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const { port } = server.address() as AddressInfo;
     try {
-      const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], consoleAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+      const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, { registry: `http://127.0.0.1:${port}` });
       const errors = new Map((await mgr.updates()).errors.map((e) => [e.name, e.error]));
       expect(errors.get('cut-mod')).toContain(`127.0.0.1:${port}: terminated`);
       expect(errors.get('cut-mod')).toContain('UND_ERR_SOCKET');
@@ -571,7 +571,7 @@ describe('ExtensionManager', () => {
     installFake('a-mod');
     const version = {
       name: 'a-mod', version: '2.0.0', type: 'module', main: './index.js', license: 'MIT',
-      keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
+      keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: 'dist/webui.js' },
       engines: { node: '>=22' }, dependencies: { ws: '^8' }, dist: { unpackedSize: 2048, fileCount: 9 },
       maintainers: [{ username: 'me' }], _npmUser: { name: 'me' },
       repository: { url: 'git+ssh://git@github.com/me/a-mod.git' }, homepage: 'https://example.invalid',
@@ -591,7 +591,7 @@ describe('ExtensionManager', () => {
     expect(info).toMatchObject({
       name: 'a-mod', version: '2.0.0', license: 'MIT', published: '2026-03-02T00:00:00.000Z',
       created: '2026-01-01T00:00:00.000Z', versionCount: 2,
-      manifest: { kind: 'world', api: EXTENSION_API_VERSIONS.world, consoleClient: 'dist/console.js' },
+      manifest: { kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: 'dist/webui.js' },
       frameworkApi: EXTENSION_API_VERSIONS.world, engines: '>=22', unpackedSize: 2048, fileCount: 9,
       dependencies: ['ws'], maintainers: ['me'], installed: true, installedSpec: '^1.0.0',
       links: { npm: 'https://www.npmjs.com/package/a-mod', repository: 'https://github.com/me/a-mod', homepage: 'https://example.invalid' },

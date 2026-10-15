@@ -10,13 +10,13 @@
 pnpm start cortiv
 ```
 
-默认控制台地址：`http://127.0.0.1:7789/`。
+默认 WebUI 地址：`http://127.0.0.1:7789/`。
 
 ## World
 
 | World | 功能与配置 |
 |---|---|
-| `terminal` | 控制台聊天。 |
+| `console` | WebUI 聊天。 |
 | `minecraft` | Minecraft 操作、任务队列和客户端托管。 |
 | `pvz` | 植物大战僵尸操作、任务队列和游戏托管，由扩展 `cortico-world-pvz` 提供，默认关闭。 |
 | `vtuber` | L1–L4 演出、TTS 声卡输出、演出流 SSE `http://127.0.0.1:7792/stream` 与弹幕输入 WS，由扩展 `cortico-world-vtuber` 提供。 |

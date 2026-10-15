@@ -15,7 +15,7 @@ const FEATURE_ENTRY = '../../src/web/client/features/feature.ts';
 
 type Any = any;
 
-const { createConsoleUi } = (await import(UI_ENTRY)) as Any;
+const { createWebUi } = (await import(UI_ENTRY)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE_ENTRY)) as Any;
 const { Router, parseHash } = (await import(ROUTER_ENTRY)) as Any;
 const core = (await import(CORE_ENTRY)) as Any;
@@ -345,7 +345,7 @@ function mkCtx(capabilities: Record<string, boolean>, hash = '#/core'): Ctx {
       store[k] = v;
     },
   };
-  const ui = createConsoleUi({ memo, overlayHost: doc.body, doc, signal: lifecycle.signal });
+  const ui = createWebUi({ memo, overlayHost: doc.body, doc, signal: lifecycle.signal });
   const win = fakeWin(hash);
   const router = new Router({ win, confirmLeave: async () => true });
   // 拦截器是真 Router 的,这里只在旁边记一份,好在测试里直接问它"现在拦不拦"。
@@ -553,7 +553,7 @@ describe('运行态', () => {
       t: 'status',
       status: {
         latestEventCursor: 7,
-        terminalOnline: 2,
+        consoleOnline: 2,
         loop: { estTokens: 12345, messageCount: 9, paused: true, behind: 3, lastDeliveredCursor: 4 },
       },
     });

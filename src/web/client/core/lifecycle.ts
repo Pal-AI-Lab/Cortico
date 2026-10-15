@@ -1,5 +1,5 @@
 /**
- * 每次控制台挂载的资源管理器。卸载时先 abort，再逐项 dispose。
+ * 每次 WebUI 挂载的资源管理器。卸载时先 abort，再逐项 dispose。
  * 监听和 fetch 使用 signal；不接受 signal 的定时器、RAF、observer、AudioContext 与 ObjectURL 经 own、interval 或 frame 登记。
  */
 

@@ -2,33 +2,33 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "dev-console",
+      "name": "dev-webui",
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "node_modules/tsx/dist/cli.mjs",
-        "scripts/dev-console.ts"
+        "scripts/dev-webui.ts"
       ],
       "port": 8848,
       "autoPort": true
     },
     {
-      "name": "dev-console-zh",
+      "name": "dev-webui-zh",
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "--env-file=scratch/lang-zh.env",
         "node_modules/tsx/dist/cli.mjs",
-        "scripts/dev-console.ts"
+        "scripts/dev-webui.ts"
       ],
       "port": 8848,
       "autoPort": true
     },
     {
-      "name": "dev-console-en",
+      "name": "dev-webui-en",
       "runtimeExecutable": "node",
       "runtimeArgs": [
         "--env-file=scratch/lang-en.env",
         "node_modules/tsx/dist/cli.mjs",
-        "scripts/dev-console.ts"
+        "scripts/dev-webui.ts"
       ],
       "port": 8848,
       "autoPort": true

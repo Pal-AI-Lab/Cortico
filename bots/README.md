@@ -17,7 +17,7 @@ Windows 也可通过 `start.bat` 选择部署。
 
 | 路径 | 内容 |
 |---|---|
-| `index.ts` | `BotDefinition`：创建 Persona、声明 World、提供配置默认值和控制台贡献。启动器合并内建与扩展 World，按 `worlds.<id>.enabled` 挂载；控制台支持激活、停用和重启。 |
+| `index.ts` | `BotDefinition`：创建 Persona、声明 World、提供配置默认值和 WebUI 贡献。启动器合并内建与扩展 World，按 `worlds.<id>.enabled` 挂载；WebUI 支持激活、停用和重启。 |
 | `persona/` | Persona 代码与默认模板。 |
 | `vtuber-pack/` | `cortico-world-vtuber` 使用的演出词表、曲线与参数。可通过 `worlds.vtuber.packDir` 指定目录；未提供演出包时使用 World 的示例包。 |
 | `worlds/<id>/ENV_PROMPT.md` | bot 对 World 环境模板的覆盖，整份替换并保留占位符插值；缺失时使用 World 自带模板。 |
@@ -32,7 +32,7 @@ Windows 也可通过 `start.bat` 选择部署。
 | `config.json` | 部署配置，覆盖代码包默认值。 |
 | `.env` | World 密钥。Provider 密钥由端点管理，保存在部署根共享的 `providers/<端点名>/` 中。 |
 | `memory/` 或 `workspace/` | Memory 内容；路径由 Persona 的 `paths.memory` 决定，Git 历史由 Persona 实现提供。 |
-| `worlds/<id>/ENV_PROMPT.md` | 部署对 World 模板的覆盖。控制台保存写此文件；恢复默认会删除此覆盖，重新使用 bot 或 World 模板。 |
+| `worlds/<id>/ENV_PROMPT.md` | 部署对 World 模板的覆盖。WebUI 保存写此文件；恢复默认会删除此覆盖，重新使用 bot 或 World 模板。 |
 | `prompts/` | Persona 模板覆盖，例如 `ORIENTATION.md`。合成首轮从部署的 `FIRST_TURN_{USER,THINKING,REPLY}.md` 读取，作为 session 的合成开头送进请求；开关 `context.firstTurn` 在 Persona 配置组，默认关闭。 |
 | `vtuber-pack/` | 可选的部署演出包。 |
 | `avatar.png`、`voices/` | 头像与参考声线素材。 |
@@ -43,10 +43,10 @@ Windows 也可通过 `start.bat` 选择部署。
 
 ## 内建 bot
 
-| 代码包 id | Persona 类 | 显示名 | 能力 | 默认控制台端口 |
+| 代码包 id | Persona 类 | 显示名 | 能力 | 默认 WebUI 端口 |
 |---|---|---|---|---|
 | `corti-soulmate` | `CortiSoulmate` | 雪午Yukima | 分层 Memory、潜意识三路、QQ 起草与确认、提案和宪法。 | 7777 |
-| `cormini` | `Cormini` | 可缇mini | 工作区 Memory、宪法前缀、主 session 和终端。 | 7788 |
+| `cormini` | `Cormini` | 可缇mini | 工作区 Memory、宪法前缀、主 session 和控制台。 | 7788 |
 | `cortiv` | `CortiV` | 可缇Corti | 继承 Cormini，增加观众档案、交接后台整理，以及直播相关 World。 | 7789 |
 
 ## 新建 bot
@@ -55,4 +55,4 @@ Windows 也可通过 `start.bat` 选择部署。
 `cormini` 复制后修改。变体通过独立类实现，基类不增加用于选择变体的构造开关。
 
 设置 `index.ts` 的 `id` 与 `web.port`，创建部署目录并用 `deployment.json` 引用该包。
-`createBot()` 提供框架控制台页；bot 的 `console` 声明补充其专有功能。
+`createBot()` 提供框架 WebUI 页；bot 的 `webUi()` 声明补充其专有功能。

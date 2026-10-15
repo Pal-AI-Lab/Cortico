@@ -26,7 +26,7 @@ export const S: Partial<typeof en> = {
 
   providerManagement: 'Anbieter-Erweiterungen dienen den Bots, die diese gemeinsame Umgebung nutzen.',
   idleManagement: 'Aktiviere oder deaktiviere Worlds auf der World-Seite. Integrierte Erweiterungen können nicht gelöscht werden.',
-  createBody: 'Öffne auf dem Host ein Terminal im Cortico-Projekt, führe pnpm start --new aus und wähle dann diese Bot-Vorlage, um eine neue Instanz zu erstellen.',
+  createBody: 'Öffne auf dem Host eine Befehlszeile im Cortico-Projekt, führe pnpm start --new aus und wähle dann diese Bot-Vorlage, um eine neue Instanz zu erstellen.',
 
   restartConfirmTitle: 'Prozess neu starten?',
   restartNoLoopTitle: 'Manueller Start erforderlich',
@@ -38,12 +38,12 @@ export const S: Partial<typeof en> = {
   resultDefault: 'Schritte zum Herunterfahren ausgeführt.',
   reloadWait: 'Warte, bis ein neuer Prozess dieses Bots bereit ist…',
   otherBot: 'Ein anderer Bot nutzt diesen Port. Wiederherstellung gestoppt.',
-  restartManual: 'Der Prozess wurde beendet. Starte ihn manuell im Terminal; diese Seite wartet, bis er bereit ist.',
+  restartManual: 'Der Prozess wurde beendet. Starte ihn manuell über die Befehlszeile; diese Seite wartet, bis er bereit ist.',
 
   updateVersions: (current: string, latest: string) => `${current} → ${latest}`,
   updateAction: 'Aktualisieren',
   updateCheckFailed: (detail: string) => `Update-Prüfung fehlgeschlagen: ${detail}`,
-  noteConsoleMissing: 'Browser-Bundle fehlt. Baue im Erweiterungsverzeichnis und starte den Prozess neu.',
+  noteWebUiMissing: 'Browser-Bundle fehlt. Baue im Erweiterungsverzeichnis und starte den Prozess neu.',
   noExtensions: 'Noch keine Erweiterungen installiert',
   listLoadFailed: (msg: string) => `Erweiterungsliste konnte nicht geladen werden: ${msg}`,
 

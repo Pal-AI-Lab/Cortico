@@ -48,7 +48,7 @@ export const S: Partial<typeof en> = {
   statRounds: 'Turni in questo batch',
   statBatches: 'Batch totali',
   statEvents: "Cursore dell'ultimo evento",
-  statOnline: 'Terminale in linea',
+  statOnline: 'Console in linea',
   statRun: 'Esecuzione',
   unitMsgs: 'msg',
   unitPeople: 'utenti',

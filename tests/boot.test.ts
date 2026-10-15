@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import {
   announceDataDir,
   providerAtBoot,
-  consoleUrlOf,
+  webUiUrlOf,
   consumeBootFlags,
   isSupervised,
   READY_MESSAGE,
@@ -95,13 +95,13 @@ describe('startsPaused', () => {
   });
 });
 
-describe('consoleUrlOf', () => {
+describe('webUiUrlOf', () => {
   it('监听所有网卡时给回环地址,具体地址原样,IPv6 加方括号', () => {
-    expect(consoleUrlOf('0.0.0.0', 7777)).toBe('http://127.0.0.1:7777/');
-    expect(consoleUrlOf('::', 7777)).toBe('http://127.0.0.1:7777/');
-    expect(consoleUrlOf('192.168.1.20', 7777)).toBe('http://192.168.1.20:7777/');
-    expect(consoleUrlOf('::1', 7777)).toBe('http://[::1]:7777/');
-    expect(consoleUrlOf(null, 7777)).toBe('http://127.0.0.1:7777/');
+    expect(webUiUrlOf('0.0.0.0', 7777)).toBe('http://127.0.0.1:7777/');
+    expect(webUiUrlOf('::', 7777)).toBe('http://127.0.0.1:7777/');
+    expect(webUiUrlOf('192.168.1.20', 7777)).toBe('http://192.168.1.20:7777/');
+    expect(webUiUrlOf('::1', 7777)).toBe('http://[::1]:7777/');
+    expect(webUiUrlOf(null, 7777)).toBe('http://127.0.0.1:7777/');
   });
 });
 
@@ -109,7 +109,7 @@ describe('启动时的供应商选择', () => {
   const entry = { kind: 'fixture', baseUrl: 'https://example.invalid' };
 
   const providerTables: Record<string, LLMProviderEntry>[] = [{}, { endpoint: entry }];
-  it.each(providerTables)('未选择连接时允许进入控制台，保留已有端点', (providers) => {
+  it.each(providerTables)('未选择连接时允许进入 WebUI，保留已有端点', (providers) => {
     const config = { activeProvider: '', providers };
     expect(providerAtBoot(config)).toBeUndefined();
     expect(config.activeProvider).toBe('');

@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ProviderRegistry } from '../../src/providers/registry.ts';
-import { ProviderSettings } from '../../src/providers/console/settings.ts';
-import { ProviderHub } from '../../src/providers/console/hub.ts';
+import { ProviderSettings } from '../../src/providers/webui/settings.ts';
+import { ProviderHub } from '../../src/providers/webui/hub.ts';
 import { acquireInstanceLock } from '../../src/core/instance-lock.ts';
 import { validateProviderName } from '../../src/providers/name.ts';
 
