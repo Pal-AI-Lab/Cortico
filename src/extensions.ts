@@ -939,7 +939,9 @@ export class ExtensionManager {
   async uninstall(name: string, language: Language = 'zh'): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
     if (!readInstalled(this.dir).some((p) => p.name === name)) throw extensionError((t) => t.notInstalled(name));
-    const output = await this.exclusive(['remove', name, '--ignore-workspace']);
+    // pnpm 11 卸载时也复查锁文件里各包的发布时间(默认 24 小时),查出过新的版本却没接处理,
+    // 报 ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED 中止。卸载不引入新版本，关掉这项检查。
+    const output = await this.exclusive(['remove', name, '--ignore-workspace', '--config.minimum-release-age=0']);
     return `${text(language).uninstalled(name)}\n${output}`;
   }
 

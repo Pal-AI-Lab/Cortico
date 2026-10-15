@@ -81,5 +81,5 @@ undici 的 `cause` 错误码。
 `month` 缺时留搜索端点的月数。
 `packageInfo()` 的 `author` 取 package.json 的 `author`(字符串只取名字,或 `{ name }`);`publisher` 取 `_npmUser.name`。
 `check(target, kind?)` 装前只读 manifest;`install()` / `uninstall()` 经 `corepack pnpm add|remove --ignore-workspace`
-改 `extensions/`。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
+改 `extensions/`,卸载另带 `--config.minimum-release-age=0`。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
 manifest 里声明的那两个文件。

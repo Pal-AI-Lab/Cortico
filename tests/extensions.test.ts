@@ -205,7 +205,7 @@ describe('ExtensionManager', () => {
     await expect(mgr.uninstall('absent')).rejects.toThrow('not installed');
     await expect(mgr.uninstall('bad name')).rejects.toThrow('package name');
     const msg = await mgr.uninstall('present');
-    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace', '--config.minimum-release-age=0'], cwd: join(root, 'extensions') }]);
     expect(msg).toContain('重启');
   });
 
