@@ -74,7 +74,7 @@ provider 模块不预设任何模型名;端点
 为 false 时不补;探测的明文一侧始终补)。签名块要靠
 `include` 取回,所以只有 `encrypted` 形态的请求带 `include: ['reasoning.encrypted_content']`;
 不认 `include` 的端点因此只在这一形态上会拒收整条请求。项的 `id` 是签发它的服务端的资源 id:来源实例、
-模块或兼容域与本次请求不同的 message、function_call、custom_tool_call 及其结果项出线时不带 `id`,
+模块或兼容域与本次请求不同的 message、function_call、function_call_output 出线时不带 `id`,
 `call_id` 照带;同一来源和没有记录来源的项(Core 合成的 `msg_` / `fc_` / `fco_`)保留 `id`。模块的 `detect`
 探测发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种写回 `reasoningReplay`。
 `options.endpointPath`、

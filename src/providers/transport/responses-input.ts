@@ -25,7 +25,7 @@ export type ReasoningReplay = (typeof REASONING_REPLAYS)[number];
 export const SYNTHETIC_REASONING_TEXT = '-';
 
 /** Item types whose `id` is optional on input; the id is the issuing server's resource id. */
-const OPTIONAL_ID_TYPES: ReadonlySet<unknown> = new Set(['message', 'function_call', 'function_call_output', 'custom_tool_call', 'custom_tool_call_output']);
+const OPTIONAL_ID_TYPES: ReadonlySet<unknown> = new Set(['message', 'function_call', 'function_call_output']);
 
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
