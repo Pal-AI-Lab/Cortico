@@ -47,16 +47,16 @@ const message = (error: unknown): string => (error instanceof Error ? error.mess
 function configPathProblems(group: ConfigGroup, prefix: string, defaults?: Record<string, unknown>): string[] {
   if (!isConfigGroup(group)) {
     const fields = isPlainObject(group) ? Object.keys(group).join(', ') : typeof group;
-    return [`有一个配置组缺 id、owner 或 schema.properties(实际字段: ${fields}):WebUI 会跳过它。`];
+    return [`A config group lacks id, owner or schema.properties (fields present: ${fields}); the WebUI skips it.`];
   }
   const problems: string[] = [];
   for (const path of Object.keys(group.schema.properties ?? {})) {
     if (!path.startsWith(prefix)) {
-      problems.push(`配置组「${group.id}」声明的「${path}」不在 ${prefix} 段里:写回按路径走,值会落到别人的段上。`);
+      problems.push(`Config group "${group.id}" declares "${path}" outside the ${prefix} section: writes follow the path, so the value lands in another owner's section.`);
       continue;
     }
     if (defaults && getByPath(defaults, path.slice(prefix.length)) === undefined) {
-      problems.push(`配置组「${group.id}」声明的「${path}」在 defaults() 里没有对应项:旋钮能改、能写回 config.json,读到的仍是代码里的兜底值。`);
+      problems.push(`Config group "${group.id}" declares "${path}" with no matching entry in defaults(): the WebUI can change it and write it to config.json, but the code still reads its fallback value.`);
     }
   }
   return problems;
@@ -108,9 +108,9 @@ export function collectToolNames(
   const skipped: string[] = [];
   for (const def of defs) {
     try {
-      for (const tool of def.create(fakeWorldContext(def, opts)).tools()) taken.set(tool.name, def.label);
+      for (const tool of def.create(fakeWorldContext(def, opts)).tools()) taken.set(tool.name, def.id);
     } catch (error) {
-      skipped.push(`${def.label}: ${message(error)}`);
+      skipped.push(`${def.id}: ${message(error)}`);
     }
   }
   return { taken, skipped };
@@ -131,69 +131,69 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
   try {
     defaults = def.defaults();
   } catch (error) {
-    failures.push(`defaults() 抛错: ${message(error)}`);
+    failures.push(`defaults() threw: ${message(error)}`);
     return report;
   }
   if (!isPlainObject(defaults)) {
-    failures.push('defaults() 没有返回对象:它是 worlds.<id> 段的默认值。');
+    failures.push('defaults() did not return an object: it supplies the defaults of the worlds.<id> section.');
     return report;
   }
   if (defaults.enabled !== false) {
-    warnings.push('defaults().enabled 不是 false:启用与否由 bot 的 declares 与部署决定,定义里恒为 false。');
+    warnings.push("defaults().enabled is not false: the bot's declares and the deployment decide whether a World is enabled, so the definition always sets false.");
   }
-  ok.push('defaults() 返回配置段。');
+  ok.push('defaults() returns a config section.');
 
   let world: World;
   try {
     world = def.create(fakeWorldContext(def, opts));
   } catch (error) {
-    failures.push(`create() 在默认配置、无密钥下抛错: ${message(error)}。装配层会构造所有可用定义，默认配置下也必须能完成构造。`);
+    failures.push(`create() threw with default config and no secrets: ${message(error)}. The assembly layer constructs every available definition, so create() must succeed with default config.`);
     return report;
   }
   if (world.id !== def.id) {
-    failures.push(`实例的 id「${world.id}」与定义的 id「${def.id}」不同:装配层按定义找槽位,Core 按实例归属工具与事件,两边会对不上。`);
+    failures.push(`Instance id "${world.id}" differs from definition id "${def.id}": the assembly layer finds the slot by the definition id and Core attributes tools and events by the instance id, so the two will not match.`);
   } else {
-    ok.push(`create() 返回 World 实例,id = ${world.id}。`);
+    ok.push(`create() returns a World instance, id = ${world.id}.`);
   }
 
   let tools: ReturnType<World['tools']>;
   try {
     tools = world.tools();
   } catch (error) {
-    failures.push(`tools() 抛错: ${message(error)}`);
+    failures.push(`tools() threw: ${message(error)}`);
     return report;
   }
   if (!Array.isArray(tools)) {
-    failures.push('tools() 没有返回数组。');
+    failures.push('tools() did not return an array.');
     return report;
   }
   const seen = new Set<string>();
   for (const tool of tools) {
     const name = tool?.name;
     if (typeof name !== 'string' || name === '') {
-      failures.push('有一个工具没有 name。');
+      failures.push('A tool has no name.');
       continue;
     }
-    if (seen.has(name)) failures.push(`工具名重复: ${name}。`);
+    if (seen.has(name)) failures.push(`Duplicate tool name: ${name}.`);
     seen.add(name);
-    if (RESERVED_FRAME_NAMES.has(name)) failures.push(`工具名「${name}」是 Core 的保留帧名,装配层拒绝挂载。`);
+    if (RESERVED_FRAME_NAMES.has(name)) failures.push(`Tool name "${name}" is a Core reserved frame name; the assembly layer refuses to mount it.`);
     const owner = opts.takenToolNames?.get(name);
-    if (owner) failures.push(`工具名「${name}」与 ${owner} 撞名,装配层拒绝挂载。`);
-    if (!isPlainObject(tool.parameters)) failures.push(`工具「${name}」的 parameters 不是对象:它是发给模型的 JSON Schema。`);
-    if (typeof tool.handler !== 'function') failures.push(`工具「${name}」没有 handler。`);
-    if (!Array.isArray(tool.tags)) failures.push(`工具「${name}」没有 tags 数组:空数组表示明确不分类,缺席不行。`);
-    else if (tool.tags.length === 0) warnings.push(`工具「${name}」的 tags 为空，按标签选择工具时不会匹配；挂载时记录警告。`);
-    if (!TOOL_PREFIX.test(name)) warnings.push(`工具名「${name}」没有前缀:惯例是 <短名>_<动词短语>,工具名在整个 bot 里唯一。`);
+    if (owner) failures.push(`Tool name "${name}" is already used by World "${owner}"; the assembly layer refuses to mount it.`);
+    if (!isPlainObject(tool.parameters)) failures.push(`Tool "${name}" parameters is not an object: it is the JSON Schema sent to the model.`);
+    if (typeof tool.handler !== 'function') failures.push(`Tool "${name}" has no handler.`);
+    if (!Array.isArray(tool.tags)) failures.push(`Tool "${name}" has no tags array: an empty array means deliberately untagged, and the field is required.`);
+    else if (tool.tags.length === 0) warnings.push(`Tool "${name}" has empty tags: tag-based tool selection never matches it, and mounting logs a warning.`);
+    if (!TOOL_PREFIX.test(name)) warnings.push(`Tool name "${name}" has no prefix: the convention is <short id>_<verb phrase>, and tool names are unique across the whole bot.`);
   }
-  if (!failures.length) ok.push(tools.length ? `tools(): ${tools.map((t) => t.name).join(', ')}` : 'tools(): 没有工具。');
+  if (!failures.length) ok.push(tools.length ? `tools(): ${tools.map((t) => t.name).join(', ')}` : 'tools(): no tools.');
 
   try {
     const vars = await world.envPromptVars();
-    if (vars === null) ok.push('envPromptVars() 返回 null:这个 World 的段不进前缀。');
-    else if (isPlainObject(vars)) ok.push(`envPromptVars(): ${Object.keys(vars).length} 个占位符值。`);
-    else failures.push('envPromptVars() 要返回对象或 null。');
+    if (vars === null) ok.push('envPromptVars() returns null: this World adds no section to the prefix.');
+    else if (isPlainObject(vars)) ok.push(`envPromptVars(): placeholder values: ${Object.keys(vars).length}.`);
+    else failures.push('envPromptVars() must return an object or null.');
   } catch (error) {
-    failures.push(`envPromptVars() 抛错: ${message(error)}`);
+    failures.push(`envPromptVars() threw: ${message(error)}`);
   }
 
   if (typeof world.webUi === 'function') {
@@ -202,34 +202,34 @@ export async function dryMountWorld(def: WorldDefinition<WorldSection>, opts: Wo
       const panels = decl.panels ?? [];
       const panelIds = new Set<string>();
       for (const panel of panels) {
-        if (!PANEL_ID.test(panel.id)) failures.push(`面板 id「${panel.id}」不合形状:WebUI 一页内的局部 id,只用 [a-z0-9-]。`);
-        if (panelIds.has(panel.id)) failures.push(`面板 id 重复: ${panel.id}。`);
+        if (!PANEL_ID.test(panel.id)) failures.push(`Panel id "${panel.id}" is malformed: it is local to one WebUI page and uses only [a-z0-9-].`);
+        if (panelIds.has(panel.id)) failures.push(`Duplicate panel id: ${panel.id}.`);
         panelIds.add(panel.id);
       }
       if (panels.length && !opts.hasWebUiClient) {
-        warnings.push(`webUi() 声明了 ${panels.length} 个面板，未声明 cortico.webUiClient；使用自定义面板时需提供浏览器产物。`);
+        warnings.push(`webUi() declares panels (${panels.length}) but the manifest has no cortico.webUiClient; custom panels need a browser bundle.`);
       }
       if ((decl.lamps?.length ?? 0) > MODULE_LAMP_MAX) {
-        warnings.push(`webUi().lamps 有 ${decl.lamps?.length} 颗,WebUI 最多画 ${MODULE_LAMP_MAX} 颗。`);
+        warnings.push(`webUi().lamps has length ${decl.lamps?.length}; the WebUI draws at most ${MODULE_LAMP_MAX} lamps.`);
       }
       for (const group of decl.config ?? []) {
-        if (group.owner !== `world:${def.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,World 的配置组 owner 应为 world:${def.id}。`);
+        if (group.owner !== `world:${def.id}`) warnings.push(`Config group "${group.id}" has owner "${group.owner}"; a World's config group owner must be world:${def.id}.`);
         failures.push(...configPathProblems(group, `worlds.${def.id}.`, defaults));
       }
       const keys = new Set<string>();
       for (const doc of decl.promptDocs ?? []) {
-        if (keys.has(doc.key)) failures.push(`promptDocs key 重复: ${doc.key}。`);
+        if (keys.has(doc.key)) failures.push(`Duplicate promptDocs key: ${doc.key}.`);
         keys.add(doc.key);
         if (doc.role === 'envPrompt' && !existsSync(doc.path)) {
-          warnings.push(`环境提示词模板 ${doc.path} 不在:这个 World 的段会是空的。`);
+          warnings.push(`Env prompt template ${doc.path} does not exist: this World's section will be empty.`);
         }
       }
-      ok.push(`webUi(): ${panels.length} 个面板,${decl.config?.length ?? 0} 个配置组,${decl.promptDocs?.length ?? 0} 份提示词文档。`);
+      ok.push(`webUi(): panels: ${panels.length}, config groups: ${decl.config?.length ?? 0}, prompt docs: ${decl.promptDocs?.length ?? 0}.`);
     } catch (error) {
-      failures.push(`webUi() 抛错: ${message(error)}`);
+      failures.push(`webUi() threw: ${message(error)}`);
     }
   } else {
-    ok.push('没有 webUi():WebUI 按通用信息显示。');
+    ok.push('No webUi(): the WebUI shows the generic page.');
   }
   return report;
 }
@@ -249,19 +249,19 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
   for (const [field, tiers] of [['reasoningTiers', mod.reasoningTiers], ['serviceTiers', mod.serviceTiers]] as const) {
     for (const tier of tiers) {
       if (typeof tier?.id !== 'string' || typeof tier.label !== 'string') {
-        failures.push(`${field} 里有一项缺 id 或 label。`);
+        failures.push(`An entry in ${field} lacks id or label.`);
         break;
       }
     }
   }
-  if (!failures.length) ok.push(`档位表: ${mod.reasoningTiers.length} 档推理(空表 = 开放),${mod.serviceTiers.length} 档服务。`);
+  if (!failures.length) ok.push(`Tiers: reasoning: ${mod.reasoningTiers.length} (empty = open), service: ${mod.serviceTiers.length}.`);
 
   const raw = { kind: mod.id, baseUrl: mod.defaultBaseUrl ?? mod.baseUrlSuggestions?.[0] ?? 'http://127.0.0.1:0' };
   let entry = raw;
   try {
     entry = mod.normalize?.(structuredClone(raw)) ?? raw;
   } catch (error) {
-    failures.push(`normalize() 抛错: ${message(error)}`);
+    failures.push(`normalize() threw: ${message(error)}`);
     return report;
   }
 
@@ -284,38 +284,38 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
   try {
     const instance = mod.create(PROBE_ENDPOINT, entry, host);
     if (typeof instance?.client?.respond !== 'function') {
-      failures.push('create() 返回的实例没有 client.respond():Core 只经它调模型。');
+      failures.push('The instance returned by create() has no client.respond(): Core calls the model only through it.');
     } else {
-      ok.push('create() 返回实例,client.respond() 在。');
+      ok.push('create() returns an instance with client.respond().');
     }
   } catch (error) {
-    warnings.push(`create() 在假端点条目(只有 kind 与 baseUrl)下抛错: ${message(error)}。真实端点条目可能不同,这一项不算失败。`);
+    warnings.push(`create() threw with a fake endpoint entry (only kind and baseUrl): ${message(error)}. A real endpoint entry may differ, so this is not a failure.`);
   }
 
   if (mod.config) {
     try {
       const groups = mod.config(PROBE_ENDPOINT, entry, language);
-      if (!Array.isArray(groups)) failures.push('config() 没有返回数组。');
+      if (!Array.isArray(groups)) failures.push('config() did not return an array.');
       else {
         for (const group of groups) {
-          if (group.owner !== `provider:${mod.id}`) warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,provider 的配置组 owner 应为 provider:${mod.id}。`);
+          if (group.owner !== `provider:${mod.id}`) warnings.push(`Config group "${group.id}" has owner "${group.owner}"; a provider's config group owner must be provider:${mod.id}.`);
           // 写回的三道闸都只按 `providers.<端点名>.` 过滤:段外的路径改不动,段内 options 之外的
           // 路径覆盖框架自己编辑的字段(baseUrl、secret、multimodal、spec)。两类都拦在这里。
           failures.push(...configPathProblems(group, `providers.${PROBE_ENDPOINT}.options.`));
         }
-        ok.push(`config(): ${groups.length} 个配置组。`);
+        ok.push(`config(): config groups: ${groups.length}.`);
       }
     } catch (error) {
-      failures.push(`config() 抛错: ${message(error)}`);
+      failures.push(`config() threw: ${message(error)}`);
     }
   }
 
   if (mod.localize) {
     try {
       mod.localize(language);
-      ok.push("localize() 调用成功。");
+      ok.push('localize() returned without error.');
     } catch (error) {
-      failures.push(`localize() 抛错: ${message(error)}`);
+      failures.push(`localize() threw: ${message(error)}`);
     }
   }
 
@@ -324,19 +324,19 @@ export function dryMountProvider(mod: ProviderModule, opts: ProviderDryMountOpti
       const contribution = mod.webUi({
         language,
         entries: () => [],
-        instance: () => { throw new Error("构造检查不提供实际端点实例"); },
+        instance: () => { throw new Error('The construction check has no real endpoint instance'); },
         save: () => {},
       });
       const panels = contribution.panels ?? [];
       for (const panel of panels) {
-        if (!PANEL_ID.test(panel.id)) failures.push(`面板 id「${panel.id}」不合形状:只用 [a-z0-9-]。`);
+        if (!PANEL_ID.test(panel.id)) failures.push(`Panel id "${panel.id}" is malformed: use only [a-z0-9-].`);
       }
       if (panels.length && !opts.hasWebUiClient) {
-        warnings.push(`webUi() 声明了 ${panels.length} 个面板，未声明 cortico.webUiClient；使用自定义面板时需提供浏览器产物。`);
+        warnings.push(`webUi() declares panels (${panels.length}) but the manifest has no cortico.webUiClient; custom panels need a browser bundle.`);
       }
-      ok.push(`webUi(): ${panels.length} 个面板。`);
+      ok.push(`webUi(): panels: ${panels.length}.`);
     } catch (error) {
-      failures.push(`webUi() 抛错: ${message(error)}`);
+      failures.push(`webUi() threw: ${message(error)}`);
     }
   }
   return report;
@@ -354,19 +354,19 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   try {
     config = def.defaults();
   } catch (error) {
-    failures.push(`defaults() 抛错: ${message(error)}`);
+    failures.push(`defaults() threw: ${message(error)}`);
     return report;
   }
   if (!isPlainObject(config)) {
-    failures.push("defaults() 必须返回配置对象。");
+    failures.push('defaults() must return a config object.');
     return report;
   }
   (config as { worlds?: unknown }).worlds ??= {};
-  ok.push('defaults() 返回对象。');
+  ok.push('defaults() returns an object.');
 
   for (const decl of def.declares ?? []) {
     const shaped = typeof decl === 'string' ? decl !== '' : isPlainObject(decl) && typeof decl.id === 'string' && typeof decl.label === 'string';
-    if (!shaped) failures.push(`declares 里有一项不合形状: ${JSON.stringify(decl)}(World id 字符串,或 { id, label, reason? })。`);
+    if (!shaped) failures.push(`An entry in declares is malformed: ${JSON.stringify(decl)} (expected a World id string or { id, label, reason? }).`);
   }
   if (def.declares?.length) ok.push(`declares: ${def.declares.map((d) => (typeof d === 'string' ? d : d.id)).join(', ')}`);
 
@@ -385,37 +385,37 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   try {
     parts = def.build(loaded, []);
   } catch (error) {
-    failures.push(`build() 在假部署(默认配置、空 Memory、无密钥)下抛错: ${message(error)}。build() 必须能在该配置下完成构造。`);
+    failures.push(`build() threw in the fake deployment (default config, empty Memory, no secrets): ${message(error)}. build() must succeed with this config.`);
     return report;
   }
   const persona = parts?.persona as unknown;
   if (!isPlainObject(persona)) {
-    failures.push('build() 没有返回 persona。');
+    failures.push('build() did not return a persona.');
     return report;
   }
   for (const method of ['systemSegments', 'attach', 'declareSessions'] as const) {
-    if (typeof persona[method] !== 'function') failures.push(`persona 缺 ${method}():Persona 契约的必填项。`);
+    if (typeof persona[method] !== 'function') failures.push(`persona lacks ${method}(), which the Persona contract requires.`);
   }
-  if (typeof persona.memoryDir !== 'string') failures.push('persona.memoryDir 不是字符串:Memory 目录的绝对路径。');
+  if (typeof persona.memoryDir !== 'string') failures.push('persona.memoryDir is not a string: it must be the absolute path of the Memory directory.');
   const blobs = persona.blobs as Record<string, unknown> | undefined;
   if (!isPlainObject(blobs) || ['put', 'get', 'list'].some((m) => typeof blobs[m] !== 'function')) {
-    failures.push('persona.blobs 不是 BlobStore(put / get / list):mem: 句柄没有后端。');
+    failures.push('persona.blobs is not a BlobStore (put / get / list): mem: handles have no backend.');
   }
-  if (!failures.length) ok.push('build() 返回 Persona,契约必填项都在。');
+  if (!failures.length) ok.push('build() returns a Persona with every member the contract requires.');
   if (typeof def.memoryName !== 'string' || def.memoryName === '') {
-    warnings.push('BotDefinition 没有 memoryName:Memory 页标题回落到 persona.memory 的类名,再缺省是「Memory」。');
+    warnings.push('BotDefinition has no memoryName: the Memory page title falls back to the class name of persona.memory, then to "Memory".');
   }
 
   const prebuilt = parts.worlds ?? [];
   const ids = new Set<string>();
   for (const world of prebuilt) {
-    if (ids.has(world.id)) failures.push(`预建 World id 重复: ${world.id}。`);
+    if (ids.has(world.id)) failures.push(`Duplicate prebuilt World id: ${world.id}.`);
     ids.add(world.id);
   }
-  if (prebuilt.length) ok.push(`预建 World: ${[...ids].join(', ')}（预建实例重启时复用原对象）。`);
+  if (prebuilt.length) ok.push(`Prebuilt Worlds: ${[...ids].join(', ')} (a restart reuses these instances).`);
 
   for (const group of parts.webUi?.configGroups ?? []) {
-    if (group.owner !== 'persona') warnings.push(`配置组「${group.id}」的 owner 是「${group.owner}」,Persona 的配置组 owner 应为 persona。`);
+    if (group.owner !== 'persona') warnings.push(`Config group "${group.id}" has owner "${group.owner}"; a Persona's config group owner must be persona.`);
     failures.push(...configPathProblems(group, '', config));
   }
   return report;

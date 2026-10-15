@@ -67,7 +67,7 @@ describe("World 构造检查", () => {
 
   it('实例 id 与定义 id 不同是失败', async () => {
     const report = await dryMountWorld(worldDef('alpha', [], { id: 'beta' }), { scratchDir });
-    expect(report.failures.join('\n')).toContain('「beta」');
+    expect(report.failures.join('\n')).toContain('"beta"');
   });
 
   it('保留帧名、撞名、重名都是失败,理由点名占用者', async () => {
@@ -78,16 +78,16 @@ describe("World 构造检查", () => {
       takenToolNames: new Map([['web_search', 'WebSearch']]),
     });
     const text = report.failures.join('\n');
-    expect(text).toContain(`「${reserved}」`);
+    expect(text).toContain(`"${reserved}"`);
     expect(text).toContain('WebSearch');
-    expect(text).toContain('重复: alpha_x');
+    expect(text).toContain('Duplicate tool name: alpha_x');
   });
 
   it('空 tags 与没有前缀只是警告', async () => {
     const report = await dryMountWorld(worldDef('alpha', [tool('ping', { tags: [] })]), { scratchDir });
     expect(report.failures).toEqual([]);
-    expect(report.warnings.join('\n')).toContain('tags 为空');
-    expect(report.warnings.join('\n')).toContain('没有前缀');
+    expect(report.warnings.join('\n')).toContain('has empty tags');
+    expect(report.warnings.join('\n')).toContain('has no prefix');
   });
 
   it('声明了面板但 manifest 没有浏览器端产物是警告;有产物就不警告', async () => {
@@ -101,7 +101,7 @@ describe("World 构造检查", () => {
   it('面板 id 不合形状是失败', async () => {
     const def = worldDef('alpha', [], { webUi: () => ({ panels: [{ id: 'Main Panel', title: '主' }] }) });
     const report = await dryMountWorld(def, { scratchDir, hasWebUiClient: true });
-    expect(report.failures.join('\n')).toContain('「Main Panel」');
+    expect(report.failures.join('\n')).toContain('"Main Panel"');
   });
 
   it('defaults().enabled 不是 false 是警告', async () => {
@@ -131,7 +131,7 @@ describe("World 构造检查", () => {
       schema: { type: 'object', title: 'alpha', properties: { 'batching.quietGapMs': { type: 'integer', title: '安静窗口' } } },
     };
     const report = await dryMountWorld(worldDef('alpha', [], { webUi: () => ({ config: [group] }) }), { scratchDir });
-    expect(report.failures.join('\n')).toContain('worlds.alpha. 段');
+    expect(report.failures.join('\n')).toContain('outside the worlds.alpha. section');
   });
 
   it('内建 World 声明的每个配置路径都在自己的 defaults() 里', async () => {
@@ -144,7 +144,7 @@ describe("World 构造检查", () => {
   it('内建 World 全部在假环境下构造得出来,工具名可供对照', () => {
     const { taken, skipped } = collectToolNames(builtinWorlds, { scratchDir });
     expect(skipped).toEqual([]);
-    expect(taken.get('web_search')).toBe('WebSearch');
+    expect(taken.get('web_search')).toBe('websearch');
   });
 });
 

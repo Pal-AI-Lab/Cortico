@@ -42,38 +42,38 @@ const fail = (msg: string): void => { failures += 1; console.log(`  ✗ ${msg}`)
 function verdict(): void {
   console.log('');
   if (failures === 0) {
-    console.log('扩展检查通过。');
+    console.log('Extension check passed.');
     return;
   }
-  console.log(`${failures} 项检查失败。`);
+  console.log(`Failed checks: ${failures}.`);
   process.exitCode = 1;
 }
 
 async function main(): Promise<void> {
   const arg = process.argv[2];
   if (!arg) {
-    console.error('用法: pnpm check:extension <扩展目录>');
+    console.error('Usage: pnpm check:extension <extension package directory>');
     process.exitCode = 1;
     return;
   }
   const pkgDir = resolve(process.cwd(), arg);
   const pkgFile = join(pkgDir, 'package.json');
   if (!existsSync(pkgFile)) {
-    console.error(`${pkgFile} 不存在:参数要指向扩展包的根目录(含 package.json 的那一层)。`);
+    console.error(`${pkgFile} does not exist: the argument must be the extension package root, the directory that holds package.json.`);
     process.exitCode = 1;
     return;
   }
   const pkg = JSON.parse(readFileSync(pkgFile, 'utf8')) as ExtensionPackageJson;
 
-  console.log(`扩展目录: ${pkgDir}`);
-  console.log(`包:       ${pkg.name ?? '(package.json 没有 name)'}@${pkg.version ?? '(没有 version)'}`);
-  console.log(`框架契约: ${EXTENSION_KINDS.map((kind) => `${kind} v${EXTENSION_API_VERSIONS[kind]}`).join(' / ')}`);
+  console.log(`Directory: ${pkgDir}`);
+  console.log(`Package:   ${pkg.name ?? '(package.json has no name)'}@${pkg.version ?? '(no version)'}`);
+  console.log(`Contracts: ${EXTENSION_KINDS.map((kind) => `${kind} v${EXTENSION_API_VERSIONS[kind]}`).join(' / ')}`);
   console.log('');
 
-  if (!pkg.name) fail('package.json 缺少 name:pnpm 装不了没有名字的包。');
-  if (!pkg.version) fail('package.json 缺少 version:浏览器端产物的 URL 按版本分段,没有版本换不掉旧缓存。');
+  if (!pkg.name) fail('package.json has no name: pnpm cannot install a package without one.');
+  if (!pkg.version) fail('package.json has no version: browser bundle URLs contain the version, so without one browsers keep serving the old cached bundle.');
 
-  const parsed = parseExtensionManifest(pkg);
+  const parsed = parseExtensionManifest(pkg, 'en');
   for (const w of parsed.warnings) warn(w);
   if (!parsed.ok) {
     for (const reason of parsed.reasons) fail(reason);
@@ -81,15 +81,15 @@ async function main(): Promise<void> {
     return;
   }
   const manifest = parsed.manifest;
-  ok(`manifest: kind=${manifest.kind},api=${manifest.api}`);
+  ok(`manifest: kind=${manifest.kind}, api=${manifest.api}`);
 
   const entry = resolveExtensionEntry(pkgDir, pkg);
   if (!existsSync(entry)) {
-    fail(`入口 ${entry} 不存在:exports / module / main 指向的文件要随包发布(检查 files 与 .npmignore)。`);
+    fail(`Entry ${entry} does not exist: the file that exports / module / main points to must ship in the package (check files and .npmignore).`);
     verdict();
     return;
   }
-  ok(`入口: ${entry}`);
+  ok(`Entry: ${entry}`);
 
   // 扩展 import `cortico/*` 靠这个钩子;装载器在 import 前也是先注册它。
   registerFrameworkResolver();
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
   try {
     exported = ((await import(pathToFileURL(entry).href)) as { default?: unknown }).default;
   } catch (error) {
-    fail(`import 入口时抛错: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+    fail(`Importing the entry threw: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
     verdict();
     return;
   }
@@ -106,42 +106,42 @@ async function main(): Promise<void> {
     : manifest.kind === 'provider' ? isProviderModule(exported)
     : isBotDefinition(exported);
   if (!shaped) {
-    fail(`${extensionShapeMismatch(manifest.kind)}扩展无法加载。`);
+    fail(`${extensionShapeMismatch(manifest.kind, 'en')} The extension cannot load.`);
     verdict();
     return;
   }
   const noun = { world: 'World', provider: 'provider', bot: 'bot' }[manifest.kind];
   const id = (exported as { id: string }).id;
-  ok(`默认导出符合 ${manifest.kind} 的形状;id = ${id}`);
+  ok(`Default export has the ${manifest.kind} shape; id = ${id}`);
   if (manifest.kind === 'bot') {
-    console.log('    bot id 不得与仓内 bots/ 下任一目录同名;deployment.json 的 bot 字段填包名即启用。');
-    console.log('    包目录只读:promptDocs 里没给 deploymentPath 的模板在 WebUI 里显示但不能保存。');
+    console.log('    The bot id must not match a directory under bots/ in the repository. To use the bot, set the bot field of deployment.json to the package name.');
+    console.log('    The package directory is read-only: a promptDocs template without deploymentPath shows in the WebUI but cannot be saved.');
   } else {
-    console.log(`    ${noun} id 在整份部署里唯一,与内建的或别的扩展同名时无法加载。`);
+    console.log(`    The ${noun} id must be unique in the deployment; an id that matches a built-in or another extension does not load.`);
     const builtin = manifest.kind === 'world' ? builtinWorlds.map((w) => w.id) : providerModules.map((p) => p.id);
-    if (builtin.includes(id)) fail(`${noun} id「${id}」与内建的撞名,装载器拒绝加载。`);
+    if (builtin.includes(id)) fail(`${noun} id "${id}" matches a built-in ${noun}; the loader refuses to load it.`);
   }
 
   if (manifest.webUiClient === undefined) {
-    ok('没有声明浏览器端产物(cortico.webUiClient),WebUI 按框架给的通用面板显示。');
+    ok('No browser bundle declared (cortico.webUiClient); the WebUI shows the generic panel.');
   } else {
     const js = extensionPackageFile(pkgDir, manifest.webUiClient);
     if (!js) {
-      fail(`cortico.webUiClient 指的 ${manifest.webUiClient} 不在包里:先 build,再确认它落在 files / .npmignore 允许的范围内。${noun}本体照常加载,只是 WebUI 没有这一块面板。`);
+      fail(`cortico.webUiClient points to ${manifest.webUiClient}, which is not in the package: build it, then check that files / .npmignore include it. The ${noun} still loads, without this WebUI panel.`);
     } else {
-      ok(`浏览器端产物: ${manifest.webUiClient}`);
-      console.log(`    WebUI 页 id: ${pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id)}`);
-      console.log(`    发布后的 URL: ${extensionAssetUrl(pkg.name ?? '', pkg.version ?? '0', basename(manifest.webUiClient))}`);
+      ok(`Browser bundle: ${manifest.webUiClient}`);
+      console.log(`    WebUI page id: ${pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id)}`);
+      console.log(`    Published URL: ${extensionAssetUrl(pkg.name ?? '', pkg.version ?? '0', basename(manifest.webUiClient))}`);
     }
     if (manifest.webUiStyle !== undefined) {
-      if (extensionPackageFile(pkgDir, manifest.webUiStyle)) ok(`浏览器端样式: ${manifest.webUiStyle}`);
-      else warn(`cortico.webUiStyle 指的 ${manifest.webUiStyle} 不在包里:面板按无样式发。`);
+      if (extensionPackageFile(pkgDir, manifest.webUiStyle)) ok(`Browser style: ${manifest.webUiStyle}`);
+      else warn(`cortico.webUiStyle points to ${manifest.webUiStyle}, which is not in the package: the panel is served without styles.`);
     }
   }
 
   // 使用临时部署检查构造与声明,不调用 start()。
   console.log('');
-  console.log('构造检查(临时部署、默认配置、无密钥,不调用 start):');
+  console.log('Construction check (temporary deployment, default config, no secrets, start() not called):');
   const scratchDir = mkdtempSync(join(tmpdir(), 'cortico-check-'));
   try {
     const dryOpts = {
@@ -149,11 +149,12 @@ async function main(): Promise<void> {
       packageDir: pkgDir,
       repoRoot: resolve(import.meta.dirname, '..'),
       hasWebUiClient: manifest.webUiClient !== undefined,
+      language: 'en' as const,
     };
     let report: DryMountReport;
     if (manifest.kind === 'world') {
       const { taken, skipped } = collectToolNames(builtinWorlds, dryOpts);
-      for (const s of skipped) warn(`内建 World 构造失败,无法将其工具纳入重名检查: ${s}`);
+      for (const s of skipped) warn(`A built-in World failed to construct, so the name collision check does not cover its tools: ${s}`);
       report = await dryMountWorld(exported as WorldDefinition<WorldSection>, { ...dryOpts, takenToolNames: taken });
     } else if (manifest.kind === 'provider') {
       report = dryMountProvider(exported as ProviderModule, dryOpts);
