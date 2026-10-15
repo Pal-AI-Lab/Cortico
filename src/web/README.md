@@ -41,6 +41,7 @@ manifest 的 `WEBUI_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 | `/api/extensions/package` | 指定包版本的详情;作者 `author` 与 npm 发布者 `publisher` 分开给出,带 `os`,每个历史版本带不兼容原因 `problems`。 |
 | `/api/extensions/icon` | 已装包声明的图标文件;没有时 404。SVG 带禁脚本的 CSP。 |
 | `/api/extensions/check` | 安装前只读 manifest 的检查;`kind` 给了就要求类别一致。 |
+| `/api/extensions/github`、`…/github/login`、`…/github/logout`、`/api/extensions/vote`、`/api/extensions/comments` | 扩展市场的 GitHub 账号、投票与评论;没登录 428,包没有讨论帖 409(见 [docs/extensions.md](../../docs/extensions.md))。 |
 | `/api/run/lifecycle` | 本进程的 bootId、部署摘要与是否就绪;WebUI 据此认出重启后的新进程。 |
 | `/api/webui/providers/<page>/panels/<panel>/<method>` | 面板调用；GET 只对面板 `getMethods` 点名的方法开放，参数使用 query 中的 JSON 数组；POST JSON 上限为 64 MiB。 |
 | `/ws/providers/<page>/panels/<panel>` | 面板流。 |

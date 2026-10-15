@@ -187,11 +187,13 @@ export interface ExtensionInfo {
   hidden?: boolean;
   /** 包声明了合格的图标,`GET /api/extensions/icon?name=<包名>` 提供它 */
   icon?: boolean;
+  /** 官方索引拉黑了这个包时是原因,按请求语言 */
+  blocked?: string;
 }
 
 /**
- * 搜索结果里的一条。字段全部来自 registry 的搜索端点，够列表排序与筛选;
- * 契约版本、体积、版本史这些要另取包文档，见 `ExtensionPackageDetail`。
+ * 搜索结果里的一条。`tags` 起的字段来自官方索引(见 `WebAppMarketDeps`),索引读不到时缺席;
+ * 其余来自 registry 的搜索端点。契约版本、体积、版本史这些要另取包文档，见 `ExtensionPackageDetail`。
  */
 export interface ExtensionSearchHit {
   name: string;
@@ -200,6 +202,8 @@ export interface ExtensionSearchHit {
   /** 这个版本的发布时间 */
   date?: string;
   publisher?: string;
+  /** npm 维护者账号 */
+  maintainers?: string[];
   license?: string;
   keywords?: string[];
   /**
@@ -213,6 +217,82 @@ export interface ExtensionSearchHit {
   installed: boolean;
   /** 按哪一类关键字搜到的(`cortico-world` → world,`cortico-provider` → provider,`cortico-bot` → bot) */
   kind?: 'world' | 'provider' | 'bot';
+  /** 标签 id:作者声明的、keywords 里的普通标签、粘住的警示标签与官方加的,减去官方删的 */
+  tags?: string[];
+  /** 官方对这个包的说明,按请求语言 */
+  note?: string;
+  certified?: boolean;
+  /** npm 维护者里有官方账号,且 repository 在官方的 GitHub 账号下 */
+  official?: boolean;
+  /** 首次发布在索引的 `newDays` 天之内 */
+  isNew?: boolean;
+  /** 取代这个包的新包名 */
+  supersededBy?: string;
+  rating?: ExtensionRating;
+}
+
+/** 官方索引词表里的一个标签,名称与悬停说明按请求语言;没有 `style` 的是普通标签。 */
+export interface MarketTag {
+  label: string;
+  hint: string;
+  style?: 'official' | 'notice' | 'warning';
+}
+
+/** 搜索回应里的官方索引;读不到时 `tags` 为空,`error` 是原因。 */
+export interface MarketIndex {
+  /** 按词表顺序 */
+  tags: Record<string, MarketTag>;
+  /** 「新品」算首次发布后多少天 */
+  newDays?: number;
+  error?: string;
+}
+
+/** 包在索引仓讨论区那一帖:首楼的喜欢、不喜欢与评论数(含回复)。 */
+export interface ExtensionRating {
+  up: number;
+  down: number;
+  comments: number;
+  /** 讨论帖网址 */
+  discussion?: string;
+  /** 本机登录的 GitHub 账号投的票 */
+  mine?: 'up' | 'down';
+}
+
+/** 讨论帖里的一条评论;`id` 是 GitHub 的节点 id,`body` 是 Markdown。 */
+export interface ExtensionComment {
+  id: string;
+  author: string;
+  avatar?: string;
+  body: string;
+  createdAt: string;
+  /** 对这条评论的回复,只有一层,旧的在前 */
+  replies?: ExtensionComment[];
+}
+
+/** 一页评论,新的在前;`next` 是下一页的 cursor,缺席就是到底了。 */
+export interface ExtensionCommentPage {
+  comments: ExtensionComment[];
+  /** 顶层评论数 */
+  total: number;
+  next?: string;
+  /** 讨论帖网址;包还没有讨论帖时缺席 */
+  discussion?: string;
+}
+
+/** 本机登录的 GitHub 账号;没登录时 `login` 缺席。 */
+export interface GithubAccount {
+  login?: string;
+  avatar?: string;
+}
+
+/** 设备码登录:用户在 `verificationUri` 输入 `userCode`。 */
+export interface GithubDeviceCode {
+  userCode: string;
+  verificationUri: string;
+  /** 秒 */
+  expiresIn: number;
+  /** 秒;查 `GET /api/extensions/github` 的间隔 */
+  interval: number;
 }
 
 export interface ExtensionUpdateResult {
@@ -296,6 +376,26 @@ export interface WebAppExtensionDeps {
   /** 返回一句结果描述(含 pnpm 输出尾部) */
   install(target: ExtensionInstallTarget, language: Language): Promise<string>;
   uninstall(name: string, language: Language): Promise<string>;
+}
+
+/**
+ * 扩展市场:官方索引仓的标签、徽标、拉黑与讨论区,实现在 `src/extensions/market.ts`。
+ * 要账号的操作没登录时抛 428、包还没有讨论帖时抛 409 的 LocalizedError。
+ */
+export interface WebAppMarketDeps {
+  /** 索引合进搜索结果并滤掉拉黑的包;索引读不到时结果原样返回,原因在 `index.error`。 */
+  merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }>;
+  /** 已装包被拉黑时的原因 */
+  blocked(name: string, language: Language): string | undefined;
+  account(): GithubAccount;
+  /** 申请设备码,服务端在后台等授权,登上后 `account()` 有账号。 */
+  login(): Promise<GithubDeviceCode>;
+  logout(): void;
+  /** `null` 撤回本账号的票 */
+  vote(name: string, vote: 'up' | 'down' | null): Promise<ExtensionRating>;
+  comments(name: string, cursor: string | undefined): Promise<ExtensionCommentPage>;
+  /** `replyTo` 是顶层评论的 id */
+  comment(name: string, body: string, replyTo: string | undefined): Promise<ExtensionComment>;
 }
 
 /** 规范关机 / 重启的账:本地步骤与外部状态分开记。 */
@@ -552,6 +652,8 @@ export interface WebUiSurface {
   };
   /** 扩展装卸(可选;不挂载时 /api/extensions* 503)。 */
   extensions?: WebAppExtensionDeps;
+  /** 扩展市场(可选;不挂载时搜索结果不带官方索引,账号、投票与评论接口 503)。 */
+  market?: WebAppMarketDeps;
   /**
    * WebUI 页的贡献来源(World 与 bot 各自的控制面)。装配层决定收什么;
    * WebApp 只负责聚合、校验与转交,不认识任何具体的一页。
@@ -1784,7 +1886,14 @@ export class WebApp {
     app.get('/api/extensions', wrap((req, res) => {
       const src = this.deps.extensions;
       if (!src) { res.status(503).json({ error: serverText(this.languageOf(req)).extensionsUnavailable }); return; }
-      res.json(src.list(this.languageOf(req)));
+      const language = this.languageOf(req);
+      const listed = src.list(language);
+      const market = this.deps.market;
+      if (!market) { res.json(listed); return; }
+      res.json({ ...listed, extensions: listed.extensions.map((item) => {
+        const blocked = market.blocked(item.name, language);
+        return blocked ? { ...item, blocked } : item;
+      }) });
     }));
 
     app.get('/api/extensions/updates', wrap(async (req, res) => {
@@ -1802,8 +1911,9 @@ export class WebApp {
         return;
       }
       try {
-        const hits = await src.search(kind);
-        res.json({ hits, partial: src.searchPartial?.(kind) ?? false, registry: await src.npmRegistry?.() });
+        const search = src.search(kind);
+        const result = this.deps.market ? await this.deps.market.merge(search, this.languageOf(req)) : { hits: await search };
+        res.json({ ...result, partial: src.searchPartial?.(kind) ?? false, registry: await src.npmRegistry?.() });
       } catch (err) {
         res.status(502).json({ error: serverText(this.languageOf(req)).npmSearchFailed(this.errorText(err, req)) });
       }
@@ -1919,6 +2029,42 @@ export class WebApp {
         this.deps.log.error('扩展卸载失败', { name, error });
         res.status(400).json({ error });
       }
+    }));
+
+    // 扩展市场的 GitHub 账号、投票与评论,内部路由;形状见 docs/extensions.md。
+    // LocalizedError 带自己的状态码,其余当成 GitHub 那一头的问题。
+    const marketRoute = (handler: (market: WebAppMarketDeps, req: Request) => Promise<unknown> | unknown) => wrap(async (req, res) => {
+      const market = this.deps.market;
+      if (!market) { res.status(503).json({ error: serverText(this.languageOf(req)).marketUnavailable }); return; }
+      try {
+        res.json(await handler(market, req));
+      } catch (err) {
+        res.status(err instanceof LocalizedError ? err.status : 502).json({ error: this.errorText(err, req) });
+      }
+    });
+    app.get('/api/extensions/github', marketRoute((market) => market.account()));
+    app.post('/api/extensions/github/login', marketRoute((market) => market.login()));
+    app.post('/api/extensions/github/logout', marketRoute((market) => { market.logout(); return { ok: true }; }));
+    app.post('/api/extensions/vote', express.json(), marketRoute((market, req) => {
+      const body = (req.body ?? {}) as { name?: unknown; vote?: unknown };
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) throw new LocalizedError((l) => serverText(l).missingPackage, 400);
+      if (body.vote !== 'up' && body.vote !== 'down' && body.vote !== null) throw new LocalizedError((l) => serverText(l).badVote(String(body.vote)), 400);
+      return market.vote(name, body.vote);
+    }));
+    app.get('/api/extensions/comments', marketRoute((market, req) => {
+      const name = strParam(req.query.name)?.trim();
+      if (!name) throw new LocalizedError((l) => serverText(l).missingPackage, 400);
+      return market.comments(name, strParam(req.query.cursor) || undefined);
+    }));
+    app.post('/api/extensions/comments', express.json(), marketRoute((market, req) => {
+      const body = (req.body ?? {}) as { name?: unknown; body?: unknown; replyTo?: unknown };
+      const name = typeof body.name === 'string' ? body.name.trim() : '';
+      if (!name) throw new LocalizedError((l) => serverText(l).missingPackage, 400);
+      if (typeof body.body !== 'string') throw new LocalizedError((l) => serverText(l).notString('body'), 400);
+      if (!body.body.trim()) throw new LocalizedError((l) => serverText(l).missingField('body'), 400);
+      if (body.replyTo !== undefined && typeof body.replyTo !== 'string') throw new LocalizedError((l) => serverText(l).notString('replyTo'), 400);
+      return market.comment(name, body.body, body.replyTo);
     }));
 
     app.get('/api/prompts', wrap(async (req, res) => {

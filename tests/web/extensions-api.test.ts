@@ -75,6 +75,16 @@ beforeAll(async () => {
       },
       uninstall: async (name) => { uninstalled.push(name); return '已卸载'; },
     },
+    market: {
+      merge: async (search) => ({ hits: (await search).map((h) => ({ ...h, tags: ['t'] })), index: { tags: { t: { label: 'T', hint: 'h' } } } }),
+      blocked: (name) => (name === 'a' ? '恶意代码' : undefined),
+      account: () => ({}),
+      login: async () => ({ userCode: 'C', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 5 }),
+      logout: () => {},
+      vote: async () => { throw new LocalizedError(() => '需要先登录 GitHub。', 428); },
+      comments: async () => ({ comments: [], total: 0 }),
+      comment: async () => { throw new LocalizedError(() => '讨论帖还没开', 409); },
+    },
     log: nullLogger(),
   });
   port = await app.start(0);
@@ -173,6 +183,19 @@ describe('/api/extensions', () => {
     } finally {
       await bare.stop();
     }
+  });
+});
+
+describe('扩展市场', () => {
+  it('清单带拉黑原因、搜索带索引;市场给的 428 与 409 原样作状态码;vote 只认 up、down 与 null', async () => {
+    expect((await get('/api/extensions')).body.extensions[0].blocked).toBe('恶意代码');
+    const searched = await get('/api/extensions/search');
+    expect(searched.body).toMatchObject({ hits: [{ name: 'hit', tags: ['t'] }], index: { tags: { t: { label: 'T' } } } });
+    expect((await post('/api/extensions/vote', { name: 'hit', vote: 'up' })).status).toBe(428);
+    expect((await post('/api/extensions/vote', { name: 'hit', vote: 'sideways' })).status).toBe(400);
+    expect((await post('/api/extensions/comments', { name: 'hit', body: 'x' })).status).toBe(409);
+    expect((await post('/api/extensions/comments', { name: 'hit', body: '  ' })).status).toBe(400);
+    expect((await get('/api/extensions/comments?name=hit')).body).toEqual({ comments: [], total: 0 });
   });
 });
 

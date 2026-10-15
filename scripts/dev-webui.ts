@@ -40,7 +40,7 @@ import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bi
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
-import { PromptRevisionConflict, WebApp, type ExtensionInfo, type ExtensionSearchHit, type OwnedStoragePart, type ToolOwner } from '../src/web/server.ts';
+import { PromptRevisionConflict, WebApp, type ExtensionComment, type ExtensionInfo, type ExtensionRating, type ExtensionSearchHit, type MarketTag, type OwnedStoragePart, type ToolOwner, type WebAppMarketDeps } from '../src/web/server.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { deriveWebUiPageSources, ioPageContribution } from '../src/bot.ts';
@@ -1212,6 +1212,67 @@ devSearchHits.push(
   { name: 'cortico-bot-example', version: '0.2.0', description: '示例 bot 模板 (dev 假数据)', publisher: 'someone', downloads: { total: 20, month: 20, week: 20 }, dependents: 0, license: 'MIT', date: '2026-09-12T09:00:00.000Z', keywords: ['cortico-bot'], kind: 'bot', links: { npm: 'https://www.npmjs.com/package/cortico-bot-example' }, installed: false },
 );
 
+/**
+ * 扩展市场的假数据:词表只有几个标签,keywords 命中即贴;GitHub 账号、票与评论都在内存里。
+ * 没登录时投票与评论回 428,登录码申请后第二次查询账号就算登上。
+ */
+const devMarketTags: Record<string, MarketTag> = {
+  chat: { label: '即时通讯', hint: '接入聊天平台。(dev 假数据)' },
+  game: { label: '游戏', hint: '接入、观察和操作游戏。(dev 假数据)' },
+  tool: { label: '工具', hint: '通用工具。(dev 假数据)' },
+  experimental: { label: '实验性', hint: '作者标明还在测试。(dev 假数据)', style: 'notice' },
+  unsafe: { label: '不安全', hint: '能在本机执行任意命令。(dev 假数据)', style: 'warning' },
+};
+let devGithubLogin: string | null = null;
+let devLoginPolls = -1;
+const devVotes = new Map<string, 'up' | 'down'>();
+const devComments = new Map<string, ExtensionComment[]>();
+const devLoginRequired = () => new LocalizedError((language) => `${language === 'en' ? 'Sign in with GitHub first.' : '需要先登录 GitHub。'} (dev)`, 428);
+const devRating = (name: string): ExtensionRating => {
+  const hit = devSearchHits.find((h) => h.name === name);
+  const mine = devVotes.get(name);
+  const base = Math.round((hit?.downloads.month ?? 0) / 100);
+  return { up: base + (mine === 'up' ? 1 : 0), down: (mine === 'down' ? 1 : 0), comments: devComments.get(name)?.reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0) ?? 0, discussion: `https://github.com/Pal-AI-Lab/cortico-extensions/discussions/${devSearchHits.indexOf(hit!) + 1}`, ...(mine ? { mine } : {}) };
+};
+const devMarket: WebAppMarketDeps = {
+  merge: async (search) => ({
+    hits: (await search).map((hit) => ({
+      ...hit,
+      tags: [...(hit.keywords ?? []).filter((k) => devMarketTags[k]), ...(hit.name === 'cortico-world-shell-sandbox' ? ['unsafe'] : []), ...(hit.name === 'cortico-world-weather' ? ['experimental'] : [])],
+      ...(hit.publisher === 'phantivia' ? { official: true } : {}),
+      ...(hit.name === 'cortico-world-matrix' ? { certified: true } : {}),
+      ...(hit.date && Date.now() - Date.parse(hit.date) < 14 * 86_400_000 ? { isNew: true } : {}),
+      rating: devRating(hit.name),
+    })),
+    index: { tags: devMarketTags, newDays: 14 },
+  }),
+  blocked: () => undefined,
+  account: () => {
+    if (!devGithubLogin && devLoginPolls >= 0 && devLoginPolls-- === 0) devGithubLogin = 'dev-user';
+    return devGithubLogin ? { login: devGithubLogin } : {};
+  },
+  login: async () => { devLoginPolls = 1; return { userCode: 'DEVC-0DE1', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 2 }; },
+  logout: () => { devGithubLogin = null; devLoginPolls = -1; devVotes.clear(); },
+  vote: async (name, vote) => {
+    if (!devGithubLogin) throw devLoginRequired();
+    if (vote) devVotes.set(name, vote); else devVotes.delete(name);
+    return devRating(name);
+  },
+  comments: async (name, cursor) => {
+    const all = devComments.get(name) ?? [];
+    const from = Number(cursor ?? 0);
+    return { comments: all.slice(from, from + 5), total: all.length, ...(from + 5 < all.length ? { next: String(from + 5) } : {}), ...(all.length ? { discussion: devRating(name).discussion } : {}) };
+  },
+  comment: async (name, body, replyTo) => {
+    if (!devGithubLogin) throw devLoginRequired();
+    const comment: ExtensionComment = { id: `dev-${Date.now()}`, author: devGithubLogin, body, createdAt: new Date().toISOString() };
+    const all = devComments.get(name) ?? [];
+    const top = replyTo ? all.find((c) => c.id === replyTo) : undefined;
+    if (top) top.replies = [...(top.replies ?? []), comment]; else devComments.set(name, [comment, ...all]);
+    return comment;
+  },
+};
+
 const app = new WebApp({
   store,
   memoryDir: tmpPersona,
@@ -1337,6 +1398,7 @@ const app = new WebApp({
       return '系统前缀与工具表已重载，保留当前session的既有消息 (dev)';
     },
   },
+  market: devMarket,
   // 扩展面的假数据:四种状态各一;装卸只改这张表,不跑 pnpm。
   extensions: {
     list: () => ({ dir: 'C:/dev/cortico/extensions', extensions: [...devExtensions.map((p) => ({ ...p })), ...devBuiltins] }),
