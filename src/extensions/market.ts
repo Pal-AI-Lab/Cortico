@@ -40,7 +40,7 @@ const RAW_CACHE_MS = 5 * 60_000;
  * 与 npm 下载统计同一个理由、同一个值(`src/extensions.ts` 的 DOWNLOADS_TIMEOUT_MS)。
  */
 const RAW_TIMEOUT_MS = 3000;
-/** 控制台评论区一次显示 5 条。 */
+/** WebUI 评论区一次显示 5 条。 */
 const COMMENTS_PAGE_SIZE = 5;
 /** GitHub GraphQL 一页最多 100 条:每条评论的回复只取前 100 条,评分的评论数只数前 100 条评论下的回复。 */
 const GRAPHQL_PAGE_MAX = 100;
@@ -126,7 +126,7 @@ export interface ExtensionMarketOptions {
   fetch?: typeof fetch;
 }
 
-/** 官方索引、GitHub 登录、投票与评论;控制台的扩展页经它读写索引仓。 */
+/** 官方索引、GitHub 登录、投票与评论;WebUI 的扩展页经它读写索引仓。 */
 export class ExtensionMarket {
   private readonly dir: string;
   private readonly log: Logger;
@@ -135,7 +135,7 @@ export class ExtensionMarket {
   /** 最近一次读到的合格 `index.json`,来自网络或缓存文件 */
   private index: IndexFile | null = null;
   /** 帖子标题(包名) → 节点 id 与网址 */
-  private discussions: { atMs: number; byTitle: Map<string, { id: string; url: string }> } | null = null;
+  private discussions: Map<string, { id: string; url: string }> | null = null;
   /** 每次登录或退出加一;后台等待授权的循环发现它变了就停下 */
   private loginRun = 0;
 
@@ -203,8 +203,8 @@ export class ExtensionMarket {
   }
 
   /**
-   * 向 GitHub 要设备码并在后台等用户授权,授权后取账号写进令牌文件;控制台按 `interval` 查 `account()`。
-   * 再次登录或退出时之前的等待作废。用户拒绝或码过期时记一条日志,控制台在过期时提示重新登录。
+   * 向 GitHub 要设备码并在后台等用户授权,授权后取账号写进令牌文件;WebUI 按 `interval` 查 `account()`。
+   * 再次登录或退出时之前的等待作废。用户拒绝或码过期时记一条日志,WebUI 在过期时提示重新登录。
    */
   async login(): Promise<GithubDeviceCode> {
     const run = ++this.loginRun;
@@ -392,10 +392,10 @@ export class ExtensionMarket {
     return found;
   }
 
-  /** 列出讨论区分类里的帖子按标题找;没找到时重新列一次,Action 可能刚开了帖。 */
+  /** 列出讨论区分类里的帖子按标题找。找到的帖子在进程内一直沿用;没找到时重新列一次,Action 可能刚开了帖。 */
   private async findDiscussion(name: string): Promise<{ id: string; url: string } | undefined> {
-    const listed = this.discussions;
-    if (listed && Date.now() - listed.atMs < RAW_CACHE_MS && listed.byTitle.has(name)) return listed.byTitle.get(name);
+    const listed = this.discussions?.get(name);
+    if (listed) return listed;
     const byTitle = new Map<string, { id: string; url: string }>();
     for (let after: string | null = null; ;) {
       const data: { repository: { discussions: {
@@ -409,7 +409,7 @@ export class ExtensionMarket {
       if (!page.pageInfo.hasNextPage) break;
       after = page.pageInfo.endCursor;
     }
-    this.discussions = { atMs: Date.now(), byTitle };
+    this.discussions = byTitle;
     return byTitle.get(name);
   }
 
