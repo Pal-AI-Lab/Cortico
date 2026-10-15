@@ -52,7 +52,10 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
   const dividers = ui.h('div', 'prefix-dividers');
   stage.append(flags, gripL, host, gripR, rail, dividers);
   const intro = pageIntro(ui, S.title, S.introDesc);
-  root.append(intro, toolbar, stage);
+  const full = ui.h('pre', 'mono prefix-full');
+  const preview = ui.foldSheet('full-prompt', { title: S.fullPreview });
+  preview.body.append(full);
+  root.append(intro, toolbar, stage, preview.el);
 
   function say(text: string, bad = false): void {
     status.className = bad ? 'msgline bad prompt-status' : 'msgline prompt-status';
@@ -125,8 +128,12 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
         docs.set(doc.key, old && dirty.has(doc.key) ? { ...doc, content: old.content, revision: old.revision, origin: old.origin } : doc);
       }
       segments = prefix?.segments ?? [];
+      full.textContent = prefix ? segments.map((s) => s.text).join('') : S.prefixUnavailable;
       closePopup();
-      for (const section of sections) observer.unobserve(section.note);
+      for (const section of sections) {
+        observer.unobserve(section.note);
+        if (section.origin) observer.unobserve(section.origin);
+      }
       sections.length = 0;
       flags.replaceChildren();
       rail.replaceChildren();
@@ -175,6 +182,13 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
         }
         return false;
       }
+    }
+    try {
+      const prefix = await get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal });
+      segments = prefix.segments;
+      full.textContent = segments.map((s) => s.text).join('');
+    } catch (error) {
+      if (!signal.aborted) { full.textContent = S.prefixUnavailable; ctx.onError(error); }
     }
     state();
     return dirty.size === 0;
@@ -249,6 +263,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       try { sessionStorage.setItem(FOLDS_KEY, JSON.stringify([...folds])); } catch { /* Kept in memory. */ }
       section.toggle.setAttribute('aria-expanded', String(!collapsed));
       section.cell.hidden = collapsed;
+      if (section.origin) section.origin.hidden = collapsed;
       closePopup();
       expand.textContent = sections.every((s) => !s.collapsed) ? S.collapseAll : S.expandAll;
       queueMicrotask(() => animateSection(section, index));
@@ -271,7 +286,9 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
       section.cell.style.height = `${g.height}px`;
       section.divider.style.top = top;
       section.divider.style.left = `${flags.offsetWidth}px`;
-      const minHeight = Math.ceil(Math.max(50, section.note.offsetHeight + 12));
+      const flagHeight = section.toggle.offsetHeight;
+      section.label.style.setProperty('--prompt-flag-height', `${flagHeight}px`);
+      const minHeight = Math.ceil(Math.max(50, section.note.offsetHeight + 12, section.origin && !g.collapsed ? flagHeight / 2 + section.origin.offsetHeight + 32 : 0));
       return { minHeight, padding: g.collapsed ? 0 : Math.max(0, Math.ceil(minHeight - (g.height - g.padding))) };
     });
     flags.style.height = rail.style.height = `${host.offsetHeight}px`;
@@ -369,8 +386,10 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
     const chips = new Map<string, HTMLButtonElement>();
     const warning = ui.h('div', 'prompt-railwarn');
     if (doc.origin) {
-      section.origin = ui.h('div', 'prefix-railnote');
-      note.append(section.origin);
+      section.origin = ui.h('p', 'prompt-help prefix-origin');
+      section.origin.hidden = collapsed;
+      label.append(section.origin);
+      observer.observe(section.origin);
     }
     if (doc.vars?.length) {
       note.append(ui.h('div', 'prompt-rail-heading', S.variablesTitle), ui.h('p', 'prompt-help', S.insertHint));

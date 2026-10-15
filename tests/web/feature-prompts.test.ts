@@ -776,11 +776,11 @@ it('retains empty editable templates omitted from the prefix and applies their r
 
 it('reloads a template saved elsewhere so the next save uses its new revision', async () => {
   const { root, view, button } = await mountPage();
-  expect(root.querySelector<HTMLElement>('.prefix-railnote')!.textContent).toBe(S.originWorld);
+  expect(root.querySelector<HTMLElement>('.prefix-origin')!.textContent).toBe(S.originWorld);
   sources[1].content = 'Changed elsewhere'; sources[1].revision = '5'; sources[1].origin = 'deployment';
   button(S.reloadSession).click();
   await vi.waitFor(() => expect(view.state.doc.toString()).toContain('Changed elsewhere'));
-  expect(root.querySelector<HTMLElement>('.prefix-railnote')!.textContent).toBe(S.originDeployment);
+  expect(root.querySelector<HTMLElement>('.prefix-origin')!.textContent).toBe(S.originDeployment);
   view.dispatch({ changes: { from: view.state.doc.toString().indexOf('Changed'), insert: 'Again ' } });
   button(S.saveToFile).click();
   await vi.waitFor(() => expect(sources[1].content).toBe('Again Changed elsewhere'));

@@ -40,6 +40,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'Predefinito del World',
   listSep: ', ',
   warnSep: '; ',
+  fullPreview: "Anteprima del prompt completo",
   prefixEmpty: 'Il prefisso è vuoto in questo momento',
   prefixUnavailable: 'Anteprima del prefisso non disponibile.',
   prefixStats: (n: number, tok: string) => `${n} ${n === 1 ? 'blocco' : 'blocchi'} · circa ${tok} token dopo il rendering`,

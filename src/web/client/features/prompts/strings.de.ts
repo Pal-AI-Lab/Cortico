@@ -40,6 +40,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'World-Standard',
   listSep: ', ',
   warnSep: '; ',
+  fullPreview: "Vorschau des vollständigen Prompts",
   prefixEmpty: 'Das Präfix ist gerade leer',
   prefixUnavailable: 'Präfixvorschau nicht verfügbar.',
   prefixStats: (n: number, tok: string) => `${n} ${n === 1 ? 'Block' : 'Blöcke'} · gerendert etwa ${tok} Tokens`,

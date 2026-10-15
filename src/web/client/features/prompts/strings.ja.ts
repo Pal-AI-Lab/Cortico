@@ -40,6 +40,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'World の既定',
   listSep: '、',
   warnSep: '。',
+  fullPreview: "完全なプロンプトのプレビュー",
   prefixEmpty: 'プレフィックスは現在空です',
   prefixUnavailable: 'プレフィックスのプレビューを利用できません。',
   prefixStats: (n: number, tok: string) => `${n} ブロック · 展開後 約 ${tok} tokens`,

@@ -40,6 +40,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'World 기본값',
   listSep: ', ',
   warnSep: '; ',
+  fullPreview: "전체 프롬프트 미리보기",
   prefixEmpty: '프리픽스가 지금 비어 있습니다',
   prefixUnavailable: '프리픽스 미리 보기를 사용할 수 없습니다.',
   prefixStats: (n: number, tok: string) => `블록 ${n}개 · 렌더링 후 약 ${tok} tokens`,

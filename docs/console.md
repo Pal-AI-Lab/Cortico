@@ -1,4 +1,4 @@
-<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/features/prompts/index.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # 控制台
 
@@ -8,6 +8,8 @@
 监听地址或 `web.allowedHosts` 里的名字的请求回 421,带跨站 Origin 的写请求与 WebSocket 升级被拒;
 `web.allowedHosts` 里的名字作 Origin 时算本站,反向代理改写 Host 时靠它放行。监听 `0.0.0.0` 或 `::`
 时不校验 Host。监听非回环地址而没有设访问密码时,启动记一条 warn。
+
+系统提示词的模板载入说明在段展开时显示于左侧标签下方。编辑器下方的「完整提示词预览」可折叠，展开后显示按已保存文件渲染的整条前缀。
 
 ## 访问密码
 
