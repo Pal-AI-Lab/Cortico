@@ -114,7 +114,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}) deaktiviert`,
   notActive: (label: string) => `${label} ist nicht aktiv, daher gibt es keine Instanz zum Neustarten`,
   restarted: (label: string) => `${label} neu gestartet`,
-  toolClash: (other: string, names: string[]) => `Tool-Namen kollidieren mit ${other}, Einhängen abgelehnt: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self} und World ${other} haben gleiche Tool-Namen, Einhängen von ${self} abgelehnt: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Tool-Namen sind von Core oder Persona belegt, Einhängen abgelehnt: ${names.join(', ')}`,
   unbound: 'Die Assemblierungsschicht ist noch an keinen Core gebunden',
 };

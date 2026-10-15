@@ -117,7 +117,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}) desactivado`,
   notActive: (label: string) => `${label} no está activo, así que no hay instancia que reiniciar`,
   restarted: (label: string) => `${label} reiniciado`,
-  toolClash: (other: string, names: string[]) => `Los nombres de herramientas coinciden con ${other}; se rechaza el montaje: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `Los World ${self} y ${other} comparten nombres de herramientas; se rechaza el montaje de ${self}: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Core o la Persona ya usan estos nombres de herramientas; se rechaza el montaje: ${names.join(', ')}`,
   unbound: 'La capa de ensamblado aún no está vinculada a un core',
 };

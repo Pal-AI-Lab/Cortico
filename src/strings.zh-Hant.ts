@@ -115,7 +115,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label}（${id}）已停用`,
   notActive: (label: string) => `${label} 未啟用,沒有可重新啟動的實例`,
   restarted: (label: string) => `${label} 已重新啟動`,
-  toolClash: (other: string, names: string[]) => `工具名與 ${other} 撞名,拒絕掛載: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self} 與 World ${other} 的工具撞名,拒絕掛載 ${self}: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `工具名已被 Core 或 Persona 占用,拒絕掛載: ${names.join(', ')}`,
   unbound: '裝配層尚未綁定 core',
 };

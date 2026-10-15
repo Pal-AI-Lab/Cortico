@@ -343,14 +343,14 @@ describe('工具名全局唯一', () => {
   const withTools = (id: string, names: () => string[]) =>
     probeDefinition(id, { create: (ctx) => Object.assign(new Probe(id, ctx), { tools: () => names().map(tool) }) });
 
-  it('启动期:与已挂载 World 撞名的进 missing 并写明对方与名字,其余槽位照常', () => {
+  it('启动期:与已挂载 World 撞名的进 missing 并写明双方 World id 与工具名,其余槽位照常', () => {
     const { assembly } = assemblyOf(
       [withTools('a', () => ['a_go', 'shared']), withTools('b', () => ['shared', 'b_go']), withTools('c', () => ['c_go'])],
       ['a', 'b', 'c'],
     );
     expect(assembly.mounted.map((m) => m.id)).toEqual(['a', 'c']);
     expect(assembly.slots.map((s) => s.id)).toEqual(['a', 'c']);
-    expect(missingOf(assembly)).toEqual([{ id: 'b', label: 'b 探针', declared: true, reason: '工具名与 a 探针 撞名,拒绝挂载: shared' }]);
+    expect(missingOf(assembly)).toEqual([{ id: 'b', label: 'b 探针', declared: true, reason: 'World b 与 World a 的工具撞名,拒绝挂载 b: shared' }]);
   });
 
   it('未激活的槽位不参与:同名只在两者都要挂载时才算撞', async () => {
@@ -359,7 +359,7 @@ describe('工具名全局唯一', () => {
       ['a'],
     );
     expect(assembly.slots.map((s) => s.id)).toEqual(['a', 'b']);
-    await expect(assembly.activate('b')).rejects.toThrow('工具名与 a 探针 撞名,拒绝挂载: shared');
+    await expect(assembly.activate('b')).rejects.toThrow('World b 与 World a 的工具撞名,拒绝挂载 b: shared');
     expect(mounts).toEqual([]);
     expect(json().worlds.b?.enabled ?? false).toBe(false);
     await assembly.deactivate('a');
@@ -373,7 +373,7 @@ describe('工具名全局唯一', () => {
       ['a', 'b'],
     );
     bNames[0] = 'a_go';
-    await expect(assembly.restart('b')).rejects.toThrow('工具名与 a 探针 撞名,拒绝挂载: a_go');
+    await expect(assembly.restart('b')).rejects.toThrow('World b 与 World a 的工具撞名,拒绝挂载 b: a_go');
     expect(mounts).toEqual(['-b']);
     expect(assembly.slot('b').mounted).toBe(false);
     expect(assembly.mounted.map((m) => m.id)).toEqual(['a']);

@@ -114,7 +114,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}) disattivato`,
   notActive: (label: string) => `${label} non è attivo, quindi non c'è alcuna istanza da riavviare`,
   restarted: (label: string) => `${label} riavviato`,
-  toolClash: (other: string, names: string[]) => `I nomi degli strumenti sono in conflitto con ${other}, montaggio rifiutato: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `I World ${self} e ${other} hanno nomi di strumenti in comune, montaggio di ${self} rifiutato: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Nomi di strumenti già occupati dal Core o dalla Persona, montaggio rifiutato: ${names.join(', ')}`,
   unbound: 'Il livello di assemblaggio non è ancora collegato a un Core',
 };

@@ -114,7 +114,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}) désactivé`,
   notActive: (label: string) => `${label} n'est pas actif, il n'y a donc aucune instance à redémarrer`,
   restarted: (label: string) => `${label} redémarré`,
-  toolClash: (other: string, names: string[]) => `Conflit de noms d'outils avec ${other}, montage refusé : ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `Les World ${self} et ${other} partagent des noms d'outils, montage de ${self} refusé : ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Noms d'outils déjà pris par le Core ou la Persona, montage refusé : ${names.join(', ')}`,
   unbound: "La couche d'assemblage n'est pas encore liée à un Core",
 };

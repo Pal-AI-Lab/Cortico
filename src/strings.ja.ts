@@ -115,7 +115,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label}（${id}）を無効化しました`,
   notActive: (label: string) => `${label} は有効化されていないため、再起動できるインスタンスがありません`,
   restarted: (label: string) => `${label} を再起動しました`,
-  toolClash: (other: string, names: string[]) => `ツール名が ${other} と重複しているため、マウントを拒否しました：${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self} と World ${other} でツール名が重複しているため、${self} のマウントを拒否しました：${names.join(', ')}`,
   toolReserved: (names: string[]) => `ツール名が Core または Persona で使用済みのため、マウントを拒否しました：${names.join(', ')}`,
   unbound: '構成層はまだ core にバインドされていません',
 };

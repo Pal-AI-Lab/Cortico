@@ -117,7 +117,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}) desativado`,
   notActive: (label: string) => `${label} não está ativo, então não há instância para reiniciar`,
   restarted: (label: string) => `${label} reiniciado`,
-  toolClash: (other: string, names: string[]) => `Os nomes de ferramentas conflitam com ${other}; montagem recusada: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `Os World ${self} e ${other} têm nomes de ferramentas iguais; montagem de ${self} recusada: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Os nomes de ferramentas já são usados pelo Core ou pela Persona; montagem recusada: ${names.join(', ')}`,
   unbound: 'A camada de montagem ainda não está vinculada a um core',
 };

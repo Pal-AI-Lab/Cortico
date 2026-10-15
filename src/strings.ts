@@ -234,7 +234,7 @@ const assemblyZh = {
   deactivated: (label: string, id: string) => `${label}（${id}）已停用`,
   notActive: (label: string) => `${label} 未激活,没有可重启的实例`,
   restarted: (label: string) => `${label} 已重启`,
-  toolClash: (other: string, names: string[]) => `工具名与 ${other} 撞名,拒绝挂载: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self} 与 World ${other} 的工具撞名,拒绝挂载 ${self}: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `工具名已被 Core 或 Persona 占用,拒绝挂载: ${names.join(', ')}`,
   unbound: '装配层尚未绑定 core',
 };
@@ -248,7 +248,7 @@ export const assemblyEn: typeof assemblyZh = {
   deactivated: (label: string, id: string) => `${label} (${id}) disabled`,
   notActive: (label: string) => `${label} is not active, so there is no instance to restart`,
   restarted: (label: string) => `${label} restarted`,
-  toolClash: (other: string, names: string[]) => `Tool names clash with ${other}, refusing to mount: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self} and World ${other} share tool names, refusing to mount ${self}: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Tool names are taken by Core or the Persona, refusing to mount: ${names.join(', ')}`,
   unbound: 'The assembly layer is not bound to a core yet',
 };

@@ -121,7 +121,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label} (${id}): отключено`,
   notActive: (label: string) => `${label}: не активно, перезапускать нечего`,
   restarted: (label: string) => `${label}: перезапущено`,
-  toolClash: (other: string, names: string[]) => `Имена инструментов совпадают с ${other}, подключение отклонено: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `У World ${self} и World ${other} совпадают имена инструментов, подключение ${self} отклонено: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `Имена инструментов уже заняты Core или Persona, подключение отклонено: ${names.join(', ')}`,
   unbound: 'Слой сборки ещё не привязан к core',
 };

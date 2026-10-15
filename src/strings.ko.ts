@@ -115,7 +115,7 @@ export const assemblyText: Partial<typeof assemblyEn> = {
   deactivated: (label: string, id: string) => `${label}(${id}) 비활성화됨`,
   notActive: (label: string) => `${label}이(가) 활성화되어 있지 않아 재시작할 인스턴스가 없습니다`,
   restarted: (label: string) => `${label} 재시작됨`,
-  toolClash: (other: string, names: string[]) => `도구 이름이 ${other}와(과) 겹쳐 마운트를 거부했습니다: ${names.join(', ')}`,
+  toolClash: (self: string, other: string, names: string[]) => `World ${self}와(과) World ${other}의 도구 이름이 겹쳐 ${self} 마운트를 거부했습니다: ${names.join(', ')}`,
   toolReserved: (names: string[]) => `도구 이름을 Core나 Persona가 이미 쓰고 있어 마운트를 거부했습니다: ${names.join(', ')}`,
   unbound: '구성 계층이 아직 core에 바인딩되지 않았습니다',
 };

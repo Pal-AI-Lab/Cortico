@@ -383,7 +383,7 @@ export class WorldAssembly {
     for (const other of mounted) {
       const shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
       if (shared.length) {
-        return (language) => text(language).toolClash(this.labelIn(other.id, language), shared);
+        return (language) => text(language).toolClash(mod.id, other.id, shared);
       }
     }
     return null;
