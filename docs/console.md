@@ -1,4 +1,4 @@
-<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/features/prompts/index.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/console-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # 控制台
 
@@ -8,8 +8,6 @@
 监听地址或 `web.allowedHosts` 里的名字的请求回 421,带跨站 Origin 的写请求与 WebSocket 升级被拒;
 `web.allowedHosts` 里的名字作 Origin 时算本站,反向代理改写 Host 时靠它放行。监听 `0.0.0.0` 或 `::`
 时不校验 Host。监听非回环地址而没有设访问密码时,启动记一条 warn。
-
-系统提示词的模板载入说明在段展开时显示于左侧标签下方。编辑器下方的「完整提示词预览」可折叠，展开后显示按已保存文件渲染的整条前缀。
 
 ## 访问密码
 
@@ -38,7 +36,7 @@ SameSite=Strict、Max-Age 取浏览器上限 400 天;请求经 HTTPS 或反向�
 | `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
 | `extensions` | 扩展 | 安装、删除、npm 搜索、更新检查与安装历史版本（见 [extensions.md](extensions.md)） |
-| `prompts` | 系统提示词 | 前缀各段的模板 |
+| `prompts` | 系统提示词 | 前缀各段的模板;完整前缀按已保存文件渲染 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
 
 终端页在部署目录里还挂着 `.onboarding` 标记时(自建部署写下的一次性开关,见
