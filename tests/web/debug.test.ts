@@ -78,7 +78,7 @@ beforeAll(async () => {
   dataDir = mkdtempSync(join(tmpdir(), 'webdebug-data-'));
   session = new SessionLog(dataDir);
   store = new JsonlEventStore({ dataDir, run: 'r-20260101-000000-0001' });
-  runlog = new Runlog(join(dataDir, 'runlog.jsonl'), { webUi: false });
+  runlog = new Runlog(join(dataDir, 'runlog.jsonl'), { stdout: false });
 
   // 种子数据(在WebApp构造前:hello快照必须能读到)
   session.append(sysMsg);

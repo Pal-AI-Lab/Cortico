@@ -138,7 +138,7 @@ export interface RunlogOptions {
   /** error 记录的上下文快照目录；未提供时不写快照。 */
   incidentsDir?: string | null;
   /** 是否同时打到 stdout(测试关掉) */
-  webUi?: boolean;
+  stdout?: boolean;
 }
 
 const DEFAULT_LEVELS: RunlogLevels = { file: 'debug', stdout: 'info', areas: '' };
@@ -224,7 +224,7 @@ export class Runlog {
     this.timezone = opts.timezone ?? SYSTEM_TIMEZONE;
     this.levels = opts.levels ?? (() => DEFAULT_LEVELS);
     this.incidentsDir = opts.incidentsDir ?? null;
-    this.echo = opts.webUi ?? true;
+    this.echo = opts.stdout ?? true;
     if (file) {
       try { this.bytes = existsSync(file) ? statSync(file).size : 0; } catch { this.bytes = 0; }
     }
