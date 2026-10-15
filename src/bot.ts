@@ -23,6 +23,7 @@ import { ONBOARDING_FLAG_FILE } from './deploy.ts';
 import { isSupervised, requestRestart, startsPaused } from './boot.ts';
 import { ExtensionManager, packageMetadata, type ExtensionSet } from './extensions.ts';
 import type { ExtensionPackageJson } from './extensions/manifest.ts';
+import { ExtensionMarket } from './extensions/market.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
 import { RESERVED_FRAME_NAMES } from './core/loop.ts';
@@ -1042,7 +1043,7 @@ export function createBot<C extends CoreConfig>(
       ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
         builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
         decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id)),
-      }) } : {}),
+      }), market: new ExtensionMarket({ dir: opts.extensions.dir, log: core.runlog.logger('market') }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
