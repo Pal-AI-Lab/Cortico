@@ -468,6 +468,7 @@ interface RegistryPackument {
     license?: string;
     deprecated?: string;
     engines?: Record<string, string>;
+    os?: string[];
     maintainers?: Array<{ username?: string; name?: string }>;
     _npmUser?: { name?: string };
     dist?: { unpackedSize?: number; fileCount?: number };
@@ -657,7 +658,7 @@ export class ExtensionManager {
   }
 
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
-  list(language: Language = 'zh'): { dir: string; extensions: ExtensionInfo[] } {
+  list(language: Language = 'zh'): { dir: string; platform: NodeJS.Platform; extensions: ExtensionInfo[] } {
     const onDisk = new Map(readInstalled(this.dir).map((p) => [p.name, p.spec]));
     const packageAt = (name: string) => readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'));
     const out: ExtensionInfo[] = [];
@@ -703,7 +704,7 @@ export class ExtensionManager {
       });
     }
     const all = [...out, ...(this.builtins?.(language) ?? [])];
-    return { dir: this.dir, extensions: this.decorate ? all.map((item) => this.decorate!(item, language)) : all };
+    return { dir: this.dir, platform: process.platform, extensions: this.decorate ? all.map((item) => this.decorate!(item, language)) : all };
   }
 
   /** 逐包检查 npm 的 latest，保留单包失败，跳过本机链接。 */
@@ -865,7 +866,11 @@ export class ExtensionManager {
     const times = Object.keys(doc.versions ?? {}).map((version) => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
-      .map(([version, date]) => ({ version, date }));
+      .map(([version, date]) => {
+        // 包文档里每个版本都带完整 manifest,不用另发请求就能判断能不能装
+        const manifest = parseExtensionManifest(doc.versions![version], language);
+        return { version, date, ...(manifest.ok ? {} : { problems: manifest.reasons }) };
+      });
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);
     const bugs = urlOf(v.bugs);
@@ -888,6 +893,7 @@ export class ExtensionManager {
         : { problems: parsed.reasons }),
       warnings: parsed.warnings,
       ...(v.engines?.node ? { engines: v.engines.node } : {}),
+      ...(v.os?.length ? { os: v.os } : {}),
       ...(v.dist?.unpackedSize ? { unpackedSize: v.dist.unpackedSize } : {}),
       ...(v.dist?.fileCount ? { fileCount: v.dist.fileCount } : {}),
       dependencies: Object.keys(v.dependencies ?? {}),

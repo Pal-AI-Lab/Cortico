@@ -34,6 +34,8 @@ scratch/
 # WebUI 装的扩展(npm 包),属部署状态。
 # 锚在仓库根上:不带斜杠会连 src/web/client/features/extensions/ 一起吞掉。
 /extensions/
+# 扩展市场登录 GitHub 的令牌将存在扩展目录里(服务端在后续 PR)。单列且不锚根:扩展目录换了位置或上面那行被改也不入库。
+github-token.json
 
 # Corti 运维目录(数据归档+复盘),不入库
 CortiV-DataAnalysis/

@@ -235,8 +235,8 @@ export interface ExtensionPackageDetail {
   /** 这个包第一次发布的时间 */
   created?: string;
   versionCount: number;
-  /** registry 包文档 versions 里的全部版本,按发布时间新的在前 */
-  history: Array<{ version: string; date: string }>;
+  /** registry 包文档 versions 里的全部版本,按发布时间新的在前;`problems` 是这个版本装不了的理由 */
+  history: Array<{ version: string; date: string; problems?: string[] }>;
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;
   /** package.json 的 cortico 块解析通过时给出 */
@@ -248,6 +248,8 @@ export interface ExtensionPackageDetail {
   frameworkApi?: number;
   /** `engines.node` */
   engines?: string;
+  /** package.json 的 `os` */
+  os?: string[];
   unpackedSize?: number;
   fileCount?: number;
   dependencies: string[];
@@ -268,7 +270,7 @@ export type ExtensionInstallTarget = { name: string; version?: string } | { path
 
 /** 扩展面:清单、搜索、装卸。装卸只改磁盘,加载要重启进程。 */
 export interface WebAppExtensionDeps {
-  list(language: Language): { dir: string; extensions: ExtensionInfo[] };
+  list(language: Language): { dir: string; platform?: NodeJS.Platform; extensions: ExtensionInfo[] };
   updates(language: Language): Promise<ExtensionUpdateResult>;
   /** 该类关键字下 npm 上的全部包;不给 kind = world(`cortico-world`)。 */
   search(kind?: 'world' | 'provider' | 'bot'): Promise<ExtensionSearchHit[]>;

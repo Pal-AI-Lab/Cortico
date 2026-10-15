@@ -25,7 +25,7 @@ export const S: Partial<typeof en> = {
   runtimeVersion: (version: string) => `目前處理程序仍為 ${version}`,
 
   providerManagement: '供應商擴充功能供共用環境中的 Bot 使用。',
-  idleManagement: '在 World 頁啟用或停用 World；內建擴充功能不能刪除。',
+  idleManagement: '在左側的 World 總覽頁面載入或停用 World；內建擴充功能不能刪除。',
   createBody: '在執行 Cortico 的電腦上於專案目錄開啟命令列，執行 pnpm start --new，選擇此 Bot 範本並建立新實例。',
 
   restartConfirmTitle: '重新啟動處理程序？',
@@ -65,6 +65,8 @@ export const S: Partial<typeof en> = {
   filterPlaceholder: '篩選：套件名稱、描述、關鍵字',
   installedFilter: '篩選：名稱、類型、描述',
   sortLabel: {
+    certified: "依認證",
+    rating: '依評分',
     downloads: '依近 30 天下載量',
     date: '依最近發布',
     name: '依名稱',

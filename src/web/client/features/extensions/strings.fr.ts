@@ -25,7 +25,7 @@ export const S: Partial<typeof en> = {
   runtimeVersion: (version: string) => `Le processus utilise encore ${version}`,
 
   providerManagement: 'Les extensions de fournisseur servent les bots qui utilisent cet environnement partagé.',
-  idleManagement: 'Activez ou désactivez les World sur la page World. Les extensions intégrées ne peuvent pas être supprimées.',
+  idleManagement: "Chargez ou désactivez les World dans la page Vue d'ensemble des World, à gauche. Les extensions intégrées ne peuvent pas être supprimées.",
   createBody: 'Ouvrez une ligne de commande dans le projet Cortico sur sa machine hôte, lancez pnpm start --new, puis sélectionnez ce modèle de bot pour créer une nouvelle instance.',
 
   restartConfirmTitle: 'Redémarrer le processus ?',
@@ -65,6 +65,8 @@ export const S: Partial<typeof en> = {
   filterPlaceholder: 'Filtrer : nom, description, mots-clés',
   installedFilter: 'Filtrer : nom, type, description',
   sortLabel: {
+    certified: "Certifiées d'abord",
+    rating: 'Note',
     downloads: 'Téléchargements (30 jours)',
     date: 'Publiés récemment',
     name: 'Nom',

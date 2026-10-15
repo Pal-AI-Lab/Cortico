@@ -572,7 +572,7 @@ describe('ExtensionManager', () => {
     const version = {
       name: 'a-mod', version: '2.0.0', type: 'module', main: './index.js', license: 'MIT',
       keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: 'dist/webui.js' },
-      engines: { node: '>=22' }, dependencies: { ws: '^8' }, dist: { unpackedSize: 2048, fileCount: 9 },
+      engines: { node: '>=22' }, os: ['win32', '!darwin'], dependencies: { ws: '^8' }, dist: { unpackedSize: 2048, fileCount: 9 },
       maintainers: [{ username: 'me' }], _npmUser: { name: 'me' },
       repository: { url: 'git+ssh://git@github.com/me/a-mod.git' }, homepage: 'https://example.invalid',
     };
@@ -592,13 +592,27 @@ describe('ExtensionManager', () => {
       name: 'a-mod', version: '2.0.0', license: 'MIT', published: '2026-03-02T00:00:00.000Z',
       created: '2026-01-01T00:00:00.000Z', versionCount: 2,
       manifest: { kind: 'world', api: EXTENSION_API_VERSIONS.world, webUiClient: 'dist/webui.js' },
-      frameworkApi: EXTENSION_API_VERSIONS.world, engines: '>=22', unpackedSize: 2048, fileCount: 9,
+      frameworkApi: EXTENSION_API_VERSIONS.world, engines: '>=22', os: ['win32', '!darwin'], unpackedSize: 2048, fileCount: 9,
       dependencies: ['ws'], maintainers: ['me'], installed: true, installedSpec: '^1.0.0',
       links: { npm: 'https://www.npmjs.com/package/a-mod', repository: 'https://github.com/me/a-mod', homepage: 'https://example.invalid' },
     });
     // 新的在前
     expect(info.history.map((h) => h.version)).toEqual(['2.0.0', '1.0.0']);
     expect(info.problems).toBeUndefined();
+  });
+
+  it('packageInfo:历史版本按各自的 manifest 判断能不能装', async () => {
+    const version = { name: 'c', keywords: ['cortico-world'], type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world } };
+    const { mgr } = manager({}, {
+      packument: {
+        'dist-tags': { latest: '2.0.0' },
+        versions: { '1.0.0': { ...version, version: '1.0.0', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world - 1 } }, '2.0.0': { ...version, version: '2.0.0' } },
+        time: { '1.0.0': '2026-01-01T00:00:00.000Z', '2.0.0': '2026-03-02T00:00:00.000Z' },
+      },
+    });
+    const info = await mgr.packageInfo('c');
+    expect(info.history[0]).toEqual({ version: '2.0.0', date: '2026-03-02T00:00:00.000Z' });
+    expect(info.history[1].problems).toEqual([expect.stringContaining(`v${EXTENSION_API_VERSIONS.world - 1}`)]);
   });
 
   it('packageInfo:装不上的包给出理由;包名不合法与没有 latest 各自抛错', async () => {

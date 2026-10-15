@@ -25,7 +25,7 @@ export const S: Partial<typeof en> = {
   runtimeVersion: (version: string) => `프로세스는 아직 ${version} 사용 중`,
 
   providerManagement: '공급자 확장은 이 공유 환경을 쓰는 봇에 제공됩니다.',
-  idleManagement: 'World는 World 페이지에서 활성화하거나 비활성화하세요. 기본 제공 확장은 삭제할 수 없습니다.',
+  idleManagement: '왼쪽 World 개요 페이지에서 World를 로드하거나 비활성화하세요. 기본 제공 확장은 삭제할 수 없습니다.',
   createBody: 'Cortico를 실행하는 컴퓨터에서 프로젝트에서 명령줄을 열고 pnpm start --new를 실행한 뒤, 이 봇 템플릿을 선택해 새 인스턴스를 만드세요.',
 
   restartConfirmTitle: '프로세스를 재시작하시겠습니까?',
@@ -65,6 +65,8 @@ export const S: Partial<typeof en> = {
   filterPlaceholder: '필터: 패키지 이름, 설명, 키워드',
   installedFilter: '필터: 이름, 유형, 설명',
   sortLabel: {
+    certified: "인증 우선",
+    rating: '평가순',
     downloads: '다운로드 수(최근 30일)',
     date: '최근 게시순',
     name: '이름순',

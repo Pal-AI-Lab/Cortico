@@ -29,6 +29,7 @@ lockfile。
 `/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:
 World 已挂载,供应商已注册,bot 包是这份部署在用的那个。本进程正在使用的 World 与 bot 包不能删除,
 World 先在 World 页停用。
+清单还回 `platform`(服务端的 `process.platform`),包详情回 package.json 的 `os`:市场按 `os` 标出平台,本机不在其中时禁用安装并写明原因。
 `extensions/` 整个目录不进版本控制,是部署状态。
 
 ## 更新
@@ -36,6 +37,7 @@ World 先在 World 页停用。
 扩展更新检查在页面打开及清单刷新时执行。发现新版时显示磁盘版本与 `latest` 版本；
 更新会向 `extensions/` 执行 `pnpm add`，重启进程后加载新版，不需要先卸载。
 详情的历史版本可安装 registry 中仍存在的任一版本，经 check 后 `pnpm add name@version`，重启后生效；配置与 Memory 不随包回退。
+包文档里每个历史版本按自己的 manifest 判断契约兼容(`history[].problems`),不兼容的版本不能装,原因写在那一行。
 契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。连接失败和读正文时断线的错误里都带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。
@@ -52,6 +54,14 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 以及按 365 天一段往前累加的累计,某段为 0 即停,所以中间有整年无下载的包少计更早的下载。
 单次请求 3 秒没回就缺那一项,卡片显示「—」;近 30 天缺时用搜索端点给的月数。
 磁盘版本与本进程加载版本不同，即使依赖范围没变，扩展仍标为「待重启」。
+
+## 市场的官方索引
+
+扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、自描述与更新日志来自官方索引仓
+[Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),由服务端读取后合进搜索结果的 `index`
+与每条结果;服务端这部分随 0.2.0 补上,读不到索引时这些都不显示。包的简介按 Markdown 子集渲染:段落、标题、列表、代码、
+粗体、斜体与 http(s) 链接,原始 HTML 当文字。投票与评论同样等这部分服务端:登录 GitHub 后由服务端代发,令牌将存在
+扩展目录的 `github-token.json`,`.gitignore` 已单列这个文件名。
 
 ## 起步
 

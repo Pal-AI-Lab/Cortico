@@ -14,7 +14,7 @@ type Any = any;
 const { createWebUi } = (await import(UI)) as Any;
 const { Lifecycle } = (await import(LIFECYCLE)) as Any;
 const { Router } = (await import(ROUTER)) as Any;
-const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns } = (await import(EXTENSIONS)) as Any;
+const { mountExtensions, parseInstallInput, arrangeHits, extensionsFeature, restartOutcome, extensionColumns, osAllowed, changesBetween } = (await import(EXTENSIONS)) as Any;
 
 const flush = async (n = 30): Promise<void> => { for (let i = 0; i < n; i++) await Promise.resolve(); };
 
@@ -248,7 +248,10 @@ describe('package authors', () => {
     stub({ hits: { hits: [{ ...HITS.hits[0], publisher }] }, detail: { author, publisher } });
     const { root } = mount(); await flush();
     const card = marketCards(root).querySelector('.extension-card') as HTMLElement;
-    expect(card.textContent).toContain(`作者：${expected}`);
+    const byline = card.querySelector('.extension-card-byline')!;
+    // 没填 author 时署名写 npm@账号,没有悬停
+    expect(byline.textContent).toContain(author ?? `npm@${publisher}`);
+    expect(byline.getAttribute('aria-description')).toBe(author ? `npm: @${publisher}` : null);
     card.click(); await flush();
     expect(detailAuthor()).toBe(expected);
   });
@@ -355,6 +358,25 @@ describe('npm input', () => {
   });
 });
 
+describe('npm os field', () => {
+  it('follows npm: a negation excludes, a positive list restricts, nothing means everywhere', () => {
+    expect(osAllowed(undefined, 'darwin')).toBe(true);
+    expect(osAllowed(['win32'], 'win32')).toBe(true);
+    expect(osAllowed(['win32'], 'darwin')).toBe(false);
+    expect(osAllowed(['!win32'], 'linux')).toBe(true);
+    expect(osAllowed(['!win32'], 'win32')).toBe(false);
+    expect(osAllowed(['linux', '!linux'], 'linux')).toBe(false);
+  });
+});
+
+describe('changelog range', () => {
+  it('lists versions after the installed one up to the target, newest first, with pre-releases before their release', () => {
+    const versions = { '0.1.9': 'a', '0.1.10': 'b', '0.2.0-beta.1': 'c', '0.2.0': 'd', '0.2.1': 'e' };
+    expect(changesBetween({ versions }, '0.1.9', '0.2.0').map(([v]: [string]) => v)).toEqual(['0.2.0', '0.2.0-beta.1', '0.1.10']);
+    expect(changesBetween(undefined, '0.1.0', '0.2.0')).toEqual([]);
+  });
+});
+
 describe('arrangeHits', () => {
   const hit = (over: Any): Any => ({ name: 'x', version: '1.0.0', description: '', downloads: { month: 0 }, dependents: 0, links: {}, installed: false, ...over });
   const opts = (over: Any): Any => ({ filter: '', hideInstalled: false, sort: 'downloads', page: 0, pageSize: 2, ...over });
@@ -430,7 +452,7 @@ describe('restart', () => {
     first.lifecycle.dispose(); first.root.remove();
     const second = mount(); await flush();
     expect(sheets(second.root)[0].textContent).not.toContain('删除成功');
-    expect(sheets(second.root)[0].textContent).toContain('在 World 页启用或停用 World');
+    expect(sheets(second.root)[0].textContent).toContain('在左侧的 World 总览页面加载或停用 World');
   });
 });
 
@@ -468,7 +490,9 @@ describe('extension review interactions', () => {
     expect(detail.querySelector('details')?.open).toBe(false);
     expect(detail.querySelector('summary')?.textContent).toBe('历史版本');
     expect([...detail.querySelectorAll('a')].map(link => link.textContent)).toContain('源代码仓库');
-    expect(card.textContent).toContain('版本：3.1.0'); expect(card.textContent).toContain('作者：someone'); expect(card.textContent).toContain('累计 130 · 30 天 42 · 7 天 9');
+    const byline = card.querySelector('.extension-card-byline')?.textContent; expect(byline).toContain('someone'); expect(byline).toContain('3.1.0');
+    const downloads = card.querySelector('.extension-stat-downloads')!;
+    expect(downloads.textContent).toBe('42'); expect(downloads.getAttribute('aria-description')).toBe('累计 130 · 30 天 42 · 7 天 9');
   });
   it('keeps installed metadata available when registry details fail', async () => {
     stub({ detailStatus: 503, list: { dir: LIST.dir, extensions: [{ ...LIST.extensions[0], metadata: { license: 'MIT', dependencies: ['example-dependency'], links: { repository: 'https://git.example/module' } } }] } });

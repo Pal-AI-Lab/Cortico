@@ -31,7 +31,7 @@ export const S: Partial<typeof en> = {
   runtimeVersion: (version: string) => `Процесс всё ещё использует ${version}`,
 
   providerManagement: 'Расширения провайдеров обслуживают ботов, использующих эту общую среду.',
-  idleManagement: 'Включайте и отключайте World на странице World. Встроенные расширения удалить нельзя.',
+  idleManagement: 'Загружайте и отключайте World на странице «Обзор World» слева. Встроенные расширения удалить нельзя.',
   createBody: 'Откройте командную строку в проекте Cortico на его хосте, выполните pnpm start --new, затем выберите этот шаблон бота, чтобы создать новый экземпляр.',
 
   restartConfirmTitle: 'Перезапустить процесс?',
@@ -71,6 +71,8 @@ export const S: Partial<typeof en> = {
   filterPlaceholder: 'Фильтр: имя, описание, ключевые слова',
   installedFilter: 'Фильтр: имя, тип, описание',
   sortLabel: {
+    certified: "Сначала сертифицированные",
+    rating: 'Оценка',
     downloads: 'Скачивания (30 дней)',
     date: 'Недавно опубликованные',
     name: 'Имя',

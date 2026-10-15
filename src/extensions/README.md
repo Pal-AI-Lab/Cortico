@@ -69,9 +69,9 @@ bot 包不在这条循环里 import:`deployment.json` 的 `bot` 字段指向哪�
 ## WebUI 接口
 
 `ExtensionManager` 提供扩展页接口:`list(language)` 比较启动时的加载结果与当前安装状态
-(`loaded` / `failed` / `pending-restart` / `removed` / `idle`),带上本机 package.json 的 `metadata` 与 `author`,
+(`loaded` / `failed` / `pending-restart` / `removed` / `idle`),给出本机 `platform`,带上本机 package.json 的 `metadata` 与 `author`,
 末尾接 `builtins` 给的随框架条目,每条再经 `decorate` 补上本进程的 `enabled` / `hidden`。
-`search()` 按 `keywords:<类关键字>` 查 npm registry,一个包都没回时再按类关键字做文本搜索，结果只留带这个关键字的包;翻到上限时 `searchPartial()` 为真;`npmRegistry()` 给出所用的 registry;`packageInfo(name, version?)` 取一个版本的包文档;
+`search()` 按 `keywords:<类关键字>` 查 npm registry,一个包都没回时再按类关键字做文本搜索，结果只留带这个关键字的包;翻到上限时 `searchPartial()` 为真;`npmRegistry()` 给出所用的 registry;`packageInfo(name, version?)` 取一个版本的包文档,带 package.json 的 `os`,`history[].problems` 是按各版本自己的 manifest 判出的不兼容原因;
 `updates()` 比较磁盘版本与 `latest`。这三处用安装时的 registry:首次查询时在 `extensions/` 里跑
 `pnpm config get registry --ignore-workspace`,成功的结果缓存到 `setRegistry()` 改写 `extensions/.npmrc` 的
 `registry=` 行为止(`configuredRegistry()` 读这一行),pnpm 失败时抛出它的输出;连接失败和读正文时断线的错误都带主机和

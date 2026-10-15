@@ -37,6 +37,7 @@
     "tests/web/settings-general.test.ts",
     "tests/web/feature-providers.test.ts",
     "tests/web/feature-extensions.test.ts",
+    "tests/web/extensions-markdown.test.ts",
     "src/worlds/*/webui/**",
     "bots/*/webui/**"
   ]
