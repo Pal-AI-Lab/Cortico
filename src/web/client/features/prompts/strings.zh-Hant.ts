@@ -40,7 +40,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'World 預設',
   listSep: '、',
   warnSep: '；',
-  fullPreview: "完整提示詞預覽",
+  fullPreview: '完整提示詞預覽',
   prefixEmpty: '前綴現在是空的',
   prefixUnavailable: '前綴預覽無法使用。',
   prefixStats: (n: number, tok: string) => `${n} 塊 · 算繪後約 ${tok} tokens`,

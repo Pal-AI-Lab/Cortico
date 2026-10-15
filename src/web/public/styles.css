@@ -1328,7 +1328,7 @@
   .prefix-railcontent .varchip[aria-expanded=true] { outline:none; box-shadow:inset 0 0 0 1px var(--section-color); opacity:1; }
 
   .prefix-full { margin:0; color:var(--ink); font:13px/1.7 var(--mono); white-space:pre-wrap; overflow-wrap:anywhere; }
-  .prefix-origin { position:absolute; top:calc(var(--prompt-flag-height) / 2 + 8px); left:9px; right:9px; overflow-wrap:anywhere; }
+  .prefix-origin { position:absolute; top:calc(var(--prompt-flag-height, 24px) / 2 + 8px); left:9px; right:9px; overflow-wrap:anywhere; }
   .prefix-label { position:absolute; left:0; right:0; height:0; }
   .prefix-label.tone-persona .prefix-flag { background:color-mix(in srgb,var(--accent) 26%,var(--sheet)); color:var(--accent); }
   .prefix-label.tone-world .prefix-flag { background:color-mix(in srgb,var(--ok) 26%,var(--sheet)); color:var(--ok); }

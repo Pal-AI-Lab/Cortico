@@ -787,6 +787,13 @@ it('reloads a template saved elsewhere so the next save uses its new revision', 
   expect(writes.at(-1).baseRevision).toBe('5');
 });
 
+it('re-renders the full prefix preview from the saved files after Ctrl+S', async () => {
+  const { root, edit } = await mountPage();
+  edit('Saved ');
+  root.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true, cancelable: true }));
+  await vi.waitFor(() => expect(root.querySelector<HTMLElement>('.prefix-full')!.textContent).toContain('Saved Hello'));
+});
+
 it('omits the World configuration shortcut when the manifest disables configuration', async () => {
   configAvailable = false;
   const { root } = await mountPage();

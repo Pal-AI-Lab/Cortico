@@ -46,7 +46,7 @@ export const S: Partial<typeof en> = {
   originWorld: 'Значение World по умолчанию',
   listSep: ', ',
   warnSep: '; ',
-  fullPreview: "Предпросмотр полного промпта",
+  fullPreview: 'Предпросмотр полного промпта',
   prefixEmpty: 'Сейчас префикс пуст',
   prefixUnavailable: 'Предпросмотр префикса недоступен.',
   prefixStats: (n: number, tok: string) => `${n} ${plural(n, 'блок', 'блока', 'блоков')} · после отрисовки около ${tok} token`,

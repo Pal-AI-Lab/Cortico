@@ -111,24 +111,27 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
   actions.append(expand, undoStep, restore, save);
   toolbar.append(status, actions);
 
+  /** Reads the rendered prefix into `segments` and the full preview; on failure `segments` keeps its value. */
+  async function fetchPrefix(): Promise<boolean> {
+    try {
+      segments = (await get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal })).segments;
+      full.textContent = segments.length ? segments.map((s) => s.text).join('') : S.prefixEmpty;
+      return true;
+    } catch (error) {
+      if (!signal.aborted) { full.textContent = S.prefixUnavailable; ctx.onError(error); }
+      return false;
+    }
+  }
   /** Rebuilds the sections from the server. Templates with unsaved edits keep their text, revision and undo history. */
   async function load(): Promise<boolean> {
     try {
-      const [sources, prefix] = await Promise.all([
-        get<{ prompts: PromptDoc[] }>('/api/prompts', { signal }),
-        get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal }).catch((error) => {
-          if (signal.aborted) throw error;
-          ctx.onError(error);
-          return null;
-        }),
-      ]);
+      const [sources, prefix] = await Promise.all([get<{ prompts: PromptDoc[] }>('/api/prompts', { signal }), fetchPrefix()]);
       for (const doc of sources.prompts) {
         const old = docs.get(doc.key);
         doc.content = editor.view.state.toText(doc.content).toString();
         docs.set(doc.key, old && dirty.has(doc.key) ? { ...doc, content: old.content, revision: old.revision, origin: old.origin } : doc);
       }
-      segments = prefix?.segments ?? [];
-      full.textContent = prefix ? segments.map((s) => s.text).join('') : S.prefixUnavailable;
+      if (!prefix) segments = [];
       closePopup();
       for (const section of sections) {
         observer.unobserve(section.note);
@@ -183,13 +186,7 @@ export async function mountPrompts(ctx: FeatureContext): Promise<void> {
         return false;
       }
     }
-    try {
-      const prefix = await get<{ segments: PrefixSegment[] }>('/api/prompts/prefix', { signal });
-      segments = prefix.segments;
-      full.textContent = segments.map((s) => s.text).join('');
-    } catch (error) {
-      if (!signal.aborted) { full.textContent = S.prefixUnavailable; ctx.onError(error); }
-    }
+    await fetchPrefix();
     state();
     return dirty.size === 0;
   }
