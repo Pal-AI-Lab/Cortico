@@ -152,7 +152,7 @@ pnpm check:extension <包目录>
 
 检查会读取 manifest、导入入口、按 kind 核对默认导出结构并确认面板产物存在,随后验证构造与声明接口:
 World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`envPromptVars()`、
-`console(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
+`webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
