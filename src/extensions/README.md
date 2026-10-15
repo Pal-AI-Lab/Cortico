@@ -6,7 +6,7 @@
 三类使用相同的 manifest 和加载流程,按 `kind` 校验默认导出结构、id 命名空间与 WebUI 页前缀。
 `pnpm check:extension` 使用 `dry-mount.ts` 在假部署中验证构造与声明接口:
 World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot 调用 `build()`;
-不调用 `start()`。报告只有英文,读它的多是扩展作者的 coding agent;工具重名时写出占用者的 World id。
+不调用 `start()`。报告只有英文;工具重名时写出占用者的 World id。
 
 ## manifest
 
