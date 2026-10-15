@@ -60,7 +60,7 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 系统生成的判断只陈述可确认的事实。`origin: 'internal'` 只用于来源可验证的内部通知;
 外部消息使用 `origin: 'external'`。
 
-工具回执 `ToolOutcome { text, blobs?, failed? }`;handler 抛错或返回值不合 ToolOutcome 时,Core 转成失败回执。
+工具回执 `ToolOutcome { text, blobs?, failed? }`;handler 抛错,或返回值既不是字符串也不是带字符串 text 的对象,Core 都转成失败回执。
 `interruptible` 的工具在 `interrupt` 到达时停止并返回已完成部分的回执,Core 等它返回;
 未声明的工具执行到结束。
 `endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下。

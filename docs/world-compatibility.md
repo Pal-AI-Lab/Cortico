@@ -12,7 +12,7 @@
 - 挂载 World 声明的工具(`tools()`),按名字调用 handler;工具名在一个 bot 内全局唯一,冲突时拒绝挂载。
 - 把 World 的环境描述(`envPromptVars()` 填入 `ENV_PROMPT.md` 模板)放进 system 前缀;返回 `null` 时省略整段,
   前缀重建时重新取值。
-- 工具回执可带附件:模型接受该 MIME 时附加内容,否则只发送 `fallbackText`。handler 抛错转成失败回执。
+- 工具回执可带附件:模型接受该 MIME 时附加内容,否则只发送 `fallbackText`。handler 抛错,或返回值既不是字符串也不是带字符串 text 的对象,都转成失败回执。
 - 调用 `start(host)` / `stop()`。
 
 ## L2 事件流
