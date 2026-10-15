@@ -1479,6 +1479,43 @@ describe('MainLoop user事件协议', () => {
     assertPairing(rig.session.messages);
   });
 
+  it.each([
+    ['普通派发', false],
+    ['提前派发', true],
+  ] as const)('%s工具返回 undefined 记为失败回执，本轮继续', async (_name, eager) => {
+    const logTmp = makeTmpDir();
+    const toolFile = join(logTmp.dir, 'bad-return-tools.jsonl');
+    const broken: ToolDef = {
+      name: 'broken_return',
+      description: 'broken',
+      tags: [],
+      parameters: { type: 'object', properties: {} },
+      // 模拟未经类型检查的扩展 handler
+      handler: (async () => undefined) as unknown as ToolDef['handler'],
+    };
+    rig = makeRig({
+      worlds: [makeFakeIO('ext', [broken])],
+      toolLog: new ToolCallLog(toolFile),
+      ...(eager ? { outputTap: { onDelta: () => {} } } : {}),
+    });
+    try {
+      rig.start();
+      await until(() => rig.llm.calls.length >= 1);
+      const before = rig.llm.calls.length;
+      rig.llm.script(toolReply([{ name: broken.name, id: 'u1' }]), textReply('继续'));
+      rig.pushEvent('触发');
+
+      await until(() => rig.llm.calls.length >= before + 2);
+      const receipt = rig.session.messages.find((message) => message.tool_call_id === 'u1')?.content;
+      expect(receipt).toMatch(/^\[tool failed\] broken_return broke the tool return contract: returned undefined/);
+      assertPairing(rig.session.messages);
+      const rows = readFileSync(toolFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      expect(rows).toEqual([expect.objectContaining({ tool: broken.name, failed: true, receipt })]);
+    } finally {
+      logTmp.cleanup();
+    }
+  });
+
   it('核心动作经Persona的handler接到core；schedule_wake支持绝对与相对时间', async () => {
     const forkCalls: Array<{ mode: string; task: string }> = [];
     const timerSets: Array<{ at: string; payload: Record<string, unknown> }> = [];

@@ -232,7 +232,7 @@ export interface ToolOutcome {
   failed?: true;
 }
 
-/** handler 异常由 Core 转为失败回执。 */
+/** handler 异常和不合 ToolOutcome 的返回值由 Core 转为失败回执。 */
 export interface ToolDef extends ToolSchema {
   /** 装配层按标签筛选。空数组表示不分类，组装主工具表时会告警。 */
   tags: readonly ToolTag[];

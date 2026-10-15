@@ -66,6 +66,7 @@ import {
   UNKNOWN_TOOL,
   eventFrameHeader,
   toolFailed,
+  toolFailedBadReturn,
 } from './markers.ts';
 import { fixPairing, rebuildTail } from './truncate.ts';
 
@@ -1365,7 +1366,7 @@ export class MainLoop {
               continue;
             }
             out = await runToolHandler(
-              def, args, ctx, call.call_id, decl.id, this.d.toolLog,
+              def, args, ctx, call.call_id, decl.id, log, this.d.toolLog,
               () => this.active(generation), this.d.toolOwner?.(def.name), flight.interrupt.signal, this.toolStarted,
             );
             if (!this.active(generation)) return;
@@ -2042,7 +2043,7 @@ function parseToolArgs(raw: string): Record<string, unknown> | null {
 }
 
 /**
- * 普通执行与流式提前执行共用工具处理及日志记录；异常转换为失败回执。
+ * 普通执行与流式提前执行共用工具处理及日志记录；异常和违反返回契约的值转换为失败回执。
  * started 在 handler 开始时登记调用，返回的函数在回执确定时调用。
  */
 function runToolHandler(
@@ -2051,6 +2052,7 @@ function runToolHandler(
   ctx: ToolCallContext,
   callId: string,
   role: string,
+  log: Logger,
   toolLog?: ToolCallLog,
   canRecord: () => boolean = () => true,
   mod?: string,
@@ -2065,7 +2067,14 @@ function runToolHandler(
       finished = started?.(def.name);
       return def.handler(args, { ...ctx, callId, signal });
     })
-    .then((out): ToolOutcome => (typeof out === 'string' ? { text: out } : out))
+    .then((out): ToolOutcome => {
+      if (typeof out === 'string') return { text: out };
+      // 扩展的 handler 不受类型检查约束，返回值在这里校验
+      if (typeof out === 'object' && out !== null && typeof out.text === 'string') return out;
+      const got = typeof out === 'object' && out !== null ? 'an object without a string text' : String(out);
+      log.error('工具返回值违反契约,按失败回执处理', { tool: def.name, ...(mod ? { mod } : {}), got });
+      return { text: toolFailedBadReturn(def.name, got), failed: true };
+    })
     .catch((e: unknown): ToolOutcome => ({
       text: toolFailed(e instanceof Error ? e.message : String(e)),
       failed: true,
@@ -2142,7 +2151,7 @@ class EagerDispatch {
     const run = this.chain.then(() => {
       const skipped = this.active() ? this.skip() : NOT_EXECUTED_LOOP_STOPPED;
       return skipped === null
-        ? runToolHandler(def, args, this.ctx, call.id, this.role, this.toolLog, this.active, this.owner(def.name), this.interrupt, this.started)
+        ? runToolHandler(def, args, this.ctx, call.id, this.role, this.log, this.toolLog, this.active, this.owner(def.name), this.interrupt, this.started)
         : { text: skipped };
     });
     this.chain = run.then(() => undefined);

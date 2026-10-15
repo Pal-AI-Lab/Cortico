@@ -54,6 +54,9 @@ export const HOST_LIFECYCLE_ENDED = 'host lifecycle ended';
 export const toolFailed = (detail: string): string => `[tool failed] ${detail}`;
 /** 参数不是合法 JSON:不进 handler,就地失败 */
 export const TOOL_FAILED_BAD_ARGS = toolFailed('arguments are not valid JSON');
+/** handler 的返回值既不是字符串也不是带字符串 text 的对象 */
+export const toolFailedBadReturn = (tool: string, got: string): string =>
+  toolFailed(`${tool} broke the tool return contract: returned ${got}, expected a string or { text: string }`);
 
 /** 合成投递帧的表头(见 loop.ts 的 EXTERNAL_EVENT_FRAME) */
 export const eventFrameHeader = (count: number): string =>
