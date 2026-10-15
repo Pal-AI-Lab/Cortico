@@ -55,5 +55,8 @@ Core 记录并发数，控制台「运行诊断 → 会话统计」显示各 ses
 
 常驻 session 落 `data/session-main.jsonl`,只追加;交接时的重置先写 `.tmp` 再 rename。启动时末行
 没有换行结尾视为追加中途中断:解析不出的截掉、完整的补上换行,并记一条 warn;其他损坏行拒绝加载。
+读回后,前面没有同 call_id 调用的工具回执被删去,文件同样先写 `.tmp` 再 rename;每条记一次 error,
+原记录写进本次 run 的 `transcript.jsonl`(边界记录 `orphan-result-drop`)。缺回执的调用补一条
+`[result missing (process restart)]`。
 统计(调用次数、prompt / completion / 缓存命中 / 推理 token)只在内存,重启清零;已结束的
 临时 session 保留最近 8 个供查看。
