@@ -37,7 +37,7 @@ export const WORLD_PACKAGES: readonly WorldPackageSpec[] = [
       '起不来,只记一条 warn。需要时在扩展目录装:',
       '',
       '```bash',
-      'cd extensions && corepack pnpm add --ignore-workspace --allow-build=canvas canvas@3',
+      'cd extensions && corepack pnpm add --allow-build=canvas canvas@3',
       '```',
     ].join('\n'),
   },
@@ -149,7 +149,7 @@ version it was generated from, and the host must run that same Cortico version. 
 ships this World built in; the package is for distributions that leave it out.
 
 \`\`\`bash
-cd extensions && corepack pnpm add --ignore-workspace ${name}
+cd extensions && corepack pnpm add ${name}
 \`\`\`
 
 配置与用法见 [src/worlds/${id}](${REPO_URL}/tree/main/src/worlds/${id})。
