@@ -31,6 +31,7 @@ manifest 的 `WEBUI_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 `toPageManifest()` 将服务端的 `WebUiPageContribution` 转换为 `WebUiPageManifest`。
 `invoke`、`promptDocs.path`、`config.schema` 和 `storage` 不发送给浏览器；`links`、`builtin` 与资源 URL 按协议规则校验。
 链接拒绝 `javascript:`、`data:`，一页最多七盏状态灯。
+`undeclared`(运行中出现、不在定义自描述里的工具名与事件 type)原样转交,`host.ts` 在页头 `reason` 之下用一行列出。
 
 | 路由 | 用途 |
 |---|---|
