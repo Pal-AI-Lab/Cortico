@@ -107,7 +107,7 @@ export const CORMINI_TOOL_SUMMARIES: Readonly<Record<string, DescribeText>> = {
   edit_file: { zh: '把文件里一段原文换成新文字,其余不动。', en: 'Replaces one exact passage in a file and leaves the rest as is.' },
   append_file: { zh: '在文件末尾追加文字,文件不存在就新建。', en: 'Appends text to the end of a file, creating it if missing.' },
   delete_file: { zh: '删除工作区里的一个文件;进系统前缀的文件不能删。', en: 'Deletes a workspace file; files in the system prefix cannot be deleted.' },
-  list_files: { zh: '列出工作区的目录内容。', en: 'Lists workspace directories.' },
+  list_files: { zh: '列出工作区里的文件,点名的目录列全。', en: 'Lists workspace files; a named directory is listed in full.' },
   glob_files: { zh: '按文件名模式找文件,最近改过的在前。', en: 'Finds files by name pattern, most recently modified first.' },
   grep_files: { zh: '用正则搜工作区文件的内容。', en: 'Searches workspace file contents with a regular expression.' },
   save_blob: {
