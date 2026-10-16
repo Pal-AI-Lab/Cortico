@@ -25,14 +25,16 @@ cd extensions && corepack pnpm add <包名或目录>
 
 `extensions/pnpm-workspace.yaml` 让 pnpm 把 `extensions/` 当作独立的工作区根,读其中的 `allowBuilds` 与
 `minimumReleaseAgeExclude`。WebUI 第一次装卸或查询 registry 时建一个空的;没有它时 pnpm 把 `extensions/` 当成仓库工作区的
-一员写进根 lockfile,所以命令行先装的话先建一个空文件。
+一员写进根 lockfile,所以命令行先装的话先建一个空文件。WebUI 装卸或查询 registry 前还把 `extensions/package.json` 的
+`packageManager` 设成 Cortico 根 `package.json` 里的那个:corepack 与 pnpm 都按它选 pnpm 版本,旧版本建的目录随 Cortico 升级换版。
 
 装卸都按 pnpm 默认的发布时间门槛(`minimumReleaseAge`,24 小时)解析:依赖版本优先取发布满 24 小时的;范围内没有这样的版本时
 (比如点名装刚发布的版本)pnpm 照装,并把它记进 `minimumReleaseAgeExclude`,之后的装卸都按这份名单放行。
 
-依赖的构建脚本(安装时编译或下载原生模块)只对 `allowBuilds` 里值为 true 的包运行。WebUI 每次安装后,pnpm 跳过构建、
-`allowBuilds` 里还没定下值的包中,是某个已装扩展直接依赖(`dependencies`)的改成 true 并 `pnpm rebuild`;其余仍不构建,
-安装回执列出包名与批准办法。值为 false 的包不改。命令行安装时被跳过的构建让 `pnpm add` 退出 1,用
+依赖的构建脚本(安装时编译或下载原生模块)只对 `allowBuilds` 里值为 true 的包运行。WebUI 每次安装后,读出构建被跳过、
+还没定下的包:`node_modules/.modules.yaml` 的 `ignoredBuilds` 里 `allowBuilds` 还没有的,和 `allowBuilds` 里值不是
+true 或 false 的。其中是某个已装扩展直接依赖(`dependencies`)的在 `allowBuilds` 里写 true 并 `pnpm rebuild`;其余写成待定值
+`set this to true or false`,仍不构建,安装回执列出包名与批准办法。值为 false 的包不改。命令行安装时被跳过的构建让 `pnpm add` 退出 1,用
 `corepack pnpm approve-builds <包名>` 批准并构建。
 
 `/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:

@@ -34,6 +34,7 @@ import {
 import { registerFrameworkResolver } from './extensions/runtime.ts';
 import { adaptBotDefinition, adaptProviderModule, adaptWorldDefinition, isPreviousContract } from './extensions/previous-contract.ts';
 import { text } from './extensions/strings.ts';
+import { repoRoot } from './paths.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -449,26 +450,62 @@ function allowBuildsEntries(lines: readonly string[]): Array<{ line: number; ind
 }
 
 /**
- * 构建脚本被跳过、还没定下的包名:pnpm 跳过一个包的构建脚本时,在 pnpm-workspace.yaml 的 `allowBuilds` 里给它写一个
- * 既不是 true 也不是 false 的占位值,直到有人改掉。
+ * `allowBuilds` 里待定的值。pnpm 只在交互安装时给构建脚本被跳过的包写它;Cortico 起的 pnpm 不是交互的,
+ * 由 `install()` 补写。
+ */
+const UNDECIDED_BUILD = 'set this to true or false';
+
+/**
+ * pnpm 在 node_modules/.modules.yaml(内容是 JSON)的 `ignoredBuilds` 里记下构建脚本被跳过的包,条目形如
+ * `name@version`。文件缺失或读不出时为空。
+ */
+function ignoredBuilds(dir: string): string[] {
+  const file = join(dir, 'node_modules', '.modules.yaml');
+  if (!existsSync(file)) return [];
+  let state: { ignoredBuilds?: unknown };
+  try { state = JSON.parse(readFileSync(file, 'utf8')) as typeof state; } catch { return []; }
+  if (!Array.isArray(state.ignoredBuilds)) return [];
+  return state.ignoredBuilds.filter((e): e is string => typeof e === 'string').map((e) => /^(@?[^@]+)@/.exec(e)?.[1] ?? e);
+}
+
+/**
+ * 构建脚本被跳过、还没定下的包名:`allowBuilds` 里值既不是 true 也不是 false 的,加上 `ignoredBuilds` 里
+ * `allowBuilds` 还没有这一项的。
  */
 function pendingBuilds(dir: string): string[] {
   const file = join(dir, WORKSPACE_FILE);
-  if (!existsSync(file)) return [];
-  return allowBuildsEntries(readFileSync(file, 'utf8').split(/\r?\n/))
-    .filter(({ value }) => value !== 'true' && value !== 'false')
-    .map(({ name }) => name);
+  const entries = existsSync(file) ? allowBuildsEntries(readFileSync(file, 'utf8').split(/\r?\n/)) : [];
+  const undecided = entries.filter(({ value }) => value !== 'true' && value !== 'false').map(({ name }) => name);
+  const unrecorded = ignoredBuilds(dir).filter((name) => !entries.some((e) => e.name === name));
+  return [...new Set([...undecided, ...unrecorded])];
 }
 
-/** 把 `allowBuilds` 里这些包的值改成 true,其余行原样写回。 */
-function allowBuilds(dir: string, names: readonly string[]): void {
+/** 把这些包在 `allowBuilds` 里的值写成 `value`,没有这一项的加上,其余行原样写回。 */
+function setAllowBuilds(dir: string, names: readonly string[], value: string): void {
+  if (!names.length) return;
   const file = join(dir, WORKSPACE_FILE);
   const raw = readFileSync(file, 'utf8');
   const lines = raw.split(/\r?\n/);
-  for (const { line, indent, quote, name } of allowBuildsEntries(lines)) {
-    if (names.includes(name)) lines[line] = `${indent}${quote}${name}${quote}: true`;
+  const entries = allowBuildsEntries(lines);
+  for (const { line, indent, quote, name } of entries) {
+    if (names.includes(name)) lines[line] = `${indent}${quote}${name}${quote}: ${value}`;
+  }
+  const indent = entries[0]?.indent ?? '  ';
+  const added = names.filter((name) => !entries.some((e) => e.name === name))
+    .map((name) => `${indent}${name.startsWith('@') ? `'${name}'` : name}: ${value}`);
+  const start = lines.findIndex((l) => /^allowBuilds:\s*$/.test(l));
+  if (start >= 0) {
+    lines.splice(start + 1, 0, ...added);
+  } else {
+    while (lines.at(-1) === '') lines.pop();
+    lines.push('allowBuilds:', ...added, '');
   }
   writeFileSync(file, lines.join(raw.includes('\r\n') ? '\r\n' : '\n'), 'utf8');
+}
+/** Cortico 自己 package.json 的 `packageManager`;发布到 npm 的 cortico 包没有这个字段。 */
+function corticoPackageManager(): string | undefined {
+  const { packageManager } = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { packageManager?: unknown };
+  return typeof packageManager === 'string' ? packageManager : undefined;
 }
 /** .npmrc 里设默认源的那一行;`@scope:registry=` 不算。 */
 const REGISTRY_LINE = /^\s*registry\s*=(.*)$/;
@@ -688,12 +725,20 @@ export class ExtensionManager {
     this.registryUrl = null;
   }
 
-  /** extensions/ 和其中的 package.json 与 pnpm-workspace.yaml,pnpm 以它为工作区根;返回目录。 */
+  /**
+   * extensions/ 和其中的 package.json 与 pnpm-workspace.yaml,pnpm 以它为工作区根;返回目录。package.json 的
+   * `packageManager` 与 Cortico 自己的不同时改成后者:corepack 与 pnpm 都按它选 pnpm 版本,旧版本建的目录随 Cortico 升级换版。
+   */
   private prepareDir(): string {
     if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
     const pkgFile = join(this.dir, 'package.json');
-    if (!existsSync(pkgFile)) {
-      writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
+    const existing = existsSync(pkgFile);
+    const pkg = existing
+      ? JSON.parse(readFileSync(pkgFile, 'utf8')) as Record<string, unknown>
+      : { name: 'cortico-extensions', private: true, dependencies: {} };
+    const packageManager = corticoPackageManager();
+    if (!existing || (packageManager && pkg.packageManager !== packageManager)) {
+      writeFileSync(pkgFile, JSON.stringify(packageManager ? { ...pkg, packageManager } : pkg, null, 2) + '\n', 'utf8');
     }
     const workspaceFile = join(this.dir, WORKSPACE_FILE);
     if (!existsSync(workspaceFile)) writeFileSync(workspaceFile, '', 'utf8');
@@ -1007,7 +1052,7 @@ export class ExtensionManager {
 
   /**
    * `pnpm add` 之后,构建脚本被跳过的包里是某个已装扩展直接依赖的,在 `allowBuilds` 里改成 true 并 `pnpm rebuild`:
-   * 装扩展就是信任它和它列出的依赖。其余的仍不构建,回执列出包名与批准的命令。
+   * 装扩展就是信任它和它列出的依赖。其余的仍不构建,在 `allowBuilds` 里写成待定值,回执列出包名与批准的命令。
    */
   async install(target: ExtensionInstallTarget, language: Language = 'zh'): Promise<string> {
     const spec = this.installSpec(target);
@@ -1018,11 +1063,10 @@ export class ExtensionManager {
       const direct = new Set(readInstalled(this.dir).flatMap(({ name }) =>
         Object.keys(readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'))?.dependencies ?? {})));
       const approve = skipped.filter((name) => direct.has(name));
-      if (approve.length) {
-        allowBuilds(this.dir, approve);
-        output.push(await this.pnpm(['rebuild', ...approve]));
-      }
       const pending = skipped.filter((name) => !direct.has(name));
+      setAllowBuilds(this.dir, approve, 'true');
+      setAllowBuilds(this.dir, pending, UNDECIDED_BUILD);
+      if (approve.length) output.push(await this.pnpm(['rebuild', ...approve]));
       if (pending.length) output.push(text(language).buildsPending(pending.join(' '), this.dir));
       return output.join('\n');
     });

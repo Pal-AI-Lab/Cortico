@@ -92,8 +92,10 @@ undici 的 `cause` 错误码。
 `month` 缺时留搜索端点的月数。
 `packageInfo()` 的 `author` 取 package.json 的 `author`(字符串只取名字,或 `{ name }`);`publisher` 取 `_npmUser.name`。
 `check(target, kind?)` 装前只读 manifest;`install()` / `uninstall()` 经 `corepack pnpm add|remove` 改 `extensions/`,
-先补上空的 `pnpm-workspace.yaml` 让它成为独立的工作区根,并带 `--config.strict-dep-builds=false`:跳过构建不算失败。
-`install()` 随后把 `allowBuilds` 里待定、又是已装扩展直接依赖的包改成 true 并 `pnpm rebuild`,其余待定的列进回执。
+先补上空的 `pnpm-workspace.yaml` 让它成为独立的工作区根、把 `package.json` 的 `packageManager` 设成 Cortico 自己的,
+并带 `--config.strict-dep-builds=false`:跳过构建不算失败。
+`install()` 随后把构建待定(`ignoredBuilds` 或 `allowBuilds` 的待定值)、又是已装扩展直接依赖的包在 `allowBuilds` 里写 true
+并 `pnpm rebuild`,其余写成待定值并列进回执。
 规则见 [docs/extensions.md](../../docs/extensions.md)「安装」。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
 manifest 里声明的那两个文件。
 

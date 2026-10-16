@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { PREVIOUS_CONTRACT_VERSIONS } from '../src/extensions/previous-contract.ts';
+import { repoRoot } from '../src/paths.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extensions-')); });
@@ -164,6 +165,16 @@ describe('ExtensionManager', () => {
     expect(runs[1].args).toEqual(['add', 'plain', '--config.strict-dep-builds=false']);
   });
 
+  it('装卸前把旧版本写下的 packageManager 换成 Cortico 自己的,依赖不动', async () => {
+    installFake('present', { noFiles: true });
+    const pkgFile = join(root, 'extensions/package.json');
+    writeFileSync(pkgFile, JSON.stringify({ ...JSON.parse(readFileSync(pkgFile, 'utf8')) as object, packageManager: 'pnpm@0.0.1' }));
+    const { mgr } = manager();
+    await mgr.uninstall('present');
+    const { packageManager } = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { packageManager: string };
+    expect(JSON.parse(readFileSync(pkgFile, 'utf8'))).toMatchObject({ packageManager, dependencies: { present: '^1.0.0' } });
+  });
+
   it('install:本机目录必须存在且含 package.json,按绝对路径交给 pnpm', async () => {
     const { mgr, runs } = manager();
     await expect(mgr.install({ path: './nowhere' })).rejects.toThrow('Directory does not exist');
@@ -207,6 +218,20 @@ describe('ExtensionManager', () => {
       ['rebuild', 'native-dep'],
     ]);
     expect(readFileSync(workspaceFile, 'utf8')).toBe(workspace('true'));
+    expect(msg).toContain('corepack pnpm rebuild @scope/deep');
+  });
+
+  it('install:pnpm 只记在 .modules.yaml 的 ignoredBuilds 里的包,直接依赖写 true 并 rebuild,其余写成待定', async () => {
+    installFake('cortico-world-native', { pkg: { dependencies: { 'native-dep': '^2.0.0' } } });
+    writeFileSync(join(root, 'extensions/node_modules/.modules.yaml'), JSON.stringify({ ignoredBuilds: ['native-dep@2.0.1', '@scope/deep@1.0.0'] }));
+    const { mgr, runs } = manager();
+    const msg = await mgr.install({ name: 'cortico-world-native' }, 'en');
+    expect(runs.map((r) => r.args)).toEqual([
+      ['add', 'cortico-world-native', '--config.strict-dep-builds=false'],
+      ['rebuild', 'native-dep'],
+    ]);
+    expect(readFileSync(join(root, 'extensions/pnpm-workspace.yaml'), 'utf8'))
+      .toBe("allowBuilds:\n  '@scope/deep': set this to true or false\n  native-dep: true\n");
     expect(msg).toContain('corepack pnpm rebuild @scope/deep');
   });
 
