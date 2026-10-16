@@ -26,6 +26,9 @@ corepack pnpm install
 pnpm typecheck && pnpm test
 ```
 
+   pnpm 只运行 `pnpm-workspace.yaml` 的 `allowBuilds` 里值为 true 的依赖构建脚本,模板放行了 tsx 与 vitest 要的
+   esbuild;加了带构建脚本的依赖就在那里加一行,不然 `pnpm install` 退出 1。
+
 4. 在 Cortico 仓库根下校验,再从 WebUI「扩展」页的「手动安装」填包目录的绝对路径,重启进程:
 
 ```bash
