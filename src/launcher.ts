@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
 import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
+import { resolveLanguage } from './core/language.ts';
 import type { BotDefinition } from './bot.ts';
 import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
@@ -245,7 +246,7 @@ async function main(): Promise<void> {
       ? `  扩展:      ${ext.name}@${ext.version} → ${ext.kind === 'provider' ? 'provider' : ext.kind === 'bot' ? 'bot' : 'World'} ${ext.worldId}`
       : ext.idle
         ? `  扩展:      ${ext.name}@${ext.version} · bot 包,本部署未引用`
-        : `  扩展:      ${ext.name} 未加载: ${ext.reason}`);
+        : `  扩展:      ${ext.name} 未加载: ${ext.reason?.(resolveLanguage(cfg.language))}`);
   }
   console.log(`  主模型:    ${activeProvider?.spec?.model || '未配置；请在 WebUI「模型供应商」页选择连接与模型'}`);
   if (missingSecret && endpointDir) {
