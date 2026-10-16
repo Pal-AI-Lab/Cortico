@@ -15,11 +15,13 @@
   "main": "./src/index.ts",
   "cortico": {
     "kind": "provider",
-    "api": 6
+    "api": 6,
+    "tags": []
   },
   "files": [
     "src",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "vitest run",

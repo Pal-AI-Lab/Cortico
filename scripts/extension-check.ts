@@ -32,6 +32,7 @@ import {
   resolveExtensionEntry,
 } from '../src/extensions.ts';
 import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
+import { authorGuide } from '../src/extensions/author-guide.ts';
 
 const builtinWorlds = await loadBuiltinWorlds();
 
@@ -176,6 +177,7 @@ async function main(): Promise<void> {
     rmSync(scratchDir, { recursive: true, force: true });
   }
 
+  for (const line of await authorGuide(pkgDir, pkg)) console.log(line);
   verdict();
 }
 

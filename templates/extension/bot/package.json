@@ -15,12 +15,14 @@
   "main": "./index.ts",
   "cortico": {
     "kind": "bot",
-    "api": 7
+    "api": 7,
+    "tags": []
   },
   "files": [
     "index.ts",
     "persona",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "vitest run",

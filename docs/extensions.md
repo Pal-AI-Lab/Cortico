@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
 
 # 扩展
 
@@ -126,6 +126,19 @@ npm 市场里还没装的包都是默认头像。bot 包的 png 图标
 在 `pnpm start --new` 新建部署时复制成部署的 `avatar.png`,之后头像以部署里的那份为准。路径不合格时给出
 warning 并忽略。
 
+以下字段可选,加载扩展不读它们:
+
+- `tags`:标签 id 的数组。词表、每个标签什么时候贴与级别规则见索引仓的 [TAGS.md](https://github.com/Pal-AI-Lab/cortico-extensions/blob/main/TAGS.md)。
+  市场只认词表里的标签;官方标注作者声明了不算;声明过的警示标签之后的版本去不掉,要向官方申请撤销。
+- `locales`:`{ "zh"?: { displayName?, description? }, "en"?: { ... } }`,只认 `zh` 与 `en`。界面是这种语言时,
+  市场用它覆盖 `displayName` 与 package.json 的 `description`。
+- `screenshots`:包内相对路径的数组,png、webp 或 jpg,显示在市场详情里;索引仓每张收至多 2MB、最多 8 张。
+- `describe`:包内相对路径,指向 `pnpm describe:extension` 导出的 describe.json,即扩展声明的工具、事件、接入方式
+  等。索引仓与市场只读这个文件,不执行包代码;`check:extension` 核对它与代码一致,见「自描述」。
+
+包根目录的 `CHANGELOG.md` 也可选:每个版本一节二级标题,标题里第一个版本号是这一节的版本(`## 0.2.0` 或
+`## [0.2.0] - 2026-10-15`),市场按节显示各版本的更新说明。
+
 入口默认导出一个 `WorldDefinition`(契约见 [worlds.md](worlds.md)):
 
 ```ts
@@ -229,6 +242,11 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 `webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
+
+最后两段只提示,不计入失败。「Tags」从 raw.githubusercontent.com 读索引仓 main 上的 `index.json`(3 秒没回、
+`schema` 不是 1 时跳过并写出原因),`cortico.tags` 为空时列出整张词表与每个标签的 `when`,不认识的标签给出名字接近的,
+并列出提示与警示标签供对照;官方在 `overrides` 里改过这个包的标签时写出改动与申请格式。「Before publishing」列出声明的标签、
+`CHANGELOG.md` 有没有当前版本的一节、`os`、`cortico.describe` 指的文件在不在,以及向官方提扩展申请的纯文本格式。
 
 配置组声明的每个路径都要落在自己的段内,否则是失败。World 是 `worlds.<id>.`,并且要在
 `defaults()` 里有对应项——缺默认值时 WebUI 照样渲染旋钮、照样写回 config.json,而读到的是代码里

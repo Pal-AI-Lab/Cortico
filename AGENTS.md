@@ -163,6 +163,8 @@ that cannot be inferred from the code.
   script under `scratch/`.
 - `pnpm logq` queries run logs; `pnpm check:extension <dir>` validates an extension package;
   `pnpm audit:release` runs the release audit.
+- Before writing an extension, read [docs/extensions.md](docs/extensions.md) and
+  [templates/extension/README.md](templates/extension/README.md).
 
 ## 7. Scratch
 
