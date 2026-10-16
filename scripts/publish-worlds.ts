@@ -8,11 +8,13 @@
  * 包名在 npm 上已有占位版本,版本号可能低于占位版,所以发布显式带 `--tag latest`。
  */
 import * as esbuild from 'esbuild';
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EXTENSION_API_VERSIONS, FRAMEWORK_SPECIFIER } from '../src/extensions/manifest.ts';
+import { DEFAULT_DESCRIBE_FILE, exportDescribe } from '../src/extensions/describe-export.ts';
 import type { RootPackageJson } from './publish-package.ts';
 
 export interface WorldPackageSpec {
@@ -202,6 +204,18 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
     if (existsSync(join(out, 'dist', 'webui.css'))) cortico.webUiStyle = 'dist/webui.css';
   }
 
+  // 与扩展作者跑 pnpm describe:extension 得到的相同
+  const scratchDir = mkdtempSync(join(tmpdir(), 'cortico-describe-'));
+  try {
+    const describe = await exportDescribe('world', definition, { scratchDir, packageDir: worldDir, repoRoot: REPO_ROOT, language: 'en' });
+    if (!describe) throw new Error(`${id}: definition.ts 的 World 没有 describe`);
+    writeFileSync(join(out, DEFAULT_DESCRIBE_FILE), `${JSON.stringify(describe, null, 2)}
+`);
+    cortico.describe = DEFAULT_DESCRIBE_FILE;
+  } finally {
+    rmSync(scratchDir, { recursive: true, force: true });
+  }
+
   const manifest = {
     name: packageNameOf(id),
     version: root.version,
@@ -216,7 +230,7 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
     engines: root.engines,
     main: './src/index.ts',
     cortico,
-    files: ['src', ...(existsSync(join(out, 'dist')) ? ['dist'] : []), 'README.md', 'LICENSE'],
+    files: ['src', ...(existsSync(join(out, 'dist')) ? ['dist'] : []), DEFAULT_DESCRIBE_FILE, 'README.md', 'LICENSE'],
     dependencies,
   };
   writeFileSync(join(out, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
