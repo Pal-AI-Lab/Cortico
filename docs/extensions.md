@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts -->
 
 # 扩展
 
@@ -126,10 +126,6 @@ npm 市场里还没装的包都是默认头像。bot 包的 png 图标
 在 `pnpm start --new` 新建部署时复制成部署的 `avatar.png`,之后头像以部署里的那份为准。路径不合格时给出
 warning 并忽略。
 
-`describe` 是自描述文件的包内路径(见下面「自描述」)。`tags`、`locales`、`screenshots` 由官方索引读取,框架只检查形状:
-`tags` 与 `screenshots` 是字符串数组,`locales` 是 `{ zh?, en? }`,每项只含字符串 `displayName` 与 `description`。
-形状不对时给出 warning,包照常加载。
-
 入口默认导出一个 `WorldDefinition`(契约见 [worlds.md](worlds.md)):
 
 ```ts
@@ -232,8 +228,6 @@ pnpm check:extension <包目录>
 World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`envPromptVars()`、
 `webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
-自描述检查:定义没写 `describe`、实例的工具名不在 `describe.tools` 里(bot 按 `persona.ownToolNames()`)、
-package.json 没有 `cortico.describe`、它指的文件不在或与重新生成的内容不一致,都是失败。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
 配置组声明的每个路径都要落在自己的段内,否则是失败。World 是 `worlds.<id>.`,并且要在
@@ -244,6 +238,11 @@ provider 是 `providers.<端点名>.options.`。写回的三道闸(服务端的�
 模块配置写入)都只认 `providers.<端点名>.` 前缀:段外的路径渲染得出旋钮、一改就报越界;
 段内 `options` 之外的路径三道都放行,值直接盖掉框架自己编辑的 `baseUrl`、`secret`、`multimodal`
 与 `spec`。这些值存在端点条目里,不经 `defaults()`,因此只核对段。
+
+自描述检查:定义没写 `describe`、实例的工具名不在 `describe.tools` 里(bot 按 `persona.ownToolNames()`)、
+package.json 没有 `cortico.describe`、它指的文件不在或与重新生成的内容不一致,都是失败。`cortico.describe`
+须是包内的 `.json`;`tags` 与 `screenshots` 须是字符串数组,`locales` 须是 `{ zh?, en? }` 且每项只含字符串
+`displayName` 与 `description`。这几项不合格时只给 warning,包照常加载。
 
 ## 契约版本
 

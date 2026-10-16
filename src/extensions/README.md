@@ -7,9 +7,6 @@
 `pnpm check:extension` 使用 `dry-mount.ts` 在假部署中验证构造与声明接口:
 World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot 调用 `build()`;
 不调用 `start()`。报告只有英文;工具重名时写出占用者的 World id。
-`describe-export.ts` 在同一个假部署里从定义的 `describe` 生成 describe.json(`describe.ts` 是它的形状),
-`pnpm describe:extension` 写文件,`pnpm check:extension` 核对包里那份一致;规则见
-[docs/extensions.md](../../docs/extensions.md)「自描述」。
 
 ## manifest
 
@@ -33,6 +30,10 @@ World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot �
   }
 }
 ```
+
+`describe-export.ts` 在 `dry-mount.ts` 的假部署里从定义的 `describe` 生成 describe.json(`describe.ts` 是它的形状),
+`pnpm describe:extension` 写文件,`pnpm check:extension` 核对包里那份一致;规则见
+[docs/extensions.md](../../docs/extensions.md)「自描述」。
 
 `parseExtensionManifest(pkg, language)` 只做解析与校验,不碰文件系统;装载器与
 `pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
