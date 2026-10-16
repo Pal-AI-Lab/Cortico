@@ -97,7 +97,7 @@ export interface ChangelogView {
   url?: string;
 }
 
-/** 与 `ExtensionSummary` 同形:卡片上的能力摘要,按包的类别取字段。 */
+/** 与 `ExtensionSummary` 同形。 */
 export interface SummaryView {
   tools?: number;
   events?: number;

@@ -246,7 +246,7 @@ export interface ExtensionSearchHit {
 }
 
 /**
- * 卡片上的能力摘要,来自包的自描述:World 有 `tools` 与 `events`(个数),供应商有 `protocols`、`auth`、
+ * 索引仓 catalog.json 从包的自描述算出的能力摘要:World 有 `tools` 与 `events`(个数),供应商有 `protocols`、`auth`、
  * `input` 与 `local`,Bot 有 `worlds`(个数)与 `memory`(Memory 名)。
  */
 export interface ExtensionSummary {
