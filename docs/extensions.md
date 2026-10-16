@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts -->
+<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts -->
 
 # 扩展
 
@@ -113,7 +113,7 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
   "type": "module",
   "main": "./src/index.ts",
   "keywords": ["cortico-world"],
-  "cortico": { "kind": "world", "api": 6, "displayName": "Discord", "icon": "assets/icon.png", "webUiClient": "dist/webui.js", "webUiStyle": "dist/webui.css" }
+  "cortico": { "kind": "world", "api": 6, "displayName": "Discord", "icon": "assets/icon.png", "describe": "describe.json", "webUiClient": "dist/webui.js", "webUiStyle": "dist/webui.css" }
 }
 ```
 
@@ -125,6 +125,10 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 npm 市场里还没装的包都是默认头像。bot 包的 png 图标
 在 `pnpm start --new` 新建部署时复制成部署的 `avatar.png`,之后头像以部署里的那份为准。路径不合格时给出
 warning 并忽略。
+
+`describe` 是自描述文件的包内路径(见下面「自描述」)。`tags`、`locales`、`screenshots` 由官方索引读取,框架只检查形状:
+`tags` 与 `screenshots` 是字符串数组,`locales` 是 `{ zh?, en? }`,每项只含字符串 `displayName` 与 `description`。
+形状不对时给出 warning,包照常加载。
 
 入口默认导出一个 `WorldDefinition`(契约见 [worlds.md](worlds.md)):
 
@@ -187,6 +191,37 @@ WebUI 面板可选。自定义面板的 `src/webui/client.ts` 默认导出 `{ pa
 在声明里给出部署侧的覆盖路径(通常在 `loaded.rootDir` 下)。bot 要挂的 World 若也是扩展,
 在 `declares` 里声明 id 即可,没装时是灰卡。
 
+## 自描述
+
+三类扩展的定义都写一个 `describe` 字段,给人和扩展市场看,不进提示词:
+
+| 类别 | 字段 | 内容 |
+|---|---|---|
+| World | `WorldDefinition.describe` | `tools`:实例的 `tools()` 可能返回的全部工具,每个有 `name`、`description`、`parameters`、`tags`,可选 `summary`(给人看的一句话);`events`:World 推出的每种事件,有 `type`、`description`,可选 `trigger` 与 `tags` |
+| provider | `ProviderModule.describe` | `protocols`、`auth`(`api-key` / `oauth` / `device-code` / `web-session`)、`local`(模型在本机运行)、`input`(`text` / `image` / `audio` / `video`) |
+| bot | `BotDefinition.describe` | `tools`:Persona 提供的工具,写法同 World;`memory.form`:Memory 的形式 |
+
+`summary`、事件的 `description` 与 `memory.form` 可以写一个字符串,也可以写 `{ zh, en }`。
+实例的 `tools()` 可以按配置改写工具的 `description` 与 `parameters`,名字要在 `describe.tools` 里。
+
+发布前跑:
+
+```bash
+pnpm describe:extension <包目录>
+pnpm check:extension <包目录>
+```
+
+`describe:extension` 在假部署里构造扩展,把声明写成 `cortico.describe` 指的文件;没写这个字段时写
+`describe.json`,并把 `"describe": "describe.json"` 加进 package.json 的 cortico 块。文件内容:World 是
+`tools`、`events` 与 `webUi('zh')` 里 `role: 'envPrompt'` 的提示词模板原文;provider 是 `describe` 加
+`title`、`description` 与非空的档位表;bot 是 `tools`、`declares` 里的 World id、`memoryName` 与
+`memory.form`,以及 `build()` 出的 Persona 提示词模板原文。代码里的声明或模板改了就重新跑一次;
+package.json 有 `files` 时要让它包含这个文件。官方索引与扩展市场只读这个文件,不执行扩展代码。
+
+运行时,工具名不在 `describe.tools` 里、推出的事件 type 不在 `describe.events` 里时照常生效,
+运行日志在 `worlds.<id>`(Persona 的工具在 `persona`)下对每个名字记一条 warn,World 页或 Persona 页列出这些名字。
+定义没写 `describe` 时不检查。
+
 ## 校验
 
 ```bash
@@ -197,6 +232,8 @@ pnpm check:extension <包目录>
 World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`envPromptVars()`、
 `webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
+自描述检查:定义没写 `describe`、实例的工具名不在 `describe.tools` 里(bot 按 `persona.ownToolNames()`)、
+package.json 没有 `cortico.describe`、它指的文件不在或与重新生成的内容不一致,都是失败。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
 配置组声明的每个路径都要落在自己的段内,否则是失败。World 是 `worlds.<id>.`,并且要在
