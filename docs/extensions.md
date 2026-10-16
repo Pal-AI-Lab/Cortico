@@ -78,7 +78,6 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 `GET /api/extensions/package` 同时读 `packages/<包名>.json`(作用域包的 `/` 换成 `__`),合进 `changelog`(版本号 →
 更新说明正文)与 `describe`(包的自描述,`summary` 与事件 `description` 按上面的语言规则换成字符串,缺字段的工具、事件与提示词
 丢掉)。`describe` 与 `locales` 对应 Action 扫到的版本,详情是别的版本时不合。文件没有或读不到时详情不带这两项。
-详情的标签下有「反馈标签」链接,打开索引仓预填包名的「标签」扩展申请。
 
 包的简介按 Markdown 子集渲染:段落、标题、列表、代码、粗体、斜体与 http(s) 链接,原始 HTML 当文字。
 

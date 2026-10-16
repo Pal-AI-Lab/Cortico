@@ -94,5 +94,6 @@ undici 的 `cause` 错误码。
 manifest 里声明的那两个文件。
 
 `market.ts` 的 `ExtensionMarket` 是扩展页的官方索引与讨论区:`merge()` 把索引仓的 `index.json` / `catalog.json` 合进
-`search()` 的结果,`blocked()` 给已装包的拉黑原因,其余方法是 GitHub 设备码登录、投票与评论。令牌文件与索引缓存都在扩展目录;
+`search()` 的结果,`mergePackage()` 把 `packages/<包名>.json` 的自描述与更新日志正文合进 `packageInfo()` 的详情,
+`blocked()` 给已装包的拉黑原因,其余方法是 GitHub 设备码登录、投票与评论。令牌文件与索引缓存都在扩展目录;
 规则与接口见 [docs/extensions.md](../../docs/extensions.md)「市场的官方索引」。
