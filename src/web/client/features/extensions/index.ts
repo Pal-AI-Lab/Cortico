@@ -161,6 +161,8 @@ export interface MarketIndexView {
   /** 「新品」算首次发布后多少天 */
   newDays?: number;
   error?: string;
+  /** 这次没读到、用的是上次读到的索引时,这次读取失败的原因 */
+  stale?: string;
 }
 
 interface UpdateView {
@@ -180,6 +182,12 @@ interface RegistryView {
   configured: string | null;
   registry?: string;
   registryError?: string;
+}
+
+/** `/api/extensions/index-base` 的回应:扩展页配的索引源(没配时 null)与先问的那一处。 */
+interface IndexBaseView {
+  configured: string | null;
+  base: string;
 }
 
 /** 与 `ExtensionSearchHit` 同形。 */
@@ -441,6 +449,11 @@ export function mountExtensions(ctx: FeatureContext): void {
   let registryInput: HTMLInputElement | null = null;
   /** npm 源下拉是否展开;读不出源时自动展开。 */
   let registryOpen = false;
+  let indexBaseSetting: IndexBaseView | null = null;
+  /** 索引源输入框里没保存的值;切换类别页签时保留。 */
+  let indexBaseDraft: string | null = null;
+  let indexBaseInput: HTMLInputElement | null = null;
+  let indexBaseOpen = false;
   let loadGeneration = 0;
   let installedFetched = false;
   let restoringScroll = true;
@@ -1189,7 +1202,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       const data = await get<{ hits: SearchHitView[]; partial?: boolean; registry?: string; index?: MarketIndexView }>(`/api/extensions/search?kind=${owner}`, { signal });
       if (signal.aborted || state.generation !== generation) return;
       registry = data.registry ?? ''; marketIndex = data.index ?? { tags: {} }; state.hits = data.hits; state.fetched = true;
-      message(owner, 'market', [data.partial ? S.partial : '', data.index?.error ? S.indexFailed(data.index.error) : ''].filter(Boolean).join('\n')); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
+      message(owner, 'market', [data.partial ? S.partial : '', data.index?.error ? S.indexFailed(data.index.error) : '', data.index?.stale ? S.indexStale(data.index.stale) : ''].filter(Boolean).join('\n')); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
     } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
   async function loadRegistry() {
@@ -1213,6 +1226,24 @@ export function mountExtensions(ctx: FeatureContext): void {
     render();
     message(owner, 'registry', registrySetting.registry ? S.registrySaved(registrySetting.registry) : registrySetting.registryError ?? '', !registrySetting.registry);
     void checkUpdates(); void search(owner);
+  }
+  async function loadIndexBase() {
+    try { indexBaseSetting = await get<IndexBaseView>('/api/extensions/index-base', { signal }); }
+    catch (error) { if (!signal.aborted) message(kind, 'indexBase', errorText(error), true); return; }
+    if (signal.aborted) return;
+    if (indexBaseInput) { indexBaseInput.placeholder = indexBaseSetting.base; if (indexBaseDraft === null) indexBaseInput.value = indexBaseSetting.configured ?? ''; }
+  }
+  /** 换索引源后已取到的搜索结果与包详情都作废,按新源重取。 */
+  async function saveIndexBase(value: string) {
+    const owner = kind;
+    try { indexBaseSetting = await post<IndexBaseView>('/api/extensions/index-base', { indexBase: value }, { signal }); }
+    catch (error) { if (!signal.aborted) message(owner, 'indexBase', errorText(error), true); return; }
+    if (signal.aborted) return;
+    indexBaseDraft = null; detailsCache.clear();
+    for (const state of Object.values(states)) { state.hits = []; state.fetched = false; state.generation++; delete state.messages.market; }
+    render();
+    message(owner, 'indexBase', S.indexBaseSaved(indexBaseSetting.base));
+    void search(owner);
   }
   /** 安装先按当前类别检查声明再装;删除直接卸。两者都改磁盘,重启进程后生效。 */
   async function operate(action: 'install' | 'delete', target: Target, area: string, owner: ExtensionKindView) {
@@ -1465,7 +1496,10 @@ export function mountExtensions(ctx: FeatureContext): void {
     const registryToggle = ui.h('button', 'extension-advanced-toggle extension-registry-toggle' + (registryOpen ? ' is-open' : ''), S.registryLabel) as HTMLButtonElement; registryToggle.type = 'button';
     registryToggle.setAttribute('aria-expanded', String(registryOpen)); registryToggle.setAttribute('aria-controls', 'extension-registry');
     registryToggle.addEventListener('click', () => { registryOpen = !registryOpen; registryPanel.hidden = !registryOpen; registryToggle.classList.toggle('is-open', registryOpen); registryToggle.setAttribute('aria-expanded', String(registryOpen)); }, { signal });
-    const toggles = ui.h('div', 'extension-search-toggles'); toggles.append(advancedToggle, registryToggle);
+    const indexBaseToggle = ui.h('button', 'extension-advanced-toggle' + (indexBaseOpen ? ' is-open' : ''), S.indexBaseLabel) as HTMLButtonElement; indexBaseToggle.type = 'button';
+    indexBaseToggle.setAttribute('aria-expanded', String(indexBaseOpen)); indexBaseToggle.setAttribute('aria-controls', 'extension-index-base');
+    indexBaseToggle.addEventListener('click', () => { indexBaseOpen = !indexBaseOpen; indexBasePanel.hidden = !indexBaseOpen; indexBaseToggle.classList.toggle('is-open', indexBaseOpen); indexBaseToggle.setAttribute('aria-expanded', String(indexBaseOpen)); }, { signal });
+    const toggles = ui.h('div', 'extension-search-toggles'); toggles.append(advancedToggle, registryToggle, indexBaseToggle);
     options.append(toggles, switches);
     const advanced = ui.h('div', 'extension-advanced'); advanced.id = 'extension-advanced'; advanced.hidden = !state.advanced;
     const field = (label: string, control: HTMLElement) => { const el = ui.h('label', 'extension-advanced-field'); el.append(ui.h('span', '', label), control); return el; };
@@ -1483,8 +1517,16 @@ export function mountExtensions(ctx: FeatureContext): void {
     messageNodes.registry = ui.msgline(S.registryHelp); messageNodes.registry.setAttribute('role', 'status');
     const registryPanel = ui.h('div', 'extension-registry'); registryPanel.id = 'extension-registry'; registryPanel.hidden = !registryOpen;
     registryPanel.append(registryBar, messageNodes.registry);
+    const indexBaseBar = ui.rowbar(); indexBaseBar.classList.add('extension-toolbar');
+    const indexBaseField = indexBaseInput = ui.input({ value: indexBaseDraft ?? indexBaseSetting?.configured ?? '', placeholder: indexBaseSetting?.base ?? '', onInput: value => { indexBaseDraft = value; } });
+    indexBaseField.setAttribute('aria-label', S.indexBaseLabel);
+    const saveIndexBaseButton = ui.button(S.registrySave, { onClick: async () => { const lock = ui.disable(saveIndexBaseButton); try { await saveIndexBase(indexBaseField.value); } finally { lock.dispose(); } } });
+    indexBaseBar.append(indexBaseField, saveIndexBaseButton);
+    messageNodes.indexBase = ui.msgline(S.indexBaseHelp); messageNodes.indexBase.setAttribute('role', 'status');
+    const indexBasePanel = ui.h('div', 'extension-index-base'); indexBasePanel.id = 'extension-index-base'; indexBasePanel.hidden = !indexBaseOpen;
+    indexBasePanel.append(indexBaseBar, messageNodes.indexBase);
     tagBar = ui.h('div', 'extension-tagbar'); tagBar.hidden = true;
-    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(filters, advanced, options, registryPanel, tagBar, messageNodes.market, marketGrid, marketPager);
+    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(filters, advanced, options, registryPanel, indexBasePanel, tagBar, messageNodes.market, marketGrid, marketPager);
     const manual = ui.sheet({ title: S.manual }); messageNodes.manual = ui.msgline(); messageNodes.manual.setAttribute('role', 'status');
     const source = ui.segmented([{ value: 'npm', label: S.npm }, { value: 'local', label: S.local }], { value: state.source, onSelect: value => { state.source = value as 'npm' | 'local'; state.input = ''; render(); save(); } });
     const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, placeholder: state.source === 'npm' ? `@scope/cortico-${kind}-demo@1.2.3` : '', onInput: value => { state.input = value; } });
@@ -1518,7 +1560,7 @@ export function mountExtensions(ctx: FeatureContext): void {
   }); observer.observe(panel); lifecycle.add(() => observer.disconnect()); }
   render();
   if (!categories.includes(router.route.segments[1] as ExtensionKindView)) router.replace(['extensions', kind]);
-  void load(); void checkUpdates(); void search(kind); void loadRegistry();
+  void load(); void checkUpdates(); void search(kind); void loadRegistry(); void loadIndexBase();
   try { const marker = win.sessionStorage.getItem(storageKey + ':restart'); if (marker) { message(kind, 'management', S.reloadWait); watchRestart(JSON.parse(marker)); } } catch { /* Invalid recovery marker. */ }
 }
 export const extensionsFeature: FrameworkFeature = { route: 'extensions', label: S.navLabel, icon: 'download', navGroup: S.navGroup, needsAny: ['extensions'], mount: mountExtensions };

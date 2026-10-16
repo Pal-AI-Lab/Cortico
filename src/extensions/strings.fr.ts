@@ -41,6 +41,7 @@ export const text: Partial<typeof en> = {
   dirMissing: (path) => `Le dossier n'existe pas : ${path}`,
   badVersion: (version) => `Version invalide : ${version}`,
   badRegistry: (value) => `Le registre npm doit être une URL http:// ou https://, reçu : ${value}`,
+  badIndexBase: (value) => `La source de l'index doit être une URL http:// ou https://, reçu : ${value}`,
   busy: "Une installation ou désinstallation est déjà en cours ; attendez qu'elle se termine.",
   pnpmFailed: (command, code, output) => `pnpm ${command} a renvoyé ${code} :\n${output}`,
   buildsPending: (names, dir) => `Les scripts de build n'ont pas été exécutés pour : ${names}. Ce ne sont pas des dépendances directes d'une extension installée ; si vous leur faites confiance, passez leurs valeurs allowBuilds à true dans pnpm-workspace.yaml de ${dir}, lancez-y corepack pnpm rebuild ${names}, puis redémarrez le processus.`,

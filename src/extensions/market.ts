@@ -1,6 +1,6 @@
 /**
  * 扩展市场的官方索引与讨论区,数据都在索引仓 Pal-AI-Lab/cortico-extensions,文件格式以那里的 DESIGN.md 为准。
- * 索引文件经 raw.githubusercontent.com 读取。投票与评论用 GitHub App「Cortico Extension Market」的用户令牌
+ * 索引文件按 `fetchIndexFile` 的顺序读取。投票与评论用 GitHub App「Cortico Extension Market」的用户令牌
  * 调 GraphQL;令牌由设备码登录取得,存在扩展目录的 github-token.json,App 设置里关了令牌过期。
  * 没登录时评论读 Action 写进索引仓的 `comments/` 快照:App 私钥不随 Cortico 分发,匿名读不了 Discussions。
  */
@@ -22,28 +22,36 @@ import type {
   GithubAccount,
   GithubDeviceCode,
   MarketIndex,
+  MarketIndexBase,
   MarketTag,
 } from '../web/server.ts';
 import { text } from './strings.ts';
 
 const REPO_OWNER = 'Pal-AI-Lab';
 const REPO_NAME = 'cortico-extensions';
+/** 索引仓 main 上文件的 raw 地址前缀;没配索引源时读索引先问它,图标与截图也用它。 */
 const RAW_BASE = `https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/main`;
+const CONTENTS_API = `https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/contents`;
 /** 每个包一帖的讨论区分类;Announcement 格式,只有维护者(Action)能开帖。 */
 const DISCUSSION_CATEGORY = 'extensions';
 const GITHUB_APP_CLIENT_ID = 'Iv23lidZhJ2BMvVFLsl0';
 export const GITHUB_TOKEN_FILE = 'github-token.json';
-/** 最近一次读到的 `index.json`;连不上 GitHub 时照它拦拉黑的包。 */
+/** 最近一次读到的 `index.json`;读不到时照它拦拉黑的包、合进搜索结果。 */
 const INDEX_CACHE_FILE = 'market-index.json';
+/** 最近一次读到的 `catalog.json`;读不到时用它。 */
+const CATALOG_CACHE_FILE = 'market-catalog.json';
+/** 扩展页配的索引源:`{ "indexBase": "<地址>" }`。 */
+const SETTINGS_FILE = 'market.json';
 /** 本机认得的索引文件格式版本。 */
 const SCHEMA = 1;
 /** raw.githubusercontent.com 的 CDN 缓存是 5 分钟,更勤地取拿到的也是同一份。 */
 const RAW_CACHE_MS = 5 * 60_000;
 /**
- * 搜索列表要等索引回来才出。连不上 GitHub 的机器会卡到系统的连接超时;
- * 与 npm 下载统计同一个理由、同一个值(`src/extensions.ts` 的 DOWNLOADS_TIMEOUT_MS)。
+ * 搜索列表要等索引回来才出,每一处来源各有超时,连不上的机器不卡到系统的连接超时。第一处与 npm 下载统计同一个值
+ * (`src/extensions.ts` 的 DOWNLOADS_TIMEOUT_MS);contents API 是最后一处,多给 2 秒,两处都超时时搜索等 8 秒。
  */
 const RAW_TIMEOUT_MS = 3000;
+const API_TIMEOUT_MS = 5000;
 /** WebUI 评论区一次显示 5 条。 */
 const COMMENTS_PAGE_SIZE = 5;
 /** GitHub GraphQL 一页最多 100 条:每条评论的回复只取前 100 条,评分的评论数只数前 100 条评论下的回复。 */
@@ -133,7 +141,6 @@ const pickText = (value: Bilingual, language: Language) => baseLanguage(language
 /** 作者写的文字(`locales`、自描述)只有 zh 与 en 两份:zh 读 zh,zh-Hant 与其余语言读 en。 */
 const authorLanguage = (language: Language): 'zh' | 'en' => language === 'zh' ? 'zh' : 'en';
 const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
-const rawUrl = (path: string) => `${RAW_BASE}/${path}`;
 /** 包名当文件名,作用域包的 `/` 换成 `__`。 */
 const fileName = (name: string) => name.replace('/', '__');
 const toComment = (node: GraphqlComment): ExtensionComment => ({
@@ -187,6 +194,44 @@ function localizeDescribe(raw: unknown, language: Language): ExtensionDescribe |
   return out;
 }
 
+export interface IndexFileOptions {
+  /** 换掉 raw.githubusercontent.com 的索引源,目录结构与它相同;缺省用 raw */
+  base?: string;
+  /** GitHub 令牌;contents API 带上它每小时 5000 次,不带时每个 IP 60 次 */
+  token?: string;
+  fetch?: typeof fetch;
+}
+
+/**
+ * 读索引仓 main 上的一个 JSON 文件。先问 `base`(raw 的 CDN 不限次数);连不上、超时、回非 2xx 或正文不是 JSON 时
+ * 改问 GitHub contents API。404 是文件不存在,回 null,不再往下问。两处都失败时抛错,依次写出每一处的主机与原因。
+ */
+export async function fetchIndexFile(path: string, opts: IndexFileOptions = {}): Promise<unknown> {
+  const fetchImpl = opts.fetch ?? fetch;
+  const sources = [
+    { url: `${opts.base ?? RAW_BASE}/${path}`, headers: {}, timeoutMs: RAW_TIMEOUT_MS },
+    {
+      url: `${CONTENTS_API}/${path}?ref=main`,
+      headers: { Accept: 'application/vnd.github.raw', 'User-Agent': 'Cortico', ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}) },
+      timeoutMs: API_TIMEOUT_MS,
+    },
+  ];
+  const failures: string[] = [];
+  for (const { url, headers, timeoutMs } of sources) {
+    let res: Response;
+    try { res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) }); } catch (err) { failures.push(fetchFailure(url, err)); continue; }
+    if (res.status === 404) return null;
+    if (!res.ok) {
+      // 额度用完时 GitHub 回 403 或 429,剩余次数在这个头里
+      const limited = res.headers.get('x-ratelimit-remaining') === '0' ? ' (x-ratelimit-remaining: 0)' : '';
+      failures.push(`${new URL(url).host}: ${res.status} ${res.statusText}${limited}`);
+      continue;
+    }
+    try { return await res.json(); } catch (err) { failures.push(fetchFailure(url, err)); }
+  }
+  throw new Error(failures.join('; '));
+}
+
 export interface ExtensionMarketOptions {
   /** 扩展目录:令牌文件与索引缓存放在这里 */
   dir: string;
@@ -202,6 +247,8 @@ export class ExtensionMarket {
   private readonly raws = new Map<string, { atMs: number; value: unknown }>();
   /** 最近一次读到的合格 `index.json`,来自网络或缓存文件 */
   private index: IndexFile | null = null;
+  /** 最近一次读到的合格 `catalog.json`,来自网络或缓存文件 */
+  private catalog: CatalogFile | null = null;
   /** 帖子标题(包名) → 节点 id 与网址 */
   private discussions: Map<string, { id: string; url: string }> | null = null;
   /** 每次登录或退出加一;后台等待授权的循环发现它变了就停下 */
@@ -216,16 +263,18 @@ export class ExtensionMarket {
   /**
    * 把官方索引合进搜索结果:滤掉拉黑的包与发布者,补上标签、徽标、官方说明、取代、评分与 `catalog.json` 的列表字段。
    * 显示名与简介按 `authorLanguage` 取 `locales`,没有时用顶层的。
-   * 索引在等搜索的同时读取;读不到时结果原样返回,`index` 只有空词表与原因。
+   * 索引在等搜索的同时读取;这次读不到时用上次读到的,`index.stale` 是这次的原因;从没读到过时结果原样返回,
+   * `index` 只有空词表与原因。
    */
   async merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }> {
-    const loaded = Promise.all([
-      this.loadIndex().catch((err: unknown) => err instanceof LocalizedError ? err.describe(language) : err instanceof Error ? err.message : String(err)),
-      this.loadCatalog(),
-    ]);
+    const describe = (err: unknown) => err instanceof LocalizedError ? err.describe(language) : err instanceof Error ? err.message : String(err);
+    const loaded = Promise.all([this.loadIndex().catch((err: unknown) => describe(err)), this.loadCatalog()]);
     const hits = await search;
-    const [index, catalog] = await loaded;
-    if (typeof index === 'string') return { hits, index: { tags: {}, error: index } };
+    const [indexRead, catalogRead] = await loaded;
+    if (typeof indexRead === 'string') return { hits, index: { tags: {}, error: indexRead } };
+    const { index } = indexRead, { catalog } = catalogRead;
+    const stale = [indexRead.stale, catalogRead.stale].filter((err) => err !== undefined).map(describe).join('; ');
+    const base = this.indexBase().base;
     const vocab = index.tags;
     const now = Date.now();
     const merged = hits.filter((hit) => !this.blockedEntry(index, hit.name, hit.publisher)).map((hit): ExtensionSearchHit => {
@@ -253,8 +302,8 @@ export class ExtensionMarket {
         ...(listed?.author ? { author: listed.author } : {}),
         ...(maintainers ? { maintainers } : {}),
         ...(listed?.os ? { os: listed.os } : {}),
-        ...(listed?.icon ? { icon: rawUrl(listed.icon) } : {}),
-        ...(listed?.screenshots ? { screenshots: listed.screenshots.map(rawUrl) } : {}),
+        ...(listed?.icon ? { icon: `${base}/${listed.icon}` } : {}),
+        ...(listed?.screenshots ? { screenshots: listed.screenshots.map((path) => `${base}/${path}`) } : {}),
         ...(listed?.summary ? { summary: listed.summary } : {}),
         ...(listed?.changelog ? { changelog: listed.changelog } : {}),
         ...(tags.length ? { tags } : {}),
@@ -269,7 +318,7 @@ export class ExtensionMarket {
     const tags = Object.fromEntries(Object.entries(vocab).map(([id, tag]) => [id, {
       label: pickText(tag.label, language), hint: pickText(tag.hint, language), ...(tag.style ? { style: tag.style } : {}),
     }]));
-    return { hits: merged, index: { tags, ...(index.newDays !== undefined ? { newDays: index.newDays } : {}) } };
+    return { hits: merged, index: { tags, ...(index.newDays !== undefined ? { newDays: index.newDays } : {}), ...(stale ? { stale } : {}) } };
   }
 
   /**
@@ -277,7 +326,7 @@ export class ExtensionMarket {
    * 自描述与 `locales` 对应索引扫到的那个版本,详情是别的版本时不合。读不到时详情原样返回。
    */
   async mergePackage(name: string, detail: Promise<ExtensionPackageDetail>, language: Language): Promise<ExtensionPackageDetail> {
-    const files = PACKAGE_NAME.test(name) ? Promise.all([this.loadCatalog(), this.loadPackage(name)]) : Promise.resolve([null, null] as const);
+    const files = PACKAGE_NAME.test(name) ? Promise.all([this.loadCatalog().then((read) => read.catalog), this.loadPackage(name)]) : Promise.resolve([null, null] as const);
     const info = await detail;
     const [catalog, file] = await files;
     const listed = catalog?.packages[info.name];
@@ -294,9 +343,29 @@ export class ExtensionMarket {
 
   /** 已装包被官方拉黑时的原因;按最近一次读到的索引,本进程还没读过时读缓存文件。 */
   blocked(name: string, language: Language): string | undefined {
-    const index = this.index ??= this.cachedIndex();
+    const index = this.index ??= this.readJsonFile<IndexFile>(INDEX_CACHE_FILE);
     const reason = index && this.blockedEntry(index, name);
     return reason ? pickText(reason, language) : undefined;
+  }
+
+  /** 读索引用的源:`configured` 是扩展页配的,没配时 null;`base` 是先问的那一处。 */
+  indexBase(): MarketIndexBase {
+    const configured = this.readJsonFile<{ indexBase?: string }>(SETTINGS_FILE)?.indexBase ?? null;
+    return { configured, base: configured ?? RAW_BASE };
+  }
+
+  /**
+   * 把索引源改成 `url`(去掉末尾的 `/`),空串恢复 raw.githubusercontent.com;不是 http(s) 地址时抛 400。
+   * 内存里已读的索引文件作废,下次读改问新的源;缓存文件留着,新的源也读不到时照样用。
+   */
+  setIndexBase(url: string): MarketIndexBase {
+    const value = url.trim().replace(/\/+$/, '');
+    if (value && !(/^https?:\/\/\S+$/i.test(value) && URL.canParse(value))) throw marketError((t) => t.badIndexBase(value), 400);
+    const file = join(this.dir, SETTINGS_FILE);
+    if (value) this.writeJsonFile(SETTINGS_FILE, { indexBase: value });
+    else if (existsSync(file)) unlinkSync(file);
+    this.raws.clear();
+    return this.indexBase();
   }
 
   account(): GithubAccount {
@@ -415,39 +484,52 @@ export class ExtensionMarket {
     return index.blocked?.packages?.[name] ?? (publisher ? index.blocked?.publishers?.[publisher] : undefined);
   }
 
-  private cachedIndex(): IndexFile | null {
-    const file = join(this.dir, INDEX_CACHE_FILE);
-    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as IndexFile : null;
+  private readJsonFile<T>(name: string): T | null {
+    const file = join(this.dir, name);
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : null;
   }
 
-  /** 读 `index.json` 并写进缓存文件;连不上时用本进程上次读到的或缓存文件,都没有才抛。 */
-  private async loadIndex(): Promise<IndexFile> {
-    let index: IndexFile;
+  private writeJsonFile(name: string, value: unknown): void {
+    mkdirSync(this.dir, { recursive: true });
+    writeFileSync(join(this.dir, name), JSON.stringify(value) + '\n', 'utf8');
+  }
+
+  /**
+   * 读 `index.json`,读到新的一份就写进缓存文件。读不到时用本进程上次读到的或缓存文件,`stale` 是这次的错误;
+   * 都没有才抛。
+   */
+  private async loadIndex(): Promise<{ index: IndexFile; stale?: unknown }> {
     try {
-      const value = await this.raw('index.json');
+      const { value, stale } = await this.raw('index.json');
       if (!value) throw marketError((t) => t.indexMissing('index.json'), 502);
-      index = this.checkSchema(value as IndexFile, 'index.json');
+      const index = this.checkSchema(value as IndexFile, 'index.json');
+      if (index !== this.index) this.writeJsonFile(INDEX_CACHE_FILE, index);
+      this.index = index;
+      return stale === undefined ? { index } : { index, stale };
     } catch (err) {
-      const fallback = this.index ??= this.cachedIndex();
+      const fallback = this.index ??= this.readJsonFile<IndexFile>(INDEX_CACHE_FILE);
       if (!fallback) throw err;
       this.log.warn('官方索引读取失败,用上次读到的', { error: err instanceof Error ? err.message : String(err) });
-      return fallback;
+      return { index: fallback, stale: err };
     }
-    if (index !== this.index) {
-      mkdirSync(this.dir, { recursive: true });
-      writeFileSync(join(this.dir, INDEX_CACHE_FILE), JSON.stringify(index) + '\n', 'utf8');
-    }
-    return this.index = index;
   }
 
-  /** `catalog.json` 没有、格式不认识或读不到时不补 Action 汇总的字段,后两种记日志。 */
-  private async loadCatalog(): Promise<CatalogFile | null> {
+  /**
+   * `catalog.json` 没有时不补 Action 汇总的字段。格式不认识或读不到时记日志,用本进程上次读到的或缓存文件,
+   * `stale` 是这次的错误;都没有时同样不补。
+   */
+  private async loadCatalog(): Promise<{ catalog: CatalogFile | null; stale?: unknown }> {
     try {
-      const value = await this.raw('catalog.json');
-      return value ? this.checkSchema(value as CatalogFile, 'catalog.json') : null;
+      const { value, stale } = await this.raw('catalog.json');
+      if (!value) return { catalog: null };
+      const catalog = this.checkSchema(value as CatalogFile, 'catalog.json');
+      if (catalog !== this.catalog) this.writeJsonFile(CATALOG_CACHE_FILE, catalog);
+      this.catalog = catalog;
+      return stale === undefined ? { catalog } : { catalog, stale };
     } catch (err) {
       this.log.warn('官方索引的 catalog.json 读取失败', { error: err instanceof Error ? err.message : String(err) });
-      return null;
+      const fallback = this.catalog ??= this.readJsonFile<CatalogFile>(CATALOG_CACHE_FILE);
+      return fallback ? { catalog: fallback, stale: err } : { catalog: null };
     }
   }
 
@@ -455,7 +537,7 @@ export class ExtensionMarket {
   private async loadPackage(name: string): Promise<PackageFile | null> {
     const path = `packages/${fileName(name)}.json`;
     try {
-      const value = await this.raw(path);
+      const { value } = await this.raw(path);
       return value ? this.checkSchema(value as PackageFile, path) : null;
     } catch (err) {
       this.log.warn('官方索引的包文件读取失败', { path, error: err instanceof Error ? err.message : String(err) });
@@ -468,23 +550,27 @@ export class ExtensionMarket {
     return value;
   }
 
-  /** 索引仓里的一个 JSON 文件,404 是 null;结果(含 404)按 CDN 缓存时长留在内存里。 */
-  private async raw(path: string): Promise<unknown> {
+  /**
+   * 索引仓里的一个 JSON 文件,404 是 null;结果(含 404)按 CDN 缓存时长留在内存里。
+   * 过了时长再读失败时回内存里那份,`stale` 是这次的错误;内存里没有才抛。
+   */
+  private async raw(path: string): Promise<{ value: unknown; stale?: unknown }> {
     const kept = this.raws.get(path);
-    if (kept && Date.now() - kept.atMs < RAW_CACHE_MS) return kept.value;
-    const url = rawUrl(path);
-    let res: Response;
-    try { res = await this.fetch(url, { signal: AbortSignal.timeout(RAW_TIMEOUT_MS) }); } catch (err) { throw new Error(fetchFailure(url, err)); }
-    if (!res.ok && res.status !== 404) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);
-    let value: unknown = null;
-    if (res.ok) { try { value = await res.json(); } catch (err) { throw new Error(fetchFailure(url, err)); } }
+    if (kept && Date.now() - kept.atMs < RAW_CACHE_MS) return { value: kept.value };
+    let value: unknown;
+    try {
+      value = await fetchIndexFile(path, { base: this.indexBase().configured ?? undefined, token: this.token()?.token, fetch: this.fetch });
+    } catch (err) {
+      if (!kept) throw err;
+      return { value: kept.value, stale: err };
+    }
     this.raws.set(path, { atMs: Date.now(), value });
-    return value;
+    return { value };
   }
 
   private async snapshotPage(name: string, cursor: string | undefined): Promise<ExtensionCommentPage> {
     if (cursor !== undefined && !/^\d+$/.test(cursor)) throw marketError((t) => t.badCursor(cursor), 400);
-    const value = await this.raw(`comments/${fileName(name)}.json`);
+    const { value } = await this.raw(`comments/${fileName(name)}.json`);
     if (!value) return { comments: [], total: 0 };
     const snapshot = this.checkSchema(value as CommentsSnapshot, `comments/${fileName(name)}.json`);
     const from = Number(cursor ?? 0);

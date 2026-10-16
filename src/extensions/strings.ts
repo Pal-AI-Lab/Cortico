@@ -65,6 +65,7 @@ const zh = {
   // ── 扩展市场(官方索引与讨论区) ─────────────────────────────────────
   indexMissing: (file: string) => `官方索引仓里没有 ${file}`,
   indexSchema: (file: string, got: string, expected: number) => `${file} 的格式版本是 ${got}，本机 Cortico 只认 ${expected}`,
+  badIndexBase: (value: string) => `索引源要填 http:// 或 https:// 开头的地址,现在是 ${value}`,
   githubLoginRequired: '需要先登录 GitHub。',
   githubFailed: (detail: string) => `GitHub 返回错误：${detail}`,
   noDiscussion: (name: string) => `${name} 的讨论帖还没开：官方索引定时扫描 npm，新发布的包要等下一次扫描。`,
@@ -121,6 +122,7 @@ export const en: typeof zh = {
   buildsPending: (names, dir) => `Build scripts did not run for: ${names}. They are not direct dependencies of an installed extension; if you trust them, set their allowBuilds values to true in pnpm-workspace.yaml in ${dir}, run corepack pnpm rebuild ${names} there, then restart the process.`,
   indexMissing: (file) => `The official index repository has no ${file}`,
   indexSchema: (file, got, expected) => `${file} has format version ${got}; this Cortico reads version ${expected}`,
+  badIndexBase: (value) => `The index source must be an http:// or https:// URL, got ${value}`,
   githubLoginRequired: 'Sign in with GitHub first.',
   githubFailed: (detail) => `GitHub returned an error: ${detail}`,
   noDiscussion: (name) => `${name} has no discussion yet: the official index scans npm on a schedule, and a newly published package gets one at the next scan.`,

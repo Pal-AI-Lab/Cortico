@@ -1,4 +1,4 @@
-<!-- Owner: src/paths.ts, bin/cortico.mjs, src/launcher.ts, src/core/secrets.ts, src/extensions.ts -->
+<!-- Owner: src/paths.ts, bin/cortico.mjs, src/launcher.ts, src/core/secrets.ts, src/extensions.ts, src/extensions/author-guide.ts -->
 
 # 环境变量
 
@@ -6,6 +6,7 @@
 |---|---|---|
 | `CORTICO_HOME` | `src/paths.ts` | 部署根。也可写在仓库根 `.env`;相对路径按主仓库根解析,绝对路径不调 git |
 | `CORTICO_EXTENSIONS_DIR` | `src/extensions.ts` | 扩展目录,默认检出根下的 `extensions/`。程序装在只读位置时由应用指到可写目录 |
+| `CORTICO_MARKET_INDEX_BASE` | `src/extensions/author-guide.ts` | `pnpm check:extension` 读标签词表时代替 raw.githubusercontent.com 的索引源,目录结构同扩展页的「索引源」(见 [extensions.md](extensions.md)) |
 | `CORTICO_BOT` | `bin/cortico.mjs`、`src/launcher.ts` | `pnpm start` 不给名字时的部署名 |
 | `CORTICO_LOG` | `src/launcher.ts` | 文件日志级别,次于 `--log-level=`,高于 `config.json` |
 | `CORTICO_START_PAUSED` | `src/launcher.ts` | `1` / `true`:启动即暂停 |

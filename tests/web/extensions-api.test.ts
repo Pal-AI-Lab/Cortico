@@ -79,6 +79,8 @@ beforeAll(async () => {
       merge: async (search) => ({ hits: (await search).map((h) => ({ ...h, tags: ['t'] })), index: { tags: { t: { label: 'T', hint: 'h' } } } }),
       mergePackage: async (_name, detail) => ({ ...await detail, changelog: { '1.0.0': '第一版' } }),
       blocked: (name) => (name === 'a' ? '恶意代码' : undefined),
+      indexBase: () => ({ configured: null, base: 'https://index.example.invalid' }),
+      setIndexBase: () => ({ configured: null, base: 'https://index.example.invalid' }),
       account: () => ({}),
       login: async () => ({ userCode: 'C', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 5 }),
       logout: () => {},

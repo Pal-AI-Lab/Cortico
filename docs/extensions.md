@@ -68,8 +68,18 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 
 扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、图标、截图、能力摘要、自描述与更新日志来自官方索引仓
 [Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),文件格式以那里的 DESIGN.md 为准。
-`src/extensions/market.ts` 经 raw.githubusercontent.com 读 `index.json` 与 `catalog.json`,读到的内容在内存里留 5 分钟
-(raw 的 CDN 缓存也是 5 分钟),单次 3 秒没回算读不到。`GET /api/extensions/search` 的回应多一个 `index`
+`src/extensions/market.ts` 读索引仓 main 上的 `index.json`、`catalog.json`、`packages/<包名>.json` 与评论快照,
+每个文件依次问两处:
+
+1. 索引源:默认 `https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main`,扩展页「索引源」配了地址时换成它。
+   配的地址要与 raw 同样的目录结构(`<地址>/index.json`、`<地址>/catalog.json`、`<地址>/packages/<包名>.json`)。3 秒没回算失败。
+2. GitHub contents API `https://api.github.com/repos/Pal-AI-Lab/cortico-extensions/contents/<路径>?ref=main`
+   (`Accept: application/vnd.github.raw`)。扩展页登录了 GitHub 时带上 `github-token.json` 的令牌(每小时 5000 次),
+   没登录时不带(每个 IP 每小时 60 次)。5 秒没回算失败。
+
+连不上、超时、回 404 以外的非 2xx(含额度用完时的 403 / 429)或正文不是 JSON 时问下一处;404 当作文件不存在,不再往下问。
+两处都失败时错误依次写出每一处的主机与原因。读到的内容在内存里留 5 分钟(raw 的 CDN 缓存也是 5 分钟);过了时长再读失败时
+继续用内存里那份。`GET /api/extensions/search` 的回应多一个 `index`
 (按界面语言取好的标签词表与 `newDays`),每条结果按索引补字段:
 
 - 拉黑的包与拉黑的发布者发的包不出现在结果里;已装的照常列出,`/api/extensions` 里那一条带 `blocked`(原因)。
@@ -79,10 +89,18 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
   `certified`;`isNew` 按 `catalog.json` 的首次发布时间与 `newDays`;`note`、`supersededBy` 来自官方覆盖;`rating` 是
   `catalog.json` 里 `discussion` 的票数与评论数。
 - `catalog.json` 的列表字段:`displayName`、`author`、`os`、`summary`(能力摘要)、`changelog`(写了更新说明的版本号与
-  完整更新日志地址);`maintainers` 在搜索端点没给时补上;`icon` 与 `screenshots` 换成索引仓的 raw 地址。显示名与简介按界面
+  完整更新日志地址);`maintainers` 在搜索端点没给时补上;`icon` 与 `screenshots` 换成索引源下的地址,浏览器直接从那里取图,
+  不经 contents API。显示名与简介按界面
   语言取 `locales`:简体中文读 `zh`,繁体中文与其余语言读 `en`,没有时用顶层的。
-- `schema` 不是 1 的文件当作读不到。`index.json` 每次读到都写进扩展目录的 `market-index.json`,读不到时用它,拉黑照常生效;
-  它也没有时 `index` 只有 `error`,结果原样返回。`catalog.json` 读不到时结果不带它补的字段。
+- `schema` 不是 1 的文件当作读不到。`index.json` 与 `catalog.json` 每次读到新的一份都写进扩展目录的 `market-index.json`、
+  `market-catalog.json`;读不到时先用本进程上次读到的,再用这两个文件,拉黑照常生效,`index.stale` 是这次读取失败的原因,
+  扩展页提示内容可能已过期。`index.json` 一份都没有时 `index` 只有 `error`,结果原样返回;`catalog.json` 一份都没有时
+  结果不带它补的字段。
+
+扩展页「索引源」读写扩展目录的 `market.json`(`{ "indexBase": "<地址>" }`),只收 http(s) 地址,末尾的 `/` 去掉,填空保存删掉
+这个文件;写入后内存里读到的索引文件作废,下次读改问新的源。镜像给出的拉黑名单、标签、徽标与评分由运营镜像的一方决定。
+接口是内部路由 `GET /api/extensions/index-base`(回 `{ configured, base }`:`configured` 是配的地址或 null,`base` 是先问的那一处)
+与 `POST /api/extensions/index-base`(体 `{ indexBase }`,回应同 GET)。
 
 `GET /api/extensions/package` 同时读 `packages/<包名>.json`(作用域包的 `/` 换成 `__`),合进 `changelog`(版本号 →
 更新说明正文)与 `describe`(包的自描述,`summary` 与事件 `description` 按上面的语言规则换成字符串,缺字段的工具、事件与提示词
@@ -259,8 +277,9 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
-最后两段只提示,不计入失败。「Tags」从 raw.githubusercontent.com 读索引仓 main 上的 `index.json`(3 秒没回、
-`schema` 不是 1 时跳过并写出原因),`cortico.tags` 为空时列出整张词表与每个标签的 `when`,不认识的标签给出名字接近的,
+最后两段只提示,不计入失败。「Tags」按「市场的官方索引」的两处来源读索引仓 main 上的 `index.json`,不带令牌;环境变量
+`CORTICO_MARKET_INDEX_BASE` 设了地址时用它代替 raw.githubusercontent.com,目录结构要求与扩展页的「索引源」相同。
+两处都读不到或 `schema` 不是 1 时跳过并写出原因;`cortico.tags` 为空时列出整张词表与每个标签的 `when`,不认识的标签给出名字接近的,
 并列出提示与警示标签供对照;官方在 `overrides` 里改过这个包的标签时写出改动与申请格式。「Before publishing」列出声明的标签、
 `CHANGELOG.md` 有没有当前版本的一节、`os`、`cortico.describe` 指的文件在不在,以及向官方提扩展申请的纯文本格式。
 

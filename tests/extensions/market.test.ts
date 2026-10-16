@@ -1,6 +1,7 @@
 /**
  * 扩展市场:官方索引合进搜索结果、拉黑与缓存、设备码登录、投票与评论。
- * GitHub 由一个按地址与 GraphQL 操作分派的假 fetch 代替:raw 文件、OAuth 端点与讨论区状态都在内存里。
+ * GitHub 由一个按地址与 GraphQL 操作分派的假 fetch 代替:raw、contents API 与镜像给同一份内存里的索引文件,
+ * OAuth 端点与讨论区状态也在内存里。
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -12,6 +13,8 @@ import { nullLogger } from '../../src/core/util.ts';
 import type { ExtensionComment, ExtensionPackageDetail, ExtensionSearchHit } from '../../src/web/server.ts';
 
 const RAW = 'https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main/';
+const CONTENTS = 'https://api.github.com/repos/Pal-AI-Lab/cortico-extensions/contents/';
+const MIRROR = 'https://mirror.example.invalid/index/';
 
 const bi = (zh: string, en: string) => ({ zh, en });
 const INDEX = {
@@ -42,16 +45,25 @@ function fakeGithub(viewer = 'me') {
   const discussions: Discussion[] = [];
   const calls: string[] = [];
   let rawDown = false;
+  let apiDown = false;
+  /** contents API 每次请求带的 Authorization 头 */
+  const apiAuth: Array<string | null> = [];
   let pollsBeforeGrant = 1;
   const node = (id: string) => discussions.find((d) => d.id === id)!;
   const gqlComment = (c: ExtensionComment & { minimized?: boolean }) => ({ id: c.id, body: c.body, createdAt: c.createdAt, isMinimized: !!c.minimized, author: { login: c.author } });
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
   const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
+    const file = (path: string) => raw.has(path) ? json(raw.get(path)) : new Response('404: Not Found', { status: 404 });
     if (url.startsWith(RAW)) {
       if (rawDown) throw new TypeError('fetch failed');
-      const path = url.slice(RAW.length);
-      return raw.has(path) ? json(raw.get(path)) : new Response('404: Not Found', { status: 404 });
+      return file(url.slice(RAW.length));
+    }
+    if (url.startsWith(MIRROR)) return file(url.slice(MIRROR.length));
+    if (url.startsWith(CONTENTS)) {
+      if (apiDown) return new Response('{"message":"API rate limit exceeded"}', { status: 403, statusText: 'Forbidden', headers: { 'x-ratelimit-remaining': '0' } });
+      apiAuth.push(new Headers(init?.headers).get('authorization'));
+      return file(url.slice(CONTENTS.length).replace(/\?ref=main$/, ''));
     }
     if (url === 'https://github.com/login/device/code') {
       return json({ device_code: 'dev-1', user_code: 'ABCD-1234', verification_uri: 'https://github.com/login/device', expires_in: 900, interval: 0 });
@@ -99,8 +111,9 @@ function fakeGithub(viewer = 'me') {
   });
   return {
     fetch: fetch as unknown as typeof globalThis.fetch,
-    raw, discussions, calls,
+    raw, discussions, calls, apiAuth,
     set rawDown(value: boolean) { rawDown = value; },
+    set apiDown(value: boolean) { apiDown = value; },
     set pollsBeforeGrant(value: number) { pollsBeforeGrant = value; },
     addDiscussion(title: string, number: number): Discussion {
       const d: Discussion = { id: `D${number}`, number, title, reactions: { THUMBS_UP: new Set(), THUMBS_DOWN: new Set() }, comments: [] };
@@ -164,16 +177,40 @@ describe('merge', () => {
     expect(merged.index).toEqual({ tags: {}, error: expect.stringContaining('index.json has format version 2') });
   });
 
-  it('连不上 GitHub 时按扩展目录里上次读到的索引拦拉黑的包', async () => {
+  it('raw 连不上时改问 contents API 并带上登录令牌;配了索引源时先问它,图标也用它', async () => {
     const github = fakeGithub();
     github.raw.set('index.json', INDEX);
+    github.raw.set('catalog.json', { schema: 1, packages: { 'cortico-world-d': { version: '1.0.0', icon: 'assets/d/icon.png' } } });
+    github.rawDown = true;
+    signIn();
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const viaApi = await market.merge(Promise.resolve([hit('cortico-world-bad'), hit('cortico-world-d')]), 'en');
+    expect(viaApi.hits.map((h) => h.name)).toEqual(['cortico-world-d']);
+    expect(viaApi.index.stale).toBeUndefined();
+    expect(github.apiAuth).toEqual(['Bearer tok', 'Bearer tok']);
+
+    expect(market.setIndexBase(`${MIRROR}/`)).toEqual({ configured: MIRROR.slice(0, -1), base: MIRROR.slice(0, -1) });
+    const viaMirror = await market.merge(Promise.resolve([hit('cortico-world-d')]), 'en');
+    expect(viaMirror.hits[0].icon).toBe(`${MIRROR}assets/d/icon.png`);
+    expect(github.apiAuth).toHaveLength(2);
+    expect(() => market.setIndexBase('ftp://mirror.example.invalid')).toThrow(LocalizedError);
+  });
+
+  it('所有来源都读不到时用扩展目录里上次读到的索引与 catalog,index.stale 写出每一处的原因', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', INDEX);
+    github.raw.set('catalog.json', { schema: 1, packages: { 'cortico-world-d': { version: '1.0.0', displayName: 'D' } } });
     await new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch }).merge(Promise.resolve([]), 'zh');
     github.rawDown = true;
+    github.apiDown = true;
     const offline = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
     expect(offline.blocked('cortico-world-bad', 'en')).toBe('Malicious code');
     const { hits, index } = await offline.merge(Promise.resolve([hit('cortico-world-bad'), hit('cortico-world-d')]), 'zh');
-    expect(hits.map((h) => h.name)).toEqual(['cortico-world-d']);
+    expect(hits.map((h) => [h.name, h.displayName])).toEqual([['cortico-world-d', 'D']]);
+    expect(Object.keys(index.tags)).toEqual(Object.keys(INDEX.tags));
     expect(index.error).toBeUndefined();
+    expect(index.stale).toContain('raw.githubusercontent.com: fetch failed');
+    expect(index.stale).toContain('api.github.com: 403 Forbidden (x-ratelimit-remaining: 0)');
   });
 });
 

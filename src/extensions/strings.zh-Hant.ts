@@ -41,6 +41,7 @@ export const text: Partial<typeof en> = {
   dirMissing: (path) => `目錄不存在: ${path}`,
   badVersion: (version) => `不是合法的版本: ${version}`,
   badRegistry: (value) => `npm 來源要填 http:// 或 https:// 開頭的網址,現在是 ${value}`,
+  badIndexBase: (value) => `索引來源要填 http:// 或 https:// 開頭的網址,現在是 ${value}`,
   busy: "已有一個安裝 / 解除安裝在進行,等它結束。",
   pnpmFailed: (command, code, output) => `pnpm ${command} 結束代碼 ${code}:\n${output}`,
   buildsPending: (names, dir) => `這些套件的建置腳本沒有執行:${names}。它們不是已安裝擴充功能的直接相依套件;確認可信後把 ${dir} 裡 pnpm-workspace.yaml 的 allowBuilds 中它們的值改成 true,在那裡執行 corepack pnpm rebuild ${names},再重新啟動程序。`,

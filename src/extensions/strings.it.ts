@@ -41,6 +41,7 @@ export const text: Partial<typeof en> = {
   dirMissing: (path) => `La cartella non esiste: ${path}`,
   badVersion: (version) => `Non è una versione valida: ${version}`,
   badRegistry: (value) => `Il registro npm deve essere un URL http:// o https://, ricevuto: ${value}`,
+  badIndexBase: (value) => `La sorgente dell'indice deve essere un URL http:// o https://, ricevuto: ${value}`,
   busy: "È già in corso un'installazione o una disinstallazione; attendi che finisca.",
   pnpmFailed: (command, code, output) => `pnpm ${command} è terminato con ${code}:\n${output}`,
   buildsPending: (names, dir) => `Gli script di build non sono stati eseguiti per: ${names}. Non sono dipendenze dirette di un'estensione installata; se ti fidi, imposta a true i loro valori allowBuilds in pnpm-workspace.yaml in ${dir}, esegui lì corepack pnpm rebuild ${names}, poi riavvia il processo.`,

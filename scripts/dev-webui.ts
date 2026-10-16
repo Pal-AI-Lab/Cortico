@@ -1231,6 +1231,8 @@ const devMarketTags: Record<string, MarketTag> = {
   unsafe: { label: '不安全', hint: '能在本机执行任意命令。(dev 假数据)', style: 'warning' },
 };
 let devGithubLogin: string | null = null;
+/** 扩展页索引源输入框写下的值;只存在内存里。 */
+let devIndexBase: string | null = null;
 let devLoginPolls = -1;
 const devVotes = new Map<string, 'up' | 'down'>();
 const devComments = new Map<string, ExtensionComment[]>();
@@ -1308,6 +1310,13 @@ const devMarket: WebAppMarketDeps = {
     index: { tags: devMarketTags, newDays: 14 },
   }),
   blocked: () => undefined,
+  indexBase: () => ({ configured: devIndexBase, base: devIndexBase ?? 'https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main' }),
+  setIndexBase: (url) => {
+    const value = url.trim().replace(/\/+$/, '');
+    if (value && !/^https?:\/\/\S+$/i.test(value)) throw new LocalizedError(() => `索引源要填 http:// 或 https:// 开头的地址,现在是 ${value} (dev)`, 400);
+    devIndexBase = value || null;
+    return devMarket.indexBase();
+  },
   account: () => {
     if (!devGithubLogin && devLoginPolls >= 0 && devLoginPolls-- === 0) devGithubLogin = 'dev-user';
     return devGithubLogin ? { login: devGithubLogin } : {};

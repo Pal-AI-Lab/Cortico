@@ -1,21 +1,21 @@
 /**
  * `pnpm check:extension` 的最后两段:按索引仓 index.json 的词表核对 `cortico.tags`,以及发布前清单与向官方提
- * 扩展申请的纯文本格式。词表经 raw.githubusercontent.com 读,读不到或 `schema` 不认识时跳过标签核对。
+ * 扩展申请的纯文本格式。词表与扩展市场同样经 `fetchIndexFile` 读,读不到或 `schema` 不认识时跳过标签核对。
  * 这两段只提示,不计入失败;读者是作者和作者的 coding agent,所以只有英文。
  * 标签规则与申请格式以索引仓的 DESIGN.md、TAGS.md 为准。
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { extensionPackageFile } from '../extensions.ts';
+import { fetchIndexFile } from './market.ts';
 import type { ExtensionPackageJson } from './manifest.ts';
 
 const INDEX_REPO = 'Pal-AI-Lab/cortico-extensions';
 const INDEX_REPO_URL = `https://github.com/${INDEX_REPO}`;
-export const TAG_INDEX_URL = `https://raw.githubusercontent.com/${INDEX_REPO}/main/index.json`;
 export const TAGS_DOC_URL = `${INDEX_REPO_URL}/blob/main/TAGS.md`;
 const INDEX_SCHEMA = 1;
-/** 与扩展市场读索引同一个超时;连不上 GitHub 的机器不该让检查卡到系统的连接超时。 */
-const INDEX_TIMEOUT_MS = 3000;
+/** 换掉 raw.githubusercontent.com 的索引源,与扩展页的「索引源」同义;命令行读不到 WebUI 的设置。 */
+const INDEX_BASE_ENV = 'CORTICO_MARKET_INDEX_BASE';
 /** 不认识的标签最多给几个接近的。 */
 const MAX_SUGGESTIONS = 3;
 
@@ -29,15 +29,15 @@ export interface TagIndex {
 
 export type TagIndexResult = { ok: true; index: TagIndex } | { ok: false; reason: string };
 
-export async function fetchTagIndex(fetchImpl: typeof fetch = fetch): Promise<TagIndexResult> {
+/** `base` 缺省读环境变量 `CORTICO_MARKET_INDEX_BASE`,没设时是 raw.githubusercontent.com。 */
+export async function fetchTagIndex(fetchImpl: typeof fetch = fetch, base = process.env[INDEX_BASE_ENV]?.trim().replace(/\/+$/, '') || undefined): Promise<TagIndexResult> {
   let body: unknown;
   try {
-    const res = await fetchImpl(TAG_INDEX_URL, { signal: AbortSignal.timeout(INDEX_TIMEOUT_MS) });
-    if (!res.ok) return { ok: false, reason: `HTTP ${res.status} from ${TAG_INDEX_URL}` };
-    body = await res.json();
+    body = await fetchIndexFile('index.json', { ...(base ? { base } : {}), fetch: fetchImpl });
   } catch (error) {
-    return { ok: false, reason: `${TAG_INDEX_URL}: ${error instanceof Error ? error.message : String(error)}` };
+    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
   }
+  if (body === null) return { ok: false, reason: `index.json not found${base ? ` under ${base}` : ''}` };
   const file = body as { schema?: unknown; tags?: unknown };
   if (file?.schema !== INDEX_SCHEMA) {
     return { ok: false, reason: `index.json has schema ${JSON.stringify(file?.schema)}; this Cortico reads schema ${INDEX_SCHEMA}` };
@@ -127,7 +127,7 @@ function tagLine(id: string, index: TagIndex): string {
 function tagSection(pkg: ExtensionPackageJson, declared: string[] | null, result: TagIndexResult): string[] {
   const lines = ['', `Tags (vocabulary: ${TAGS_DOC_URL}):`];
   if (!result.ok) {
-    lines.push(`  ⚠ Tag check skipped: could not read the tag vocabulary (${result.reason}).`);
+    lines.push(`  ⚠ Tag check skipped: could not read the tag vocabulary (${result.reason}). ${INDEX_BASE_ENV}=<mirror URL> reads it from a mirror with the same layout.`);
     return lines;
   }
   const { index } = result;

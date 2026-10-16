@@ -286,6 +286,14 @@ export interface MarketIndex {
   /** 「新品」算首次发布后多少天 */
   newDays?: number;
   error?: string;
+  /** 这次没读到 `index.json` 或 `catalog.json`、用的是上次读到的那份时,这次读取失败的原因 */
+  stale?: string;
+}
+
+/** 读官方索引用的源:`configured` 是扩展页配的,没配时 null;`base` 是先问的那一处。 */
+export interface MarketIndexBase {
+  configured: string | null;
+  base: string;
 }
 
 /** 包在索引仓讨论区那一帖:首楼的喜欢、不喜欢与评论数(含回复)。 */
@@ -439,6 +447,9 @@ export interface WebAppMarketDeps {
   mergePackage(name: string, detail: Promise<ExtensionPackageDetail>, language: Language): Promise<ExtensionPackageDetail>;
   /** 已装包被拉黑时的原因 */
   blocked(name: string, language: Language): string | undefined;
+  indexBase(): MarketIndexBase;
+  /** 空串恢复默认;不是 http(s) 地址时抛 400 的 LocalizedError。 */
+  setIndexBase(url: string): MarketIndexBase;
   account(): GithubAccount;
   /** 申请设备码,服务端在后台等授权,登上后 `account()` 有账号。 */
   login(): Promise<GithubDeviceCode>;
@@ -2085,7 +2096,7 @@ export class WebApp {
       }
     }));
 
-    // 扩展市场的 GitHub 账号、投票与评论,内部路由;形状见 docs/extensions.md。
+    // 扩展市场的索引源、GitHub 账号、投票与评论,内部路由;形状见 docs/extensions.md。
     // LocalizedError 带自己的状态码,其余当成 GitHub 那一头的问题。
     const marketRoute = (handler: (market: WebAppMarketDeps, req: Request) => Promise<unknown> | unknown) => wrap(async (req, res) => {
       const market = this.deps.market;
@@ -2096,6 +2107,14 @@ export class WebApp {
         res.status(err instanceof LocalizedError ? err.status : 502).json({ error: this.errorText(err, req) });
       }
     });
+    app.get('/api/extensions/index-base', marketRoute((market) => market.indexBase()));
+    app.post('/api/extensions/index-base', express.json(), marketRoute((market, req) => {
+      const indexBase = (req.body as { indexBase?: unknown } | undefined)?.indexBase;
+      if (typeof indexBase !== 'string') throw new LocalizedError((l) => serverText(l).notString('indexBase'), 400);
+      const result = market.setIndexBase(indexBase);
+      this.deps.log.warn('扩展市场的索引源已改', { indexBase: result.base });
+      return result;
+    }));
     app.get('/api/extensions/github', marketRoute((market) => market.account()));
     app.post('/api/extensions/github/login', marketRoute((market) => market.login()));
     app.post('/api/extensions/github/logout', marketRoute((market) => { market.logout(); return { ok: true }; }));

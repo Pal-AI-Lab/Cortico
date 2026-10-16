@@ -41,6 +41,7 @@ export const text: Partial<typeof en> = {
   dirMissing: (path) => `ディレクトリがありません: ${path}`,
   badVersion: (version) => `有効なバージョンではありません: ${version}`,
   badRegistry: (value) => `npm レジストリには http:// または https:// で始まる URL を入力してください(入力値: ${value})`,
+  badIndexBase: (value) => `インデックスの取得元には http:// または https:// で始まる URL を入力してください(入力値: ${value})`,
   busy: "別のインストールまたはアンインストールを実行中です。終わるまで待ってください。",
   pnpmFailed: (command, code, output) => `pnpm ${command} の終了コード ${code}:\n${output}`,
   buildsPending: (names, dir) => `次のパッケージのビルドスクリプトは実行されていません: ${names}。インストール済み拡張機能の直接の依存ではありません。信頼できる場合は ${dir} の pnpm-workspace.yaml で allowBuilds の値を true に変え、そこで corepack pnpm rebuild ${names} を実行してからプロセスを再起動してください。`,
