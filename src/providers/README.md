@@ -25,7 +25,8 @@
 effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可选:`description`、`defaultBaseUrl` 与
 `baseUrlSuggestions`、`effortSuggestions`、`temperatureNote`、`localize()`、`normalize()`、
 `validateEntry()`、`validateModel()`、`accepts()`(多模态判定)、`config()` 与 `webUi()`
-(附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`。
+(附加配置组与面板)、`prices()`、`estimateTokens()`、`contextOverflow()`、`describe`(自描述:协议、登录方式、是否本机、输入类型,
+见 [docs/extensions.md](../../docs/extensions.md)「自描述」)。
 
 地址、密钥变量名与图像开关不归模块:框架在 `webui/config.ts` 里为每个端点声明这一组,
 扩展来的模块照样有。模块自己的 `options.*` 走 `config()` 的配置组,模块的面板作为端点编辑页的段落

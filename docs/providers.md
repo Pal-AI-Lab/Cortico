@@ -141,5 +141,5 @@ router 自动加载。
 
 ## 添加 Provider
 
-写一个 provider 扩展:`kind: 'provider'`,默认导出 `ProviderModule`。接口与注册流程见
+写一个 provider 扩展:`kind: 'provider'`,默认导出 `ProviderModule`,带 `describe`(见 [extensions.md](extensions.md)「自描述」)。接口与注册流程见
 [src/providers/README.md](../src/providers/README.md),打包见 [extensions.md](extensions.md)。
