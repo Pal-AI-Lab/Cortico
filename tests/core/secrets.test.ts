@@ -39,6 +39,12 @@ describe('secretReader', () => {
     expect(secretReader(file)(NAME)).toBe('');
   });
 
+  it('空的 NAME= 行后紧跟另一个密钥时读出空串', () => {
+    vi.stubEnv(NAME, '');
+    const file = envFile(Buffer.from(`${NAME}=\r\nOTHER_API_KEY=sk-other\n`, 'utf8'));
+    expect(secretReader(file)(NAME)).toBe('');
+  });
+
   it('进程不重启时改写 .env 后读到新值', () => {
     vi.stubEnv(NAME, '');
     const file = envFile(Buffer.from(`${NAME}=first\n`, 'utf8'));
