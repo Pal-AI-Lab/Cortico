@@ -669,6 +669,12 @@ export class ExtensionManager {
     return this.booted.webUiAssets;
   }
 
+  /** 经上一版契约过渡层加载的扩展的 WebUI 页 id。 */
+  previousContractPages(): ReadonlySet<string> {
+    return new Set(this.booted.records.flatMap((r) => r.loaded && r.previousContract && r.kind && r.worldId
+      ? [pageIdFor(EXTENSION_PAGE_KIND[r.kind], r.worldId)]
+      : []));
+  }
 
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
   list(language: Language = 'zh'): { dir: string; platform: NodeJS.Platform; extensions: ExtensionInfo[] } {

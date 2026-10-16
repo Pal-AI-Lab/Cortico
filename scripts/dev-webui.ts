@@ -41,7 +41,8 @@ import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
 import { PromptRevisionConflict, WebApp, type ExtensionComment, type ExtensionDescribe, type ExtensionInfo, type ExtensionRating, type ExtensionSearchHit, type MarketTag, type OwnedStoragePart, type ToolOwner, type WebAppMarketDeps } from '../src/web/server.ts';
-import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
+import { EXTENSION_API_VERSIONS, parseExtensionManifest } from '../src/extensions/manifest.ts';
+import { PREVIOUS_CONTRACT_VERSIONS } from '../src/extensions/previous-contract.ts';
 import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { deriveWebUiPageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
@@ -1139,8 +1140,14 @@ const devPersonaPageSources = deriveWebUiPageSources(
 /** 扩展页 npm 源输入框写下的值;只存在内存里。 */
 let devNpmRegistry: string | null = null;
 
+/** 上一版契约的包在扩展页上带的那条 warning。 */
+const previousContractWarnings = parseExtensionManifest({
+  type: 'module', keywords: ['cortico-world'], cortico: { kind: 'world', api: PREVIOUS_CONTRACT_VERSIONS.world },
+}).warnings;
+
 /** 扩展页的假清单(见下面 `extensions` 依赖)。kind 缺了会被归进「未识别」组。 */
 const devExtensions: ExtensionInfo[] = [
+  { name: 'cortico-world-almanac', spec: '^0.4.0', version: '0.4.2', description: '按上一版契约写的黄历 World (dev 假数据)', kind: 'world', api: PREVIOUS_CONTRACT_VERSIONS.world, webUiClient: false, loaded: true, worldId: 'almanac', label: '黄历', state: 'loaded', enabled: true, author: 'someone', warnings: previousContractWarnings, metadata: { dependencies: [], links: {} } },
   {
     name: '@acme/cortico-world-discord', spec: '^0.3.0', version: '0.3.1', description: 'Discord 频道接入 (dev 假数据)', kind: 'world', webUiClient: false, loaded: true, worldId: 'discord', label: 'Discord 频道', state: 'loaded', enabled: true, author: 'acme',
     metadata: { displayName: 'Discord', license: 'MIT', dependencies: ['ws'], links: { repository: 'https://github.com/acme/cortico-world-discord', bugs: 'https://github.com/acme/cortico-world-discord/issues' } },
@@ -1505,7 +1512,7 @@ const app = new WebApp({
         history: [
           { version: hit.version, date: hit.date ?? '' },
           { version: '0.9.0', date: '2026-03-02T00:00:00.000Z' },
-          { version: '0.8.0', date: '2026-01-19T00:00:00.000Z' },
+          { version: '0.8.0', date: '2026-01-19T00:00:00.000Z', warnings: previousContractWarnings },
         ],
         ...(stale ? { deprecated: '不再维护,改用 cortico-world-webhook (dev 假数据)' } : {}),
         ...(broken

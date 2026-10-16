@@ -115,7 +115,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/auth/status`、`POST /api/auth/login`、`POST /api/auth/logout` | 部署设了访问密码时的登录与登出;登录态在 Cookie 里，未登录的请求回 401 并带 `x-cortico-auth: required` 头，WebSocket 握手直接断开 |
 | `GET /api/providers`、`GET /api/providers/:name`、`POST /api/providers`、`POST /api/providers/:name/save`、`POST /api/providers/:name/activate`、`POST /api/providers/:name/test` | 模型端点：列出、详情、新建、保存(体带 `expectedRevision`)、设为当前端点、测试连通;没挂 provider 时 503 |
 | `GET /api/webui/manifest` | 每页一条 `WebUiPageManifest`,以及框架级能力;形状见 `webui-protocol.ts` |
-| `GET`/`POST /api/webui/providers/<page>/panels/<panel>/<method>`、WebSocket `/ws/providers/<page>/panels/<panel>` | 面板契约：路径两段都 `encodeURIComponent`(page id 的冒号写作 `%3A`);POST 体 `{ args: [...] }`,GET 只对 `getMethods` 点名的方法开放，参数放在查询串 `args`(JSON 数组);WebSocket 是该面板的推送通道 |
+| `GET`/`POST /api/webui/providers/<page>/panels/<panel>/<method>`、WebSocket `/ws/providers/<page>/panels/<panel>` | 面板契约：路径两段都 `encodeURIComponent`(page id 的冒号写作 `%3A`);POST 体 `{ args: [...] }`,GET 只对 `getMethods` 点名的方法开放，参数放在查询串 `args`(JSON 数组);WebSocket 是该面板的推送通道。上一版扩展契约的包的页另可走 `/api/console/providers/...`,由 `src/extensions/previous-contract.ts` 转过来,Cortico 下一个大版本删除 |
 
 请求带 `x-cortico-language` 头(WebSocket 握手用查询串 `language`)时，回应里的文案按该语言给出。其余路由都是内部路由，包括框架更新提示用的
 `GET /api/framework/release` 和左栏状态灯的轮询 `GET /api/webui/lamps`。

@@ -9,6 +9,7 @@
  * - `BotParts.console` 当 `webUi`,其中 `consolePages` 当 `webUiPages`;bot 声明的 World `terminal` 当 `console`;
  * - 包 import 的 `cortico/` 下改过名的模块路径映到新路径;
  * - 框架内建 provider 模块多一个不可枚举的 `console`,等于 `webUi`,给包装框架模块的旧 provider 调;
+ * - 面板脚本直接请求的 `/api/console/providers/...` 转到 `/api/webui/providers/...` 的处理,只放行这些包的页。
  *
  * `check:extension` 不经过本模块,上一版契约的包在那里判失败。删除时连同调用点(搜 previous-contract)、
  * 各语言 strings 里的 `previousContract` 与文档里写过渡层的段落一起删。
@@ -16,6 +17,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import type { NextFunction, Request, Response } from 'express';
 import type { BotDefinition, BotParts, WebUiContribution } from '../bot.ts';
 import type { CoreConfig } from '../core/types.ts';
 import type { ProviderModule } from '../providers/base.ts';
@@ -161,3 +163,12 @@ export function previousContractModulePath(path: string, parentURL: string | und
   return path.replace(rule[0], rule[1]);
 }
 
+export const PREVIOUS_CONTRACT_PANEL_ROUTE = '/api/console/providers/:provider/panels/:panel/:method';
+
+/** 只让 `pages()` 里的页走旧路由;别的页落到后面的路由,和没有这条路由一样。 */
+export function previousContractPagesOnly(pages: () => ReadonlySet<string>) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (pages().has(String(req.params.provider ?? ''))) next();
+    else next('route');
+  };
+}

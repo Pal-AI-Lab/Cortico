@@ -27,6 +27,7 @@ export interface ExtensionView {
   webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   reason?: string;
+  warnings?: string[];
   worldId?: string;
   label?: string;
   enabled?: boolean;
@@ -233,7 +234,7 @@ export interface PackageDetailView {
   published?: string;
   created?: string;
   versionCount: number;
-  history: Array<{ version: string; date: string; problems?: string[] }>;
+  history: Array<{ version: string; date: string; problems?: string[]; warnings?: string[] }>;
   deprecated?: string;
   manifest?: { kind: ExtensionKindView; api: number; webUiClient?: string; webUiStyle?: string };
   problems?: string[];
@@ -1319,7 +1320,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       info.append(ui.h('h4', '', S.information));
       if (item?.reason) info.append(ui.msgline(item.reason, true));
       if (item?.webUi === 'missing') info.append(ui.msgline(S.noteWebUiMissing, true));
-      for (const text of [...item ? data.problems ?? [] : [], ...data.warnings]) info.append(ui.msgline(text, true));
+      for (const text of new Set([...item?.warnings ?? [], ...item ? data.problems ?? [] : [], ...data.warnings])) info.append(ui.msgline(text, true));
       if (data.deprecated) info.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [
         { k: S.authorLabel, v: item?.author ?? data.author ?? S.unknownAuthor },
@@ -1347,6 +1348,7 @@ export function mountExtensions(ctx: FeatureContext): void {
           button.classList.add('extension-version-action');
           button.disabled = same || incompatible || linked || busy.has(data.name);
           if (linked) button.title = S.localVersionNote;
+          else if (!same && !incompatible && release.warnings?.length) button.title = release.warnings.join('\n');
           const notes = data.changelog?.[release.version];
           let label: HTMLElement = ui.h('code', '', release.version), body: HTMLElement | null = null;
           if (notes) {
@@ -1370,7 +1372,8 @@ export function mountExtensions(ctx: FeatureContext): void {
   /** 历史版本走与市场安装相同的 check → install;结果同时写进抽屉。 */
   async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
     const current = installed.find(entry => entry.name === data.name && entry.state !== 'removed');
-    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), danger: true })) return;
+    const warnings = data.history.find(release => release.version === version)?.warnings ?? [];
+    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: [S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), ...warnings].join('\n'), danger: true })) return;
     if (signal.aborted || busy.has(data.name)) return;
     const show = (note: { text: string; bad: boolean } | undefined) => {
       const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback');

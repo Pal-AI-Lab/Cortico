@@ -8,13 +8,16 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
+import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
 import { EXTENSION_API_VERSIONS, EXTENSION_KINDS, parseExtensionManifest } from '../../src/extensions/manifest.ts';
 import { PREVIOUS_CONTRACT_VERSIONS, UPGRADING_URL, previousContractModulePath } from '../../src/extensions/previous-contract.ts';
 import { providerModules } from '../../src/providers/registry.ts';
 import type { ProviderWebUiHost } from '../../src/providers/webui/types.ts';
 import type { LoadedConfig } from '../../src/deploy.ts';
 import type { WorldContext, WorldSection } from '../../src/world.ts';
+import { WebApp } from '../../src/web/server.ts';
+import { nullLogger } from '../../src/core/util.ts';
+import { FakeStore } from '../web/fakes.ts';
 import { installFixture } from '../fixtures/extensions/install.ts';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
@@ -89,6 +92,43 @@ describe('加载与改名', () => {
     expect(previousContractModulePath('worlds/qq/console/client.ts', from(previous))).toBe('worlds/qq/webui/client.ts');
     expect(previousContractModulePath('core/util.ts', from(previous))).toBeNull();
     expect(previousContractModulePath('web/shared/console-protocol.ts', from(current))).toBeNull();
+  });
+});
+
+describe('旧面板路由', () => {
+  it('/api/console/providers/... 只转给上一版契约的包的页,别的页 404', async () => {
+    installFixture(root, 'world-previous-contract');
+    installFixture(root, 'world-ok');
+    const set = await loadExtensions(root);
+    const echo = (id: string) => ({
+      id,
+      contribute: () => ({
+        id, kind: 'world' as const, label: id, panels: [{ id: 'p', title: 'P' }],
+        invoke: async (panel: string, method: string, args: unknown[]) => ({ panel, method, args }),
+      }),
+    });
+    const app = new WebApp({
+      store: new FakeStore(),
+      memoryDir: root,
+      dataDir: root,
+      getStatus: () => ({}),
+      run: { pause: () => {}, resume: () => {}, isPaused: () => false },
+      log: nullLogger(),
+      extensions: new ExtensionManager(root, set),
+      webUiPageSources: () => [echo('world:previous-world'), echo('world:fixture-world')],
+    });
+    const port = await app.start(0);
+    try {
+      const post = (page: string) => fetch(`http://127.0.0.1:${port}/api/console/providers/${encodeURIComponent(page)}/panels/p/ping`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args: [1] }),
+      });
+      const forwarded = await post('world:previous-world');
+      expect(forwarded.status).toBe(200);
+      expect(await forwarded.json()).toEqual({ panel: 'p', method: 'ping', args: [1] });
+      expect((await post('world:fixture-world')).status).toBe(404);
+    } finally {
+      await app.stop();
+    }
   });
 });
 

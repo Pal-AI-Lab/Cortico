@@ -39,6 +39,7 @@ import { THEME_FILE, readDeploymentTheme, writeDeploymentTheme } from './theme-s
 import { checkFrameworkRelease } from './framework-release.ts';
 import { THEME_SCRIPT_ID, type InjectedTheme, type StoredTheme } from './shared/theme.ts';
 import { EXTENSION_ASSET_PREFIX, extensionAssetSegment, type ExtensionWebUiAsset } from '../extensions/manifest.ts';
+import { PREVIOUS_CONTRACT_PANEL_ROUTE, previousContractPagesOnly } from '../extensions/previous-contract.ts';
 import {
   WEBUI_AUTH_HEADER, WEBUI_LAMPS_ROUTE, WEBUI_LANGUAGE_HEADER, WEBUI_LANGUAGE_QUERY, WEBUI_PROTOCOL_VERSION,
   PROVIDERS_LAMP_ID,
@@ -420,6 +421,8 @@ export interface WebAppExtensionDeps {
    * 并只发这几个文件;缺席 = 没有扩展带面板。
    */
   webUiAssets?(): readonly ExtensionWebUiAsset[];
+  /** 经上一版契约过渡层加载的扩展的页 id;只有这些页能走 `PREVIOUS_CONTRACT_PANEL_ROUTE`。 */
+  previousContractPages?(): ReadonlySet<string>;
   /** 返回一句结果描述(含 pnpm 输出尾部) */
   install(target: ExtensionInstallTarget, language: Language): Promise<string>;
   uninstall(name: string, language: Language): Promise<string>;
@@ -2271,15 +2274,13 @@ export class WebApp {
     };
 
     // GET:轮询读 + <audio src> 这类只能带 URL 的场合。args 经 query 传 JSON 数组。
-    app.get('/api/webui/providers/:provider/panels/:panel/:method', wrap((req, res) => {
+    const getPanel = wrap((req, res) => {
       const args = parseQueryArgs(req.query.args, serverText(this.languageOf(req)));
       if ('error' in args) { res.status(400).json({ error: args.error }); return; }
       invokeWebUiPagePanel(req, res, args.args);
-    }));
-
+    });
     // POST:带参调用。base64 音频/图片会经这里,limit 放宽。
-    app.post(
-      '/api/webui/providers/:provider/panels/:panel/:method',
+    const postPanel = [
       express.json({ limit: '64mb' }),
       wrap((req, res) => {
         const body = (req.body ?? {}) as { args?: unknown };
@@ -2289,7 +2290,12 @@ export class WebApp {
         }
         invokeWebUiPagePanel(req, res, (body.args as unknown[] | undefined) ?? []);
       }),
-    );
+    ];
+    app.get('/api/webui/providers/:provider/panels/:panel/:method', getPanel);
+    app.post('/api/webui/providers/:provider/panels/:panel/:method', ...postPanel);
+    const previousContractPages = () => this.deps.extensions?.previousContractPages?.() ?? new Set<string>();
+    app.get(PREVIOUS_CONTRACT_PANEL_ROUTE, previousContractPagesOnly(previousContractPages), getPanel);
+    app.post(PREVIOUS_CONTRACT_PANEL_ROUTE, previousContractPagesOnly(previousContractPages), ...postPanel);
 
     app.get('/api/usage', wrap((req, res) => {
       const src = this.deps.usage;
