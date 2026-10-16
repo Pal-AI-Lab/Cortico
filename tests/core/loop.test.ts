@@ -19,6 +19,7 @@ import { SessionTracker } from '../../src/core/sessions.ts';
 import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
+import { functionCall, functionResult, type ContextRecord } from '../../src/protocol/open-responses/context.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import {
@@ -67,7 +68,7 @@ interface RigOptions {
   silent?: boolean;
   /** 覆盖 logger(断言 core 的机械告警) */
   log?: Logger;
-  preSession?: ChatMessage[];
+  preSession?: Array<ChatMessage | ContextRecord>;
   /** run()前布置事件库/core状态(重启复原用) */
   preState?: (state: CoreState, store: JsonlEventStore) => void;
   /** 事件正文怎么进上下文(缺省=声明里不写,即 tool 帧投递) */
@@ -1333,6 +1334,30 @@ describe('MainLoop user事件协议', () => {
     expect(observed.content).toContain('崩的时候还在队里的');
     expect(observed.content).not.toContain('她已经读过的'); // 水位之前的不重投
     expect(rig.state.data.lastDeliveredCursor).toBe(rig.store.latestCursor());
+  });
+
+  it('重启补投跳过 session 事件块里已有的事件,水位越过它', async () => {
+    const said = '[09:00] 阿明: 崩之前已经进过上下文的';
+    const ts = '2026-07-17T09:00:00+08:00';
+    rig = makeRig({
+      // 事件块落进 session 后、水位落盘前进程没了:水位还停在它前面
+      preSession: [
+        { role: 'system', content: 'sys' },
+        functionCall('evf_1', 'external_event_frame', '{}'),
+        functionResult('evf_1', said, { frame: { events: [{ cursor: 1, ts, type: 'qq.message', source: 'qq', start: 0, chars: said.length }] } }),
+      ],
+      preState: (state, store) => {
+        expect(store.append({ type: 'qq.message', ts, source: 'qq', origin: 'external', text: said }).cursor).toBe(1);
+        state.save();
+      },
+    });
+    rig.start();
+    rig.pushEvent('新消息');
+
+    await until(() => rig.llm.calls.length >= 1);
+    expect(JSON.stringify(rig.llm.calls[0].messages).split(said).length - 1).toBe(1);
+    assertPairing(rig.session.messages);
+    await until(() => rig.state.data.lastDeliveredCursor === rig.store.latestCursor());
   });
 
   it('重启仅补投外部事件,不重放过期内部项', async () => {

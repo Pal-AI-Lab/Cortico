@@ -902,10 +902,17 @@ export class MainLoop {
 
   /**
    * 重启时补投水位之后的外部事件；内部事件不跨重启投递。
+   * session 里已有事件块记着的事件已经投递过，不再补投。
    * archive-only 已被投影引用则不重复投递，未被引用则按原文补投。超过条数上限时只入队最近一段，更早事件结清水位。
    */
   private requeueUndelivered(): void {
-    const { bus, state, store, log } = this.d;
+    const { bus, session, state, store, log } = this.d;
+    // 水位只推进连续前缀，前面有未了结的事件时，已进 session 的后续事件仍在水位之后
+    const inSession = new Set<number>();
+    for (const { context } of session.records) for (const ref of context.frame?.events ?? []) {
+      if (ref.cursor > state.data.lastDeliveredCursor) inSession.add(ref.cursor);
+    }
+    for (const c of inSession) this.deliveredCursors.add(c);
     // 推进水位前，先从已生成事件的引用恢复 settledArchives。
     // 否则重启前已处理的原始归档仍会阻止水位推进。
     const from = state.data.lastDeliveredCursor + 1;
@@ -931,7 +938,7 @@ export class MainLoop {
     // 撤回的事件按已了结处理，水位可越过。
     for (const c of withdrawn) this.deliveredCursors.add(c);
     this.noteHandled([], this.generation);
-    const pending = after.filter((event) => event.origin === 'external' && !withdrawn.has(event.cursor)
+    const pending = after.filter((event) => event.origin === 'external' && !withdrawn.has(event.cursor) && !inSession.has(event.cursor)
       && (event.contextDelivery !== 'archive-only' || !referenced.has(event.cursor)));
     if (pending.length === 0) return;
 
