@@ -8,6 +8,7 @@ export const text: Partial<typeof en> = {
   kindBad: (kinds, got) => `cortico.kind deve ser ${kinds.join(' ou ')}; valor atual: ${got}.`,
   apiNotInteger: (got, kind, expected) => `cortico.api deve ser um inteiro positivo${kind === undefined ? '' : ` (o contrato ${kind} deste framework é v${expected})`}; valor atual: ${got}.`,
   apiTooOld: (kind, api, expected) => `A extensão foi escrita para o contrato ${kind} v${api}; o contrato ${kind} deste framework é v${expected}. É preciso atualizar a extensão.`,
+  previousContract: (kind, api, expected, url) => `A extensão foi escrita para o contrato ${kind} v${api}; este framework está na v${expected}. Ela é carregada por uma camada de transição que a próxima versão principal do Cortico remove. Quando o autor a atualizar conforme ${url} e publicar, atualize para a nova versão.`,
   apiTooNew: (kind, api, expected) => `A extensão exige o contrato ${kind} v${api}; o contrato ${kind} deste framework vai só até v${expected}. É preciso atualizar o framework.`,
   clientPath: (got) => `cortico.webUiClient deve ser um caminho relativo dentro do pacote (sem .., sem / inicial, apenas / como separador); valor atual: ${got}.`,
   clientNotJs: "cortico.webUiClient deve apontar para um .js / .mjs já compilado; navegadores não executam TypeScript.",

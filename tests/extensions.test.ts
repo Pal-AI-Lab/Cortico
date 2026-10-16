@@ -14,6 +14,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, readInstalled, repositoryWebUrl, type ExtensionSet } from '../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
+import { PREVIOUS_CONTRACT_VERSIONS } from '../src/extensions/previous-contract.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extensions-')); });
@@ -606,13 +607,19 @@ describe('ExtensionManager', () => {
     const { mgr } = manager({}, {
       packument: {
         'dist-tags': { latest: '2.0.0' },
-        versions: { '1.0.0': { ...version, version: '1.0.0', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world - 1 } }, '2.0.0': { ...version, version: '2.0.0' } },
-        time: { '1.0.0': '2026-01-01T00:00:00.000Z', '2.0.0': '2026-03-02T00:00:00.000Z' },
+        versions: {
+          '0.9.0': { ...version, version: '0.9.0', cortico: { kind: 'world', api: PREVIOUS_CONTRACT_VERSIONS.world - 1 } },
+          '1.0.0': { ...version, version: '1.0.0', cortico: { kind: 'world', api: PREVIOUS_CONTRACT_VERSIONS.world } },
+          '2.0.0': { ...version, version: '2.0.0' },
+        },
+        time: { '0.9.0': '2025-12-01T00:00:00.000Z', '1.0.0': '2026-01-01T00:00:00.000Z', '2.0.0': '2026-03-02T00:00:00.000Z' },
       },
     });
     const info = await mgr.packageInfo('c');
     expect(info.history[0]).toEqual({ version: '2.0.0', date: '2026-03-02T00:00:00.000Z' });
-    expect(info.history[1].problems).toEqual([expect.stringContaining(`v${EXTENSION_API_VERSIONS.world - 1}`)]);
+    expect(info.history[1].problems).toBeUndefined();
+    expect(info.history[1].warnings).toEqual([expect.stringContaining(`v${PREVIOUS_CONTRACT_VERSIONS.world}`)]);
+    expect(info.history[2].problems).toEqual([expect.stringContaining(`v${PREVIOUS_CONTRACT_VERSIONS.world - 1}`)]);
   });
 
   it('packageInfo:装不上的包给出理由;包名不合法与没有 latest 各自抛错', async () => {

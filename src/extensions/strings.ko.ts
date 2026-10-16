@@ -8,6 +8,7 @@ export const text: Partial<typeof en> = {
   kindBad: (kinds, got) => `cortico.kind는 ${kinds.join(' 또는 ')} 중 하나여야 합니다. 현재 값은 ${got}입니다.`,
   apiNotInteger: (got, kind, expected) => `cortico.api는 양의 정수여야 합니다${kind === undefined ? '' : `(이 프레임워크의 ${kind} 계약은 v${expected})`}. 현재 값은 ${got}입니다.`,
   apiTooOld: (kind, api, expected) => `확장은 ${kind} 계약 v${api} 기준으로 작성되었고 이 프레임워크의 ${kind} 계약은 v${expected}입니다. 확장을 업그레이드해야 합니다.`,
+  previousContract: (kind, api, expected, url) => `확장은 ${kind} 계약 v${api} 기준으로 작성되었고 이 프레임워크는 v${expected}입니다. 지금은 전환 계층으로 로드되지만 Cortico 다음 메이저 버전부터는 로드되지 않습니다. 작성자가 ${url} 에 따라 업그레이드해 게시하면 새 버전으로 업데이트하세요.`,
   apiTooNew: (kind, api, expected) => `확장은 ${kind} 계약 v${api}가 필요하지만 이 프레임워크의 ${kind} 계약은 v${expected}까지입니다. 프레임워크를 업그레이드해야 합니다.`,
   clientPath: (got) => `cortico.webUiClient는 패키지 안의 상대 경로여야 합니다(.. 없이, /로 시작하지 않고, 구분자는 /만). 현재 값은 ${got}입니다.`,
   clientNotJs: "cortico.webUiClient는 미리 빌드한 .js / .mjs를 가리켜야 합니다. 브라우저는 TypeScript를 실행하지 않습니다.",

@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, src/extensions.ts, src/extensions/author-guide.ts -->
+<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, src/extensions.ts, src/extensions/author-guide.ts, src/extensions/previous-contract.ts -->
 
 # src/extensions
 
@@ -20,7 +20,7 @@ World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot �
   "keywords": ["cortico-world"],          // npm 搜索按类关键字:cortico-world / cortico-provider / cortico-bot
   "cortico": {
     "kind": "world",                      // world | provider | bot
-    "api": 6,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载
+    "api": 6,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载(上一版见下)
     "displayName": "VTuber",              // 可选:WebUI 里的名称;不合格时 warning 并忽略
     "webUiClient": "dist/webui.js",   // 可选:预构建的面板 bundle,包内相对路径
     "webUiStyle": "dist/webui.css",   // 可选:随 bundle 注入的样式
@@ -38,6 +38,8 @@ World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot �
 
 `parseExtensionManifest(pkg, language)` 只做解析与校验,不碰文件系统;装载器与
 `pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
+上一版契约(`PREVIOUS_CONTRACT_VERSIONS`)例外:给 warning、照常加载,`previous-contract.ts` 把旧接口名接到新名上,
+覆盖的范围写在它的模块头;Cortico 下一个大版本删除它。`check:extension` 对上一版契约判失败。
 
 `EXTENSION_API_VERSIONS` 按 kind 各记一个版本:`WorldDefinition` 不兼容变更只加 world,
 `ProviderModule` 只加 provider,`BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;

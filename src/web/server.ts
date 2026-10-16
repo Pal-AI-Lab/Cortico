@@ -171,6 +171,8 @@ export interface ExtensionInfo {
   webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   reason?: string;
+  /** manifest 的 warning,按请求语言 */
+  warnings?: string[];
   worldId?: string;
   label?: string;
   state: 'loaded' | 'failed' | 'pending-restart' | 'removed' | 'idle';
@@ -353,8 +355,11 @@ export interface ExtensionPackageDetail {
   /** 这个包第一次发布的时间 */
   created?: string;
   versionCount: number;
-  /** registry 包文档 versions 里的全部版本,按发布时间新的在前;`problems` 是这个版本装不了的理由 */
-  history: Array<{ version: string; date: string; problems?: string[] }>;
+  /**
+   * registry 包文档 versions 里的全部版本,按发布时间新的在前;`problems` 是这个版本装不了的理由,
+   * `warnings` 是装得了的版本的 manifest warning
+   */
+  history: Array<{ version: string; date: string; problems?: string[]; warnings?: string[] }>;
   /** npm 上标了 deprecated 时是那句话 */
   deprecated?: string;
   /** package.json 的 cortico 块解析通过时给出 */

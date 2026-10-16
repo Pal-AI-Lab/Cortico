@@ -8,6 +8,7 @@ export const text: Partial<typeof en> = {
   kindBad: (kinds, got) => `cortico.kind 必須是 ${kinds.join(' 或 ')},目前是 ${got}。`,
   apiNotInteger: (got, kind, expected) => `cortico.api 必須是正整數${kind === undefined ? '' : `(本框架的 ${kind} 契約是 v${expected})`},目前是 ${got}。`,
   apiTooOld: (kind, api, expected) => `擴充功能依 ${kind} 契約 v${api} 撰寫,本框架的 ${kind} 契約是 v${expected}:擴充功能需要升級。`,
+  previousContract: (kind, api, expected, url) => `擴充功能依 ${kind} 契約 v${api} 撰寫,本框架是 v${expected}:目前經過渡層載入,Cortico 下一個大版本起不再載入。作者依 ${url} 升級並發布後,更新到新版即可。`,
   apiTooNew: (kind, api, expected) => `擴充功能要求 ${kind} 契約 v${api},本框架的 ${kind} 契約只到 v${expected}:框架需要升級。`,
   clientPath: (got) => `cortico.webUiClient 必須是套件內相對路徑(不含 ..、不以 / 開頭、只用 /),目前是 ${got}。`,
   clientNotJs: "cortico.webUiClient 必須指向預先建置好的 .js / .mjs;瀏覽器不執行 TypeScript。",

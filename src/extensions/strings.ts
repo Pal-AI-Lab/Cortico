@@ -21,6 +21,8 @@ const zh = {
     `cortico.api 必须是正整数${kind === undefined ? '' : `(本框架的 ${kind} 契约是 v${expected})`},现在是 ${got}。`,
   apiTooOld: (kind: string, api: number, expected: number) =>
     `扩展按 ${kind} 契约 v${api} 编写,本框架的 ${kind} 契约是 v${expected}:扩展需要升级。`,
+  previousContract: (kind: string, api: number, expected: number, url: string) =>
+    `扩展按 ${kind} 契约 v${api} 编写,本框架是 v${expected}:现经过渡层加载,Cortico 下一个大版本起不再加载。作者按 ${url} 升级并发布后,更新到新版即可。`,
   apiTooNew: (kind: string, api: number, expected: number) =>
     `扩展要求 ${kind} 契约 v${api},本框架的 ${kind} 契约只到 v${expected}:框架需要升级。`,
   clientPath: (got: string) => `cortico.webUiClient 必须是包内相对路径(不含 ..、不以 / 开头、只用 /),现在是 ${got}。`,
@@ -78,6 +80,8 @@ export const en: typeof zh = {
     `cortico.api must be a positive integer${kind === undefined ? '' : ` (this framework's ${kind} contract is v${expected})`}; got ${got}.`,
   apiTooOld: (kind, api, expected) =>
     `The extension was written for ${kind} contract v${api}; this framework's ${kind} contract is v${expected}. Upgrade the extension.`,
+  previousContract: (kind, api, expected, url) =>
+    `The extension was written for ${kind} contract v${api}; this framework is at v${expected}. It loads through a transition layer that the next major Cortico release removes. Once the author upgrades it as described in ${url} and publishes, update to the new version.`,
   apiTooNew: (kind, api, expected) =>
     `The extension needs ${kind} contract v${api}; this framework's ${kind} contract only reaches v${expected}. Upgrade the framework.`,
   clientPath: (got) => `cortico.webUiClient must be a relative path inside the package (no .., no leading /, / separators only); got ${got}.`,

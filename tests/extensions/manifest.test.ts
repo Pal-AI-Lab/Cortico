@@ -14,6 +14,7 @@ import {
   parseExtensionManifest,
   extensionAssetUrl,
 } from '../../src/extensions/manifest.ts';
+import { PREVIOUS_CONTRACT_VERSIONS } from '../../src/extensions/previous-contract.ts';
 import { ProviderRegistry, providerModule, providerModules, registerProviderModules } from '../../src/providers/registry.ts';
 import type { ProviderModule } from '../../src/providers/base.ts';
 import { nullLogger } from '../../src/core/util.ts';
@@ -78,7 +79,7 @@ describe('bot 包', () => {
   it('locateBotPackage:仓内没有 → extensions/ 下同名的 bot 包,入口按 package.json 解析', () => {
     const pkgDir = installFixture(root, 'bot-ok', { as: 'cortico-bot-x' });
     expect(locateBotPackage(root, 'cortico-bot-x', treeDirOf('cortico-bot-x')))
-      .toEqual({ source: 'extension', name: 'cortico-bot-x', pkgDir, entry: join(pkgDir, 'index.js') });
+      .toEqual({ source: 'extension', name: 'cortico-bot-x', pkgDir, entry: join(pkgDir, 'index.js'), previousContract: false });
   });
 
   it('locateBotPackage:两处都没有 → 报错列出两处路径;装了但不是 bot 类 → 说它是哪一类', () => {
@@ -199,7 +200,7 @@ describe('契约版本', () => {
 
   it('反方向(扩展比框架旧)与非正整数各有各的措辞', () => {
     const parse = (api: unknown) => parseExtensionManifest({ type: 'module', cortico: { kind: 'world', api } });
-    const old = parse(EXTENSION_API_VERSIONS.world - 1);
+    const old = parse(PREVIOUS_CONTRACT_VERSIONS.world - 1);
     expect(old.ok).toBe(false);
     expect((old as { reasons: string[] }).reasons.join('')).toContain('扩展需要升级');
     for (const bad of [0, -1, 1.5, '1', undefined]) {

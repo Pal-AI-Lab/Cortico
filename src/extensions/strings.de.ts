@@ -8,6 +8,7 @@ export const text: Partial<typeof en> = {
   kindBad: (kinds, got) => `cortico.kind muss ${kinds.join(' oder ')} sein; aktuell ${got}.`,
   apiNotInteger: (got, kind, expected) => `cortico.api muss eine positive ganze Zahl sein${kind === undefined ? '' : ` (der ${kind}-Vertrag dieses Frameworks ist v${expected})`}; aktuell ${got}.`,
   apiTooOld: (kind, api, expected) => `Die Erweiterung wurde für den ${kind}-Vertrag v${api} geschrieben; der ${kind}-Vertrag dieses Frameworks ist v${expected}. Die Erweiterung muss aktualisiert werden.`,
+  previousContract: (kind, api, expected, url) => `Die Erweiterung wurde für den ${kind}-Vertrag v${api} geschrieben; dieses Framework ist bei v${expected}. Sie wird über eine Übergangsschicht geladen, die die nächste Hauptversion von Cortico entfernt. Sobald der Autor sie nach ${url} aktualisiert und veröffentlicht hat, auf die neue Version aktualisieren.`,
   apiTooNew: (kind, api, expected) => `Die Erweiterung braucht den ${kind}-Vertrag v${api}; der ${kind}-Vertrag dieses Frameworks reicht nur bis v${expected}. Das Framework muss aktualisiert werden.`,
   clientPath: (got) => `cortico.webUiClient muss ein relativer Pfad im Paket sein (ohne .., ohne führendes /, nur / als Trenner); aktuell ${got}.`,
   clientNotJs: "cortico.webUiClient muss auf eine vorgebaute .js- oder .mjs-Datei zeigen; Browser führen kein TypeScript aus.",

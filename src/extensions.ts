@@ -32,6 +32,7 @@ import {
   type ExtensionPackageJson,
 } from './extensions/manifest.ts';
 import { registerFrameworkResolver } from './extensions/runtime.ts';
+import { adaptBotDefinition, adaptProviderModule, adaptWorldDefinition, isPreviousContract } from './extensions/previous-contract.ts';
 import { text } from './extensions/strings.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
@@ -56,6 +57,10 @@ export interface ExtensionRecord {
   kind?: ExtensionKind;
   /** 扩展声明的契约版本(`cortico.api`)。 */
   api?: number;
+  /** `api` 是上一版契约,经 previous-contract.ts 加载。 */
+  previousContract?: true;
+  /** manifest 的 warning,按界面语言给。 */
+  warnings?: (language: Language) => string[];
   /** 包声明了浏览器端产物(`cortico.webUiClient`)。 */
   webUiClient: boolean;
   /** 浏览器产物状态：none=未声明，served=文件可提供，missing=声明的文件不存在。 */
@@ -190,7 +195,7 @@ export function extensionIconFile(pkgDir: string, pkg: ExtensionPackageJson): { 
 
 export type BotPackageLocation =
   | { source: 'tree'; pkgDir: string; entry: string }
-  | { source: 'extension'; name: string; pkgDir: string; entry: string };
+  | { source: 'extension'; name: string; pkgDir: string; entry: string; previousContract: boolean };
 
 /**
  * `deployment.json` 的 `bot` 字段是包标识,两处找,仓内赢:`treeDir`(`bots/<bot>/`)下有
@@ -212,7 +217,10 @@ export function locateBotPackage(repoRoot: string, ref: string, treeDir: string)
   if (parsed.manifest.kind !== 'bot') {
     throw new Error(`「${ref}」是 ${parsed.manifest.kind} 类扩展,不是 bot 包;deployment.json 的 bot 字段要指向 cortico.kind 为 "bot" 的包。`);
   }
-  return { source: 'extension', name: ref, pkgDir, entry: resolveExtensionEntry(pkgDir, pkg) };
+  return {
+    source: 'extension', name: ref, pkgDir, entry: resolveExtensionEntry(pkgDir, pkg),
+    previousContract: isPreviousContract(parsed.manifest.kind, parsed.manifest.api),
+  };
 }
 
 /**
@@ -233,7 +241,7 @@ export async function importBotDefinition(
   if (location.source === 'extension' && opts.treeHas(mod.default.id)) {
     throw new Error(`扩展「${location.name}」的 bot id「${mod.default.id}」与仓内 bots/${mod.default.id}/ 撞名;WebUI 面板产物按 persona:<id> 找,会拿到仓内那份。换一个 id。`);
   }
-  return mod.default;
+  return location.source === 'extension' && location.previousContract ? adaptBotDefinition(mod.default) : mod.default;
 }
 
 /**
@@ -282,6 +290,9 @@ export async function loadExtensions(
     const { kind, api, webUiClient, webUiStyle } = parsed.manifest;
     record.kind = kind;
     record.api = api;
+    const previousContract = isPreviousContract(kind, api);
+    if (previousContract) record.previousContract = true;
+    if (parsed.warnings.length) record.warnings = (language) => parseExtensionManifest(pkg, language).warnings;
     record.webUiClient = webUiClient !== undefined;
 
     // 缺少面板产物不阻止定义加载。
@@ -342,7 +353,7 @@ export async function loadExtensions(
       }
       taken.world.add(exported.id);
       record.label = exported.label;
-      worlds.push(exported);
+      worlds.push(previousContract ? adaptWorldDefinition(exported) : exported);
       id = exported.id;
     } else {
       if (!isProviderModule(exported)) {
@@ -357,7 +368,7 @@ export async function loadExtensions(
       }
       taken.provider.add(exported.id);
       record.label = exported.title;
-      providers.push(exported);
+      providers.push(previousContract ? await adaptProviderModule(exported) : exported);
       id = exported.id;
     }
     record.loaded = true;
@@ -658,6 +669,7 @@ export class ExtensionManager {
     return this.booted.webUiAssets;
   }
 
+
   /** 将启动时的加载结果与当前安装状态比较；不一致时标记待重启。 */
   list(language: Language = 'zh'): { dir: string; platform: NodeJS.Platform; extensions: ExtensionInfo[] } {
     const onDisk = new Map(readInstalled(this.dir).map((p) => [p.name, p.spec]));
@@ -676,6 +688,7 @@ export class ExtensionManager {
       out.push({
         ...r,
         reason: r.reason?.(language),
+        warnings: r.warnings?.(language),
         ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
         ...(author ? { author } : {}),
         ...(pkg && extensionIconFile(pkgDir, pkg) ? { icon: true } : {}),
@@ -696,6 +709,7 @@ export class ExtensionManager {
         webUiClient: manifest?.webUiClient !== undefined,
         ...(manifest ? { kind: manifest.kind, api: manifest.api } : {}),
         ...(manifest && manifest.webUiClient === undefined ? { webUi: 'none' as const } : {}),
+        ...(parsed?.warnings.length ? { warnings: parsed.warnings } : {}),
         loaded: false,
         state: 'pending-restart',
         ...(pkg?.description ? { description: pkg.description } : {}),
@@ -871,7 +885,11 @@ export class ExtensionManager {
       .map(([version, date]) => {
         // 包文档的 versions 里每个版本都带完整 manifest
         const manifest = parseExtensionManifest(doc.versions![version], language);
-        return { version, date, ...(manifest.ok ? {} : { problems: manifest.reasons }) };
+        return {
+          version, date,
+          ...(manifest.ok ? {} : { problems: manifest.reasons }),
+          ...(manifest.ok && manifest.warnings.length ? { warnings: manifest.warnings } : {}),
+        };
       });
     const spec = readInstalled(this.dir).find((p) => p.name === name)?.spec;
     const repository = urlOf(v.repository);

@@ -274,6 +274,11 @@ package.json 没有 `cortico.describe`、它指的文件不在或与重新生成
 三类扩展各有一个契约版本,`cortico.api` 必须等于自己这一类的那个:world **6**、provider **6**、
 bot **7**。版本不符的扩展不能加载,页面显示「需要升级」。
 
+上一版契约(world 5、provider 5、bot 6)的包是例外,经过渡层 `src/extensions/previous-contract.ts` 照常加载:
+旧接口名(`console()`、`BotParts.console`、manifest 的 `consoleClient` / `consoleStyle`、改过名的
+`cortico/` 模块路径)接到新名上,扩展页与市场的详情给一条
+warning。Cortico 下一个大版本删除这个过渡层,届时这些包不再加载。`pnpm check:extension` 对上一版契约判失败。
+
 加一的判据按类分:`WorldDefinition` 不兼容变更只加 world,`ProviderModule` 只加 provider,
 `BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;`WebUiPanelContext`
 与其余共用接口变更时三类一起加。同一次发布里的多处变更合计加一。扩展 API 与 WebUI 协议分别版本化。

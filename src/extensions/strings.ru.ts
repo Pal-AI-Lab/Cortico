@@ -8,6 +8,7 @@ export const text: Partial<typeof en> = {
   kindBad: (kinds, got) => `cortico.kind должен быть ${kinds.join(' или ')}; сейчас ${got}.`,
   apiNotInteger: (got, kind, expected) => `cortico.api должен быть положительным целым числом${kind === undefined ? '' : ` (контракт ${kind} в этом framework — v${expected})`}; сейчас ${got}.`,
   apiTooOld: (kind, api, expected) => `Расширение написано для контракта ${kind} v${api}, а контракт ${kind} в этом framework — v${expected}. Обновите расширение.`,
+  previousContract: (kind, api, expected, url) => `Расширение написано для контракта ${kind} v${api}, а этот framework — v${expected}. Оно загружается через переходный слой, который следующая основная версия Cortico удалит. Когда автор обновит его по ${url} и опубликует, обновитесь до новой версии.`,
   apiTooNew: (kind, api, expected) => `Расширению нужен контракт ${kind} v${api}, а контракт ${kind} в этом framework доходит только до v${expected}. Обновите framework.`,
   clientPath: (got) => `cortico.webUiClient должен быть относительным путём внутри пакета (без .., без / в начале, только / как разделитель); сейчас ${got}.`,
   clientNotJs: "cortico.webUiClient должен указывать на собранный .js / .mjs; браузеры не выполняют TypeScript.",

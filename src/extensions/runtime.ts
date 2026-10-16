@@ -2,10 +2,12 @@
  * 将扩展的 cortico/<路径> 导入映射到框架 src/<路径>。
  * 使用同步 module.registerHooks 与 tsx 的解析链协作；映射后继续调用下一个解析器，
  * 使最终 URL 与框架内部导入一致，保留共享模块实例。扩展须使用 type=module。
+ * 上一版契约的包 import 改过名的模块时,路径先经 previous-contract.ts 换成新名。
  * childExecArgv 保留父进程加载器并通过 --import 注册本模块，供引擎子进程使用。
  */
 import { registerHooks } from 'node:module';
 import { FRAMEWORK_SPECIFIER } from './manifest.ts';
+import { previousContractModulePath } from './previous-contract.ts';
 
 const PREFIX = `${FRAMEWORK_SPECIFIER}/`;
 /** `src/` 的 URL:本文件在 `src/extensions/`。 */
@@ -20,7 +22,8 @@ export function registerFrameworkResolver(): void {
   registerHooks({
     resolve(specifier, context, next) {
       if (specifier.startsWith(PREFIX)) {
-        return next(new URL(specifier.slice(PREFIX.length), SRC_URL).href, context);
+        const path = specifier.slice(PREFIX.length);
+        return next(new URL(previousContractModulePath(path, context.parentURL) ?? path, SRC_URL).href, context);
       }
       return next(specifier, context);
     },

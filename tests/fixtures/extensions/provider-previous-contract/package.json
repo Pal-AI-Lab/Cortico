@@ -1,0 +1,9 @@
+{
+  "name": "cortico-fixture-provider-previous-contract",
+  "version": "0.5.0",
+  "description": "按上一版契约写的 provider 扩展",
+  "type": "module",
+  "main": "./index.js",
+  "keywords": ["cortico-provider"],
+  "cortico": { "kind": "provider", "api": 5 }
+}

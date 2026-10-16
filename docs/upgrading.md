@@ -3,7 +3,8 @@
 # 把扩展升到当前契约
 
 当前契约版本是 world **6**、provider **6**、bot **7**(`EXTENSION_API_VERSIONS`)。`cortico.api` 还是
-world 5、provider 5、bot 6 的包加载不了,扩展页显示「需要升级」。按下面改完、重新发布即可。
+world 5、provider 5、bot 6 的包经过渡层照常加载,扩展页给一条 warning;Cortico 下一个大版本删除过渡层,
+那之后这些包加载不了。`pnpm check:extension` 现在就对它们判失败。按下面改完、重新发布即可。
 English below.
 
 ## 改名
@@ -54,8 +55,9 @@ pnpm check:extension <包目录>
 # Upgrading an extension to the current contract
 
 The current contract versions are world **6**, provider **6**, bot **7** (`EXTENSION_API_VERSIONS`). A package whose
-`cortico.api` is still world 5, provider 5 or bot 6 does not load, and the extensions page says it needs an upgrade.
-Make the changes below and publish again.
+`cortico.api` is still world 5, provider 5 or bot 6 loads through a transition layer and the extensions page shows a
+warning; the next major Cortico release removes the layer, and from then on such a package does not load.
+`pnpm check:extension` already fails it. Make the changes below and publish again.
 
 ## Renames
 

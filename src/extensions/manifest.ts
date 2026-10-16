@@ -1,6 +1,7 @@
 /**
  * 解析 package.json 的 cortico 扩展声明，不访问文件系统；装载器与 check:extension 共用。
- * kind 必须为 world、provider 或 bot；api 必须等于这一类的契约版本。
+ * kind 必须为 world、provider 或 bot；api 必须等于这一类的契约版本,或是上一版契约(给 warning,由
+ * previous-contract.ts 过渡)。
  * webUiClient 和 webUiStyle 是预构建产物的包内相对路径；服务端分配 URL。
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
  * 扩展市场读的 tags、locales、screenshots 框架不用,这里只校验形状,不合格给 warning。
@@ -8,6 +9,7 @@
 
 import type { Language } from '../core/language.ts';
 import { text } from './strings.ts';
+import { isPreviousContract, renamePreviousManifestFields, UPGRADING_URL } from './previous-contract.ts';
 
 export type ExtensionKind = 'world' | 'provider' | 'bot';
 export const EXTENSION_KINDS: readonly ExtensionKind[] = ['world', 'provider', 'bot'];
@@ -109,7 +111,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
     reasons.push(t.corticoMissing);
     return { ok: false, reasons, warnings };
   }
-  const m = block as Record<string, unknown>;
+  let m = block as Record<string, unknown>;
   const displayName = typeof m.displayName === 'string' ? m.displayName.trim() : '';
   if (m.displayName !== undefined && !displayName) warnings.push(t.displayNameEmpty);
   const icon = isSafeRelativeFile(m.icon) && Object.keys(ICON_TYPES).some((ext) => (m.icon as string).toLowerCase().endsWith(ext)) ? m.icon : undefined;
@@ -128,6 +130,9 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
   const expected = kindOk ? EXTENSION_API_VERSIONS[kind as ExtensionKind] : undefined;
   if (typeof api !== 'number' || !Number.isInteger(api) || api < 1) {
     reasons.push(expected === undefined ? t.apiNotInteger(JSON.stringify(api)) : t.apiNotInteger(JSON.stringify(api), kind as string, expected));
+  } else if (expected !== undefined && isPreviousContract(kind as string, api)) {
+    warnings.push(t.previousContract(kind as string, api, expected, UPGRADING_URL));
+    m = renamePreviousManifestFields(m);
   } else if (expected !== undefined && api < expected) {
     reasons.push(t.apiTooOld(kind as string, api, expected));
   } else if (expected !== undefined && api > expected) {

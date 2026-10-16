@@ -1,0 +1,14 @@
+{
+  "name": "cortico-fixture-world-previous-contract",
+  "version": "0.5.0",
+  "description": "按上一版契约写的 World 扩展",
+  "type": "module",
+  "main": "./index.js",
+  "keywords": ["cortico-world"],
+  "cortico": {
+    "kind": "world",
+    "api": 5,
+    "consoleClient": "dist/console.js",
+    "consoleStyle": "dist/console.css"
+  }
+}

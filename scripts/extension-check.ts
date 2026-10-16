@@ -14,6 +14,7 @@ import {
   type ExtensionPackageJson,
 } from '../src/extensions/manifest.ts';
 import { registerFrameworkResolver } from '../src/extensions/runtime.ts';
+import { isPreviousContract, UPGRADING_URL } from '../src/extensions/previous-contract.ts';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld, type DryMountReport } from '../src/extensions/dry-mount.ts';
 import { checkDescribe } from '../src/extensions/describe-export.ts';
 import { loadBuiltinWorlds } from '../src/worlds/index.ts';
@@ -83,6 +84,12 @@ async function main(): Promise<void> {
     return;
   }
   const manifest = parsed.manifest;
+  if (isPreviousContract(manifest.kind, manifest.api)) {
+    const current = EXTENSION_API_VERSIONS[manifest.kind];
+    fail(`cortico.api ${manifest.api} is the previous ${manifest.kind} contract; this check requires v${current}. Apply the renames in ${UPGRADING_URL}, set cortico.api to ${current}, and run the check again.`);
+    verdict();
+    return;
+  }
   ok(`manifest: kind=${manifest.kind}, api=${manifest.api}`);
 
   const entry = resolveExtensionEntry(pkgDir, pkg);
