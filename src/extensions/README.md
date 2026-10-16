@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, src/extensions.ts -->
+<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, src/extensions.ts, src/extensions/author-guide.ts -->
 
 # src/extensions
 
@@ -7,6 +7,7 @@
 `pnpm check:extension` 使用 `dry-mount.ts` 在假部署中验证构造与声明接口:
 World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot 调用 `build()`;
 不调用 `start()`。报告只有英文;工具重名时写出占用者的 World id。
+报告最后两段来自 `author-guide.ts`:按索引仓的标签词表核对 `cortico.tags`,发布前清单与扩展申请格式;只提示,不计入失败。
 
 ## manifest
 
