@@ -57,6 +57,7 @@ WebUI 不终结 TLS。经公网使用时放在终结 HTTPS 的反向代理后面
 存储项按归属分页:Core 的在运行诊断的「数据」子页,一键清空也在那里;World、Persona 与 Memory 页
 各有「数据」页签,列本页声明的项。配置组同理:Core 的在运行诊断的「配置」子页,其余在声明方自己的页。
 工具表是装配好的整份,只挂在 Persona 页的「工具表」页签上。
+World 页与 Persona 页在运行中出现不在定义自描述里的工具或事件时,标题下多一行列出它们(manifest 的 `undeclared`)。
 
 World、Persona 与 provider 各自贡献自己的页,页 id `world:<id>` / `persona:<id>` /
 `llm:<id>`;Persona 的 `webUi().memory` 子声明另成一页 `memory:<id>`,与 Persona 页共用一份

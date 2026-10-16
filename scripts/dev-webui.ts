@@ -1319,6 +1319,7 @@ const app = new WebApp({
         visible: devWorldVisible[m.id] !== false,
         prefixDrifted: devWorldDrift.has(m.id),
       }, m, language);
+      if (m.id === 'bilibili') c.undeclared = { tools: [], events: ['bilibili.devprobe'] };
       const dev = devPanelSurface(m.id);
       if (dev) c.invoke = (panel, method, args) => dev.invoke(panel, method, args);
       return c;

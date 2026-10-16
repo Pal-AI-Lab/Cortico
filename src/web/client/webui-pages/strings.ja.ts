@@ -19,6 +19,8 @@ export const S: Partial<typeof en> = {
   notActivated: '無効',
   hidden: '非表示',
   reloadPrefix: 'プレフィックスの再読み込み待ち · クリックして再読み込み',
+  undeclaredTools: (names: string) => `describe に宣言されていないツール: ${names}`,
+  undeclaredEvents: (names: string) => `describe に宣言されていないイベント: ${names}`,
   open: '開く',
   configTab: '設定',
   promptsTab: 'プロンプトテンプレート',

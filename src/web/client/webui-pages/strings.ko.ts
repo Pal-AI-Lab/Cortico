@@ -19,6 +19,8 @@ export const S: Partial<typeof en> = {
   notActivated: '비활성',
   hidden: '숨김',
   reloadPrefix: '프리픽스 다시 불러오기 대기 · 클릭하여 다시 불러오기',
+  undeclaredTools: (names: string) => `describe에 선언되지 않은 도구: ${names}`,
+  undeclaredEvents: (names: string) => `describe에 선언되지 않은 이벤트: ${names}`,
   open: '열기',
   configTab: '설정',
   promptsTab: '프롬프트 템플릿',
