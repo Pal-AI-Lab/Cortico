@@ -35,6 +35,16 @@ pnpm check:extension <包目录>
 `cortico` 是模板的开发依赖:它只把框架源码给编辑器、类型检查与 vitest,没有入口,不启动任何东西。
 装进实例后 `cortico/*` 由宿主的模块钩子解析到它自己运行的那份框架,包里这一份不参与运行。
 
+## 发布前
+
+每个模板带一份英文的 `AGENTS.md`(发布清单)和只写 `Read AGENTS.md` 的 `CLAUDE.md`,coding agent 打开包目录就会读到。
+
+- `cortico.tags` 从索引仓的 [TAGS.md](https://github.com/Pal-AI-Lab/cortico-extensions/blob/main/TAGS.md) 里选,
+  提示与警示标签符合就要声明。
+- `CHANGELOG.md` 给要发的版本加一节 `## <版本>`,扩展市场按它显示更新说明;没有这一节只是不显示,不拦发布。
+- `pnpm check:extension <包目录>` 最后的「Before publishing」一段列出这个包的标签、更新日志、`os`、自描述,
+  以及向官方提扩展申请的纯文本格式。
+
 ## 装进实例后该看见什么
 
 - **world**:扩展页卡片「已加载」;World 总览多一张 Example 卡;控制台时间线里出现一条
