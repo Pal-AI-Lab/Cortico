@@ -7,7 +7,7 @@ Owner: `src/definition.ts`
 
 | 文件 | 内容 |
 |---|---|
-| `src/definition.ts` | `WorldDefinition`:id、label、默认配置段、`create()` |
+| `src/definition.ts` | `WorldDefinition`:id、label、默认配置段、`create()`、`describe`(全部工具与事件,给人和扩展市场看) |
 | `src/config.ts` | 配置段类型、默认值、WebUI 配置组 |
 | `src/world.ts` | `World` 实现:事件、工具、`webUi()` 声明 |
 | `src/ENV_PROMPT.md` | 环境提示词模板;`{{example.greeting}}` 由 `envPromptVars()` 报值 |

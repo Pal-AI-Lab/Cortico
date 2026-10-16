@@ -35,7 +35,8 @@ Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefiniti
 钩子的异常处理方式见 [Core 文档](../src/core/README.md)。
 
 工具不在 Persona 上,在每个 `SessionDecl.tools()` 里;`end_turn`、`save_blob` 这类是 bot 侧的
-Persona 工具,Core 只认 `ToolDef.endsTurn`。
+Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声明是模块常量(`CORMINI_TOOL_DECLS` 等),
+`BotDefinition.describe.tools` 用 `describeTools(decls, summaries)` 从同一份声明拼成。
 
 `CoreApi` 是 Persona 唯一的 Core 入口:`injectInternal` / `injectDeferred` / `injectExternal`、
 `requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、

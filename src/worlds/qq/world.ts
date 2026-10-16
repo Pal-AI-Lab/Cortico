@@ -35,7 +35,7 @@ import {
   type ExtensionResult,
   type OneBotEvent,
 } from './driver.ts';
-import { createHistoryTools, readLatest } from './history-tools.ts';
+import { createHistoryTools, HISTORY_TOOL_DECLS, readLatest } from './history-tools.ts';
 import {
   buildOutgoing,
   makeImagePolicy,
@@ -153,6 +153,84 @@ interface ForwardNode {
   userId?: string;
   messageType?: string;
 }
+
+const DRAFT_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'qq_draft',
+  description:
+    'Stage a QQ message without sending. This ends the current tool sequence so you can review the draft and any newly arrived user events once before calling confirm (send or cancel). An unconfirmed draft is discarded at end of turn.',
+  tags: ['speak'],
+  barrierAfter: true,
+  parameters: {
+    type: 'object',
+    properties: {
+      to: {
+        type: 'string',
+        description:
+          'Target conversation: "group:<id>" or "private:<id>" (numeric QQ group/user id, not a name). Optional when reply_to is given (taken from the quoted message).',
+      },
+      text: { type: 'string', description: 'Message text. Optional if image is given.' },
+      image: {
+        type: 'string',
+        description:
+          'Optional. An image to send, given by handle: a log: handle from a [blob ...] line you saw, '
+          + 'or a mem: handle of one kept in your workspace.',
+      },
+      voice: {
+        type: 'string',
+        description:
+          'Optional. Audio to send as a QQ voice bar, given by handle the same way as image. '
+          + 'A voice bar is a message of its own: leave text, image and reply_to out. '
+          + 'The protocol end converts the audio it accepts (wav, mp3) to what QQ plays.',
+      },
+      reply_to: {
+        type: 'string',
+        description:
+          'Optional. The QQ message id to quote-reply — the `#<id>` shown at the start of that message line.',
+      },
+    },
+    required: [],
+  },
+};
+
+const CONFIRM_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'qq_confirm',
+  description:
+    'Act on the last draft: decision="send" sends it, decision="cancel" discards it. Only the most recent draft can be confirmed.',
+  tags: ['speak'],
+  parameters: {
+    type: 'object',
+    properties: {
+      decision: {
+        type: 'string',
+        enum: ['send', 'cancel'],
+        description: '"send" or "cancel".',
+      },
+    },
+    required: ['decision'],
+  },
+};
+
+const VIEW_IMAGE_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'qq_view_image',
+  description: 'Ask the auxiliary vision model a specific question about an image.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      image_id: { type: 'string', description: 'Image id, e.g. IMG-3.' },
+      prompt: { type: 'string', description: 'Your question about the image.' },
+    },
+    required: ['image_id', 'prompt'],
+  },
+};
+
+/** 全部工具的声明;`qq_view_image` 只在辅助视觉配好时出现。 */
+export const QQ_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  DRAFT_DECL,
+  CONFIRM_DECL,
+  ...HISTORY_TOOL_DECLS,
+  VIEW_IMAGE_DECL,
+];
 
 export class QQWorld implements World {
   readonly id = 'qq';
@@ -1477,41 +1555,7 @@ export class QQWorld implements World {
 
   private draftTool(): ToolDef {
     return {
-      name: 'qq_draft',
-      description:
-        'Stage a QQ message without sending. This ends the current tool sequence so you can review the draft and any newly arrived user events once before calling confirm (send or cancel). An unconfirmed draft is discarded at end of turn.',
-      tags: ['speak'],
-      barrierAfter: true,
-      parameters: {
-        type: 'object',
-        properties: {
-          to: {
-            type: 'string',
-            description:
-              'Target conversation: "group:<id>" or "private:<id>" (numeric QQ group/user id, not a name). Optional when reply_to is given (taken from the quoted message).',
-          },
-          text: { type: 'string', description: 'Message text. Optional if image is given.' },
-          image: {
-            type: 'string',
-            description:
-              'Optional. An image to send, given by handle: a log: handle from a [blob ...] line you saw, '
-              + 'or a mem: handle of one kept in your workspace.',
-          },
-          voice: {
-            type: 'string',
-            description:
-              'Optional. Audio to send as a QQ voice bar, given by handle the same way as image. '
-              + 'A voice bar is a message of its own: leave text, image and reply_to out. '
-              + 'The protocol end converts the audio it accepts (wav, mp3) to what QQ plays.',
-          },
-          reply_to: {
-            type: 'string',
-            description:
-              'Optional. The QQ message id to quote-reply — the `#<id>` shown at the start of that message line.',
-          },
-        },
-        required: [],
-      },
+      ...DRAFT_DECL,
       handler: async (args, ctx) => {
         const host = this.host;
         const driver = this.driver;
@@ -1597,21 +1641,7 @@ export class QQWorld implements World {
 
   private confirmTool(): ToolDef {
     return {
-      name: 'qq_confirm',
-      description:
-        'Act on the last draft: decision="send" sends it, decision="cancel" discards it. Only the most recent draft can be confirmed.',
-      tags: ['speak'],
-      parameters: {
-        type: 'object',
-        properties: {
-          decision: {
-            type: 'string',
-            enum: ['send', 'cancel'],
-            description: '"send" or "cancel".',
-          },
-        },
-        required: ['decision'],
-      },
+      ...CONFIRM_DECL,
       handler: async (args) => {
         const host = this.host;
         const driver = this.driver;
@@ -1659,17 +1689,7 @@ export class QQWorld implements World {
 
   private viewImageTool(): ToolDef {
     return {
-      name: 'qq_view_image',
-      description: 'Ask the auxiliary vision model a specific question about an image.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        properties: {
-          image_id: { type: 'string', description: 'Image id, e.g. IMG-3.' },
-          prompt: { type: 'string', description: 'Your question about the image.' },
-        },
-        required: ['image_id', 'prompt'],
-      },
+      ...VIEW_IMAGE_DECL,
       handler: async (args) => {
         const vision = this.vision;
         if (!vision) return '[tool failed] auxiliary vision not configured';

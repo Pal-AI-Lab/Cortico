@@ -11,13 +11,14 @@ import type { Language } from 'cortico/core/language.ts';
 import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './webUiSurface.ts';
 import { webUiText } from './strings.ts';
 import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
-import { saveBlobTool } from './blobs.ts';
+import { SAVE_BLOB_DECL, saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
-import { workspaceTools } from './workspaceTools.ts';
+import { WORKSPACE_TOOL_DECLS, workspaceTools } from './workspaceTools.ts';
 import { Heartbeat, quietLine } from './heartbeat.ts';
 import type { ContextRecord, Item } from 'cortico/protocol/open-responses/context.ts';
 import type {
   ContextHandoffResult,
+  DescribeText,
   EventEnvelope,
   CoreApi,
   World,
@@ -70,23 +71,51 @@ export const MAIN = 'main';
 /** 交接笔记目录:每次交接一份,文件名是 UTC 时间戳(见 handoffNoteStamp) */
 export const HANDOFF_DIR = 'handoffs/';
 
+export const END_TURN_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'end_turn',
+  description:
+    'End this turn: nothing more you want to say or do right now. ' +
+    'New events or the heartbeat will wake you again. ' +
+    'This is the normal way to finish a turn — do not idle with empty actions.',
+  tags: ['flow'],
+  barrierAfter: true,
+  endsTurn: true,
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
 /**
  * 显式结束本次唤醒的 yield 工具，仅挂在主 session。fork 以最后一段文本作为返回值，不挂终止工具。
  */
 export function endTurnTool(): ToolDef {
   return {
-    name: 'end_turn',
-    description:
-      'End this turn: nothing more you want to say or do right now. ' +
-      'New events or the heartbeat will wake you again. ' +
-      'This is the normal way to finish a turn — do not idle with empty actions.',
-    tags: ['flow'],
-    barrierAfter: true,
-    endsTurn: true,
-    parameters: { type: 'object', properties: {}, required: [] },
+    ...END_TURN_DECL,
     handler: async () => '[turn ended]',
   };
 }
+
+/** Cormini 自有工具的声明:文件工具、`save_blob` 与 `end_turn`;变体在其上追加自己的。 */
+export const CORMINI_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  ...WORKSPACE_TOOL_DECLS,
+  SAVE_BLOB_DECL,
+  END_TURN_DECL,
+];
+
+/** Cormini 自有工具给人看的一句话,进 bot 的自描述。 */
+export const CORMINI_TOOL_SUMMARIES: Readonly<Record<string, DescribeText>> = {
+  read_file: { zh: '读工作区里的一个文件,可以只读一段行。', en: 'Reads a workspace file, whole or a range of lines.' },
+  write_file: { zh: '新建或整份重写工作区里的一个文件。', en: 'Creates or fully rewrites a workspace file.' },
+  edit_file: { zh: '把文件里一段原文换成新文字,其余不动。', en: 'Replaces one exact passage in a file and leaves the rest as is.' },
+  append_file: { zh: '在文件末尾追加文字,文件不存在就新建。', en: 'Appends text to the end of a file, creating it if missing.' },
+  delete_file: { zh: '删除工作区里的一个文件;进系统前缀的文件不能删。', en: 'Deletes a workspace file; files in the system prefix cannot be deleted.' },
+  list_files: { zh: '列出工作区里的文件,点名的目录列全。', en: 'Lists workspace files; a named directory is listed in full.' },
+  glob_files: { zh: '按文件名模式找文件,最近改过的在前。', en: 'Finds files by name pattern, most recently modified first.' },
+  grep_files: { zh: '用正则搜工作区文件的内容。', en: 'Searches workspace file contents with a regular expression.' },
+  save_blob: {
+    zh: '把看到过的图片等二进制附件存进工作区,换来长期可用的句柄。',
+    en: 'Saves an image or other binary attachment it has seen into the workspace and gets a lasting handle.',
+  },
+  end_turn: { zh: '结束这一轮,等新事件或心跳再醒。', en: 'Ends the turn until a new event or the heartbeat wakes the bot.' },
+};
 
 /** 阶段预算、软阈值比例和交接笔记预算比例。 */
 export interface ContextStagePolicy {

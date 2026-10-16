@@ -4,12 +4,12 @@ import type { BotDefinition, BotParts } from 'cortico/bot.ts';
 import type { ConfigGroup, CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
-import type { WorldDeclaration, WorldSection } from 'cortico/world.ts';
+import { describeTools, type WorldDeclaration, type WorldSection } from 'cortico/world.ts';
 import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
 import type { BilibiliConfigSection } from 'cortico/worlds/bilibili/config.ts';
 import type { MinecraftConfigSection } from 'cortico/worlds/minecraft/config.ts';
-import { CortiV } from './persona/persona.ts';
-import type { ContextStagePolicy } from '../cormini/persona/persona.ts';
+import { CORTIV_TOOL_DECLS, CortiV } from './persona/persona.ts';
+import { CORMINI_TOOL_SUMMARIES, type ContextStagePolicy } from '../cormini/persona/persona.ts';
 import { contextStageConfigGroup } from '../cormini/persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
@@ -143,6 +143,23 @@ const definition: BotDefinition<CortiVConfig> = {
     // 在这份部署的 config.json。
   } as unknown as CortiVConfig),
   build,
+  describe: {
+    tools: describeTools(CORTIV_TOOL_DECLS, {
+      ...CORMINI_TOOL_SUMMARIES,
+      git_log: { zh: '看工作区某个文件或整个工作区的修改历史。', en: 'Lists the edit history of a workspace file or of the whole workspace.' },
+      git_show: { zh: '读某个文件在旧版本里的内容。', en: 'Reads a file as it was at an earlier version.' },
+      recall_viewer: {
+        zh: '按 id 或名字调出一位观众的档案。',
+        en: "Looks up a viewer's file by id or by name.",
+      },
+    }),
+    memory: {
+      form: {
+        zh: '工作区里的文本文件,每次写入提交进 git;观众档案按来源与 id 分文件存,观众出现时自动带出档案首行;交接后由后台整理更新档案。',
+        en: "Text files in a workspace, each write committed to git; viewer files are kept per source and id, and a file's first line is brought in when that viewer shows up; background consolidation after a handoff updates the files.",
+      },
+    },
+  },
 };
 
 export default definition;

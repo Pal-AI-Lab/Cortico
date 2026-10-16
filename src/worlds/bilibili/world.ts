@@ -170,6 +170,34 @@ function emptyAggregate(): Aggregate {
   };
 }
 
+/** 工具声明。公告字数上限来自 `worlds.bilibili.overlay.agentNoticeMaxChars`,写进参数的 schema 与说明。 */
+export function bilibiliToolDecls(agentNoticeMaxChars: number): Array<Omit<ToolDef, 'handler'>> {
+  return [
+    {
+      name: 'bilibili_set_announcement',
+      description:
+        'Write plain text to the Bilibili Overlay Agent announcement board. '
+        + 'Empty or whitespace-only text is rejected and the board keeps its current content. '
+        + 'The result reports the active character limit.',
+      tags: ['speak'],
+      parameters: {
+        type: 'object',
+        properties: {
+          text: {
+            type: 'string',
+            maxLength: agentNoticeMaxChars,
+            description:
+              `Announcement text, at most ${agentNoticeMaxChars} characters. `
+              + 'Must contain visible characters; empty or whitespace-only text is rejected.',
+          },
+        },
+        required: ['text'],
+        additionalProperties: false,
+      },
+    },
+  ];
+}
+
 export class BilibiliWorld implements World {
   readonly id = 'bilibili';
 
@@ -532,26 +560,7 @@ export class BilibiliWorld implements World {
   tools(): ToolDef[] {
     return [
       {
-        name: 'bilibili_set_announcement',
-        description:
-          'Write plain text to the Bilibili Overlay Agent announcement board. '
-          + 'Empty or whitespace-only text is rejected and the board keeps its current content. '
-          + 'The result reports the active character limit.',
-        tags: ['speak'],
-        parameters: {
-          type: 'object',
-          properties: {
-            text: {
-              type: 'string',
-              maxLength: this.agentNoticeLimit(),
-              description:
-                `Announcement text, at most ${this.agentNoticeLimit()} characters. `
-                + 'Must contain visible characters; empty or whitespace-only text is rejected.',
-            },
-          },
-          required: ['text'],
-          additionalProperties: false,
-        },
+        ...bilibiliToolDecls(this.agentNoticeLimit())[0],
         handler: async (args) => {
           if (typeof args.text !== 'string') return '[bad input] text must be a string';
 

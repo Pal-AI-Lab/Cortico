@@ -5,7 +5,9 @@
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { CoreConfig, EventDescribe, ToolDescribe, World, WorldLifecycleEvent } from './core/types.ts';
+import type {
+  CoreConfig, DescribeText, EventDescribe, ToolDescribe, ToolSpec, World, WorldLifecycleEvent,
+} from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
 import type { BotDefinition } from './bot.ts';
 import { updateJsonObject } from './config-file.ts';
@@ -71,6 +73,19 @@ export interface WorldDefinition<S extends WorldSection = WorldSection> {
 export interface WorldDescribe {
   tools: readonly ToolDescribe[];
   events: readonly EventDescribe[];
+}
+
+/**
+ * 由工具声明拼出自描述里的工具:取发给模型的字段与标签,`summaries` 按工具名给每个工具一句给人看的话。
+ * World 与 Persona 共用。
+ */
+export function describeTools(
+  decls: readonly ToolSpec[],
+  summaries: Readonly<Record<string, DescribeText>>,
+): ToolDescribe[] {
+  return decls.map(({ name, description, parameters, tags }) => ({
+    name, description, parameters, tags, summary: summaries[name],
+  }));
 }
 
 /**

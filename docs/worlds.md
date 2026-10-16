@@ -66,6 +66,9 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 `endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下。
 工具名在一个 bot 内全局唯一:模型按名字调用,Core 按名字归属与隐藏。用自家短名做前缀
 (`mc_`、`qq_`);工具名与已挂载 World、Persona 工具或 Core 保留帧名冲突时,装配层拒绝挂载并报告原因。
+工具声明放在导出的 `<PREFIX>_TOOL_DECLS`(不含 handler),`tools()` 在其上加 handler;自描述的 `describe.tools` 由
+`describeTools(<PREFIX>_TOOL_DECLS, summaries)` 从同一份声明拼成,每个工具配一句给人看的 `summary`。仓内 World 都写
+`describe`,`tests/builtin-describe.test.ts` 核对各可达配置下的工具名与声明一致。
 
 ## 定义与装配
 

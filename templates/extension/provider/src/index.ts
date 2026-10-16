@@ -14,6 +14,7 @@ import { ExampleChatProvider } from './native.ts';
 const EXAMPLE = {
   id: 'example',
   title: 'Example (Chat Completions)',
+  describe: { protocols: ['openai-chat'], auth: ['api-key'], local: false, input: ['text', 'image'] },
   defaultBaseUrl: 'http://127.0.0.1:8080/v1',
   reasoningTiers: [],
   serviceTiers: [],

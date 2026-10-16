@@ -25,6 +25,7 @@ export default {
   id: 'llamacpp',
   title: 'llama.cpp',
   description: 'Connect to or manage local llama.cpp models.',
+  describe: { protocols: ['openai-chat'], auth: ['api-key'], local: true, input: ['text', 'image'] },
   defaultBaseUrl: 'http://127.0.0.1:8090/v1',
   baseUrlSuggestions: ['http://127.0.0.1:8090/v1', 'http://127.0.0.1:8080/v1'],
   normalize: normalizeLlamaCpp,

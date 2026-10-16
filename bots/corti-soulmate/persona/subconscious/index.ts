@@ -33,6 +33,20 @@ export interface DreamStatus {
   dreaming: boolean;
 }
 
+export const SURFACE_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'surface',
+  description:
+    'Hand a short sleep summary back to the waking thread. One call only; if nothing is worth returning, do not call this.',
+  tags: ['flow'],
+  parameters: {
+    type: 'object',
+    properties: {
+      text: { type: 'string', description: 'The summary: a few sentences, first person, conclusion only.' },
+    },
+    required: ['text'],
+  },
+};
+
 export class Dream {
   private readonly d: DreamDeps;
   private dreaming = false;
@@ -72,17 +86,7 @@ export class Dream {
   /** surface 是每场梦私有的一次性工具,不属于 session 的基础工具集。 */
   private makeSurfaceTool(surfaced: { text: string | null }): ToolDef {
     return {
-      name: 'surface',
-      description:
-        'Hand a short sleep summary back to the waking thread. One call only; if nothing is worth returning, do not call this.',
-      tags: ['flow'],
-      parameters: {
-        type: 'object',
-        properties: {
-          text: { type: 'string', description: 'The summary: a few sentences, first person, conclusion only.' },
-        },
-        required: ['text'],
-      },
+      ...SURFACE_DECL,
       handler: async (args) => {
         const text = String(args.text ?? '').trim();
         if (!text) return '[bad input] text is empty';

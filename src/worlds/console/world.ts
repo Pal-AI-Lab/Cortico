@@ -89,6 +89,22 @@ const MODEL_TEXT = {
 
 type ConsoleText = ReturnType<typeof text>;
 
+export const CONSOLE_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  {
+    // 固定叫 console_send,与前缀文档里的「控制台」同名
+    name: 'console_send',
+    description: 'Send text to everyone connected to the console.',
+    tags: ['speak'],
+    parameters: {
+      type: 'object',
+      properties: {
+        text: { type: 'string', description: 'Text to send.' },
+      },
+      required: ['text'],
+    },
+  },
+];
+
 /** 口令配置组,文案按界面语言给;id / owner / 键与取值规则各语言完全一致。 */
 export function consoleConfigGroup(language: Language): ConfigGroup {
   const t = text(language);
@@ -330,17 +346,7 @@ export class ConsoleWorld implements World {
   tools(): ToolDef[] {
     return [
       {
-        // 固定叫 console_send,与前缀文档里的「控制台」同名
-        name: 'console_send',
-        description: 'Send text to everyone connected to the console.',
-        tags: ['speak'],
-        parameters: {
-          type: 'object',
-          properties: {
-            text: { type: 'string', description: 'Text to send.' },
-          },
-          required: ['text'],
-        },
+        ...CONSOLE_TOOL_DECLS[0],
         handler: async (args) => {
           const text = typeof args.text === 'string' ? args.text.trim() : '';
           if (!text) return '[send failed] text must not be empty';
