@@ -685,7 +685,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     }, { signal });
     more.addEventListener('keydown', event => event.stopPropagation(), { signal });
   }
-  /** 能力摘要:World 是工具与事件数,供应商是协议、登录与输入,Bot 是 World 数与 Memory;没有自描述时为空。 */
+  /** 能力摘要:World 是工具与事件数,供应商是协议、登录与输入,Bot 是 World 数与 Memory。 */
   function summaryLine(owner: ExtensionKindView, summary?: SummaryView) {
     const line = ui.h('div', 'extension-card-spec');
     if (!summary) return line;
