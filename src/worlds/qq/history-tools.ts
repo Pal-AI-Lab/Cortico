@@ -122,36 +122,40 @@ function readAround(
   ];
 }
 
+const READ_HISTORY_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'qq_read_history',
+  description:
+    'Read QQ history: the neighborhood of one message (around / around_time), or a time range. Optional conversation and sender filters.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      around: {
+        type: 'string',
+        description: 'A QQ message id — the `#<id>` at the start of a message line. Reads the messages around it.',
+      },
+      around_time: {
+        type: 'string',
+        description: 'ISO 8601 time: reads around the first message at or after it. Use when you have no message id.',
+      },
+      before: { type: 'number', description: 'With around/around_time: how many earlier messages (default 20).' },
+      after: { type: 'number', description: 'With around/around_time: how many later messages (default 20).' },
+      from_time: { type: 'string', description: 'Start time, ISO 8601.' },
+      to_time: { type: 'string', description: 'End time, ISO 8601.' },
+      sender: { type: 'string', description: 'Filter by QQ number.' },
+      conversation: {
+        type: 'string',
+        description: `Filter by conversation: ${TARGET_FORMAT} (numeric QQ group/user id, not a name).`,
+      },
+      limit: { type: 'number', description: 'Max results, default 50.' },
+    },
+    required: [],
+  },
+};
+
 function createReadHistoryTool(deps: HistoryToolDeps): ToolDef {
   return {
-    name: 'qq_read_history',
-    description:
-      'Read QQ history: the neighborhood of one message (around / around_time), or a time range. Optional conversation and sender filters.',
-    tags: ['read'],
-    parameters: {
-      type: 'object',
-      properties: {
-        around: {
-          type: 'string',
-          description: 'A QQ message id — the `#<id>` at the start of a message line. Reads the messages around it.',
-        },
-        around_time: {
-          type: 'string',
-          description: 'ISO 8601 time: reads around the first message at or after it. Use when you have no message id.',
-        },
-        before: { type: 'number', description: 'With around/around_time: how many earlier messages (default 20).' },
-        after: { type: 'number', description: 'With around/around_time: how many later messages (default 20).' },
-        from_time: { type: 'string', description: 'Start time, ISO 8601.' },
-        to_time: { type: 'string', description: 'End time, ISO 8601.' },
-        sender: { type: 'string', description: 'Filter by QQ number.' },
-        conversation: {
-          type: 'string',
-          description: `Filter by conversation: ${TARGET_FORMAT} (numeric QQ group/user id, not a name).`,
-        },
-        limit: { type: 'number', description: 'Max results, default 50.' },
-      },
-      required: [],
-    },
+    ...READ_HISTORY_DECL,
     handler: async (args) => {
       const host = deps.host();
       if (!host) return NOT_STARTED;
@@ -178,27 +182,31 @@ function createReadHistoryTool(deps: HistoryToolDeps): ToolDef {
   };
 }
 
+const GREP_HISTORY_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'qq_grep_history',
+  description:
+    'Keyword search over QQ history; each hit includes 3 messages of context on each side. Optional conversation and sender filters.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      keyword: { type: 'string', description: 'Keyword (plain substring match).' },
+      sender: { type: 'string', description: 'Filter by QQ number.' },
+      conversation: {
+        type: 'string',
+        description: `Filter by conversation: ${TARGET_FORMAT} (numeric QQ group/user id, not a name).`,
+      },
+      from_time: { type: 'string', description: 'Start time, ISO 8601.' },
+      to_time: { type: 'string', description: 'End time, ISO 8601.' },
+      limit: { type: 'number', description: 'Max hit groups, default 5.' },
+    },
+    required: ['keyword'],
+  },
+};
+
 function createGrepHistoryTool(deps: HistoryToolDeps): ToolDef {
   return {
-    name: 'qq_grep_history',
-    description:
-      'Keyword search over QQ history; each hit includes 3 messages of context on each side. Optional conversation and sender filters.',
-    tags: ['read'],
-    parameters: {
-      type: 'object',
-      properties: {
-        keyword: { type: 'string', description: 'Keyword (plain substring match).' },
-        sender: { type: 'string', description: 'Filter by QQ number.' },
-        conversation: {
-          type: 'string',
-          description: `Filter by conversation: ${TARGET_FORMAT} (numeric QQ group/user id, not a name).`,
-        },
-        from_time: { type: 'string', description: 'Start time, ISO 8601.' },
-        to_time: { type: 'string', description: 'End time, ISO 8601.' },
-        limit: { type: 'number', description: 'Max hit groups, default 5.' },
-      },
-      required: ['keyword'],
-    },
+    ...GREP_HISTORY_DECL,
     handler: async (args) => {
       const host = deps.host();
       if (!host) return NOT_STARTED;
@@ -244,6 +252,8 @@ function createGrepHistoryTool(deps: HistoryToolDeps): ToolDef {
     },
   };
 }
+
+export const HISTORY_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [READ_HISTORY_DECL, GREP_HISTORY_DECL];
 
 export function createHistoryTools(deps: HistoryToolDeps): ToolDef[] {
   return [createReadHistoryTool(deps), createGrepHistoryTool(deps)];

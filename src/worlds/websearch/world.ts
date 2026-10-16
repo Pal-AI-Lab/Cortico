@@ -41,6 +41,47 @@ const Q_MAX = 240;
 const PLATFORM_RISK_WARNING =
   '⚠ Before posting any of this into QQ or other external platforms: make sure it doesn\'t violate that platform\'s rules (illegal, explicit, violent, infringing, etc.) — sharing content that does can get the account banned. Paraphrase and use judgment.';
 
+export const WEBSEARCH_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  {
+    name: 'web_search',
+    description:
+      'Search the public internet for recent or uncertain information. Returns concise, numbered evidence with sources. Default to calling it once.',
+    tags: ['read'],
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        q: {
+          type: 'string',
+          minLength: Q_MIN,
+          maxLength: Q_MAX,
+          description:
+            'Focused search query. Keep key names, dates and platforms; do not paste whole chat logs or private info.',
+        },
+        mode: {
+          type: 'string',
+          enum: MODES,
+          default: 'auto',
+          description:
+            '"answer" for evidence to answer a question; "links" for web pages; others search that content type.',
+        },
+        fresh: {
+          type: 'string',
+          enum: FRESHNESS,
+          default: 'any',
+        },
+        n: {
+          type: 'integer',
+          minimum: N_MIN,
+          maximum: N_MAX,
+          default: N_DEFAULT,
+        },
+      },
+      required: ['q'],
+    },
+  },
+];
+
 export class WebSearchWorld implements World {
   readonly id = 'websearch';
 
@@ -103,42 +144,7 @@ export class WebSearchWorld implements World {
 
   private webSearchTool(): ToolDef {
     return {
-      name: 'web_search',
-      description:
-        'Search the public internet for recent or uncertain information. Returns concise, numbered evidence with sources. Default to calling it once.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          q: {
-            type: 'string',
-            minLength: Q_MIN,
-            maxLength: Q_MAX,
-            description:
-              'Focused search query. Keep key names, dates and platforms; do not paste whole chat logs or private info.',
-          },
-          mode: {
-            type: 'string',
-            enum: MODES,
-            default: 'auto',
-            description:
-              '"answer" for evidence to answer a question; "links" for web pages; others search that content type.',
-          },
-          fresh: {
-            type: 'string',
-            enum: FRESHNESS,
-            default: 'any',
-          },
-          n: {
-            type: 'integer',
-            minimum: N_MIN,
-            maximum: N_MAX,
-            default: N_DEFAULT,
-          },
-        },
-        required: ['q'],
-      },
+      ...WEBSEARCH_TOOL_DECLS[0],
       handler: async (args) => {
         const client = this.client;
         if (!client) return '[tool failed] web search is not configured (missing BRAVE_API_KEY)';
