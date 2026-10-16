@@ -639,6 +639,35 @@ describe('CortiV 并行梦', () => {
     expect(sys.content).toContain(RECENT_FILE);
   });
 
+  it('越过软阈值的那一批整批算最近段:批内已发出的回复不因提醒落在批末而省略', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2026-10-14T11:22:00Z'));
+      p.onDelivery({ events: [] });
+      const asked = new Date().toISOString();
+      const replied = new Date('2026-10-14T11:22:09Z').toISOString();
+      vi.setSystemTime(new Date('2026-10-14T11:22:11Z'));
+      p.onBatchEnd();
+      const snapshot: ChatMessage[] = [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: '私聊:你最近玩得少', ts: asked },
+        {
+          role: 'assistant', content: '', ts: replied,
+          tool_calls: [{ id: 'r1', type: 'function', function: { name: 'vtuber_act', arguments: JSON.stringify({ script: '晚上才有空' }) } }],
+        },
+        { role: 'tool', content: '已开演(流式)。', tool_call_id: 'r1' },
+      ];
+      await p.onHandoff(records(snapshot), HANDOFF_CTX);
+      const recent = externals.at(-1)!.text;
+      expect(recent).toContain('最近的一段');
+      expect(recent).toContain('私聊:你最近玩得少');
+      expect(recent).toContain('[调用] vtuber_act {"script":"晚上才有空"}\n[回执] 已开演(流式)。');
+      await sleep(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('无软阈值连续交接仅投递本窗最近段,上一份 note 不套娃且新台词不逐轮缩短', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     try {
