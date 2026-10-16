@@ -198,7 +198,7 @@ export interface ToolSchema {
  */
 export type ToolTag = 'read' | 'write' | 'speak' | 'act' | 'flow' | 'snapshot';
 
-/** 自描述里给人看的文字:一种写法,或中英两份(按 WebUI 语言取,中文以外的语言取 en)。 */
+/** 自描述里给人看的文字:一种写法,或中英两份(按 WebUI 语言取,简体中文以外的语言取 en)。 */
 export type DescribeText = string | { zh: string; en: string };
 
 /**
