@@ -3,6 +3,7 @@
  * kind 必须为 world、provider 或 bot；api 必须等于这一类的契约版本。
  * webUiClient 和 webUiStyle 是预构建产物的包内相对路径；服务端分配 URL。
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
+ * 扩展市场读的 tags、locales、screenshots 框架不用,这里只校验形状,不合格给 warning。
  */
 
 import type { Language } from '../core/language.ts';
@@ -47,6 +48,8 @@ export interface ExtensionManifest {
   webUiClient?: string;
   /** 包内相对路径,`.css`。要有 `webUiClient` 才有意义。 */
   webUiStyle?: string;
+  /** 包内相对路径,`.json`;`pnpm describe:extension` 生成的自描述文件。 */
+  describe?: string;
 }
 
 /** package.json 里我们会看的字段。 */
@@ -78,6 +81,17 @@ export function isSafeRelativeFile(p: unknown): p is string {
   if (typeof p !== 'string' || p === '') return false;
   if (p.includes('\\') || p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;
   return !p.split('/').some((seg) => seg === '..' || seg === '');
+}
+
+const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every((item) => typeof item === 'string');
+
+/** `{ zh?, en? }`,每项是只含字符串 displayName / description 的对象。 */
+function isLocales(v: unknown): boolean {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  return Object.entries(v).every(([language, entry]) =>
+    (language === 'zh' || language === 'en')
+    && !!entry && typeof entry === 'object' && !Array.isArray(entry)
+    && Object.entries(entry).every(([key, value]) => (key === 'displayName' || key === 'description') && typeof value === 'string'));
 }
 
 /** reasons 与 warnings 按 `language` 给。 */
@@ -139,6 +153,12 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
     }
   }
 
+  const describe = isSafeRelativeFile(m.describe) && m.describe.endsWith('.json') ? m.describe : undefined;
+  if (m.describe !== undefined && describe === undefined) warnings.push(t.describeBad(JSON.stringify(m.describe)));
+  if (m.tags !== undefined && !isStringArray(m.tags)) warnings.push(t.tagsBad(JSON.stringify(m.tags)));
+  if (m.locales !== undefined && !isLocales(m.locales)) warnings.push(t.localesBad(JSON.stringify(m.locales)));
+  if (m.screenshots !== undefined && !isStringArray(m.screenshots)) warnings.push(t.screenshotsBad(JSON.stringify(m.screenshots)));
+
   if (kindOk) {
     const keyword = EXTENSION_KEYWORDS[kind as ExtensionKind];
     if (!(pkg.keywords ?? []).includes(keyword)) {
@@ -157,6 +177,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
       api: api as number,
       ...(typeof client === 'string' ? { webUiClient: client } : {}),
       ...(typeof style === 'string' ? { webUiStyle: style } : {}),
+      ...(describe ? { describe } : {}),
     },
   };
 }
