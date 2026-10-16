@@ -8,7 +8,7 @@ Owner: `src/index.ts`
 
 | 文件 | 内容 |
 |---|---|
-| `src/index.ts` | `ProviderModule`:id、title、档位表、连接配置组、`create()` |
+| `src/index.ts` | `ProviderModule`:id、title、档位表、连接配置组、`create()`、`describe`(协议、登录方式、输入类型) |
 | `src/native.ts` | 继承 `OpenAIHttpClient` 的客户端:`buildBody()` 与 `headers()` |
 | `tests/` | 干装载与请求体形状 |
 

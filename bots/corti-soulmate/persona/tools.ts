@@ -62,18 +62,22 @@ export interface MoveFileDeps {
   capGuard: (to: string, from: string) => string | null;
 }
 
+export const MOVE_FILE_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'move_file',
+  description: 'Move or rename a file within your workspace. Use it to shift a memo between tiers when one is full '
+    + '(memo/ → memo/active/ → memo/archived/); parent folders are created as needed.',
+  tags: ['write'],
+  parameters: S({
+    from: { type: 'string', description: 'Current path, relative to your workspace.' },
+    to: { type: 'string', description: 'New path, relative to your workspace.' },
+  }, ['from', 'to']),
+};
+
 /** 工作区内移动或改名。memo 层间搬运走它;父目录按需创建。 */
 export function moveFileTool(deps: MoveFileDeps): ToolDef {
   const { ws } = deps;
   return {
-    name: 'move_file',
-    description: 'Move or rename a file within your workspace. Use it to shift a memo between tiers when one is full '
-      + '(memo/ → memo/active/ → memo/archived/); parent folders are created as needed.',
-    tags: ['write'],
-    parameters: S({
-      from: { type: 'string', description: 'Current path, relative to your workspace.' },
-      to: { type: 'string', description: 'New path, relative to your workspace.' },
-    }, ['from', 'to']),
+    ...MOVE_FILE_DECL,
     handler: async (args, ctx) => {
       const from = String(args.from ?? '');
       const to = String(args.to ?? '');

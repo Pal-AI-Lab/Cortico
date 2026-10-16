@@ -4,7 +4,7 @@ import type { BotDefinition, BotParts, WebUiContribution } from 'cortico/bot.ts'
 import type { World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
-import type { WorldDeclaration } from 'cortico/world.ts';
+import { describeTools, type WorldDeclaration } from 'cortico/world.ts';
 import type { WebAppCheckpointDeps } from 'cortico/web/server.ts';
 
 import { CortiSoulmate } from './persona/index.ts';
@@ -13,6 +13,9 @@ import {
   type CortiResetDeps,
 } from './webui-page.ts';
 import { AUTHOR_OPERATOR } from '../cormini/persona/workspaceGit.ts';
+import { CORMINI_TOOL_DECLS, CORMINI_TOOL_SUMMARIES } from '../cormini/persona/persona.ts';
+import { SURFACE_DECL } from './persona/subconscious/index.ts';
+import { MOVE_FILE_DECL, scheduleWakeSpec } from './persona/tools.ts';
 import { PERSONA_CONFIG_GROUP, PERSONA_DEFAULTS } from './persona/config.ts';
 import type { PersonaConfig } from './persona/config.ts';
 
@@ -202,6 +205,29 @@ const definition: BotDefinition<BotConfig> = {
   declares: DECLARES,
   defaults: composeDefaults,
   build,
+  describe: {
+    tools: describeTools([...CORMINI_TOOL_DECLS, MOVE_FILE_DECL, scheduleWakeSpec(), SURFACE_DECL], {
+      ...CORMINI_TOOL_SUMMARIES,
+      move_file: {
+        zh: '在工作区里移动或改名文件,用来在三级备忘之间搬条目。',
+        en: 'Moves or renames a workspace file, used to shift memos between tiers.',
+      },
+      schedule_wake: {
+        zh: '定一个闹钟:到点或过几分钟再醒,期间可暂缓投递新事件。',
+        en: 'Sets a wake at a time or after some minutes, optionally holding new events until then.',
+      },
+      surface: {
+        zh: '交接后的后台整理结束时,把一小段总结交回醒着的主线。',
+        en: 'At the end of the background consolidation after a handoff, hands a short summary back to the main thread.',
+      },
+    }),
+    memory: {
+      form: {
+        zh: '工作区里的文本文件,按区分权限:笔记、容量有上限的三级备忘、只能追加的人物档案,WORLDVIEW.md 只由交接后的后台整理改写;前缀里是 MEMORY 0–4 五层快照,改动记进 git。',
+        en: 'Text files in a workspace with per-area write rules: notes, three capped memo tiers, append-only people files, and WORLDVIEW.md rewritten only by the background consolidation after a handoff; the prefix holds a five-layer snapshot (MEMORY 0–4) and changes are committed to git.',
+      },
+    },
+  },
 };
 
 export default definition;

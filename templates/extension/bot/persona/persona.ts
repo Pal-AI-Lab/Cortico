@@ -28,6 +28,34 @@ export interface ExamplePersonaOptions {
   rounds: () => RoundCaps;
 }
 
+const MEMORY_WRITE_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'memory_write',
+  description: 'Append one line to MEMORY.md, your only persistent memory. It is shown in full at the top of every context.',
+  tags: ['write'],
+  parameters: {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      text: { type: 'string', description: 'One line to remember.' },
+    },
+    required: ['text'],
+  },
+};
+
+const END_TURN_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'end_turn',
+  description:
+    'End this turn: nothing more you want to say or do right now. '
+    + 'New events will wake you again. This is the normal way to finish a turn.',
+  tags: ['flow'],
+  barrierAfter: true,
+  endsTurn: true,
+  parameters: { type: 'object', properties: {}, required: [] },
+};
+
+/** 自有工具的声明;`index.ts` 的 describe 与 `ownToolNames()` 都取它。 */
+export const EXAMPLE_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [MEMORY_WRITE_DECL, END_TURN_DECL];
+
 export class ExamplePersona implements Persona {
   readonly memoryDir: string;
   readonly blobs: BlobStore;
@@ -85,24 +113,14 @@ export class ExamplePersona implements Persona {
 
   /** 自有工具名;装配层据此拒绝与之撞名的 World。 */
   ownToolNames(): string[] {
-    return ['memory_write', 'end_turn'];
+    return EXAMPLE_TOOL_DECLS.map((decl) => decl.name);
   }
 }
 
 /** 向 MEMORY.md 追加一行。 */
 export function memoryWriteTool(memoryDir: string): ToolDef {
   return {
-    name: 'memory_write',
-    description: 'Append one line to MEMORY.md, your only persistent memory. It is shown in full at the top of every context.',
-    tags: ['write'],
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        text: { type: 'string', description: 'One line to remember.' },
-      },
-      required: ['text'],
-    },
+    ...MEMORY_WRITE_DECL,
     handler: async (args) => {
       const text = String(args.text ?? '').trim();
       if (!text) return '[write failed] text 不能为空';
@@ -115,14 +133,7 @@ export function memoryWriteTool(memoryDir: string): ToolDef {
 /** 结束本轮的工具。Core 只认 `endsTurn`;名字与措辞归 Persona。 */
 export function endTurnTool(): ToolDef {
   return {
-    name: 'end_turn',
-    description:
-      'End this turn: nothing more you want to say or do right now. '
-      + 'New events will wake you again. This is the normal way to finish a turn.',
-    tags: ['flow'],
-    barrierAfter: true,
-    endsTurn: true,
-    parameters: { type: 'object', properties: {}, required: [] },
+    ...END_TURN_DECL,
     handler: async () => '[turn ended]',
   };
 }

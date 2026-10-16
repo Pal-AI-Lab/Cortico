@@ -40,7 +40,7 @@ import type {
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
 import { DeadlineError, estimateTokens, withDeadline } from 'cortico/core/util.ts';
-import { Cormini, HANDOFF_DIR, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
+import { CORMINI_TOOL_DECLS, Cormini, HANDOFF_DIR, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
 import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceGit.ts';
 import { personaWebUiDecl } from './webUiSurface.ts';
 import { VIEWERS_DIR, VIEWER_MEMORY_NOTE_FILE, viewerMemoryNote } from './viewers.ts';
@@ -218,6 +218,74 @@ export function balancedSnapshot(snapshot: readonly ContextRecord[]): ContextRec
   });
   return snapshot.slice(0, end);
 }
+
+const RECALL_VIEWER_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'recall_viewer',
+  description:
+    'Look someone up in your viewer files by numeric id or by name. '
+    + 'The [memory] line you get when a person first shows up is only the first line of their file; '
+    + 'this returns the whole file when the id is given or the name matches exactly one file. '
+    + 'A name search also covers people seen this session who have no file yet and gives their id. '
+    + 'Use this instead of list_files to find people.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      id: { type: 'string', description: 'Numeric id, the one shown in a [memory] line.' },
+      name: {
+        type: 'string',
+        description: 'Display name or part of it; case-insensitive. Ignored when id is given.',
+      },
+    },
+    required: [],
+  },
+};
+
+const GIT_LOG_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'git_log',
+  description:
+    'List recent versions of a file in your workspace (omit path for the whole workspace). '
+    + 'Every write_file and append_file you make is committed, so this is the edit history of your own notes: '
+    + 'short hash, time, and how many lines each version added and removed. '
+    + 'Use it when a note looks shorter or emptier than you remember it. '
+    + 'Read an old version back with git_show.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      path: {
+        type: 'string',
+        description: 'Path relative to your workspace. Omit for the whole workspace.',
+      },
+    },
+    required: [],
+  },
+};
+
+const GIT_SHOW_DECL: Omit<ToolDef, 'handler'> = {
+  name: 'git_show',
+  description:
+    'Read a file as it was at an earlier version; rev is a short hash from git_log. '
+    + 'Read-only — nothing is rolled back for you. To bring old content back, '
+    + 'take what you want from here and write it yourself with write_file.',
+  tags: ['read'],
+  parameters: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'Path relative to your workspace.' },
+      rev: { type: 'string', description: 'Short commit hash from git_log.' },
+    },
+    required: ['path', 'rev'],
+  },
+};
+
+/** CortiV 自有工具的声明:Cormini 的那一份加上观众档案召回与工作区版本历史。 */
+export const CORTIV_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  ...CORMINI_TOOL_DECLS,
+  GIT_LOG_DECL,
+  GIT_SHOW_DECL,
+  RECALL_VIEWER_DECL,
+];
 
 export interface CortiVOptions extends CorminiOptions {
   /**
@@ -453,25 +521,7 @@ export class CortiV extends Cormini {
    */
   private recallTool(): ToolDef {
     return {
-      name: 'recall_viewer',
-      description:
-        'Look someone up in your viewer files by numeric id or by name. '
-        + 'The [memory] line you get when a person first shows up is only the first line of their file; '
-        + 'this returns the whole file when the id is given or the name matches exactly one file. '
-        + 'A name search also covers people seen this session who have no file yet and gives their id. '
-        + 'Use this instead of list_files to find people.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', description: 'Numeric id, the one shown in a [memory] line.' },
-          name: {
-            type: 'string',
-            description: 'Display name or part of it; case-insensitive. Ignored when id is given.',
-          },
-        },
-        required: [],
-      },
+      ...RECALL_VIEWER_DECL,
       handler: async (args) => this.renderRecall(String(args.id ?? '').trim(), String(args.name ?? '').trim()),
     };
   }
@@ -595,42 +645,12 @@ export class CortiV extends Cormini {
    */
   private historyTools(): ToolDef[] {
     const log: ToolDef = {
-      name: 'git_log',
-      description:
-        'List recent versions of a file in your workspace (omit path for the whole workspace). '
-        + 'Every write_file and append_file you make is committed, so this is the edit history of your own notes: '
-        + 'short hash, time, and how many lines each version added and removed. '
-        + 'Use it when a note looks shorter or emptier than you remember it. '
-        + 'Read an old version back with git_show.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        properties: {
-          path: {
-            type: 'string',
-            description: 'Path relative to your workspace. Omit for the whole workspace.',
-          },
-        },
-        required: [],
-      },
+      ...GIT_LOG_DECL,
       handler: async (args) => this.renderLog(args.path),
     };
 
     const show: ToolDef = {
-      name: 'git_show',
-      description:
-        'Read a file as it was at an earlier version; rev is a short hash from git_log. '
-        + 'Read-only — nothing is rolled back for you. To bring old content back, '
-        + 'take what you want from here and write it yourself with write_file.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        properties: {
-          path: { type: 'string', description: 'Path relative to your workspace.' },
-          rev: { type: 'string', description: 'Short commit hash from git_log.' },
-        },
-        required: ['path', 'rev'],
-      },
+      ...GIT_SHOW_DECL,
       handler: async (args) => this.renderShow(args.path, args.rev),
     };
 

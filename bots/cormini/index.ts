@@ -5,9 +5,9 @@ import type { BotDefinition, BotParts } from 'cortico/bot.ts';
 import type { CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
-import type { WorldDeclaration } from 'cortico/world.ts';
+import { describeTools, type WorldDeclaration } from 'cortico/world.ts';
 import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
-import { CORMINI_CONTEXT_DEFAULTS, Cormini, type ContextStagePolicy } from './persona/persona.ts';
+import { CORMINI_CONTEXT_DEFAULTS, CORMINI_TOOL_DECLS, CORMINI_TOOL_SUMMARIES, Cormini, type ContextStagePolicy } from './persona/persona.ts';
 import { contextStageConfigGroup } from './persona/config.ts';
 
 const HERE = resolve(import.meta.dirname);
@@ -77,6 +77,15 @@ const definition: BotDefinition<CorminiConfig> = {
     rounds: { soft: 6, hard: 12 },
   } as unknown as CorminiConfig),
   build,
+  describe: {
+    tools: describeTools(CORMINI_TOOL_DECLS, CORMINI_TOOL_SUMMARIES),
+    memory: {
+      form: {
+        zh: '工作区目录里的文本文件;CONSTITUTION.md 与文件清单进系统前缀,其余按需用文件工具读写。',
+        en: 'Text files in a workspace directory; CONSTITUTION.md and the file listing are in the system prefix, the rest is read and written with the file tools.',
+      },
+    },
+  },
 };
 
 export default definition;

@@ -12,6 +12,23 @@ export interface ExampleWorldOptions {
   timezone: string;
 }
 
+/** 全部工具的声明;定义里的 describe 与 `tools()` 都取它。 */
+export const EXAMPLE_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
+  {
+    name: 'example_echo',
+    description: 'Echo the given text back, prefixed with the configured greeting.',
+    tags: ['read'],
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        text: { type: 'string', description: 'Text to echo.' },
+      },
+      required: ['text'],
+    },
+  },
+];
+
 export class ExampleWorld implements World {
   readonly id = 'example';
 
@@ -58,17 +75,7 @@ export class ExampleWorld implements World {
 
   private echoTool(): ToolDef {
     return {
-      name: 'example_echo',
-      description: 'Echo the given text back, prefixed with the configured greeting.',
-      tags: ['read'],
-      parameters: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          text: { type: 'string', description: 'Text to echo.' },
-        },
-        required: ['text'],
-      },
+      ...EXAMPLE_TOOL_DECLS[0],
       handler: async (args) => `${this.opts.cfg.greeting} ${String(args.text ?? '')}`,
     };
   }

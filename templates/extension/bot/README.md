@@ -9,7 +9,7 @@ Owner: `index.ts`
 
 | 文件 | 内容 |
 |---|---|
-| `index.ts` | `BotDefinition`:id、`declares`、默认配置、`build()` |
+| `index.ts` | `BotDefinition`:id、`declares`、默认配置、`build()`、`describe`(Persona 的工具与 Memory 的形式) |
 | `persona/persona.ts` | `Persona` 实现:前缀、session 声明、`memory_write`、`end_turn`、开场注入 |
 | `persona/blobs.ts` | `mem:` 句柄的后端,字节住在 `memory/blobs/` |
 | `persona/PREFIX.md` | 前缀装配模板;`{{persona.memory}}` 与 `{{worlds.envPrompts}}` |

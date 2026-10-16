@@ -70,7 +70,10 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 ## 定义与装配
 
 `WorldDefinition`(`src/world.ts`):`id`、`label`、`defaults()`(配置段默认值,World 声明的
-`enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`。
+`enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`、`describe?`。
+`describe` 是给人和扩展市场看的自描述,不进提示词:`tools` 列这个 World 在任何配置下可能返回的全部工具,由
+`describeTools(<PREFIX>_TOOL_DECLS, summaries)` 从工具声明拼成,每个工具带一句 `summary`;`events` 列它会推出的全部事件
+`type`,推送时固定的 `trigger` 与 `tags` 照写。仓内 World 都写,`tests/builtin-describe.test.ts` 核对实例工具名在声明里。
 `WorldContext` 向 `create` 提供:`cfg`(共享配置对象)、`timezone`、`botName`、`botDir` /
 `packageDir` / `dataDir` / `repoRoot`、`secret()` / `storeSecret()`、`persist()`(写回
 `worlds.<id>`)、`restart()`。界面语言不在其中:它是每个请求的属性,`webUi(language)` 与
