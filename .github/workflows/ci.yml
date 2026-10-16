@@ -49,3 +49,34 @@ jobs:
 
       - name: Build WebUI bundle
         run: pnpm run build:web
+
+  templates:
+    # 照 templates/extension/README.md 在仓库外装、类型检查、测试每个模板;cortico 换成本次检出打的包,契约改动与模板同步验证。
+    name: extension templates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pack the framework
+        run: pnpm run publish:package --pack
+
+      - name: Install, typecheck and test each template outside the repository
+        run: |
+          tarball="$(ls "$GITHUB_WORKSPACE"/dist/cortico-*.tgz)"
+          for kind in world provider bot; do
+            dir="$RUNNER_TEMP/template-$kind"
+            cp -r "templates/extension/$kind" "$dir"
+            (cd "$dir" && pnpm install && pnpm add -D "$tarball" && pnpm typecheck && pnpm test)
+          done
