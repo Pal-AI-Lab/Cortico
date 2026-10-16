@@ -271,6 +271,8 @@ bot **7**。版本不符的扩展不能加载,页面显示「需要升级」。
 `BotDefinition`(连同 `BotParts`、`Persona`、`LoadedConfig`)只加 bot;`WebUiPanelContext`
 与其余共用接口变更时三类一起加。同一次发布里的多处变更合计加一。扩展 API 与 WebUI 协议分别版本化。
 
+旧契约的包怎么改到当前版本,见 [upgrading.md](upgrading.md)。
+
 ## 已有扩展
 
 - `cortico-world-vtuber`:Live2D VTuber 演出(VTube Studio、流式 TTS、强制对齐、字幕 overlay)。
