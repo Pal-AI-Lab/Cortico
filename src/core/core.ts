@@ -58,6 +58,8 @@ export interface CoreDeps {
   persona: Persona;
   worlds: World[];
   llm?: ResponseClient;
+  /** World 经宿主推出一条事件时调用:pushEvent、pushDeferred 各一次,pushCandidate 每条源事件一次。 */
+  onWorldPush?(worldId: string, type: string): void;
 }
 
 export interface WorldStopFailure {
@@ -91,6 +93,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
   /** 挂载表。与装配层共用同一个数组:运行中挂载/卸载就地增删。 */
   private worlds: World[];
   private persona: Persona;
+  private readonly onWorldPush: (worldId: string, type: string) => void;
   private log: Logger;
   private runPromise: Promise<void> | null = null;
   /** start() 已跑过 World 启动循环;之后挂载的 World 立即 start,之前的等 start() 统一起。 */
@@ -131,6 +134,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.state.load();
     this.worlds = deps.worlds;
     this.persona = deps.persona;
+    this.onWorldPush = deps.onWorldPush ?? (() => {});
     this.logBlobs = new LogBlobStore(dataDir);
     this.providers = new ProviderRegistry(() => cfg.providers, {
       // 同一部署根下的部署共享端点配置和状态目录。
@@ -479,6 +483,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         opts?: PushOptions,
       ): Promise<EventEnvelope> => {
         if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
+        this.onWorldPush(mod.id, e.type);
         const deliver = opts?.deliver !== false && this.isWorldVisible(mod.id);
         const blobs = this.internBlobs(e.blobs);
         const envelope = this.store.append({
@@ -500,6 +505,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       },
       pushDeferred: (e, opts) => {
         if (!lease.active) return;
+        this.onWorldPush(mod.id, e.type);
         // 隐藏 World 的延迟渲染项没有正文，直接丢弃。
         if (!this.isWorldVisible(mod.id)) return;
         this.bus.push(
@@ -510,6 +516,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       pushCandidate: async (spec, opts) => {
         if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
         if (spec.sourceEvents.length === 0) throw new Error('候选票据至少需要一条原始事件');
+        for (const event of spec.sourceEvents) this.onWorldPush(mod.id, event.type);
         const origin = spec.origin ?? 'external';
         const sourceEvents = spec.sourceEvents.map((event) => this.store.append({
           ...event,
