@@ -141,4 +141,5 @@ export const S: Partial<typeof en> = {
   labelled: (label: string, value: string) => `${label}: ${value}`,
   metaSeparator: ' · ',
   listSeparator: ', ',
+  feedbackTags: '태그 신고',
 };

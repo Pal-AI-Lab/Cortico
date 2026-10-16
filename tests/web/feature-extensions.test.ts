@@ -371,8 +371,8 @@ describe('npm os field', () => {
 
 describe('changelog range', () => {
   it('lists versions after the installed one up to the target, newest first, with pre-releases before their release', () => {
-    const versions = { '0.1.9': 'a', '0.1.10': 'b', '0.2.0-beta.1': 'c', '0.2.0': 'd', '0.2.1': 'e' };
-    expect(changesBetween({ versions }, '0.1.9', '0.2.0').map(([v]: [string]) => v)).toEqual(['0.2.0', '0.2.0-beta.1', '0.1.10']);
+    const versions = ['0.1.9', '0.1.10', '0.2.0-beta.1', '0.2.0', '0.2.1'];
+    expect(changesBetween(versions, '0.1.9', '0.2.0')).toEqual(['0.2.0', '0.2.0-beta.1', '0.1.10']);
     expect(changesBetween(undefined, '0.1.0', '0.2.0')).toEqual([]);
   });
 });

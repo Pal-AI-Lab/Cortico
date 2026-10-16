@@ -90,12 +90,23 @@ export interface DeviceCodeView {
   interval: number;
 }
 
-/** 按版本的更新日志;没写的包缺席。 */
+/** 写了更新说明的版本;没写的包缺席。正文在包详情的 `changelog` 里。 */
 export interface ChangelogView {
-  /** 版本号 → 这一版的说明(Markdown) */
-  versions: Record<string, string>;
+  versions: string[];
   /** 完整更新日志的地址 */
   url?: string;
+}
+
+/** 与 `ExtensionSummary` 同形:卡片上的能力摘要,按包的类别取字段。 */
+export interface SummaryView {
+  tools?: number;
+  events?: number;
+  protocols?: string[];
+  auth?: Array<'api-key' | 'oauth' | 'device-code' | 'web-session'>;
+  input?: Array<'text' | 'image' | 'audio' | 'video'>;
+  local?: boolean;
+  worlds?: number;
+  memory?: string;
 }
 
 /** 扩展自描述里的一个工具:名字、给模型的描述、分类标签(read / write / speak / act / flow / snapshot)。 */
@@ -113,7 +124,7 @@ export interface EventDescribeView {
   description: string;
 }
 
-/** 扩展的自描述,按类别取用。 */
+/** 与 `ExtensionDescribe` 同形:扩展的自描述,按类别取用。 */
 export interface ExtensionDescribeView {
   /** World 的全部工具;Bot 是 Persona 提供的工具 */
   tools?: ToolDescribeView[];
@@ -184,8 +195,8 @@ export interface SearchHitView {
   links: { npm?: string; repository?: string; homepage?: string };
   installed: boolean;
   kind?: ExtensionKindView;
+  /** 以下来自官方索引,索引读不到时缺席。 */
   displayName?: string;
-  /** 以下除 `os`、`author`、`maintainers` 外来自官方索引,索引读不到时缺席。 */
   /** 合并后的标签 id:作者声明的、keywords 里命中词表的、官方加的,减去官方删的 */
   tags?: string[];
   /** 官方对这个包的说明,通常解释提示与警示标签 */
@@ -207,8 +218,7 @@ export interface SearchHitView {
   /** 索引仓库里的图标与截图地址 */
   icon?: string;
   screenshots?: string[];
-  /** 来自索引汇总的扩展自描述 */
-  describe?: ExtensionDescribeView;
+  summary?: SummaryView;
   changelog?: ChangelogView;
 }
 
@@ -240,6 +250,10 @@ export interface PackageDetailView {
   links: { npm?: string; repository?: string; homepage?: string; bugs?: string };
   installed: boolean;
   installedSpec?: string;
+  /** 来自官方索引,读不到时缺席 */
+  describe?: ExtensionDescribeView;
+  /** 版本号 → 这一版的说明(Markdown) */
+  changelog?: Record<string, string>;
 }
 
 /**
@@ -347,10 +361,10 @@ export function compareVersions(a: string, b: string): number {
   return x.pre < y.pre ? -1 : 1;
 }
 /** 已装版本(不含)到目标版本(含)之间写了说明的版本,新的在前。 */
-export function changesBetween(changelog: ChangelogView | undefined, from: string, to: string): Array<[string, string]> {
-  return Object.entries(changelog?.versions ?? {})
-    .filter(([version]) => compareVersions(version, from) > 0 && compareVersions(version, to) <= 0)
-    .sort(([a], [b]) => compareVersions(b, a));
+export function changesBetween(versions: readonly string[] | undefined, from: string, to: string): string[] {
+  return (versions ?? [])
+    .filter(version => compareVersions(version, from) > 0 && compareVersions(version, to) <= 0)
+    .sort((a, b) => compareVersions(b, a));
 }
 
 type Target = { name: string; version?: string } | { path: string };
@@ -377,6 +391,11 @@ export function parseInstallInput(raw: string): Target | null {
   const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9][a-z0-9_.-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/.exec(raw.trim());
   return match ? { name: match[1], ...(match[2] ? { version: match[2] } : {}) } : null;
 }
+/** 官方索引仓:标签、讨论区与扩展申请都在这里。 */
+const INDEX_REPO = 'https://github.com/Pal-AI-Lab/cortico-extensions';
+/** 预填包名的「标签」扩展申请:索引仓的网页表单,`package` 字段按查询参数预填。 */
+export const tagIssueUrl = (name: string): string =>
+  `${INDEX_REPO}/issues/new?${new URLSearchParams({ template: '1-tags.yml', title: `${S.tagIssuePrefix} ${name}`, package: name })}`;
 /** 已装包图标的地址;版本号放进查询串,换版本后浏览器重新取。 */
 export const iconUrl = (name: string, version: string | null | undefined): string =>
   '/api/extensions/icon?name=' + encodeURIComponent(name) + (version ? '&v=' + encodeURIComponent(version) : '');
@@ -667,19 +686,19 @@ export function mountExtensions(ctx: FeatureContext): void {
     more.addEventListener('keydown', event => event.stopPropagation(), { signal });
   }
   /** 能力摘要:World 是工具与事件数,供应商是协议、登录与输入,Bot 是 World 数与 Memory;没有自描述时为空。 */
-  function describeLine(describe?: ExtensionDescribeView) {
+  function summaryLine(owner: ExtensionKindView, summary?: SummaryView) {
     const line = ui.h('div', 'extension-card-spec');
-    if (!describe) return line;
+    if (!summary) return line;
     const part = (name: Parameters<typeof icon>[1] | null, text: string) => { const el = ui.h('span', ''); if (name) el.append(icon(doc, name)); el.append(ui.h('span', '', text)); line.append(el); };
-    if (describe.provider) {
-      const p = describe.provider;
-      part('cpu', [p.protocols.join(S.listSeparator), p.auth.map(a => S.authNames[a]).join(S.listSeparator), p.input.map(i => S.inputNames[i]).join(S.listSeparator), p.local ? S.runsLocal : ''].filter(Boolean).join(S.metaSeparator));
-    } else if (describe.bot) {
-      part('boxes', S.worldCount(describe.bot.worlds.length));
-      if (describe.bot.memory) part(null, S.labelled(S.memory, describe.bot.memory.name));
+    if (owner === 'provider') {
+      const text = [summary.protocols?.join(S.listSeparator), summary.auth?.map(a => S.authNames[a]).join(S.listSeparator), summary.input?.map(i => S.inputNames[i]).join(S.listSeparator), summary.local ? S.runsLocal : ''].filter(Boolean).join(S.metaSeparator);
+      if (text) part('cpu', text);
+    } else if (owner === 'bot') {
+      if (summary.worlds !== undefined) part('boxes', S.worldCount(summary.worlds));
+      if (summary.memory) part(null, S.labelled(S.memory, summary.memory));
     } else {
-      if (describe.tools?.length) part('wrench', S.toolCount(describe.tools.length));
-      if (describe.events?.length) part('zap', S.eventCount(describe.events.length));
+      if (summary.tools) part('wrench', S.toolCount(summary.tools));
+      if (summary.events) part('zap', S.eventCount(summary.events));
     }
     return line;
   }
@@ -1012,10 +1031,18 @@ export function mountExtensions(ctx: FeatureContext): void {
       const button = ui.button(S.updateAction, { size: 'sm', onClick: () => void operate('install', { name: item.name, version: update.latestVersion }, 'management', kind) });
       button.disabled = !!update.problems.length || busy.has(item.name); button.title = update.problems.join('\n');
       const changelog = states[kind].hits.find(hit => hit.name === item.name)?.changelog;
-      const changes = changesBetween(changelog, update.installedVersion, update.latestVersion);
-      if (changes.length) {
+      const versions = changesBetween(changelog?.versions, update.installedVersion, update.latestVersion);
+      if (versions.length) {
         const notes = ui.h('button', 'extension-update-notes', S.updateNotes) as HTMLButtonElement; notes.type = 'button';
-        notes.addEventListener('click', event => { event.stopPropagation(); showChanges(item.metadata?.displayName ?? item.label ?? item.name, changes, changelog?.url); }, { signal });
+        const owner = kind;
+        notes.addEventListener('click', event => {
+          event.stopPropagation();
+          void fetchDetail(item.name).then(data => {
+            if (signal.aborted) return;
+            const changes = versions.flatMap(v => data.changelog?.[v] ? [[v, data.changelog[v]] as [string, string]] : []);
+            showChanges(item.metadata?.displayName ?? item.label ?? item.name, changes, changelog?.url);
+          }).catch(error => { if (!signal.aborted) message(owner, 'management', errorText(error), true); });
+        }, { signal });
         version.append(notes);
       }
       version.append(button);
@@ -1096,7 +1123,7 @@ export function mountExtensions(ctx: FeatureContext): void {
         if (!hit.os) placeOs(data.os);
       }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
       card.append(heading, ui.h('p', 'extension-description', hit.description));
-      card.append(describeLine(hit.describe));
+      card.append(summaryLine(owner, hit.summary));
       const tags = orderedTags(hit.tags);
       if (tags.length) {
         const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(id => tagChip(id, { active: state.tags.includes(id), onToggle: () => toggleTag(id) }))); card.append(row);
@@ -1263,9 +1290,9 @@ export function mountExtensions(ctx: FeatureContext): void {
       box.replaceChildren(header, ...(links.hasChildNodes() ? [links] : []), feedback, columns);
       const info = ui.h('div', 'extension-detail-panel');
       const pages: Array<{ value: string; label: string; el: HTMLElement }> = [{ value: 'info', label: S.detailInfoTab, el: info }];
-      const described = describeSection(listed?.describe);
+      const described = describeSection(data.describe);
       if (described) { const panel = ui.h('div', 'extension-detail-panel'); panel.append(described.el); pages.push({ value: 'describe', label: described.title, el: panel }); }
-      const prompts = promptsSection(listed?.describe);
+      const prompts = promptsSection(data.describe);
       if (prompts) { const panel = ui.h('div', 'extension-detail-panel'); panel.append(prompts.el); pages.push({ value: 'prompts', label: prompts.title, el: panel }); }
       if (pages.length > 1) {
         const tab = pages.some(page => page.value === box.dataset.tab) ? box.dataset.tab! : 'info';
@@ -1277,7 +1304,13 @@ export function mountExtensions(ctx: FeatureContext): void {
       const intro = ui.h('div', 'extension-intro');
       intro.append(renderMarkdown(doc, item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'));
       info.append(ui.h('h4', '', S.introduction), intro);
+      // 内建条目要有对应的 npm 包才在索引里
+      const indexed = (!item?.builtin || !!listed) && Object.keys(marketIndex.tags).length > 0;
       if (tags.length) { const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(id => tagChip(id))); info.append(row); }
+      if (indexed) {
+        const report = ui.h('a', 'extension-tag-feedback', S.feedbackTags); report.href = tagIssueUrl(listed?.name ?? data.name); report.target = '_blank'; report.rel = 'noopener noreferrer';
+        info.append(report);
+      }
       if (listed?.screenshots?.length) {
         const shots = ui.h('div', 'extension-screenshots');
         for (const src of listed.screenshots) { const image = ui.h('img'); image.src = src; image.alt = ''; image.loading = 'lazy'; shots.append(image); }
@@ -1314,7 +1347,7 @@ export function mountExtensions(ctx: FeatureContext): void {
           button.classList.add('extension-version-action');
           button.disabled = same || incompatible || linked || busy.has(data.name);
           if (linked) button.title = S.localVersionNote;
-          const notes = listed?.changelog?.versions[release.version];
+          const notes = data.changelog?.[release.version];
           let label: HTMLElement = ui.h('code', '', release.version), body: HTMLElement | null = null;
           if (notes) {
             body = ui.h('div', 'extension-history-notes'); body.hidden = true; body.append(renderMarkdown(doc, notes));
@@ -1331,9 +1364,8 @@ export function mountExtensions(ctx: FeatureContext): void {
         releases.append(data.history.length ? history : ui.h('p', 'muted extension-history-empty', S.noHistory)); cta.append(releases);
       }
       if (item?.kind === 'bot') info.append(ui.h('p', 'extension-create-help', S.createBody), ui.h('pre', '', 'pnpm start --new'));
-      const commented = (!item?.builtin || !!listed) && Object.keys(marketIndex.tags).length > 0;
-      columns.classList.toggle('is-split', commented); box.closest('.modalcard')?.classList.toggle('extension-detail-card', commented);
-      if (commented) { const side = ui.h('aside', 'extension-detail-side'); side.append(commentsSection(listed?.name ?? data.name, listed?.rating)); columns.append(side); }
+      columns.classList.toggle('is-split', indexed); box.closest('.modalcard')?.classList.toggle('extension-detail-card', indexed);
+      if (indexed) { const side = ui.h('aside', 'extension-detail-side'); side.append(commentsSection(listed?.name ?? data.name, listed?.rating)); columns.append(side); }
   }
   /** 历史版本走与市场安装相同的 check → install;结果同时写进抽屉。 */
   async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {

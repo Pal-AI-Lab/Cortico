@@ -2110,6 +2110,7 @@ button.extension-tag { cursor: pointer; }
 .extension-detail-main > .extension-tag-row { margin-top: 12px; }
 .extension-screenshots { display: flex; gap: 10px; overflow-x: auto; margin: 14px 0 4px; padding-bottom: 4px; }
 .extension-screenshots img { height: 160px; width: auto; max-width: none; border-radius: 10px; border: 1px solid var(--line); }
+.extension-tag-feedback { display: block; width: fit-content; margin-top: 8px; font-size: 12px; }
 /* 详情两栏 */
 .modalcard.extension-detail-card { width: min(1240px, 94vw); }
 .extension-detail { padding: 6px 8px 8px; }

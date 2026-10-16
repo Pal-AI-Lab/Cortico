@@ -147,4 +147,5 @@ export const S: Partial<typeof en> = {
   labelled: (label: string, value: string) => `${label}: ${value}`,
   metaSeparator: ' · ',
   listSeparator: ', ',
+  feedbackTags: 'Сообщить о метках',
 };

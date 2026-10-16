@@ -35,7 +35,7 @@ WebUI 不终结 TLS。经公网使用时放在终结 HTTPS 的反向代理后面
 | `usage` | 用量与成本 | 按 session、按天的 token 与费用 |
 | `providers` | 模型供应商 | 端点表(见 [providers.md](providers.md)) |
 | `world` | World 总览 | World 激活、停用、重启和状态 |
-| `extensions` | 扩展 | 安装、删除、npm 搜索与官方索引（标签、徽标、评分与评论）、更新检查与安装历史版本（见 [extensions.md](extensions.md)） |
+| `extensions` | 扩展 | 安装、删除、npm 搜索与官方索引（标签、徽标、评分与评论、能力摘要、自描述与更新日志）、更新检查与安装历史版本（见 [extensions.md](extensions.md)） |
 | `prompts` | 系统提示词 | 前缀各段的模板;完整前缀按已保存文件渲染 |
 | `settings` / `appearance` | 设置 | 语言、外观;入口是左栏底部那颗齿轮,不占左栏的行 |
 
