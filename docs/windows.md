@@ -37,7 +37,6 @@ Windows 把 WebUI 事件发给前台进程组里的每一个进程。`bin/cortic
 
 - 外部程序可能受到 Smart App Control 限制;诊断与运行时目录设置见 [runtimes.md](runtimes.md)。
 - Minecraft 的 Java 版本约定与客户端兼容限制见 [Minecraft README](../src/worlds/minecraft/README.md)。
-- 在 `extensions/` 下跑 pnpm 必须带 `--ignore-workspace`,否则根 lockfile 会多出一个 importer。
 
 ## 文本文件编码
 

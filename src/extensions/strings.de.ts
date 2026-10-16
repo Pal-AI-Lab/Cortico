@@ -43,4 +43,5 @@ export const text: Partial<typeof en> = {
   badRegistry: (value) => `Die npm-Registry muss eine http://- oder https://-URL sein, erhalten: ${value}`,
   busy: "Es läuft bereits eine Installation oder Deinstallation; warte, bis sie fertig ist.",
   pnpmFailed: (command, code, output) => `pnpm ${command} endete mit ${code}:\n${output}`,
+  buildsPending: (names, dir) => `Build-Skripte wurden nicht ausgeführt für: ${names}. Sie sind keine direkten Abhängigkeiten einer installierten Erweiterung; wenn Sie ihnen vertrauen, setzen Sie ihre allowBuilds-Werte in pnpm-workspace.yaml in ${dir} auf true, führen dort corepack pnpm rebuild ${names} aus und starten den Prozess neu.`,
 };

@@ -20,11 +20,20 @@ provider 仅包含参考 bot 所需的实现;其他平台或模型通信协议�
 - 命令行,在仓库根下:
 
 ```bash
-cd extensions && corepack pnpm add --ignore-workspace <包名或目录>
+cd extensions && corepack pnpm add <包名或目录>
 ```
 
-`--ignore-workspace` 不能省:少了它 pnpm 会把 `extensions/` 当成仓库工作区的一员写进根
-lockfile。
+`extensions/pnpm-workspace.yaml` 让 pnpm 把 `extensions/` 当作独立的工作区根,读其中的 `allowBuilds` 与
+`minimumReleaseAgeExclude`。WebUI 第一次装卸或查询 registry 时建一个空的;没有它时 pnpm 把 `extensions/` 当成仓库工作区的
+一员写进根 lockfile,所以命令行先装的话先建一个空文件。
+
+装卸都按 pnpm 默认的发布时间门槛(`minimumReleaseAge`,24 小时)解析:依赖版本优先取发布满 24 小时的;范围内没有这样的版本时
+(比如点名装刚发布的版本)pnpm 照装,并把它记进 `minimumReleaseAgeExclude`,之后的装卸都按这份名单放行。
+
+依赖的构建脚本(安装时编译或下载原生模块)只对 `allowBuilds` 里值为 true 的包运行。WebUI 每次安装后,pnpm 跳过构建、
+`allowBuilds` 里还没定下值的包中,是某个已装扩展直接依赖(`dependencies`)的改成 true 并 `pnpm rebuild`;其余仍不构建,
+安装回执列出包名与批准办法。值为 false 的包不改。命令行安装时被跳过的构建让 `pnpm add` 退出 1,用
+`corepack pnpm approve-builds <包名>` 批准并构建。
 
 `/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:
 World 已挂载,供应商已注册,bot 包是这份部署在用的那个。本进程正在使用的 World 与 bot 包不能删除,
@@ -41,7 +50,7 @@ World 先在 World 页停用。
 契约不兼容的新版不能更新。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。连接失败和读正文时断线的错误里都带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。
-搜索、详情和检查更新用安装时的 registry:在 `extensions/` 里跑 `pnpm config get registry --ignore-workspace`,
+搜索、详情和检查更新用安装时的 registry:在 `extensions/` 里跑 `pnpm config get registry`,
 读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。结果在进程内缓存,在扩展页以外改了配置要重启进程;
 pnpm 读不出地址时这三处都报 pnpm 的错误。
 扩展页的「npm 源」读写 `extensions/.npmrc` 的 `registry=` 行,其余行原样保留,填空保存删掉这一行;写入后缓存作废,

@@ -61,6 +61,7 @@ const zh = {
   badRegistry: (value: string) => `npm 源要填 http:// 或 https:// 开头的地址,现在是 ${value}`,
   busy: '已有一个安装 / 卸载在进行,等它结束。',
   pnpmFailed: (command: string, code: number | null, output: string) => `pnpm ${command} 退出码 ${code}:\n${output}`,
+  buildsPending: (names: string, dir: string) => `这些包的构建脚本没有运行:${names}。它们不是已装扩展的直接依赖;确认可信后把 ${dir} 里 pnpm-workspace.yaml 的 allowBuilds 中它们的值改成 true,在那里运行 corepack pnpm rebuild ${names},再重启进程。`,
   // ── 扩展市场(官方索引与讨论区) ─────────────────────────────────────
   indexMissing: (file: string) => `官方索引仓里没有 ${file}`,
   indexSchema: (file: string, got: string, expected: number) => `${file} 的格式版本是 ${got}，本机 Cortico 只认 ${expected}`,
@@ -117,6 +118,7 @@ export const en: typeof zh = {
   badRegistry: (value) => `The npm registry must be an http:// or https:// URL, got ${value}`,
   busy: 'An install or uninstall is already running; wait for it to finish.',
   pnpmFailed: (command, code, output) => `pnpm ${command} exited with ${code}:\n${output}`,
+  buildsPending: (names, dir) => `Build scripts did not run for: ${names}. They are not direct dependencies of an installed extension; if you trust them, set their allowBuilds values to true in pnpm-workspace.yaml in ${dir}, run corepack pnpm rebuild ${names} there, then restart the process.`,
   indexMissing: (file) => `The official index repository has no ${file}`,
   indexSchema: (file, got, expected) => `${file} has format version ${got}; this Cortico reads version ${expected}`,
   githubLoginRequired: 'Sign in with GitHub first.',

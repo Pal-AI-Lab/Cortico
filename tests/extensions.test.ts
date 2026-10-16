@@ -152,15 +152,16 @@ describe('ExtensionManager', () => {
     return { mgr, runs, urls, release: () => release?.() };
   }
 
-  it('install:合法包名 → pnpm add name@version --ignore-workspace,在 extensions/ 里跑;首次先造 package.json', async () => {
+  it('install:合法包名 → pnpm add name@version,在 extensions/ 里跑;首次先造 package.json 与 pnpm-workspace.yaml', async () => {
     const { mgr, runs } = manager();
     const msg = await mgr.install({ name: '@acme/cortico-world-x', version: '^1.2.0' });
-    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--ignore-workspace'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--config.strict-dep-builds=false'], cwd: join(root, 'extensions') }]);
     expect(JSON.parse(readFileSync(join(root, 'extensions/package.json'), 'utf8'))).toMatchObject({ private: true, dependencies: {} });
+    expect(existsSync(join(root, 'extensions/pnpm-workspace.yaml'))).toBe(true);
     expect(msg).toContain('重启');
     expect(msg).toContain('Done in 1s');
     await mgr.install({ name: 'plain' });
-    expect(runs[1].args).toEqual(['add', 'plain', '--ignore-workspace']);
+    expect(runs[1].args).toEqual(['add', 'plain', '--config.strict-dep-builds=false']);
   });
 
   it('install:本机目录必须存在且含 package.json,按绝对路径交给 pnpm', async () => {
@@ -171,7 +172,7 @@ describe('ExtensionManager', () => {
     mkdirSync(join(root, 'my mod'));
     writeFileSync(join(root, 'my mod/package.json'), '{}');
     await mgr.install({ path: './my mod' });
-    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--ignore-workspace']);
+    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--config.strict-dep-builds=false']);
   });
 
   it('install:拒绝带 shell 元字符的包名、版本与路径,一次 pnpm 都不起', async () => {
@@ -184,6 +185,29 @@ describe('ExtensionManager', () => {
     }
     await expect(mgr.install({ path: './a"b' })).rejects.toThrow('characters');
     expect(runs).toEqual([]);
+  });
+
+  it('install:allowBuilds 里待定的包,已装扩展的直接依赖改成 true 并 rebuild,其余列进回执', async () => {
+    installFake('cortico-world-native', { pkg: { dependencies: { 'native-dep': '^2.0.0' } } });
+    const workspaceFile = join(root, 'extensions/pnpm-workspace.yaml');
+    const workspace = (nativeDep: string) => [
+      'allowBuilds:',
+      '  denied-dep: false',
+      `  native-dep: ${nativeDep}`,
+      "  '@scope/deep': set this to true or false",
+      'minimumReleaseAgeExclude:',
+      '  - cortico-world-native@1.2.3',
+      '',
+    ].join('\n');
+    writeFileSync(workspaceFile, workspace('set this to true or false'));
+    const { mgr, runs } = manager();
+    const msg = await mgr.install({ name: 'cortico-world-native' }, 'en');
+    expect(runs.map((r) => r.args)).toEqual([
+      ['add', 'cortico-world-native', '--config.strict-dep-builds=false'],
+      ['rebuild', 'native-dep'],
+    ]);
+    expect(readFileSync(workspaceFile, 'utf8')).toBe(workspace('true'));
+    expect(msg).toContain('corepack pnpm rebuild @scope/deep');
   });
 
   it('install:pnpm 非零退出 → 抛错带输出尾部', async () => {
@@ -206,7 +230,7 @@ describe('ExtensionManager', () => {
     await expect(mgr.uninstall('absent')).rejects.toThrow('not installed');
     await expect(mgr.uninstall('bad name')).rejects.toThrow('package name');
     const msg = await mgr.uninstall('present');
-    expect(runs).toEqual([{ args: ['remove', 'present', '--ignore-workspace', '--config.minimum-release-age=0'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: ['remove', 'present', '--config.strict-dep-builds=false'], cwd: join(root, 'extensions') }]);
     expect(msg).toContain('重启');
   });
 
@@ -431,7 +455,7 @@ describe('ExtensionManager', () => {
     writeFileSync(join(local, 'package.json'), JSON.stringify({ name: 'local-world', version: '0.1.0' }));
     await expect(mgr.check({ path: local })).rejects.toThrow('cortico');
     await expect(mgr.check({ path: join(root, 'missing') })).rejects.toThrow('Directory does not exist');
-    expect(runs.map((r) => r.args)).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
+    expect(runs.map((r) => r.args)).toEqual([['config', 'get', 'registry']]);
   });
 
   it('registry 取 pnpm 配置的那个:搜索与详情都用它,pnpm 只问一次', async () => {
@@ -450,7 +474,7 @@ describe('ExtensionManager', () => {
     expect(urls.map((u) => u.split('?')[0])).toEqual([
       'https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/-/v1/search', 'https://mirror.example.invalid/npm/a',
     ]);
-    expect(runs).toEqual([['config', 'get', 'registry', '--ignore-workspace']]);
+    expect(runs).toEqual([['config', 'get', 'registry']]);
     expect(await mgr.npmRegistry()).toBe('https://mirror.example.invalid/npm');
   });
 

@@ -43,4 +43,5 @@ export const text: Partial<typeof en> = {
   badRegistry: (value) => `Реестр npm должен быть адресом http:// или https://, получено: ${value}`,
   busy: "Уже идёт установка или удаление; дождитесь окончания.",
   pnpmFailed: (command, code, output) => `pnpm ${command} завершился с кодом ${code}:\n${output}`,
+  buildsPending: (names, dir) => `Скрипты сборки не запускались для: ${names}. Это не прямые зависимости установленного расширения; если вы им доверяете, поставьте им значение true в allowBuilds файла pnpm-workspace.yaml в ${dir}, выполните там corepack pnpm rebuild ${names} и перезапустите процесс.`,
 };

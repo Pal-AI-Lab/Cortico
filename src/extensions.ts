@@ -428,6 +428,48 @@ export function fetchFailure(url: string, err: unknown): string {
 
 /** extensions/ 里的 npm 配置文件;`pnpm add` 与 `pnpm config get` 在这个目录跑,都读它。 */
 const NPMRC = '.npmrc';
+/**
+ * 有它 pnpm 把 extensions/ 当作独立的工作区根:不并进外层仓库的工作区,读这里的 `allowBuilds` 与
+ * pnpm 自己追加的 `minimumReleaseAgeExclude`。
+ */
+const WORKSPACE_FILE = 'pnpm-workspace.yaml';
+/** 构建脚本被跳过时 pnpm 照常退出 0;跳过的包由 `pendingBuilds()` 读出再处理。 */
+const LENIENT_BUILDS = '--config.strict-dep-builds=false';
+
+/** pnpm-workspace.yaml 顶层 `allowBuilds:` 下的各项与所在行号;作用域包名带引号。 */
+function allowBuildsEntries(lines: readonly string[]): Array<{ line: number; indent: string; quote: string; name: string; value: string }> {
+  const start = lines.findIndex((l) => /^allowBuilds:\s*$/.test(l));
+  if (start < 0) return [];
+  const entries = [];
+  for (let i = start + 1; i < lines.length && /^\s/.test(lines[i]); i++) {
+    const m = /^(\s+)(['"]?)(.+?)\2:\s*(.*?)\s*$/.exec(lines[i]);
+    if (m) entries.push({ line: i, indent: m[1], quote: m[2], name: m[3], value: m[4] });
+  }
+  return entries;
+}
+
+/**
+ * 构建脚本被跳过、还没定下的包名:pnpm 跳过一个包的构建脚本时,在 pnpm-workspace.yaml 的 `allowBuilds` 里给它写一个
+ * 既不是 true 也不是 false 的占位值,直到有人改掉。
+ */
+function pendingBuilds(dir: string): string[] {
+  const file = join(dir, WORKSPACE_FILE);
+  if (!existsSync(file)) return [];
+  return allowBuildsEntries(readFileSync(file, 'utf8').split(/\r?\n/))
+    .filter(({ value }) => value !== 'true' && value !== 'false')
+    .map(({ name }) => name);
+}
+
+/** 把 `allowBuilds` 里这些包的值改成 true,其余行原样写回。 */
+function allowBuilds(dir: string, names: readonly string[]): void {
+  const file = join(dir, WORKSPACE_FILE);
+  const raw = readFileSync(file, 'utf8');
+  const lines = raw.split(/\r?\n/);
+  for (const { line, indent, quote, name } of allowBuildsEntries(lines)) {
+    if (names.includes(name)) lines[line] = `${indent}${quote}${name}${quote}: true`;
+  }
+  writeFileSync(file, lines.join(raw.includes('\r\n') ? '\r\n' : '\n'), 'utf8');
+}
 /** .npmrc 里设默认源的那一行;`@scope:registry=` 不算。 */
 const REGISTRY_LINE = /^\s*registry\s*=(.*)$/;
 
@@ -601,14 +643,14 @@ export class ExtensionManager {
   }
 
   /**
-   * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里带 `--ignore-workspace` 跑
+   * 安装走的 registry:和 `pnpm add` 同样在 extensions/ 里跑
    * `pnpm config get registry`,读的是 extensions/ 与用户的 .npmrc、`pnpm_config_registry`,没配时是 npm 官方的。
    * pnpm 失败或没给出地址时抛出它的退出码与输出,下次查询再问。解析结果缓存到 `setRegistry()` 改写
    * extensions/.npmrc 为止;在别处改了配置要重启进程。
    */
   private registry(): Promise<string> {
     if (this.registryUrl) return this.registryUrl;
-    const args = ['config', 'get', 'registry', '--ignore-workspace'];
+    const args = ['config', 'get', 'registry'];
     const pending = this.run(args, this.prepareDir()).then(({ code, output }) => {
       const url = code === 0 ? output.split(/\r?\n/).map((line) => line.trim()).reverse().find((line) => /^https?:\/\/\S+$/.test(line)) : undefined;
       if (!url) throw extensionError((t) => t.registryUnreadable(`pnpm ${args.join(' ')}`, code, output.trim().split('\n').slice(-20).join('\n')), 502);
@@ -646,13 +688,15 @@ export class ExtensionManager {
     this.registryUrl = null;
   }
 
-  /** extensions/ 和其中的 package.json,pnpm 以它为项目目录;返回目录。 */
+  /** extensions/ 和其中的 package.json 与 pnpm-workspace.yaml,pnpm 以它为工作区根;返回目录。 */
   private prepareDir(): string {
     if (!existsSync(this.dir)) mkdirSync(this.dir, { recursive: true });
     const pkgFile = join(this.dir, 'package.json');
     if (!existsSync(pkgFile)) {
       writeFileSync(pkgFile, JSON.stringify({ name: 'cortico-extensions', private: true, dependencies: {} }, null, 2) + '\n', 'utf8');
     }
+    const workspaceFile = join(this.dir, WORKSPACE_FILE);
+    if (!existsSync(workspaceFile)) writeFileSync(workspaceFile, '', 'utf8');
     return this.dir;
   }
 
@@ -961,19 +1005,34 @@ export class ExtensionManager {
     return { name: info.name, version: info.version, kind };
   }
 
+  /**
+   * `pnpm add` 之后,构建脚本被跳过的包里是某个已装扩展直接依赖的,在 `allowBuilds` 里改成 true 并 `pnpm rebuild`:
+   * 装扩展就是信任它和它列出的依赖。其余的仍不构建,回执列出包名与批准的命令。
+   */
   async install(target: ExtensionInstallTarget, language: Language = 'zh'): Promise<string> {
     const spec = this.installSpec(target);
     this.prepareDir();
-    const output = await this.exclusive(['add', spec, '--ignore-workspace']);
-    return `${text(language).installed(spec)}\n${output}`;
+    return this.exclusive(async () => {
+      const output = [text(language).installed(spec), await this.pnpm(['add', spec, LENIENT_BUILDS])];
+      const skipped = pendingBuilds(this.dir);
+      const direct = new Set(readInstalled(this.dir).flatMap(({ name }) =>
+        Object.keys(readPackageJson(join(this.dir, 'node_modules', ...name.split('/'), 'package.json'))?.dependencies ?? {})));
+      const approve = skipped.filter((name) => direct.has(name));
+      if (approve.length) {
+        allowBuilds(this.dir, approve);
+        output.push(await this.pnpm(['rebuild', ...approve]));
+      }
+      const pending = skipped.filter((name) => !direct.has(name));
+      if (pending.length) output.push(text(language).buildsPending(pending.join(' '), this.dir));
+      return output.join('\n');
+    });
   }
 
   async uninstall(name: string, language: Language = 'zh'): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
     if (!readInstalled(this.dir).some((p) => p.name === name)) throw extensionError((t) => t.notInstalled(name));
-    // pnpm 11 卸载时也复查锁文件里各包的发布时间(默认 24 小时),查出过新的版本却没接处理,
-    // 报 ERR_PNPM_RESOLUTION_POLICY_VIOLATIONS_UNHANDLED 中止。卸载不引入新版本，关掉这项检查。
-    const output = await this.exclusive(['remove', name, '--ignore-workspace', '--config.minimum-release-age=0']);
+    this.prepareDir();
+    const output = await this.exclusive(() => this.pnpm(['remove', name, LENIENT_BUILDS]));
     return `${text(language).uninstalled(name)}\n${output}`;
   }
 
@@ -993,16 +1052,21 @@ export class ExtensionManager {
     return version ? `${name}@${version}` : name;
   }
 
-  private async exclusive(args: string[]): Promise<string> {
+  private async exclusive<T>(work: () => Promise<T>): Promise<T> {
     if (this.busy) throw extensionError((t) => t.busy);
     this.busy = true;
     try {
-      const { code, output } = await this.run(args, this.dir);
-      const tail = output.trim().split('\n').slice(-20).join('\n');
-      if (code !== 0) throw extensionError((t) => t.pnpmFailed(args[0], code, tail));
-      return tail;
+      return await work();
     } finally {
       this.busy = false;
     }
+  }
+
+  /** 在 extensions/ 里跑 pnpm,回输出的末 20 行;非零退出时抛出。 */
+  private async pnpm(args: string[]): Promise<string> {
+    const { code, output } = await this.run(args, this.dir);
+    const tail = output.trim().split('\n').slice(-20).join('\n');
+    if (code !== 0) throw extensionError((t) => t.pnpmFailed(args[0], code, tail));
+    return tail;
   }
 }

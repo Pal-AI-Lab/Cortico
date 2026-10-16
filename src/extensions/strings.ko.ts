@@ -43,4 +43,5 @@ export const text: Partial<typeof en> = {
   badRegistry: (value) => `npm 레지스트리는 http:// 또는 https:// 로 시작하는 주소여야 합니다. 입력값: ${value}`,
   busy: "다른 설치 또는 제거가 진행 중입니다. 끝날 때까지 기다리세요.",
   pnpmFailed: (command, code, output) => `pnpm ${command} 종료 코드 ${code}:\n${output}`,
+  buildsPending: (names, dir) => `다음 패키지의 빌드 스크립트가 실행되지 않았습니다: ${names}. 설치된 확장의 직접 의존성이 아닙니다. 신뢰할 수 있다면 ${dir}의 pnpm-workspace.yaml에서 allowBuilds 값을 true로 바꾸고 그곳에서 corepack pnpm rebuild ${names}를 실행한 뒤 프로세스를 다시 시작하세요.`,
 };

@@ -43,4 +43,5 @@ export const text: Partial<typeof en> = {
   badRegistry: (value) => `El registro de npm debe ser una URL http:// o https://; se recibió ${value}`,
   busy: "Ya hay una instalación o desinstalación en curso; espera a que termine.",
   pnpmFailed: (command, code, output) => `pnpm ${command} terminó con ${code}:\n${output}`,
+  buildsPending: (names, dir) => `No se ejecutaron los scripts de compilación de: ${names}. No son dependencias directas de una extensión instalada; si confías en ellos, cambia sus valores de allowBuilds a true en pnpm-workspace.yaml de ${dir}, ejecuta ahí corepack pnpm rebuild ${names} y reinicia el proceso.`,
 };
