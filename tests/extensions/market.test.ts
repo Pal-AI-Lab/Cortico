@@ -189,7 +189,7 @@ const CATALOG_ENTRY = {
 };
 
 describe('catalog.json 的列表字段', () => {
-  it('合进搜索结果:图标与截图换成 raw 地址;显示名与简介 zh 读顶层,en 与其余语言读 locales.en', async () => {
+  it('合进搜索结果:图标与截图换成 raw 地址;显示名与简介 zh 读顶层,zh-Hant、en 与其余语言读 locales.en', async () => {
     const github = fakeGithub();
     github.raw.set('index.json', INDEX);
     github.raw.set('catalog.json', { schema: 1, packages: { '@scope/cortico-world-x': CATALOG_ENTRY } });
@@ -203,6 +203,7 @@ describe('catalog.json 的列表字段', () => {
     });
     expect((await market.merge(search(), 'zh')).hits[0]).toMatchObject({ displayName: '甲', description: '读甲。' });
     expect((await market.merge(search(), 'ja')).hits[0]).toMatchObject({ displayName: 'A', description: 'Reads A.' });
+    expect((await market.merge(search(), 'zh-Hant')).hits[0]).toMatchObject({ displayName: 'A', description: 'Reads A.' });
   });
 });
 
@@ -236,6 +237,7 @@ describe('包详情', () => {
       prompts: [{ key: 'worlds.x.envPrompt', title: 'X', role: 'envPrompt', content: '你在 X 上。' }],
     });
     expect((await market.mergePackage('@scope/cortico-world-x', Promise.resolve(detail('1.0.0')), 'zh')).describe?.events).toEqual([{ type: 'x.message', description: '来消息' }]);
+    expect((await market.mergePackage('@scope/cortico-world-x', Promise.resolve(detail('1.0.0')), 'zh-Hant')).describe?.events).toEqual([{ type: 'x.message', description: 'A message arrived' }]);
   });
 
   it('详情是索引没扫到的版本时只合更新日志;索引里没有这个包时详情原样返回', async () => {

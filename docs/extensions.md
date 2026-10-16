@@ -71,7 +71,7 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
   `catalog.json` 里 `discussion` 的票数与评论数。
 - `catalog.json` 的列表字段:`displayName`、`author`、`os`、`summary`(能力摘要)、`changelog`(写了更新说明的版本号与
   完整更新日志地址);`maintainers` 在搜索端点没给时补上;`icon` 与 `screenshots` 换成索引仓的 raw 地址。显示名与简介按界面
-  语言取 `locales`:中文与繁体中文读 `zh`,其余语言读 `en`,没有时用顶层的。
+  语言取 `locales`:简体中文读 `zh`,繁体中文与其余语言读 `en`,没有时用顶层的。
 - `schema` 不是 1 的文件当作读不到。`index.json` 每次读到都写进扩展目录的 `market-index.json`,读不到时用它,拉黑照常生效;
   它也没有时 `index` 只有 `error`,结果原样返回。`catalog.json` 读不到时结果不带它补的字段。
 

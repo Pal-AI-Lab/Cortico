@@ -130,6 +130,8 @@ function marketError(message: (t: ReturnType<typeof text>) => string, status: nu
 }
 
 const pickText = (value: Bilingual, language: Language) => baseLanguage(language) === 'zh' ? value.zh : value.en;
+/** 作者写的文字(`locales`、自描述)只有 zh 与 en 两份:zh 读 zh,zh-Hant 与其余语言读 en。 */
+const authorLanguage = (language: Language): 'zh' | 'en' => language === 'zh' ? 'zh' : 'en';
 const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
 const rawUrl = (path: string) => `${RAW_BASE}/${path}`;
 /** 包名当文件名,作用域包的 `/` 换成 `__`。 */
@@ -155,7 +157,7 @@ const strings = <T extends string = string>(value: unknown): T[] => Array.isArra
 function localizeDescribe(raw: unknown, language: Language): ExtensionDescribe | undefined {
   if (!isItem(raw)) return undefined;
   const say = (value: unknown): string | undefined => typeof value === 'string' ? value
-    : isItem(value) && typeof value.zh === 'string' && typeof value.en === 'string' ? pickText(value as Bilingual, language) : undefined;
+    : isItem(value) && typeof value.zh === 'string' && typeof value.en === 'string' ? (value as Bilingual)[authorLanguage(language)] : undefined;
   const out: ExtensionDescribe = {};
   const tools = items(raw.tools).flatMap((t) => {
     const summary = say(t.summary);
@@ -213,7 +215,7 @@ export class ExtensionMarket {
 
   /**
    * 把官方索引合进搜索结果:滤掉拉黑的包与发布者,补上标签、徽标、官方说明、取代、评分与 `catalog.json` 的列表字段。
-   * 显示名与简介按请求语言取 `locales`,zh-Hant 读 zh、其余语言读 en,没有时用顶层的。
+   * 显示名与简介按 `authorLanguage` 取 `locales`,没有时用顶层的。
    * 索引在等搜索的同时读取;读不到时结果原样返回,`index` 只有空词表与原因。
    */
   async merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }> {
@@ -241,7 +243,7 @@ export class ExtensionMarket {
       const official = !!maintainers?.some((m) => index.official.maintainers.includes(m))
         && index.official.githubOwners.some((owner) => repository.startsWith(`https://github.com/${owner.toLowerCase()}/`));
       const isNew = !!listed?.created && now - Date.parse(listed.created) < (index.newDays ?? 0) * 86_400_000;
-      const locale = listed?.locales?.[baseLanguage(language)];
+      const locale = listed?.locales?.[authorLanguage(language)];
       const displayName = locale?.displayName ?? listed?.displayName;
       const discussion = listed?.discussion;
       return {
@@ -279,7 +281,7 @@ export class ExtensionMarket {
     const info = await detail;
     const [catalog, file] = await files;
     const listed = catalog?.packages[info.name];
-    const locale = listed?.version === info.version ? listed.locales?.[baseLanguage(language)] : undefined;
+    const locale = listed?.version === info.version ? listed.locales?.[authorLanguage(language)] : undefined;
     const describe = file?.version === info.version ? localizeDescribe(file.describe, language) : undefined;
     return {
       ...info,
