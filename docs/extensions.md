@@ -126,7 +126,7 @@ npm 市场里还没装的包都是默认头像。bot 包的 png 图标
 在 `pnpm start --new` 新建部署时复制成部署的 `avatar.png`,之后头像以部署里的那份为准。路径不合格时给出
 warning 并忽略。
 
-以下字段可选,只给扩展市场用,加载扩展不读它们:
+以下字段可选,加载扩展不读它们:
 
 - `tags`:标签 id 的数组。词表、每个标签什么时候贴与级别规则见索引仓的 [TAGS.md](https://github.com/Pal-AI-Lab/cortico-extensions/blob/main/TAGS.md)。
   市场只认词表里的标签;官方标注作者声明了不算;声明过的警示标签之后的版本去不掉,要向官方申请撤销。
@@ -134,7 +134,7 @@ warning 并忽略。
   市场用它覆盖 `displayName` 与 package.json 的 `description`。
 - `screenshots`:包内相对路径的数组,png、webp 或 jpg,显示在市场详情里;索引仓每张收至多 2MB、最多 8 张。
 - `describe`:包内相对路径,指向 `pnpm describe:extension` 导出的 describe.json,即扩展声明的工具、事件、接入方式
-  等。索引仓与市场只读这个文件,不执行包代码。
+  等。索引仓与市场只读这个文件,不执行包代码;`check:extension` 核对它与代码一致,见「自描述」。
 
 包根目录的 `CHANGELOG.md` 也可选:每个版本一节二级标题,标题里第一个版本号是这一节的版本(`## 0.2.0` 或
 `## [0.2.0] - 2026-10-15`),市场按节显示各版本的更新说明。
