@@ -51,7 +51,7 @@ jobs:
         run: pnpm run build:web
 
   templates:
-    # 照 templates/extension/README.md 在仓库外装、类型检查、测试每个模板;cortico 换成本次检出打的包,契约改动与模板同步验证。
+    # 在仓库外装、类型检查、测试每个模板。cortico 直接装本次检出打的包:模板依赖的版本可能还没发到 npm,契约改动也与模板同步验证。
     name: extension templates
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -78,5 +78,5 @@ jobs:
           for kind in world provider bot; do
             dir="$RUNNER_TEMP/template-$kind"
             cp -r "templates/extension/$kind" "$dir"
-            (cd "$dir" && pnpm install && pnpm add -D "$tarball" && pnpm typecheck && pnpm test)
+            (cd "$dir" && npm pkg set "devDependencies.cortico=file:$tarball" && pnpm install && pnpm typecheck && pnpm test)
           done
