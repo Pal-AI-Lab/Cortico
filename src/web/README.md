@@ -39,7 +39,7 @@ manifest 的 `WEBUI_PROTOCOL_VERSION` 不匹配时，浏览器拒绝加载。
 | `/api/webui/lamps` | 状态灯。 |
 | `/api/extensions` | 扩展目录、本机 `platform`、各扩展状态、作者与本机包元数据;随框架提供的 World 与供应商列在最后。 |
 | `/api/extensions/updates` | 已安装 npm 扩展的可用新版本及逐包检查错误。 |
-| `/api/extensions/package` | 指定包版本的详情;作者 `author` 与 npm 发布者 `publisher` 分开给出,带 `os`,每个历史版本带不兼容原因 `problems`。 |
+| `/api/extensions/package` | 指定包版本的详情;作者 `author` 与 npm 发布者 `publisher` 分开给出,带 `os`,每个历史版本带不兼容原因 `problems`;官方索引里有时带自描述 `describe` 与更新日志正文 `changelog`(见 [docs/extensions.md](../../docs/extensions.md))。 |
 | `/api/extensions/icon` | 已装包声明的图标文件;没有时 404。SVG 带禁脚本的 CSP。 |
 | `/api/extensions/check` | 安装前只读 manifest 的检查;`kind` 给了就要求类别一致。 |
 | `/api/extensions/github`、`…/github/login`、`…/github/logout`、`/api/extensions/vote`、`/api/extensions/comments` | 扩展市场的 GitHub 账号、投票与评论;没登录 428,包没有讨论帖 409(见 [docs/extensions.md](../../docs/extensions.md))。 |

@@ -77,6 +77,7 @@ beforeAll(async () => {
     },
     market: {
       merge: async (search) => ({ hits: (await search).map((h) => ({ ...h, tags: ['t'] })), index: { tags: { t: { label: 'T', hint: 'h' } } } }),
+      mergePackage: async (_name, detail) => ({ ...await detail, changelog: { '1.0.0': '第一版' } }),
       blocked: (name) => (name === 'a' ? '恶意代码' : undefined),
       account: () => ({}),
       login: async () => ({ userCode: 'C', verificationUri: 'https://github.com/login/device', expiresIn: 900, interval: 5 }),
@@ -136,7 +137,8 @@ describe('/api/extensions', () => {
     asked.length = 0;
     const ok = await get('/api/extensions/package?name=%40acme%2Fcortico-world-x');
     expect(ok.status).toBe(200);
-    expect(ok.body).toMatchObject({ name: '@acme/cortico-world-x', frameworkApi: 4 });
+    // 有市场时详情经它合进索引里的更新日志
+    expect(ok.body).toMatchObject({ name: '@acme/cortico-world-x', frameworkApi: 4, changelog: { '1.0.0': '第一版' } });
     expect(asked).toEqual(['@acme/cortico-world-x']);
     expect((await get('/api/extensions/package')).status).toBe(400);
     expect((await get('/api/extensions/package?name=%20')).status).toBe(400);

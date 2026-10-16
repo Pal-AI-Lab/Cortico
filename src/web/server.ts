@@ -21,8 +21,9 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import type {
   EventEnvelope, EventRangeQuery, EventStoreReader, Logger,
   ConfigGroup, ConfigValues, WorldWebUiDecl,
-  LogRecord, OwnedStoragePart, StoragePart, ToolSchema, RunPhase,
+  LogRecord, OwnedStoragePart, StoragePart, ToolSchema, ToolTag, RunPhase,
 } from '../core/types.ts';
+import type { ProviderAuth, ProviderDescribe } from '../providers/base.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
@@ -192,12 +193,13 @@ export interface ExtensionInfo {
 }
 
 /**
- * 搜索结果里的一条。`tags` 起的字段来自官方索引(见 `WebAppMarketDeps`),索引读不到时缺席;
+ * 搜索结果里的一条。`displayName` 与 `tags` 起的字段来自官方索引(见 `WebAppMarketDeps`),索引读不到时缺席;
  * 其余来自 registry 的搜索端点。契约版本、体积、版本史这些要另取包文档，见 `ExtensionPackageDetail`。
  */
 export interface ExtensionSearchHit {
   name: string;
   version: string;
+  /** 索引里有这一语言的 `locales` 时换成它 */
   description: string;
   /** 这个版本的发布时间 */
   date?: string;
@@ -217,6 +219,18 @@ export interface ExtensionSearchHit {
   installed: boolean;
   /** 按哪一类关键字搜到的(`cortico-world` → world,`cortico-provider` → provider,`cortico-bot` → bot) */
   kind?: 'world' | 'provider' | 'bot';
+  /** `cortico.displayName`,按请求语言取 `locales` */
+  displayName?: string;
+  /** package.json 的 author,只取名字 */
+  author?: string;
+  /** package.json 的 `os` */
+  os?: string[];
+  /** 图标与截图在索引仓里的 raw 地址 */
+  icon?: string;
+  screenshots?: string[];
+  summary?: ExtensionSummary;
+  /** 写了更新说明的版本号与完整更新日志的地址;正文在包详情里 */
+  changelog?: { versions: string[]; url?: string };
   /** 标签 id:作者声明的、keywords 里的普通标签、粘住的警示标签与官方加的,减去官方删的 */
   tags?: string[];
   /** 官方对这个包的说明,按请求语言 */
@@ -229,6 +243,30 @@ export interface ExtensionSearchHit {
   /** 取代这个包的新包名 */
   supersededBy?: string;
   rating?: ExtensionRating;
+}
+
+/**
+ * 卡片上的能力摘要,来自包的自描述:World 有 `tools` 与 `events`(个数),供应商有 `protocols`、`auth`、
+ * `input` 与 `local`,Bot 有 `worlds`(个数)与 `memory`(Memory 名)。
+ */
+export interface ExtensionSummary {
+  tools?: number;
+  events?: number;
+  protocols?: string[];
+  auth?: ProviderAuth[];
+  input?: Array<ProviderDescribe['input'][number]>;
+  local?: boolean;
+  worlds?: number;
+  memory?: string;
+}
+
+/** 包的自描述(`ExtensionDescribeFile`),给人看的文字已按请求语言取好。 */
+export interface ExtensionDescribe {
+  tools?: Array<{ name: string; description: string; summary?: string; tags: ToolTag[] }>;
+  events?: Array<{ type: string; description: string }>;
+  provider?: { protocols: string[]; auth: ProviderAuth[]; local: boolean; input: Array<ProviderDescribe['input'][number]> };
+  bot?: { worlds: string[]; memory?: { name: string; form: string } };
+  prompts?: Array<{ key: string; title: string; role?: 'envPrompt' | 'prefix'; content: string }>;
 }
 
 /** 官方索引词表里的一个标签,名称与悬停说明按请求语言;没有 `style` 的是普通标签。 */
@@ -343,6 +381,10 @@ export interface ExtensionPackageDetail {
   installed: boolean;
   /** 已安装时 extensions/package.json 里写的那个版本范围 */
   installedSpec?: string;
+  /** 以下来自官方索引的 `packages/<包名>.json`,读不到时缺席。`describe` 只在索引扫到的正是这个版本时给出。 */
+  describe?: ExtensionDescribe;
+  /** 版本号 → 这一版的更新说明(Markdown) */
+  changelog?: Record<string, string>;
 }
 
 /** 装 npm 上的包(可带版本或 dist-tag),或本机一个含 package.json 的目录。 */
@@ -385,6 +427,8 @@ export interface WebAppExtensionDeps {
 export interface WebAppMarketDeps {
   /** 索引合进搜索结果并滤掉拉黑的包;索引读不到时结果原样返回,原因在 `index.error`。 */
   merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }>;
+  /** 索引里这个包的自描述与更新日志合进包详情;读不到时详情原样返回。 */
+  mergePackage(name: string, detail: Promise<ExtensionPackageDetail>, language: Language): Promise<ExtensionPackageDetail>;
   /** 已装包被拉黑时的原因 */
   blocked(name: string, language: Language): string | undefined;
   account(): GithubAccount;
@@ -1953,7 +1997,9 @@ export class WebApp {
       const name = strParam(req.query.name)?.trim();
       if (!name) { res.status(400).json({ error: serverText(this.languageOf(req)).missingPackage }); return; }
       try {
-        res.json(await src.packageInfo(name, strParam(req.query.version)?.trim() || undefined, this.languageOf(req)));
+        const language = this.languageOf(req);
+        const detail = src.packageInfo(name, strParam(req.query.version)?.trim() || undefined, language);
+        res.json(this.deps.market ? await this.deps.market.mergePackage(name, detail, language) : await detail);
       } catch (err) {
         // 请求本身不合法的报错带 400,其余当成 registry 那一头的问题
         res.status(err instanceof LocalizedError ? err.status : 502).json({ error: this.errorText(err, req) });

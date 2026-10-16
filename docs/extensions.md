@@ -57,20 +57,28 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 
 ## 市场的官方索引
 
-扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢与评论来自官方索引仓
+扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、图标、截图、能力摘要、自描述与更新日志来自官方索引仓
 [Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),文件格式以那里的 DESIGN.md 为准。
 `src/extensions/market.ts` 经 raw.githubusercontent.com 读 `index.json` 与 `catalog.json`,读到的内容在内存里留 5 分钟
 (raw 的 CDN 缓存也是 5 分钟),单次 3 秒没回算读不到。`GET /api/extensions/search` 的回应多一个 `index`
 (按界面语言取好的标签词表与 `newDays`),每条结果按索引补字段:
 
 - 拉黑的包与拉黑的发布者发的包不出现在结果里;已装的照常列出,`/api/extensions` 里那一条带 `blocked`(原因)。
-- `tags`:`catalog.json` 里作者当前版本声明的(官方标注除外)、`keywords` 里的普通标签、粘住名单里的警示标签与官方
+- `tags`:`catalog.json` 的 `declaredTags`(官方标注除外)、`keywords` 里的普通标签、粘住名单里的警示标签与官方
   `addTags`,去掉官方 `removeTags`。
 - `official`:npm 维护者里有 `official.maintainers` 的账号,且 repository 在 `official.githubOwners` 名下。`certified` 来自
-  `certified`;`isNew` 按 `catalog.json` 的首次发布时间与 `newDays`;`note`、`supersededBy` 来自官方覆盖;`rating` 来自
-  `catalog.json`。
+  `certified`;`isNew` 按 `catalog.json` 的首次发布时间与 `newDays`;`note`、`supersededBy` 来自官方覆盖;`rating` 是
+  `catalog.json` 里 `discussion` 的票数与评论数。
+- `catalog.json` 的列表字段:`displayName`、`author`、`os`、`summary`(能力摘要)、`changelog`(写了更新说明的版本号与
+  完整更新日志地址);`maintainers` 在搜索端点没给时补上;`icon` 与 `screenshots` 换成索引仓的 raw 地址。显示名与简介按界面
+  语言取 `locales`:中文与繁体中文读 `zh`,其余语言读 `en`,没有时用顶层的。
 - `schema` 不是 1 的文件当作读不到。`index.json` 每次读到都写进扩展目录的 `market-index.json`,读不到时用它,拉黑照常生效;
   它也没有时 `index` 只有 `error`,结果原样返回。`catalog.json` 读不到时结果不带它补的字段。
+
+`GET /api/extensions/package` 同时读 `packages/<包名>.json`(作用域包的 `/` 换成 `__`),合进 `changelog`(版本号 →
+更新说明正文)与 `describe`(包的自描述,`summary` 与事件 `description` 按上面的语言规则换成字符串,缺字段的工具、事件与提示词
+丢掉)。`describe` 与 `locales` 对应 Action 扫到的版本,详情是别的版本时不合。文件没有或读不到时详情不带这两项。
+详情的标签下有「反馈标签」链接,打开索引仓预填包名的「标签」扩展申请。
 
 包的简介按 Markdown 子集渲染:段落、标题、列表、代码、粗体、斜体与 http(s) 链接,原始 HTML 当文字。
 

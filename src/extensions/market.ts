@@ -8,13 +8,17 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { baseLanguage, LocalizedError, type Language } from '../core/language.ts';
-import type { Logger } from '../core/types.ts';
+import type { Logger, ToolTag } from '../core/types.ts';
 import { fetchFailure, PACKAGE_NAME } from '../extensions.ts';
+import type { ProviderAuth, ProviderDescribe } from '../providers/base.ts';
 import type {
   ExtensionComment,
   ExtensionCommentPage,
+  ExtensionDescribe,
+  ExtensionPackageDetail,
   ExtensionRating,
   ExtensionSearchHit,
+  ExtensionSummary,
   GithubAccount,
   GithubDeviceCode,
   MarketIndex,
@@ -58,20 +62,39 @@ interface IndexFile {
   overrides?: Record<string, { addTags?: string[]; removeTags?: string[]; note?: Bilingual; supersededBy?: string }>;
 }
 
-/** `catalog.json`:Action 扫 npm 与讨论区生成。这里只读下面几个字段。 */
+type Locale = { displayName?: string; description?: string };
+
+/** `catalog.json`:Action 扫 npm 与讨论区生成,字段对应包的当前版本。这里只读下面几个字段。 */
 interface CatalogFile {
   schema: number;
   packages: Record<string, {
+    version: string;
+    displayName?: string;
+    locales?: { zh?: Locale; en?: Locale };
+    author?: string;
+    maintainers?: string[];
+    os?: string[];
     /** 首次发布时间 */
     created?: string;
-    /** 当前版本 `cortico.tags` 里的标签 */
-    tags?: string[];
-    /** 讨论帖编号 */
-    discussion?: number;
-    rating?: { up: number; down: number; comments: number };
+    /** 当前版本 `cortico.tags` 里词表内的标签 */
+    declaredTags?: string[];
+    /** 索引仓里的相对路径 */
+    icon?: string;
+    screenshots?: string[];
+    summary?: ExtensionSummary;
+    changelog?: { versions: string[]; url?: string };
+    discussion?: { number: number; url: string; up: number; down: number; comments: number };
   }>;
   /** 粘住名单:任一版本声明过的警示标签 */
   sticky?: Record<string, string[]>;
+}
+
+/** `packages/<包>.json`:Action 从包的 `version` 版里解出的自描述文件原文与按版本切好的更新日志。 */
+interface PackageFile {
+  schema: number;
+  version: string;
+  describe?: unknown;
+  changelog?: Record<string, string>;
 }
 
 /** `comments/<包>.json`:一个包讨论帖的评论快照,新的在前,回复旧的在前;`id` 是 GraphQL 节点 id。 */
@@ -108,6 +131,7 @@ function marketError(message: (t: ReturnType<typeof text>) => string, status: nu
 
 const pickText = (value: Bilingual, language: Language) => baseLanguage(language) === 'zh' ? value.zh : value.en;
 const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
+const rawUrl = (path: string) => `${RAW_BASE}/${path}`;
 /** 包名当文件名,作用域包的 `/` 换成 `__`。 */
 const fileName = (name: string) => name.replace('/', '__');
 const toComment = (node: GraphqlComment): ExtensionComment => ({
@@ -118,6 +142,48 @@ const toComment = (node: GraphqlComment): ExtensionComment => ({
   body: node.body,
   createdAt: node.createdAt,
 });
+
+type Item = Record<string, unknown>;
+const isItem = (value: unknown): value is Item => !!value && typeof value === 'object' && !Array.isArray(value);
+const items = (value: unknown): Item[] => Array.isArray(value) ? value.filter(isItem) : [];
+const strings = <T extends string = string>(value: unknown): T[] => Array.isArray(value) ? value.filter((v): v is T => typeof v === 'string') : [];
+
+/**
+ * 包里的自描述文件按请求语言取成 `ExtensionDescribe`。文件是作者写的、索引仓原样转存,
+ * 缺字段或类型不对的工具、事件、提示词丢掉,整份不是对象时是 undefined。
+ */
+function localizeDescribe(raw: unknown, language: Language): ExtensionDescribe | undefined {
+  if (!isItem(raw)) return undefined;
+  const say = (value: unknown): string | undefined => typeof value === 'string' ? value
+    : isItem(value) && typeof value.zh === 'string' && typeof value.en === 'string' ? pickText(value as Bilingual, language) : undefined;
+  const out: ExtensionDescribe = {};
+  const tools = items(raw.tools).flatMap((t) => {
+    const summary = say(t.summary);
+    return typeof t.name === 'string' && typeof t.description === 'string'
+      ? [{ name: t.name, description: t.description, tags: strings<ToolTag>(t.tags), ...(summary ? { summary } : {}) }] : [];
+  });
+  if (tools.length) out.tools = tools;
+  const events = items(raw.events).flatMap((e) => {
+    const description = say(e.description);
+    return typeof e.type === 'string' && description !== undefined ? [{ type: e.type, description }] : [];
+  });
+  if (events.length) out.events = events;
+  if (isItem(raw.provider)) {
+    const p = raw.provider;
+    out.provider = { protocols: strings(p.protocols), auth: strings<ProviderAuth>(p.auth), local: p.local === true, input: strings<ProviderDescribe['input'][number]>(p.input) };
+  }
+  if (isItem(raw.bot)) {
+    const memory = raw.bot.memory, form = isItem(memory) ? say(memory.form) : undefined;
+    out.bot = { worlds: strings(raw.bot.worlds), ...(isItem(memory) && typeof memory.name === 'string' ? { memory: { name: memory.name, form: form ?? '' } } : {}) };
+  }
+  const prompts = items(raw.prompts).flatMap((p) => {
+    const role = p.role === 'envPrompt' || p.role === 'prefix' ? p.role as 'envPrompt' | 'prefix' : undefined;
+    return typeof p.key === 'string' && typeof p.title === 'string' && typeof p.content === 'string'
+      ? [{ key: p.key, title: p.title, content: p.content, ...(role ? { role } : {}) }] : [];
+  });
+  if (prompts.length) out.prompts = prompts;
+  return out;
+}
 
 export interface ExtensionMarketOptions {
   /** 扩展目录:令牌文件与索引缓存放在这里 */
@@ -146,7 +212,8 @@ export class ExtensionMarket {
   }
 
   /**
-   * 把官方索引合进搜索结果:滤掉拉黑的包与发布者,补上标签、徽标、官方说明、取代与评分。
+   * 把官方索引合进搜索结果:滤掉拉黑的包与发布者,补上标签、徽标、官方说明、取代、评分与 `catalog.json` 的列表字段。
+   * 显示名与简介按请求语言取 `locales`,zh-Hant 读 zh、其余语言读 en,没有时用顶层的。
    * 索引在等搜索的同时读取;读不到时结果原样返回,`index` 只有空词表与原因。
    */
   async merge(search: Promise<ExtensionSearchHit[]>, language: Language): Promise<{ hits: ExtensionSearchHit[]; index: MarketIndex }> {
@@ -164,30 +231,63 @@ export class ExtensionMarket {
       const listed = catalog?.packages[hit.name];
       // 作者能声明官方标注以外的标签;keywords 只映射普通标签;粘住名单只收警示标签;官方的去优先
       const tags = [...new Set([
-        ...(listed?.tags ?? []).filter((id) => vocab[id] && vocab[id].style !== 'official'),
+        ...(listed?.declaredTags ?? []).filter((id) => vocab[id] && vocab[id].style !== 'official'),
         ...(hit.keywords ?? []).filter((id) => vocab[id] && !vocab[id].style),
         ...(catalog?.sticky?.[hit.name] ?? []).filter((id) => vocab[id]?.style === 'warning'),
         ...(override?.addTags ?? []).filter((id) => vocab[id]),
       ])].filter((id) => !override?.removeTags?.includes(id));
+      const maintainers = hit.maintainers ?? listed?.maintainers;
       const repository = hit.links.repository?.toLowerCase() ?? '';
-      const official = !!hit.maintainers?.some((m) => index.official.maintainers.includes(m))
+      const official = !!maintainers?.some((m) => index.official.maintainers.includes(m))
         && index.official.githubOwners.some((owner) => repository.startsWith(`https://github.com/${owner.toLowerCase()}/`));
       const isNew = !!listed?.created && now - Date.parse(listed.created) < (index.newDays ?? 0) * 86_400_000;
+      const locale = listed?.locales?.[baseLanguage(language)];
+      const displayName = locale?.displayName ?? listed?.displayName;
+      const discussion = listed?.discussion;
       return {
         ...hit,
+        ...(locale?.description ? { description: locale.description } : {}),
+        ...(displayName ? { displayName } : {}),
+        ...(listed?.author ? { author: listed.author } : {}),
+        ...(maintainers ? { maintainers } : {}),
+        ...(listed?.os ? { os: listed.os } : {}),
+        ...(listed?.icon ? { icon: rawUrl(listed.icon) } : {}),
+        ...(listed?.screenshots ? { screenshots: listed.screenshots.map(rawUrl) } : {}),
+        ...(listed?.summary ? { summary: listed.summary } : {}),
+        ...(listed?.changelog ? { changelog: listed.changelog } : {}),
         ...(tags.length ? { tags } : {}),
         ...(override?.note ? { note: pickText(override.note, language) } : {}),
         ...(index.certified?.includes(hit.name) ? { certified: true } : {}),
         ...(official ? { official: true } : {}),
         ...(isNew ? { isNew: true } : {}),
         ...(override?.supersededBy ? { supersededBy: override.supersededBy } : {}),
-        ...(listed?.rating ? { rating: { ...listed.rating, ...(listed.discussion ? { discussion: discussionUrl(listed.discussion) } : {}) } } : {}),
+        ...(discussion ? { rating: { up: discussion.up, down: discussion.down, comments: discussion.comments, discussion: discussionUrl(discussion.number) } } : {}),
       };
     });
     const tags = Object.fromEntries(Object.entries(vocab).map(([id, tag]) => [id, {
       label: pickText(tag.label, language), hint: pickText(tag.hint, language), ...(tag.style ? { style: tag.style } : {}),
     }]));
     return { hits: merged, index: { tags, ...(index.newDays !== undefined ? { newDays: index.newDays } : {}) } };
+  }
+
+  /**
+   * 把索引仓 `packages/<包>.json` 的更新日志正文与自描述合进包详情,与包文档同时读取;显示名与简介按 `merge` 的规则取 `locales`。
+   * 自描述与 `locales` 对应索引扫到的那个版本,详情是别的版本时不合。读不到时详情原样返回。
+   */
+  async mergePackage(name: string, detail: Promise<ExtensionPackageDetail>, language: Language): Promise<ExtensionPackageDetail> {
+    const files = PACKAGE_NAME.test(name) ? Promise.all([this.loadCatalog(), this.loadPackage(name)]) : Promise.resolve([null, null] as const);
+    const info = await detail;
+    const [catalog, file] = await files;
+    const listed = catalog?.packages[info.name];
+    const locale = listed?.version === info.version ? listed.locales?.[baseLanguage(language)] : undefined;
+    const describe = file?.version === info.version ? localizeDescribe(file.describe, language) : undefined;
+    return {
+      ...info,
+      ...(locale?.displayName ? { displayName: locale.displayName } : {}),
+      ...(locale?.description ? { description: locale.description } : {}),
+      ...(describe ? { describe } : {}),
+      ...(file?.changelog && Object.keys(file.changelog).length ? { changelog: file.changelog } : {}),
+    };
   }
 
   /** 已装包被官方拉黑时的原因;按最近一次读到的索引,本进程还没读过时读缓存文件。 */
@@ -349,6 +449,18 @@ export class ExtensionMarket {
     }
   }
 
+  /** 包没有 `packages/` 文件时是 null;格式不认识或读不到时同样是 null 并记日志。 */
+  private async loadPackage(name: string): Promise<PackageFile | null> {
+    const path = `packages/${fileName(name)}.json`;
+    try {
+      const value = await this.raw(path);
+      return value ? this.checkSchema(value as PackageFile, path) : null;
+    } catch (err) {
+      this.log.warn('官方索引的包文件读取失败', { path, error: err instanceof Error ? err.message : String(err) });
+      return null;
+    }
+  }
+
   private checkSchema<T extends { schema: number }>(value: T, file: string): T {
     if (value.schema !== SCHEMA) throw marketError((t) => t.indexSchema(file, String(value.schema), SCHEMA), 502);
     return value;
@@ -358,7 +470,7 @@ export class ExtensionMarket {
   private async raw(path: string): Promise<unknown> {
     const kept = this.raws.get(path);
     if (kept && Date.now() - kept.atMs < RAW_CACHE_MS) return kept.value;
-    const url = `${RAW_BASE}/${path}`;
+    const url = rawUrl(path);
     let res: Response;
     try { res = await this.fetch(url, { signal: AbortSignal.timeout(RAW_TIMEOUT_MS) }); } catch (err) { throw new Error(fetchFailure(url, err)); }
     if (!res.ok && res.status !== 404) throw new Error(`${new URL(url).host}: ${res.status} ${res.statusText}`);

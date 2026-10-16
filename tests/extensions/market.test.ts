@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { ExtensionMarket, GITHUB_TOKEN_FILE } from '../../src/extensions/market.ts';
 import { LocalizedError } from '../../src/core/language.ts';
 import { nullLogger } from '../../src/core/util.ts';
-import type { ExtensionComment, ExtensionSearchHit } from '../../src/web/server.ts';
+import type { ExtensionComment, ExtensionPackageDetail, ExtensionSearchHit } from '../../src/web/server.ts';
 
 const RAW = 'https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main/';
 
@@ -124,8 +124,11 @@ describe('merge', () => {
     github.raw.set('catalog.json', {
       schema: 1,
       packages: {
-        'cortico-world-a': { created: new Date(Date.now() - 86_400_000).toISOString(), tags: ['yellow', 'blue', 'other', 'unknown'], discussion: 7, rating: { up: 3, down: 1, comments: 2 } },
-        'cortico-world-old': { created: '2020-01-01T00:00:00Z' },
+        'cortico-world-a': {
+          version: '1.0.0', created: new Date(Date.now() - 86_400_000).toISOString(), declaredTags: ['yellow', 'blue', 'other', 'unknown'],
+          discussion: { number: 7, url: 'https://github.com/Pal-AI-Lab/cortico-extensions/discussions/7', up: 3, down: 1, comments: 2 },
+        },
+        'cortico-world-old': { version: '1.0.0', created: '2020-01-01T00:00:00Z' },
       },
       sticky: { 'cortico-world-a': ['red', 'plain'] },
     });
@@ -171,6 +174,79 @@ describe('merge', () => {
     const { hits, index } = await offline.merge(Promise.resolve([hit('cortico-world-bad'), hit('cortico-world-d')]), 'zh');
     expect(hits.map((h) => h.name)).toEqual(['cortico-world-d']);
     expect(index.error).toBeUndefined();
+  });
+});
+
+const CATALOG_ENTRY = {
+  version: '1.0.0',
+  displayName: '甲',
+  locales: { en: { displayName: 'A', description: 'Reads A.' } },
+  author: 'Author', maintainers: ['someone'], os: ['win32'],
+  icon: 'assets/@scope__cortico-world-x/icon.png',
+  screenshots: ['assets/@scope__cortico-world-x/screenshot-1.png'],
+  summary: { tools: 2, events: 1 },
+  changelog: { versions: ['1.0.0', '0.9.0'], url: 'https://github.com/someone/x/blob/HEAD/CHANGELOG.md' },
+};
+
+describe('catalog.json 的列表字段', () => {
+  it('合进搜索结果:图标与截图换成 raw 地址;显示名与简介 zh 读顶层,en 与其余语言读 locales.en', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', INDEX);
+    github.raw.set('catalog.json', { schema: 1, packages: { '@scope/cortico-world-x': CATALOG_ENTRY } });
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const search = () => Promise.resolve([hit('@scope/cortico-world-x', { description: '读甲。' })]);
+    const [en] = (await market.merge(search(), 'en')).hits;
+    expect(en).toMatchObject({
+      displayName: 'A', description: 'Reads A.', author: 'Author', maintainers: ['someone'], os: ['win32'],
+      icon: `${RAW}assets/@scope__cortico-world-x/icon.png`, screenshots: [`${RAW}assets/@scope__cortico-world-x/screenshot-1.png`],
+      summary: CATALOG_ENTRY.summary, changelog: CATALOG_ENTRY.changelog,
+    });
+    expect((await market.merge(search(), 'zh')).hits[0]).toMatchObject({ displayName: '甲', description: '读甲。' });
+    expect((await market.merge(search(), 'ja')).hits[0]).toMatchObject({ displayName: 'A', description: 'Reads A.' });
+  });
+});
+
+describe('包详情', () => {
+  const detail = (version: string): ExtensionPackageDetail => ({
+    name: '@scope/cortico-world-x', version, description: '读甲。', versionCount: 2, history: [], warnings: [], dependencies: [], maintainers: [], links: {}, installed: false,
+  });
+  const PACKAGE_FILE = {
+    schema: 1, name: '@scope/cortico-world-x', version: '1.0.0',
+    describe: {
+      tools: [
+        { name: 'x_read', description: 'Read x.', parameters: { type: 'object' }, tags: ['read'], summary: bi('读 x', 'Reads x') },
+        { name: 'x_broken', tags: [] },
+      ],
+      events: [{ type: 'x.message', description: bi('来消息', 'A message arrived'), trigger: 'wake' }],
+      prompts: [{ key: 'worlds.x.envPrompt', title: 'X', role: 'envPrompt', content: '你在 X 上。' }],
+    },
+    changelog: { '1.0.0': '- 第一版', '0.9.0': '- 预览' },
+  };
+
+  it('合进按请求语言取好的自描述与更新日志正文,缺字段的工具丢掉', async () => {
+    const github = fakeGithub();
+    github.raw.set('catalog.json', { schema: 1, packages: { '@scope/cortico-world-x': CATALOG_ENTRY } });
+    github.raw.set('packages/@scope__cortico-world-x.json', PACKAGE_FILE);
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const merged = await market.mergePackage('@scope/cortico-world-x', Promise.resolve(detail('1.0.0')), 'en');
+    expect(merged).toMatchObject({ displayName: 'A', description: 'Reads A.', changelog: PACKAGE_FILE.changelog });
+    expect(merged.describe).toEqual({
+      tools: [{ name: 'x_read', description: 'Read x.', summary: 'Reads x', tags: ['read'] }],
+      events: [{ type: 'x.message', description: 'A message arrived' }],
+      prompts: [{ key: 'worlds.x.envPrompt', title: 'X', role: 'envPrompt', content: '你在 X 上。' }],
+    });
+    expect((await market.mergePackage('@scope/cortico-world-x', Promise.resolve(detail('1.0.0')), 'zh')).describe?.events).toEqual([{ type: 'x.message', description: '来消息' }]);
+  });
+
+  it('详情是索引没扫到的版本时只合更新日志;索引里没有这个包时详情原样返回', async () => {
+    const github = fakeGithub();
+    github.raw.set('catalog.json', { schema: 1, packages: { '@scope/cortico-world-x': CATALOG_ENTRY } });
+    github.raw.set('packages/@scope__cortico-world-x.json', PACKAGE_FILE);
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const older = await market.mergePackage('@scope/cortico-world-x', Promise.resolve(detail('0.9.0')), 'en');
+    expect(older).toEqual({ ...detail('0.9.0'), changelog: PACKAGE_FILE.changelog });
+    const unlisted = { ...detail('1.0.0'), name: 'cortico-world-y' };
+    expect(await market.mergePackage('cortico-world-y', Promise.resolve(unlisted), 'en')).toEqual(unlisted);
   });
 });
 

@@ -40,7 +40,7 @@ import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bi
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
 import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
-import { PromptRevisionConflict, WebApp, type ExtensionComment, type ExtensionInfo, type ExtensionRating, type ExtensionSearchHit, type MarketTag, type OwnedStoragePart, type ToolOwner, type WebAppMarketDeps } from '../src/web/server.ts';
+import { PromptRevisionConflict, WebApp, type ExtensionComment, type ExtensionDescribe, type ExtensionInfo, type ExtensionRating, type ExtensionSearchHit, type MarketTag, type OwnedStoragePart, type ToolOwner, type WebAppMarketDeps } from '../src/web/server.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { deriveWebUiPageSources, ioPageContribution } from '../src/bot.ts';
@@ -1234,10 +1234,64 @@ const devRating = (name: string): ExtensionRating => {
   const base = Math.round((hit?.downloads.month ?? 0) / 100);
   return { up: base + (mine === 'up' ? 1 : 0), down: (mine === 'down' ? 1 : 0), comments: devComments.get(name)?.reduce((n, c) => n + 1 + (c.replies?.length ?? 0), 0) ?? 0, discussion: `https://github.com/Pal-AI-Lab/cortico-extensions/discussions/${devSearchHits.indexOf(hit!) + 1}`, ...(mine ? { mine } : {}) };
 };
+/** 图标与截图用内联 SVG,不取网络。 */
+const devSvg = (width: number, height: number, color: string, text: string) => `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" rx="${Math.min(width, height) / 8}" fill="${color}"/><text x="50%" y="55%" fill="#fff" font-family="sans-serif" font-size="${Math.min(width, height) / 3}" text-anchor="middle">${text}</text></svg>`)}`;
+/** catalog.json 里列表要用的字段,按包名;没列出的包就是索引里没有这几项。 */
+const devCatalog: Record<string, Partial<ExtensionSearchHit>> = {
+  '@acme/cortico-world-discord': {
+    displayName: 'Discord', author: 'Acme Labs', icon: devSvg(64, 64, '#5865f2', 'D'),
+    screenshots: [devSvg(320, 180, '#3b4252', '频道列表'), devSvg(320, 180, '#434c5e', '消息投递')],
+    summary: { tools: 6, events: 9 },
+    changelog: { versions: ['0.3.2', '0.3.1', '0.3.0'], url: 'https://github.com/acme/cortico-world-discord/blob/HEAD/CHANGELOG.md' },
+  },
+  'cortico-world-matrix': { displayName: 'Matrix', author: 'Kyoka', os: ['!darwin'], summary: { tools: 4, events: 2 } },
+  'cortico-world-obs': { author: 'StreamKit', os: ['win32'], icon: devSvg(64, 64, '#302e31', 'OBS'), summary: { tools: 3, events: 0 } },
+  'cortico-provider-example': { summary: { protocols: ['openai-chat'], auth: ['api-key', 'oauth'], input: ['text', 'image'], local: false } },
+  'cortico-bot-example': { displayName: 'Example Bot', summary: { worlds: 3, memory: 'workspace' } },
+};
+/** packages/<包名>.json 里的自描述(已按语言取好)与更新日志正文。 */
+const devPackageFiles: Record<string, { describe?: ExtensionDescribe; changelog?: Record<string, string> }> = {
+  '@acme/cortico-world-discord': {
+    describe: {
+      tools: [
+        { name: 'discord_send_message', description: 'Send a message to a channel. Long text is split at 2000 characters.', summary: '往频道发一条消息', tags: ['speak'] },
+        { name: 'discord_read_history', description: 'Read the latest messages of a channel.', tags: ['read'] },
+        { name: 'discord_add_reaction', description: 'React to a message with an emoji.', summary: '给消息加表情回应', tags: ['act'] },
+        { name: 'discord_list_channels', description: 'List the channels the bot can see.', tags: ['read'] },
+        { name: 'discord_join_voice', description: 'Join a voice channel.', tags: ['act'] },
+        { name: 'discord_leave_voice', description: 'Leave the current voice channel.', tags: ['act'] },
+      ],
+      events: ['message', 'mention', 'reaction', 'join', 'leave', 'voice', 'typing', 'edit', 'delete'].map((type) => ({ type: `discord.${type}`, description: `频道里的 ${type} (dev 假数据)` })),
+      prompts: [{ key: 'worlds.discord.envPrompt', title: '环境提示词', role: 'envPrompt', content: '你在 Discord 上。\n\n下面是你所在的频道:\n{{channels}}' }],
+    },
+    changelog: {
+      '0.3.2': '- 修复长消息被截断\n- 频道列表按分类分组',
+      '0.3.1': '- 新增 `discord_add_reaction`',
+      '0.3.0': '### 语音\n\n- 可以加入与离开语音频道',
+    },
+  },
+  'cortico-provider-example': {
+    describe: { provider: { protocols: ['openai-chat'], auth: ['api-key', 'oauth'], local: false, input: ['text', 'image'] } },
+  },
+  'cortico-bot-example': {
+    describe: {
+      bot: { worlds: ['console', 'qq', 'websearch'], memory: { name: 'workspace', form: '文件工作区,按目录分主题 (dev 假数据)' } },
+      tools: [{ name: 'memory_read', description: 'Read a file from the workspace.', summary: '读工作区里的文件', tags: ['read'] }],
+      prompts: [{ key: 'persona.constitution', title: '宪法', role: 'prefix', content: '你是一个陪伴型 bot。(dev 假数据)' }],
+    },
+  },
+};
 const devMarket: WebAppMarketDeps = {
+  mergePackage: async (name, detail) => {
+    const info = await detail;
+    const file = devPackageFiles[name];
+    return { ...info, ...(file?.describe && info.version === devSearchHits.find((h) => h.name === name)?.version ? { describe: file.describe } : {}), ...(file?.changelog ? { changelog: file.changelog } : {}) };
+  },
   merge: async (search) => ({
     hits: (await search).map((hit) => ({
       ...hit,
+      ...devCatalog[hit.name],
       tags: [...(hit.keywords ?? []).filter((k) => devMarketTags[k]), ...(hit.name === 'cortico-world-shell-sandbox' ? ['unsafe'] : []), ...(hit.name === 'cortico-world-weather' ? ['experimental'] : [])],
       ...(hit.publisher === 'phantivia' ? { official: true } : {}),
       ...(hit.name === 'cortico-world-matrix' ? { certified: true } : {}),
@@ -1466,7 +1520,7 @@ const app = new WebApp({
         fileCount: 41,
         dependencies: ['ws', 'undici'],
         maintainers: [hit.publisher ?? 'someone'],
-        author: devExtensions.find(p => p.name === name)?.author ?? 'example-author',
+        author: devCatalog[name]?.author ?? devExtensions.find(p => p.name === name)?.author ?? 'example-author',
         publisher: hit.publisher,
         links: { ...hit.links, npm: hit.links.npm ?? `https://www.npmjs.com/package/${name}`, bugs: `${hit.links.repository ?? ''}/issues` },
         installed: devExtensions.some((p) => p.name === name && p.state !== 'removed'),
