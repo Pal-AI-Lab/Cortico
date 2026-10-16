@@ -272,7 +272,7 @@ package.json 没有 `cortico.describe`、它指的文件不在或与重新生成
 ## 契约版本
 
 三类扩展各有一个契约版本,`cortico.api` 必须等于自己这一类的那个:world **6**、provider **6**、
-bot **7**。版本不符的扩展不能加载,页面显示「需要升级」。
+bot **7**。版本不符的扩展不能加载,页面显示「需要升级」;上一版契约是例外,见下一段。
 
 上一版契约(world 5、provider 5、bot 6)的包是例外,经过渡层 `src/extensions/previous-contract.ts` 照常加载:
 旧接口名(`console()`、`BotParts.console`、manifest 的 `consoleClient` / `consoleStyle`、改过名的

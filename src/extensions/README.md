@@ -37,7 +37,7 @@ World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot �
 [docs/extensions.md](../../docs/extensions.md)「自描述」。
 
 `parseExtensionManifest(pkg, language)` 只做解析与校验,不碰文件系统;装载器与
-`pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。
+`pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧;上一版契约是例外。
 上一版契约(`PREVIOUS_CONTRACT_VERSIONS`)例外:给 warning、照常加载,`previous-contract.ts` 把旧接口名接到新名上,
 覆盖的范围写在它的模块头;Cortico 下一个大版本删除它。`check:extension` 对上一版契约判失败。
 
