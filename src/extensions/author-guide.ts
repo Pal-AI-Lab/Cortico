@@ -186,7 +186,7 @@ function publishSection(pkgDir: string, pkg: ExtensionPackageJson, declared: str
 
   const describe = (pkg.cortico as { describe?: unknown } | undefined)?.describe;
   if (typeof describe !== 'string') {
-    lines.push('  ⚠ No cortico.describe. Run `pnpm describe:extension <dir>` in the Cortico repository and set cortico.describe to the written file.');
+    lines.push('  ⚠ No cortico.describe. Run `pnpm describe:extension <dir>` in the Cortico repository; it writes describe.json and adds cortico.describe.');
   } else if (!extensionPackageFile(pkgDir, describe)) {
     lines.push(`  ⚠ cortico.describe points to ${describe}, which is not in the package. Run \`pnpm describe:extension <dir>\`.`);
   } else {
