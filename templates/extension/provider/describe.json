@@ -1,0 +1,16 @@
+{
+  "provider": {
+    "protocols": [
+      "openai-chat"
+    ],
+    "auth": [
+      "api-key"
+    ],
+    "local": false,
+    "input": [
+      "text",
+      "image"
+    ],
+    "title": "Example (Chat Completions)"
+  }
+}

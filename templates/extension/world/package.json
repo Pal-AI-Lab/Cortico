@@ -16,12 +16,14 @@
   "cortico": {
     "kind": "world",
     "api": 6,
-    "tags": []
+    "tags": [],
+    "describe": "describe.json"
   },
   "files": [
     "src",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "describe.json"
   ],
   "scripts": {
     "test": "vitest run",

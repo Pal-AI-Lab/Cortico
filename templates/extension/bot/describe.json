@@ -1,0 +1,56 @@
+{
+  "tools": [
+    {
+      "name": "memory_write",
+      "description": "Append one line to MEMORY.md, your only persistent memory. It is shown in full at the top of every context.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "One line to remember."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "tags": [
+        "write"
+      ],
+      "summary": {
+        "zh": "往 MEMORY.md 末尾追加一行。",
+        "en": "Appends one line to MEMORY.md."
+      }
+    },
+    {
+      "name": "end_turn",
+      "description": "End this turn: nothing more you want to say or do right now. New events will wake you again. This is the normal way to finish a turn.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "tags": [
+        "flow"
+      ],
+      "summary": {
+        "zh": "结束这一轮,等新事件再醒。",
+        "en": "Ends the turn until a new event arrives."
+      }
+    }
+  ],
+  "bot": {
+    "worlds": [
+      "console"
+    ],
+    "memory": {
+      "name": "MEMORY.md",
+      "form": {
+        "zh": "一份 MEMORY.md,整份进系统前缀;附件存在 blobs/ 下。",
+        "en": "One MEMORY.md, all of it in the system prefix; attachments go under blobs/."
+      }
+    }
+  }
+}

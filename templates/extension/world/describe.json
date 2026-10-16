@@ -1,0 +1,45 @@
+{
+  "tools": [
+    {
+      "name": "example_echo",
+      "description": "Echo the given text back, prefixed with the configured greeting.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Text to echo."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "tags": [
+        "read"
+      ],
+      "summary": {
+        "zh": "把一段文字加上配置的开头一句原样返回。",
+        "en": "Returns the given text prefixed with the configured greeting."
+      }
+    }
+  ],
+  "events": [
+    {
+      "type": "example.started",
+      "description": {
+        "zh": "World 挂载完成。",
+        "en": "The World was mounted."
+      }
+    }
+  ],
+  "prompts": [
+    {
+      "key": "worlds.example.envPrompt",
+      "title": "Example · 环境提示词",
+      "role": "envPrompt",
+      "content": "Example 是一个只用来验证接线的 World。想确认工具链路通不通时调用 example_echo 一次即可,不要反复调用它;它的回执以「{{example.greeting}}」开头,这一句来自部署配置。\n"
+    }
+  ]
+}

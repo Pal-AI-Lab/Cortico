@@ -16,13 +16,15 @@
   "cortico": {
     "kind": "bot",
     "api": 7,
-    "tags": []
+    "tags": [],
+    "describe": "describe.json"
   },
   "files": [
     "index.ts",
     "persona",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "describe.json"
   ],
   "scripts": {
     "test": "vitest run",
