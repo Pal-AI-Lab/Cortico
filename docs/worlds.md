@@ -66,14 +66,14 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 `endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下。
 工具名在一个 bot 内全局唯一:模型按名字调用,Core 按名字归属与隐藏。用自家短名做前缀
 (`mc_`、`qq_`);工具名与已挂载 World、Persona 工具或 Core 保留帧名冲突时,装配层拒绝挂载并报告原因。
+工具声明放在导出的 `<PREFIX>_TOOL_DECLS`(不含 handler),`tools()` 在其上加 handler;自描述的 `describe.tools` 由
+`describeTools(<PREFIX>_TOOL_DECLS, summaries)` 从同一份声明拼成,每个工具配一句给人看的 `summary`。仓内 World 都写
+`describe`,`tests/builtin-describe.test.ts` 核对各可达配置下的工具名与声明一致。
 
 ## 定义与装配
 
 `WorldDefinition`(`src/world.ts`):`id`、`label`、`defaults()`(配置段默认值,World 声明的
-`enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`、`describe?`。
-`describe` 是给人和扩展市场看的自描述,不进提示词:`tools` 列这个 World 在任何配置下可能返回的全部工具,由
-`describeTools(<PREFIX>_TOOL_DECLS, summaries)` 从工具声明拼成,每个工具带一句 `summary`;`events` 列它会推出的全部事件
-`type`,推送时固定的 `trigger` 与 `tags` 照写。仓内 World 都写,`tests/builtin-describe.test.ts` 核对实例工具名在声明里。
+`enabled` 应为 false)、`preflight?`、`configOptions?`、`create(ctx)`。
 `WorldContext` 向 `create` 提供:`cfg`(共享配置对象)、`timezone`、`botName`、`botDir` /
 `packageDir` / `dataDir` / `repoRoot`、`secret()` / `storeSecret()`、`persist()`(写回
 `worlds.<id>`)、`restart()`。界面语言不在其中:它是每个请求的属性,`webUi(language)` 与

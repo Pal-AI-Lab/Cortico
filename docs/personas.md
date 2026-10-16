@@ -34,7 +34,8 @@ Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefiniti
 钩子的异常处理方式见 [Core 文档](../src/core/README.md)。
 
 工具不在 Persona 上,在每个 `SessionDecl.tools()` 里;`end_turn`、`save_blob` 这类是 bot 侧的
-Persona 工具,Core 只认 `ToolDef.endsTurn`。
+Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声明是模块常量(`CORMINI_TOOL_DECLS` 等),
+`BotDefinition.describe.tools` 用 `describeTools(decls, summaries)` 从同一份声明拼成。
 
 `CoreApi` 是 Persona 唯一的 Core 入口:`injectInternal` / `injectDeferred` / `injectExternal`、
 `requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、
@@ -55,7 +56,6 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。
 | `defaults()` | bot 默认配置,可包含 World 段。启动器用 `withWorlds()` 补充内建与扩展 World 中缺失的默认段,保留此处已有的段 |
 | `declares` | 默认启用的 World id;未安装时显示为不可用。已安装但未声明的 World 默认关闭,部署可自行启用 |
 | `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, webUi? }` |
-| `describe` | 可选,给人和扩展市场看的自描述:Persona 提供的全部工具(`describeTools(decls, summaries)` 由工具声明加一句 summary 拼成)与 `memory.form`。仓内 bot 都写 |
 
 `createBot()` 的顺序:算提示词覆盖目录 → 定默认语言 → `WorldAssembly` → `build()` → `Core` →
 装配层绑定挂载钩子 → 收配置组(含未激活槽位)→ provider 设置页与端点编辑 → `WebApp`。
