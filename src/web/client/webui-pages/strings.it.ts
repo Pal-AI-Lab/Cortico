@@ -19,6 +19,8 @@ export const S: Partial<typeof en> = {
   notActivated: 'non attivato',
   hidden: 'nascosto',
   reloadPrefix: 'Prefisso da ricaricare · clicca per ricaricare',
+  undeclaredTools: (names: string) => `Strumenti non dichiarati in describe: ${names}`,
+  undeclaredEvents: (names: string) => `Eventi non dichiarati in describe: ${names}`,
   open: 'Apri',
   configTab: 'Configurazione',
   promptsTab: 'Template di prompt',

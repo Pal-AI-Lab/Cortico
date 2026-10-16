@@ -1,4 +1,4 @@
-<!-- Owner: src/core/types.ts (World, WorldHost), src/world.ts, src/worlds/index.ts -->
+<!-- Owner: src/core/types.ts (World, WorldHost), src/world.ts, src/worlds/index.ts, src/undeclared-names.ts -->
 
 # World
 
@@ -100,6 +100,11 @@ bot 的 `index.ts` 在 `declares` 中列出默认启用的 World id。声明但�
 `activate` / `deactivate` 热生效并写回 `worlds.<id>.enabled`。定义实例在停用或重启时重新构造;
 预建实例重启时复用现有对象,停用后不能通过 `activate` 重新挂载。
 生命周期事件转给 `Persona.onWorldLifecycle`。
+
+`describe` 列出全部工具与会推出的事件,不进提示词,写法与导出见 [extensions.md](extensions.md)「自描述」。
+装配层在 World 挂载时对照 `describe.tools` 检查 `tools()` 的工具名,经 Core 的 `onWorldPush` 对照
+`describe.events` 检查 `pushEvent`、`pushDeferred`、`pushCandidate` 的事件 type;不在声明里的照常生效,
+每个名字在 `worlds.<id>` 下记一条 warn,World 页列出(`src/undeclared-names.ts`)。
 
 ## 环境提示词
 

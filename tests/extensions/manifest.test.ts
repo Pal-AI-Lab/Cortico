@@ -151,6 +151,27 @@ describe('icon', () => {
   });
 });
 
+describe('市场字段', () => {
+  const pkg = (fields: Record<string, unknown>) => ({ name: 'x', type: 'module', keywords: ['cortico-world'], cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, ...fields } });
+  it('describe 只收包内的 .json;越界与别的格式给 warning 并忽略,包照样可装', () => {
+    const good = parseExtensionManifest(pkg({ describe: 'meta/describe.json' }));
+    expect(good.ok && good.manifest.describe).toBe('meta/describe.json');
+    for (const bad of ['../describe.json', '/describe.json', 'describe.yaml', 42]) {
+      const parsed = parseExtensionManifest(pkg({ describe: bad }));
+      expect(parsed.ok).toBe(true);
+      expect(parsed.ok && parsed.manifest.describe).toBeUndefined();
+      expect(parsed.warnings.join(' ')).toContain('cortico.describe');
+    }
+  });
+  it('tags、locales、screenshots 形状不对只给 warning,包照样可装', () => {
+    const fine = parseExtensionManifest(pkg({ tags: ['streaming'], locales: { en: { displayName: 'X', description: 'Y' } }, screenshots: ['a.png'] }));
+    expect(fine.warnings).toEqual([]);
+    const parsed = parseExtensionManifest(pkg({ tags: 'streaming', locales: { fr: { displayName: 'X' } }, screenshots: [1] }));
+    expect(parsed.ok).toBe(true);
+    expect(parsed.warnings.join('\n')).toMatch(/cortico\.tags[\s\S]*cortico\.locales[\s\S]*cortico\.screenshots/);
+  });
+});
+
 describe('displayName', () => {
   const pkg = (displayName: unknown) => ({ name: 'x', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName } });
   it('去掉首尾空白后收下', () => {

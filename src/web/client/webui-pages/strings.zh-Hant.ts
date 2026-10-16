@@ -18,6 +18,8 @@ export const S: Partial<typeof en> = {
   notActivated: '未啟用',
   hidden: '已隱藏',
   reloadPrefix: '前綴待重新載入 · 點此重新載入',
+  undeclaredTools: (names: string) => `未在 describe 中宣告的工具：${names}`,
+  undeclaredEvents: (names: string) => `未在 describe 中宣告的事件：${names}`,
   open: '開啟',
   configTab: '設定',
   promptsTab: '提示詞範本',

@@ -33,6 +33,7 @@ Core 管理 session、事件流与模型调用的生命周期，包括事件投�
 公开成员：`store`、`bus`、`session`、`state`、`timers`、`loop`、`llm`、`sessions`、`providers`、
 `sessionDecls`;`spawnFork`、`resolveBlob` / `internBlobs`、`setWorldVisible`、`activeSpec` /
 `activeProviderEntry`、`mountWorld` / `unmountWorld`、`start` / `stop`。
+`CoreDeps.onWorldPush(worldId, type)` 在 World 经宿主推出事件时调用,装配层用它对照 World 的自描述。
 
 `WorldHost.modelFacts` 每次调用按当前端点读取。`activeProvider` 为空或端点没有模型时 `accepts`
 返回 false,`activeProvider` 指向不存在的端点时抛错。

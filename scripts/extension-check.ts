@@ -15,6 +15,7 @@ import {
 } from '../src/extensions/manifest.ts';
 import { registerFrameworkResolver } from '../src/extensions/runtime.ts';
 import { collectToolNames, dryMountBot, dryMountProvider, dryMountWorld, type DryMountReport } from '../src/extensions/dry-mount.ts';
+import { checkDescribe } from '../src/extensions/describe-export.ts';
 import { loadBuiltinWorlds } from '../src/worlds/index.ts';
 import { providerModules } from '../src/providers/registry.ts';
 import type { BotDefinition } from '../src/bot.ts';
@@ -164,6 +165,13 @@ async function main(): Promise<void> {
     for (const m of report.ok) ok(m);
     for (const m of report.warnings) warn(m);
     for (const m of report.failures) fail(m);
+
+    console.log('');
+    console.log('Self-description check (describe in the code against the file cortico.describe points to):');
+    const described = await checkDescribe(manifest.kind, exported, manifest.describe, dryOpts);
+    for (const m of described.ok) ok(m);
+    for (const m of described.warnings) warn(m);
+    for (const m of described.failures) fail(m);
   } finally {
     rmSync(scratchDir, { recursive: true, force: true });
   }

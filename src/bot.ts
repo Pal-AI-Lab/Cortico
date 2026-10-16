@@ -28,6 +28,7 @@ import type { ExtensionPackageJson } from './extensions/manifest.ts';
 import { ExtensionMarket } from './extensions/market.ts';
 import { WorldAssembly, type WorldDefinition, type WorldDeclaration, type WorldSection } from './world.ts';
 import { Core, type WorldStopFailure } from './core/core.ts';
+import { UndeclaredNames } from './undeclared-names.ts';
 import { RESERVED_FRAME_NAMES } from './core/loop.ts';
 import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
@@ -159,6 +160,8 @@ export interface Bot<C extends CoreConfig = CoreConfig> {
   parts: BotParts<C>;
   /** World 槽位表:挂载表、未激活槽位与缺失声明。 */
   assembly: WorldAssembly;
+  /** 运行中出现、不在 World 定义与 bot 定义自描述里的工具与事件。 */
+  undeclared: UndeclaredNames;
   webApp: WebApp | null;
   /** 启动全部;返回 WebUI 端口(未起 WebUI=null) */
   start(): Promise<{ port: number | null }>;
@@ -768,7 +771,8 @@ export function mergePersonaContributions(
 export function deriveWebUiPageSources(
   core: WorldVisibilityFacts,
 
-  parts: { assembly: WorldAssembly; persona?: Persona },
+  /** `undeclared` 给出不在自描述里的工具与事件,标在 World 页与 Persona 页上。 */
+  parts: { assembly: WorldAssembly; persona?: Persona; undeclared?: UndeclaredNames },
   /**
    * bot 标识、展示名、Memory 名与配置组;配置组归入 Persona 页面。
    * 展示名是这一台 bot 的名字(底栏头像旁边那个),Persona 页的标题另取 Persona 的类名。
@@ -795,7 +799,9 @@ export function deriveWebUiPageSources(
       id: pageIdFor('world', id),
       contribute: (language) => {
         const info = infos(language).get(id);
-        return ioPageContribution(id, info?.label ?? id, info, instances.get(id), language);
+        const page = ioPageContribution(id, info?.label ?? id, info, instances.get(id), language);
+        const undeclared = parts.undeclared?.of(`worlds.${id}`);
+        return undeclared ? { ...page, undeclared } : page;
       },
     }));
 
@@ -823,13 +829,17 @@ export function deriveWebUiPageSources(
         : [];
       sources.push({
         id: selfId,
-        contribute: (language) => mergePersonaContributions(
-          selfId,
-          personaLabel,
-          persona ? personaPageContribution(bot.id, personaLabel, persona, language) : null,
-          [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
-          language,
-        ),
+        contribute: (language) => {
+          const page = mergePersonaContributions(
+            selfId,
+            personaLabel,
+            persona ? personaPageContribution(bot.id, personaLabel, persona, language) : null,
+            [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
+            language,
+          );
+          const undeclared = parts.undeclared?.of('persona');
+          return page && undeclared ? { ...page, undeclared } : page;
+        },
       });
       if (persona) {
         const memoryLabel = bot.memoryName ?? memoryClassName(persona) ?? 'Memory';
@@ -869,22 +879,36 @@ export function createBot<C extends CoreConfig>(
   if (parts.worlds?.length) assembly.addPrebuilt(parts.worlds);
   const contribution = parts.webUi ?? {};
 
+  const undeclared = new UndeclaredNames((area) => core.runlog.logger(area));
+  const checkWorldTools = (mod: World): void => {
+    const describe = assembly.slots.find((slot) => slot.instance === mod)?.definition?.describe;
+    undeclared.tools(`worlds.${mod.id}`, describe?.tools, mod.tools().map((t) => t.name));
+  };
   const core = new Core<C>(loaded, {
     persona: parts.persona,
     worlds: assembly.mounted,
     llm: parts.llm,
+    onWorldPush: (worldId, type) => {
+      const slot = assembly.slots.find((item) => item.id === worldId);
+      undeclared.event(`worlds.${worldId}`, slot?.definition?.describe?.events, type);
+    },
   });
+  undeclared.tools('persona', definition.describe?.tools, parts.persona.ownToolNames?.() ?? []);
 
   const notifyLifecycle = (event: WorldLifecycleEvent): void => {
     parts.persona.onWorldLifecycle?.(event);
   };
   assembly.bind({
-    mount: (mod) => core.mountWorld(mod),
+    mount: async (mod) => {
+      await core.mountWorld(mod);
+      checkWorldTools(mod);
+    },
     unmount: async (id) => { await core.unmountWorld(id); },
     lifecycle: notifyLifecycle,
 
     reservedToolNames: () => [...RESERVED_FRAME_NAMES, ...(parts.persona.ownToolNames?.() ?? [])],
   });
+  for (const mod of assembly.mounted) checkWorldTools(mod);
 
   // 未激活实例也提供配置；组 id、owner 和配置键不随语言变化。
   // bot 包、World、provider 交来的形状不完整的组跳过,并记在交来方的日志名下;其余组照常列出和保存。
@@ -1008,7 +1032,7 @@ export function createBot<C extends CoreConfig>(
 
       webUiPageSources: () => [...deriveWebUiPageSources(
         core,
-        { assembly, persona: parts.persona },
+        { assembly, persona: parts.persona, undeclared },
         {
           id: definition.id,
           label: cfg.displayName || definition.id,
@@ -1123,6 +1147,7 @@ export function createBot<C extends CoreConfig>(
     core,
     parts,
     assembly,
+    undeclared,
     webApp,
     async start() {
       instanceLock ??= acquireInstanceLock(loaded.dataDir, {

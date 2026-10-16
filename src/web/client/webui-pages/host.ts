@@ -567,6 +567,11 @@ export class WebUiPageHost {
     }
     if (bar.children.length > 1) chrome.appendChild(bar);
     if (page.reason) chrome.appendChild(ui.msgline(page.reason, true));
+    const undeclared = [
+      page.undeclared?.tools.length ? S.undeclaredTools(page.undeclared.tools.join(', ')) : '',
+      page.undeclared?.events.length ? S.undeclaredEvents(page.undeclared.events.join(', ')) : '',
+    ].filter(Boolean);
+    if (undeclared.length) chrome.appendChild(ui.msgline(undeclared.join(' · ')));
 
     const panels = tabbed(page);
     const prompts = asArray(page.prompts);

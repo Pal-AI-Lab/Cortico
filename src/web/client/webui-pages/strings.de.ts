@@ -19,6 +19,8 @@ export const S: Partial<typeof en> = {
   notActivated: 'nicht aktiviert',
   hidden: 'verborgen',
   reloadPrefix: 'Präfix veraltet · zum Neuladen klicken',
+  undeclaredTools: (names: string) => `Nicht in describe deklarierte Tools: ${names}`,
+  undeclaredEvents: (names: string) => `Nicht in describe deklarierte Ereignisse: ${names}`,
   open: 'Öffnen',
   configTab: 'Konfiguration',
   promptsTab: 'Prompt-Vorlagen',

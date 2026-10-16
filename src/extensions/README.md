@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions.ts -->
+<!-- Owner: src/extensions/manifest.ts, src/extensions/runtime.ts, src/extensions/dry-mount.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, src/extensions.ts -->
 
 # src/extensions
 
@@ -22,10 +22,18 @@ World 调用 `create()` / `tools()` / `webUi()`,provider 调用 `create()`,bot �
     "api": 6,                             // 这一类的契约版本,与 EXTENSION_API_VERSIONS[kind] 相等才加载
     "displayName": "VTuber",              // 可选:WebUI 里的名称;不合格时 warning 并忽略
     "webUiClient": "dist/webui.js",   // 可选:预构建的面板 bundle,包内相对路径
-    "webUiStyle": "dist/webui.css"    // 可选:随 bundle 注入的样式
+    "webUiStyle": "dist/webui.css",   // 可选:随 bundle 注入的样式
+    "describe": "describe.json",      // 可选:pnpm describe:extension 生成的自描述;check:extension 要求有
+    "tags": ["streaming"],            // 可选:以下三项由官方索引读取,这里只校验形状
+    "locales": { "en": { "displayName": "VTuber" } },
+    "screenshots": ["assets/shot-1.png"]
   }
 }
 ```
+
+`describe-export.ts` 在 `dry-mount.ts` 的假部署里从定义的 `describe` 生成 describe.json(`describe.ts` 是它的形状),
+`pnpm describe:extension` 写文件,`pnpm check:extension` 核对包里那份一致;规则见
+[docs/extensions.md](../../docs/extensions.md)「自描述」。
 
 `parseExtensionManifest(pkg, language)` 只做解析与校验,不碰文件系统;装载器与
 `pnpm check:extension <dir>` 共用它。问题与警告按 `language` 成文,扩展页的装载原因按请求语言现取。`api` 与这一类的契约版本不等时不加载,扩展页说明哪一边旧。

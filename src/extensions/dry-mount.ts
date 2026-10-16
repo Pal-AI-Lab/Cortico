@@ -346,6 +346,21 @@ export interface BotDryMountOptions extends DryMountOptions {
   packageDir: string;
 }
 
+/** bot `build()` 的假部署:给定配置、空 Memory、没有密钥。 */
+export function fakeLoadedConfig(config: CoreConfig, opts: BotDryMountOptions): LoadedConfig<CoreConfig> {
+  const { botDir, dataDir, memoryDir } = deploymentDirs(opts);
+  return {
+    config,
+    secret: () => '',
+    rootDir: botDir,
+    memoryDir,
+    dataDir,
+    packageDir: opts.packageDir,
+    providersDir: join(botDir, 'providers'),
+    repoRoot: opts.repoRoot ?? botDir,
+  };
+}
+
 export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOptions): DryMountReport {
   const report: DryMountReport = { ok: [], warnings: [], failures: [] };
   const { ok, warnings, failures } = report;
@@ -370,17 +385,7 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   }
   if (def.declares?.length) ok.push(`declares: ${def.declares.map((d) => (typeof d === 'string' ? d : d.id)).join(', ')}`);
 
-  const { botDir, dataDir, memoryDir } = deploymentDirs(opts);
-  const loaded: LoadedConfig<CoreConfig> = {
-    config: config as unknown as CoreConfig,
-    secret: () => '',
-    rootDir: botDir,
-    memoryDir,
-    dataDir,
-    packageDir: opts.packageDir,
-    providersDir: join(botDir, 'providers'),
-    repoRoot: opts.repoRoot ?? botDir,
-  };
+  const loaded = fakeLoadedConfig(config as unknown as CoreConfig, opts);
   let parts: ReturnType<typeof def.build>;
   try {
     parts = def.build(loaded, []);

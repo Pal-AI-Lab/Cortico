@@ -284,6 +284,13 @@ export interface WebUiPageContribution {
   agentVisible?: boolean;
   /** 可见性已改但 system 前缀还是旧的。不适用的页省略。 */
   prefixDrifted?: boolean;
+  /** 运行中出现、不在定义自描述里的工具名与事件 type;照常生效。没有时省略。 */
+  undeclared?: WebUiUndeclared;
+}
+
+export interface WebUiUndeclared {
+  tools: string[];
+  events: string[];
 }
 
 /**
@@ -387,6 +394,7 @@ export interface WebUiPageManifest {
   reason?: string;
   agentVisible?: boolean;
   prefixDrifted?: boolean;
+  undeclared?: WebUiUndeclared;
 
   /** 浏览器扩展资源由服务端解析构建产物得到；缺省时非内置面板显示缺少产物错误，内置面板不依赖该字段。 */
   client?: WebUiAssetEntry;
@@ -573,6 +581,7 @@ export function toPageManifest(
   if (c.reason) out.reason = c.reason;
   if (c.agentVisible !== undefined) out.agentVisible = c.agentVisible;
   if (c.prefixDrifted !== undefined) out.prefixDrifted = c.prefixDrifted;
+  if (c.undeclared) out.undeclared = { tools: [...c.undeclared.tools], events: [...c.undeclared.events] };
   if (client) out.client = client;
   return out;
 }

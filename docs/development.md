@@ -17,6 +17,7 @@ Node 22+,pnpm 11(版本由 `package.json` 的 `packageManager` 指定)。规则�
 | `pnpm dev:webui` | 假数据起 WebUI,`http://127.0.0.1:8848/`;不连真实 API,不起 Core |
 | `pnpm logq` | 查运行日志(见 [runs.md](runs.md)) |
 | `pnpm check:extension <目录>` | 校验一个扩展包 |
+| `pnpm describe:extension <目录>` | 生成扩展包的 describe.json(见 [extensions.md](extensions.md)「自描述」) |
 | `pnpm audit:release` | 发布审计:部署资源、明文凭证、异常大文件 |
 | `pnpm publish:package` | 生成 npm 发布包 `dist/package`;`--pack` 出 tarball;`--publish` 发布,只由发布 workflow 执行 |
 | `pnpm publish:worlds [id…]` | 把内建 World 生成扩展包 `dist/worlds/cortico-world-<id>`,版本同框架;`--pack` / `--publish` 同上 |

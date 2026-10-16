@@ -19,6 +19,8 @@ export const S: Partial<typeof en> = {
   notActivated: 'не активировано',
   hidden: 'скрыто',
   reloadPrefix: 'Префикс устарел · нажмите, чтобы перезагрузить',
+  undeclaredTools: (names: string) => `Инструменты, не объявленные в describe: ${names}`,
+  undeclaredEvents: (names: string) => `События, не объявленные в describe: ${names}`,
   open: 'Открыть',
   configTab: 'Конфигурация',
   promptsTab: 'Шаблоны промптов',
