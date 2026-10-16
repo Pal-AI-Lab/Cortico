@@ -57,6 +57,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声
 | `defaults()` | bot 默认配置,可包含 World 段。启动器用 `withWorlds()` 补充内建与扩展 World 中缺失的默认段,保留此处已有的段 |
 | `declares` | 默认启用的 World id;未安装时显示为不可用。已安装但未声明的 World 默认关闭,部署可自行启用 |
 | `build(loaded, worlds)` | 创建 Persona,返回 `BotParts { persona, worlds?, llm?, onStart?, onStop?, webUi? }` |
+| `describe` | 可选,自描述:Persona 的全部工具与 Memory 的形式,见 [extensions.md](extensions.md)「自描述」 |
 
 `createBot()` 的顺序:算提示词覆盖目录 → 定默认语言 → `WorldAssembly` → `build()` → `Core` →
 装配层绑定挂载钩子 → 收配置组(含未激活槽位)→ provider 设置页与端点编辑 → `WebApp`。
