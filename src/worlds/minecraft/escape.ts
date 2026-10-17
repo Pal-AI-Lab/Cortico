@@ -202,7 +202,7 @@ function formatCleared(cleared: string | null): string {
   return cleared ?? '队列本来就是空的';
 }
 
-/** 逃生回执显示目标坐标；提供同维度出发点时附目标水平距离，传送失败时另附实测当前位置。 */
+/** 逃生回执显示目标坐标；提供同维度出发点时附目标水平距离，时限内没到目标时另附实测当前位置。不读服务端对 tp 的回应。 */
 export function formatEscapeReceipt(
   kind: 'already' | 'arrived' | 'rejected',
   target: SpawnTarget,
@@ -226,7 +226,7 @@ export function formatEscapeReceipt(
     ? `还在${here.dimension ? `[${zhDimension(here.dimension)}] ` : ' '}`
       + `(${Math.round(here.x)}, ${Math.round(here.y)}, ${Math.round(here.z)})。`
     : '';
-  return `没能传送(服务器拒了指令,多半没有 op)。本来会把你送到${place} ${at}${moved}。${now}${again}${queue}`;
+  return `发了传送指令,时限内没到目标。本来会把你送到${place} ${at}${moved}。${now}${again}${queue}`;
 }
 
 interface EscapeBot {

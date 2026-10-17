@@ -1,12 +1,12 @@
 /**
- * mineflayer-pathfinder 2.4.5 与 prismarine-windows 2.10.0 的源码补丁:包一层 CommonJS 的
- * `Module.prototype._compile`,编译 `index.js` 前改写源码。要改的状态在闭包里,运行时替换函数够不着。
+ * mineflayer-pathfinder 2.4.5、prismarine-windows 2.10.0 与 mineflayer 4.37.1 的源码补丁:包一层 CommonJS 的
+ * `Module.prototype._compile`,编译前改写源码。要改的状态或监听器在闭包里,运行时替换函数够不着。
  * 补丁随 World 的源码走:World 作为扩展装进别的实例时,宿主的 pnpm 不会替它打包补丁。
  *
  * 引擎子进程以 `--import` 加载本模块;测试先 import 本模块再加载依赖。
  * 每处改写的原文必须在文件里恰好出现一次,依赖升级后对不上时加载即抛错。
  *
- * 两个包都是 MIT 许可;mineflayer-pathfinder 的许可全文见同目录 LICENSE-mineflayer-pathfinder.txt。
+ * 三个包都是 MIT 许可;mineflayer-pathfinder 的许可全文见同目录 LICENSE-mineflayer-pathfinder.txt。
  */
 import Module from 'node:module';
 
@@ -89,6 +89,24 @@ const PATCHES: readonly SourcePatch[] = [
             lockEquipItem.release()
           })
           .catch(_ignoreError => {})`,
+      },
+    ],
+  },
+  {
+    pkg: 'mineflayer',
+    file: 'lib/plugins/game.js',
+    edits: [
+      {
+        find: `    if ((packet.reason === 4 || packet.reason === 'win_game') && packet.gameMode === 1) {
+      bot._client.write('client_command', { action: 0 })
+    }`,
+        replace: `    // win_game value 1 shows the credits; the server sends 0 instead once the
+    // player has seen them, and the vanilla client then sends the respawn at
+    // once. Both must be acknowledged or the server keeps the player inside
+    // the exit portal. Field name as in health.js respawn.
+    if (packet.reason === 4 || packet.reason === 'win_game') {
+      bot._client.write('client_command', bot.supportFeature('respawnIsPayload') ? { payload: 0 } : { actionId: 0 })
+    }`,
       },
     ],
   },
