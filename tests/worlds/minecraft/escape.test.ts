@@ -199,7 +199,7 @@ describe('回执', () => {
     expect(formatEscapeReceipt('already', spawnAt({ x: 0, y: 64, z: 0 }, 'overworld', 'world'), null))
       .toBe('已经在世界出生点附近 [主世界] (0, 64, 0)。队列本来就是空的');
     expect(formatEscapeReceipt('rejected', bed, null, { x: 100, y: 12, z: -30 }))
-      .toContain('没能传送');
+      .toContain('发了传送指令,时限内没到目标');
   });
 
   it('起点和重生点不在同一维度时不计算坐标直线距离', () => {
@@ -368,7 +368,7 @@ describe('runEscape', () => {
       clearQueue: () => null, sendConsole: () => true, chat: () => {}, hold: () => {},
       waitMove: async () => false,
     });
-    expect(out).toContain('没能传送');
+    expect(out).toContain('发了传送指令,时限内没到目标');
     expect(out).toContain('本来会把你送到你圈的「家」 [主世界] (20, 71, 4)');
     expect(out).not.toContain('已回到');
     expect(out).not.toContain('已经在');
@@ -391,7 +391,7 @@ describe('runEscape', () => {
     });
     expect(calls).toBe(2);
     expect(out).toContain('已回到你圈的「叹息之墙」');
-    expect(out).not.toContain('没能传送');
+    expect(out).not.toContain('发了传送指令,时限内没到目标');
   });
 
   it('runEscape 全候选站不住:照去最近的,回执把这个事实说全', async () => {
@@ -503,7 +503,7 @@ describe('runEscape', () => {
     const r = rig();
     const out = await r.p;
     expect(r.chats[0]).toMatch(/^\/execute in minecraft:overworld run tp corti /);
-    expect(out).toContain('没能传送');
+    expect(out).toContain('发了传送指令,时限内没到目标');
     expect(out).toContain('还在[主世界] (100, 12, -30)');
     expect(out).toContain('已叫停');
   });
