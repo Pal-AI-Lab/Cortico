@@ -331,7 +331,7 @@ describe('评论', () => {
 
   it('没登录读快照,一页 5 条,next 指向下一页', async () => {
     const github = fakeGithub();
-    github.raw.set('comments/@scope__cortico-world-x.json', { schema: 1, discussion: 9, comments: Array.from({ length: 7 }, (_, i) => comment(i)) });
+    github.raw.set('comments/@scope__cortico-world-x.json', { schema: 1, discussion: 'https://github.com/Pal-AI-Lab/cortico-extensions/discussions/9', comments: Array.from({ length: 7 }, (_, i) => comment(i)) });
     const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
     const first = await market.comments('@scope/cortico-world-x', undefined);
     expect(first).toMatchObject({ total: 7, next: '5', discussion: 'https://github.com/Pal-AI-Lab/cortico-extensions/discussions/9' });

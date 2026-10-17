@@ -108,7 +108,8 @@ interface PackageFile {
 /** `comments/<包>.json`:一个包讨论帖的评论快照,新的在前,回复旧的在前;`id` 是 GraphQL 节点 id。 */
 interface CommentsSnapshot {
   schema: number;
-  discussion: number;
+  /** 讨论帖的完整地址。 */
+  discussion: string;
   comments: ExtensionComment[];
 }
 
@@ -579,7 +580,7 @@ export class ExtensionMarket {
       comments: snapshot.comments.slice(from, end),
       total: snapshot.comments.length,
       ...(end < snapshot.comments.length ? { next: String(end) } : {}),
-      discussion: discussionUrl(snapshot.discussion),
+      discussion: snapshot.discussion,
     };
   }
 
