@@ -69,7 +69,7 @@ WebUI 保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 `function_call` 项补成 `completed`;响应未完成时原样交给 Core,Core 不执行这些调用。历史推理按
 `options.reasoningReplay` 回传:
 `encrypted`(默认)只回 `encrypted_content`,且只回来源实例、模块、兼容域与模型均匹配的项,受
-`keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传,最后一条 user 消息之后的
+`keepPastThinking` 控制;`plaintext` 把推理文字以 `reasoning_text` 回传、不带签名块(没有文字只有签名块的项按 `encrypted` 的来源规则),最后一条 user 消息之后的
 那一轮不受 `keepPastThinking` 约束,没有记录来源的工具调用前补一项合成推理(`options.sendSyntheticReasoning`
 为 false 时不补;探测的明文一侧始终补)。签名块要靠
 `include` 取回,所以只有 `encrypted` 形态的请求带 `include: ['reasoning.encrypted_content']`;

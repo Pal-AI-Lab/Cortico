@@ -42,7 +42,7 @@ export interface ResponsesInputOptions {
 /**
  * Encrypted replay: a reasoning item re-enters only with `encrypted_content` and when the recorded
  * instance, module, compatibility domain and model match this request. Plaintext replay: a reasoning
- * item re-enters as `reasoning_text`; the turn after the last user message is always replayed, earlier
+ * item re-enters as `reasoning_text` without its signed block, one with no text only by the encrypted rule; the turn after the last user message is always replayed, earlier
  * turns follow `keepThinking`; unless `sendSyntheticReasoning` is false, a function call without an
  * origin gets a synthetic reasoning item when none already precedes it. System and developer text is joined into instructions.
  * An item recorded from another instance, module or compatibility domain goes out without its
@@ -68,10 +68,12 @@ export function responsesInput(
     if (item.type === 'reasoning') {
       if (plaintext) {
         const text = itemText(item);
-        if (!text && !item.encrypted_content) return;
         if (!entry.context.head && index < roundStart && opts.keepThinking?.() === false) return;
         const wire = inputItem(entry) as Item;
-        if (text) wire.content = [{ type: 'reasoning_text', text }];
+        if (text) {
+          wire.content = [{ type: 'reasoning_text', text }];
+          delete wire.encrypted_content;
+        } else if (!item.encrypted_content || !sameService || owner?.model !== request.model) return;
         input.push(wire);
         return;
       }

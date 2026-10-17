@@ -23,7 +23,9 @@ export function estimateMessagesTokens(messages: readonly ContextRecord[]): numb
       total +
       8 +
       estimateTokens(item.type === 'function_call' ? item.name + item.arguments : itemText(item)) +
-      (item.type === 'reasoning' && item.encrypted_content
+      // The upstream counts the reasoning a signed block decodes to, not the block itself, so the
+      // block stands in only when the full reasoning text was not recorded.
+      (item.type === 'reasoning' && item.encrypted_content && !item.content?.some(part => 'text' in part && part.text)
         ? estimateTokens(item.encrypted_content)
         : 0),
     0,

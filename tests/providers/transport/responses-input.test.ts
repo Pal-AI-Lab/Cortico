@@ -47,18 +47,22 @@ describe('responsesInput 明文形态', () => {
     expect(reasoningItems(input).map((item) => item.id)).toEqual(['own']);
   });
 
-  it('推理项以 reasoning_text 出线,不看 origin;签名块照带;没有文字也没有签名的不出线', () => {
+  it('有文字的推理项以 reasoning_text 出线,不看 origin,不带签名块;只有签名块的按加密形态的来源规则;都没有的不出线', () => {
     const context = [
       message('user', 'hi'),
       reasoning('own', '想了想', { origin }),
       reasoning('foreign', '别家的', { origin: { ...origin, model: 'other' } }),
       reasoning('signed', '带签名', { origin }, 'sig'),
+      reasoning('sigOnly', '', { origin }, 'sig2'),
+      reasoning('foreignSig', '', { origin: { ...origin, model: 'other' } }, 'sig3'),
       reasoning('empty', ''),
     ];
     const items = reasoningItems(replay(context));
-    expect(items.map((item) => item.id)).toEqual(['own', 'foreign', 'signed']);
+    expect(items.map((item) => item.id)).toEqual(['own', 'foreign', 'signed', 'sigOnly']);
     expect(items[0].content).toEqual([{ type: 'reasoning_text', text: '想了想' }]);
-    expect(items[2]).toMatchObject({ encrypted_content: 'sig', content: [{ type: 'reasoning_text', text: '带签名' }] });
+    expect(items[2]).toEqual(expect.objectContaining({ content: [{ type: 'reasoning_text', text: '带签名' }] }));
+    expect(items[2]).not.toHaveProperty('encrypted_content');
+    expect(items[3]).toMatchObject({ encrypted_content: 'sig2' });
   });
 
   it('keepThinking 关:最后一条 user 消息之后的推理照回,之前的不回,开头豁免', () => {
