@@ -862,6 +862,18 @@ function parseGrindstone(c: Record<string, unknown>, at: string, marks?: MarkLoo
 }
 
 /** `take` 的两种操作必须显式区分：定量取物，或清空指定容器。 */
+/**
+ * 她的账号在托管服务器上是 4 级 op,聊天框里的 / 开头会被服务器当指令执行。
+ * 1008 直播里观众教她在 chat 里打 /tp、/give、/experience、/difficulty,世界被改得收不回来,
+ * 所以 chat 只放行说话。World 自己要下的指令(mc_escape、摄像机)走服务器控制台或代码里的 bot.chat。
+ */
+function parseChat(c: Record<string, unknown>, at: string): ParseResult {
+  const text = str(c.text);
+  if (!text) return { error: `${at} chat 要 text` };
+  if (text.startsWith('/')) return { error: `${at} chat 只用来说话,不下游戏指令` };
+  return { step: { skill: 'chat', text } };
+}
+
 function parseTake(c: Record<string, unknown>, at: string, marks?: MarkLookup): ParseResult {
   const item = str(c.item);
   const takeAt = c.at === undefined || c.at === null ? null : anchorOf(c.at, marks);
@@ -1467,6 +1479,7 @@ const SKILLS: readonly SkillSpec[] = [
   {
     name: 'chat',
     doc: '{"skill":"chat","text":"..."}                    游戏内说话',
+    parse: parseChat,
     fields: [{ key: 'text', kind: 'string', required: true }],
   },
 ];

@@ -2869,3 +2869,12 @@ describe('eat:毒食确认门、可吃物清单、一单三连的回执', () => 
     expect(bag[0].count).toBe(0);
   });
 });
+
+describe('chat 只说话', () => {
+  it('/ 开头的文本整批退回,不送进 op 账号的聊天框', () => {
+    // 1008 直播:观众教她在 chat 里打 /tp、/give,4 级 op 账号照单执行
+    expect(parseSteps([{ skill: 'chat', text: ' /give @s minecraft:nether_star 1' }]))
+      .toEqual({ error: '第 1 步 chat 只用来说话,不下游戏指令' });
+    expect(parseSteps([{ skill: 'chat', text: '到家了' }])).toEqual({ steps: [{ skill: 'chat', text: '到家了' }] });
+  });
+});
