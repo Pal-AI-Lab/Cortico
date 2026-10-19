@@ -1790,20 +1790,23 @@ export class WebApp {
       res.json({ parts });
     }));
 
-    // 清除某个存储部分(运维动作;POST,key走query免body解析)
+    // 清除某个存储部分(运维动作;POST,owner 与 key 走 query 免 body 解析)。不同归属可以同 key:省略 owner 时 key 须唯一。
     app.post('/api/storage/clear', (req: Request, res: Response) => {
       void (async () => {
         const language = this.languageOf(req);
         const key = strParam(req.query.key);
         if (!key) { res.status(400).json({ error: serverText(language).missingField('key') }); return; }
-        const part = (this.deps.storage?.(language) ?? []).find((p) => p.key === key);
-        if (!part) { res.status(404).json({ error: serverText(language).noStoragePart(key) }); return; }
+        const owner = strParam(req.query.owner);
+        const matches = (this.deps.storage?.(language) ?? []).filter((p) => p.key === key && (!owner || p.owner === owner));
+        const part = matches[0];
+        if (!part) { res.status(404).json({ error: serverText(language).noStoragePart(owner ? `${owner} ${key}` : key) }); return; }
+        if (matches.length > 1) { res.status(409).json({ error: serverText(language).ambiguousStoragePart(key, matches.map((p) => p.owner)) }); return; }
         try {
           const result = await part.clear();
-          this.deps.log.warn(`存储部分已清除: ${key}`, { result });
+          this.deps.log.warn(`存储部分已清除: ${part.owner} ${key}`, { result });
           res.json({ ok: true, result });
         } catch (err) {
-          this.deps.log.error(`存储清除失败: ${key}`, { error: String(err) });
+          this.deps.log.error(`存储清除失败: ${part.owner} ${key}`, { error: String(err) });
           res.status(500).json({ error: String(err) });
         }
       })();
@@ -1815,12 +1818,12 @@ export class WebApp {
         const language = this.languageOf(req);
         const parts = [...(this.deps.storage?.(language) ?? [])].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
         if (!parts.length) { res.status(404).json({ error: serverText(language).noStorageParts }); return; }
-        const results: Array<{ key: string; ok: boolean; result: string }> = [];
+        const results: Array<{ owner: string; key: string; ok: boolean; result: string }> = [];
         for (const part of parts) {
           try {
-            results.push({ key: part.key, ok: true, result: String(await part.clear()) });
+            results.push({ owner: part.owner, key: part.key, ok: true, result: String(await part.clear()) });
           } catch (err) {
-            results.push({ key: part.key, ok: false, result: String(err) });
+            results.push({ owner: part.owner, key: part.key, ok: false, result: String(err) });
           }
         }
         this.deps.log.warn('存储已一键清空', { results });

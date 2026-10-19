@@ -821,7 +821,7 @@ describe('存储页', () => {
     answerConfirm(doc, true);
     await flush();
 
-    expect(calls[0].url).toBe('/api/storage/clear?key=events');
+    expect(calls[0].url).toBe('/api/storage/clear?owner=core&key=events');
     expect(root.find('msgline')!.textContent).toContain('已删 128 条');
     expect(calls.some((c) => c.url === '/api/storage')).toBe(true); // 清完重取
   });
@@ -834,7 +834,7 @@ describe('存储页', () => {
     stubFetch({
       '/api/storage/clear-all': {
         ok: false,
-        results: [{ key: 'events', ok: true }, { key: 'cache', ok: false }],
+        results: [{ owner: 'core', key: 'events', ok: true }, { owner: 'world:a', key: 'cache', ok: false }],
       },
       '/api/storage': { parts },
     });
@@ -845,7 +845,7 @@ describe('存储页', () => {
     answerConfirm(doc, true);
     await flush();
     const msg = root.find('msgline')!;
-    expect(msg.textContent).toContain('部分失败: cache');
+    expect(msg.textContent).toContain('部分失败: world:a cache');
     expect(msg.classList.contains('bad')).toBe(true);
   });
 

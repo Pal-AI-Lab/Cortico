@@ -55,6 +55,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args должен быть массивом JSON',
   noSession: (id: string) => `Нет такой сессии: ${id}`,
   noStoragePart: (key: string) => `Нет такой части хранилища: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `Ключ хранилища ${key} есть у ${owners.join(', ')}; укажите owner, чтобы выбрать, что очистить`,
   noStorageParts: 'На сервере не подключён список хранилища',
   statFailed: (error: string) => `Не удалось получить статистику: ${error}`,
   promptTooLarge: 'Промпт больше 1MB и не сохранён',

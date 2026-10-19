@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args は JSON 配列である必要があります',
   noSession: (id: string) => `そのセッションはありません：${id}`,
   noStoragePart: (key: string) => `そのストレージ項目はありません：${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `ストレージ項目 ${key} は ${owners.join(', ')} にあります。owner でどれを消去するか指定してください`,
   noStorageParts: 'サーバーにストレージ一覧がマウントされていません',
   statFailed: (error: string) => `集計に失敗しました：${error}`,
   promptTooLarge: 'プロンプトが 1MB を超えているため保存しませんでした',

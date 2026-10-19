@@ -195,7 +195,7 @@ describe('manifest 组装', () => {
     });
   });
 
-  it('World 声明的存储项:manifest 只带 key,stat 与 clear 不上线', async () => {
+  it('World 声明的存储项:manifest 只带归属与 key,stat 与 clear 不上线', async () => {
     const sources = deriveWebUiPageSources(facts(), {
       assembly: WorldAssembly.ofInstances([new FakeWorld('demo', () => ({
         storage: [{ key: 'demo-log', label: '日志', kind: 'disk' as const, stat: () => '1', clear: () => '清了' }],
@@ -203,7 +203,7 @@ describe('manifest 组装', () => {
     });
     await withApp({ webUiPageSources: sources }, async (base) => {
       const p = byId(await manifestOf(base), 'world:demo');
-      expect(p?.storageKeys).toEqual(['demo-log']);
+      expect(p?.storageParts).toEqual([{ owner: 'world:demo', key: 'demo-log' }]);
       expect(JSON.stringify(p)).not.toContain('清了');
     });
   });

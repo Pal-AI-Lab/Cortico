@@ -165,3 +165,30 @@ describe('POST /api/storage/clear', () => {
     await bare.stop();
   });
 });
+
+describe('两个 World 声明同名 key', () => {
+  it('带 owner 只清那一个 World 的;不带 owner 回 409 并列出归属', async () => {
+    const hits: string[] = [];
+    const same = (owner: OwnedStoragePart['owner']): OwnedStoragePart => ({
+      key: 'log', owner, label: `${owner} 日志`, kind: 'disk', stat: () => '1条',
+      clear: () => { hits.push(owner); return `${owner} 已清`; },
+    });
+    const twin = new WebApp({
+      store: new FakeStore(),
+      memoryDir: dir,
+      dataDir: dir,
+      getStatus: () => ({}),
+      storage: () => [same('world:a'), same('world:b')],
+      log: nullLogger(),
+    });
+    const p2 = await twin.start(0);
+    const r = await req(`http://127.0.0.1:${p2}/api/storage/clear?owner=world:b&key=log`, 'POST');
+    expect(r.body).toEqual({ ok: true, result: 'world:b 已清' });
+    expect(hits).toEqual(['world:b']);
+    const ambiguous = await req(`http://127.0.0.1:${p2}/api/storage/clear?key=log`, 'POST');
+    expect(ambiguous.status).toBe(409);
+    expect(ambiguous.body.error).toContain('world:a, world:b');
+    expect(hits).toEqual(['world:b']);
+    await twin.stop();
+  });
+});

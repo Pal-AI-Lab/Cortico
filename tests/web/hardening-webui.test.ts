@@ -309,8 +309,8 @@ interface ProviderDecl {
   links?: Array<{ label: string; href: string; inheritTheme?: boolean }>;
   /** 这个 provider 认领的配置组 id(归属),配置页据此只画自己那几组。 */
   configGroups?: string[];
-  /** 这个 provider 声明的存储项 key,数据页签据此只画自己那几项。 */
-  storageKeys?: string[];
+  /** 这个 provider 声明的存储项,数据页签据此只画自己那几项。 */
+  storageParts?: Array<{ owner: string; key: string }>;
 }
 
 interface Stage {
@@ -1601,6 +1601,8 @@ describe('数据页签', () => {
   const STORAGE_PARTS = {
     parts: [
       { key: 'a-log', owner: 'world:a', label: 'A 日志', kind: 'disk', stat: '3 条' },
+      { key: 'cache', owner: 'world:a', label: 'A 缓存', kind: 'disk', stat: '1 条' },
+      { key: 'cache', owner: 'world:b', label: 'B 缓存', kind: 'disk', stat: '2 条' },
       { key: 'events', owner: 'core', label: '事件库', kind: 'disk', stat: '9 条' },
     ],
   };
@@ -1614,13 +1616,25 @@ describe('数据页签', () => {
   afterEach(() => { vi.unstubAllGlobals(); });
 
   it('只画 manifest 里点名的那几项;页签上多一颗「数据」', async () => {
-    const stage = makeStage([{ id: 'world:a', label: 'A World', storageKeys: ['a-log'], panels: [{ id: 'one', title: '面板一' }] }], {});
+    const stage = makeStage([{ id: 'world:a', label: 'A World', storageParts: [{ owner: 'world:a', key: 'a-log' }], panels: [{ id: 'one', title: '面板一' }] }], {});
     await stage.host.load();
     await stage.host.show('world:a', '~storage');
     await flush();
     expect(stage.chrome()!.textContent).toContain('数据');
     expect(stage.slotText()).toContain('A 日志');
     expect(stage.slotText()).not.toContain('事件库');
+  });
+
+  it('两个 World 声明同名 key,各自的数据页只画自己那一项', async () => {
+    const stage = makeStage([
+      { id: 'world:a', label: 'A World', storageParts: [{ owner: 'world:a', key: 'cache' }] },
+      { id: 'world:b', label: 'B World', storageParts: [{ owner: 'world:b', key: 'cache' }] },
+    ], {});
+    await stage.host.load();
+    await stage.host.show('world:b', '~storage');
+    await flush();
+    expect(stage.slotText()).toContain('B 缓存');
+    expect(stage.slotText()).not.toContain('A 缓存');
   });
 
   it('没声明存储项的页没有这颗页签,直接进 ~storage 是一张"没有这个面板"的卡', async () => {

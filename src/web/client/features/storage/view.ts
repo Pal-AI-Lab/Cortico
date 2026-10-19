@@ -87,7 +87,7 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
     const lock = ui.disable(btn);
     try {
       const out = await post<{ result?: string }>(
-        `/api/storage/clear?key=${encodeURIComponent(p.key)}`,
+        `/api/storage/clear?owner=${encodeURIComponent(p.owner)}&key=${encodeURIComponent(p.key)}`,
         undefined,
         { signal },
       );
@@ -112,7 +112,7 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
     if (!ok || signal.aborted) return;
     const lock = ui.disable(nukeBtn);
     try {
-      const out = await post<{ results?: Array<{ key: string; ok: boolean }> }>(
+      const out = await post<{ results?: Array<{ owner: string; key: string; ok: boolean }> }>(
         '/api/storage/clear-all',
         undefined,
         { signal },
@@ -120,7 +120,7 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
       if (signal.aborted) return;
       const results = out.results || [];
       const bad = results.filter((x) => !x.ok);
-      setMsg(bad.length ? S.partialFailed(bad.map((x) => x.key).join(',')) : S.nukedAll(results.length), bad.length > 0);
+      setMsg(bad.length ? S.partialFailed(bad.map((x) => `${x.owner} ${x.key}`).join(',')) : S.nukedAll(results.length), bad.length > 0);
       await load();
     } catch (err) {
       if (isAbort(err) || signal.aborted) return;

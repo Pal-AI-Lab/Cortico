@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args doit être un tableau JSON',
   noSession: (id: string) => `Session introuvable : ${id}`,
   noStoragePart: (key: string) => `Partie de stockage introuvable : ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `La clé de stockage ${key} appartient à ${owners.join(', ')} ; précisez owner pour choisir laquelle effacer`,
   noStorageParts: "Le serveur n'a pas de liste de stockage montée",
   statFailed: (error: string) => `Échec des statistiques : ${error}`,
   promptTooLarge: "Le prompt dépasse 1MB et n'a pas été enregistré",

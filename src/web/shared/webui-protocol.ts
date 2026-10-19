@@ -4,7 +4,7 @@
  * 协议保持通用，具体页的语义和实现由贡献方提供。
  */
 
-import type { ConfigGroup, StoragePart } from '../../core/types.ts';
+import type { ConfigGroup, OwnedStoragePart, StorageOwner } from '../../core/types.ts';
 
 /** 前端拒绝渲染不支持的协议版本。 */
 export const WEBUI_PROTOCOL_VERSION = 1;
@@ -254,8 +254,8 @@ export interface WebUiPageContribution {
   config?: ConfigGroup[];
   /** 可编辑的固定提示词源文件 */
   promptDocs?: WebUiPromptDocDecl[];
-  /** 这一页自己攒下的、可清除的存储 */
-  storage?: StoragePart[];
+  /** 这一页自己攒下的、可清除的存储,每项带装配层盖的归属 */
+  storage?: OwnedStoragePart[];
 
   /**
    * 面板数据面。WebUI 只把 HTTP 请求翻译成一次 `(panel, method, args)` 调用——
@@ -371,6 +371,12 @@ export interface WebUiPromptManifest {
   description: string;
 }
 
+/** manifest 里的一条存储项引用。 */
+export interface WebUiStorageRef {
+  owner: StorageOwner;
+  key: string;
+}
+
 export interface WebUiPageManifest {
   id: string;
   kind: ContributingKind;
@@ -386,8 +392,8 @@ export interface WebUiPageManifest {
    * 归属不从 owner 推断；未认领的组显示在框架设置页。
    */
   configGroups?: string[];
-  /** 这一页声明的存储项 key;清单与清除仍走 /api/storage。 */
-  storageKeys?: string[];
+  /** 这一页声明的存储项;不同归属的项可以同 key,按 owner 与 key 一起认。清单与清除仍走 /api/storage。 */
+  storageParts?: WebUiStorageRef[];
   links?: WebUiLink[];
 
   declared?: boolean;
@@ -561,7 +567,7 @@ export function toPageManifest(
   }
   // 只上 id:归属够用了,schema 与当前值仍只走 /api/config。
   if (c.config?.length) out.configGroups = c.config.map((g) => g.id);
-  if (c.storage?.length) out.storageKeys = c.storage.map((p) => p.key);
+  if (c.storage?.length) out.storageParts = c.storage.map((p) => ({ owner: p.owner, key: p.key }));
   if (c.promptDocs?.length) {
     out.prompts = c.promptDocs.map((doc) => ({
       key: doc.key,

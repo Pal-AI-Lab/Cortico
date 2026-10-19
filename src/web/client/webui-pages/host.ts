@@ -6,6 +6,7 @@ import {
   WEBUI_PROTOCOL_VERSION,
   type WebUiManifest,
   type WebUiPageManifest,
+  type WebUiStorageRef,
   type WebUiPanelManifest,
 } from '../../shared/webui-protocol.ts';
 import type { WebUiMemo, WebUiPanel, WebUiPanelContext, Disposable } from '../../shared/client-panel.ts';
@@ -218,12 +219,12 @@ export class WebUiPageHost {
     const panels = tabbed(page);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
-    const storageKeys = this.storageKeysOf(page);
+    const storage = this.storageOf(page);
     const tools = this.toolsTabOf(page);
     const wanted = panelId ?? panels[0]?.id
       ?? (configGroups.length ? PROVIDER_CONFIG_ROUTE : undefined)
       ?? (prompts.length ? PROVIDER_PROMPTS_ROUTE : undefined)
-      ?? (storageKeys.length ? PROVIDER_STORAGE_ROUTE : undefined)
+      ?? (storage.length ? PROVIDER_STORAGE_ROUTE : undefined)
       ?? (tools ? PROVIDER_TOOLS_ROUTE : undefined);
     if (wanted === PROVIDER_CONFIG_ROUTE && configGroups.length) {
       this.renderChrome(pageId, PROVIDER_CONFIG_ROUTE);
@@ -235,9 +236,9 @@ export class WebUiPageHost {
       await this.showPrompts(pageId, prompts.map((doc) => doc.key), gen);
       return;
     }
-    if (wanted === PROVIDER_STORAGE_ROUTE && storageKeys.length) {
+    if (wanted === PROVIDER_STORAGE_ROUTE && storage.length) {
       this.renderChrome(pageId, PROVIDER_STORAGE_ROUTE);
-      await this.showStorage(pageId, storageKeys, gen);
+      await this.showStorage(pageId, storage, gen);
       return;
     }
     if (wanted === PROVIDER_TOOLS_ROUTE && tools) {
@@ -249,7 +250,7 @@ export class WebUiPageHost {
     if (!panel) {
       this.renderChrome(pageId, wanted);
       if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0
-        && storageKeys.length === 0 && !tools) {
+        && storage.length === 0 && !tools) {
         this.appendNote(S.noPanels(page.label));
       } else {
         this.renderError(
@@ -258,7 +259,7 @@ export class WebUiPageHost {
             ...panels.map((p) => p.id),
             ...(configGroups.length ? [PROVIDER_CONFIG_ROUTE] : []),
             ...(prompts.length ? [PROVIDER_PROMPTS_ROUTE] : []),
-            ...(storageKeys.length ? [PROVIDER_STORAGE_ROUTE] : []),
+            ...(storage.length ? [PROVIDER_STORAGE_ROUTE] : []),
             ...(tools ? [PROVIDER_TOOLS_ROUTE] : []),
           ].join(' / ')),
         );
@@ -389,10 +390,10 @@ export class WebUiPageHost {
     return asArray(page.configGroups);
   }
 
-  /** 仅返回当前页声明且部署支持 storage 能力的存储项 key。 */
-  private storageKeysOf(page: WebUiPageManifest): readonly string[] {
+  /** 仅返回当前页声明且部署支持 storage 能力的存储项。 */
+  private storageOf(page: WebUiPageManifest): readonly WebUiStorageRef[] {
     if (this.snapshot?.framework?.capabilities?.storage === false) return [];
-    return asArray(page.storageKeys);
+    return asArray(page.storageParts);
   }
 
   /** Persona 页才有工具表页签,且要部署挂着 /api/tool-schemas。 */
@@ -427,8 +428,8 @@ export class WebUiPageHost {
     if (gen !== this.generation) lifecycle.dispose();
   }
 
-  /** 这一页声明的存储项走同一张 /api/storage 清单;这里只按 key 挑出自己的。 */
-  private async showStorage(pageId: string, keys: readonly string[], gen: number): Promise<void> {
+  /** 这一页声明的存储项走同一张 /api/storage 清单;这里按归属与 key 挑出自己的。 */
+  private async showStorage(pageId: string, refs: readonly WebUiStorageRef[], gen: number): Promise<void> {
     const { slot } = this.ensurePanes();
     const lifecycle = new Lifecycle(this.deps.onError);
     this.mounted = { pageId, panelId: PROVIDER_STORAGE_ROUTE, lifecycle };
@@ -438,8 +439,11 @@ export class WebUiPageHost {
       signal: lifecycle.signal,
       doc: this.deps.doc,
     });
-    const wanted = new Set(keys);
-    const view = createStorageView({ ui, signal: lifecycle.signal, filter: (part) => wanted.has(part.key) });
+    const view = createStorageView({
+      ui,
+      signal: lifecycle.signal,
+      filter: (part) => refs.some((r) => r.owner === part.owner && r.key === part.key),
+    });
     const sheet = ui.sheet({ title: S.storageTitle, en: 'storage', desc: S.storageDesc });
     sheet.body.appendChild(view.el);
     slot.appendChild(sheet.el);
@@ -576,10 +580,10 @@ export class WebUiPageHost {
     const panels = tabbed(page);
     const prompts = asArray(page.prompts);
     const configGroups = this.configGroupsOf(page);
-    const storageKeys = this.storageKeysOf(page);
+    const storage = this.storageOf(page);
     const tools = this.toolsTabOf(page);
     if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0)
-      + (storageKeys.length ? 1 : 0) + (tools ? 1 : 0) > 1) {
+      + (storage.length ? 1 : 0) + (tools ? 1 : 0) > 1) {
       const tabs = ui.rowbar();
       const go = (panelId: string): void => this.deps.router.navigate(this.routeOf(page.id, panelId));
       for (const p of panels) {
@@ -604,7 +608,7 @@ export class WebUiPageHost {
           onClick: () => go(PROVIDER_PROMPTS_ROUTE),
         }));
       }
-      if (storageKeys.length) {
+      if (storage.length) {
         tabs.appendChild(ui.button(S.storageTab, {
           size: 'sm',
           variant: activePanel === PROVIDER_STORAGE_ROUTE ? 'primary' : 'plain',

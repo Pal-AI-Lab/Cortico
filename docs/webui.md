@@ -74,7 +74,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 数据接口)、`stream`(面板的推送通道)。World 通过 `World.webUi()` 声明,Persona 通过
 `Persona.webUi()` 声明。面板方法只接受 POST;`getMethods` 点名的方法才接受 GET(轮询读、
 `<audio src>` 这类只能带 URL 的场合)。存储项由装配层按来源盖上归属 `owner`(`core` / `persona` /
-`memory` / `world:<id>`),`/api/storage` 原样回它。
+`memory` / `world:<id>`),`/api/storage` 原样回它;不同归属可以有同名 key,manifest 的 `storageParts` 与清除接口都按归属和 key 一起认。
 
 面板带 `slot` 就没有自己的页签,由同页某块面板调 `ctx.mountSlot(slot, 容器, 作用域)` 挂进去,
 同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。`llm:*` 页的面板
@@ -105,7 +105,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/config/options/:kind` | schema 里 `x-options` 为 `kind` 的配置项的当前候选值 |
 | `GET /api/blob?handle=` | 附件字节 |
 | `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;激活或停用,体 `{ id, enabled }` |
-| `POST /api/storage/clear?key=` | 清除一个存储部分;`key` 取自各页 manifest 的 `storageKeys`,Core 自己的对话历史是 `session` |
+| `POST /api/storage/clear?owner=&key=` | 清除一个存储部分;`owner` 与 `key` 取自各页 manifest 的 `storageParts`,Core 自己的对话历史是 `core` 的 `session`。省略 `owner` 时 `key` 须只有一个归属,有多个时回 409 |
 | `GET /api/theme`、`POST /api/theme` | 部署的配色;GET 回 `{ defaultScheme, theme }`,POST 体是 `StoredTheme`(`src/web/shared/theme.ts`),回 `{ ok, theme }` |
 | `GET /api/avatar`、`POST /api/avatar` | bot 头像 PNG,没有时 404;POST 体是 `image/png` 原始字节，不是 PNG 时回 400 |
 | `GET /api/usage` | 用量聚合;查询参数 `bucket`(`auto`/`minute`/`hour`/`day`/`week`/`month`)、`currency`、`basis`(`marginal`/`equivalent`)、`from`、`to`、`days`(不小于 1 的整数) |

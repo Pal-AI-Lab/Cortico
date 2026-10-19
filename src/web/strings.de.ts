@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args muss ein JSON-Array sein',
   noSession: (id: string) => `Keine solche Session: ${id}`,
   noStoragePart: (key: string) => `Kein solcher Speicherteil: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `Der Speicherschlüssel ${key} gehört zu ${owners.join(', ')}; gib owner an, um den zu löschenden zu wählen`,
   noStorageParts: 'Auf dem Server ist keine Speicherliste eingebunden',
   statFailed: (error: string) => `Statistik fehlgeschlagen: ${error}`,
   promptTooLarge: 'Der Prompt ist größer als 1MB und wurde nicht gespeichert',

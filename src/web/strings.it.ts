@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args deve essere un array JSON',
   noSession: (id: string) => `Sessione inesistente: ${id}`,
   noStoragePart: (key: string) => `Parte di archiviazione inesistente: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `La chiave di archiviazione ${key} appartiene a ${owners.join(', ')}; indica owner per scegliere quale cancellare`,
   noStorageParts: 'Il server non ha un elenco di archiviazione montato',
   statFailed: (error: string) => `Statistiche non riuscite: ${error}`,
   promptTooLarge: 'Il prompt supera 1MB e non è stato salvato',

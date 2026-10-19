@@ -439,6 +439,7 @@ describe('toPageManifest 序列化公开字段', () => {
     }],
     storage: [{
       key: 'alpha.cache',
+      owner: 'world:alpha',
       label: '缓存',
       kind: 'disk',
       location: 'data/alpha',
@@ -465,7 +466,7 @@ describe('toPageManifest 序列化公开字段', () => {
   });
 
   it('config 只上线组 id(归属),schema 与属性名不上线——正文仍走 /api/config', () => {
-    const m = toPageManifest(full());
+    const { storageParts: _, ...m } = toPageManifest(full());
     expect(m.configGroups).toEqual(['alpha']);
     const text = JSON.stringify(m);
     expect(text).not.toContain('阿尔法旋钮');
@@ -478,9 +479,9 @@ describe('toPageManifest 序列化公开字段', () => {
     expect('configGroups' in toPageManifest(provider())).toBe(false);
   });
 
-  it('storage 只上 key:stat 与 clear 是函数,连键名都不该出现', () => {
+  it('storage 只上归属与 key:stat 与 clear 是函数,连键名都不该出现', () => {
     const text = JSON.stringify(toPageManifest(full()));
-    expect(text).toContain('"storageKeys":["alpha.cache"]');
+    expect(text).toContain('"storageParts":[{"owner":"world:alpha","key":"alpha.cache"}]');
     expect(text).not.toContain('stat');
     expect(text).not.toContain('clear');
   });
@@ -501,7 +502,7 @@ describe('toPageManifest 序列化公开字段', () => {
       { id: 'runtime', title: '运行时', slot: 'instance' },
     ],
       configGroups: ['alpha'],
-      storageKeys: ['alpha.cache'],
+      storageParts: [{ owner: 'world:alpha', key: 'alpha.cache' }],
       prompts: [{ key: 'worlds.alpha.main', title: '主提示词', description: '说明' }],
       links: [{ label: '打开', href: '/alpha/page' }],
       declared: true,

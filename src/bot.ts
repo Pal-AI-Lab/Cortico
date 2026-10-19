@@ -132,7 +132,7 @@ export interface WebUiContribution {
 /** 装配层向 bot WebUI 声明函数提供的共享数据。 */
 export interface WebUiPageBuildContext {
   /** 与 /api/storage 共用同一批对象的存储清单，文案使用请求语言。 */
-  storage: readonly StoragePart[];
+  storage: readonly OwnedStoragePart[];
   /** 发起这次请求的浏览器的界面语言。 */
   language: Language;
 }
@@ -625,7 +625,7 @@ export function ioPageContribution(
   if (decl?.links?.length) out.links = decl.links;
   if (decl?.config?.length) out.config = decl.config;
   if (decl?.promptDocs?.length) out.promptDocs = decl.promptDocs;
-  if (decl?.storage?.length) out.storage = decl.storage;
+  if (decl?.storage?.length) out.storage = decl.storage.map((p) => ({ ...p, owner: `world:${worldId}` }));
   if (info?.declared !== undefined) out.declared = info.declared;
   if (info?.status === 'missing') out.reason = info.reason;
   if (info?.status === 'active') {
@@ -665,7 +665,7 @@ export function personaPageContribution(
   if (declaredPanels.length) out.panels = normalizePanelDecls(declaredPanels);
   if (decl.config?.length) out.config = decl.config;
   if (decl.promptDocs?.length) out.promptDocs = decl.promptDocs;
-  if (decl.storage?.length) out.storage = decl.storage;
+  if (decl.storage?.length) out.storage = decl.storage.map((p) => ({ ...p, owner: 'persona' }));
   const invoke = decl.invoke;
   if (invoke) {
     out.invoke = (panel, method, args) =>
@@ -695,7 +695,7 @@ export function memoryPageContribution(
   };
   if (panels.length) out.panels = normalizePanelDecls(panels);
   if (promptDocs.length) out.promptDocs = promptDocs;
-  if (storage.length) out.storage = storage;
+  if (storage.length) out.storage = storage.map((p) => ({ ...p, owner: 'memory' }));
   const invoke = persona.webUi?.(language)?.invoke;
   if (invoke) out.invoke = (panel, method, args) => invoke(panel, method, args);
   return out;

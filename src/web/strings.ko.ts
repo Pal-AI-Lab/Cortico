@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args는 JSON 배열이어야 합니다',
   noSession: (id: string) => `해당 세션이 없습니다: ${id}`,
   noStoragePart: (key: string) => `해당 저장소 항목이 없습니다: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `저장소 항목 ${key}이(가) ${owners.join(', ')}에 있습니다. owner로 지울 항목을 지정하세요`,
   noStorageParts: '서버에 저장소 목록이 마운트되지 않았습니다',
   statFailed: (error: string) => `통계 실패: ${error}`,
   promptTooLarge: '프롬프트가 1MB를 넘어 저장하지 않았습니다',

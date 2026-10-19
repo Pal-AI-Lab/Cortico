@@ -48,6 +48,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args 必須是 JSON 陣列',
   noSession: (id: string) => `沒有這個 session: ${id}`,
   noStoragePart: (key: string) => `沒有這個儲存部分: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `儲存項 ${key} 分屬 ${owners.join(', ')},請用 owner 參數指明清除哪一個`,
   noStorageParts: '伺服器端未掛載儲存清單',
   statFailed: (error: string) => `統計失敗: ${error}`,
   promptTooLarge: '提示詞超過 1MB，拒絕儲存',

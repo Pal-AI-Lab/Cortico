@@ -49,6 +49,7 @@ export const serverText: Partial<typeof en> = {
   argsNotArray: 'args debe ser un arreglo JSON',
   noSession: (id: string) => `No existe esa sesión: ${id}`,
   noStoragePart: (key: string) => `No existe esa parte del almacenamiento: ${key}`,
+  ambiguousStoragePart: (key: string, owners: string[]) => `La clave de almacenamiento ${key} pertenece a ${owners.join(', ')}; indica owner para elegir cuál borrar`,
   noStorageParts: 'El servidor no tiene montada una lista de almacenamiento',
   statFailed: (error: string) => `Falló la estadística: ${error}`,
   promptTooLarge: 'El prompt supera 1MB y no se guardó',
