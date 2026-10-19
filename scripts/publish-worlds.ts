@@ -186,6 +186,8 @@ async function stageWorld(spec: WorldPackageSpec, root: RootPackageJson): Promis
   writeFileSync(join(out, 'src', 'index.ts'), `export { ${exportName} as default } from './definition.ts';\n`);
 
   const cortico: Record<string, unknown> = { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: definition.label };
+  // World 目录里的非 .ts 文件已随上面的 cpSync 进了 src/
+  if (existsSync(join(worldDir, 'icon.svg'))) cortico.icon = 'src/icon.svg';
   const webUiEntry = join(worldDir, WEBUI_DIR, 'client.ts');
   if (existsSync(webUiEntry)) {
     await esbuild.build({

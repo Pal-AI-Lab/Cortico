@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="QQ">
+  <title>QQ</title>
+  <rect width="256" height="256" rx="56" fill="#F4F5F4"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path fill="#1B1626" stroke="none" d="M76 140C60 150 54 168 58 182C70 178 80 168 84 156Z"/>
+    <path fill="#1B1626" stroke="none" d="M180 140C196 150 202 168 198 182C186 178 176 168 172 156Z"/>
+    <path fill="#1B1626" stroke="none" d="M128 46C88 46 72 84 72 122C72 168 92 202 128 202C164 202 184 168 184 122C184 84 168 46 128 46Z"/>
+    <ellipse cx="128" cy="160" rx="38" ry="36" fill="#F4F5F4" stroke="none"/>
+    <path stroke="#00A870" stroke-width="14" d="M90 130Q128 146 166 130"/>
+    <path stroke="#00A870" stroke-width="12" d="M152 136L160 160"/>
+    <ellipse cx="106" cy="206" rx="16" ry="8" fill="#00A870" stroke="none"/>
+    <ellipse cx="150" cy="206" rx="16" ry="8" fill="#00A870" stroke="none"/>
+  </g>
+</svg>

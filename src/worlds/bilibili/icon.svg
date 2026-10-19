@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Bilibili Live">
+  <title>Bilibili Live</title>
+  <rect width="256" height="256" rx="56" fill="#F4F5F4"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="50" y="66" width="156" height="118" rx="24" stroke="#1B1626" stroke-width="22"/>
+    <path stroke="#1B1626" stroke-width="22" d="M100 212H156"/>
+    <path stroke="#00A870" stroke-width="12" d="M82 106H132M110 126H174M82 146H118"/>
+  </g>
+</svg>

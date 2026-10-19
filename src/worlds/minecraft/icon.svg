@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Minecraft">
+  <title>Minecraft</title>
+  <rect width="256" height="256" rx="56" fill="#F4F5F4"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path stroke="#1B1626" stroke-width="24" d="M70 194L157 107"/>
+    <path stroke="#00A870" stroke-width="24" d="M112 60Q187 76 202 151"/>
+  </g>
+</svg>
