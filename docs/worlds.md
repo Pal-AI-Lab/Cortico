@@ -80,6 +80,15 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 `configOptions(kind, language)` 每次传入(见 [webui.md](webui.md))。WebUI 里的 World 名取
 `webUi(language).label`,没有时取定义的 `label`,两者都按请求现读。
 
+`ctx.cfg` 是部署配置里 `worlds.<id>` 段的共享引用,WebUI 改配置时原地写入这个对象。World 用到时现读
+`ctx.cfg.<键>`,改动立即生效;构造时存进字段、或用来建立连接和启动进程的值,要等实例重新构造(停用后
+再启用、World 重启、bot 重启)才生效。这类项在 schema 里标 `x-hot: false`,设置页显示「重启生效」;没标的项
+按立即生效显示。
+
+`ctx.dataDir` 是部署的数据目录,Core 与这个部署的全部 World 共用,同名文件会互相覆盖。World 的文件名与
+`webUi().storage` 的 key 都以 World id 开头,仓内 World 写作 `minecraft-chests.json` 与 `minecraft-chests`。
+装配层给每个存储项盖上归属 `world:<id>`,数据页和清除接口按归属与 key 一起区分。
+
 仓内定义列在 `src/worlds/index.ts`,由 `loadBuiltinWorlds(ids?)` 按 id 动态导入 `src/worlds/<id>/definition.ts`;
 不给 `ids` 时带上全部(`BUILTIN_WORLD_IDS`),有不认识的 id 时抛错。启动器带上全部仓内 World,与扩展定义
 合并后通过 `withWorlds()` 交给 bot 定义。

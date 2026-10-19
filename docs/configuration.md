@@ -52,7 +52,7 @@ WebUI 按 schema 渲染表单。owner 是 `core`、`persona`、`world:<id>` 或 
 
 | 键 | 作用 |
 |---|---|
-| `x-hot` | `false` 时前端标「重启生效」;Core 组每一项都是热改 |
+| `x-hot` | `false`:改动要等所属实例重新构造才生效,前端标「重启生效」。省略或 `true`:读取方每次现读,保存后立即生效。Core 组每一项都是热改;World 的读法见 [worlds.md](worlds.md) |
 | `x-scale`、`x-suffix` | 显示倍率与单位 |
 | `x-options` | 下拉项 |
 | `x-path` | 用本机路径选择器填 |
