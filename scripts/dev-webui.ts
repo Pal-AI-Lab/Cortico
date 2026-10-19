@@ -1251,11 +1251,11 @@ const devCatalog: Record<string, Partial<ExtensionSearchHit>> = {
   '@acme/cortico-world-discord': {
     displayName: 'Discord', author: 'Acme Labs', icon: devSvg(64, 64, '#5865f2', 'D'),
     screenshots: [devSvg(320, 180, '#3b4252', '频道列表'), devSvg(320, 180, '#434c5e', '消息投递')],
-    summary: { tools: 6, events: 9 },
+    summary: { tools: 6, events: 9, toolTokens: 1820, envPromptTokens: 640 },
     changelog: { versions: ['0.3.2', '0.3.1', '0.3.0'], url: 'https://github.com/acme/cortico-world-discord/blob/HEAD/CHANGELOG.md' },
   },
-  'cortico-world-matrix': { displayName: 'Matrix', author: 'Kyoka', os: ['!darwin'], summary: { tools: 4, events: 2 } },
-  'cortico-world-obs': { author: 'StreamKit', os: ['win32'], icon: devSvg(64, 64, '#302e31', 'OBS'), summary: { tools: 3, events: 0 } },
+  'cortico-world-matrix': { displayName: 'Matrix', author: 'Kyoka', os: ['!darwin'], summary: { tools: 14, events: 2, toolTokens: 3150, envPromptTokens: 1420 } },
+  'cortico-world-obs': { author: 'StreamKit', os: ['win32'], icon: devSvg(64, 64, '#302e31', 'OBS'), summary: { tools: 3, events: 0, toolTokens: 7230, envPromptTokens: 12600 } },
   'cortico-provider-example': { summary: { protocols: ['openai-chat'], auth: ['api-key', 'oauth'], input: ['text', 'image'], local: false } },
   'cortico-bot-example': { displayName: 'Example Bot', summary: { worlds: 3, memory: 'workspace' } },
 };

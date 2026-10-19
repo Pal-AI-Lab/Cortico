@@ -255,6 +255,10 @@ export interface ExtensionSearchHit {
 export interface ExtensionSummary {
   tools?: number;
   events?: number;
+  /** 全部声明工具的定义估算的 token 数。 */
+  toolTokens?: number;
+  /** 环境提示词模板原文估算的 token 数。 */
+  envPromptTokens?: number;
   protocols?: string[];
   auth?: ProviderAuth[];
   input?: Array<ProviderDescribe['input'][number]>;

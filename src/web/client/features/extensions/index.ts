@@ -102,6 +102,8 @@ export interface ChangelogView {
 export interface SummaryView {
   tools?: number;
   events?: number;
+  toolTokens?: number;
+  envPromptTokens?: number;
   protocols?: string[];
   auth?: Array<'api-key' | 'oauth' | 'device-code' | 'web-session'>;
   input?: Array<'text' | 'image' | 'audio' | 'video'>;
@@ -411,6 +413,12 @@ export const iconUrl = (name: string, version: string | null | undefined): strin
 const categories: ExtensionKindView[] = ['world', 'provider', 'bot'];
 const TAB_ICONS = { world: 'boxes', provider: 'cpu', bot: 'bot' } as const;
 const LINK_ICONS = { npm: 'package', repository: 'code', homepage: 'home', bugs: 'alert' } as const;
+/** World 卡片能力摘要的黄 / 红两档:超过前一个数标黄,超过后一个数标红。token 数按 catalog 里的估算。 */
+const SPEC_LEVELS = {
+  toolCount: [10, 20],
+  toolTokens: [2500, 6000],
+  envPromptTokens: [1000, 2500],
+} as const satisfies Record<string, readonly [number, number]>;
 const stateLabels = { loaded: S.disabled, failed: S.stateFailed, 'pending-restart': S.statePendingRestart, removed: S.stateRemoved, idle: S.template };
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 
@@ -699,11 +707,16 @@ export function mountExtensions(ctx: FeatureContext): void {
     }, { signal });
     more.addEventListener('keydown', event => event.stopPropagation(), { signal });
   }
-  /** 能力摘要:World 是工具与事件数,供应商是协议、登录与输入,Bot 是 World 数与 Memory。 */
+  /**
+   * 能力摘要:World 是工具数、事件数与环境提示词 token 数,供应商是协议、登录与输入,Bot 是 World 数与 Memory。
+   * 工具数按 SPEC_LEVELS 取个数与工具定义 token 两档里较严的一档着色。
+   */
   function summaryLine(owner: ExtensionKindView, summary?: SummaryView) {
     const line = ui.h('div', 'extension-card-spec');
     if (!summary) return line;
-    const part = (name: Parameters<typeof icon>[1] | null, text: string) => { const el = ui.h('span', ''); if (name) el.append(icon(doc, name)); el.append(ui.h('span', '', text)); line.append(el); };
+    const part = (name: Parameters<typeof icon>[1] | null, text: string) => { const el = ui.h('span', ''); if (name) el.append(icon(doc, name)); el.append(ui.h('span', '', text)); line.append(el); return el; };
+    const level = (value: number | undefined, [caution, alert]: readonly [number, number]) => value === undefined ? 0 : value > alert ? 2 : value > caution ? 1 : 0;
+    const tint = (el: HTMLElement, rank: number) => { if (rank) el.classList.add(rank === 2 ? 'is-alert' : 'is-caution'); };
     if (owner === 'provider') {
       const text = [summary.protocols?.join(S.listSeparator), summary.auth?.map(a => S.authNames[a]).join(S.listSeparator), summary.input?.map(i => S.inputNames[i]).join(S.listSeparator), summary.local ? S.runsLocal : ''].filter(Boolean).join(S.metaSeparator);
       if (text) part('cpu', text);
@@ -711,8 +724,17 @@ export function mountExtensions(ctx: FeatureContext): void {
       if (summary.worlds !== undefined) part('boxes', S.worldCount(summary.worlds));
       if (summary.memory) part(null, S.labelled(S.memory, summary.memory));
     } else {
-      if (summary.tools) part('wrench', S.toolCount(summary.tools));
+      if (summary.tools) {
+        const el = part('wrench', S.toolCount(summary.tools));
+        tint(el, Math.max(level(summary.tools, SPEC_LEVELS.toolCount), level(summary.toolTokens, SPEC_LEVELS.toolTokens)));
+        if (summary.toolTokens !== undefined) attachHint(el, S.toolsHint(summary.tools, summary.toolTokens));
+      }
       if (summary.events) part('zap', S.eventCount(summary.events));
+      if (summary.envPromptTokens) {
+        const el = part('text', S.prefixSize(ui.fmt.count(summary.envPromptTokens)));
+        tint(el, level(summary.envPromptTokens, SPEC_LEVELS.envPromptTokens));
+        attachHint(el, S.prefixHint(summary.envPromptTokens));
+      }
     }
     return line;
   }

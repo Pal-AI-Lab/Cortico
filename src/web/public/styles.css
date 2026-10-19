@@ -2084,6 +2084,8 @@ button.extension-tag { cursor: pointer; }
 .extension-card-spec > span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
 .extension-card-spec > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .extension-card-spec .icon { width: 13px; height: 13px; flex: none; }
+.extension-card-spec .is-caution { color: var(--extension-caution); }
+.extension-card-spec .is-alert { color: var(--extension-alert); }
 .extension-describe { margin-top: 0; }
 .extension-describe h5 { display: flex; align-items: baseline; gap: 8px; margin: 14px 0 8px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
 .extension-describe-count { font-weight: 400; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
