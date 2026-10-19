@@ -295,7 +295,11 @@ export function createShell(deps: ShellDeps): WebUiShell {
     const href = buildHash(opts.segments);
     const item = ui.h('a', 'navitem');
     item.href = href;
-    if (opts.icon) item.appendChild(icon(doc, opts.icon, 'navicon'));
+    if (opts.icon) {
+      item.appendChild(icon(doc, opts.icon, 'navicon'));
+      // 窄屏只露图标,名字靠悬停读到。
+      item.title = opts.label;
+    }
     const label = ui.h('span', 'lbl', opts.label);
     // 名字给灯让位后可能被截断,悬停仍读得到全名(灯自己的说明挂在各自那颗上)。
     if (opts.pageId) label.title = opts.label;

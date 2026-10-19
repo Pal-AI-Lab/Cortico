@@ -736,7 +736,6 @@
     .stacklabel { display: none; }
     .navitem { flex: none; padding: 7px 11px; margin: 0; min-height: 38px; }
     .navitem .tag { display: none; }
-    .railfoot { display: none; }
     .pagehead { padding-top: 14px; }
     .pagedesc { max-width: none; }
     .modalcard { width: 96vw; max-height: 92dvh; }
@@ -1694,11 +1693,21 @@
   }
 
   @media (max-width: 720px) {
-    #rail { width: 100%; border-bottom: 1px solid var(--border); }
+    /* 底栏只留那几个键,接在横向导航的行尾。 */
+    #rail { width: 100%; border-bottom: 1px solid var(--border); flex-direction: row; align-items: center; }
+    nav.stack { flex: 1; min-width: 0; }
+    .railfoot { flex: none; min-height: 0; padding: 0 8px 0 2px; }
+    .rail-who { display: none; }
     #kernel-root { height: calc(100dvh - 54px); margin: 0; border-radius: 0; }
     nav.stack { padding: 7px 8px; }
     .navgroup { display: contents; }
+    /* 横排时 World 的模块与其他项并列,树形连线不画。 */
+    .navmodule-list { display: contents; }
+    .navmodule-list::before, .navmodule-list .navitem::before { display: none; }
     .navitem { min-height: 36px; }
+    /* 有图标的项只留图标,名字留给读屏与悬停;World 的模块没有图标,照旧写名字。 */
+    .navitem:has(> .navicon) { padding-inline: 10px; }
+    .navitem:has(> .navicon) .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .navgroup-provider .navitem { padding: 7px 11px; }
     .pagehead { padding-top: 22px; }
     .sheet { padding-block: 18px; }
