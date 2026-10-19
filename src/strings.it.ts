@@ -106,6 +106,7 @@ export const botText: Partial<typeof botEn> = {
 };
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `Costruzione non riuscita: ${detail}`,
+  instanceIdMismatch: (instanceId: string, definitionId: string) => `L'id di istanza "${instanceId}" restituito da create() è diverso dall'id di definizione "${definitionId}"; l'id di un'istanza di World deve coincidere con quello della definizione`,
   notImplemented: 'Nessuna implementazione di questo World trovata in locale.',
   unknownWorld: (id: string) => `World sconosciuto: ${id}`,
   alreadyRunning: (label: string) => `${label} è già attivato`,

@@ -226,6 +226,7 @@ export const botText = (language: Language) => pick(language, {
 /** 装配层给 WebUI 的回执与拒绝理由,按发起请求的界面语言取。 */
 const assemblyZh = {
   constructFailed: (detail: string) => `构造失败: ${detail}`,
+  instanceIdMismatch: (instanceId: string, definitionId: string) => `create() 返回的实例 id「${instanceId}」与定义 id「${definitionId}」不一致,World 实例的 id 须等于定义的 id`,
   notImplemented: '本地没有找到这个 World 的实现。',
   unknownWorld: (id: string) => `未知 World: ${id}`,
   alreadyRunning: (label: string) => `${label} 已启用`,
@@ -240,6 +241,7 @@ const assemblyZh = {
 };
 export const assemblyEn: typeof assemblyZh = {
   constructFailed: (detail: string) => `Construction failed: ${detail}`,
+  instanceIdMismatch: (instanceId: string, definitionId: string) => `Instance id "${instanceId}" returned by create() differs from definition id "${definitionId}"; a World instance's id must equal its definition's id`,
   notImplemented: 'No implementation of this World was found locally.',
   unknownWorld: (id: string) => `Unknown World: ${id}`,
   alreadyRunning: (label: string) => `${label} is already enabled`,

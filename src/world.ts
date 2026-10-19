@@ -227,6 +227,17 @@ export class WorldAssembly {
         });
         continue;
       }
+      // Core 按实例 id 归属工具与事件,装配层按定义 id 找槽位,两者须一致。
+      if (instance.id !== def.id) {
+        const instanceId = String(instance.id);
+        this.missing.push({
+          id: def.id,
+          label: def.label,
+          declared: declared.has(def.id),
+          reason: (language) => text(language).instanceIdMismatch(instanceId, def.id),
+        });
+        continue;
+      }
       const clash = section.enabled ? this.toolClash(instance, this.mounted) : null;
       if (clash) {
         this.missing.push({ id: def.id, label: def.label, declared: declared.has(def.id), reason: clash });

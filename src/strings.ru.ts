@@ -113,6 +113,7 @@ export const botText: Partial<typeof botEn> = {
 
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `Ошибка создания: ${detail}`,
+  instanceIdMismatch: (instanceId: string, definitionId: string) => `Id экземпляра «${instanceId}», который вернул create(), не совпадает с id определения «${definitionId}»; id экземпляра World должен совпадать с id определения`,
   notImplemented: 'Реализация этого World локально не найдена.',
   unknownWorld: (id: string) => `Неизвестный World: ${id}`,
   alreadyRunning: (label: string) => `${label}: уже включено`,

@@ -14,6 +14,7 @@ import type { BotDefinition } from '../src/bot.ts';
 import type { CoreConfig, ToolDef, World, WorldHost, WorldLifecycleEvent } from '../src/core/types.ts';
 import type { Language } from '../src/core/language.ts';
 import { makeCfg } from './core/helpers.ts';
+import { assemblyText } from '../src/strings.ts';
 
 interface ProbeSection { enabled: boolean; port: number; nested: { name: string; tags: string[] } }
 
@@ -305,6 +306,14 @@ describe('构造隔离与生命周期', () => {
     const boom = probeDefinition('boom', { create: () => { throw new Error('x'); } });
     const { assembly } = assemblyOf([boom], []);
     expect(assembly.missing[0]).toMatchObject({ id: 'boom', declared: false });
+  });
+
+  it('实例 id 与定义 id 不一致 → 进 missing 并说明两个 id,不建槽位不挂载', () => {
+    const stray = probeDefinition('stray', { create: (ctx) => new Probe('other', ctx) });
+    const { assembly } = assemblyOf([stray, probeDefinition('a')], ['stray', 'a']);
+    expect(assembly.slots.map((s) => s.id)).toEqual(['a']);
+    expect(assembly.mounted.map((m) => m.id)).toEqual(['a']);
+    expect(missingOf(assembly)).toEqual([{ id: 'stray', label: 'stray 探针', declared: true, reason: assemblyText('zh').instanceIdMismatch('other', 'stray') }]);
   });
 
   it('激活 / 停用 / 重启 / 对账各报一次生命周期事件;启动期初始挂载与失败的激活不报', async () => {

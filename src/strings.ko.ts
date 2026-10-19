@@ -107,6 +107,7 @@ export const botText: Partial<typeof botEn> = {
 
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `생성 실패: ${detail}`,
+  instanceIdMismatch: (instanceId: string, definitionId: string) => `create()가 반환한 인스턴스 id "${instanceId}"가 정의 id "${definitionId}"와 다릅니다. World 인스턴스의 id는 정의의 id와 같아야 합니다`,
   notImplemented: '이 World의 구현을 로컬에서 찾지 못했습니다.',
   unknownWorld: (id: string) => `알 수 없는 World: ${id}`,
   alreadyRunning: (label: string) => `${label}은(는) 이미 활성화되어 있습니다`,
