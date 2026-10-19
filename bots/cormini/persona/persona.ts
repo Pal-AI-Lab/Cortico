@@ -12,7 +12,7 @@ import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './webUiSu
 import { webUiText } from './strings.ts';
 import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
 import { SAVE_BLOB_DECL, saveBlobTool } from './blobs.ts';
-import { BLOBS_DIR, GitWorkspaceMemory, type WorkspaceBlobStore } from './memory.ts';
+import { BLOBS_DIR, GitWorkspaceMemory, LIST_DIR_CAP, type WorkspaceBlobStore } from './memory.ts';
 import { WORKSPACE_TOOL_DECLS, workspaceTools } from './workspaceTools.ts';
 import { Heartbeat, quietLine } from './heartbeat.ts';
 import type { ContextRecord, Item } from 'cortico/protocol/open-responses/context.ts';
@@ -493,12 +493,27 @@ export class Cormini implements Persona {
   /**
    * 前缀里的工作区清单。大目录折叠为一行计数(每场几十份交接笔记会撑爆缓存前缀);
    * list_files 指定目录时全量。变体经 prefixFolds() 追加自己的折叠目录。
+   * 其余目录直属文件超过 LIST_DIR_CAP 份的,同样折叠为一行计数(场次蒸馏一场几份,会越攒越多)。
    */
   protected prefixWorkspaceListing(): string {
     const files = this.memory.walkFiles();
     if (files.length === 0) return 'Your workspace is empty.';
     const folds = this.prefixFolds();
-    const shown = files.filter((f) => !folds.some((d) => f.startsWith(d.prefix)));
+    const rest = files.filter((f) => !folds.some((d) => f.startsWith(d.prefix)));
+    const dirOf = (f: string): string => f.slice(0, f.lastIndexOf('/') + 1);
+    const perDir = new Map<string, number>();
+    for (const f of rest) perDir.set(dirOf(f), (perDir.get(dirOf(f)) ?? 0) + 1);
+    const shown: string[] = [];
+    const folded = new Set<string>();
+    for (const f of rest) {
+      const dir = dirOf(f);
+      const n = perDir.get(dir)!;
+      if (dir === '' || n <= LIST_DIR_CAP) shown.push(f);
+      else if (!folded.has(dir)) {
+        folded.add(dir);
+        shown.push(`${dir} (${n} 份;list_files 指定 dir 为 ${dir.slice(0, -1)} 可列出全部)`);
+      }
+    }
     for (const d of folds) {
       const n = files.filter((f) => f.startsWith(d.prefix)).length;
       if (n > 0) shown.push(d.line(n));

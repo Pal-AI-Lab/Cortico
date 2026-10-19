@@ -372,7 +372,7 @@ export class GitWorkspaceMemory {
 
   /**
  * 完整列出 dir（空值为工作区根）；各子目录最多显示 LIST_DIR_CAP 项，其余报告计数。
- * 指定该子目录可查看全部。前缀的 prefixWorkspaceListing 不受此上限限制。
+ * 指定该子目录可查看全部。前缀的 prefixWorkspaceListing 把超过此上限的目录整个折叠为计数。
  */
   listing(dir = ''): string {
     const abs = this.insideWorkspace(dir || '.');
