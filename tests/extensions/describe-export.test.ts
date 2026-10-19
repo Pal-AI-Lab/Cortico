@@ -1,6 +1,6 @@
 /**
  * describe.json 从定义的 describe 与干装载的提示词模板生成;check:extension 要求定义写了 describe、
- * 实例工具名都已声明、包里的文件与重新生成的一致。
+ * 实例工具名都已声明、包里的文件与重新生成的一致;实例改写了声明的描述或参数时警告。
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,7 +26,7 @@ afterEach(() => {
 const declared = (name: string): ToolDescribe => ({ name, description: name, parameters: { type: 'object', properties: {} }, tags: ['read'] });
 const tool = (name: string): ToolDef => ({ ...declared(name), handler: async () => 'ok' });
 
-function world(names: string[], withDescribe = true): WorldDefinition<WorldSection> {
+function world(names: string[], withDescribe = true, rewrite: Partial<ToolDef> = {}): WorldDefinition<WorldSection> {
   return {
     id: 'sample',
     label: 'Sample',
@@ -34,7 +34,7 @@ function world(names: string[], withDescribe = true): WorldDefinition<WorldSecti
     create: (ctx) => ({
       id: 'sample',
       envPromptVars: () => ({}),
-      tools: () => names.map(tool),
+      tools: () => names.map((name) => ({ ...tool(name), ...rewrite })),
       start: async () => {},
       stop: async () => {},
       webUi: () => ({
@@ -71,6 +71,14 @@ describe('World', () => {
     const opts = { scratchDir, packageDir: pkgDir };
     expect((await checkDescribe('world', world(['sample_ping'], false), 'describe.json', opts)).failures.join('\n')).toContain('has no describe');
     expect((await checkDescribe('world', world(['sample_ping', 'sample_extra']), undefined, opts)).failures.join('\n')).toMatch(/sample_extra[\s\S]*cortico\.describe/);
+  });
+
+  it('the check warns without failing when tools() under the default config rewrites a declared description or parameters', async () => {
+    const opts = { scratchDir, packageDir: pkgDir };
+    expect((await checkDescribe('world', world(['sample_ping']), undefined, opts)).warnings).toEqual([]);
+    const rewritten = await checkDescribe('world', world(['sample_ping'], true, { parameters: { type: 'object', properties: { n: { type: 'number' } } } }), undefined, opts);
+    expect(rewritten.warnings.join('\n')).toContain('sample_ping (parameters)');
+    expect(rewritten.failures.join('\n')).not.toContain('sample_ping');
   });
 });
 

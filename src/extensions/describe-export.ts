@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
-import type { CoreConfig, PromptDocDecl } from '../core/types.ts';
+import type { CoreConfig, PromptDocDecl, ToolSchema } from '../core/types.ts';
 import type { BotDefinition } from '../bot.ts';
 import type { WorldDefinition, WorldSection } from '../world.ts';
 import type { ProviderModule } from '../providers/base.ts';
@@ -21,6 +21,8 @@ interface Exported {
   file: ExtensionDescribeFile;
   /** 构造出的实例实际给出的工具名;provider 与没有 `ownToolNames()` 的 Persona 为 null。 */
   toolNames: string[] | null;
+  /** World 实例在默认配置下发给模型的工具定义;其他类别缺席。 */
+  liveTools?: ToolSchema[];
 }
 
 /** 模板文件不存在的项跳过。 */
@@ -45,9 +47,11 @@ async function exportFrom(kind: ExtensionKind, exported: unknown, opts: BotDryMo
     if (!def.describe) return null;
     const world = def.create(fakeWorldContext(def, opts));
     const docs = (world.webUi?.('zh')?.promptDocs ?? []).filter((doc) => doc.role === 'envPrompt');
+    const liveTools = world.tools().map(({ name, description, parameters }) => ({ name, description, parameters }));
     return {
       file: withPrompts({ tools: [...def.describe.tools], events: [...def.describe.events] }, promptsOf(docs)),
-      toolNames: world.tools().map((tool) => tool.name),
+      toolNames: liveTools.map((tool) => tool.name),
+      liveTools,
     };
   }
   if (kind === 'provider') {
@@ -132,6 +136,20 @@ export async function checkDescribe(
     else ok.push(`${source}: every tool is declared in describe.tools.`);
   } else if (kind === 'bot') {
     warnings.push('The Persona has no ownToolNames(), so its tools cannot be compared with describe.tools.');
+  }
+  if (result.liveTools) {
+    const byName = new Map((result.file.tools ?? []).map((tool) => [tool.name, tool]));
+    const changed = result.liveTools.flatMap((tool) => {
+      const decl = byName.get(tool.name);
+      if (!decl) return [];
+      const fields = [
+        ...(decl.description === tool.description ? [] : ['description']),
+        ...(isDeepStrictEqual(decl.parameters, tool.parameters) ? [] : ['parameters']),
+      ];
+      return fields.length ? [`${tool.name} (${fields.join(', ')})`] : [];
+    });
+    if (changed.length) warnings.push(`With the default config, tools() returns a description or parameters that differ from describe.tools: ${changed.join(', ')}. The extension market shows the declared tools and their token count. Update the declaration if it is stale; leave it if the difference comes from config.`);
+    else ok.push('tools(): descriptions and parameters match describe.tools under the default config.');
   }
 
   if (describePath === undefined) {

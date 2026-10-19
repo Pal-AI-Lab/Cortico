@@ -295,7 +295,8 @@ provider 是 `providers.<端点名>.options.`。写回的三道闸(服务端的�
 与 `spec`。这些值存在端点条目里,不经 `defaults()`,因此只核对段。
 
 自描述检查:定义没写 `describe`、实例的工具名不在 `describe.tools` 里(bot 按 `persona.ownToolNames()`)、
-package.json 没有 `cortico.describe`、它指的文件不在或与重新生成的内容不一致,都是失败。`cortico.describe`
+package.json 没有 `cortico.describe`、它指的文件不在或与重新生成的内容不一致,都是失败。World 实例在默认配置下
+改写了声明的 `description` 或 `parameters` 时只给 warning:扩展市场按声明显示工具数与工具定义的 token 数。`cortico.describe`
 须是包内的 `.json`;`tags` 与 `screenshots` 须是字符串数组,`locales` 须是 `{ zh?, en? }` 且每项只含字符串
 `displayName` 与 `description`。这几项不合格时只给 warning,包照常加载。
 
