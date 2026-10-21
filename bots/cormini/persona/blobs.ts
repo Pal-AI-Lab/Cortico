@@ -1,4 +1,5 @@
 /** save_blob 工具的参数、权限检查与回执；附件存储由 WorkspaceBlobStore 提供。 */
+import { LOG_SCHEME, blobScheme } from 'cortico/core/blobs.ts';
 import type { BlobStore, CoreApi, ToolDef } from 'cortico/core/types.ts';
 
 export const SAVE_BLOB_DECL: Omit<ToolDef, 'handler'> = {
@@ -11,7 +12,7 @@ export const SAVE_BLOB_DECL: Omit<ToolDef, 'handler'> = {
   parameters: {
     type: 'object',
     properties: {
-      handle: { type: 'string', description: 'The log: handle (a unique prefix of 8+ hex digits is enough).' },
+      handle: { type: 'string', description: 'The log: handle as written in the [blob ...] line, e.g. log:1a2b3c4d (a unique prefix of 8+ hex digits after log: is enough).' },
       path: { type: 'string', description: 'Where to keep it, relative to your workspace, with an extension.' },
     },
     required: ['handle', 'path'],
@@ -28,9 +29,11 @@ export function saveBlobTool(deps: {
   return {
     ...SAVE_BLOB_DECL,
     handler: async (args, ctx) => {
-      const handle = String(args.handle ?? '').trim();
+      const given = String(args.handle ?? '').trim();
       const path = String(args.path ?? '').trim();
-      if (!handle) return '[save failed] handle 不能为空';
+      if (!given) return '[save failed] handle 不能为空';
+      // 只给了哈希时按 log: 句柄解析
+      const handle = blobScheme(given) ? given : `${LOG_SCHEME}${given}`;
       if (!path) return '[save failed] path 不能为空';
       const denied = deps.guard?.(path, ctx.role) ?? null;
       if (denied) return `[save failed] ${denied}`;

@@ -64,6 +64,7 @@ describe('save_blob 与 read_file 的二进制回执', () => {
     const out = await tool.handler({ handle: 'log:abcdef01', path: 'blobs/stickers/cat.png' }, ctx);
     expect(out).toBe(`[saved] mem:blobs/stickers/cat.png image/png ${PNG.length} 字节`);
     expect(readFileSync(join(dir, 'blobs', 'stickers', 'cat.png')).equals(PNG)).toBe(true);
+    expect(await tool.handler({ handle: 'abcdef01', path: 'blobs/bare.png' }, ctx)).toBe(`[saved] mem:blobs/bare.png image/png ${PNG.length} 字节`);
     expect(await tool.handler({ handle: 'log:nope', path: 'blobs/x.png' }, ctx)).toContain('[save failed] 没有 log:nope');
     expect(await tool.handler({ handle: 'log:abcdef01', path: '../x.png' }, ctx)).toContain('[save failed]');
   });
