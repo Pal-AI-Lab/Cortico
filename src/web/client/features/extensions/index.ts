@@ -1283,7 +1283,8 @@ export function mountExtensions(ctx: FeatureContext): void {
       }
       if (signal.aborted) return;
       const restartHint = action === 'delete' || resultKind !== 'bot' ? ' ' + S.restartNeeded : '';
-      message(owner, area, `${S.completed(actionLabel, name)}${version ? ' ' + S.version(version) : ''}${restartHint}`);
+      const activateHint = actionLabel === S.installedAction && resultKind === 'world' ? ' ' + S.worldActivateHint : '';
+      message(owner, area, `${S.completed(actionLabel, name)}${version ? ' ' + S.version(version) : ''}${restartHint}${activateHint}`);
       updates.delete(name);
       if (!await load()) message(owner, area, S.completed(actionLabel, name) + ' ' + S.syncedFailed, true);
     } catch (error) { if (!signal.aborted) message(owner, area, errorText(error), true); }

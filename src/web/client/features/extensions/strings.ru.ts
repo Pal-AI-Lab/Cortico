@@ -66,6 +66,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `${action} ${name}…`,
   completed: (action: string, name: string) => `${action} ${name}: готово.`,
   restartNeeded: 'Вступит в силу после перезапуска процесса.',
+  worldActivateHint: 'Если World не активен, активируйте его на странице «Обзор World».',
   syncedFailed: 'Операция выполнена, но список не синхронизирован. Обновите, чтобы повторить.',
 
   filterPlaceholder: 'Фильтр: имя, описание, ключевые слова',

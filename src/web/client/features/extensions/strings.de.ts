@@ -60,6 +60,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `${action} von ${name} läuft…`,
   completed: (action: string, name: string) => `${action} von ${name} abgeschlossen.`,
   restartNeeded: 'Gilt nach dem Neustart des Prozesses.',
+  worldActivateHint: 'Ist die World nicht aktiv, aktiviere sie in der World-Übersicht.',
   syncedFailed: 'Vorgang abgeschlossen, aber die Liste ist nicht synchron. Aktualisiere, um es erneut zu versuchen.',
 
   filterPlaceholder: 'Filter: Name, Beschreibung, Stichwörter',

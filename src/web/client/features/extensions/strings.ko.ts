@@ -60,6 +60,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `${action} 중: ${name}…`,
   completed: (action: string, name: string) => `${action} 완료: ${name}.`,
   restartNeeded: '프로세스를 재시작한 뒤 적용됩니다.',
+  worldActivateHint: '활성화되지 않은 World는 World 개요에서 활성화하세요.',
   syncedFailed: '작업은 끝났지만 목록이 동기화되지 않았습니다. 새로 고치세요.',
 
   filterPlaceholder: '필터: 패키지 이름, 설명, 키워드',

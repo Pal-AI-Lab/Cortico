@@ -60,6 +60,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `${action} di ${name} in corso…`,
   completed: (action: string, name: string) => `Operazione completata: ${action.toLowerCase()} di ${name}.`,
   restartNeeded: 'Ha effetto dopo il riavvio del processo.',
+  worldActivateHint: 'Se il World non è attivo, attivalo in Panoramica dei World.',
   syncedFailed: "Operazione completata, ma l'elenco non è sincronizzato. Aggiorna per riprovare.",
 
   filterPlaceholder: 'Filtra: nome, descrizione, parole chiave',

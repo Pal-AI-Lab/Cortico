@@ -70,6 +70,7 @@ const zh = {
   progress: (action: string, name: string) => `正在${action}：${name}…`,
   completed: (action: string, name: string) => `${action}成功：${name}。`,
   restartNeeded: '重启进程后生效。',
+  worldActivateHint: '未激活的 World 要到 World 总览里激活。',
   syncedFailed: '操作已完成，但列表未同步；请刷新。',
 
   filterPlaceholder: '筛选：包名、描述、关键字',
@@ -308,6 +309,7 @@ export const en: typeof zh = {
   progress: (action: string, name: string) => `${action}: ${name}…`,
   completed: (action: string, name: string) => `${action} completed: ${name}.`,
   restartNeeded: 'Takes effect after the process restarts.',
+  worldActivateHint: 'If the World is not active, activate it in World overview.',
   syncedFailed: 'Operation completed, but the list is out of sync. Refresh to retry.',
 
   filterPlaceholder: 'Filter: name, description, keywords',

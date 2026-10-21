@@ -60,6 +60,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `${action}中：${name}…`,
   completed: (action: string, name: string) => `${action}が完了しました：${name}。`,
   restartNeeded: 'プロセスの再起動後に反映されます。',
+  worldActivateHint: '有効になっていない World は World 一覧で有効化してください。',
   syncedFailed: '操作は完了しましたが、一覧が同期されていません。更新してください。',
 
   filterPlaceholder: '絞り込み：パッケージ名、説明、キーワード',

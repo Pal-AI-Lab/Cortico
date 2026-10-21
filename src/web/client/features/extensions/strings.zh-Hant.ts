@@ -60,6 +60,7 @@ export const S: Partial<typeof en> = {
   progress: (action: string, name: string) => `正在${action}：${name}…`,
   completed: (action: string, name: string) => `${action}成功：${name}。`,
   restartNeeded: '重新啟動處理程序後生效。',
+  worldActivateHint: '未啟用的 World 請到 World 總覽啟用。',
   syncedFailed: '操作已完成，但清單未同步；請重新整理。',
 
   filterPlaceholder: '篩選：套件名稱、描述、關鍵字',
