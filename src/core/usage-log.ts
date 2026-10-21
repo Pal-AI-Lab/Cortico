@@ -1,7 +1,31 @@
 /** Append-only usage ledger. Failed writes remain queued and are reported to the operator. */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { UsageRecord } from './types.ts';
+
+/** The ledger is read in chunks so its size is not bounded by V8's maximum string length. */
+const READ_CHUNK_BYTES = 4 * 1024 * 1024;
+
+/** Lines split at the newline byte, which never occurs inside a UTF-8 multibyte sequence. */
+function* fileLines(file: string): Generator<string> {
+  const fd = openSync(file, 'r');
+  try {
+    const chunk = Buffer.alloc(READ_CHUNK_BYTES);
+    let rest = Buffer.alloc(0);
+    for (let n = readSync(fd, chunk); n > 0; n = readSync(fd, chunk)) {
+      const buf = rest.length ? Buffer.concat([rest, chunk.subarray(0, n)]) : chunk.subarray(0, n);
+      let start = 0;
+      for (let end = buf.indexOf(10); end !== -1; end = buf.indexOf(10, start)) {
+        yield buf.toString('utf8', start, end);
+        start = end + 1;
+      }
+      rest = Buffer.from(buf.subarray(start));
+    }
+    if (rest.length) yield rest.toString('utf8');
+  } finally {
+    closeSync(fd);
+  }
+}
 
 export class UsageLog {
   private pending: UsageRecord[] = [];
@@ -45,7 +69,7 @@ export class UsageLog {
     const out: UsageRecord[] = [];
     const seen = new Set<string>();
     let damaged = 0;
-    for (const line of readFileSync(this.file, 'utf8').split(/\r?\n/)) {
+    for (const line of fileLines(this.file)) {
       if (!line.trim()) continue;
       let record: UsageRecord;
       try { record = JSON.parse(line) as UsageRecord; } catch { damaged++; continue; }

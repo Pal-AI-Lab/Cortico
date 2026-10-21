@@ -44,6 +44,18 @@ describe('UsageLog', () => {
     expect(readFileSync(file, 'utf8')).toBe(raw);
   });
 
+  it('账本跨多个读取块时每行完整读出,多字节字符落在块边界上也不损坏', () => {
+    const label = '主意识'.repeat(700);
+    const lines = Array.from({ length: 1400 }, (_, i) => JSON.stringify({ ...rec(1), version: 2, recordId: `r${i}`, label }));
+    writeFileSync(file, lines.join('\r\n') + '\n');
+    expect(readFileSync(file).byteLength).toBeGreaterThan(8 * 1024 * 1024);
+    const errors: string[] = [];
+    const all = new UsageLog(file, error => errors.push(error)).readAll();
+    expect(all.map(r => r.recordId)).toEqual(lines.map((_, i) => `r${i}`));
+    expect(all.every(r => r.label === label)).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
   it('坏行跳过,不影响其它行', () => {
     const log = new UsageLog(file);
     log.append(rec(1));
