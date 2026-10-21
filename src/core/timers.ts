@@ -4,6 +4,7 @@
  */
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { retryBusy } from './fs-busy.ts';
 import type { Logger, TimerEntry, TimersApi } from './types.ts';
 import { nullLogger, shortId } from './util.ts';
 
@@ -124,6 +125,6 @@ export class TimerStore implements TimersApi {
     const tmp = this.file + '.tmp';
     writeFileSync(tmp, JSON.stringify(this.entries, null, 2), 'utf8');
     // 通过 rename 原子覆盖，不先删除，避免崩溃后定时器全部丢失。
-    renameSync(tmp, this.file);
+    retryBusy(() => renameSync(tmp, this.file));
   }
 }

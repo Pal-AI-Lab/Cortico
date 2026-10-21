@@ -136,3 +136,38 @@ describe('CoreState', () => {
     expect(s2.data.lastDeliveredCursor).toBe(172230);
   });
 });
+
+describe('CoreState 在 Windows 上遇到文件被短暂占用', () => {
+  let tmp: ReturnType<typeof makeTmpDir>;
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+  beforeEach(() => {
+    tmp = makeTmpDir();
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+  });
+  afterEach(() => {
+    Object.defineProperty(process, 'platform', platform);
+    fsHooks.onRename = null;
+    tmp.cleanup();
+  });
+
+  const busy = () => Object.assign(new Error('EBUSY: resource busy or locked'), { code: 'EBUSY' });
+
+  it('占用几十毫秒后放开时 save 照常落盘', () => {
+    const s = new CoreState(tmp.dir);
+    s.load();
+    let left = 2;
+    fsHooks.onRename = () => { if (left-- > 0) throw busy(); };
+    s.data.lastDeliveredCursor = 42;
+    s.save();
+    const s2 = new CoreState(tmp.dir);
+    s2.load();
+    expect(s2.data.lastDeliveredCursor).toBe(42);
+  });
+
+  it('一直被占用时 save 照原样抛出', () => {
+    const s = new CoreState(tmp.dir);
+    s.load();
+    fsHooks.onRename = () => { throw busy(); };
+    expect(() => s.save()).toThrow('EBUSY');
+  });
+});
