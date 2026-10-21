@@ -10,7 +10,13 @@ import type { ItemStack } from './terrain.ts';
 export const FURNACE_BLOCKS = ['furnace', 'smoker', 'blast_furnace'] as const;
 
 /** 箱子族方块名(能当仓库用的那些);工作台、炉子族、酿造台都不在内 */
-export const CHEST_BLOCKS = ['chest', 'trapped_chest', 'barrel', 'ender_chest'] as const;
+export const CHEST_BLOCKS = [
+  'chest', 'trapped_chest', 'barrel', 'ender_chest',
+  'shulker_box', 'white_shulker_box', 'orange_shulker_box', 'magenta_shulker_box', 'light_blue_shulker_box',
+  'yellow_shulker_box', 'lime_shulker_box', 'pink_shulker_box', 'gray_shulker_box', 'light_gray_shulker_box',
+  'cyan_shulker_box', 'purple_shulker_box', 'blue_shulker_box', 'brown_shulker_box', 'green_shulker_box',
+  'red_shulker_box', 'black_shulker_box',
+] as const;
 
 const CHEST_KINDS = new Set<string>(CHEST_BLOCKS);
 
