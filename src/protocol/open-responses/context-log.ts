@@ -1,5 +1,6 @@
 import { appendFileSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { retryBusy } from '../../core/fs-busy.ts';
 import type { ContextRecord } from './context.ts';
 
 function freeze<T>(value: T): T {
@@ -64,7 +65,7 @@ export class ContextLog {
   append(entry: ContextRecord): ContextRecord {
     const next = structuredClone(entry);
     if (this.stamp && next.context.ts === undefined) next.context.ts = this.stamp();
-    appendFileSync(this.file, JSON.stringify(next) + '\n');
+    retryBusy(() => appendFileSync(this.file, JSON.stringify(next) + '\n'));
     this.entries = Object.freeze([...this.entries, freeze(next)]);
     return next;
   }
@@ -83,5 +84,5 @@ function atomicContextWrite(path: string, records: readonly ContextRecord[]): vo
     writeFileSync(fd, records.map(row => JSON.stringify(row)).join('\n') + (records.length ? '\n' : ''));
     fsyncSync(fd);
   } finally { closeSync(fd); }
-  renameSync(temporary, path);
+  retryBusy(() => renameSync(temporary, path));
 }
