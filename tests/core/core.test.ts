@@ -88,7 +88,7 @@ describe('Core · session 声明与 fork 原语', () => {
     const { core, llm } = build();
     const exits: LogRecord[] = [];
     core.runlog.onWrite((entry) => {
-      if (entry.msg === '主循环异常退出') exits.push(entry);
+      if (entry.event === 'loop-exit') exits.push(entry);
     });
     const due: string[] = [];
     core.timers.onDue((entry) => due.push(entry.id));

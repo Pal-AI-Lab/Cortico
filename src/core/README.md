@@ -107,7 +107,7 @@ handler 抛错，或返回值既不是字符串也不是带字符串 text 的对
 装配层将 World 构造失败限制在该 World。`start()` 抛错时不挂载；`stop()` 失败或超时会记录
 结果并继续卸载。`onOpening`、`onDelivery`、`onBatchEnd`、`onTurnEnded`、`onIdle` 异常记录
 warn；`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
-读取 `webUi()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 error
-并停止定时器。启动器处理未捕获的进程异常并执行关机流程。
+读取 `webUi()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 event 为 `loop-exit` 的 error
+并停止定时器，进程不退出;宿主按这个 event 决定是否重启。启动器处理未捕获的进程异常并执行关机流程。
 
 `instanceIsRunning(dataDir)` 只读检查实例锁对应进程是否存活，沿用锁接管时的陈旧记录判定(开机时刻、可执行文件名)，不获取或更改锁。

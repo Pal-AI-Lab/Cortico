@@ -616,7 +616,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.timers.start();
     this.runPromise = this.loop.run().catch((e) => {
       this.timers.stop();
-      this.log.error('主循环异常退出', { err: e });
+      this.log.emit('error', '主循环异常退出', { event: 'loop-exit', err: e });
     });
     writeRunJson(this.run, {
       bot: this.loaded.config.displayName,
