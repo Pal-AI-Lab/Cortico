@@ -1541,7 +1541,7 @@ export class WebApp {
     const app = express();
     app.disable('x-powered-by');
 
-    // 只有本机的页面能把 WebUI 嵌进框里:外站嵌进去就能骗操作员点按钮
+    // 只有本机的页面能把 WebUI 嵌进框里
     app.use((_req, res, next) => {
       res.setHeader('Content-Security-Policy', FRAME_ANCESTORS);
       next();
