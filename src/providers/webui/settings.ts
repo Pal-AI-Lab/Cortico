@@ -11,9 +11,9 @@ import {
   readGroupValues,
   setByPath,
 } from '../../core/config-schema.ts';
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { updateJsonObject } from '../../config-file.ts';
+import { updateJsonObject, writeSecretFile } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
 import { isConnectionEditorBlock, type WebUiLamp, type WebUiPageContribution } from '../../web/shared/webui-protocol.ts';
 import type { WebUiPageSource } from '../../web/webui-pages.ts';
@@ -176,7 +176,7 @@ export class ProviderSettings {
     if (!entry.secret) throw new Error(S.secretNameRequired);
     if (!value.trim() || /\s/.test(value)) throw new Error(S.secretValueInvalid);
     const dir = join(this.providersDir, name);
-    mkdirSync(dir, { recursive: true });
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
     const file = join(dir, '.env');
     const line = `${entry.secret}=${value.trim()}`;
     const current = existsSync(file) ? readTextFile(file) : '';
@@ -184,7 +184,7 @@ export class ProviderSettings {
     const next = pattern.test(current)
       ? current.replace(pattern, line)
       : current + (current && !current.endsWith('\n') ? '\n' : '') + line + '\n';
-    writeFileSync(file, next, 'utf8');
+    writeSecretFile(file, next);
     this.registry.invalidate(name);
     return this.secretStatus(name, entry);
   }

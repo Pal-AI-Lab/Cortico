@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
@@ -86,6 +86,20 @@ it('copies saved credentials only on final creation, without exposing them in de
   expect(existsSync(join(root, 'Copy'))).toBe(false);
   hub.save(null, { name: 'Copy', entry: source.entry, copyFrom: { name: source.name, revision: source.revision } }, 'en');
   expect(readFileSync(join(root, 'Copy', '.env'), 'utf8')).toContain('test-secret');
+});
+
+it('an endpoint without a key variable keeps its .env out of a copy', () => {
+  const { hub, root } = fixture();
+  const source = hub.save(null, { name: 'Account', entry }, 'en');
+  writeFileSync(join(root, 'Account', '.env'), 'ACCOUNT_REFRESH_TOKEN=signed-in\n');
+  hub.save(null, { name: 'Copy', entry: source.entry, copyFrom: { name: source.name, revision: hub.detail('Account', 'en').revision } }, 'en');
+  expect(existsSync(join(root, 'Copy', '.env'))).toBe(false);
+});
+
+it.skipIf(process.platform === 'win32')('writes a saved key readable by its owner alone', () => {
+  const { hub, root } = fixture();
+  hub.save(null, { name: 'Alpha', entry, secretValue: 'alpha-key' }, 'en');
+  expect(statSync(join(root, 'Alpha', '.env')).mode & 0o777).toBe(0o600);
 });
 
 it('switches the current connection without replacing instances already serving requests', () => {

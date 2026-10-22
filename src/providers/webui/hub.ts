@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, w
 import { basename, dirname, join, resolve } from 'node:path';
 import type { CoreConfig, LLMProviderEntry } from '../../core/types.ts';
 import { LocalizedError, type Language } from '../../core/language.ts';
-import { readJsonObject, updateJsonObject } from '../../config-file.ts';
+import { readJsonObject, updateJsonObject, writeSecretFile } from '../../config-file.ts';
 import { readTextFile } from '../../core/util.ts';
 import type { ProviderModule } from '../base.ts';
 import { validateEntry, withContextWindows } from '../configuration.ts';
@@ -210,7 +210,8 @@ export class ProviderHub {
         const source = this.config.providers[input.copyFrom.name];
         if (!source) throw hubError(S => S.copySourceGone, 409);
         this.checkRevision(input.copyFrom.name, input.copyFrom.revision);
-        if (source.secret === entry.secret) {
+        // an endpoint without a key variable (a signed-in account's tokens) does not hand its .env to the copy
+        if (entry.secret && source.secret === entry.secret) {
           credentialSource = input.copyFrom.name;
           const file = join(this.path(input.copyFrom.name), '.env');
           if (existsSync(file)) copiedSecret = readFileSync(file);
@@ -227,15 +228,15 @@ export class ProviderHub {
         backups.set(file, existsSync(file) ? readFileSync(file) : null);
       let moved = false;
       try {
-        if (!source) mkdirSync(stage);
+        if (!source) mkdirSync(stage, { mode: 0o700 });
         const dir = source ?? stage;
         updateJsonObject(join(dir, 'config.json'), raw => { for (const key of Object.keys(raw)) delete raw[key]; Object.assign(raw, entry); });
-        if (copiedSecret) writeFileSync(join(dir, '.env'), copiedSecret);
+        if (copiedSecret) writeSecretFile(join(dir, '.env'), copiedSecret);
         if (input.secretValue) {
           const file = join(dir, '.env');
           const lines = (existsSync(file) ? readTextFile(file) : '').split(/\r?\n/).filter(line => line.split('=')[0]?.trim() !== entry.secret);
           lines.push(`${entry.secret}=${input.secretValue}`);
-          writeFileSync(file, lines.filter(Boolean).join('\n') + '\n');
+          writeSecretFile(file, lines.filter(Boolean).join('\n') + '\n');
         }
         if (source !== target) { renameSync(dir, target); moved = true; }
         for (const file of refs) updateJsonObject(file, raw => { raw.activeProvider = name; });

@@ -17,6 +17,21 @@ export function readJsonObject(file: string): JsonObject {
   }
 }
 
+/**
+ * Writes a file that holds secrets: only its owner may read it (mode 0600 where the system has modes), and it
+ * is replaced by one rename, so a crash leaves the old file or the new one.
+ */
+export function writeSecretFile(file: string, contents: string | Buffer): void {
+  const tmp = `${file}.tmp-${process.pid}-${randomUUID()}`;
+  writeFileSync(tmp, contents, { mode: 0o600 });
+  try {
+    renameSync(tmp, file);
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    throw error;
+  }
+}
+
 export function updateJsonObject(file: string, update: (root: JsonObject) => void): void {
   const root = readJsonObject(file);
   update(root);
