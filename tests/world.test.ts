@@ -158,6 +158,9 @@ describe('装配上下文', () => {
       probe.ctx.storeSecret(name, 'tok-2');
       expect(readFileSync(join(dir, '.env'), 'utf8').match(new RegExp(`^${name}=`, 'gm'))).toHaveLength(1);
       expect(loaded.secret(name)).toBe('tok-2');
+      expect(() => probe.ctx.storeSecret(name, 'tok 3')).toThrow();
+      expect(() => probe.ctx.storeSecret('BAD NAME', 'tok')).toThrow();
+      expect(loaded.secret(name)).toBe('tok-2');
     } finally {
       delete process.env[name];
     }

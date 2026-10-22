@@ -3,14 +3,14 @@
  * 挂载状态与启动状态分开，实际启动由 Core 管理。定义实例在停用和重启时重新构造；
  * 预建实例重启时复用原对象。名称、标签与缺失原因来自定义或 bot 声明。
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   CoreConfig, DescribeText, EventDescribe, ToolDescribe, ToolSpec, World, WorldLifecycleEvent,
 } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
 import type { BotDefinition } from './bot.ts';
-import { updateJsonObject } from './config-file.ts';
+import { updateJsonObject, writeSecretFile } from './config-file.ts';
 import type { Language } from './core/language.ts';
 import { assemblyText as text } from './strings.ts';
 
@@ -39,7 +39,7 @@ export interface WorldContext<S extends WorldSection = WorldSection> {
   readonly dataDir: string;
   readonly repoRoot: string;
   secret(name: string): string;
-  /** 将密钥写入部署 .env，并更新进程环境供 secret() 立即读取。 */
+  /** 将密钥写入部署 .env(仅本人可读)，并更新进程环境供 secret() 立即读取。name 须是环境变量名，值不能为空或含空白，否则抛错。 */
   storeSecret(name: string, value: string): void;
   /** 深合并进 `worlds.<id>` 段:活对象与 config.json 同步。数组整体替换。 */
   persist(patch: DeepPartial<S>): void;
@@ -182,14 +182,17 @@ function assignDeep(target: Record<string, unknown>, patch: Record<string, unkno
   }
 }
 
+/** A .env line holds one variable name and a value without whitespace; anything else is refused. */
 function writeEnvLine(envPath: string, name: string, value: string): void {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`storeSecret: "${name}" is not an environment variable name`);
+  if (!value || /\s/.test(value)) throw new Error(`storeSecret: the value of ${name} is empty or holds whitespace`);
   const prev = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
   const line = `${name}=${value}`;
   const pattern = new RegExp(`^[ \\t]*${name}\\s*=.*$`, 'm');
   const next = pattern.test(prev)
     ? prev.replace(pattern, line)
     : (prev.trimEnd() ? `${prev.trimEnd()}\n${line}\n` : `${line}\n`);
-  writeFileSync(envPath, next, 'utf8');
+  writeSecretFile(envPath, next);
 }
 
 export class WorldAssembly {
