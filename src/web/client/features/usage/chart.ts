@@ -324,18 +324,19 @@ export interface ChartDeps {
 export interface ChartOptions {
   metric: UsageMetric;
   dims: UsageDimFlags;
-  /** 调用图没有"类型"这一维（次数没有三档分量可分）。 */
+  /** 调用次数没有三档分量，不按"类型"拆。 */
   allowType?: boolean;
   /** 按占比降序统一堆叠；关掉则按 类型>角色>模型 的嵌套序。 */
   sort?: boolean;
 }
 
 const PAD_L = 52;
-const PAD_B = 46;
+const PAD_R = 8;
+const PAD_B = 26;
 const PAD_T = 12;
-const CHART_H = 248;
-/** 横轴最多印几个刻度标签，超了按 stride 抽稀。 */
-const XLABEL_MAX = 18;
+const CHART_H = 240;
+/** 每个横轴刻度标签至少占的宽度，按 stride 抽稀。 */
+const XLABEL_W = 72;
 
 /** 成本、token 与调用次数的堆叠柱图；SVG 统一处理 hover 与离开事件。 */
 export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptions): void {
@@ -383,12 +384,12 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     }
   }
 
-  const chartH = CHART_H - PAD_T - PAD_B;
-  const avail = Math.max(320, box.getBoundingClientRect().width || box.clientWidth || 700);
-  let step = Math.floor((avail - PAD_L - 22) / series.length);
-  step = Math.max(18, Math.min(72, step));
-  const W = Math.max(avail, series.length * step + PAD_L + 24);
-  const bw = Math.max(6, Math.min(40, step - 6));
+  // 画布与图区同宽：桶多时柱子变窄，不出现横向滚动。
+  const W = Math.max(240, box.clientWidth || 700);
+  const H = CHART_H;
+  const chartH = H - PAD_T - PAD_B;
+  const step = (W - PAD_L - PAD_R) / series.length;
+  const bw = Math.max(1, Math.min(40, step * 0.6));
   let max = 0;
   for (const p of series) {
     const t = uMetricVal(p, metric);
@@ -396,14 +397,14 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
   }
   if (!(max > 0)) max = 1;
 
-  const svg = mkSvgEl(doc, 'svg', { viewBox: `0 0 ${W} ${CHART_H}`, width: W, height: CHART_H });
+  const svg = mkSvgEl(doc, 'svg', { viewBox: `0 0 ${W} ${H}`, width: W, height: H });
   const defs = mkSvgEl(doc, 'defs', {});
   svg.appendChild(defs);
   const clipPrefix = (box.id || 'usage-chart').replace(/[^a-zA-Z0-9_-]/g, '-');
   for (let i = 0; i <= 4; i++) {
     const y = PAD_T + chartH * (1 - i / 4);
     svg.appendChild(mkSvgEl(doc, 'line', {
-      x1: PAD_L, y1: y, x2: W - 8, y2: y, class: 'axis', opacity: i === 0 ? 0.9 : 0.35,
+      x1: PAD_L, y1: y, x2: W - PAD_R, y2: y, class: 'axis', opacity: i === 0 ? 0.9 : 0.35,
     }));
     svg.appendChild(mkSvgEl(doc, 'text', {
       x: PAD_L - 6, y: y + 3, 'text-anchor': 'end', class: 'vlabel',
@@ -411,14 +412,14 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
   }
 
   const sep = stacked && order.length > 1;
-  const stride = Math.ceil(series.length / XLABEL_MAX);
+  const stride = Math.max(1, Math.ceil(series.length / Math.max(1, Math.floor((W - PAD_L - PAD_R) / XLABEL_W))));
   series.forEach((p, i) => {
     const cx = PAD_L + i * step;                       // 列起点
-    const bx = cx + Math.max(1, (step - bw) / 2);      // 柱体居中
+    const bx = cx + (step - bw) / 2;                   // 柱体居中
     const g = mkSvgEl(doc, 'g', { class: 'barg' });
     // 全宽透明感应块：整列都归这个桶，相邻列平铺无缝隙，移动不断档
     g.appendChild(mkSvgEl(doc, 'rect', {
-      x: cx, y: PAD_T, width: step, height: CHART_H - PAD_T - PAD_B,
+      x: cx, y: PAD_T, width: step, height: chartH,
       fill: 'transparent', class: 'bhit', 'data-i': i,
     }));
     const shownTotal = stacked
@@ -429,7 +430,7 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     const clip = mkSvgEl(doc, 'clipPath', { id: clipId });
     clip.appendChild(mkSvgEl(doc, 'rect', {
       x: bx,
-      y: CHART_H - PAD_B - totalH,
+      y: H - PAD_B - totalH,
       width: bw,
       height: Math.max(0.6, totalH),
       rx: Math.min(4, bw / 2, Math.max(0.3, totalH / 2)),
@@ -442,7 +443,7 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
       if (v <= 0) continue;
       const cid = compId(comp);
       const segH = chartH * (v / max);
-      const y = CHART_H - PAD_B - acc - segH;
+      const y = H - PAD_B - acc - segH;
       const at: Record<string, string | number> = {
         x: bx, y, width: bw, height: Math.max(0.6, segH),
         fill: colorOf[cid] ?? '', class: 'bseg', 'data-i': i,
@@ -460,7 +461,7 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     svg.appendChild(g);
     if (i % stride === 0) {
       svg.appendChild(mkSvgEl(doc, 'text', {
-        x: bx + bw / 2, y: CHART_H - PAD_B + 14, 'text-anchor': 'middle', class: 'glabel',
+        x: bx + bw / 2, y: H - PAD_B + 16, 'text-anchor': 'middle', class: 'glabel',
       }, bucketLabel(p.bucket, unit)));
     }
   });

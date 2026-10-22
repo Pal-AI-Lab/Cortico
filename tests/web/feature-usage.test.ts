@@ -12,6 +12,7 @@ const LABELS = '../../src/web/client/features/usage/labels.ts';
 const TOOLTIP = '../../src/web/client/features/usage/tooltip.ts';
 const STATE = '../../src/web/client/features/usage/state.ts';
 const USAGE = '../../src/web/client/features/usage/index.ts';
+const ACTIVITY = '../../src/web/client/features/usage/activity.ts';
 const FEATURE = '../../src/web/client/features/feature.ts';
 const UI = '../../src/web/client/ui/index.ts';
 const LIFECYCLE = '../../src/web/client/core/lifecycle.ts';
@@ -98,6 +99,17 @@ class FakeEl {
   innerHTML = '';
   /** 布局：桩里没有真实布局，测试自己写死 */
   clientWidth = 0;
+  clientHeight = 0;
+  offsetWidth = 0;
+  offsetHeight = 0;
+  offsetLeft = 0;
+  offsetTop = 0;
+  scrollTop = 0;
+  scrollHeight = 0;
+  inert = false;
+  hidden = false;
+  readOnly = false;
+  tabIndex = 0;
   /** `style.left = …` 与 `style.setProperty('--x', …)` 两种写法都要认（后者是主题在用）。 */
   style: Any = {
     setProperty(this: Any, k: string, v: string): void { this[k] = v; },
@@ -125,6 +137,7 @@ class FakeEl {
     this.ownText = v;
   }
   get firstChild(): FakeEl | null { return this.children[0] ?? null; }
+  get firstElementChild(): FakeEl | null { return this.children[0] ?? null; }
   get lastChild(): FakeEl | null { return this.children[this.children.length - 1] ?? null; }
 
   appendChild(node: FakeEl): FakeEl {
@@ -140,6 +153,20 @@ class FakeEl {
     this.append(...nodes);
   }
   removeChild(node: FakeEl): FakeEl { node.remove(); return node; }
+  replaceWith(node: FakeEl): void {
+    const parent = this.parent!;
+    node.remove();
+    parent.children.splice(parent.children.indexOf(this), 1, node);
+    node.parent = parent;
+    this.parent = null;
+  }
+  /** 只认 `.class` 与标签名两种选择器，够用量页用。 */
+  querySelector(sel: string): FakeEl | null {
+    return sel.startsWith('.') ? this.find(sel.slice(1)) : this.findTag(sel);
+  }
+  querySelectorAll(sel: string): FakeEl[] {
+    return sel.startsWith('.') ? this.findAll(sel.slice(1)) : this.findAllTag(sel);
+  }
   remove(): void {
     if (!this.parent) return;
     this.parent.children.splice(this.parent.children.indexOf(this), 1);
@@ -212,10 +239,29 @@ class FakeEl {
   }
 }
 
+/** 记下每个观察者，测试手动触发尺寸变化。 */
+class FakeResizeObserver {
+  static live: FakeResizeObserver[] = [];
+  targets: FakeEl[] = [];
+  constructor(private readonly fn: () => void) { FakeResizeObserver.live.push(this); }
+  observe(el: FakeEl): void { this.targets.push(el); }
+  disconnect(): void {
+    this.targets = [];
+    FakeResizeObserver.live.splice(FakeResizeObserver.live.indexOf(this), 1);
+  }
+  /** 给观察 `el` 的观察者发一次尺寸变化。 */
+  static resize(el: FakeEl): void {
+    for (const o of FakeResizeObserver.live.slice()) if (o.targets.includes(el)) o.fn();
+  }
+}
+
 class FakeWindow {
   innerWidth = 1200;
   innerHeight = 800;
   listeners = new Listeners();
+  ResizeObserver = FakeResizeObserver;
+  requestAnimationFrame(fn: () => void): number { fn(); return 0; }
+  setTimeout(fn: () => void, ms: number): unknown { return setTimeout(fn, ms); }
   /** 主题变量表。`themeColor` 读的就是它。 */
   vars: Record<string, string> = { '--chart-1': '#336699', '--ink-dim': '#777777' };
   addEventListener(type: string, fn: Listener, opts?: ListenOptions): void {
@@ -286,7 +332,7 @@ function stubFetch(routes: Routes, fail?: string): void {
 }
 
 /** 让所有已 resolve 的微任务跑完（假 fetch 全是微任务，不用等真时钟）。 */
-async function flush(times = 6): Promise<void> {
+async function flush(times = 12): Promise<void> {
   for (let i = 0; i < times; i++) await Promise.resolve();
 }
 
@@ -324,6 +370,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   vi.useRealTimers();
   seen.length = 0;
+  FakeResizeObserver.live.length = 0;
   // 主题工作室是进程级单例；每条用例给它一份干净的，免得互相看见对方的假文档
   const { disposeThemeStudio } = (await import(THEME)) as Any;
   disposeThemeStudio();
@@ -749,65 +796,162 @@ describe('feature 声明', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Token 活跃度格子图
+// ---------------------------------------------------------------------------
+
+describe('活跃度格子图', () => {
+  /** 2026-07-01 到 2026-08-31 每天一个桶，token 数 = 当月的日（1–31）×100。 */
+  function daily(): Any {
+    const series = [];
+    for (let t = Date.parse('2026-07-01'); t <= Date.parse('2026-08-31'); t += 86_400_000) {
+      const day = new Date(t).toISOString().slice(0, 10);
+      series.push({ bucket: day, ...accum({ promptTokens: Number(day.slice(8)) * 100 }) });
+    }
+    return { bucket: 'day', series };
+  }
+  async function draw(range: { from: string; to: string }, motion: Any): Promise<Any> {
+    const { createWebUi } = (await import(UI)) as Any;
+    const { renderActivity } = (await import(ACTIVITY)) as Any;
+    const doc = new FakeDoc();
+    const ui = createWebUi({ memo: fakeMemo(), overlayHost: doc.body, doc, signal: new AbortController().signal });
+    const box = doc.createElement('div');
+    const tip = { show: vi.fn(), move: vi.fn(), hide: vi.fn() };
+    renderActivity({ ui, box, tip }, daily(), range, motion);
+    return { box, tip, cells: box.find('ugrid')!.findAll('ucell').filter((c: Any) => c.dataset.day) };
+  }
+  const col = (c: Any): number => Number(c.style['--i']);
+
+  it('范围内的日子着色，范围之前的淡显；深浅按整张图的最大值分档', async () => {
+    const { cells } = await draw({ from: '2026-08-25', to: '2026-08-31' }, null);
+    const byDay = new Map(cells.map((c: Any) => [c.dataset.day, c]));
+    expect((byDay.get('2026-08-25') as Any).classList.contains('is-dim')).toBe(false);
+    expect((byDay.get('2026-08-24') as Any).classList.contains('is-dim')).toBe(true);
+    // 3100 是整张图的最大值（07-31 与 08-31）；范围外的 07-31 与范围内的 08-31 同档
+    expect((byDay.get('2026-07-31') as Any).dataset.level).toBe('4');
+    expect((byDay.get('2026-08-31') as Any).dataset.level).toBe('4');
+    expect((byDay.get('2026-08-01') as Any).dataset.level).toBe('1');
+  });
+
+  it('首次画出带入场动画；给出上一个范围时不重播入场', async () => {
+    expect((await draw({ from: '2026-08-25', to: '2026-08-31' }, 'enter')).box.find('ugrid')!.classList.contains('is-entering')).toBe(true);
+    expect((await draw({ from: '2026-08-25', to: '2026-08-31' }, { from: '2026-08-01', to: '2026-08-31' })).box.find('ugrid')!.classList.contains('is-entering')).toBe(false);
+  });
+
+  it('换范围时只扫过变化的格子：进入范围的从右往左着色，离开范围的从左往右褪色，扫完清掉延迟', async () => {
+    vi.useFakeTimers();
+    const wider = await draw({ from: '2026-08-01', to: '2026-08-31' }, { from: '2026-08-25', to: '2026-08-31' });
+    const gained = wider.cells.filter((c: Any) => c.style.transitionDelay);
+    expect(gained.map((c: Any) => c.dataset.day).sort()).toEqual(
+      wider.cells.map((c: Any) => c.dataset.day).filter((d: string) => d >= '2026-08-01' && d < '2026-08-25').sort(),
+    );
+    expect(gained.every((c: Any) => !c.classList.contains('is-dim'))).toBe(true);
+    const rightmost = gained.reduce((a: Any, b: Any) => (col(b) > col(a) ? b : a));
+    const leftmost = gained.reduce((a: Any, b: Any) => (col(b) < col(a) ? b : a));
+    expect(parseInt(rightmost.style.transitionDelay)).toBe(0);
+    expect(parseInt(leftmost.style.transitionDelay)).toBeGreaterThan(0);
+
+    const narrower = await draw({ from: '2026-08-25', to: '2026-08-31' }, { from: '2026-08-01', to: '2026-08-31' });
+    const lost = narrower.cells.filter((c: Any) => c.style.transitionDelay);
+    expect(lost.every((c: Any) => c.classList.contains('is-dim'))).toBe(true);
+    const first = lost.reduce((a: Any, b: Any) => (col(b) < col(a) ? b : a));
+    expect(parseInt(first.style.transitionDelay)).toBe(0);
+
+    vi.advanceTimersByTime(1000);
+    expect(narrower.cells.filter((c: Any) => c.style.transitionDelay).length).toBe(0);
+  });
+
+  it('悬停一天 → tooltip 写日期与当天 token 数；移出格子图即收起', async () => {
+    const { box, tip, cells } = await draw({ from: '2026-08-25', to: '2026-08-31' }, null);
+    const cell = cells.find((c: Any) => c.dataset.day === '2026-08-30')!;
+    cell.closest = (): Any => cell; // 桩里没有选择器匹配；真实 DOM 由 closest('.ucell[data-day]') 找到这一格
+    const grid = box.find('ugrid')!;
+    grid.dispatchEvent({ type: 'mousemove', target: cell, clientX: 1, clientY: 1 });
+    expect(tip.show).toHaveBeenCalledTimes(1);
+    expect(tip.show.mock.calls[0][0]).toContain('2026-08-30');
+    expect(tip.show.mock.calls[0][0]).toContain(`${(3000).toLocaleString()} token`);
+    grid.dispatchEvent({ type: 'mouseleave', target: grid });
+    expect(tip.hide).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // 用量页挂载
 // ---------------------------------------------------------------------------
 
 describe('用量页挂载', () => {
-  it('取数一次，画出概览卡、构成条、两张图与三张分组表', async () => {
+  /** 主数据那一次请求（按天数据另有一次，带 bucket=day 与补出的 from）。 */
+  const mainQueries = (): string[] => seen.filter((u) => u.startsWith('/api/usage') && !u.includes('bucket=day&from='));
+
+  it('取数：主数据一次、按天数据一次；画出六项读数、构成条、一张柱图、活跃度格子图与分组明细', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
 
-    expect(seen.filter((u) => u.startsWith('/api/usage')).length).toBe(1);
+    expect(seen.length).toBe(2);
     expect(seen[0]).toContain('bucket=auto');
+    // 格子图的数据按天分桶，止于页面范围的末日，并向前补出对照的日子
+    expect(seen[1]).toContain('bucket=day');
+    expect(seen[1]).toContain('to=2026-08-02');
+    expect(seen[1]).toMatch(/from=2025-/);
     expect(root.findTag('h1')!.textContent).toBe('用量与成本');
-    expect(root.find('usagecontrols')!.findAll('usagebar').length).toBe(2);
 
-    // 八张概览卡
-    expect(root.find('usagecards')!.classList.contains('statgrid')).toBe(true);
-    expect(root.findAll('stat').length).toBe(8);
+    expect(root.findAll('stat').length).toBe(6);
     expect(root.textContent).toContain('已知费用小计');
     expect(root.textContent).toContain('$4.00');
 
-    // 成本构成：三段 + 三条图例
     expect(root.findAll('compseg').length).toBe(3);
     expect(root.findAll('compitem').length).toBe(3);
 
-    // 两张图各一棵 svg，柱子数 = 桶数
+    // 成本、token 与调用次数共用一张图；柱子数 = 桶数，每根由一枚圆角 clipPath 约束外轮廓
     const svgs = root.findAllTag('svg');
-    expect(svgs.length).toBe(2);
+    expect(svgs.length).toBe(1);
     expect(svgs[0].findAll('barg').length).toBe(2);
-    // 每根堆叠柱由一枚圆角 clipPath 约束外轮廓，内部拆分不再露直角顶边。
     expect(svgs[0].findAllTag('clipPath').length).toBe(2);
     expect(svgs[0].findAllTag('clipPath')[0].findTag('rect')!.getAttribute('rx')).not.toBe(null);
 
-    // 分组表：首列印 label 并跟上 id，没有 label 就只印 id
-    const rows = root.findAllTag('tbody').flatMap((b: Any) => b.children);
-    const firstCells = rows.map((r: Any) => r.children[0].textContent);
-    expect(firstCells).toContain('甲 alpha');
-    expect(firstCells).toContain('conn-a');
-    expect(firstCells).toContain('beta');
-    expect(firstCells).toContain('m-big');
-    expect(root.textContent).not.toContain('无数据');
+    // 活跃度格子图：范围内的两天有用量
+    const days = root.find('ugrid')!.findAll('ucell').filter((c: Any) => c.dataset.day >= '2026-08-01');
+    expect(days.map((c: Any) => [c.dataset.day, c.dataset.level])).toEqual([['2026-08-01', '4'], ['2026-08-02', '2']]);
 
-    // 范围提示
-    expect(root.textContent).toContain('2026-08-01 ~ 2026-08-02 · 2 桶');
+    // 日期框常驻，显示服务端算出的范围；不再印桶数
+    const dates = root.find('udates')!.findAllTag('input');
+    expect([dates[0].value, dates[1].value]).toEqual(['2026-08-01', '2026-08-02']);
+    expect(root.textContent).not.toContain('桶');
   });
 
-  it('空 series → 读数卡整排换成占位句,图里铺空态而不是一张空白画布', async () => {
+  it('分组明细同一时刻一张表：切换用途 / 模型 / 模型连接时首列跟着换', async () => {
+    stubFetch({ '/api/usage': sample() });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const firstCells = (): string[] => root.findAllTag('tbody').flatMap((b: Any) => b.children).map((r: Any) => r.children[0].textContent);
+
+    expect(root.findAllTag('table').length).toBe(1);
+    expect(firstCells()).toEqual(['甲 alpha', 'beta']);
+    root.findButton('按模型')!.dispatchEvent({ type: 'click' });
+    expect(firstCells()).toEqual(['m-big', 'm-small']);
+    root.findButton('按模型连接')!.dispatchEvent({ type: 'click' });
+    expect(firstCells()).toEqual(['conn-a']);
+    expect(root.textContent).not.toContain('无数据');
+  });
+
+  it('空 series → 读数整排换成占位句，构成条收起，图里铺空态而不是一张空白画布', async () => {
     stubFetch({ '/api/usage': { currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [] } });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
     expect(root.findAll('stat').length).toBe(0);
-    expect(root.find('usagecards')!.findAll('placeholder').length).toBe(1);
+    expect(root.find('ukpis')!.findAll('placeholder').length).toBe(1);
+    expect(root.find('ucomp')!.hidden).toBe(true);
     expect(root.findAllTag('svg').length).toBe(0);
     expect(root.textContent).toContain('这个范围内没有调用记录');
-    expect(root.textContent).toContain('暂无成本数据');
     expect(root.textContent).toContain('无数据');
+    // 没有范围就不取按天数据
+    expect(seen.length).toBe(1);
   });
 
   it('取数失败 → 概览位置铺一行失败说明，带服务端措辞', async () => {
@@ -820,7 +964,7 @@ describe('用量页挂载', () => {
     expect(root.textContent).toContain('炸了');
   });
 
-  it('有调用但成本全为 0 时勾上拆分维度，主图画合计柱而不抛错', async () => {
+  it('有调用但成本全为 0 时按下拆分维度，主图画合计柱而不抛错', async () => {
     const d = sample();
     for (const p of d.series) {
       p.cost = 0;
@@ -832,9 +976,7 @@ describe('用量页挂载', () => {
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
-    const box = root.findAll('check').find((c: Any) => c.textContent.includes('调用用途'))!.findTag('input')!;
-    box.checked = true;
-    expect(() => box.dispatchEvent({ type: 'change' })).not.toThrow();
+    expect(() => root.findButton('调用用途')!.dispatchEvent({ type: 'click' })).not.toThrow();
     expect(root.findAllTag('svg')[0].findAll('barg').length).toBe(2);
   });
 
@@ -849,15 +991,18 @@ describe('用量页挂载', () => {
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
-    root.findAll('seg').find((b: Any) => b.textContent === '今天')!.dispatchEvent({ type: 'click' });
+    root.findButton('今天')!.dispatchEvent({ type: 'click' });
     const older = { ...sample(), from: '2026-07-01', to: '2026-08-02' };
     const newer = { ...sample(), from: '2026-08-02', to: '2026-08-02' };
     replies[1]!(newer);
     await flush();
+    replies[2]!(newer); // 后一次查询的按天数据
+    await flush();
     replies[0]!(older);
     await flush();
-    expect(root.textContent).toContain('2026-08-02 ~ 2026-08-02');
-    expect(root.textContent).not.toContain('2026-07-01');
+    const dates = root.find('udates')!.findAllTag('input');
+    expect([dates[0].value, dates[1].value]).toEqual(['2026-08-02', '2026-08-02']);
+    expect(replies.length).toBe(3); // 过期的那次不再去取按天数据
   });
 
   it('刷新失败时保留上一次结果，整块标为过期并写明失败原因', async () => {
@@ -869,33 +1014,42 @@ describe('用量页挂载', () => {
     stubFetch({}, '/api/usage');
     root.findButton('刷新')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(root.findAll('stat').length).toBe(8);
+    expect(root.findAll('stat').length).toBe(6);
     expect(root.find('u-stale')).not.toBeNull();
-    expect(root.find('msgline')!.textContent).toContain('炸了');
+    expect(root.find('unotice')!.hidden).toBe(false);
+    expect(root.find('unotice')!.textContent).toContain('炸了');
   });
 
-  it('勾上拆分维度 → 重画但不重取（数据没变，变的是画法）', async () => {
+  it('按下拆分维度 → 重画但不重取（数据没变，变的是画法）', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
     const before = seen.length;
-    const legendBefore = root.find('chart-legend')!.children.length;
-    expect(legendBefore).toBe(0);
+    expect(root.find('chart-legend')!.children.length).toBe(0);
 
-    // 「角色」那颗勾选框（主图控件里的第二颗 check）
-    const checks = root.findAll('check');
-    const roleCheck = checks.find((c: Any) => c.textContent.includes('调用用途'))!;
-    const box = roleCheck.findTag('input')!;
-    box.checked = true;
-    box.dispatchEvent({ type: 'change' });
-
-    expect(seen.length).toBe(before); // 一次都没再取
+    const role = root.findButton('调用用途')!;
+    role.dispatchEvent({ type: 'click' });
+    expect(role.getAttribute('aria-pressed')).toBe('true');
+    expect(seen.length).toBe(before);
     expect(root.find('chart-legend')!.children.length).toBeGreaterThan(0);
   });
 
-  it('换粒度 / 点刷新 → 重新取数，且 bucket 跟着走', async () => {
+  it('指标换成调用次数时「类型」不可拆，换回来恢复', async () => {
+    stubFetch({ '/api/usage': sample() });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const type = root.findButton('类型')!;
+    root.findButton('调用次数')!.dispatchEvent({ type: 'click' });
+    expect(type.disabled).toBe(true);
+    root.findButton('成本')!.dispatchEvent({ type: 'click' });
+    expect(type.disabled).toBe(false);
+  });
+
+  it('换粒度 / 点刷新 → 重新取数，且 bucket 跟着走；按天数据不随粒度变', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -903,35 +1057,37 @@ describe('用量页挂载', () => {
     await flush();
     seen.length = 0;
 
-    const hourBtn = root.findAll('seg').find((b: Any) => b.textContent === '时')!;
-    hourBtn.dispatchEvent({ type: 'click' });
+    root.findButton('时')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(seen.some((u) => u.includes('bucket=hour'))).toBe(true);
+    expect(mainQueries().some((u) => u.includes('bucket=hour'))).toBe(true);
+    expect(seen.filter((u) => u.includes('bucket=day&from=')).length).toBe(1);
 
     seen.length = 0;
     root.findButton('刷新')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(seen.length).toBe(1);
+    expect(seen.length).toBe(2);
   });
 
-  it('切到「自定义」时以上一次结果的范围预填并发起查询', async () => {
+  it('日期框常驻：切到「自定义」沿用当前范围；改日期即切到自定义档并按新日期取数', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
-    const range = root.find('urange')!;
-    expect(range.classList.contains('hidden')).toBe(true);
+    const [from] = root.find('udates')!.findAllTag('input');
 
-    root.findAll('seg').find((b: Any) => b.textContent === '自定义')!.dispatchEvent({ type: 'click' });
+    root.findButton('自定义')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(range.classList.contains('hidden')).toBe(false);
-    const dates = range.findAllTag('input');
-    expect(dates.length).toBe(2);
-    expect(dates[0].value).toBe('2026-08-01');
-    expect(dates[1].value).toBe('2026-08-02');
-    expect(seen.at(-1)).toContain('from=2026-08-01');
-    expect(seen.at(-1)).toContain('to=2026-08-02');
+    expect(mainQueries().at(-1)).toContain('from=2026-08-01');
+    expect(mainQueries().at(-1)).toContain('to=2026-08-02');
+
+    root.findButton('近 7 天')!.dispatchEvent({ type: 'click' });
+    await flush();
+    from.value = '2026-07-20';
+    from.dispatchEvent({ type: 'change' });
+    await flush();
+    expect(root.findButton('自定义')!.classList.contains('active')).toBe(true);
+    expect(mainQueries().at(-1)).toContain('from=2026-07-20');
   });
 
   it('自动刷新：勾上才有表，取消即停；离开这一页一根都不剩', async () => {
@@ -963,21 +1119,21 @@ describe('用量页挂载', () => {
     seen.length = 0;
     vi.advanceTimersByTime(15_000);
     await flush();
-    expect(seen.length).toBe(1);
+    expect(seen.length).toBe(2);
 
     lifecycle.dispose();
     expect(vi.getTimerCount()).toBe(base);
   });
 
-  it('卸载后：window 监听、定时器、tooltip 节点全部归零', async () => {
+  it('卸载后：尺寸观察者、定时器、tooltip 节点全部归零', async () => {
     vi.useFakeTimers();
     stubFetch({ '/api/usage': sample() });
-    const { ctx, root, lifecycle, win } = await mkCtx({ usage: true });
+    const { ctx, root, lifecycle } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
 
-    expect(win.countListeners('resize')).toBe(1);
+    expect(FakeResizeObserver.live.length).toBeGreaterThan(0);
     expect(root.find('u-tip')).not.toBeNull();
 
     // 开着自动刷新再卸载：最坏情况也要归零
@@ -986,35 +1142,46 @@ describe('用量页挂载', () => {
     box.dispatchEvent({ type: 'change' });
 
     const base = vi.getTimerCount();
+    const chart = root.find('uchart')!;
     lifecycle.dispose();
-    expect(win.countListeners('resize')).toBe(0);
+    expect(FakeResizeObserver.live.length).toBe(0);
     expect(vi.getTimerCount()).toBe(base - 1);
     expect(root.find('u-tip')).toBeNull();
 
-    // 卸载之后再来一次 resize，不该有任何动静（也不该抛）
+    // 卸载之后再来一次尺寸变化，不该有任何动静（也不该抛）
     seen.length = 0;
-    win.dispatchEvent({ type: 'resize' });
+    FakeResizeObserver.resize(chart);
     await flush();
     expect(seen.length).toBe(0);
   });
 
-  it('改窗宽经防抖后只重画一次、不重取', async () => {
+  it('图区改宽经防抖后柱图与格子图各重画一次、不重取；宽度没变不重画', async () => {
     vi.useFakeTimers();
     stubFetch({ '/api/usage': sample() });
-    const { ctx, root, win } = await mkCtx({ usage: true });
+    const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
     seen.length = 0;
 
+    const chart = root.find('uchart')!;
     const svgMid = root.findAllTag('svg')[0];
-    win.dispatchEvent({ type: 'resize' });
-    win.dispatchEvent({ type: 'resize' });
-    win.dispatchEvent({ type: 'resize' });
+    const gridMid = root.find('ugrid');
+    chart.clientWidth = 800;
+    FakeResizeObserver.resize(chart);
+    FakeResizeObserver.resize(chart);
+    FakeResizeObserver.resize(chart);
     expect(root.findAllTag('svg')[0]).toBe(svgMid); // 还在防抖窗口里
     vi.advanceTimersByTime(200);
-    expect(root.findAllTag('svg')[0]).not.toBe(svgMid);
+    const svgAfter = root.findAllTag('svg')[0];
+    expect(svgAfter).not.toBe(svgMid);
+    expect(root.find('ugrid')).not.toBe(gridMid);
+    expect(root.find('ugrid')!.classList.contains('is-entering')).toBe(false);
     expect(seen.length).toBe(0);
+
+    FakeResizeObserver.resize(chart); // 宽度没变
+    vi.advanceTimersByTime(200);
+    expect(root.findAllTag('svg')[0]).toBe(svgAfter);
   });
 
   it('主题工作室换肤也重画（长期只剩这一条来路，不能只接 legacy 事件）', async () => {

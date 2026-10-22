@@ -11,12 +11,9 @@ export interface UsageState {
   to: string;
   bucket: UsageBucketOption;
   metric: UsageMetric;
-  /** 主图的拆分维度（含"类型"）。 */
+  /** 拆分维度；指标为调用次数时不按"类型"拆。 */
   splitDims: UsageDimFlags;
-  /** 调用图的拆分维度（没有"类型"）。 */
-  callDims: UsageDimFlags;
   sortByShare: boolean;
-  callSortByShare: boolean;
   /** 最近一次取回的数据。重绘（换指标、换拆分、主题换色、窗口改宽）不重取。 */
   data: UsageAggregate | null;
 }
@@ -29,9 +26,7 @@ export function createUsageState(): UsageState {
     bucket: 'auto',
     metric: 'cost',
     splitDims: { type: false, role: false, model: false },
-    callDims: { role: false, model: false },
     sortByShare: false,
-    callSortByShare: false,
     data: null,
   };
 }
