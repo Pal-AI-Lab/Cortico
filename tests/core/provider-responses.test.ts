@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
 import { OpenAIHttpClient } from '../../src/providers/transport/chat.ts';
 import { mapTools, renderMessagesWithMedia } from '../../src/providers/transport/history.ts';
 import type { NativeChatMessage } from '../../src/providers/transport/native-types.ts';
@@ -183,6 +184,23 @@ describe('Provider standard Responses boundary', () => {
     expect(events).toEqual([value]);
     const endless = new EventDecoder();
     expect(() => endless.feed('data: ' + 'x'.repeat(EVENT_MAX))).toThrow('SSE line');
+  });
+
+  it('does not follow a redirect: the request never reaches the address it points to', async () => {
+    const listen = (server: Server) => new Promise<number>((done) => server.listen(0, '127.0.0.1', () => done((server.address() as { port: number }).port)));
+    let reached = 0;
+    const target = createServer((_req, res) => { reached++; res.end('{}'); });
+    const targetPort = await listen(target);
+    const moved = createServer((_req, res) => { res.writeHead(307, { location: `http://127.0.0.1:${targetPort}/v1/responses` }).end(); });
+    const movedPort = await listen(moved);
+    try {
+      const failure = await new ResponsesProvider({ baseUrl: `http://127.0.0.1:${movedPort}/v1`, apiKey: 'key' }).respond({ model: 'test', input: [] }, { diagnostic: true }).catch((error: unknown) => error);
+      expect(failure).toBeInstanceOf(GenerationError);
+      expect(reached).toBe(0);
+    } finally {
+      target.close();
+      moved.close();
+    }
   });
 
   it('keeps at most 64 KiB of an error response body', async () => {

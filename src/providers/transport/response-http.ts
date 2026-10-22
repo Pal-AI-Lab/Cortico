@@ -184,7 +184,8 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.startedAt = new Date().toISOString();
       quotes = structuredClone(options.quote?.({ startedAt: attempt.startedAt, requestedServiceTier: attempt.requestedServiceTier ?? null }) ?? []);
       sent = true;
-      const response = await fetch(transport.url, { method: 'POST', body: requestJson(transport.body), headers, signal });
+      // a redirect fails the attempt: the key headers a vendor uses besides Authorization would follow it to the new address
+      const response = await fetch(transport.url, { method: 'POST', body: requestJson(transport.body), headers, signal, redirect: 'error' });
       attempt.status = response.status;
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
