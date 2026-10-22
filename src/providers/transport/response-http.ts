@@ -29,25 +29,65 @@ export function requestJson(body: unknown): string {
     typeof value === 'string' ? value.replace(LONE_SURROGATE, '\uFFFD') : value);
 }
 
-/** SSE framing is independent of packet and line boundaries. */
+/** The longest line or event a stream may send, in UTF-16 code units; a longer one fails the attempt. */
+export const EVENT_MAX = 16 * 1024 * 1024;
+/** How much of an error response's body is read and kept. */
+const ERROR_BODY_MAX = 64 * 1024;
+
+/**
+ * SSE framing is independent of packet and line boundaries. Each byte is searched for a line end once,
+ * so a long line sent in many chunks costs time in proportion to its length.
+ */
 export class EventDecoder {
   private buffer = '';
+  /** The part of `buffer` already searched: it holds no line end. */
+  private scanned = 0;
   private data: string[] = [];
+  private dataLength = 0;
   feed(text: string): string[] {
     this.buffer += text;
     const events: string[] = [];
+    let start = 0;
     for (;;) {
-      const newline = this.buffer.indexOf('\n');
+      const newline = this.buffer.indexOf('\n', Math.max(start, this.scanned));
       if (newline < 0) break;
-      const line = this.buffer.slice(0, newline).replace(/\r$/, '');
-      this.buffer = this.buffer.slice(newline + 1);
+      const line = this.buffer.slice(start, newline).replace(/\r$/, '');
+      start = newline + 1;
       if (line === '') {
         if (this.data.length) events.push(this.data.join('\n'));
         this.data = [];
-      } else if (line.startsWith('data:')) this.data.push(line.slice(5).replace(/^ /, ''));
+        this.dataLength = 0;
+      } else if (line.startsWith('data:')) {
+        const data = line.slice(5).replace(/^ /, '');
+        this.dataLength += data.length + 1;
+        if (this.dataLength > EVENT_MAX) throw new ResponseProtocolError(`SSE event longer than ${EVENT_MAX} characters`);
+        this.data.push(data);
+      }
     }
+    this.buffer = this.buffer.slice(start);
+    this.scanned = this.buffer.length;
+    if (this.buffer.length > EVENT_MAX) throw new ResponseProtocolError(`SSE line longer than ${EVENT_MAX} characters`);
     return events;
   }
+}
+
+/** The first `max` bytes of a body as text; the rest is not read. */
+async function readCapped(response: globalThis.Response, max: number): Promise<string> {
+  if (!response.body) return '';
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (size < max) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      chunks.push(chunk.value);
+      size += chunk.value.length;
+    }
+  } finally {
+    void reader.cancel().catch(() => {});
+  }
+  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, max));
 }
 
 function irreversible(event: StreamEvent): boolean {
@@ -148,7 +188,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.status = response.status;
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
-        const error = new LLMError(`LLM API ${response.status}`, response.status, await response.text());
+        const error = new LLMError(`LLM API ${response.status}`, response.status, await readCapped(response, ERROR_BODY_MAX));
         retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
         if (!options.diagnostic && (response.status === 401 || response.status === 403) && !authRetried && await transport.refresh()) {
           authRetried = true;

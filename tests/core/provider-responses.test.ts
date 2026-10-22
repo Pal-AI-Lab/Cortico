@@ -6,7 +6,7 @@ import type { NativeChatMessage } from '../../src/providers/transport/native-typ
 import type { ModelSpec, ToolSchema } from '../../src/core/types.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ChatResponseAssembly, NativeResponseAssembly } from '../../src/providers/transport/response-assembly.ts';
-import { EventDecoder } from '../../src/providers/transport/response-http.ts';
+import { EVENT_MAX, EventDecoder } from '../../src/providers/transport/response-http.ts';
 import { GenerationError, priceUsage, unknownMeters } from '../../src/core/generation.ts';
 import { ResponsesProvider } from '../../src/providers/openai-responses-compat/native.ts';
 import type { FunctionCall, StreamEvent } from '../../src/protocol/open-responses/index.ts';
@@ -172,6 +172,24 @@ describe('Provider standard Responses boundary', () => {
     assembly.feed({ choices: [{ delta: { role: 'assistant', content: '' } }], usage: { prompt_tokens: 3, completion_tokens: 1 } }, emit);
     expect(assembly.finish(emit).status).toBe('completed');
     expect(assembly.meters()).toMatchObject({ input: 3, output: 1 });
+  });
+
+  it('decodes a long event sent in small chunks, and refuses a line past the limit', () => {
+    const decoder = new EventDecoder();
+    const value = 'x'.repeat(1 << 20);
+    const raw = `data: ${value}\n\n`;
+    const events: string[] = [];
+    for (let index = 0; index < raw.length; index += 1024) events.push(...decoder.feed(raw.slice(index, index + 1024)));
+    expect(events).toEqual([value]);
+    const endless = new EventDecoder();
+    expect(() => endless.feed('data: ' + 'x'.repeat(EVENT_MAX))).toThrow('SSE line');
+  });
+
+  it('keeps at most 64 KiB of an error response body', async () => {
+    vi.stubGlobal('fetch', async () => new Response('e'.repeat(1 << 20), { status: 400 }));
+    const failure = await new ResponsesProvider({ baseUrl: 'https://fixture.test' }).respond({ model: 'test', input: [] }).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(GenerationError);
+    expect((failure as GenerationError).body.length).toBe(64 * 1024);
   });
 
   it('decodes real native Responses framing and retains encrypted reasoning and function identity', () => {
