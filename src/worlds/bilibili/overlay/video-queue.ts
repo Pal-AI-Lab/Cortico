@@ -5,7 +5,6 @@ import type { VideoQueueItem, VideoQueueState } from './types.ts';
 /** BV 号是 `BV1` 加 9 位 base58 字符。 */
 const BVID_RE = /(?<![0-9A-Za-z])[Bb][Vv]1[1-9A-HJ-NP-Za-km-z]{9}(?![0-9A-Za-z])/;
 const STORED_BVID_RE = /^BV1[1-9A-HJ-NP-Za-km-z]{9}$/;
-export const VIDEO_QUEUE_NOTE_MAX_CHARS = 60;
 
 const EMPTY_STATE: VideoQueueState = {
   schemaVersion: 1,
@@ -34,10 +33,6 @@ export class VideoQueueStore {
 
   /** `position` 超出末尾时排到最后。 */
   add(bvid: string, note: string, position: number | undefined, maxItems: number): VideoQueueState {
-    const count = Array.from(note).length;
-    if (count > VIDEO_QUEUE_NOTE_MAX_CHARS) {
-      throw new Error(`note 最多 ${VIDEO_QUEUE_NOTE_MAX_CHARS} 字，当前 ${count} 字`);
-    }
     if (this.state.items.length >= maxItems) {
       throw new Error(`队列已满(${this.state.items.length}/${maxItems})`);
     }

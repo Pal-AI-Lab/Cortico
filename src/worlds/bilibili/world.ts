@@ -37,7 +37,7 @@ import {
 import { projectOverlayEvent } from './overlay/project.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from './overlay/server.ts';
 import type { BilibiliOverlayConfig, OverlayAudienceEvent, VideoQueueState } from './overlay/types.ts';
-import { parseBvid, VIDEO_QUEUE_NOTE_MAX_CHARS, VideoQueueStore } from './overlay/video-queue.ts';
+import { parseBvid, VideoQueueStore } from './overlay/video-queue.ts';
 import { BILIBILI_DEFAULTS, bilibiliConfigGroup } from './config.ts';
 import { text, type BilibiliText } from './strings.ts';
 
@@ -240,7 +240,6 @@ export function bilibiliToolDecls(
           },
           note: {
             type: 'string',
-            maxLength: VIDEO_QUEUE_NOTE_MAX_CHARS,
             description: 'add only: short text shown after the BV id, such as the video title or who asked for it.',
           },
           position: {
