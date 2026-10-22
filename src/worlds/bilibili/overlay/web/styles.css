@@ -53,6 +53,10 @@ body.preview[data-wall-mode="dark"] {
   flex-direction: column;
 }
 
+.overlay-component[hidden] {
+  display: none;
+}
+
 .component-content {
   position: relative;
   flex: 1 1 auto;
