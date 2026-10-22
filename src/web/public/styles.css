@@ -1518,6 +1518,18 @@
   .segwrap { gap: 2px; padding: 2px; background: var(--surface-hover); border: 0; border-radius: var(--radius-md); }
   .seg { border: 0; border-radius: calc(var(--radius-md) - 2px); background: transparent; }
   .seg.active { background: var(--surface); color: var(--foreground); }
+  /* 选中底色由外框的 ::before 滑块画出（segmented() 按按钮的 offset 写位置，外框须是定位元素）；页面可改 --seg-thumb 换颜色 */
+  .segwrap { position: relative; isolation: isolate; }
+  .segwrap[data-thumb]::before {
+    content: ''; position: absolute; top: 0; left: 0; z-index: -1;
+    width: var(--seg-w); height: var(--seg-h); transform: translate(var(--seg-x), var(--seg-y));
+    border-radius: calc(var(--radius-md) - 2px); background: var(--seg-thumb, var(--surface));
+  }
+  .segwrap[data-thumb="ready"]::before { transition: transform 280ms cubic-bezier(.3, .7, .2, 1), width 280ms cubic-bezier(.3, .7, .2, 1), height 280ms cubic-bezier(.3, .7, .2, 1); }
+  .segwrap[data-thumb] > .seg { transition: color 200ms ease-out; }
+  .segwrap[data-thumb] > .seg.active { background: transparent; }
+  .seg:disabled { opacity: .45; cursor: default; }
+  .segwrap[data-thumb]:has(> .seg.active:disabled)::before { opacity: .45; }
   .pill, .chip { background: transparent; border-color: var(--border); }
 
   .tablewrap, .logview {

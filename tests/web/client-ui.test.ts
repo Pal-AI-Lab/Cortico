@@ -93,6 +93,12 @@ class FakeEl {
   scrollTop = 0;
   scrollHeight = 0;
   clientHeight = 0;
+  offsetLeft = 0;
+  offsetTop = 0;
+  offsetWidth = 0;
+  offsetHeight = 0;
+  /** 只记 `style.setProperty` 写进的 CSS 变量。 */
+  style: Any = { setProperty(this: Any, k: string, v: string): void { this[k] = v; } };
   /** `textarea.select()`：复制按钮的降级路线要它 */
   selected = false;
   select(): void {
@@ -131,7 +137,10 @@ class FakeEl {
   }
   getAttribute(k: string): string | null {
     return this.attrs.get(k) ?? null;
+  }  removeAttribute(k: string): void {
+    this.attrs.delete(k);
   }
+
   focus(): void {
     this.focused = true;
   }
@@ -790,6 +799,27 @@ describe('segmented', () => {
     (s.el.children[0] as FakeEl).dispatchEvent({ type: 'click' });
     expect(seen).toEqual([]);
     expect(s.value).toBe('天');
+  });
+
+  it('选中底色是外框的滑块：选中按钮有尺寸时把位置写进 CSS 变量并标 data-thumb，结构仍是 .segwrap > button.seg', async () => {
+    const { ui } = await mkUi();
+    const s = ui.segmented(['天', '周'], { value: '天' });
+    const [day, week] = s.el.children as FakeEl[];
+    // 还没布局：不显示滑块
+    expect(s.el.getAttribute('data-thumb')).toBeNull();
+
+    Object.assign(day, { offsetLeft: 2, offsetTop: 2, offsetWidth: 40, offsetHeight: 26 });
+    Object.assign(week, { offsetLeft: 44, offsetTop: 2, offsetWidth: 52, offsetHeight: 26 });
+    week.dispatchEvent({ type: 'click' });
+    expect(s.el.getAttribute('data-thumb')).toBe('');
+    expect([s.el.style['--seg-x'], s.el.style['--seg-y'], s.el.style['--seg-w'], s.el.style['--seg-h']]).toEqual(['44px', '2px', '52px', '26px']);
+    expect(s.el.className).toBe('segwrap');
+    expect((s.el.children as FakeEl[]).map((b) => b.tagName)).toEqual(['button', 'button']);
+
+    // 选中项不可见（宽度 0）时收起滑块
+    week.offsetWidth = 0;
+    s.setValue('周');
+    expect(s.el.getAttribute('data-thumb')).toBeNull();
   });
 
   it('setValue 改选中态但不回调；给个不认识的值就一颗都不亮', async () => {

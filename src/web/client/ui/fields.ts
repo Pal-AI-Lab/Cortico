@@ -144,7 +144,12 @@ export function field(doc: Document, label: string, control: HTMLElement): HTMLL
   return el;
 }
 
-/** 分段选择器保留全部重复 value 选项，并统一更新它们的选中态。 */
+/**
+ * 分段选择器保留全部重复 value 选项，并统一更新它们的选中态。
+ * 选中底色是外框的 `::before` 滑块，换选中项时从旧位置滑到新位置：外框带 `data-thumb` 时显示，
+ * 位置与尺寸写在 `--seg-x/--seg-y/--seg-w/--seg-h`，颜色取 `--seg-thumb`。结构仍是
+ * `.segwrap > button.seg`。没有选中项或还没布局时不显示，第一次落位不播动画。
+ */
 export function segmented(
   doc: Document,
   signal: AbortSignal,
@@ -155,9 +160,35 @@ export function segmented(
   const el = h(doc, 'div', o.size === 'sm' ? 'segwrap sm' : 'segwrap');
   const keys: { value: string; btn: HTMLButtonElement }[] = [];
   let current = o.value ?? '';
+  const place = (): void => {
+    const active = keys.find((k) => k.value === current)?.btn;
+    if (!active?.offsetWidth) {
+      if (el.getAttribute('data-thumb') !== null) el.removeAttribute('data-thumb');
+      return;
+    }
+    el.style.setProperty('--seg-x', `${active.offsetLeft}px`);
+    el.style.setProperty('--seg-y', `${active.offsetTop}px`);
+    el.style.setProperty('--seg-w', `${active.offsetWidth}px`);
+    el.style.setProperty('--seg-h', `${active.offsetHeight}px`);
+    if (el.getAttribute('data-thumb') === null) {
+      el.setAttribute('data-thumb', '');
+      doc.defaultView?.requestAnimationFrame(() => {
+        if (el.getAttribute('data-thumb') !== null) el.setAttribute('data-thumb', 'ready');
+      });
+    }
+  };
   const paint = (): void => {
     for (const k of keys) k.btn.className = k.value === current ? 'seg active' : 'seg';
+    place();
   };
+  // 挂到页面、换行或改字号后按钮的位置会变；滑块跟着重新落位。没有 ResizeObserver 的环境（jsdom）
+  // 只在选中项变化时落位。
+  const view = doc.defaultView;
+  if (view?.ResizeObserver) {
+    const size = new view.ResizeObserver(place);
+    size.observe(el);
+    signal.addEventListener('abort', () => size.disconnect(), { once: true });
+  }
 
   for (const raw of items) {
     const item = typeof raw === 'string' ? { value: raw, label: raw } : raw;
