@@ -1,10 +1,11 @@
 /**
- * 交接笔记渲染:speak 只进最近段,flow 不进笔记,状态读数与逐字重复只留最后一次,
+ * 交接笔记渲染:speak 只进最近段,flow 与投递计数通知不进笔记,状态读数与逐字重复只留最后一次,
  * 时间按分钟分段,单条折叠随年龄衰减,整份按预算从新往旧装,出线切成两段。
  */
 import { describe, it, expect } from 'vitest';
 import {
   HANDOFF_NOTE_TYPE,
+  deliveryNotice,
   foldToBudget,
   handoffNoteStamp,
   renderHandoffNote,
@@ -47,6 +48,19 @@ function frameMsg(
     call(id, 'external_event_frame', '{}'),
     { role: 'tool', tool_call_id: id, content: [header, ...items.map((it) => it.text)].join('\n'), frame: { events } },
   ];
+}
+
+/**
+ * 一批只含一条外部事件的投递,按 Core 的两种写法:user 投递时通知行接在事件块之前,
+ * 工具帧投递时通知独占一条 user 消息,紧跟帧调用。
+ */
+function deliveryBatch(mode: 'user' | 'tool', id: string, text: string): ChatMessage[] {
+  const notice = deliveryNotice(1);
+  if (mode === 'tool') return [{ role: 'user', content: notice }, ...frameMsg(id, [{ text }])];
+  const ref: FrameEventRef = {
+    cursor: 1, ts: '2026-09-03T14:24:00+08:00', type: 'test.message', source: 'test', start: notice.length + 1, chars: text.length,
+  };
+  return [{ role: 'user', content: `${notice}\n${text}`, frame: { events: [ref] } }];
 }
 
 const oneNote = (snapshot: ChatMessage[], opts: Partial<Parameters<typeof renderHandoffNote>[1]> = {}) =>
@@ -177,7 +191,7 @@ describe('renderHandoffNote', () => {
     expect(note.entries).toBe(1);
   });
 
-  it('逐字相同的条目只留最后一次,并注明重复了几次', () => {
+  it('逐字相同的条目只留最后一次,并注明共出现几次', () => {
     const snapshot: ChatMessage[] = [
       ...frameMsg('evf_1', [
         { text: '[MC] Server: Saved the game' },
@@ -188,8 +202,22 @@ describe('renderHandoffNote', () => {
     ];
     const note = oneNote(snapshot);
     expect(note.text.match(/Saved the game/g)).toHaveLength(1);
-    expect(note.text).toContain('同样的一条重复了 3 次');
+    expect(note.text).toContain('同样的一条共出现 3 次');
     expect(note.entries).toBe(2);
+  });
+
+  it.each(['user', 'tool'] as const)('%s 投递时每批的投递计数通知不进笔记,不与各批事件并列成重复', (mode) => {
+    const snapshot = Array.from({ length: 29 }, (_, i) => deliveryBatch(mode, `evf_${i}`, `外来事件 ${i + 1}。`)).flat();
+    const note = oneNote(snapshot);
+    expect(note.entries).toBe(29);
+    expect(note.text).not.toContain('同样的一条');
+    expect(note.text).not.toContain(deliveryNotice(1));
+  });
+
+  it.each(['user', 'tool'] as const)('%s 投递时与通知同文的外部事件照常收录', (mode) => {
+    const note = oneNote(deliveryBatch(mode, 'evf_1', deliveryNotice(1)));
+    expect(note.entries).toBe(1);
+    expect(note.text.split(deliveryNotice(1))).toHaveLength(2);
   });
 
   it('单条折叠随年龄衰减:最新的按 foldTokens,更早的越来越短', () => {
@@ -335,7 +363,7 @@ describe('renderHandoffNote', () => {
     expect(snapshot).toEqual(before);
   });
 
-  it('只有入参与回执都相同的 speak 才合并,合并项保留最后位置与重复次数', () => {
+  it('只有入参与回执都相同的 speak 才合并,合并项保留最后位置与出现次数', () => {
     const note = oneNote([
       call('a', 'vtuber_act', '{"script":"等一下"}'), result('a', '[未播出] 合成失败'),
       { role: 'user', content: '重试间隔的事件' },
@@ -344,7 +372,7 @@ describe('renderHandoffNote', () => {
     ]);
     expect(note.entries).toBe(3);
     expect(note.text.match(/\[调用\] vtuber_act/g)).toHaveLength(2);
-    expect(note.text).toContain('同样的一条重复了 2 次');
+    expect(note.text).toContain('同样的一条共出现 2 次');
     expect(note.text.indexOf('重试间隔的事件')).toBeLessThan(note.text.indexOf('[调用]'));
     expect(note.text).toContain('[回执] [未播出] 合成失败');
     expect(note.text).toContain('[回执] 已开演');

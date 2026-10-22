@@ -1,7 +1,7 @@
 /**
  * 将交接前的 session 消息渲染为纯文本笔记，不做 I/O；变体措辞由 handoffNoteLines 提供。
  * 收录 user 消息、事件帧、工具入参与回执；speak 类调用仅保留最近段，flow 类调用、
- * assistant 正文、思维链和上一份交接笔记不收录。完成状态以回执和后续事件为准。
+ * assistant 正文、思维链、投递计数通知和上一份交接笔记不收录。完成状态以回执和后续事件为准。
  * snapshot 事件按 source/type、snapshot 工具按名称保留最后一次；相同条目合并并计数。
  * FrameEventRef 将帧拆为事件，时间取入库 ts 并按分钟分组；旧记录缺 ts 时不标时间，
  * 缺 sidecar 时整帧作为一条。
@@ -21,6 +21,19 @@ export const HANDOFF_NOTE_TYPE = 'handoff-note';
 export const HANDOFF_NOTE_TOKENS = 4096;
 /** 最近那批条目的单条预算,更早的按年龄衰减 */
 export const HANDOFF_FOLD_TOKENS = 1024;
+
+/** 每批外部事件的投递计数通知:onDelivery 注入,交接笔记不收录 */
+export function deliveryNotice(count: number): string {
+  return `[system] ${count} 条新事件。`;
+}
+
+/** 去掉内部文本里的投递计数通知行。外部事件正文按 sidecar 位置切出,不经过这里。 */
+function withoutDeliveryNotice(text: string): string {
+  return text.split('\n').filter((line) => {
+    const count = /\d+/.exec(line);
+    return count === null || line !== deliveryNotice(Number(count[0]));
+  }).join('\n');
+}
 
 export interface HandoffNoteOptions {
   /** speak 类工具名(core 按 'speak' tag 现场给) */
@@ -63,7 +76,7 @@ interface Entry {
   call?: { name: string; args: string };
   /** 调用回执,或事件正文 */
   body: string;
-  /** 逐字重复合并后的次数 */
+  /** 逐字相同条目的出现总次数,含保留的这一条 */
   repeats?: number;
 }
 
@@ -100,7 +113,7 @@ function capFor(age: number, total: number, fold: number): number {
 }
 
 function renderEntry(e: Entry, cap: number): string {
-  const repeat = e.repeats && e.repeats > 1 ? `(同样的一条重复了 ${e.repeats} 次,只留这一次)\n` : '';
+  const repeat = e.repeats && e.repeats > 1 ? `(同样的一条共出现 ${e.repeats} 次,只留这一次)\n` : '';
   if (!e.call) return `${repeat}${foldToBudget(e.body, cap)}`;
   const args = e.call.args && e.call.args !== '{}' ? ` ${foldToBudget(e.call.args, cap)}` : '';
   return `${repeat}[调用] ${e.call.name}${args}\n[回执] ${foldToBudget(e.body, cap)}`;
@@ -108,18 +121,20 @@ function renderEntry(e: Entry, cap: number): string {
 
 /**
  * 一条投递消息拆成条目:有 sidecar 就按位置切回逐条事件(帧的表头行不要),事件块之前
- * 的内部行算一条;没有 sidecar 整条算一条。上一份交接笔记跳过。
+ * 的内部行算一条;没有 sidecar 整条算一条,internalOnly 表示整条都是内部文本。
+ * 内部文本去掉投递计数通知,上一份交接笔记跳过。
  */
-function deliveryEntries(m: ContextRecord, skipHeader: boolean): Entry[] {
+function deliveryEntries(m: ContextRecord, skipHeader: boolean, internalOnly: boolean): Entry[] {
   const refs = m.context.frame?.events;
   if (!refs?.length) {
-    const text = skipHeader ? textOf(m).replace(EVENT_FRAME_HEADER_RE, '') : textOf(m);
+    let text = skipHeader ? textOf(m).replace(EVENT_FRAME_HEADER_RE, '') : textOf(m);
+    if (internalOnly) text = withoutDeliveryNotice(text);
     return text.trim() ? [{ body: text, ts: m.context.ts }] : [];
   }
   const out: Entry[] = [];
   const first = refs[0].start;
   if (!skipHeader && first > 0) {
-    const head = textOf(m).slice(0, first - 1);
+    const head = withoutDeliveryNotice(textOf(m).slice(0, first - 1));
     if (head.trim()) out.push({ body: head, ts: m.context.ts });
   }
   for (const r of refs) {
@@ -168,10 +183,13 @@ export function renderHandoffNote(snapshot: readonly ContextRecord[], opts: Hand
   }
 
   const collected: Entry[] = [];
-  for (const m of snapshot) {
+  for (const [i, m] of snapshot.entries()) {
     if (hasRole(m, 'system') || m.context.head || m.context.ephemeral) continue;
     if (hasRole(m, 'user')) {
-      collected.push(...deliveryEntries(m, false));
+      // 工具帧投递时,紧挨在帧调用之前的 user 消息只承载这一批的内部文本
+      const next = snapshot[i + 1]?.item;
+      const internalOnly = next?.type === 'function_call' && RESERVED_FRAME_NAMES.has(next.name);
+      collected.push(...deliveryEntries(m, false, internalOnly));
       continue;
     }
     if (m.item.type !== 'function_call') continue;
@@ -181,7 +199,7 @@ export function renderHandoffNote(snapshot: readonly ContextRecord[], opts: Hand
       if (flow.has(name)) continue;
       const receipt = results.get(call.call_id);
       if (RESERVED_FRAME_NAMES.has(name)) {
-        if (receipt) collected.push(...deliveryEntries(receipt, true));
+        if (receipt) collected.push(...deliveryEntries(receipt, true, false));
         continue;
       }
       const entry: Entry = {

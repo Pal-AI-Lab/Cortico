@@ -10,7 +10,7 @@ import { renderSections, renderTemplate } from 'cortico/core/template.ts';
 import type { Language } from 'cortico/core/language.ts';
 import { historyPanelDecl, workspaceInvoke, workspacePanelDecl } from './webUiSurface.ts';
 import { webUiText } from './strings.ts';
-import { HANDOFF_NOTE_TYPE, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
+import { HANDOFF_NOTE_TYPE, deliveryNotice, handoffNoteStamp, renderHandoffNote } from './handoffNote.ts';
 import { SAVE_BLOB_DECL, saveBlobTool } from './blobs.ts';
 import { BLOBS_DIR, GitWorkspaceMemory, LIST_DIR_CAP, type WorkspaceBlobStore } from './memory.ts';
 import { WORKSPACE_TOOL_DECLS, workspaceTools } from './workspaceTools.ts';
@@ -556,7 +556,7 @@ export class Cormini implements Persona {
     if (externals.length === 0) return;
     // 外部事件投递复位静默时长。
     this.heartbeat.noteActivity();
-    this.core?.injectInternal(`[system] ${externals.length} 条新事件。`, 'notice');
+    this.core?.injectInternal(deliveryNotice(externals.length), 'notice');
   }
 
   /**
