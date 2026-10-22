@@ -143,7 +143,7 @@ export function mountUsage(ctx: FeatureContext): void {
   rangeBar.append(presets.el, dates);
   intro.append(rangeBar, notice);
 
-  // ---- 总览：读数、成本构成与计费口径 -----------------------------------------
+  // ---- 总览：读数、成本构成与费用口径 -----------------------------------------
   const overview = ui.sheet({ title: S.sectionOverview });
   let basis = 'marginal';
   let currency = '';
