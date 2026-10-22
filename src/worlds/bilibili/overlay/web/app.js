@@ -9,6 +9,7 @@
   let design = null;
   let builtinStyles = [];
   let announcement = { text: '' };
+  let videoQueue = { items: [] };
   let hasEditorDraft = false;
   const feeds = new Map();
   const horizontalLanes = new Map();
@@ -28,7 +29,9 @@
       if (editorPreview && hasEditorDraft) {
         builtinStyles = Array.isArray(packet.builtinStyles) ? packet.builtinStyles : builtinStyles;
         announcement = packet.agentAnnouncement || announcement;
+        videoQueue = packet.videoQueue || videoQueue;
         updateAnnouncement();
+        updateVideoQueues();
         return;
       }
       applyState(packet);
@@ -37,6 +40,11 @@
     if (packet.type === 'announcement' && packet.agentAnnouncement) {
       announcement = packet.agentAnnouncement;
       updateAnnouncement();
+      return;
+    }
+    if (packet.type === 'video-queue' && packet.videoQueue) {
+      videoQueue = packet.videoQueue;
+      updateVideoQueues();
       return;
     }
     if (packet.type === 'audience' && packet.event) renderAudience(packet.event);
@@ -70,6 +78,7 @@
     design = packet.design || design;
     builtinStyles = Array.isArray(packet.builtinStyles) ? packet.builtinStyles : builtinStyles;
     announcement = packet.agentAnnouncement || announcement;
+    videoQueue = packet.videoQueue || videoQueue;
     renderScene();
   }
 
@@ -162,6 +171,10 @@
       renderAgentNotice(element, content, component, placementId, style.body);
       return;
     }
+    if (component.kind === 'video-queue') {
+      renderVideoQueue(element, content, component, style, videoQueue.items);
+      return;
+    }
     if (component.kind === 'image') {
       element.classList.add('image-component');
       const image = document.createElement('img');
@@ -220,6 +233,51 @@
         styleById(component.styleId).body,
       );
     }
+  }
+
+  function updateVideoQueues() {
+    if (!design) return;
+    const components = new Map(design.components.map((item) => [item.id, item]));
+    for (const element of stage.querySelectorAll('.video-queue')) {
+      const component = components.get(element.dataset.componentId);
+      if (!component || component.kind !== 'video-queue') continue;
+      if (component.id === activeMockComponentId) continue;
+      const content = element.querySelector('.component-content');
+      if (content) renderVideoQueue(element, content, component, styleById(component.styleId), videoQueue.items);
+    }
+  }
+
+  /** BV 号与序号用样式的用户名文字，备注用正文文字；放不下的备注以省略号截断。 */
+  function renderVideoQueue(element, content, component, style, items) {
+    const list = Array.isArray(items) ? items : [];
+    element.hidden = !list.length && component.hideWhenEmpty;
+    content.replaceChildren();
+    if (element.hidden) return;
+    if (!list.length) {
+      content.appendChild(textElement(component.emptyText, style.body));
+      return;
+    }
+    const queue = document.createElement('ol');
+    queue.className = `video-queue-list ${component.axis}`;
+    queue.style.gap = `${component.gap}px`;
+    list.forEach((item, index) => {
+      const row = document.createElement('li');
+      row.className = 'video-queue-item';
+      const bvid = document.createElement('span');
+      bvid.className = 'video-queue-bvid';
+      bvid.textContent = component.showIndex ? `${index + 1}. ${item.bvid}` : item.bvid;
+      applyTextStyle(bvid, style.username);
+      row.appendChild(bvid);
+      if (item.note) {
+        const note = document.createElement('span');
+        note.className = 'video-queue-note';
+        note.textContent = item.note;
+        applyTextStyle(note, style.body);
+        row.appendChild(note);
+      }
+      queue.appendChild(row);
+    });
+    content.appendChild(queue);
   }
 
   function audienceElement(event, feed) {
@@ -409,6 +467,18 @@
       return;
     }
 
+    if (component.kind === 'video-queue') {
+      for (const element of elements) {
+        const content = element.querySelector('.component-content');
+        if (content) renderVideoQueue(element, content, component, styleById(component.styleId), [
+          { bvid: 'BV1Ab4y1C7dE', note: '一起看新番预告 · 星野' },
+          { bvid: 'BV1Qx411m7Ks', note: '这是一条为了验证省略号而故意写得很长很长很长很长的视频备注' },
+          { bvid: 'BV1Zr4y1N7pQ', note: '' },
+        ]);
+      }
+      return;
+    }
+
     if (component.kind === 'image' && !componentImageSource(component)) {
       for (const element of elements) {
         const image = element.querySelector('.component-content img');
@@ -422,7 +492,9 @@
       ? { width: 720, height: 320 }
       : component.kind === 'image'
         ? { width: 520, height: 300 }
-        : { width: 820, height: 140 };
+        : component.kind === 'video-queue'
+          ? { width: 600, height: 320 }
+          : { width: 820, height: 140 };
     const width = Math.min(preset.width, design.canvas.width);
     const height = Math.min(preset.height, design.canvas.height);
     const z = Math.max(0, ...design.placements.map((placement) => placement.z)) + 1;

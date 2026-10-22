@@ -3,8 +3,8 @@
 # worlds/bilibili
 
 B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上舰、进场与人流读数从这里进事件流；
-同一 World 提供本机透明 Overlay。唯一工具 `bilibili_set_announcement` 只写本机 Agent 公告栏，
-不会向 B 站账号发送弹幕或执行平台操作。
+同一 World 提供本机透明 Overlay。两个工具只改本机 Overlay:`bilibili_set_announcement` 写 Agent 公告栏，
+`bilibili_update_video_queue` 改视频排队列表；都不会向 B 站账号发送弹幕或执行平台操作。
 
 “重要观众”指符合 UID 资格、在限流时优先分配上下文预算的观众。资格、拥挤状态、事件分组与人物档案召回由 [`audience-admission.ts`](audience-admission.ts) 管理；阈值和预算在 [`config.ts`](config.ts)。资格变化不删除 Memory 中的人物档案。具体条件见「重要观众与实时限流」。
 
@@ -123,6 +123,8 @@ World 在 `127.0.0.1` 启动独立页面：`GET /overlay` 是 OBS browser source
 - 横向或纵向弹幕机，准入可选弹幕、礼物、弹幕+礼物；用户名与内容可分别限制显示字数，礼物包含免费礼物、付费礼物、SC 与舰队事件。
 - 横向或纵向滚动公告、固定公告、Agent 公告；多行滚动公告可设置每行停留时间和行间切换时长，滚动内容在运动方向的两端渐隐。
 - HTTPS/HTTP 外部图片或上传图片，支持 contain/cover/fill。
+- 视频排队：显示 Bot 维护的 BV 号列表，默认纵向堆叠，可改横向；可显示序号，队列为空时显示占位文字或隐藏组件。
+  序号与 BV 号用样式的用户名文字，Bot 写的备注用正文文字，放不下时以省略号截断。
 
 组件可带独立标题。标题占据上、右、下或左侧边带，支持起点、居中、终点对齐，并拥有独立的
 字体、字号、字重、RGBA 颜色与描边。Agent 公告更新时按 Unicode 字符逐字显示并保留输入光标；
@@ -144,6 +146,12 @@ WebP 与 GIF，单文件上限 8 MiB。Agent 公告单独原子保存到
 正在滚动的弹幕。公告内容在下一次主会话前缀重建时通过 `ENV_PROMPT.md` 占位符同步； World 不会
 为了每次公告写入强制重建前缀。
 
+视频排队列表属于 World,所有排队组件显示同一份，原子保存到 `data/bilibili-overlay/video-queue.json`。
+`bilibili_update_video_queue` 的 `add` 按位置插入(从 1 数起，缺省或超出末尾排到最后),`remove` 与 `move`
+作用于第一个相同的 BV 号，`clear` 清空；BV 号可以写在视频链接里。队列达到 `worlds.bilibili.overlay.maxQueuedVideos`
+时 `add` 被拒绝，调低上限不删除已有条目。每次修改以独立 SSE 事件 `video-queue` 更新组件，回执列出整队；
+`ENV_PROMPT.md` 的 `bilibili.videoQueue` 占位符同公告一样在前缀重建时同步。
+
 ## WebUI
 
 WebUI 提供直播间事件诊断和独立 Overlay 编辑器入口。样式、组件与布局编辑共享草稿、撤销历史和保存操作。草稿预览复用 OBS 渲染器，支持拖动、八向缩放、网格、画布与组件吸附、层级、可见性和锁定；编辑控件与选择框不进入 `/overlay` 输出。
@@ -151,7 +159,7 @@ WebUI 提供直播间事件诊断和独立 Overlay 编辑器入口。样式、�
 从主 Web 页面打开编辑器时，语义调色板通过 URL fragment 传递。编辑器内置浅色和深色默认调色板，主 Web 停止后仍可通过独立 URL 打开。画布背景的浅深设置只保存在本机，不写入设计数据。
 
 配置项包括直播间号、登录凭证、礼物即时投递门槛、相同消息归并窗与容量上限，以及 Overlay
-启用、端口和 Agent 公告字数上限。
+启用、端口、Agent 公告字数上限和视频排队上限。
 
 日志面板每 2 秒轮询 `log.state`。`total` 是累计记录数，包括已超出 `RECENT_CAP` 而从缓冲移除的记录；客户端按差值追加新行，保留滚动位置。
 

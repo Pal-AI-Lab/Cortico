@@ -44,6 +44,8 @@ const zh = {
   noticeMaxTitle: 'Agent 公告字数上限',
   suffixChars: '字',
   noticeMaxDescription: 'Agent 公告工具写入纯文本时的 Unicode 字符上限。',
+  queueMaxTitle: '视频排队上限',
+  queueMaxDescription: '视频排队列表最多容纳的视频数，排满后加入会被拒绝。',
   // ── WebUI 露出:灯、徽标、面板、链接、模板 ──────────────────────────
   label: 'B 站直播间',
   panelLogTitle: '直播间事件',
@@ -75,6 +77,8 @@ const zh = {
   promptDocDescription: '直播间这个场所的常驻事实。',
   announcementVarDescription: 'Agent 公告栏当前保存的纯文本。',
   announcementLimitVarDescription: 'Agent 公告工具当前允许的最大字数。',
+  videoQueueVarDescription: '视频排队列表当前的内容，每项一行。',
+  videoQueueLimitVarDescription: '视频排队列表当前的上限。',
   // ── 关机核验 ───────────────────────────────────────────────────────
   sourceLabel: 'B 站直播源',
   roomLabel: (roomId: number) => `B 站直播间 ${roomId}`,
@@ -142,6 +146,8 @@ export const en: typeof zh = {
   noticeMaxTitle: 'Agent announcement character limit',
   suffixChars: 'chars',
   noticeMaxDescription: 'Maximum Unicode characters the Agent announcement tool may write.',
+  queueMaxTitle: 'Video queue limit',
+  queueMaxDescription: 'Maximum number of videos in the video queue list; adding is rejected while it is full.',
   label: 'Bilibili live room',
   panelLogTitle: 'Live room events',
   panelLogDescription: 'Live room events and counts per cmd.',
@@ -171,6 +177,8 @@ export const en: typeof zh = {
   promptDocDescription: 'Standing facts about the live room.',
   announcementVarDescription: 'Plain text currently saved on the Agent announcement board.',
   announcementLimitVarDescription: 'Character limit the Agent announcement tool currently allows.',
+  videoQueueVarDescription: 'Current contents of the video queue list, one entry per line.',
+  videoQueueLimitVarDescription: 'Current limit of the video queue list.',
   sourceLabel: 'Bilibili live source',
   roomLabel: (roomId) => `Bilibili live room ${roomId}`,
   manualCheck:

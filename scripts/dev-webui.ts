@@ -39,7 +39,7 @@ import { bilibiliPanelDecls } from '../src/worlds/bilibili/world.ts';
 import { BUILTIN_OVERLAY_STYLES, normalizeOverlayDesign } from '../src/worlds/bilibili/overlay/model.ts';
 import { OverlayAssetStore } from '../src/worlds/bilibili/overlay/assets.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from '../src/worlds/bilibili/overlay/server.ts';
-import type { AgentAnnouncementState, BilibiliOverlayDesign } from '../src/worlds/bilibili/overlay/types.ts';
+import type { AgentAnnouncementState, BilibiliOverlayDesign, VideoQueueState } from '../src/worlds/bilibili/overlay/types.ts';
 import { PromptRevisionConflict, WebApp, type ExtensionComment, type ExtensionDescribe, type ExtensionInfo, type ExtensionRating, type ExtensionSearchHit, type MarketTag, type OwnedStoragePart, type ToolOwner, type WebAppMarketDeps } from '../src/web/server.ts';
 import { EXTENSION_API_VERSIONS, parseExtensionManifest } from '../src/extensions/manifest.ts';
 import { PREVIOUS_CONTRACT_VERSIONS } from '../src/extensions/previous-contract.ts';
@@ -539,6 +539,17 @@ devBilibiliDesign.components.push(
     styleId: 'builtin:white',
     text: '今日目标：完成 Overlay 联调',
   },
+  {
+    id: 'dev-video-queue',
+    name: '视频排队',
+    kind: 'video-queue',
+    styleId: 'builtin:translucent',
+    axis: 'vertical',
+    gap: 8,
+    showIndex: true,
+    emptyText: '暂无排队视频',
+    hideWhenEmpty: false,
+  },
 );
 devBilibiliDesign.placements.push(
   {
@@ -553,10 +564,23 @@ devBilibiliDesign.placements.push(
     id: 'placement-dev-fixed-notice', componentId: 'dev-fixed-notice',
     x: 120, y: 220, width: 760, height: 120, z: 18, visible: true, locked: false,
   },
+  {
+    id: 'placement-dev-video-queue', componentId: 'dev-video-queue',
+    x: 120, y: 690, width: 700, height: 190, z: 16, visible: true, locked: false,
+  },
 );
 let devBilibiliAnnouncement: AgentAnnouncementState = {
   schemaVersion: 1,
   text: '正在测试新版直播 Overlay',
+  revision: 1,
+  updatedAt: new Date().toISOString(),
+};
+const devBilibiliVideoQueue: VideoQueueState = {
+  schemaVersion: 1,
+  items: [
+    { bvid: 'BV1Ab4y1C7dE', note: '新番预告 · 观众点播', addedAt: new Date().toISOString() },
+    { bvid: 'BV1Qx411m7Ks', note: '', addedAt: new Date().toISOString() },
+  ],
   revision: 1,
   updatedAt: new Date().toISOString(),
 };
@@ -569,6 +593,7 @@ const devBilibiliOverlay: BilibiliOverlayServer = new BilibiliOverlayServer({
     designRevision: devBilibiliDesignRevision,
     builtinStyles: structuredClone(BUILTIN_OVERLAY_STYLES),
     agentAnnouncement: { ...devBilibiliAnnouncement },
+    videoQueue: structuredClone(devBilibiliVideoQueue),
   }),
   editor: {
     state: () => devBilibiliState(),
@@ -595,7 +620,9 @@ function devBilibiliState(): Record<string, unknown> {
     designRevision: devBilibiliDesignRevision,
     builtinStyles: structuredClone(BUILTIN_OVERLAY_STYLES),
     agentAnnouncement: { ...devBilibiliAnnouncement },
+    videoQueue: structuredClone(devBilibiliVideoQueue),
     maxAnnouncementChars: BILIBILI_DEFAULTS.overlay.agentNoticeMaxChars,
+    maxQueuedVideos: BILIBILI_DEFAULTS.overlay.maxQueuedVideos,
     assets: devBilibiliAssets.list(DEV_BILIBILI_OVERLAY_URL ? devBilibiliOverlay.baseUrl : null),
     url: DEV_BILIBILI_OVERLAY_URL,
     streamUp: !MINIMAL,
@@ -1025,7 +1052,7 @@ const devFakeWorlds: World[] = MINIMAL ? [] : [
 
 const devFakeWorldTools: Record<string, string[]> = {
   minecraft: ['mc_do', 'mc_queue', 'mc_check', 'mc_stop', 'mc_escape'],
-  bilibili: ['bilibili_set_announcement'],
+  bilibili: ['bilibili_set_announcement', 'bilibili_update_video_queue'],
 };
 
 /** QQ 事件面板(dev):按会话分组读假事件库 */

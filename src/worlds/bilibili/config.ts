@@ -180,6 +180,15 @@ export function bilibiliConfigGroup(language: Language): ConfigGroup {
           'x-hot': true,
           description: t.noticeMaxDescription,
         },
+        'worlds.bilibili.overlay.maxQueuedVideos': {
+          type: 'integer',
+          title: t.queueMaxTitle,
+          minimum: 1,
+          maximum: 100,
+          'x-suffix': t.suffixItems,
+          'x-hot': true,
+          description: t.queueMaxDescription,
+        },
       },
     },
   };

@@ -35,7 +35,8 @@ import {
 } from './overlay/model.ts';
 import { projectOverlayEvent } from './overlay/project.ts';
 import { BilibiliOverlayServer, OverlayEditorConflictError } from './overlay/server.ts';
-import type { BilibiliOverlayConfig, OverlayAudienceEvent } from './overlay/types.ts';
+import type { BilibiliOverlayConfig, OverlayAudienceEvent, VideoQueueState } from './overlay/types.ts';
+import { parseBvid, VIDEO_QUEUE_NOTE_MAX_CHARS, VideoQueueStore } from './overlay/video-queue.ts';
 import { BILIBILI_DEFAULTS, bilibiliConfigGroup } from './config.ts';
 import { text, type BilibiliText } from './strings.ts';
 
@@ -110,6 +111,8 @@ export interface BilibiliWorldOptions {
   onOverlayConfig?: (config: BilibiliOverlayConfig) => void | Promise<void>;
   agentNoticeMaxChars?: () => number;
   agentNoticeFile?: string;
+  maxQueuedVideos?: () => number;
+  videoQueueFile?: string;
   overlayAssetDir?: string;
   timezone?: string;
   /** 自定义直播源；默认使用 LiveClient。 */
@@ -170,8 +173,19 @@ function emptyAggregate(): Aggregate {
   };
 }
 
-/** 工具声明。公告字数上限来自 `worlds.bilibili.overlay.agentNoticeMaxChars`,写进参数的 schema 与说明。 */
-export function bilibiliToolDecls(agentNoticeMaxChars: number): Array<Omit<ToolDef, 'handler'>> {
+/** 每项一行「序号. BV 号 备注」;空队列为空串。 */
+function videoQueueLines(state: VideoQueueState): string {
+  return state.items.map((item, index) => `${index + 1}. ${item.bvid}${item.note ? ` ${item.note}` : ''}`).join('\n');
+}
+
+/**
+ * 工具声明。公告字数上限来自 `worlds.bilibili.overlay.agentNoticeMaxChars`,写进参数的 schema 与说明;
+ * 排队上限来自 `worlds.bilibili.overlay.maxQueuedVideos`,写进说明。
+ */
+export function bilibiliToolDecls(
+  agentNoticeMaxChars: number,
+  maxQueuedVideos: number,
+): Array<Omit<ToolDef, 'handler'>> {
   return [
     {
       name: 'bilibili_set_announcement',
@@ -195,6 +209,39 @@ export function bilibiliToolDecls(agentNoticeMaxChars: number): Array<Omit<ToolD
         additionalProperties: false,
       },
     },
+    {
+      name: 'bilibili_update_video_queue',
+      description:
+        'Edit the video queue list shown on the Bilibili Overlay: add puts a video into the queue, remove takes one out, '
+        + 'move changes its position, clear empties the list. '
+        + `The queue holds at most ${maxQueuedVideos} videos; add is rejected while it is full. `
+        + 'The result lists the whole queue after the change.',
+      tags: ['act', 'snapshot'],
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['add', 'remove', 'move', 'clear'] },
+          bvid: {
+            type: 'string',
+            description:
+              'BV id (BV1 followed by 9 characters); a video link that contains one also works. '
+              + 'Required for add, remove and move. remove and move act on the first matching entry.',
+          },
+          note: {
+            type: 'string',
+            maxLength: VIDEO_QUEUE_NOTE_MAX_CHARS,
+            description: 'add only: short text shown after the BV id, such as the video title or who asked for it.',
+          },
+          position: {
+            type: 'integer',
+            minimum: 1,
+            description: 'add: slot to insert at, counting from 1; default the end. move: required, the slot to move to.',
+          },
+        },
+        required: ['action'],
+        additionalProperties: false,
+      },
+    },
   ];
 }
 
@@ -209,6 +256,7 @@ export class BilibiliWorld implements World {
   private overlayDesignRevision = 0;
   private overlayEditorMutation: Promise<void> = Promise.resolve();
   private readonly announcement: AgentAnnouncementStore;
+  private readonly videoQueue: VideoQueueStore;
   private readonly assets: OverlayAssetStore | null;
   private overlayServer: BilibiliOverlayServer | null = null;
   private overlayError: string | null = null;
@@ -283,6 +331,7 @@ export class BilibiliWorld implements World {
       ? normalizeOverlayConfig(opts.overlay)
       : { ...cloneOverlayConfig(), enabled: false };
     this.announcement = new AgentAnnouncementStore(opts.agentNoticeFile);
+    this.videoQueue = new VideoQueueStore(opts.videoQueueFile);
     this.assets = opts.overlayAssetDir ? new OverlayAssetStore(opts.overlayAssetDir) : null;
   }
 
@@ -290,6 +339,8 @@ export class BilibiliWorld implements World {
     return {
       'bilibili.agentAnnouncement': this.announcement.current.text,
       'bilibili.agentAnnouncementLimit': String(this.agentNoticeLimit()),
+      'bilibili.videoQueue': videoQueueLines(this.videoQueue.current),
+      'bilibili.videoQueueLimit': String(this.maxQueuedVideos()),
     };
   }
 
@@ -400,6 +451,15 @@ export class BilibiliWorld implements World {
             {
               name: 'bilibili.agentAnnouncementLimit',
               description: t.announcementLimitVarDescription,
+            },
+            {
+              name: 'bilibili.videoQueue',
+              description: t.videoQueueVarDescription,
+              multiline: true,
+            },
+            {
+              name: 'bilibili.videoQueueLimit',
+              description: t.videoQueueLimitVarDescription,
             },
           ],
         },
@@ -558,9 +618,10 @@ export class BilibiliWorld implements World {
   }
 
   tools(): ToolDef[] {
+    const [announcementDecl, videoQueueDecl] = bilibiliToolDecls(this.agentNoticeLimit(), this.maxQueuedVideos());
     return [
       {
-        ...bilibiliToolDecls(this.agentNoticeLimit())[0],
+        ...announcementDecl,
         handler: async (args) => {
           if (typeof args.text !== 'string') return '[bad input] text must be a string';
 
@@ -580,6 +641,17 @@ export class BilibiliWorld implements World {
             return `[announcement updated] ${count}/${this.agentNoticeLimit()} chars: ${state.text}`;
           } catch (error) {
             return `[bad input] ${error instanceof Error ? error.message : String(error)}`;
+          }
+        },
+      },
+      {
+        ...videoQueueDecl,
+        handler: async (args) => {
+          try {
+            const state = this.updateVideoQueue(args);
+            return `[video queue] ${state.items.length}/${this.maxQueuedVideos()}\n${videoQueueLines(state) || '(empty)'}`;
+          } catch (error) {
+            return `[not executed] ${error instanceof Error ? error.message : String(error)}`;
           }
         },
       },
@@ -779,6 +851,7 @@ export class BilibiliWorld implements World {
       designRevision: this.overlayDesignRevision,
       builtinStyles: structuredClone(BUILTIN_OVERLAY_STYLES),
       agentAnnouncement: this.announcement.current,
+      videoQueue: this.videoQueue.current,
     };
   }
 
@@ -789,6 +862,7 @@ export class BilibiliWorld implements World {
       streamUp: this.overlayServer?.running ?? false,
       error: this.overlayError,
       maxAnnouncementChars: this.agentNoticeLimit(),
+      maxQueuedVideos: this.maxQueuedVideos(),
       assets: this.assets?.list(this.overlayServer?.running ? this.overlayServer.baseUrl : null) ?? [],
     };
   }
@@ -863,6 +937,41 @@ export class BilibiliWorld implements World {
     const group = matchAudienceGroup(this.overlayConfig.design.groups, event.facts);
     const projected = { ...event, ...(group ? { groupId: group.id } : {}) };
     this.overlayServer?.emitAudience(projected);
+  }
+
+  /** 出错时队列不变，错误信息回给 Bot。 */
+  private updateVideoQueue(args: Record<string, unknown>): VideoQueueState {
+    const { action } = args;
+    let state: VideoQueueState;
+    if (action === 'clear') {
+      state = this.videoQueue.clear();
+    } else {
+      if (action !== 'add' && action !== 'remove' && action !== 'move') {
+        throw new Error('action 只能是 add、remove、move 或 clear');
+      }
+      const bvid = typeof args.bvid === 'string' ? parseBvid(args.bvid) : null;
+      if (!bvid) throw new Error('bvid 里没有 BV 号(BV1 加 9 位字符)');
+      const position = args.position === undefined ? undefined : Number(args.position);
+      if (position !== undefined && !(Number.isInteger(position) && position >= 1)) {
+        throw new Error('position 是从 1 数起的整数');
+      }
+      if (action === 'add') {
+        const note = typeof args.note === 'string' ? args.note.trim() : '';
+        state = this.videoQueue.add(bvid, note, position, this.maxQueuedVideos());
+      } else if (action === 'remove') {
+        state = this.videoQueue.remove(bvid);
+      } else {
+        if (position === undefined) throw new Error('move 需要 position');
+        state = this.videoQueue.move(bvid, position);
+      }
+    }
+    this.overlayServer?.emitVideoQueue(state);
+    return state;
+  }
+
+  private maxQueuedVideos(): number {
+    const value = this.opts.maxQueuedVideos?.() ?? this.overlayConfig.maxQueuedVideos;
+    return Number.isFinite(value) ? Math.min(100, Math.max(1, Math.round(value))) : 10;
   }
 
   private agentNoticeLimit(): number {

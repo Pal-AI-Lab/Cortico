@@ -241,10 +241,10 @@ describe('BilibiliWorld', () => {
     vi.useRealTimers();
   });
 
-  it('只提供本机 Agent 公告工具，不向 B 站账号写入', async () => {
+  it('只提供本机 Agent 公告与视频排队工具，不向 B 站账号写入', async () => {
     const { module } = await mount();
     const tools = module.tools();
-    expect(tools.map((tool) => tool.name)).toEqual(['bilibili_set_announcement']);
+    expect(tools.map((tool) => tool.name)).toEqual(['bilibili_set_announcement', 'bilibili_update_video_queue']);
     expect(tools[0].tags).toEqual(['speak']);
     expect((tools[0].parameters.properties as Record<string, { maxLength: number }>).text.maxLength).toBe(200);
     await module.stop();

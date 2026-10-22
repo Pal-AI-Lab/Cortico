@@ -141,12 +141,23 @@ interface ImageComponent extends OverlayComponentBase {
   opacity: number;
 }
 
+/** 显示 Bot 维护的视频排队列表；队列内容与上限属于 World,所有排队组件显示同一份。 */
+interface VideoQueueComponent extends OverlayComponentBase {
+  kind: 'video-queue';
+  axis: OverlayAxis;
+  gap: number;
+  showIndex: boolean;
+  emptyText: string;
+  hideWhenEmpty: boolean;
+}
+
 export type OverlayComponent =
   | DanmakuComponent
   | ScrollNoticeComponent
   | FixedNoticeComponent
   | AgentNoticeComponent
-  | ImageComponent;
+  | ImageComponent
+  | VideoQueueComponent;
 
 export interface OverlayPlacement {
   id: string;
@@ -173,6 +184,7 @@ export interface BilibiliOverlayConfig {
   enabled: boolean;
   port: number;
   agentNoticeMaxChars: number;
+  maxQueuedVideos: number;
   design: BilibiliOverlayDesign;
 }
 
@@ -205,6 +217,20 @@ export interface OverlayAudienceEvent {
 export interface AgentAnnouncementState {
   schemaVersion: 1;
   text: string;
+  revision: number;
+  updatedAt: string | null;
+}
+
+export interface VideoQueueItem {
+  bvid: string;
+  /** Bot 写在 BV 号后面的短文本，可为空。 */
+  note: string;
+  addedAt: string;
+}
+
+export interface VideoQueueState {
+  schemaVersion: 1;
+  items: VideoQueueItem[];
   revision: number;
   updatedAt: string | null;
 }

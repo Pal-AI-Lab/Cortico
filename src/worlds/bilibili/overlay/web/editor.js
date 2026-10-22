@@ -64,6 +64,8 @@
       kindAgentNotice: 'Agent 公告',
       kindImage: '图片',
       glyphImage: '图',
+      kindVideoQueue: '视频排队',
+      glyphVideoQueue: '排',
       fieldUid: '用户 UID',
       fieldGuardLevel: '大航海等级',
       fieldMedalLevel: '粉丝牌等级',
@@ -123,8 +125,8 @@
       padding: '内边距',
       sampleDanmaku: '这是一条弹幕正文',
       panelAppearance: '面板外观',
-      username: '用户名',
-      bodyText: '弹幕 / 公告正文',
+      username: '用户名 / BV 号',
+      bodyText: '弹幕 / 公告正文 / 视频备注',
       textPreview: '透明度、字体与描边实时预览',
       font: '字体',
       fontSize: '字号',
@@ -241,6 +243,10 @@
       hideWhenEmpty: '无公告时隐藏组件',
       typingInterval: '打字间隔 ms',
       typingNote: '逐字出现的间隔；设为 0 可关闭动画。',
+      stackDirection: '堆叠方向',
+      showIndex: '显示序号',
+      hideWhenQueueEmpty: '队列为空时隐藏组件',
+      queueLimitNote: (n) => `最多 ${n} 个，在 World 配置「视频排队上限」修改。`,
       imageSource: '图片来源',
       externalUrl: '外部 URL',
       assetLibrary: '素材库',
@@ -281,6 +287,7 @@
       defaultScrollText: '欢迎来到直播间\n关注主播，不错过开播通知',
       defaultFixedText: '固定公告',
       defaultEmptyText: '公告栏待更新',
+      defaultQueueEmptyText: '暂无排队视频',
       deleteComponent: '删除组件',
       deleteWithPlacements: (n) => `组件与它的 ${n} 个布局实例都会删除。`,
       canvasWidth: '画布宽度',
@@ -368,6 +375,8 @@
       kindAgentNotice: 'Agent announcement',
       kindImage: 'Image',
       glyphImage: 'I',
+      kindVideoQueue: 'Video queue',
+      glyphVideoQueue: 'Q',
       fieldUid: 'User UID',
       fieldGuardLevel: 'Guard level',
       fieldMedalLevel: 'Fan medal level',
@@ -427,8 +436,8 @@
       padding: 'Padding',
       sampleDanmaku: 'This is a danmaku message',
       panelAppearance: 'Panel appearance',
-      username: 'Username',
-      bodyText: 'Danmaku / announcement text',
+      username: 'Username / BV id',
+      bodyText: 'Danmaku / announcement / video note text',
       textPreview: 'Live preview of opacity, font and outline',
       font: 'Font',
       fontSize: 'Font size',
@@ -545,6 +554,10 @@
       hideWhenEmpty: 'Hide when there is no announcement',
       typingInterval: 'Typing interval ms',
       typingNote: 'Delay between characters; 0 turns the animation off.',
+      stackDirection: 'Stack direction',
+      showIndex: 'Show numbers',
+      hideWhenQueueEmpty: 'Hide component while the queue is empty',
+      queueLimitNote: (n) => `Holds up to ${n}; change it in the World setting "Video queue limit".`,
       imageSource: 'Image source',
       externalUrl: 'External URL',
       assetLibrary: 'Asset library',
@@ -585,6 +598,7 @@
       defaultScrollText: 'Welcome to the stream\nFollow to get notified when the stream starts',
       defaultFixedText: 'Fixed notice',
       defaultEmptyText: 'Announcement coming soon',
+      defaultQueueEmptyText: 'No videos queued',
       deleteComponent: 'Delete component',
       deleteWithPlacements: (n) => `The component and its ${n} layout instance${n === 1 ? '' : 's'} will be deleted.`,
       canvasWidth: 'Canvas width',
@@ -669,6 +683,7 @@
     'fixed-notice': [T.kindFixedNotice, T.glyphFixedNotice],
     'agent-notice': [T.kindAgentNotice, 'A'],
     image: [T.kindImage, T.glyphImage],
+    'video-queue': [T.kindVideoQueue, T.glyphVideoQueue],
   };
   const fontChoices = [
     'Microsoft YaHei, sans-serif',
@@ -2100,6 +2115,15 @@
         checkInput(T.hideWhenEmpty, component.hideWhenEmpty, (value) => { component.hideWhenEmpty = value; }),
         field(T.typingInterval, numberInput(component.typingMs, (value) => { component.typingMs = value; }, 0, 2000, 1), T.typingNote),
       );
+    } else if (component.kind === 'video-queue') {
+      body.append(
+        h('p', 'field-note', T.queueLimitNote(editor.state.maxQueuedVideos)),
+        field(T.stackDirection, selectInput(component.axis, [['vertical', T.vertical], ['horizontal', T.horizontal]], (value) => { component.axis = value; }, { render: false })),
+        field(T.itemGap, numberInput(component.gap, (value) => { component.gap = value; }, 0, 500, 1)),
+        checkInput(T.showIndex, component.showIndex, (value) => { component.showIndex = value; }),
+        field(T.emptyPlaceholder, textInput(component.emptyText, (value) => { component.emptyText = value; }, { maxLength: 500 })),
+        checkInput(T.hideWhenQueueEmpty, component.hideWhenEmpty, (value) => { component.hideWhenEmpty = value; }),
+      );
     } else if (component.kind === 'image') {
       body.append(
         field(T.imageSource, selectInput(component.source, [['external', T.externalUrl], ['upload', T.assetLibrary]], (value) => { component.source = value; }, { render: true })),
@@ -2296,6 +2320,7 @@
     else if (kind === 'scroll-notice') component = { ...base, axis: 'horizontal', text: T.defaultScrollText, speed: 70, gap: 60, lineHoldMs: 1600, lineTransitionMs: 420, edgeFadePx: 32 };
     else if (kind === 'fixed-notice') component = { ...base, text: T.defaultFixedText };
     else if (kind === 'agent-notice') component = { ...base, emptyText: T.defaultEmptyText, hideWhenEmpty: false, typingMs: 42 };
+    else if (kind === 'video-queue') component = { ...base, axis: 'vertical', gap: 8, showIndex: true, emptyText: T.defaultQueueEmptyText, hideWhenEmpty: false };
     else component = { ...base, source: 'external', url: '', assetId: '', fit: 'contain', opacity: 1 };
     mutate(() => {
       editor.design.components.push(component);
@@ -2402,7 +2427,9 @@
   function addPlacement(component) {
     const canvas = editor.design.canvas;
     const width = component.kind === 'agent-notice' || component.kind.includes('notice') ? Math.min(960, canvas.width * .6) : Math.min(600, canvas.width * .35);
-    const height = component.kind === 'danmaku' ? Math.min(560, canvas.height * .65) : Math.min(160, canvas.height * .2);
+    const height = component.kind === 'danmaku'
+      ? Math.min(560, canvas.height * .65)
+      : component.kind === 'video-queue' ? Math.min(420, canvas.height * .4) : Math.min(160, canvas.height * .2);
     const placement = {
       id: uniqueId('placement'), componentId: component.id,
       x: Math.round((canvas.width - width) / 2), y: Math.round((canvas.height - height) / 2),

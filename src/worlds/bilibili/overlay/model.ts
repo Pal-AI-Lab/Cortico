@@ -126,6 +126,7 @@ export const BILIBILI_OVERLAY_DEFAULTS: BilibiliOverlayConfig = {
   enabled: true,
   port: 7795,
   agentNoticeMaxChars: 200,
+  maxQueuedVideos: 10,
   design: {
     schemaVersion: OVERLAY_SCHEMA_VERSION,
     canvas: { width: 1920, height: 1080 },
@@ -199,6 +200,7 @@ export function normalizeOverlayConfig(value: unknown): BilibiliOverlayConfig {
       5000,
       BILIBILI_OVERLAY_DEFAULTS.agentNoticeMaxChars,
     ),
+    maxQueuedVideos: integer(raw.maxQueuedVideos, 1, 100, BILIBILI_OVERLAY_DEFAULTS.maxQueuedVideos),
     design: normalizeOverlayDesign(raw.design),
   };
 }
@@ -408,6 +410,16 @@ function normalizeComponent(value: unknown, index: number): OverlayComponent {
         assetId: text(raw.assetId, '', 128),
         fit: raw.fit === 'cover' || raw.fit === 'fill' ? raw.fit : 'contain',
         opacity: number(raw.opacity, 0, 1, 1),
+      };
+    case 'video-queue':
+      return {
+        ...base,
+        kind: 'video-queue',
+        axis: raw.axis === 'horizontal' ? 'horizontal' : 'vertical',
+        gap: number(raw.gap, 0, 500, 8),
+        showIndex: bool(raw.showIndex, true),
+        emptyText: text(raw.emptyText, '暂无排队视频', 500),
+        hideWhenEmpty: bool(raw.hideWhenEmpty, false),
       };
     case 'danmaku':
       return {

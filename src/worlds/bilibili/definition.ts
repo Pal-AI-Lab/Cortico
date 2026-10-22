@@ -27,16 +27,25 @@ export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
       overlay: cfg.overlay,
       agentNoticeMaxChars: () => cfg.overlay.agentNoticeMaxChars,
       agentNoticeFile: join(ctx.dataDir, 'bilibili-overlay', 'agent-notice.json'),
+      maxQueuedVideos: () => cfg.overlay.maxQueuedVideos,
+      videoQueueFile: join(ctx.dataDir, 'bilibili-overlay', 'video-queue.json'),
       overlayAssetDir: join(ctx.dataDir, 'bilibili-overlay', 'assets'),
       onOverlayConfig: (overlay) => ctx.persist({ overlay: { design: overlay.design } }),
       timezone: ctx.timezone,
     });
   },
   describe: {
-    tools: describeTools(bilibiliToolDecls(BILIBILI_DEFAULTS.overlay.agentNoticeMaxChars), {
+    tools: describeTools(bilibiliToolDecls(
+      BILIBILI_DEFAULTS.overlay.agentNoticeMaxChars,
+      BILIBILI_DEFAULTS.overlay.maxQueuedVideos,
+    ), {
       bilibili_set_announcement: {
         zh: '改写直播画面叠加层上的公告板文字。',
         en: 'Rewrites the announcement board text on the stream overlay.',
+      },
+      bilibili_update_video_queue: {
+        zh: '改写直播画面上的视频排队列表:加入、移除、调整顺序或清空。',
+        en: 'Edits the video queue list on the stream overlay: add, remove, reorder or clear.',
       },
     }),
     events: [
