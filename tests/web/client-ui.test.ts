@@ -137,7 +137,8 @@ class FakeEl {
   }
   getAttribute(k: string): string | null {
     return this.attrs.get(k) ?? null;
-  }  removeAttribute(k: string): void {
+  }
+  removeAttribute(k: string): void {
     this.attrs.delete(k);
   }
 
