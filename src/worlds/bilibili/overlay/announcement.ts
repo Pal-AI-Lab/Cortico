@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { dirname } from 'node:path';
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { writeStateFile } from './state-file.ts';
 import type { AgentAnnouncementState } from './types.ts';
 
 const EMPTY_STATE: AgentAnnouncementState = {
@@ -31,7 +30,7 @@ export class AgentAnnouncementStore {
       revision: this.state.revision + 1,
       updatedAt: new Date().toISOString(),
     };
-    this.persist(next);
+    if (this.file) writeStateFile(this.file, next);
     this.state = next;
     return this.current;
   }
@@ -50,27 +49,5 @@ export class AgentAnnouncementStore {
     } catch {
       this.state = { ...EMPTY_STATE };
     }
-  }
-
-  private persist(next: AgentAnnouncementState): void {
-    if (!this.file) return;
-    const dir = dirname(this.file);
-    if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-    const suffix = `${process.pid}-${randomUUID()}`;
-    const temporary = `${this.file}.tmp-${suffix}`;
-    const backup = `${this.file}.bak-${suffix}`;
-    writeFileSync(temporary, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-    if (!existsSync(this.file)) {
-      renameSync(temporary, this.file);
-      return;
-    }
-    renameSync(this.file, backup);
-    try {
-      renameSync(temporary, this.file);
-    } catch (error) {
-      renameSync(backup, this.file);
-      throw error;
-    }
-    rmSync(backup);
   }
 }
