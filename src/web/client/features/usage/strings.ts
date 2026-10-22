@@ -1,4 +1,5 @@
 import { pick } from '../../core/language.ts';
+import type { UsageBucketUnit } from './types.ts';
 import { S as zhHant } from './strings.zh-Hant.ts';
 import { S as ja } from './strings.ja.ts';
 import { S as ko } from './strings.ko.ts';
@@ -31,6 +32,8 @@ const zh = {
   liveRefreshTitle: (sec: number) => `每 ${sec} 秒重取一次；离开本页自动停`,
   refresh: '刷新',
   granularity: '粒度',
+  /** 粒度选「自动」时，选择器旁写出服务端实际用的粒度。 */
+  autoBucket: (unit: UsageBucketUnit) => `自动(${{ minute: '按分钟', hour: '按小时', day: '按天', week: '按周', month: '按月' }[unit]})`,
   autoCurrency: '自动币种',
   rateHint: '保存到 Core 配置 usage.rates，修改后立即重新换算',
   rateSaveFailed: (why: string) => `汇率没有保存：${why}`,
@@ -132,6 +135,7 @@ export const en: typeof zh = {
   liveRefreshTitle: (sec: number) => `Refetches every ${sec} s; stops when you leave this page`,
   refresh: 'Refresh',
   granularity: 'Granularity',
+  autoBucket: (unit: UsageBucketUnit) => `Auto (${{ minute: 'per minute', hour: 'hourly', day: 'daily', week: 'weekly', month: 'monthly' }[unit]})`,
   autoCurrency: 'Auto currency',
   rateHint: 'Saved to the Core config (usage.rates); the report converts again at once',
   rateSaveFailed: (why: string) => `Rate not saved: ${why}`,

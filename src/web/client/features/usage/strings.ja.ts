@@ -1,4 +1,5 @@
 import type { en } from './strings.ts';
+import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -22,6 +23,7 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `${sec} 秒ごとに再取得します。このページを離れると停止します`,
   refresh: '更新',
   granularity: '粒度',
+  autoBucket: (unit: UsageBucketUnit) => `自動(${{ minute: '分単位', hour: '時間単位', day: '日単位', week: '週単位', month: '月単位' }[unit]})`,
   autoCurrency: '通貨を自動選択',
   rateHint: 'Core 設定の usage.rates に保存し、すぐに再換算します',
   rateSaveFailed: (why: string) => `為替レートを保存できませんでした：${why}`,

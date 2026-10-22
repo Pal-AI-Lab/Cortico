@@ -2319,6 +2319,7 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .uctrls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 28px; }
 .ugroup { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
 .ugroup > .ulabel { color: var(--ink); font-weight: 600; }
+.uauto { font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); white-space: nowrap; }
 .chart-legend { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
 .chart-legend:empty { display: none; }
 .uchart { margin-top: 20px; }

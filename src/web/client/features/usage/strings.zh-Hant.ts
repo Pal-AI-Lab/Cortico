@@ -1,4 +1,5 @@
 import type { en } from './strings.ts';
+import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -22,6 +23,7 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `每 ${sec} 秒重新取得一次；離開本頁自動停止`,
   refresh: '重新整理',
   granularity: '粒度',
+  autoBucket: (unit: UsageBucketUnit) => `自動(${{ minute: '按分鐘', hour: '按小時', day: '按天', week: '按週', month: '按月' }[unit]})`,
   autoCurrency: '自動幣別',
   rateHint: '儲存到 Core 設定 usage.rates，修改後立即重新換算',
   rateSaveFailed: (why: string) => `匯率沒有儲存：${why}`,

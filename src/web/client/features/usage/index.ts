@@ -206,6 +206,8 @@ export function mountUsage(ctx: FeatureContext): void {
     onSelect: (v) => { state.bucket = v as UsageBucketOption; void load(); },
   });
   bucketSeg.el.classList.add('uswitch');
+  const bucketNote = ui.h('span', 'uauto');
+  bucketNote.hidden = true;
   // 拆分维度可多选：同一组按钮，按下的高亮。
   const splitWrap = ui.h('div', 'segwrap sm umulti');
   const splitBtns = SPLITS.map(({ dim, label }) => {
@@ -229,7 +231,7 @@ export function mountUsage(ctx: FeatureContext): void {
   const mainBox = ui.h('div', 'uchart');
   const mainNote = ui.h('p', 'muted unote');
   const chartCtrls = ui.h('div', 'uctrls');
-  chartCtrls.append(group(ui, S.granularity, bucketSeg.el), group(ui, S.split, splitWrap, sortBox.el));
+  chartCtrls.append(group(ui, S.granularity, bucketSeg.el, bucketNote), group(ui, S.split, splitWrap, sortBox.el));
   trend.body.append(chartCtrls, mainLegend, mainBox, mainNote);
 
   // ---- 分组明细：同一时刻显示一张 -------------------------------------------
@@ -449,6 +451,8 @@ export function mountUsage(ctx: FeatureContext): void {
     billingNote.textContent = S.billingHint +
       (d.totals?.unknownUsageCalls ? S.unknownUsage(d.totals.unknownUsageCalls) : '');
     renderRange(d);
+    bucketNote.textContent = state.bucket === 'auto' && d.bucket ? S.autoBucket(d.bucket) : '';
+    bucketNote.hidden = !bucketNote.textContent;
     renderNotes();
     renderCards(d);
     renderComposition(d);

@@ -1059,6 +1059,21 @@ describe('用量页挂载', () => {
     expect(seen.length).toBe(1);
   });
 
+  it('粒度选「自动」时选择器旁写出服务端实际用的粒度，选了具体粒度就收起', async () => {
+    stubFetch({ '/api/usage': sample() });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const note = root.find('uauto')!;
+    expect(note.hidden).toBe(false);
+    expect(note.textContent).toBe('自动(按天)');
+
+    root.findButton('时')!.dispatchEvent({ type: 'click' });
+    await flush();
+    expect(note.hidden).toBe(true);
+  });
+
   it('日期框常驻：切到「自定义」沿用当前范围；改日期即切到自定义档并按新日期取数', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });

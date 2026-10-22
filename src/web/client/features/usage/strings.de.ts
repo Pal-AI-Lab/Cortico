@@ -1,4 +1,5 @@
 import type { en } from './strings.ts';
+import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -22,6 +23,7 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `Lädt alle ${sec} s neu; stoppt, wenn du diese Seite verlässt`,
   refresh: 'Aktualisieren',
   granularity: 'Granularität',
+  autoBucket: (unit: UsageBucketUnit) => `Automatisch (${{ minute: 'minütlich', hour: 'stündlich', day: 'täglich', week: 'wöchentlich', month: 'monatlich' }[unit]})`,
   autoCurrency: 'Währung automatisch',
   rateHint: 'Wird in der Core-Konfiguration (usage.rates) gespeichert; der Bericht rechnet sofort neu um',
   rateSaveFailed: (why: string) => `Kurs nicht gespeichert: ${why}`,
