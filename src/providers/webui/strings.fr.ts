@@ -54,5 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "Une autre modification de fournisseur est en cours. Réessayez une fois qu'elle est terminée.",
   changedElsewhere: "La configuration a été modifiée dans une autre page ou un autre bot. Rechargez avant d’enregistrer.",
   copySourceGone: "La source de la copie n'existe plus.",
+  keyForOtherAddress: "L'adresse pointe vers un autre site : saisissez à nouveau l'API Key. La clé enregistrée n'est pas envoyée à la nouvelle adresse.",
   inUse: (names: string) => `Instance de fournisseur utilisée par : ${names}`,
 };

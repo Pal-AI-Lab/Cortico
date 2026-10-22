@@ -277,6 +277,17 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     expect(existsSync(join(providersDir, 'local-2'))).toBe(false);
     expect(cfg.providers.local).toBeDefined();
   });
+  it('地址换到另一个网站时删掉为旧地址存的密钥，同一网站换路径不动', async () => {
+    const { cfg, settings, providersDir } = fixture();
+    cfg.providers.cloud.secret = 'MOVE_TEST_KEY';
+    await invoke(settings, 'setSecret', { name: 'cloud', value: 'sk-old' });
+    settings.save('cloud', { ...cfg.providers.cloud, baseUrl: `${new URL(cfg.providers.cloud.baseUrl).origin}/other-path` });
+    expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('file');
+    settings.save('cloud', { ...cfg.providers.cloud, baseUrl: 'https://elsewhere.test/v1' });
+    expect(settings.secretStatus('cloud', cfg.providers.cloud)).toBe('none');
+    expect(readFileSync(join(providersDir, 'cloud', '.env'), 'utf8')).not.toContain('sk-old');
+  });
+
   it('setSecret 写进端点 .env 并重建实例;状态区分 进程环境 / 文件 / 无', async () => {
     const { cfg, settings, registry, providersDir } = fixture();
     cfg.providers.cloud.secret = 'DS_TEST_KEY';

@@ -11,7 +11,7 @@ import type { ProviderModule } from '../base.ts';
 import { validateEntry, withContextWindows } from '../configuration.ts';
 import { validateProviderName, defaultSecretName } from '../name.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
-import type { ProviderSettings } from './settings.ts';
+import { originOf, type ProviderSettings } from './settings.ts';
 import { quotePrices } from '../pricebook.ts';
 import { connectionGroup } from './config.ts';
 import { instanceIsRunning } from '../../core/instance-lock.ts';
@@ -27,6 +27,8 @@ export interface ConnectionSave {
   entry: LLMProviderEntry;
   expectedRevision?: string;
   secretValue?: string;
+  /** Sends the stored key to an address on another origin; otherwise that save is refused (409) unless a new key comes with it. */
+  moveSecret?: boolean;
 }
 export class ProviderHub {
   private readonly revisions = new Map<string, string>();
@@ -219,6 +221,10 @@ export class ProviderHub {
       }
       if (entry.secret && !input.secretValue && (!credentialSource || this.settings.secretStatus(credentialSource, entry) === 'none'))
         throw hubError(S => S.apiKeyMissing);
+      const keyFor = credentialSource ? this.config.providers[credentialSource] : undefined;
+      if (entry.secret && !input.secretValue && !input.moveSecret && keyFor && this.settings.secretStatus(credentialSource!, entry) === 'file'
+        && originOf(keyFor.baseUrl) !== originOf(entry.baseUrl))
+        throw hubError(S => S.keyForOtherAddress, 409);
       const target = this.path(name);
       const source = original ? this.path(original) : null;
       const stage = join(this.root, `.transaction-${randomUUID()}`);
@@ -295,6 +301,9 @@ export class ProviderHub {
     const module = this.modules.find(m => m.id === draft.entry.kind);
     if (!module) throw hubError(S => S.moduleMissing);
     const entry = validateEntry(module, withTypedSecret(name, draft.entry, draft.secretValue), language);
+    const saved = this.config.providers[name];
+    if (entry.secret && !draft.secretValue && saved && this.settings.secretStatus(name, entry) === 'file' && originOf(saved.baseUrl) !== originOf(entry.baseUrl))
+      throw hubError(S => S.keyForOtherAddress, 409);
     const registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
     if (action === 'models') {
       const instance = registry.resolve(name);

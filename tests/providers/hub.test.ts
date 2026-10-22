@@ -88,6 +88,21 @@ it('copies saved credentials only on final creation, without exposing them in de
   expect(readFileSync(join(root, 'Copy', '.env'), 'utf8')).toContain('test-secret');
 });
 
+it('a saved key stays with its address: moving the endpoint to another origin needs the key again', async () => {
+  const { hub, root } = fixture();
+  let saved = hub.save(null, { name: 'Alpha', entry, secretValue: 'alpha-key' }, 'en');
+  const elsewhere = { ...saved.entry, baseUrl: 'https://other.test/v1' };
+  const refusal = (() => { try { hub.save('Alpha', { ...saved, entry: elsewhere, expectedRevision: saved.revision }, 'en'); } catch (error) { return error as { status?: number }; } })();
+  expect(refusal?.status).toBe(409);
+  await expect(hub.action('Alpha', 'test', 'en', { entry: elsewhere })).rejects.toMatchObject({ status: 409 });
+  expect(hub.detail('Alpha', 'en').entry.baseUrl).toBe('https://model.test');
+  saved = hub.save('Alpha', { ...saved, entry: { ...saved.entry, baseUrl: 'https://model.test/v2' }, expectedRevision: saved.revision }, 'en');
+  saved = hub.save('Alpha', { ...saved, entry: elsewhere, expectedRevision: saved.revision, moveSecret: true }, 'en');
+  expect(saved.entry.baseUrl).toBe('https://other.test/v1');
+  hub.save('Alpha', { ...saved, entry: { ...saved.entry, baseUrl: 'https://third.test' }, expectedRevision: saved.revision, secretValue: 'third-key' }, 'en');
+  expect(readFileSync(join(root, 'Alpha', '.env'), 'utf8')).toContain('third-key');
+});
+
 it('an endpoint without a key variable keeps its .env out of a copy', () => {
   const { hub, root } = fixture();
   const source = hub.save(null, { name: 'Account', entry }, 'en');

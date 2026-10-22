@@ -54,5 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "다른 공급자 변경이 진행 중입니다. 끝난 뒤 다시 시도하세요.",
   changedElsewhere: "다른 페이지나 bot에서 설정이 바뀌었습니다. 다시 불러온 뒤 저장하세요.",
   copySourceGone: "복사할 원본이 더 이상 없습니다.",
+  keyForOtherAddress: "주소가 다른 사이트로 바뀌었습니다. API Key를 다시 입력하세요. 저장된 키는 새 주소로 보내지 않습니다.",
   inUse: (names: string) => `이 공급자 인스턴스를 사용하는 곳: ${names}`,
 };
