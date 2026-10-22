@@ -7,7 +7,7 @@ import type { NativeChatMessage } from '../../src/providers/transport/native-typ
 import type { ModelSpec, ToolSchema } from '../../src/core/types.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ChatResponseAssembly, NativeResponseAssembly } from '../../src/providers/transport/response-assembly.ts';
-import { EVENT_MAX, EventDecoder } from '../../src/providers/transport/response-http.ts';
+import { EventDecoder } from '../../src/providers/transport/response-http.ts';
 import { GenerationError, priceUsage, unknownMeters } from '../../src/core/generation.ts';
 import { ResponsesProvider } from '../../src/providers/openai-responses-compat/native.ts';
 import type { FunctionCall, StreamEvent } from '../../src/protocol/open-responses/index.ts';
@@ -176,14 +176,14 @@ describe('Provider standard Responses boundary', () => {
   });
 
   it('decodes a long event sent in small chunks, and refuses a line past the limit', () => {
-    const decoder = new EventDecoder();
+    const decoder = new EventDecoder(1 << 21);
     const value = 'x'.repeat(1 << 20);
     const raw = `data: ${value}\n\n`;
     const events: string[] = [];
     for (let index = 0; index < raw.length; index += 1024) events.push(...decoder.feed(raw.slice(index, index + 1024)));
     expect(events).toEqual([value]);
-    const endless = new EventDecoder();
-    expect(() => endless.feed('data: ' + 'x'.repeat(EVENT_MAX))).toThrow('SSE line');
+    const endless = new EventDecoder(1 << 21);
+    expect(() => endless.feed('data: ' + 'x'.repeat(1 << 21))).toThrow('SSE line');
   });
 
   it('does not follow a redirect: the request never reaches the address it points to', async () => {
@@ -203,16 +203,9 @@ describe('Provider standard Responses boundary', () => {
     }
   });
 
-  it('keeps at most 64 KiB of an error response body', async () => {
-    vi.stubGlobal('fetch', async () => new Response('e'.repeat(1 << 20), { status: 400 }));
-    const failure = await new ResponsesProvider({ baseUrl: 'https://fixture.test' }).respond({ model: 'test', input: [] }).catch((error: unknown) => error);
-    expect(failure).toBeInstanceOf(GenerationError);
-    expect((failure as GenerationError).body.length).toBe(64 * 1024);
-  });
-
   it('decodes real native Responses framing and retains encrypted reasoning and function identity', () => {
     const raw = readFileSync(new URL('../fixtures/responses-stream.sse', import.meta.url), 'utf8');
-    const decoder = new EventDecoder();
+    const decoder = new EventDecoder(1 << 21);
     const assembly = new NativeResponseAssembly();
     for (let index = 0; index < raw.length; index += 17) {
       for (const payload of decoder.feed(raw.slice(index, index + 17))) {

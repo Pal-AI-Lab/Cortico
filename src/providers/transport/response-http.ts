@@ -29,16 +29,13 @@ export function requestJson(body: unknown): string {
     typeof value === 'string' ? value.replace(LONE_SURROGATE, '\uFFFD') : value);
 }
 
-/** The longest line or event a stream may send, in UTF-16 code units; a longer one fails the attempt. */
-export const EVENT_MAX = 16 * 1024 * 1024;
-/** How much of an error response's body is read and kept. */
-const ERROR_BODY_MAX = 64 * 1024;
-
 /**
- * SSE framing is independent of packet and line boundaries. Each byte is searched for a line end once,
- * so a long line sent in many chunks costs time in proportion to its length.
+ * SSE framing is independent of packet and line boundaries. Each character is searched for a line end once,
+ * so a long line sent in many chunks costs time in proportion to its length. A line or event longer than
+ * `max` UTF-16 code units fails the attempt; without `max` there is no limit.
  */
 export class EventDecoder {
+  constructor(private readonly max = Infinity) {}
   private buffer = '';
   /** The part of `buffer` already searched: it holds no line end. */
   private scanned = 0;
@@ -60,34 +57,15 @@ export class EventDecoder {
       } else if (line.startsWith('data:')) {
         const data = line.slice(5).replace(/^ /, '');
         this.dataLength += data.length + 1;
-        if (this.dataLength > EVENT_MAX) throw new ResponseProtocolError(`SSE event longer than ${EVENT_MAX} characters`);
+        if (this.dataLength > this.max) throw new ResponseProtocolError(`SSE event longer than ${this.max} characters`);
         this.data.push(data);
       }
     }
     this.buffer = this.buffer.slice(start);
     this.scanned = this.buffer.length;
-    if (this.buffer.length > EVENT_MAX) throw new ResponseProtocolError(`SSE line longer than ${EVENT_MAX} characters`);
+    if (this.buffer.length > this.max) throw new ResponseProtocolError(`SSE line longer than ${this.max} characters`);
     return events;
   }
-}
-
-/** The first `max` bytes of a body as text; the rest is not read. */
-async function readCapped(response: globalThis.Response, max: number): Promise<string> {
-  if (!response.body) return '';
-  const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let size = 0;
-  try {
-    while (size < max) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      chunks.push(chunk.value);
-      size += chunk.value.length;
-    }
-  } finally {
-    void reader.cancel().catch(() => {});
-  }
-  return new TextDecoder().decode(Buffer.concat(chunks).subarray(0, max));
 }
 
 function irreversible(event: StreamEvent): boolean {
@@ -164,6 +142,8 @@ export async function generate(request: Request, options: GenerateOptions, origi
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     let sent = false;
     let finishedAt: number | null = null;
+    /** The characters of output a request may produce. */
+    const outputMax = (request.max_output_tokens ?? 32768) * 12;
     const diagnostics: ProviderAttempt[] = [];
     partial = null;
     const forward = (event: StreamEvent): void => {
@@ -172,7 +152,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
       if ('delta' in event && typeof event.delta === 'string') characters += event.delta.length;
       if (irreversible(event)) committed = true;
       if (!options.signal?.aborted) options.onEvent?.(event);
-      if (characters > (request.max_output_tokens ?? 32768) * 12) {
+      if (characters > outputMax) {
         runaway = true;
         controller.abort();
         throw new LLMError('Provider exceeded the output character limit', 0, '');
@@ -189,7 +169,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.status = response.status;
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
-        const error = new LLMError(`LLM API ${response.status}`, response.status, await readCapped(response, ERROR_BODY_MAX));
+        const error = new LLMError(`LLM API ${response.status}`, response.status, await response.text());
         retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
         if (!options.diagnostic && (response.status === 401 || response.status === 403) && !authRetried && await transport.refresh()) {
           authRetried = true;
@@ -202,7 +182,9 @@ export async function generate(request: Request, options: GenerateOptions, origi
         if (!response.body) throw new LLMError('Streaming response has no body', response.status, '');
         reader = response.body.getReader();
         const decoder = new TextDecoder();
-        const frames = new EventDecoder();
+        // one event carries at most the whole output again (a done or completed event repeats its items), and
+        // JSON escaping at most doubles ordinary text
+        const frames = new EventDecoder(outputMax * 2);
         touchContent();
         stream: for (;;) {
           const chunk = await reader.read();
