@@ -122,6 +122,13 @@ describe('写请求的同源闸门', () => {
     expect(paused).toBe(false);
   });
 
+  it('省了端口的 Origin 按默认端口算:80 端口上的本机页面不是本 WebUI', async () => {
+    for (const origin of ['http://127.0.0.1', 'http://localhost', 'https://127.0.0.1']) {
+      expect((await post('/api/run/pause', { origin })).status).toBe(403);
+    }
+    expect(paused).toBe(false);
+  });
+
   it('路径选择同样受同源闸门保护，外站请求不会打开主机对话框', async () => {
     const same = await fetch(`http://127.0.0.1:${port}/api/path-picker`, {
       method: 'POST',
@@ -138,6 +145,11 @@ describe('写请求的同源闸门', () => {
     });
     expect(foreign.status).toBe(403);
     expect(pickerCalls).toBe(1);
+  });
+
+  it('只有本机页面能嵌框', async () => {
+    const csp = (await fetch(`http://127.0.0.1:${port}/api/status`)).headers.get('content-security-policy');
+    expect(csp?.startsWith("frame-ancestors 'self' http://127.0.0.1:* ")).toBe(true);
   });
 
   it('读接口不受闸门影响', async () => {
@@ -160,6 +172,7 @@ describe('WebSocket 握手的同源闸门', () => {
   it('外站 Origin 被拒', async () => {
     expect(await handshake('/ws/sessions', { origin: 'http://evil.example' })).toBe('rejected');
     expect(await handshake('/ws/debug', { origin: 'http://evil.example' })).toBe('rejected');
+    expect(await handshake('/ws/debug', { origin: 'http://127.0.0.1' })).toBe('rejected');
   });
 });
 

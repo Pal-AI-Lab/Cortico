@@ -796,14 +796,21 @@ function parseQueryArgs(raw: unknown, t: ReturnType<typeof serverText>): { args:
 
 const hasPort = (h: string): boolean => /:\d+$/.test(h);
 const barePort = (h: string): string => h.replace(/:\d+$/, '');
+const DEFAULT_PORTS: Record<string, string> = { 'http:': '80', 'https:': '443' };
 
-/** 按 Host 校验 Origin；缺失 Origin 时放行，null、非法或主机不匹配时拒绝。 */
+/**
+ * 按 Host 校验 Origin；缺失 Origin 时放行，null、非法或主机不匹配时拒绝。省掉的端口按 Origin 的协议补成默认端口再比:
+ * `http://localhost` 是 80 端口上的页面，不是 `localhost:17788` 上的本 WebUI。
+ */
 function isForeignOrigin(origin: unknown, hostHeader: unknown, allowedHosts: readonly string[] = []): boolean {
   if (typeof origin !== 'string' || origin === '') return false;
   if (origin === 'null') return true; // 沙箱 iframe / file:// 一类,不是本 WebUI
   let originHost: string;
+  let defaultPort: string;
   try {
-    originHost = new URL(origin).host;
+    const url = new URL(origin);
+    originHost = url.host;
+    defaultPort = DEFAULT_PORTS[url.protocol] ?? '';
   } catch {
     return true;
   }
@@ -811,10 +818,8 @@ function isForeignOrigin(origin: unknown, hostHeader: unknown, allowedHosts: rea
   if (namesHost(allowedHosts, originHost)) return false;
   const host = typeof hostHeader === 'string' ? hostHeader : '';
   if (!originHost || !host) return true;
-  if (originHost === host) return false;
-  // 任一侧省了端口(走默认端口时浏览器会省)→ 只比主机名
-  if ((!hasPort(originHost) || !hasPort(host)) && barePort(originHost) === barePort(host)) return false;
-  return true;
+  const withPort = (h: string) => (hasPort(h) ? h : `${h}:${defaultPort}`).toLowerCase();
+  return withPort(originHost) !== withPort(host);
 }
 
 /** 表里的名字可带端口也可不带；不带端口的匹配任意端口。比较不分大小写。 */
@@ -833,6 +838,8 @@ function isLoopbackPeer(address: string | undefined): boolean {
 }
 
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+/** 默认的 CSP:只限嵌框;个别响应(blob、图标)换成自己的。 */
+const FRAME_ANCESTORS = "frame-ancestors 'self' http://127.0.0.1:* http://localhost:* http://[::1]:*";
 const WILDCARD_HOSTS = new Set(['0.0.0.0', '::', '[::]']);
 
 /**
@@ -1533,6 +1540,12 @@ export class WebApp {
   private buildApp(): express.Express {
     const app = express();
     app.disable('x-powered-by');
+
+    // 只有本机的页面能把 WebUI 嵌进框里:外站嵌进去就能骗操作员点按钮
+    app.use((_req, res, next) => {
+      res.setHeader('Content-Security-Policy', FRAME_ANCESTORS);
+      next();
+    });
 
     app.use((req, res, next) => {
       if (isAllowedHost(req.headers.host, this.listenHost, this.allowedHosts)) {
