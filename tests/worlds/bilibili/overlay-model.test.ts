@@ -9,8 +9,9 @@ import {
 import type { AudienceGroup, AudienceRule } from '../../../src/worlds/bilibili/overlay/types.ts';
 
 describe('Bilibili Overlay 模型', () => {
-  it('内置主题保留持久化设计引用的四个 id', () => {
+  it('内置主题保留持久化设计引用的 id,首项是默认样式', () => {
     expect(BUILTIN_OVERLAY_STYLES.map((style) => style.id)).toEqual([
+      'builtin:translucent',
       'builtin:sky',
       'builtin:navy',
       'builtin:white',

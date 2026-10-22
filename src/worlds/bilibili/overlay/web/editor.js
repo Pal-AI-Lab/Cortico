@@ -2290,7 +2290,7 @@
   }
 
   function createComponent(kind) {
-    const base = { id: uniqueId('component'), name: componentKinds[kind][0], kind, styleId: editor.selectedStyle || 'builtin:sky' };
+    const base = { id: uniqueId('component'), name: componentKinds[kind][0], kind, styleId: editor.selectedStyle || editor.state.builtinStyles[0].id };
     let component;
     if (kind === 'danmaku') component = { ...base, axis: 'vertical', admission: 'all', showAvatar: true, speed: 90, gap: 12, maxItems: 12, usernameMaxChars: 24, bodyMaxChars: 80, edgeFadePx: 32 };
     else if (kind === 'scroll-notice') component = { ...base, axis: 'horizontal', text: T.defaultScrollText, speed: 70, gap: 60, lineHoldMs: 1600, lineTransitionMs: 420, edgeFadePx: 32 };

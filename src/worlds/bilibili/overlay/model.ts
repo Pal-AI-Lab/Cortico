@@ -63,7 +63,19 @@ const BASE_TITLE: OverlayTextStyle = {
   strokeWidth: 0,
 };
 
+/** 首项是默认样式：新组件、缺省设计和找不到样式的组件都用它。 */
 export const BUILTIN_OVERLAY_STYLES: readonly OverlayStyle[] = [
+  {
+    id: 'builtin:translucent',
+    name: '半透明黑',
+    background: '#0000001f',
+    borderColor: '#00000000',
+    borderWidth: 0,
+    radius: 0,
+    padding: 16,
+    username: { ...BASE_USERNAME },
+    body: { ...BASE_BODY },
+  },
   {
     id: 'builtin:sky',
     name: '天蓝色',
@@ -124,7 +136,7 @@ export const BILIBILI_OVERLAY_DEFAULTS: BilibiliOverlayConfig = {
         id: 'danmaku-main',
         name: '主弹幕机',
         kind: 'danmaku',
-        styleId: 'builtin:sky',
+        styleId: 'builtin:translucent',
         axis: 'vertical',
         admission: 'all',
         showAvatar: true,
@@ -139,7 +151,7 @@ export const BILIBILI_OVERLAY_DEFAULTS: BilibiliOverlayConfig = {
         id: 'agent-notice',
         name: 'Agent 公告',
         kind: 'agent-notice',
-        styleId: 'builtin:navy',
+        styleId: 'builtin:translucent',
         emptyText: '公告栏待更新',
         hideWhenEmpty: false,
         typingMs: 42,
@@ -264,9 +276,9 @@ function normalizeStyle(value: unknown, index: number): OverlayStyle {
   return {
     id: id(raw.id, `style-${index + 1}`),
     name: text(raw.name, `样式 ${index + 1}`, 80),
-    background: color(raw.background, '#58b8e8dd'),
-    borderColor: color(raw.borderColor, '#d8f5ffff'),
-    borderWidth: number(raw.borderWidth, 0, 64, 2),
+    background: color(raw.background, BUILTIN_OVERLAY_STYLES[0].background),
+    borderColor: color(raw.borderColor, BUILTIN_OVERLAY_STYLES[0].borderColor),
+    borderWidth: number(raw.borderWidth, 0, 64, BUILTIN_OVERLAY_STYLES[0].borderWidth),
     radius: number(raw.radius, 0, 200, 0),
     padding: number(raw.padding, 0, 200, 16),
     username: normalizeTextStyle(raw.username, BASE_USERNAME),
@@ -361,7 +373,7 @@ function normalizeComponent(value: unknown, index: number): OverlayComponent {
   const base = {
     id: id(raw.id, `component-${index + 1}`),
     name: text(raw.name, `组件 ${index + 1}`, 80),
-    styleId: id(raw.styleId, 'builtin:sky'),
+    styleId: id(raw.styleId, BUILTIN_OVERLAY_STYLES[0].id),
     ...(title ? { title } : {}),
   };
   switch (raw.kind) {
