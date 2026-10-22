@@ -93,6 +93,19 @@ describe('分时段聚合 aggregateUsage', () => {
     expect(active(a).map((s) => s.bucket)).toEqual(['2026-07-19T14']);
   });
 
+  it('dailyTokenDays:逐日 token 与同一窗口按天分桶的聚合一致，窗口从范围末日往前数，主聚合仍只算范围内', () => {
+    // 美西夏令时 UTC-7:东八区 07-18 09:10 是 07-17 18:10,07-19 14:00 是 07-18 23:00。
+    const tz = { timezone: 'America/Los_Angeles', now: new Date('2026-07-19T12:00:00Z') };
+    const a = aggregateUsage(recs, { days: 2, bucket: 'hour', dailyTokenDays: 3, ...tz });
+    const byDay = aggregateUsage(recs, { from: '2026-07-17', to: '2026-07-19', bucket: 'day', ...tz });
+    expect(a.dailyTokens).toEqual(byDay.series.map((p) => ({ day: p.bucket, tokens: p.promptTokens + p.completionTokens })));
+    expect(a.dailyTokens!.map((p) => p.day)).toEqual(['2026-07-17', '2026-07-18', '2026-07-19']);
+    expect(a.totals.calls).toBe(1);
+    // 范围比窗口长时从范围起点起
+    expect(aggregateUsage(recs, { from: '2026-07-16', to: '2026-07-19', bucket: 'day', dailyTokenDays: 1, ...tz }).dailyTokens![0]!.day).toBe('2026-07-16');
+    expect('dailyTokens' in aggregateUsage(recs, { days: 2, bucket: 'hour', ...tz })).toBe(false);
+  });
+
   it('空输入→空序列、总计为0', () => {
     const a = aggregateUsage([], { bucket: 'day' });
     expect(a.series).toEqual([]);

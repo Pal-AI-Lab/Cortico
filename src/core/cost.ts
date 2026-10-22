@@ -78,6 +78,17 @@ export interface UsageAggregate {
   byModel: UsageGroupStat[];
   /** Failed, aborted and discarded attempts are also included in totals. */
   failed: UsageAccum;
+  /**
+   * 逐日的输入加输出 token 合计，只在给了 dailyTokenDays 时出现。窗口从范围末日(没有末日时取今天)
+   * 往前 dailyTokenDays 天，范围更长时从范围起点起；窗口内有记录时逐日连续，不越过当前时刻。
+   */
+  dailyTokens?: UsageDailyTokens[];
+}
+
+/** 一天的 token 合计;day 是 YYYY-MM-DD,与桶键同一时区。 */
+export interface UsageDailyTokens {
+  day: string;
+  tokens: number;
 }
 
 function zero(): UsageAccum {
@@ -256,6 +267,8 @@ export interface UsageAggregateOptions {
    */
   timezone?: string;
   now?: Date;
+  /** 给了就在结果里附上 dailyTokens,窗口为范围末日往前这么多天。 */
+  dailyTokenDays?: number;
 }
 
 /**
@@ -279,10 +292,10 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const successful = zero();
   const instances = new Map<string, UsageAccum>();
   const wall = opts.timezone ? wallClockIn(opts.timezone) : (ts: string) => ts.slice(0, 16);
-  const keyed = records
+  const walled = records
     .filter(r => r && typeof r.ts === 'string')
-    .map(r => ({ r, at: wall(r.ts) }))
-    .filter(({ at }) => (!from || at.slice(0, 10) >= from) && (!to || at.slice(0, 10) <= to));
+    .map(r => ({ r, at: wall(r.ts) }));
+  const keyed = walled.filter(({ at }) => (!from || at.slice(0, 10) >= from) && (!to || at.slice(0, 10) <= to));
   const selected = keyed.map(({ r }) => r);
   const balances = billingBalances(selected);
   const basis = opts.basis ?? 'marginal';
@@ -346,7 +359,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const groupOut = (m: Map<string, UsageAccum>, labels?: Map<string, string>): UsageGroupStat[] =>
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
 
-  return {
+  const out: UsageAggregate = {
     currency, currencies, rates, basis, balances, successful, byInstance: groupOut(instances),
     bucket: unit,
     from,
@@ -358,6 +371,34 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     byModel: groupOut(models),
     failed,
   };
+  if (opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1) {
+    out.dailyTokens = dailyTokensOf(walled, from, to ?? today, today, opts.dailyTokenDays);
+  }
+  return out;
+}
+
+/** 逐日 token 合计，口径同 UsageAggregate.dailyTokens;end 是窗口末日，today 是部署时区的今天。 */
+function dailyTokensOf(
+  walled: ReadonlyArray<{ r: UsageRecord; at: string }>,
+  from: string | null,
+  end: string | null,
+  today: string | null,
+  days: number,
+): UsageDailyTokens[] {
+  if (!end) return [];
+  const back = daysBefore(end, days - 1);
+  const start = from && from < back ? from : back;
+  const sums = new Map<string, number>();
+  for (const { r, at } of walled) {
+    const day = at.slice(0, 10);
+    if (day >= start && day <= end) sums.set(day, (sums.get(day) ?? 0) + r.promptTokens + r.completionTokens);
+  }
+  if (!sums.size) return [];
+  let last = today && today < end ? today : end;
+  for (const day of sums.keys()) if (day > last) last = day;
+  const out: UsageDailyTokens[] = [];
+  for (let day = start; day <= last; day = nextBucketKey(day, 'day')) out.push({ day, tokens: sums.get(day) ?? 0 });
+  return out;
 }
 
 export function cacheHitRate(u: { cacheHitTokens: number; cacheMissTokens: number }): number | null {
