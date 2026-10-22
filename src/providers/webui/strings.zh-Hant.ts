@@ -54,6 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "另一次供應實例修改正在進行,等它結束後重試。",
   changedElsewhere: "設定已在別的頁面或 bot 裡改過,重新載入後再儲存。",
   copySourceGone: "複製來源已不存在。",
-  keyForOtherAddress: "位址換成了另一個網站：請重新填寫 API Key,已存的 Key 不會送到新位址。",
+  keyForOtherAddress: "位址的協定、主機或連接埠變了：請重新填寫 API Key,已存的 Key 不會送到新位址。",
   inUse: (names: string) => `供應實例正被這些部署使用:${names}`,
 };

@@ -54,6 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "Hay otro cambio de proveedor en curso. Vuelve a intentarlo cuando termine.",
   changedElsewhere: "La configuración cambió en otra página u otro bot. Recarga antes de guardar.",
   copySourceGone: "La fuente de la copia ya no existe.",
-  keyForOtherAddress: "La dirección ahora apunta a otro sitio: vuelve a ingresar la API Key. La clave guardada no se envía a la nueva dirección.",
+  keyForOtherAddress: "Cambió el esquema, el host o el puerto de la dirección: vuelve a ingresar la API Key. La clave guardada no se envía a la nueva dirección.",
   inUse: (names: string) => `La instancia de proveedor la usa: ${names}`,
 };

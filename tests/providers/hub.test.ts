@@ -88,7 +88,7 @@ it('copies saved credentials only on final creation, without exposing them in de
   expect(readFileSync(join(root, 'Copy', '.env'), 'utf8')).toContain('test-secret');
 });
 
-it('a saved key stays with its address: moving the endpoint to another origin needs the key again', async () => {
+it('a saved key stays with its origin: another scheme, host or port needs the key again', async () => {
   const { hub, root } = fixture();
   let saved = hub.save(null, { name: 'Alpha', entry, secretValue: 'alpha-key' }, 'en');
   const elsewhere = { ...saved.entry, baseUrl: 'https://other.test/v1' };

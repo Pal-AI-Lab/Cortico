@@ -54,6 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "別のプロバイダー変更を処理中です。完了してから再試行してください。",
   changedElsewhere: "別のページまたは bot で設定が変更されました。再読み込みしてから保存してください。",
   copySourceGone: "コピー元がもう存在しません。",
-  keyForOtherAddress: "アドレスが別のサイトに変わりました。API Key を入力し直してください。保存済みのキーは新しいアドレスに送りません。",
+  keyForOtherAddress: "アドレスのスキーム、ホスト、ポートのいずれかが変わりました。API Key を入力し直してください。保存済みのキーは新しいアドレスに送りません。",
   inUse: (names: string) => `このプロバイダーインスタンスは次で使用中です: ${names}`,
 };
