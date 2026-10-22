@@ -12,6 +12,7 @@ export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
     return new BilibiliWorld({
       roomId: cfg.roomId,
       sessdata: cfg.sessdata,
+      onSessdata: (sessdata) => ctx.persist({ sessdata }),
       giftFlushYuan: () => cfg.giftFlushYuan,
       coalesceWindowMs: () => cfg.coalesceWindowMs,
       coalesceMaxItems: () => cfg.coalesceMaxItems,

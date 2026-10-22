@@ -16,7 +16,7 @@ import type { Logger, ShutdownExternalCheck } from '../../core/types.ts';
 import { text, type BilibiliText } from './strings.ts';
 import { encodePacket, OP, parseFrame } from './wire.ts';
 
-const UA =
+export const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 const HEARTBEAT_MS = 30_000;

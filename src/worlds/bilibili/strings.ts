@@ -9,7 +9,7 @@ const zh = {
   roomIdDescription: '短号或真实房间号皆可。改动需重启后生效。',
   sessdataTitle: '登录凭证 SESSDATA',
   sessdataDescription:
-    '浏览器登录 bilibili 后的 SESSDATA cookie。留空使用匿名接入,观众身份可能被脱敏。修改后需重启。',
+    'B 站登录 cookie 里的 SESSDATA。「登录 B 站」面板用浏览器确认登录后自动写入并重连；手动修改需重启。留空使用匿名接入，观众身份可能被脱敏。',
   giftFlushTitle: '礼物即时投递门槛',
   suffixYuan: '元',
   giftFlushDescription: '达到此金额的礼物立即投递;其余礼物参与常规合批。',
@@ -50,6 +50,8 @@ const zh = {
   label: 'B 站直播间',
   panelLogTitle: '直播间事件',
   panelLogDescription: '直播间事件与各 cmd 计数。',
+  panelLoginTitle: '登录 B 站',
+  panelLoginDescription: '在已登录 B 站的浏览器里确认登录，SESSDATA 自动写入配置并重连直播间。',
   feed: '接入',
   phaseStopped: '未接入',
   phaseConnecting: '连接中',
@@ -105,8 +107,8 @@ export const en: typeof zh = {
   roomIdDescription: 'Short or real room ID. Takes effect after a restart.',
   sessdataTitle: 'Login credential SESSDATA',
   sessdataDescription:
-    'The SESSDATA cookie from a browser signed in to bilibili. Empty connects anonymously, and viewer identities may be masked. '
-    + 'Takes effect after a restart.',
+    'The SESSDATA cookie of a bilibili sign-in. Confirming a sign-in in a browser from the "Sign in to bilibili" panel writes it '
+    + 'and reconnects; a manual change takes effect after a restart. Empty connects anonymously, and viewer identities may be masked.',
   giftFlushTitle: 'Instant gift delivery threshold',
   suffixYuan: 'CNY',
   giftFlushDescription: 'Gifts worth this much or more are delivered at once; other gifts join regular batching.',
@@ -151,6 +153,8 @@ export const en: typeof zh = {
   label: 'Bilibili live room',
   panelLogTitle: 'Live room events',
   panelLogDescription: 'Live room events and counts per cmd.',
+  panelLoginTitle: 'Sign in to bilibili',
+  panelLoginDescription: 'Confirm a sign-in in a browser already signed in to bilibili; SESSDATA is written to the config and the live room reconnects.',
   feed: 'Feed',
   phaseStopped: 'Not connected',
   phaseConnecting: 'Connecting',

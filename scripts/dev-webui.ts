@@ -668,6 +668,14 @@ const devBilibiliOverlayPanel = {
   },
 };
 
+let devBilibiliLoginStartedAt: number | null = null;
+function devBilibiliLoginState(): Record<string, unknown> {
+  const base = { url: null, uid: null, error: null, configured: true, selfUid: 87654321 };
+  if (devBilibiliLoginStartedAt === null) return { ...base, phase: 'idle' };
+  if (Date.now() - devBilibiliLoginStartedAt < 4000) return { ...base, phase: 'waiting', url: 'about:blank#dev-bilibili-login' };
+  return { ...base, phase: 'done', uid: 87654321 };
+}
+
 /** 按 World id、面板局部 id、方法名组织假数据,返回最终接口响应形状。 */
 const devPanels: Record<string, Record<string, Record<string, (...args: never[]) => unknown>>> = {
   qq: {
@@ -708,7 +716,18 @@ const devPanels: Record<string, Record<string, Record<string, (...args: never[])
     },
   } as never,
   bilibili: {
-
+    login: {
+      // dev:开始后 4 秒视为已在浏览器确认，不连 B 站。
+      state: () => devBilibiliLoginState(),
+      start: () => {
+        devBilibiliLoginStartedAt = Date.now();
+        return devBilibiliLoginState();
+      },
+      cancel: () => {
+        devBilibiliLoginStartedAt = null;
+        return devBilibiliLoginState();
+      },
+    },
     log: {
       state: () => ({
         status: {

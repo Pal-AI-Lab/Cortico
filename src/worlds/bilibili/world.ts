@@ -21,6 +21,7 @@ import {
   type ImportantAudienceParticipant,
 } from './audience-admission.ts';
 import { LiveClient, type LivePhase, type LiveStatus } from './client.ts';
+import { BrowserLogin } from './login.ts';
 import { CoalescingBuffer, type CoalescingGroup } from './coalescing-buffer.ts';
 import { giftFrameData } from './gift-frame.ts';
 import { normalize, type CountField, type GaugeField, type LiveEvent } from './normalize.ts';
@@ -43,6 +44,7 @@ import { text, type BilibiliText } from './strings.ts';
 const ENV_PROMPT_FILE = fileURLToPath(new URL('./ENV_PROMPT.md', import.meta.url));
 
 const PANEL_LOG = 'log';
+const PANEL_LOGIN = 'login';
 
 /** 开发 WebUI 复用此面板声明。 */
 export function bilibiliPanelDecls(language: Language): readonly WorldPanelDecl[] {
@@ -52,6 +54,11 @@ export function bilibiliPanelDecls(language: Language): readonly WorldPanelDecl[
       id: PANEL_LOG,
       title: t.panelLogTitle,
       description: t.panelLogDescription,
+    },
+    {
+      id: PANEL_LOGIN,
+      title: t.panelLoginTitle,
+      description: t.panelLoginDescription,
     },
   ];
 }
@@ -89,6 +96,10 @@ export interface BilibiliWorldOptions {
   roomId: number;
   /** 登录 cookie 的 SESSDATA;空串=匿名接入 */
   sessdata?: string;
+  /** 浏览器确认登录拿到新 SESSDATA 时调用，负责写回配置；抛错则这次登录记为失败。 */
+  onSessdata?: (sessdata: string) => void;
+  /** B 站账号接口的根地址；测试指向本机假服务。 */
+  passportBase?: string;
   /** 热改：触发即时投递的礼物金额下限（元）。 */
   giftFlushYuan?: () => number;
   /** 热改:相同弹幕与常规礼物进入总线前的固定归并窗 */
@@ -251,6 +262,8 @@ export class BilibiliWorld implements World {
   private host: WorldHost | null = null;
   private client: LiveSource | null = null;
   private readonly opts: BilibiliWorldOptions;
+  private sessdata: string;
+  private readonly login: BrowserLogin;
   private readonly timezone: string;
   private overlayConfig: BilibiliOverlayConfig;
   private overlayDesignRevision = 0;
@@ -314,6 +327,11 @@ export class BilibiliWorld implements World {
 
   constructor(opts: BilibiliWorldOptions) {
     this.opts = opts;
+    this.sessdata = opts.sessdata ?? '';
+    this.login = new BrowserLogin({
+      passportBase: opts.passportBase,
+      onSessdata: (value) => this.applySessdata(value),
+    });
     this.coalescing = new CoalescingBuffer((groups) => this.emitCoalesced(groups));
     this.admission = new AudienceAdmission({
       file: opts.audienceLedgerFile,
@@ -418,6 +436,18 @@ export class BilibiliWorld implements World {
       ],
       panels: [...bilibiliPanelDecls(language)],
       invoke: async (panel, method, args) => {
+        if (panel === PANEL_LOGIN) {
+          if (method === 'state') return this.loginState();
+          if (method === 'start') {
+            await this.login.start();
+            return this.loginState();
+          }
+          if (method === 'cancel') {
+            this.login.cancel();
+            return this.loginState();
+          }
+          throw new Error(t.unknownMethod(method));
+        }
         if (panel !== PANEL_LOG) throw new Error(t.unknownPanel(panel));
         if (method === 'state') return this.logState();
         throw new Error(t.unknownMethod(method));
@@ -499,26 +529,10 @@ export class BilibiliWorld implements World {
       this.host = null;
       throw new Error('B 站直播间需要宿主提供候选投递能力');
     }
-    if (!this.opts.sessdata && !this.opts.source) {
+    if (!this.sessdata && !this.opts.source) {
       host.log.warn('未配置 worlds.bilibili.sessdata,将以匿名接入——观众 uid 会被服务端抹成 0');
     }
-    const handlers: LiveHandlers = {
-      onCmd: (msg) => {
-        if (generation === this.lifecycleGeneration) this.onCmd(msg);
-      },
-      onStatus: (s) => {
-        if (generation === this.lifecycleGeneration) this.onLiveStatus(s);
-      },
-    };
-    this.client = this.opts.source
-      ? this.opts.source(handlers)
-      : new LiveClient({
-          roomId: this.opts.roomId,
-          sessdata: this.opts.sessdata ?? '',
-          log: host.log,
-          onCmd: handlers.onCmd,
-          onStatus: handlers.onStatus,
-        });
+    this.client = this.liveSource(generation, host);
     this.onLiveStatus(this.client.current());
     this.shutdownChecks = this.unknownSourceShutdownChecks((t) => t.sourcePending);
     await this.client.start();
@@ -526,6 +540,7 @@ export class BilibiliWorld implements World {
 
   async stop(): Promise<void> {
     ++this.lifecycleGeneration;
+    this.login.cancel();
     this.coalescing.flush('stop');
 
     this.flushCoalesceLog(true);
@@ -830,6 +845,61 @@ export class BilibiliWorld implements World {
       this.overlayError = error instanceof Error ? error.message : String(error);
       host.log.warn('B站 Overlay 启动失败', { err: this.overlayError });
     }
+  }
+
+  /** 回调只认 `generation` 仍是当前代的直播源。 */
+  private liveSource(generation: number, host: WorldHost): LiveSource {
+    const handlers: LiveHandlers = {
+      onCmd: (msg) => {
+        if (generation === this.lifecycleGeneration) this.onCmd(msg);
+      },
+      onStatus: (s) => {
+        if (generation === this.lifecycleGeneration) this.onLiveStatus(s);
+      },
+    };
+    return this.opts.source
+      ? this.opts.source(handlers)
+      : new LiveClient({
+          roomId: this.opts.roomId,
+          sessdata: this.sessdata,
+          log: host.log,
+          onCmd: handlers.onCmd,
+          onStatus: handlers.onStatus,
+        });
+  }
+
+  /** 先写回配置(失败则抛给登录流程),再只重建直播间长连;Overlay、归并缓冲与开播基线不动。 */
+  private applySessdata(value: string): void {
+    this.opts.onSessdata?.(value);
+    this.sessdata = value;
+    const host = this.host;
+    void this.reconnectLive().catch((error: unknown) => {
+      host?.log.error('B站换登录凭证后重连失败', { err: error instanceof Error ? error.message : String(error) });
+    });
+  }
+
+  private async reconnectLive(): Promise<void> {
+    const host = this.host;
+    const old = this.client;
+    if (!host || !old || this.opts.source) return;
+    const generation = ++this.lifecycleGeneration;
+    this.client = null;
+    await old.stop();
+    if (generation !== this.lifecycleGeneration) return;
+    this.anonymousLoginReported = false;
+    host.log.info('B站登录凭证已更新，重连直播间');
+    const client = this.liveSource(generation, host);
+    this.client = client;
+    this.onLiveStatus(client.current());
+    await client.start();
+  }
+
+  private loginState(): Record<string, unknown> {
+    return {
+      ...this.login.current,
+      configured: this.sessdata !== '',
+      selfUid: this.status?.selfUid ?? 0,
+    };
   }
 
   private logState(): Record<string, unknown> {
@@ -1265,7 +1335,7 @@ export class BilibiliWorld implements World {
 
   private checkAnonymousLogin(status: LiveStatus): void {
     if (status.phase !== 'connected') return;
-    if (!this.opts.sessdata) return;
+    if (!this.sessdata) return;
     if (status.selfUid > 0) {
       this.anonymousLoginReported = false;
       return;

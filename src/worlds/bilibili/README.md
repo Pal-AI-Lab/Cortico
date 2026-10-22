@@ -46,7 +46,13 @@ B 站直播间协议只读接入。观众的弹幕、礼物、醒目留言、上
 
 ## 登录凭证与观众身份
 
-`worlds.bilibili.sessdata` 保存浏览器登录后的 SESSDATA cookie，位于部署的 `config.json`，不进入版本控制。匿名连接仍可接收弹幕；已观测到匿名响应将观众 uid 置为 0，并对昵称脱敏。`uid=0` 时不生成 `senderKey`，昵称不作为稳定身份键。
+`worlds.bilibili.sessdata` 保存登录 cookie 的 SESSDATA，位于部署的 `config.json`，不进入版本控制。匿名连接仍可接收弹幕；已观测到匿名响应将观众 uid 置为 0，并对昵称脱敏。`uid=0` 时不生成 `senderKey`，昵称不作为稳定身份键。
+
+WebUI 的「登录 B 站」面板(`login`)由 [`login.ts`](login.ts) 向 B 站要一个网页扫码登录的确认页链接，
+面板在新标签打开它；浏览器已登录 B 站时页面显示该账号和确认按钮，点确认即完成。
+World 每 2 秒轮询登录状态，成功后取响应 `Set-Cookie` 里的 SESSDATA 原样(含 `%2C`)经 `onSessdata` 写回配置，
+再只重建直播间长连;Overlay、归并缓冲与开播基线不动，所以不会补报开播。链接约 180 秒后由 B 站作废，
+写回配置失败时这次登录记为失败、仍用旧凭证。
 
 已有弹幕且最近至多 20 条均缺少有效 uid 时,WebUI 显示「近期弹幕缺少观众 uid」。
 

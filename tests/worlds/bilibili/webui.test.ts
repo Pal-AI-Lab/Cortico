@@ -1,5 +1,5 @@
 /**
- * 直播间 World 的 WebUI 表面:只保留日志。
+ * 直播间 World 的 WebUI 表面:日志与浏览器确认登录。
  *
  * 咬住的是**两侧对齐**:服务端声明的局部 panel id 与扩展导出的键一一对应。
  * 对不上时 WebUI 渲染的是"扩展缺这个面板"的错误卡,而那张卡在真直播时才会
@@ -23,7 +23,7 @@ describe('bilibili 的面板声明', () => {
   it('适配成 provider 贡献后:局部 id 原样,配置组与环境提示词照带', () => {
     const c = ioPageContribution('bilibili', 'B 站直播间', undefined, mod());
     expect(c.id).toBe('world:bilibili');
-    expect(c.panels?.map((p) => p.id)).toEqual(['log']);
+    expect(c.panels?.map((p) => p.id)).toEqual(['log', 'login']);
     expect(c.config?.map((g) => g.id)).toEqual(['world:bilibili']);
     expect(c.promptDocs?.map((d) => d.key)).toEqual(['worlds.bilibili.envPrompt']);
     const properties = c.config?.[0].schema.properties ?? {};

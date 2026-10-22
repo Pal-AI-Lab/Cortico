@@ -1,14 +1,14 @@
 /**
  * B 站直播间 World 的浏览器扩展。
  *
- * `log` 保留直播间入站诊断。Overlay 编辑器由 World 的回环服务独立承载，
+ * `log` 保留直播间入站诊断;`login` 用浏览器确认登录换 SESSDATA。Overlay 编辑器由 World 的回环服务独立承载，
  * WebUI 只暴露入口链接。
  *
  * 轮询 state,按 total 差值追加事件。服务端响应类型在浏览器端声明,避免导入 Node 模块。
  */
 
 import type { WebUiClientBundle, WebUiPanelContext, WebUiPanel } from '../../../web/shared/client-panel.ts';
-import { logText } from './strings.ts';
+import { loginText, logText } from './strings.ts';
 
 export function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -185,10 +185,124 @@ const logPanel: WebUiPanel = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// 服务端 `invoke('login', 'state' | 'start' | 'cancel')` 的返回形状
+// ---------------------------------------------------------------------------
+
+interface BilibiliLoginState {
+  phase: 'idle' | 'waiting' | 'scanned' | 'done' | 'expired' | 'failed';
+  /** 确认页链接，仅 waiting 与 scanned 时有值。 */
+  url: string | null;
+  uid: number | null;
+  error: string | null;
+  /** 配置里已有 SESSDATA。 */
+  configured: boolean;
+  /** 直播间握手读到的自己的 uid;匿名或未接入为 0。 */
+  selfUid: number;
+}
+
+const LOGIN_POLL_MS = 1500;
+
+const loginPanel: WebUiPanel = {
+  mount(ctx: WebUiPanelContext) {
+    const { ui, root } = ctx;
+    const T = loginText(ctx.language);
+    const card = ui.sheet({ title: T.sheetTitle, en: 'bilibili sign-in', desc: T.sheetDesc });
+    root.appendChild(card.el);
+
+    const err = ui.msgline();
+    const info = ui.h('div');
+    const startButton = ui.button(T.start, { variant: 'primary', onClick: () => void begin() });
+    const cancelButton = ui.button(T.cancel, { onClick: () => void cancel() });
+    const pageLink = ui.h('a', 'btn', T.openPage);
+    pageLink.target = '_blank';
+    pageLink.rel = 'noopener noreferrer';
+    const bar = ui.actions();
+    bar.append(startButton, pageLink, cancelButton);
+    card.body.append(err, info, bar);
+
+    const setError = (text: string | null): void => {
+      err.textContent = text ?? '';
+      err.className = text ? 'msgline bad' : 'msgline';
+      err.hidden = !text;
+    };
+    setError(null);
+
+    const draw = (st: BilibiliLoginState): void => {
+      const pending = st.phase === 'waiting' || st.phase === 'scanned';
+      const progress = st.phase === 'done'
+        ? T.done(st.uid)
+        : st.phase === 'failed'
+          ? T.failed(st.error ?? '')
+          : T.phase[st.phase];
+      info.replaceChildren(ui.kv([
+        { k: T.kCredential, v: ui.pill(st.configured ? T.configured : T.notConfigured, st.configured ? 'on' : 'off') },
+        { k: T.kIdentity, v: ui.pill(st.selfUid ? T.loggedIn(st.selfUid) : T.anonymous, st.selfUid ? 'on' : 'plain') },
+        ...(progress ? [{ k: T.kProgress, v: progress }] : []),
+      ]));
+      startButton.hidden = pending;
+      startButton.textContent = st.configured ? T.restart : T.start;
+      pageLink.hidden = !pending || !st.url;
+      if (st.url) pageLink.href = st.url;
+      cancelButton.hidden = !pending;
+    };
+
+    /** 空白页在点击当下打开，拿到链接后再跳转，浏览器不会当成弹窗拦下。 */
+    const begin = async (): Promise<void> => {
+      const page = window.open('about:blank', '_blank');
+      if (page) page.opener = null;
+      startButton.disabled = true;
+      try {
+        const st = await ctx.invoke<BilibiliLoginState>('start');
+        setError(null);
+        draw(st);
+        if (page && st.url) page.location.href = st.url;
+        else page?.close();
+      } catch (e: unknown) {
+        page?.close();
+        setError(T.failed(errText(e)));
+      } finally {
+        startButton.disabled = false;
+      }
+    };
+
+    const cancel = async (): Promise<void> => {
+      try {
+        draw(await ctx.invoke<BilibiliLoginState>('cancel'));
+      } catch (e: unknown) {
+        setError(T.stateFailed(errText(e)));
+      }
+    };
+
+    let polling = false;
+    const poll = (): void => {
+      if (polling) return;
+      polling = true;
+      void ctx.invoke<BilibiliLoginState>('state').then(
+        (st) => {
+          polling = false;
+          if (ctx.signal.aborted) return;
+          setError(null);
+          draw(st);
+        },
+        (e: unknown) => {
+          polling = false;
+          if (ctx.signal.aborted) return;
+          setError(T.stateFailed(errText(e)));
+        },
+      );
+    };
+
+    ctx.interval(poll, LOGIN_POLL_MS);
+    poll();
+  },
+};
+
 const bundle: WebUiClientBundle = {
   // 键是**局部** panel id,与服务端 `webUi().panels[].id` 一一对应。
   panels: {
     log: logPanel,
+    login: loginPanel,
   },
 };
 

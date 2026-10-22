@@ -1,5 +1,56 @@
 import { pick, type Language } from '../../../core/language.ts';
 
+/** 「登录 B 站」面板的浏览器端文案。 */
+const loginZh = {
+  sheetTitle: '登录 B 站',
+  sheetDesc: '在打开的 B 站页面确认登录;页面上显示的就是将要使用的账号。',
+  kCredential: '登录凭证',
+  configured: '已配置',
+  notConfigured: '未配置',
+  kIdentity: '当前身份',
+  loggedIn: (uid: number) => `已登录(uid ${uid})`,
+  anonymous: '匿名或未接入',
+  kProgress: '进度',
+  phase: {
+    waiting: '等待在 B 站页面确认',
+    scanned: '已扫码，等待确认',
+    expired: '链接已过期，请重新登录',
+  } as Record<string, string>,
+  done: (uid: number | null) => `登录成功${uid ? `(uid ${uid})` : ''},已写入配置，直播间正在重连`,
+  start: '浏览器登录',
+  restart: '重新登录',
+  openPage: '打开确认页 ↗',
+  cancel: '取消登录',
+  failed: (err: string) => `登录失败:${err}`,
+  stateFailed: (err: string) => `读取登录状态失败:${err}`,
+};
+
+const loginEn: typeof loginZh = {
+  sheetTitle: 'Sign in to bilibili',
+  sheetDesc: 'Confirm the sign-in on the bilibili page that opens; the account shown there is the one that will be used.',
+  kCredential: 'Credential',
+  configured: 'Set',
+  notConfigured: 'Not set',
+  kIdentity: 'Current identity',
+  loggedIn: (uid: number) => `Signed in (uid ${uid})`,
+  anonymous: 'Anonymous or not connected',
+  kProgress: 'Progress',
+  phase: {
+    waiting: 'Waiting for confirmation on the bilibili page',
+    scanned: 'Scanned, waiting for confirmation',
+    expired: 'The link expired; sign in again',
+  },
+  done: (uid: number | null) => `Signed in${uid ? ` (uid ${uid})` : ''}; saved to the config, the live room is reconnecting`,
+  start: 'Sign in with browser',
+  restart: 'Sign in again',
+  openPage: 'Open confirmation page ↗',
+  cancel: 'Cancel sign-in',
+  failed: (err: string) => `Sign-in failed: ${err}`,
+  stateFailed: (err: string) => `Could not read the sign-in state: ${err}`,
+};
+
+export const loginText = (language: Language) => pick(language, { zh: loginZh, en: loginEn });
+
 /** 「直播间事件」面板的浏览器端文案。 */
 const zh = {
   sheetTitle: '直播间事件',
