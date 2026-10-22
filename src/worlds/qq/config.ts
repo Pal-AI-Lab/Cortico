@@ -16,6 +16,14 @@ export const QQ_DEFAULTS = {
   groups: [] as QQRosterEntry[],
   privates: [] as QQRosterEntry[],
   token: '',
+  /** 视频消息落盘；关掉时 video 段只留 `[视频]` 占位，行为同旧版。 */
+  media: {
+    enabled: true,
+    /** 单个视频的字节上限，默认 200MB。 */
+    maxVideoBytes: 200 * 1024 * 1024,
+    /** 下载或复制的总时限，默认 60 秒。 */
+    timeoutMs: 60_000,
+  },
 } as const;
 
 /**
@@ -92,6 +100,34 @@ export function qqConfigGroup(language: Language): ConfigGroup {
           'x-hot': false,
           description: t.timeoutDescription,
         },
+        'worlds.qq.media.enabled': {
+          type: 'boolean',
+          title: t.mediaEnabledTitle,
+          'x-hot': false,
+          description: t.mediaEnabledDescription,
+        },
+        'worlds.qq.media.maxVideoBytes': {
+          type: 'integer',
+          title: t.maxVideoBytesTitle,
+          minimum: 1_048_576,
+          maximum: 2_147_483_647,
+          multipleOf: 1_048_576,
+          'x-scale': 1_048_576,
+          'x-suffix': 'MB',
+          'x-hot': true,
+          description: t.maxVideoBytesDescription,
+        },
+        'worlds.qq.media.timeoutMs': {
+          type: 'integer',
+          title: t.mediaTimeoutTitle,
+          minimum: 1000,
+          maximum: 600_000,
+          multipleOf: 1000,
+          'x-scale': 1000,
+          'x-suffix': 's',
+          'x-hot': false,
+          description: t.mediaTimeoutDescription,
+        },
       },
     },
   };
@@ -109,4 +145,12 @@ export interface QQConfigSection {
   /** OneBot access token,可空 */
   token: string;
   vision: VisionConfig;
+  /** 视频消息落盘。关掉时 video 段只留 `[视频]` 占位。 */
+  media: {
+    enabled: boolean;
+    /** 单个视频的字节上限。 */
+    maxVideoBytes: number;
+    /** 下载或复制的总时限（毫秒）。 */
+    timeoutMs: number;
+  };
 }

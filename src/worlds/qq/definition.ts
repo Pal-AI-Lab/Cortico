@@ -7,7 +7,7 @@ import { OpenRouterVLMClient } from './vlm.ts';
 export const QQ: WorldDefinition<QQConfigSection> = {
   id: 'qq',
   label: 'QQ',
-  defaults: () => ({ ...QQ_DEFAULTS, groups: [], privates: [], vision: { ...VISION_DEFAULTS } }),
+  defaults: () => ({ ...QQ_DEFAULTS, groups: [], privates: [], media: { ...QQ_DEFAULTS.media }, vision: { ...VISION_DEFAULTS } }),
   create: (ctx) => {
     const { cfg } = ctx;
     // 辅助视觉依赖开关与密钥;没有它时,主模型收图则由 QQWorld 自己下载图片附件。
@@ -32,10 +32,16 @@ export const QQ: WorldDefinition<QQConfigSection> = {
         privates: enabledRosterIds(cfg.privates),
         token: cfg.token,
         timezone: ctx.timezone,
+        dataDir: ctx.dataDir,
+        media: { enabled: cfg.media.enabled },
       },
       {
         vision,
         imageCapture: cfg.vision,
+        videoStore: {
+          maxVideoBytes: cfg.media.maxVideoBytes,
+          timeoutMs: cfg.media.timeoutMs,
+        },
         gate: {
           enabled: () => cfg.enabled,
           wsUrl: () => cfg.wsUrl,
@@ -91,6 +97,13 @@ export const QQ: WorldDefinition<QQConfigSection> = {
       {
         type: 'qq.image',
         description: { zh: '消息里的图片下载完成后补发的附件。', en: 'An image from an earlier message, sent once its download finishes.' },
+      },
+      {
+        type: 'qq.video',
+        description: {
+          zh: '消息里的视频落盘完成后补发，带上本地绝对路径；失败则写清原因。',
+          en: 'A video from an earlier message, sent once it is stored locally, with the absolute path; on failure the reason is given.',
+        },
       },
       {
         type: 'qq.vision',

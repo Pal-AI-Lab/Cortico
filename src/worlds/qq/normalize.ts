@@ -118,6 +118,12 @@ export type JsonCardRenderPolicy = (info: JsonCardInfo) => string;
 export type ImageRenderPolicy = (data: Record<string, unknown>) => string;
 
 /**
+ * 视频segment的渲染策略函数:输入segment.data,输出正文里的占位文本。
+ * 落盘成功后写出绝对路径(模型拿它去 probe/抽帧),失败时由 World 写清原因。
+ */
+export type VideoRenderPolicy = (data: Record<string, unknown>) => string;
+
+/**
  * 生成图片渲染策略:
  * - 取不到图 → 降级 `[图片]`
  * - 主模型支持图像或 World 配置了视觉模型 → 正文保留图片 URL 标记
@@ -159,6 +165,8 @@ export interface RenderContext {
   nameOf?: (qq: string) => string | undefined;
   /** 图片渲染策略(能力协商产物);缺省=降级`[图片]` */
   renderImage?: ImageRenderPolicy;
+  /** 视频段渲染策略:落盘中/已落盘(带绝对路径)/拿不到文件;缺省 `[视频]` */
+  renderVideo?: VideoRenderPolicy;
   /** JSON 卡片渲染策略；缺省显示分享正文，封面由 World 的策略追加。 */
   renderJsonCard?: JsonCardRenderPolicy;
   /** 语音段的占位文本(标明转写状态);缺省 `[语音]` */
@@ -217,6 +225,9 @@ export function renderSegmentsPlain(segments: Segment[]): string {
       }
       case 'image':
         parts.push({ text: '[图片]', isToken: true });
+        break;
+      case 'video':
+        parts.push({ text: '[视频]', isToken: true });
         break;
       case 'record':
         parts.push({ text: '[语音]', isToken: true });
@@ -293,6 +304,11 @@ export function renderIncoming(
       }
       case 'image': {
         parts.push({ text: renderImage(data), isToken: true });
+        break;
+      }
+      // 视频段的文件不随消息到达；落盘后的绝对路径由 World 另发 qq.video 事件。
+      case 'video': {
+        parts.push({ text: ctx.renderVideo ? ctx.renderVideo(data) : '[视频]', isToken: true });
         break;
       }
       // 语音条的音频不随消息到达;转写文本由 World 另发事件。

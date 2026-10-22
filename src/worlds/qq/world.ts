@@ -47,9 +47,16 @@ import {
   type JsonCardRenderPolicy,
   type OneBotGroupMessage,
   type Segment,
+  type VideoRenderPolicy,
 } from './normalize.ts';
 import { VISION_DEFAULTS, type VisionConfig, type VisionService } from './vision.ts';
 import { downloadImageBytes } from './image-download.ts';
+import {
+  extractVideoSource,
+  storeVideoSegment,
+  type VideoStoreOptions,
+  type VideoStoreResult,
+} from './media-store.ts';
 import { qqConfigGroup, type QQRosterEntry } from './config.ts';
 import { text } from './strings.ts';
 
@@ -96,6 +103,10 @@ interface QQWorldConfig {
   reconnectBaseMs?: number;
   reconnectMaxMs?: number;
   apiTimeoutMs?: number;
+  /** 部署数据目录；视频落盘的 media 目录建在它下面。 */
+  dataDir?: string;
+  /** 视频落盘开关与上限（缺省按关闭处理，见 videoStoreEnabled）。 */
+  media?: { enabled: boolean };
 }
 
 /**
@@ -124,12 +135,23 @@ interface QQWorldDeps {
   vision?: VisionService;
   /** 无辅助视觉时下载入站图片用的上限;传入配置对象本身,热更新随之生效。 */
   imageCapture?: QQImageCaptureOptions;
+  /** 视频消息落盘的上限与超时;传入配置对象本身,热更新随之生效。 */
+  videoStore?: VideoStoreOptions;
   gate?: QQGatePanelDeps;
 }
 
 type QQImageCaptureOptions = Pick<VisionConfig, 'timeoutMs' | 'maxImageBytes' | 'dedupPrecheckMs'>;
 
+/** 视频落盘的默认上限与超时，与 config.ts 的 defaults 保持一致。 */
+const VIDEO_STORE_FALLBACK: VideoStoreOptions = {
+  maxVideoBytes: 200 * 1024 * 1024,
+  timeoutMs: 60_000,
+};
+
 type IncomingImageDownload = { image: { buffer: Uint8Array; mime: string } | null };
+
+/** 一条 video 段的落盘结果，与它在消息里的序号绑定。 */
+type IncomingVideoStore = { index: number; source: string; result: Promise<VideoStoreResult> };
 
 /** 暂存的草稿(单槽,一进一出;不确认到本轮末即作废) */
 interface PendingDraft {
@@ -237,6 +259,7 @@ export class QQWorld implements World {
 
   private readonly cfg: QQWorldConfig;
   private readonly imageCapture: QQImageCaptureOptions;
+  private readonly videoStore: VideoStoreOptions;
   private readonly timezone: string;
   private host?: WorldHost;
   private driver?: OneBotDriver;
@@ -288,6 +311,7 @@ export class QQWorld implements World {
     this.timezone = cfg.timezone ?? SYSTEM_TIMEZONE;
     this.vision = deps?.vision;
     this.imageCapture = deps?.imageCapture ?? VISION_DEFAULTS;
+    this.videoStore = deps?.videoStore ?? VIDEO_STORE_FALLBACK;
     this.gate = deps?.gate;
     this.watchedGroups = new Set(cfg.groups);
     this.watchedPrivates = new Set(cfg.privates);
@@ -788,6 +812,12 @@ export class QQWorld implements World {
             .catch((): IncomingImageDownload => ({ image: null })),
         }));
 
+    // 视频段落盘:与图片下载同一风格——先并行起跑,不阻塞消息投递。
+    // 落盘完成(或失败)后另发一条 qq.video 事件带上绝对路径或失败原因。
+    const videoStores: IncomingVideoStore[] = this.videoStoreEnabled()
+      ? this.incomingVideoStores(msg)
+      : [];
+
     // 图片渲染策略(外挂视觉,群/私聊同处理)。被动开启时,每张图先做一次限时的
     // 内容去重预判(下载+算hash+查重复,不跑VLM);时限内出结果(命中或下载失败)
     // 则直接内联进消息,跳过占位与异步qq.vision事件,否则显示占位符。
@@ -882,6 +912,7 @@ export class QQWorld implements World {
       nameOf: (qq) => this.nameByUserId.get(qq),
       renderImage,
       renderJsonCard,
+      renderVideo: this.makeVideoRenderPolicy(),
       recordText: transcribe ? '[语音,正在转写中...]' : '[语音,协议端不提供转写]',
     });
 
@@ -940,6 +971,31 @@ export class QQWorld implements World {
 
     if (transcribe) this.transcribeVoice(msg, conv, displayName, when);
 
+    // 视频:落盘完成后另发一条 qq.video,带上绝对路径(或失败原因)。
+    // 与 lateImages 同一套非阻塞风格——这一条卡住也不会拖住整条消息。
+    for (const v of videoStores) {
+      void v.result.then((res) => host.pushEvent(
+        res.ok
+          ? {
+              type: 'qq.video',
+              ts: nowIso(this.timezone),
+              source: this.id,
+              text: `#${msg.message_id} [${this.convLabel(conv)} ${shortTime(this.timezone, when)}] ${displayName}(${msg.user_id}): `
+                + `[video] 已存本地：${res.path}`,
+              senderKey,
+              meta: { message_id: msg.message_id, user_id: msg.user_id, sender_name: displayName, conv, video_path: res.path, video_bytes: res.bytes },
+            }
+          : {
+              type: 'qq.video',
+              ts: nowIso(this.timezone),
+              source: this.id,
+              text: `[系统] #${msg.message_id} 的视频没能落盘：${res.reason}`,
+              senderKey,
+              meta: { message_id: msg.message_id, conv, video_error: res.reason },
+            },
+      )).catch((e) => this.log.warn('QQ 视频落盘事件投递失败', { messageId: msg.message_id, err: String(e) }));
+    }
+
     for (const img of lateImages) {
       void img.promise.then(({ image }) => {
         if (!image) {
@@ -995,6 +1051,36 @@ export class QQWorld implements World {
       const resId = String(forwardSeg.data?.id ?? '');
       if (resId) this.lookupForward(resId, conv, msg.message_id);
     }
+  }
+
+  /**
+   * 视频落盘是否开启。读 cfg（装配层写入的活引用），热改立即生效；
+   * 没有 dataDir 时无从落盘，按关闭处理。
+   */
+  private videoStoreEnabled(): boolean {
+    return this.cfg.media?.enabled === true && !!this.cfg.dataDir;
+  }
+
+  /** 并行起跑所有 video 段的落盘；每段一个 promise，失败在 promise 内化解为原因。 */
+  private incomingVideoStores(msg: OneBotGroupMessage): IncomingVideoStore[] {
+    const dirs = { dataDir: this.cfg.dataDir! };
+    return incomingVideoSources(msg).map(({ index, source }) => ({
+      index,
+      source,
+      result: storeVideoSegment(source, this.videoStore, dirs),
+    }));
+  }
+
+  /**
+   * video 段的正文占位。渲染发生在落盘起跑之后、结果回来之前,
+   * 所以能取到源就写「正在落盘中」,落盘结果由随后的 qq.video 事件给出。
+   */
+  private makeVideoRenderPolicy(): VideoRenderPolicy {
+    return (data) => {
+      if (!extractVideoSource(data)) return '[视频]';
+      // 落盘关掉时不启动下载,占位就和旧版一致。
+      return this.videoStoreEnabled() ? '[视频 正在落盘中...]' : '[视频]';
+    };
   }
 
   /**
@@ -1741,6 +1827,19 @@ function incomingImageBlob(
     name: `qq-${messageId}-${ordinal}`,
     fallbackText: `QQ图片 ${ordinal}`,
   };
+}
+
+/** 消息里的 video 段按下标取出「视频在哪」；拿不到源的段跳过（不入列）。 */
+function incomingVideoSources(msg: OneBotGroupMessage): Array<{ index: number; source: string }> {
+  const out: Array<{ index: number; source: string }> = [];
+  let index = 0;
+  for (const segment of msg.message ?? []) {
+    if (segment.type !== 'video') continue;
+    const source = extractVideoSource(segment.data ?? {});
+    if (source) out.push({ index, source });
+    index++;
+  }
+  return out;
 }
 
 /** 渲染阶段的 GIF 提示仅依据 url/file 的 .gif 后缀。 */
