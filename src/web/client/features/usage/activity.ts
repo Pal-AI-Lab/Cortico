@@ -8,14 +8,14 @@ import type { WebUi } from '../../../shared/client-panel.ts';
 import { LANGUAGE } from '../../core/language.ts';
 import { S } from './strings.ts';
 import type { UsageTip } from './tooltip.ts';
-import type { UsageAggregate } from './types.ts';
+import type { UsageDailyTokens } from './types.ts';
 
 const DAY_MS = 86_400_000;
 /** 格子边长与间距（px），与 src/web/public/styles.css 中 .uactivity 的 --cell / --gap 一致。 */
 const CELL = 12;
 const GAP = 3;
-/** 范围之外最多向前补多少天作对照；取数时按这个长度取。 */
-const ACTIVITY_CONTEXT_DAYS = 371;
+/** 取数时从范围末日往前取多少天的按天数据，范围之外的部分作对照。 */
+export const ACTIVITY_CONTEXT_DAYS = 371;
 /** 月份标签之间至少隔几列，避免挤在一起。 */
 const MONTH_GAP = 3;
 /** 换范围时着色/褪色依次扫过各列，每列的延迟与整段扫过的上限（ms）。 */
@@ -39,11 +39,6 @@ export interface ActivityRange {
 const dayMs = (day: string): number => Date.parse(day + 'T00:00:00Z');
 const dayKey = (t: number): string => new Date(t).toISOString().slice(0, 10);
 
-/** 取格子图数据的起始日：范围起点与终点前 ACTIVITY_CONTEXT_DAYS 天中较早的一个。 */
-export function activityFrom(range: ActivityRange): string {
-  return dayKey(Math.min(dayMs(range.from), dayMs(range.to) - (ACTIVITY_CONTEXT_DAYS - 1) * DAY_MS));
-}
-
 /** 0 = 没有用量；1–4 按当天 token 占最大值的比例分档。 */
 function level(value: number, max: number): number {
   return value > 0 ? Math.min(4, Math.ceil((value / max) * 4)) : 0;
@@ -55,17 +50,16 @@ function level(value: number, max: number): number {
  */
 export type ActivityMotion = 'enter' | ActivityRange | null;
 
-/** `daily` 是按天分桶、覆盖 `activityFrom(range)` 到 `range.to` 的数据。 */
-export function renderActivity(deps: ActivityDeps, daily: UsageAggregate, range: ActivityRange, motion: ActivityMotion): void {
+/** `daily` 是请求带 `dailyTokenDays=ACTIVITY_CONTEXT_DAYS` 时 `/api/usage` 给的 `dailyTokens`。 */
+export function renderActivity(deps: ActivityDeps, daily: readonly UsageDailyTokens[], range: ActivityRange, motion: ActivityMotion): void {
   const { ui, box, tip } = deps;
   box.replaceChildren();
-  const series = daily.series || [];
-  if (!series.length) {
+  if (!daily.length) {
     box.appendChild(ui.placeholder(S.noCalls));
     return;
   }
-  const tokens = new Map(series.map((p) => [p.bucket.slice(0, 10), (p.promptTokens || 0) + (p.completionTokens || 0)]));
-  const dataFrom = series[0]!.bucket.slice(0, 10);
+  const tokens = new Map(daily.map((p) => [p.day, p.tokens]));
+  const dataFrom = daily[0]!.day;
   const toMs = dayMs(range.to);
   const end = toMs + (6 - ((new Date(toMs).getUTCDay() + 6) % 7)) * DAY_MS;
   const rangeCols = Math.ceil((end - dayMs(range.from) + DAY_MS) / DAY_MS / 7);

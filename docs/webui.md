@@ -108,7 +108,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `POST /api/storage/clear?owner=&key=` | 清除一个存储部分;`owner` 与 `key` 取自各页 manifest 的 `storageParts`,Core 自己的对话历史是 `core` 的 `session`。省略 `owner` 时 `key` 须只有一个归属,有多个时回 409 |
 | `GET /api/theme`、`POST /api/theme` | 部署的配色;GET 回 `{ defaultScheme, theme }`,POST 体是 `StoredTheme`(`src/web/shared/theme.ts`),回 `{ ok, theme }` |
 | `GET /api/avatar`、`POST /api/avatar` | bot 头像 PNG,没有时 404;POST 体是 `image/png` 原始字节，不是 PNG 时回 400 |
-| `GET /api/usage` | 用量聚合;查询参数 `bucket`(`auto`/`minute`/`hour`/`day`/`week`/`month`)、`currency`、`basis`(`marginal`/`equivalent`)、`from`、`to`、`days`(不小于 1 的整数) |
+| `GET /api/usage` | 用量聚合;查询参数 `bucket`(`auto`/`minute`/`hour`/`day`/`week`/`month`)、`currency`、`basis`(`marginal`/`equivalent`)、`from`、`to`、`days`(不小于 1 的整数)、`dailyTokenDays`(不小于 1 的整数)。带 `dailyTokenDays` 时回应多一个 `dailyTokens`,是从范围末日往前这么多天(范围更长时从范围起点起)逐日的 `{ day, tokens }`,`tokens` 为输入加输出 token,按部署时区分日 |
 | `POST /api/run/pause`、`POST /api/run/resume`、`POST /api/run/shutdown` | 暂停、继续与关机，见「运行控制」 |
 | `GET /api/prompts`、`POST /api/prompts` | 固定提示词的列表与编辑;POST 体 `{ key, content, baseRevision? }`,带上的 `baseRevision` 过期时回 409 并带 `conflict: true`,成功回新的 `revision` |
 | `GET /api/prompts/prefix`、`POST /api/prompts/reset`、`POST /api/session/reload-prefix` | 整条系统前缀的分段预览，回 `{ segments: [{ title, text, sourceKey? }] }`;移除一条固定提示词的部署覆盖，体 `{ key }`,回 `{ ok, result }`;用当前提示词重载当前 session 的系统前缀，对话保留，回 `{ ok, result }`。服务没挂时回 503 |

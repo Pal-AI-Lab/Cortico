@@ -614,7 +614,7 @@ export interface WebAppCheckpointDeps {
 export interface WebAppUsageDeps {
   status?(): { pending: number; error: string | null };
   /** `days` 与补空桶的截止时刻按部署时区解释,由实现方给定时区。 */
-  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent' }): UsageAggregate;
+  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent'; dailyTokenDays?: number }): UsageAggregate;
 }
 
 
@@ -2340,6 +2340,8 @@ export class WebApp {
       if (to) opts.to = to;
       const days = intParam(req.query.days);
       if (days !== undefined && days >= 1) opts.days = days;
+      const dailyTokenDays = intParam(req.query.dailyTokenDays);
+      if (dailyTokenDays !== undefined && dailyTokenDays >= 1) opts.dailyTokenDays = dailyTokenDays;
       res.json({ ...src.aggregate(opts), ledger: src.status?.() });
     }));
 

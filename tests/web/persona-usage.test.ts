@@ -84,6 +84,15 @@ describe('/api/usage', () => {
     expect(d.totals.unpricedCalls).toBe(2);
     expect(d.byModel[0].key).toBe('deepseek-v4-flash');
   });
+
+  it('带 dailyTokenDays 时同一次回应附上逐日 token;不带时回应里没有 dailyTokens', async () => {
+    const range = '/api/usage?bucket=hour&from=2026-07-19&to=2026-07-19';
+    const plain = await getJ(range);
+    const d = await getJ(`${range}&dailyTokenDays=2`);
+    expect('dailyTokens' in plain).toBe(false);
+    expect(d.dailyTokens).toEqual([{ day: '2026-07-18', tokens: 0 }, { day: '2026-07-19', tokens: 2_500_000 }]);
+    expect({ ...d, dailyTokens: undefined }).toEqual({ ...plain, dailyTokens: undefined });
+  });
 });
 
 describe('/api/config', () => {

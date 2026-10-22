@@ -441,6 +441,7 @@ function sample(): Any {
     byInstance: [
       { key: 'conn-a', ...accum({ calls: 6, cost: 4 }), cacheHitRate: 0.8 },
     ],
+    dailyTokens: [{ day: '2026-08-01', tokens: 1200 }, { day: '2026-08-02', tokens: 600 }],
   };
 }
 
@@ -800,14 +801,14 @@ describe('feature 声明', () => {
 // ---------------------------------------------------------------------------
 
 describe('活跃度格子图', () => {
-  /** 2026-07-01 到 2026-08-31 每天一个桶，token 数 = 当月的日（1–31）×100。 */
+  /** 2026-07-01 到 2026-08-31 每天一项，token 数 = 当月的日（1–31）×100。 */
   function daily(): Any {
-    const series = [];
+    const days = [];
     for (let t = Date.parse('2026-07-01'); t <= Date.parse('2026-08-31'); t += 86_400_000) {
       const day = new Date(t).toISOString().slice(0, 10);
-      series.push({ bucket: day, ...accum({ promptTokens: Number(day.slice(8)) * 100 }) });
+      days.push({ day, tokens: Number(day.slice(8)) * 100 });
     }
-    return { bucket: 'day', series };
+    return days;
   }
   async function draw(range: { from: string; to: string }, motion: Any): Promise<Any> {
     const { createWebUi } = (await import(UI)) as Any;
@@ -879,22 +880,17 @@ describe('活跃度格子图', () => {
 // ---------------------------------------------------------------------------
 
 describe('用量页挂载', () => {
-  /** 主数据那一次请求（按天数据另有一次，带 bucket=day 与补出的 from）。 */
-  const mainQueries = (): string[] => seen.filter((u) => u.startsWith('/api/usage') && !u.includes('bucket=day&from='));
-
-  it('取数：主数据一次、按天数据一次；画出六项读数、构成条、一张柱图、活跃度格子图与分组明细', async () => {
+  it('取数只发一次请求，同一份回应带格子图的逐日 token;画出六项读数、构成条、一张柱图、活跃度格子图与分组明细', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
+    const { ACTIVITY_CONTEXT_DAYS } = (await import(ACTIVITY)) as Any;
     mountUsage(ctx);
     await flush();
 
-    expect(seen.length).toBe(2);
+    expect(seen.length).toBe(1);
     expect(seen[0]).toContain('bucket=auto');
-    // 格子图的数据按天分桶，止于页面范围的末日，并向前补出对照的日子
-    expect(seen[1]).toContain('bucket=day');
-    expect(seen[1]).toContain('to=2026-08-02');
-    expect(seen[1]).toMatch(/from=2025-/);
+    expect(seen[0]).toContain(`dailyTokenDays=${ACTIVITY_CONTEXT_DAYS}`);
     expect(root.findTag('h1')!.textContent).toBe('用量与成本');
 
     expect(root.findAll('stat').length).toBe(6);
@@ -950,8 +946,6 @@ describe('用量页挂载', () => {
     expect(root.findAllTag('svg').length).toBe(0);
     expect(root.textContent).toContain('这个范围内没有调用记录');
     expect(root.textContent).toContain('无数据');
-    // 没有范围就不取按天数据
-    expect(seen.length).toBe(1);
   });
 
   it('取数失败 → 概览位置铺一行失败说明，带服务端措辞', async () => {
@@ -996,13 +990,10 @@ describe('用量页挂载', () => {
     const newer = { ...sample(), from: '2026-08-02', to: '2026-08-02' };
     replies[1]!(newer);
     await flush();
-    replies[2]!(newer); // 后一次查询的按天数据
-    await flush();
     replies[0]!(older);
     await flush();
     const dates = root.find('udates')!.findAllTag('input');
     expect([dates[0].value, dates[1].value]).toEqual(['2026-08-02', '2026-08-02']);
-    expect(replies.length).toBe(3); // 过期的那次不再去取按天数据
   });
 
   it('刷新失败时保留上一次结果，整块标为过期并写明失败原因', async () => {
@@ -1049,7 +1040,7 @@ describe('用量页挂载', () => {
     expect(type.disabled).toBe(false);
   });
 
-  it('换粒度 / 点刷新 → 重新取数，且 bucket 跟着走；按天数据不随粒度变', async () => {
+  it('换粒度 / 点刷新 → 各重新取数一次，且 bucket 跟着走', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -1059,13 +1050,13 @@ describe('用量页挂载', () => {
 
     root.findButton('时')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(mainQueries().some((u) => u.includes('bucket=hour'))).toBe(true);
-    expect(seen.filter((u) => u.includes('bucket=day&from=')).length).toBe(1);
+    expect(seen.length).toBe(1);
+    expect(seen[0]).toContain('bucket=hour');
 
     seen.length = 0;
     root.findButton('刷新')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(seen.length).toBe(2);
+    expect(seen.length).toBe(1);
   });
 
   it('日期框常驻：切到「自定义」沿用当前范围；改日期即切到自定义档并按新日期取数', async () => {
@@ -1078,8 +1069,8 @@ describe('用量页挂载', () => {
 
     root.findButton('自定义')!.dispatchEvent({ type: 'click' });
     await flush();
-    expect(mainQueries().at(-1)).toContain('from=2026-08-01');
-    expect(mainQueries().at(-1)).toContain('to=2026-08-02');
+    expect(seen.at(-1)).toContain('from=2026-08-01');
+    expect(seen.at(-1)).toContain('to=2026-08-02');
 
     root.findButton('近 7 天')!.dispatchEvent({ type: 'click' });
     await flush();
@@ -1087,7 +1078,7 @@ describe('用量页挂载', () => {
     from.dispatchEvent({ type: 'change' });
     await flush();
     expect(root.findButton('自定义')!.classList.contains('active')).toBe(true);
-    expect(mainQueries().at(-1)).toContain('from=2026-07-20');
+    expect(seen.at(-1)).toContain('from=2026-07-20');
   });
 
   it('自动刷新：勾上才有表，取消即停；离开这一页一根都不剩', async () => {
@@ -1119,7 +1110,7 @@ describe('用量页挂载', () => {
     seen.length = 0;
     vi.advanceTimersByTime(15_000);
     await flush();
-    expect(seen.length).toBe(2);
+    expect(seen.length).toBe(1);
 
     lifecycle.dispose();
     expect(vi.getTimerCount()).toBe(base);

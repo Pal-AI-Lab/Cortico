@@ -75,6 +75,14 @@ export interface UsageAggregate {
   byInstance?: UsageGroupStat[];
   /** 失败、丢弃和中断均计入 totals；此字段用于核对失败消耗。 */
   failed?: UsageAccum;
+  /** 逐日的输入加输出 token 合计；请求带 `dailyTokenDays` 时才有，窗口内没有记录时为空。 */
+  dailyTokens?: UsageDailyTokens[];
+}
+
+/** 一天的 token 合计，`day` 是部署时区的 `YYYY-MM-DD`。 */
+export interface UsageDailyTokens {
+  day: string;
+  tokens: number;
 }
 
 /** 图上纵轴画的是什么。 */
