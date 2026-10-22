@@ -1120,6 +1120,16 @@ describe('浮层层级', () => {
   });
 });
 
+describe('容器查询', () => {
+  it('具名容器查询只引用样式表里声明过的容器', () => {
+    const css = readFileSync(new URL('../../src/web/public/styles.css', import.meta.url), 'utf8');
+    const declared = new Set([...css.matchAll(/\bcontainer(?:-name)?:\s*([\w-]+)/g)].map((m) => m[1]));
+    const queried = [...css.matchAll(/@container\s+([\w-]+)\s*\(/g)].map((m) => m[1]);
+    expect(queried.length).toBeGreaterThan(0);
+    expect(queried.filter((name) => !declared.has(name))).toEqual([]);
+  });
+});
+
 describe('lightbox', () => {
   it('点图片、点遮罩或按 Esc 都关闭,doc 上的监听归零', async () => {
     const { ui, doc, host } = await mkUi();

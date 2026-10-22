@@ -2338,11 +2338,11 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .unote { margin: 6px 0 0; }
 .unote:empty { display: none; }
 
-@container console-content (max-width: 720px) {
+@container webui-content (max-width: 720px) {
   .ukpis { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 14px; }
   .ukpis > .stat:nth-child(3n + 1) { padding-left: 0; border-left: 0; }
 }
-@container console-content (max-width: 480px) {
+@container webui-content (max-width: 480px) {
   .ukpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ukpis > .stat:nth-child(n) { padding-left: 16px; border-left: 1px solid var(--line); }
   .ukpis > .stat:nth-child(2n + 1) { padding-left: 0; border-left: 0; }
