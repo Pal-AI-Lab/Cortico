@@ -305,12 +305,15 @@
   line-height: 24px;
 }
 
-.ct-find input.field:focus,
-.ct-find input.field:focus-visible {
+/* 工作区里的输入框和编辑器聚焦时都不发光:编辑器本身无框,输入框只换边框颜色 */
+.ct-ws .field:focus,
+.ct-ws .field:focus-visible {
   outline: none;
   box-shadow: none;
-  border-color: color-mix(in srgb, var(--accent) 60%, var(--line-2));
 }
+
+.ct-ws input.field:focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line-2)); }
+.ct-ws .ct-textarea.field:focus { border-color: transparent; }
 
 .ct-findrow { min-height: 28px; }
 
