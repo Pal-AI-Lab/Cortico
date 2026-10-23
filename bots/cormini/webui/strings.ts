@@ -19,8 +19,6 @@ const zh = {
   // history.ts
   historyLoading: '读取提交历史…',
   historyFailed: '版本历史不可用',
-  mediumTitle: '介质状态',
-  mediumDesc: '工作区有自己的 Git 仓库，和项目仓库分开。在这里做的每次修改都会立即提交，署名为 operator。',
   rowLastCommit: '最近提交',
   logTitle: '提交流水',
   logDesc: '点一条提交，展开它改了什么。输入路径只看某个档案的提交。',
@@ -118,8 +116,6 @@ export const en: typeof zh = {
     `git ${head} · ${dirty ? 'uncommitted changes' : 'clean'} · ${checkpoints} checkpoint${checkpoints === 1 ? '' : 's'}`,
   historyLoading: 'Reading commit history…',
   historyFailed: 'Version history unavailable',
-  mediumTitle: 'Medium status',
-  mediumDesc: 'The workspace has its own Git repository, separate from the project repository. Every change made here is committed right away, authored as operator.',
   rowLastCommit: 'Last commit',
   logTitle: 'Commit log',
   logDesc: 'Click a commit to see what it changed. Type a path to see only the commits for that file.',

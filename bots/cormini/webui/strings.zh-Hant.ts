@@ -7,8 +7,6 @@ export const S: Partial<typeof en> = {
     `git ${head} · ${dirty ? '有未提交的改動' : '乾淨'} · ${checkpoints} 個存檔點`,
   historyLoading: '讀取提交歷史…',
   historyFailed: '版本歷史無法使用',
-  mediumTitle: '介質狀態',
-  mediumDesc: '工作區有自己的 Git 儲存庫，和專案儲存庫分開。在這裡做的每次修改都會立即提交，署名為 operator。',
   rowLastCommit: '最近提交',
   logTitle: '提交紀錄',
   logDesc: '點一條提交，展開它改了什麼。輸入路徑只看某個檔案的提交。',

@@ -423,13 +423,7 @@
   padding: 8px 14px;
 }
 
-/* ---- 版本历史:仓库状态只有最近一次提交这一块;提交流水紧跟其后,不另起分割线 ---- */
-.ct-fact-k {
-  margin-bottom: 3px;
-  font-size: 12px;
-  color: var(--ink-dim);
-}
-
+/* ---- 版本历史:最近一次提交在上,提交流水紧跟其后,不另起分割线 ---- */
 .ct-lastcommit {
   padding: 12px 14px;
   background: var(--sheet-2);

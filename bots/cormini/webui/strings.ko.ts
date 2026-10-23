@@ -7,8 +7,6 @@ export const S: Partial<typeof en> = {
     `git ${head} · ${dirty ? '커밋하지 않은 변경 있음' : '깨끗함'} · 체크포인트 ${checkpoints}개`,
   historyLoading: '커밋 기록을 읽는 중…',
   historyFailed: '버전 기록을 사용할 수 없습니다',
-  mediumTitle: '매체 상태',
-  mediumDesc: '워크스페이스에는 프로젝트와 별개인 Git 저장소가 있습니다. 여기서 한 변경은 바로 커밋되며 작성자는 operator입니다.',
   rowLastCommit: '최근 커밋',
   logTitle: '커밋 기록',
   logDesc: '커밋을 클릭하면 바뀐 내용을 펼쳐 봅니다. 경로를 입력하면 그 파일의 커밋만 표시합니다.',

@@ -7,8 +7,6 @@ export const S: Partial<typeof en> = {
     `git ${head} · ${dirty ? 'nicht committete Änderungen' : 'sauber'} · ${checkpoints} ${checkpoints === 1 ? 'Checkpoint' : 'Checkpoints'}`,
   historyLoading: 'Commit-Verlauf wird gelesen…',
   historyFailed: 'Versionsverlauf nicht verfügbar',
-  mediumTitle: 'Status des Mediums',
-  mediumDesc: 'Der Arbeitsbereich hat ein eigenes Git-Repository, getrennt vom Projekt-Repository. Jede Änderung hier wird sofort committet, als Autor steht operator.',
   rowLastCommit: 'Letzter Commit',
   logTitle: 'Commit-Log',
   logDesc: 'Klicken Sie auf einen Commit, um seine Änderungen zu sehen. Geben Sie einen Pfad ein, um nur die Commits dieser Datei zu sehen.',

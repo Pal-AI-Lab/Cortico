@@ -7,8 +7,6 @@ export const S: Partial<typeof en> = {
     `git ${head} · ${dirty ? '未コミットの変更あり' : 'クリーン'} · チェックポイント ${checkpoints} 個`,
   historyLoading: 'コミット履歴を読み込み中…',
   historyFailed: 'バージョン履歴を利用できません',
-  mediumTitle: '媒体の状態',
-  mediumDesc: 'ワークスペースにはプロジェクトとは別の Git リポジトリがあります。ここでの変更はすぐにコミットされ、作成者は operator になります。',
   rowLastCommit: '最新のコミット',
   logTitle: 'コミット履歴',
   logDesc: 'コミットをクリックすると、変更内容を表示します。パスを入力すると、そのファイルのコミットだけを表示します。',

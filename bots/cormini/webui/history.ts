@@ -45,7 +45,7 @@ const PAGE_SIZES = [15, 30, 60, 100] as const;
 /** 仓库状态只列最近一次提交(HEAD 指的就是它)。 */
 function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiSheet {
   const { ui } = ctx;
-  const card = ui.sheet({ title: T.mediumTitle, en: '.git', desc: T.mediumDesc });
+  const card = ui.sheet({ title: T.rowLastCommit, en: 'HEAD' });
   card.el.classList.add('ct-histsheet');
   const s = st.status;
   if (!s.available || !s.repo) {
@@ -61,7 +61,7 @@ function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiShe
       ui.h('span', '', last.author),
       ui.h('span', '', stamp(last.date)),
     );
-    box.append(ui.h('div', 'ct-fact-k', T.rowLastCommit), ui.h('div', 'ct-commitmsg', last.message), meta);
+    box.append(ui.h('div', 'ct-commitmsg', last.message), meta);
     card.body.appendChild(box);
   }
   return card;

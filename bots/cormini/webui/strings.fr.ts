@@ -7,8 +7,6 @@ export const S: Partial<typeof en> = {
     `git ${head} · ${dirty ? 'modifications non commitées' : 'propre'} · ${checkpoints} point${checkpoints > 1 ? 's' : ''} de contrôle`,
   historyLoading: "Lecture de l'historique des commits…",
   historyFailed: 'Historique des versions indisponible',
-  mediumTitle: 'État du support',
-  mediumDesc: 'L’espace de travail a son propre dépôt Git, distinct de celui du projet. Chaque modification faite ici est committée aussitôt, au nom d’operator.',
   rowLastCommit: 'Dernier commit',
   logTitle: 'Journal des commits',
   logDesc: 'Cliquez sur un commit pour voir ce qu’il a modifié. Saisissez un chemin pour ne voir que les commits de ce fichier.',
