@@ -1,6 +1,7 @@
 /*
  * Memory 页面板的专有样式，仅补充 ctx.ui 未提供的布局与排版。通用原语、树行、历史行和 diff 框复用 WebUI 样式。
  * 类名使用 ct- 前缀，颜色和字体使用主题变量，避免跨 provider 的全局样式冲突。
+ * 窄屏规则用不具名的容器查询：面板挂在哪个页面的内容容器里都生效。
  */
 
 /* ---- 通用小件 ---- */
@@ -70,41 +71,111 @@
 .ct-model-row input.field,
 .ct-model-row select.field { width: 100%; min-width: 0; }
 
-/* ---- 工作区:树 | 编辑区 ---- */
+/* ---- 工作区:左栏(过滤、目录树) | 右栏(文件头、工具行、编辑区) ----
+   两栏同高:右栏决定这一行的高度,目录树填满左栏余下的部分。 */
 .ct-ws {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 12px;
-  margin-top: 10px;
+  grid-template-columns: 260px minmax(0, 1fr);
+  gap: 16px;
+  align-items: stretch;
   min-height: 0;
 }
 
+.ct-side {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ct-treehead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ct-filter { flex: 1; min-width: 0; }
+
 .ct-tree {
+  flex: 1 1 0;
+  min-height: 240px;
   overflow: auto;
-  max-height: min(62vh, 640px);
   background: var(--sheet-2);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 8px 6px;
+  padding: 6px;
 }
+
+/* 选中的档案只轻轻标出;目录行用字重区分,不用主题色 */
+.ct-tree .treerow.sel { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
+.ct-tree .treerow.sel .fsize { color: var(--ink-dim); }
+.ct-tree .treerow.dir { color: var(--ink-soft); font-weight: 600; }
 
 .ct-pane {
   display: flex;
   flex-direction: column;
+  gap: 8px;
   min-width: 0;
+}
+
+.ct-file {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* 没有打开的档案:一块与编辑区同高的空态 */
+.ct-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: min(62vh, 600px);
+  border: 1px dashed var(--line-2);
+  border-radius: 10px;
+}
+
+/* 第一行:路径(未保存时后面一个点)、还原、保存 */
+.ct-filehead {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  min-width: 0;
 }
 
 .ct-path {
-  font: 12px var(--mono);
-  color: var(--ink-soft);
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 46%;
+  font: 600 13.5px/1.5 var(--mono);
+  color: var(--ink);
 }
 
-.ct-filter { flex: 1; min-width: 120px; }
+.ct-path.is-dirty::after {
+  content: '●';
+  margin-left: 6px;
+  font-size: 10px;
+  color: var(--warn);
+  vertical-align: 1px;
+}
+
+/* 第二行:显示方式在左;查找、历史、改名在右,删除与它们隔开 */
+.ct-filetools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ct-sep {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: var(--line-2);
+}
 
 .ct-findbar { flex-wrap: wrap; }
 .ct-findbar input.field { width: 150px; flex: none; }
@@ -125,17 +196,20 @@
 
 .ct-editwrap.ct-mode-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 
+/* 长行折行显示(不改文件内容),分栏时也不用横向滚动 */
 .ct-textarea {
   min-height: min(52vh, 520px);
   resize: vertical;
   font: 13.5px/1.72 var(--mono);
-  white-space: pre;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   overflow: auto;
   tab-size: 2;
 }
 
 .ct-preview {
   overflow: auto;
+  overflow-wrap: anywhere;
   background: var(--sheet);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -157,7 +231,7 @@
 .ct-preview h2 { font-size: 17px; }
 .ct-preview h3 { font-size: 15px; }
 .ct-preview p { margin: 6px 0; }
-.ct-preview code { font: 12.5px var(--mono); color: var(--ink-blue); }
+.ct-preview code { font: 12.5px var(--mono); color: var(--ink-blue, var(--accent)); }
 
 .ct-preview pre {
   background: var(--sheet-2);
@@ -189,12 +263,12 @@
   max-height: min(58vh, 600px);
 }
 
-@container webui-content (max-width: 900px) {
+@container (max-width: 900px) {
   .ct-ws { grid-template-columns: minmax(0, 1fr); }
-  .ct-tree { max-height: 240px; }
+  .ct-tree { flex: none; max-height: 240px; }
+  .ct-empty { min-height: 160px; }
   .ct-editwrap.ct-mode-split { grid-template-columns: minmax(0, 1fr); }
   .ct-editwrap.ct-mode-split .ct-preview { display: none; }
-  .ct-path { max-width: 100%; }
   .ct-model-row { grid-template-columns: minmax(110px, .6fr) minmax(220px, 1.4fr) auto; }
   .ct-model-role { grid-row: 1 / 3; }
   .ct-model-row > .fieldrow:first-of-type { grid-column: 2; grid-row: 1; }
@@ -202,7 +276,7 @@
   .ct-model-row > .btn { grid-column: 3; grid-row: 2; }
 }
 
-@container webui-content (max-width: 620px) {
+@container (max-width: 620px) {
   .ct-model-row { grid-template-columns: minmax(0, 1fr); }
   .ct-model-role,
   .ct-model-row > .fieldrow:first-of-type,

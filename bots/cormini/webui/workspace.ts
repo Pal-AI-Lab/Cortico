@@ -130,6 +130,9 @@ class WorkspaceView {
   private readonly preview: HTMLDivElement;
   private readonly editWrap: HTMLDivElement;
   private readonly histWrap: HTMLDivElement;
+  /** 打开了文件时的整块（文件头、工具行、编辑区、页脚）；没打开时换成空态。 */
+  private readonly fileArea: HTMLDivElement;
+  private readonly emptyNote: HTMLElement;
   private readonly pathLabel: HTMLElement;
   private readonly metaLabel: HTMLElement;
   private readonly stateLabel: HTMLElement;
@@ -154,29 +157,26 @@ class WorkspaceView {
     this.defaultDir = options.defaultDir ?? '';
     const { ui } = ctx;
 
-    const card = ui.sheet({
-      title: T.workspaceTitle,
-      en: `${this.root}/`,
-      desc: T.workspaceDesc,
-    });
+    const card = ui.sheet({ title: T.workspaceTitle, desc: T.workspaceDesc });
 
+    // ---- 左栏:过滤与新建在上,目录树在下 ----
     const filterInput = ui.input({
       type: 'search',
       placeholder: T.filterFiles,
       onInput: (v) => { this.filter = v.trim(); this.renderTree(); },
     });
     filterInput.classList.add('ct-filter');
-    const top = ui.rowbar();
-    top.append(
-      ui.button(T.newFile, { size: 'sm', variant: 'primary', onClick: () => this.openNewDialog() }),
-      ui.button(T.refresh, { size: 'sm', onClick: () => { void this.refreshTree(); } }),
+    const treeHead = ui.h('div', 'ct-treehead');
+    treeHead.append(
       filterInput,
-      ui.h('span', 'grow'),
+      ui.button(T.refresh, { size: 'sm', onClick: () => { void this.refreshTree(); } }),
+      ui.button(T.newFile, { size: 'sm', variant: 'primary', onClick: () => this.openNewDialog() }),
     );
-    card.body.appendChild(top);
-
-    // ---- 主体:树 | 编辑区 ----
     this.treePane = ui.h('div', 'ct-tree');
+    const side = ui.h('div', 'ct-side');
+    side.append(treeHead, this.treePane);
+
+    // ---- 右栏:文件头(路径、还原、保存) / 工具行(显示方式、查找等、删除) / 编辑区 / 页脚 ----
     this.pane = ui.h('div', 'ct-pane');
 
     this.pathLabel = ui.h('div', 'ct-path', T.noFileOpen);
@@ -201,8 +201,10 @@ class WorkspaceView {
       },
     );
 
-    const bar = ui.rowbar();
-    bar.append(this.pathLabel, ui.h('span', 'grow'), mode.el, ...this.fileBtns);
+    const head = ui.h('div', 'ct-filehead');
+    head.append(this.pathLabel, reloadBtn, this.saveBtn);
+    const tools = ui.h('div', 'ct-filetools');
+    tools.append(mode.el, ui.h('span', 'grow'), findBtn, histBtn, renameBtn, ui.h('span', 'ct-sep'), delBtn);
 
     // ---- 查找栏 ----
     this.findInput = ui.input({
@@ -241,10 +243,14 @@ class WorkspaceView {
     const foot = ui.rowbar();
     foot.append(this.metaLabel, ui.h('span', 'grow'), this.stateLabel);
 
-    this.pane.append(bar, this.findBar, this.editWrap, this.histWrap, foot, this.msg);
+    this.fileArea = ui.h('div', 'ct-file');
+    this.fileArea.append(head, tools, this.findBar, this.editWrap, this.histWrap, foot);
+    this.emptyNote = ui.placeholder(T.noFileOpen);
+    this.emptyNote.classList.add('ct-empty');
+    this.pane.append(this.emptyNote, this.fileArea, this.msg);
 
     const split = ui.h('div', 'ct-ws');
-    split.append(this.treePane, this.pane);
+    split.append(side, this.pane);
     card.body.appendChild(split);
 
     this.el = card.el;
@@ -677,6 +683,8 @@ class WorkspaceView {
   }
 
   private setPane(kind: 'empty' | 'edit' | 'hist'): void {
+    this.fileArea.hidden = kind === 'empty';
+    this.emptyNote.hidden = kind !== 'empty';
     this.editWrap.classList.toggle('ct-hidden', kind !== 'edit');
     this.histWrap.classList.toggle('ct-hidden', kind !== 'hist');
     this.findBar.classList.toggle('ct-hidden', kind !== 'edit' || this.findBar.dataset.open !== '1');
@@ -698,6 +706,7 @@ class WorkspaceView {
       ? this.T.cursor(line, col, text.split('\n').length, text.length, dirty)
       : '';
     this.saveBtn.disabled = !dirty;
+    this.pathLabel.classList.toggle('is-dirty', dirty);
     if (!this.editWrap.classList.contains('ct-mode-edit')) {
       this.preview.innerHTML = markdownPreview(this.ctx, text);
     }
