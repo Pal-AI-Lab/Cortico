@@ -54,6 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "Eine andere Anbieter-Änderung läuft gerade. Versuche es danach erneut.",
   changedElsewhere: "Die Konfiguration wurde auf einer anderen Seite oder in einem anderen Bot geändert. Lade neu, bevor du speicherst.",
   copySourceGone: "Die Kopierquelle existiert nicht mehr.",
-  keyForOtherAddress: "Schema, Host oder Port der Adresse haben sich geändert: Gib den API Key erneut ein. Der gespeicherte Schlüssel wird nicht an die neue Adresse gesendet.",
+  keyForOtherAddress: "Die Adresse zeigt jetzt auf eine andere Website: Gib den API Key erneut ein. Der gespeicherte Schlüssel wird nicht an die neue Adresse gesendet.",
   inUse: (names: string) => `Die Anbieter-Instanz wird verwendet von: ${names}`,
 };

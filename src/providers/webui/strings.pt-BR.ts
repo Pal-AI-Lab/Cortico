@@ -54,6 +54,6 @@ export const text: Partial<typeof en> = {
   busy: "Outra alteração de provedor está em andamento. Tente de novo quando ela terminar.",
   changedElsewhere: "A configuração foi alterada em outra página ou outro bot. Recarregue antes de salvar.",
   copySourceGone: "A origem da cópia não existe mais.",
-  keyForOtherAddress: "O esquema, o host ou a porta do endereço mudou: digite a API Key de novo. A chave salva não é enviada ao novo endereço.",
+  keyForOtherAddress: "O endereço agora aponta para outro site: digite a API Key de novo. A chave salva não é enviada ao novo endereço.",
   inUse: (names: string) => `A instância de provedor está em uso por: ${names}`,
 };

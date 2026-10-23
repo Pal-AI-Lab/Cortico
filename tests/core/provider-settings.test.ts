@@ -277,7 +277,7 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
     expect(existsSync(join(providersDir, 'local-2'))).toBe(false);
     expect(cfg.providers.local).toBeDefined();
   });
-  it('地址的协议、主机或端口变了就删掉为旧地址存的密钥，只换路径不动', async () => {
+  it('地址换到另一个网站时删掉为旧地址存的密钥，同一网站换路径不动', async () => {
     const { cfg, settings, providersDir } = fixture();
     cfg.providers.cloud.secret = 'MOVE_TEST_KEY';
     await invoke(settings, 'setSecret', { name: 'cloud', value: 'sk-old' });
