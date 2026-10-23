@@ -255,10 +255,19 @@ class FakeResizeObserver {
   }
 }
 
+/** 同一份 window 上的 localStorage 由多次挂载共享，用来验证偏好跨页面存活。 */
+class FakeStorage {
+  private map = new Map<string, string>();
+  getItem(k: string): string | null { return this.map.has(k) ? this.map.get(k)! : null; }
+  setItem(k: string, v: string): void { this.map.set(k, String(v)); }
+  removeItem(k: string): void { this.map.delete(k); }
+}
+
 class FakeWindow {
   innerWidth = 1200;
   innerHeight = 800;
   listeners = new Listeners();
+  localStorage = new FakeStorage();
   ResizeObserver = FakeResizeObserver;
   requestAnimationFrame(fn: () => void): number { fn(); return 0; }
   setTimeout(fn: () => void, ms: number): unknown { return setTimeout(fn, ms); }
@@ -340,10 +349,10 @@ async function flush(times = 12): Promise<void> {
 // 造一份 FeatureContext
 // ---------------------------------------------------------------------------
 
-async function mkCtx(caps: Record<string, boolean> = {}): Promise<Any> {
+async function mkCtx(caps: Record<string, boolean> = {}, view: Any = new FakeWindow()): Promise<Any> {
   const { createWebUi } = (await import(UI)) as Any;
   const { Lifecycle } = (await import(LIFECYCLE)) as Any;
-  const doc = new FakeDoc();
+  const doc = new FakeDoc(view);
   const root = doc.createElement('div');
   doc.body.appendChild(root);
   const lifecycle = new Lifecycle();
@@ -994,6 +1003,48 @@ describe('用量页挂载', () => {
     await flush();
     const dates = root.find('udates')!.findAllTag('input');
     expect([dates[0].value, dates[1].value]).toEqual(['2026-08-02', '2026-08-02']);
+  });
+
+  /** 币种下拉是档案卡里第二个 select，按它第一个选项的名字认出来。 */
+  const currencyPicker = (root: Any): Any =>
+    root.findAllTag('select').find((s: Any) => s.children.some((o: Any) => o.textContent === '自动币种'))!;
+
+  it('选的币种离开这一页再回来还在：存本机 localStorage，不是每次挂载的局部量', async () => {
+    stubFetch({ '/api/usage': { ...sample(), currency: 'CNY', currencies: ['CNY', 'USD'], rates: { CNY: 6.69 } } });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    const view = new FakeWindow();
+
+    const first = await mkCtx({ usage: true }, view);
+    mountUsage(first.ctx);
+    await flush();
+    currencyPicker(first.root).value = 'CNY';
+    currencyPicker(first.root).dispatchEvent({ type: 'change' });
+    await flush();
+    expect(seen.at(-1)).toContain('currency=CNY');
+
+    // 切走整页卸载，回来是一次新的 mount，共用同一个 window
+    first.lifecycle.dispose();
+    const second = await mkCtx({ usage: true }, view);
+    seen.length = 0;
+    mountUsage(second.ctx);
+    await flush();
+    expect(seen[0]).toContain('currency=CNY');
+    expect(currencyPicker(second.root).value).toBe('CNY');
+  });
+
+  it('记住的币种服务端不再提供 → 退回自动并忘掉偏好，不留下一个空着的选择框', async () => {
+    const view = new FakeWindow();
+    view.localStorage.setItem('cortico:usage-currency:v1', 'CNY');
+    stubFetch({ '/api/usage': { ...sample(), currency: 'USD', currencies: ['USD'] } });
+    const { ctx, root } = await mkCtx({ usage: true }, view);
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+
+    expect(view.localStorage.getItem('cortico:usage-currency:v1')).toBe('');
+    expect(currencyPicker(root).value).toBe('');
+    expect(seen.at(-1)).toContain('currency=');
+    expect(seen.at(-1)).not.toContain('currency=CNY');
   });
 
   it('刷新失败时保留上一次结果，整块标为过期并写明失败原因', async () => {
