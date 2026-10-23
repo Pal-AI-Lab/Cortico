@@ -71,40 +71,84 @@
 .ct-model-row input.field,
 .ct-model-row select.field { width: 100%; min-width: 0; }
 
-/* ---- 工作区:左栏(过滤、目录树) | 右栏(文件头、工具行、编辑区) ----
-   两栏同高:右栏决定这一行的高度,目录树填满左栏余下的部分。 */
+/* ---- 工作区:一整块,左边目录侧栏 | 右边编辑器,中间一条竖线 ----
+   侧栏可以收成一条窄边,只留展开按钮;右栏的高度决定整块的高度,目录树填满侧栏余下的部分。 */
 .ct-ws {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  gap: 16px;
-  align-items: stretch;
-  min-height: 0;
+  min-height: min(70vh, 680px);
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
 }
+
+.ct-ws.is-collapsed { grid-template-columns: 40px minmax(0, 1fr); }
 
 .ct-side {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   min-width: 0;
+  min-height: 0;
+  background: var(--sheet-2);
+  border-right: 1px solid var(--line);
 }
 
-.ct-treehead {
+.ct-sidehead {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 2px;
+  height: 40px;
+  padding: 0 6px 0 14px;
+  flex: none;
 }
 
-.ct-filter { flex: 1; min-width: 0; }
+.ct-sidetitle {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--ink-soft);
+}
+
+.ct-iconbtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.ct-iconbtn:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+.ct-iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.ct-filterrow { padding: 0 10px 8px; flex: none; }
+.ct-filter { width: 100%; }
 
 .ct-tree {
   flex: 1 1 0;
-  min-height: 240px;
+  min-height: 0;
   overflow: auto;
-  background: var(--sheet-2);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 6px;
+  padding: 0 6px 10px;
 }
+
+/* 收起:侧栏只剩展开按钮 */
+.ct-ws.is-collapsed .ct-sidehead { padding: 0; justify-content: center; }
+.ct-ws.is-collapsed .ct-sidehead > :not(.ct-sidetoggle),
+.ct-ws.is-collapsed .ct-filterrow,
+.ct-ws.is-collapsed .ct-tree { display: none; }
 
 /* 选中的档案只轻轻标出;目录行用字重区分,不用主题色 */
 .ct-tree .treerow.sel { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
@@ -114,26 +158,30 @@
 .ct-pane {
   display: flex;
   flex-direction: column;
-  gap: 8px;
   min-width: 0;
+  min-height: 0;
 }
 
 .ct-file {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: 8px;
   min-width: 0;
+  min-height: 0;
 }
 
-/* 没有打开的档案:一块与编辑区同高的空态 */
+.ct-file[hidden], .ct-empty[hidden] { display: none; }
+
+/* 没有打开的档案:右栏中间一行提示 */
 .ct-empty {
   display: flex;
+  flex: 1;
   align-items: center;
   justify-content: center;
-  min-height: min(62vh, 600px);
-  border: 1px dashed var(--line-2);
-  border-radius: 10px;
+  border: 0;
 }
+
+.ct-pane > .msgline:not(:empty) { padding: 6px 14px; border-top: 1px solid var(--line); }
 
 /* 第一行:路径(未保存时后面一个点)、还原、保存 */
 .ct-filehead {
@@ -141,6 +189,10 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  height: 40px;
+  padding: 0 8px 0 16px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
 }
 
 .ct-path {
@@ -168,6 +220,9 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding: 6px 8px 6px 12px;
+  flex: none;
+  border-bottom: 1px solid var(--line);
 }
 
 .ct-sep {
@@ -177,16 +232,18 @@
   background: var(--line-2);
 }
 
-.ct-findbar { flex-wrap: wrap; }
+.ct-findbar { flex-wrap: wrap; flex: none; margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--line); }
 .ct-findbar input.field { width: 150px; flex: none; }
 
 /* 编辑 / 分栏 / 预览三挡:同一个容器,靠 class 切列 */
 .ct-editwrap {
   display: grid;
-  gap: 10px;
+  flex: 1;
   min-height: min(52vh, 520px);
   min-width: 0;
 }
+
+.ct-editwrap.ct-hidden + .ct-hist { flex: 1; }
 
 .ct-editwrap.ct-mode-edit { grid-template-columns: minmax(0, 1fr); }
 .ct-editwrap.ct-mode-edit .ct-preview { display: none; }
@@ -195,11 +252,20 @@
 .ct-editwrap.ct-mode-preview .ct-textarea { display: none; }
 
 .ct-editwrap.ct-mode-split { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.ct-editwrap.ct-mode-split .ct-preview { border-left: 1px solid var(--line); }
+
+/* 页脚像状态栏:行列、字数在左,保存状态在右 */
+.ct-file > .rowbar:last-child { flex: none; margin: 0; padding: 5px 14px; border-top: 1px solid var(--line); }
 
 /* 长行折行显示(不改文件内容),分栏时也不用横向滚动 */
-.ct-textarea {
+.ct-textarea.field {
   min-height: min(52vh, 520px);
-  resize: vertical;
+  resize: none;
+  padding: 14px 18px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
   font: 13.5px/1.72 var(--mono);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -210,9 +276,6 @@
 .ct-preview {
   overflow: auto;
   overflow-wrap: anywhere;
-  background: var(--sheet);
-  border: 1px solid var(--line);
-  border-radius: 10px;
   padding: 14px 18px;
   color: var(--ink);
   font-size: 13.5px;
@@ -261,10 +324,83 @@
 .ct-hist {
   overflow: auto;
   max-height: min(58vh, 600px);
+  padding: 8px 14px;
 }
 
+/* ---- 版本历史:仓库状态是一排事实,最近一次提交单独一块;提交流水紧跟其后,不另起分割线 ---- */
+.ct-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 40px;
+}
+
+.ct-fact { min-width: 0; }
+
+.ct-fact-k {
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: var(--ink-dim);
+}
+
+.ct-fact-v {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.ct-fact-v.mono { font: 13px/1.6 var(--mono); }
+.ct-fact-v.is-none { color: var(--ink-dim); }
+.ct-fact-v.is-warn { color: var(--warn); }
+
+.ct-lastcommit {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: var(--sheet-2);
+  border-radius: 8px;
+}
+
+.ct-commitmsg {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.ct-commitmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+  font: 12px/1.5 var(--mono);
+  color: var(--ink-dim);
+}
+
+.ct-histsheet .sh-desc { max-width: none; }
+.ct-histsheet h3.ct-logtitle { margin-top: 32px; }
+
+.ct-histbar { gap: 10px; margin-bottom: 8px; }
+.ct-histbar .ct-histsearch { flex: 0 1 560px; width: auto; min-width: 0; }
+
+.ct-pagesize {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.ct-pagesize select.field { width: auto; }
+
+.ct-pager { gap: 8px; margin-top: 10px; min-height: 32px; }
+.ct-pageof { font: 12px var(--mono); color: var(--ink-soft); }
+
 @container (max-width: 700px) {
-  .ct-ws { grid-template-columns: minmax(0, 1fr); }
+  .ct-ws, .ct-ws.is-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .ct-side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .ct-ws.is-collapsed .ct-sidehead { padding: 0 6px 0 14px; justify-content: flex-start; }
+  .ct-ws.is-collapsed .ct-sidetitle { display: block; }
   .ct-tree { flex: none; max-height: 240px; }
   .ct-empty { min-height: 160px; }
   .ct-editwrap.ct-mode-split { grid-template-columns: minmax(0, 1fr); }

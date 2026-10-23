@@ -90,6 +90,25 @@ function markdownPreview(ctx: WebUiPanelContext, source: string): string {
   return out;
 }
 
+const svg = (body: string): string =>
+  `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const ICON_NEW = svg('<path d="M9 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6z"/><path d="M9 2v4h4M8 8.5v3.5M6.25 10.25h3.5"/>');
+const ICON_REFRESH = svg('<path d="M13 8a5 5 0 1 1-1.46-3.54"/><path d="M13 2.5v3h-3"/>');
+const ICON_SIDE = svg('<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/>');
+
+/** 侧栏标题行里的小图标按钮:只有图标,名字在 title 和 aria-label 里。 */
+function iconButton(ctx: WebUiPanelContext, cls: string, icon: string, label: string, onClick: () => void): HTMLButtonElement {
+  const btn = ctx.ui.h('button', ('ct-iconbtn ' + cls).trim());
+  btn.type = 'button';
+  btn.innerHTML = icon;
+  if (label) {
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+  }
+  btn.addEventListener('click', onClick, { signal: ctx.signal });
+  return btn;
+}
+
 // ---------------------------------------------------------------------------
 
 export function createWorkspacePanel(options: WorkspacePanelOptions = {}): WebUiPanel {
@@ -157,24 +176,37 @@ class WorkspaceView {
     this.defaultDir = options.defaultDir ?? '';
     const { ui } = ctx;
 
-    const card = ui.sheet({ title: T.workspaceTitle, desc: T.workspaceDesc });
-
-    // ---- 左栏:过滤与新建在上,目录树在下 ----
+    // ---- 左栏:标题与按钮一行,过滤框一行,目录树占满其余高度;可以收成一条窄边 ----
+    const split = ui.h('div', 'ct-ws');
     const filterInput = ui.input({
       type: 'search',
       placeholder: T.filterFiles,
       onInput: (v) => { this.filter = v.trim(); this.renderTree(); },
     });
     filterInput.classList.add('ct-filter');
-    const treeHead = ui.h('div', 'ct-treehead');
-    treeHead.append(
-      filterInput,
-      ui.button(T.refresh, { size: 'sm', onClick: () => { void this.refreshTree(); } }),
-      ui.button(T.newFile, { size: 'sm', variant: 'primary', onClick: () => this.openNewDialog() }),
+    const sideToggle = iconButton(ctx, 'ct-sidetoggle', ICON_SIDE, '', () => {
+      setCollapsed(!split.classList.contains('is-collapsed'));
+    });
+    const setCollapsed = (on: boolean): void => {
+      split.classList.toggle('is-collapsed', on);
+      const label = on ? T.expandSide : T.collapseSide;
+      sideToggle.title = label;
+      sideToggle.setAttribute('aria-label', label);
+      sideToggle.setAttribute('aria-expanded', String(!on));
+      ctx.memo.set('ws.sideCollapsed', on);
+    };
+    const sideHead = ui.h('div', 'ct-sidehead');
+    sideHead.append(
+      ui.h('span', 'ct-sidetitle', T.workspaceTitle),
+      iconButton(ctx, '', ICON_NEW, T.newFile, () => this.openNewDialog()),
+      iconButton(ctx, '', ICON_REFRESH, T.refresh, () => { void this.refreshTree(); }),
+      sideToggle,
     );
+    const filterRow = ui.h('div', 'ct-filterrow');
+    filterRow.appendChild(filterInput);
     this.treePane = ui.h('div', 'ct-tree');
     const side = ui.h('div', 'ct-side');
-    side.append(treeHead, this.treePane);
+    side.append(sideHead, filterRow, this.treePane);
 
     // ---- 右栏:文件头(路径、还原、保存) / 工具行(显示方式、查找等、删除) / 编辑区 / 页脚 ----
     this.pane = ui.h('div', 'ct-pane');
@@ -249,11 +281,10 @@ class WorkspaceView {
     this.emptyNote.classList.add('ct-empty');
     this.pane.append(this.emptyNote, this.fileArea, this.msg);
 
-    const split = ui.h('div', 'ct-ws');
     split.append(side, this.pane);
-    card.body.appendChild(split);
+    setCollapsed(ctx.memo.get<boolean>('ws.sideCollapsed', false));
 
-    this.el = card.el;
+    this.el = split;
 
     for (const type of ['click', 'keyup'] as const) {
       this.editor.addEventListener(type, () => this.syncMeta(), { signal: ctx.signal });

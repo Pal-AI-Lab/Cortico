@@ -224,7 +224,7 @@ export function workspaceInvoke(
           const path = typeof args[0] === 'string' && args[0].trim() ? args[0].trim() : undefined;
           return {
             status: git.status(),
-            commits: git.log(path ? { path, limit: 100 } : { limit: 100 }),
+            commits: git.log(path ? { path, limit: 500 } : { limit: 500 }),
             path: path ?? '',
           };
         }
