@@ -341,7 +341,8 @@ class WorkspaceView {
         split.style.height = `${Math.max(360, Math.round(startH + e.clientY - startY))}px`;
       };
       grip.addEventListener('pointermove', move, { signal: ctx.signal });
-      grip.addEventListener('pointerup', () => {
+      // 松开与被系统取消都会丢掉捕获:两种都在这里停
+      grip.addEventListener('lostpointercapture', () => {
         grip.removeEventListener('pointermove', move);
         ctx.memo.set('ws.blockHeight', Math.round(split.getBoundingClientRect().height));
       }, { once: true, signal: ctx.signal });

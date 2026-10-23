@@ -3,6 +3,7 @@
  */
 
 import type {
+  Disposable,
   WebUiPanelContext,
   WebUiPanel,
   WebUiSheet,
@@ -107,13 +108,12 @@ function commitsSection(ctx: WebUiPanelContext, T: Text, st: HistoryState): HTML
   const pager = ui.rowbar();
   pager.classList.add('ct-pager');
 
-  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timer: Disposable | null = null;
   let seq = 0;
-  ctx.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
   function schedule(next: string): void {
-    clearTimeout(timer);
+    timer?.dispose();
     // 停顿一下再问服务端:逐次击键去跑 git log 是白烧 CPU。
-    timer = setTimeout(() => { void query(next); }, 300);
+    timer = ctx.timeout(() => { void query(next); }, 300);
   }
   async function query(next: string): Promise<void> {
     if (next === path) return;
