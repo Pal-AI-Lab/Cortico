@@ -74,9 +74,10 @@
 /* ---- 工作区:一整块,左边目录侧栏 | 右边编辑器,中间一条竖线 ----
    侧栏可以收成一条窄边,只留展开按钮;右栏的高度决定整块的高度,目录树填满侧栏余下的部分。 */
 .ct-ws {
+  position: relative;
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr);
-  min-height: min(70vh, 680px);
+  grid-template-rows: minmax(0, 1fr);
   background: var(--sheet);
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -242,22 +243,26 @@
 /* 编辑区、分栏、预览和历史共用一个固定高度(内联 height),内容多了在里面滚动;底下的细条可以拖高 */
 .ct-body {
   position: relative;
-  flex: none;
-  min-height: 240px;
+  flex: 1 1 0;
+  min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
 
+/* 整块的底边:拖它改整块的高度 */
 .ct-grip {
-  flex: none;
-  height: 7px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 6;
+  height: 6px;
   cursor: ns-resize;
-  border-top: 1px solid var(--line);
   touch-action: none;
   transition: background-color .15s ease;
 }
 
-.ct-grip:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.ct-grip:hover { background: color-mix(in srgb, var(--accent) 35%, transparent); }
 
 /* 编辑 / 分栏 / 预览三挡:同一个容器,靠 class 切列 */
 .ct-editwrap {
@@ -290,12 +295,24 @@
 .ct-findexpand svg { transition: transform .15s ease; }
 .ct-find.is-replacing .ct-findexpand svg { transform: rotate(90deg); }
 
+/* 查找框里的两个输入框只有一行高,聚焦时只换边框颜色,不加外圈 */
 .ct-find input.field {
   width: 200px;
-  height: 28px;
+  height: 26px;
+  min-height: 0;
   padding: 0 8px;
   font-size: 13px;
+  line-height: 24px;
 }
+
+.ct-find input.field:focus,
+.ct-find input.field:focus-visible {
+  outline: none;
+  box-shadow: none;
+  border-color: color-mix(in srgb, var(--accent) 60%, var(--line-2));
+}
+
+.ct-findrow { min-height: 28px; }
 
 .ct-findcount {
   min-width: 56px;
@@ -442,7 +459,9 @@
 .ct-pageof { font: 12px var(--mono); color: var(--ink-soft); }
 
 @container (max-width: 700px) {
-  .ct-ws, .ct-ws.is-collapsed { grid-template-columns: minmax(0, 1fr); }
+  .ct-ws, .ct-ws.is-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; height: auto !important; }
+  .ct-body { flex: none; height: 420px; }
+  .ct-grip { display: none; }
   .ct-side { border-right: 0; border-bottom: 1px solid var(--line); }
   .ct-ws.is-collapsed .ct-sidehead { padding: 0 6px 0 14px; justify-content: flex-start; }
   .ct-ws.is-collapsed .ct-sidetitle { display: block; }

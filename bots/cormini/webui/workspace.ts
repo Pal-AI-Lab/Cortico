@@ -243,7 +243,7 @@ class WorkspaceView {
     this.saveBtn = iconButton(ctx, 'is-primary', ICON_SAVE, T.save, () => { void this.save(); });
     const renameBtn = iconButton(ctx, '', ICON_RENAME, T.rename, () => this.openRenameDialog());
     const delBtn = iconButton(ctx, 'is-danger', ICON_DELETE, T.remove, () => { void this.remove(); });
-    const findBtn = iconButton(ctx, '', ICON_FIND, T.find, () => this.toggleFind(true));
+    const findBtn = iconButton(ctx, '', ICON_FIND, T.find, () => this.toggleFind(this.findBar.dataset.open !== '1'));
     const histBtn = iconButton(ctx, '', ICON_HISTORY, T.history, () => { void this.showHistory(); });
     this.fileBtns = [this.undoBtn, this.redoBtn, reloadBtn, this.saveBtn, renameBtn, delBtn, findBtn, histBtn];
 
@@ -316,7 +316,18 @@ class WorkspaceView {
 
     const body = ui.h('div', 'ct-body');
     body.append(this.editWrap, this.histWrap, this.findBar);
-    body.style.height = `${ctx.memo.get<number>('ws.height', 440)}px`;
+
+    this.foot = ui.rowbar();
+    this.foot.append(this.metaLabel, ui.h('span', 'grow'), this.stateLabel);
+
+    this.fileArea = ui.h('div', 'ct-file');
+    this.fileArea.append(head, tools, body, this.foot);
+    this.emptyNote = ui.placeholder(T.noFileOpen);
+    this.emptyNote.classList.add('ct-empty');
+    this.pane.append(this.emptyNote, this.fileArea, this.msg);
+
+    // 整块的高度固定(记在 memo 里),切换编辑 / 分栏 / 预览 / 历史都不变;拖整块的底边改它
+    split.style.height = `${ctx.memo.get<number>('ws.blockHeight', 560)}px`;
     const grip = ui.h('div', 'ct-grip');
     grip.setAttribute('role', 'separator');
     grip.setAttribute('aria-orientation', 'horizontal');
@@ -324,28 +335,19 @@ class WorkspaceView {
     grip.addEventListener('pointerdown', (ev) => {
       ev.preventDefault();
       const startY = ev.clientY;
-      const startH = body.getBoundingClientRect().height;
+      const startH = split.getBoundingClientRect().height;
       grip.setPointerCapture(ev.pointerId);
       const move = (e: PointerEvent): void => {
-        body.style.height = `${Math.max(240, Math.round(startH + e.clientY - startY))}px`;
+        split.style.height = `${Math.max(360, Math.round(startH + e.clientY - startY))}px`;
       };
       grip.addEventListener('pointermove', move, { signal: ctx.signal });
       grip.addEventListener('pointerup', () => {
         grip.removeEventListener('pointermove', move);
-        ctx.memo.set('ws.height', Math.round(body.getBoundingClientRect().height));
+        ctx.memo.set('ws.blockHeight', Math.round(split.getBoundingClientRect().height));
       }, { once: true, signal: ctx.signal });
     }, { signal: ctx.signal });
 
-    this.foot = ui.rowbar();
-    this.foot.append(this.metaLabel, ui.h('span', 'grow'), this.stateLabel);
-
-    this.fileArea = ui.h('div', 'ct-file');
-    this.fileArea.append(head, tools, body, grip, this.foot);
-    this.emptyNote = ui.placeholder(T.noFileOpen);
-    this.emptyNote.classList.add('ct-empty');
-    this.pane.append(this.emptyNote, this.fileArea, this.msg);
-
-    split.append(side, this.pane);
+    split.append(side, this.pane, grip);
     setCollapsed(ctx.memo.get<boolean>('ws.sideCollapsed', false));
 
     this.el = split;
