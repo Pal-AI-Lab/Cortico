@@ -41,7 +41,7 @@ export const historyPanel: WebUiPanel = {
 /** 每页条数的选项;缺省 30。 */
 const PAGE_SIZES = [15, 30, 60, 100] as const;
 
-/** 仓库的几项事实并排成一行,最近一次提交单独一块。 */
+/** 仓库状态只列最近一次提交(HEAD 指的就是它)。 */
 function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiSheet {
   const { ui } = ctx;
   const card = ui.sheet({ title: T.mediumTitle, en: '.git', desc: T.mediumDesc });
@@ -51,19 +51,6 @@ function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiShe
     card.body.appendChild(ui.placeholder(gitLine(s, ctx.language)));
     return card;
   }
-  const facts = ui.h('div', 'ct-facts');
-  const fact = (k: string, v: string | HTMLElement, cls = ''): void => {
-    const item = ui.h('div', 'ct-fact');
-    const value = ui.h('div', ('ct-fact-v ' + cls).trim());
-    value.append(v);
-    item.append(ui.h('div', 'ct-fact-k', k), value);
-    facts.appendChild(item);
-  };
-  fact('HEAD', s.head ?? '—', 'mono');
-  fact(T.rowWorkspace, s.dirty ? T.dirty : T.clean, s.dirty ? 'is-warn' : '');
-  fact(T.rowCheckpoints, s.tags.length ? T.names(s.tags) : T.noCheckpoints, s.tags.length ? '' : 'is-none');
-  card.body.appendChild(facts);
-
   const last = s.lastCommit;
   if (last) {
     const box = ui.h('div', 'ct-lastcommit');

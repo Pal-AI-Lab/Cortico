@@ -141,6 +141,7 @@
   flex: 1 1 0;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   padding: 0 6px 10px;
 }
 
@@ -227,23 +228,82 @@
 
 .ct-sep {
   width: 1px;
-  height: 18px;
+  height: 16px;
   margin: 0 4px;
+  flex: none;
   background: var(--line-2);
 }
 
-.ct-findbar { flex-wrap: wrap; flex: none; margin: 0; padding: 6px 12px; border-bottom: 1px solid var(--line); }
-.ct-findbar input.field { width: 150px; flex: none; }
+/* 图标按钮的两种强调:保存用主题色,删除悬停时变红;不可用时淡出 */
+.ct-iconbtn.is-primary:not(:disabled) { color: var(--accent); }
+.ct-iconbtn.is-danger:not(:disabled):hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
+.ct-iconbtn:disabled { opacity: .35; cursor: default; background: transparent; }
+
+/* 编辑区、分栏、预览和历史共用一个固定高度(内联 height),内容多了在里面滚动;底下的细条可以拖高 */
+.ct-body {
+  position: relative;
+  flex: none;
+  min-height: 240px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.ct-grip {
+  flex: none;
+  height: 7px;
+  cursor: ns-resize;
+  border-top: 1px solid var(--line);
+  touch-action: none;
+  transition: background-color .15s ease;
+}
+
+.ct-grip:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
 
 /* 编辑 / 分栏 / 预览三挡:同一个容器,靠 class 切列 */
 .ct-editwrap {
   display: grid;
-  flex: 1;
-  min-height: min(52vh, 520px);
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
   min-width: 0;
 }
 
-.ct-editwrap.ct-hidden + .ct-hist { flex: 1; }
+/* 查找:浮在编辑区右上角;展开后多一行替换 */
+.ct-find {
+  position: absolute;
+  top: 8px;
+  right: 22px;
+  z-index: 5;
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 4px;
+  background: var(--sheet);
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px color-mix(in srgb, #000 14%, transparent);
+}
+
+.ct-findrows { display: flex; flex-direction: column; gap: 4px; }
+.ct-findrow { display: flex; align-items: center; gap: 2px; }
+.ct-replacerow { display: none; }
+.ct-find.is-replacing .ct-replacerow { display: flex; }
+.ct-findexpand svg { transition: transform .15s ease; }
+.ct-find.is-replacing .ct-findexpand svg { transform: rotate(90deg); }
+
+.ct-find input.field {
+  width: 200px;
+  height: 28px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.ct-findcount {
+  min-width: 56px;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
 
 .ct-editwrap.ct-mode-edit { grid-template-columns: minmax(0, 1fr); }
 .ct-editwrap.ct-mode-edit .ct-preview { display: none; }
@@ -259,7 +319,8 @@
 
 /* 长行折行显示(不改文件内容),分栏时也不用横向滚动 */
 .ct-textarea.field {
-  min-height: min(52vh, 520px);
+  height: 100%;
+  min-height: 0;
   resize: none;
   padding: 14px 18px;
   background: transparent;
@@ -270,11 +331,14 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   overflow: auto;
+  scrollbar-gutter: stable;
   tab-size: 2;
 }
 
 .ct-preview {
+  min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
   overflow-wrap: anywhere;
   padding: 14px 18px;
   color: var(--ink);
@@ -322,39 +386,20 @@
 
 /* 这一份档案的历史(编辑区换成它) */
 .ct-hist {
-  overflow: auto;
-  max-height: min(58vh, 600px);
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   padding: 8px 14px;
 }
 
-/* ---- 版本历史:仓库状态是一排事实,最近一次提交单独一块;提交流水紧跟其后,不另起分割线 ---- */
-.ct-facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 40px;
-}
-
-.ct-fact { min-width: 0; }
-
+/* ---- 版本历史:仓库状态只有最近一次提交这一块;提交流水紧跟其后,不另起分割线 ---- */
 .ct-fact-k {
   margin-bottom: 3px;
   font-size: 12px;
   color: var(--ink-dim);
 }
 
-.ct-fact-v {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--ink);
-  overflow-wrap: anywhere;
-}
-
-.ct-fact-v.mono { font: 13px/1.6 var(--mono); }
-.ct-fact-v.is-none { color: var(--ink-dim); }
-.ct-fact-v.is-warn { color: var(--warn); }
-
 .ct-lastcommit {
-  margin-top: 16px;
   padding: 12px 14px;
   background: var(--sheet-2);
   border-radius: 8px;

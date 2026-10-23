@@ -91,12 +91,26 @@ function markdownPreview(ctx: WebUiPanelContext, source: string): string {
 }
 
 const svg = (body: string): string =>
-  `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
-const ICON_NEW = svg('<path d="M9 2H4.5A1.5 1.5 0 0 0 3 3.5v9A1.5 1.5 0 0 0 4.5 14h7a1.5 1.5 0 0 0 1.5-1.5V6z"/><path d="M9 2v4h4M8 8.5v3.5M6.25 10.25h3.5"/>');
-const ICON_REFRESH = svg('<path d="M13 8a5 5 0 1 1-1.46-3.54"/><path d="M13 2.5v3h-3"/>');
-const ICON_SIDE = svg('<rect x="2.5" y="3" width="11" height="10" rx="1.5"/><path d="M6.5 3v10"/>');
+  `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${body}</svg>`;
+const ICON_NEW = svg('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4M12 12v6M9 15h6"/>');
+const ICON_REFRESH = svg('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>');
+const ICON_SIDE = svg('<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>');
+const ICON_UNDO = svg('<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>');
+const ICON_REDO = svg('<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>');
+const ICON_REVERT = svg('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>');
+const ICON_SAVE = svg('<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7M7 3v4a1 1 0 0 0 1 1h7"/>');
+const ICON_RENAME = svg('<path d="M21.17 6.81a2.82 2.82 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>');
+const ICON_DELETE = svg('<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>');
+const ICON_FIND = svg('<circle cx="11" cy="11" r="7.5"/><path d="m20.5 20.5-4.2-4.2"/>');
+const ICON_HISTORY = svg('<circle cx="12" cy="12" r="9.5"/><path d="M12 7v5l3.5 2"/>');
+const ICON_UP = svg('<path d="m5 12 7-7 7 7M12 19V5"/>');
+const ICON_DOWN = svg('<path d="M12 5v14M19 12l-7 7-7-7"/>');
+const ICON_CLOSE = svg('<path d="M18 6 6 18M6 6l12 12"/>');
+const ICON_CHEVRON = svg('<path d="m9 18 6-6-6-6"/>');
+const ICON_REPLACE = svg('<path d="M14 4a2 2 0 0 1 2-2M16 10a2 2 0 0 1-2-2M20 2a2 2 0 0 1 2 2M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/>');
+const ICON_REPLACE_ALL = svg('<path d="M14 14a2 2 0 0 1 2-2M14 4a2 2 0 0 1 2-2M16 10a2 2 0 0 1-2-2M16 22a2 2 0 0 1-2-2M20 12a2 2 0 0 1 2 2M20 2a2 2 0 0 1 2 2M22 20a2 2 0 0 1-2 2M22 8a2 2 0 0 1-2 2"/><path d="m3 7 3 3 3-3"/><path d="M6 10V5a3 3 0 0 1 3-3h1"/><rect x="2" y="14" width="8" height="8" rx="2"/>');
 
-/** 侧栏标题行里的小图标按钮:只有图标,名字在 title 和 aria-label 里。 */
+/** 只有图标的小按钮(侧栏标题行、文件头、查找框),名字在 title 和 aria-label 里。 */
 function iconButton(ctx: WebUiPanelContext, cls: string, icon: string, label: string, onClick: () => void): HTMLButtonElement {
   const btn = ctx.ui.h('button', ('ct-iconbtn ' + cls).trim());
   btn.type = 'button';
@@ -157,6 +171,13 @@ class WorkspaceView {
   private readonly stateLabel: HTMLElement;
   private readonly msg: HTMLDivElement;
   private readonly saveBtn: HTMLButtonElement;
+  private readonly undoBtn: HTMLButtonElement;
+  private readonly redoBtn: HTMLButtonElement;
+  private readonly foot: HTMLDivElement;
+  /** 撤销 / 恢复:编辑器自己记的快照;连续打字合成一步,替换、还原、载入旧版本各算一步。 */
+  private undoStack: Array<{ value: string; at: number }> = [];
+  private redoStack: Array<{ value: string; at: number }> = [];
+  private lastTyped = 0;
   private readonly fileBtns: HTMLButtonElement[];
   private readonly findBar: HTMLDivElement;
   private readonly findInput: HTMLInputElement;
@@ -208,7 +229,7 @@ class WorkspaceView {
     const side = ui.h('div', 'ct-side');
     side.append(sideHead, filterRow, this.treePane);
 
-    // ---- 右栏:文件头(路径、还原、保存) / 工具行(显示方式、查找等、删除) / 编辑区 / 页脚 ----
+    // ---- 右栏:文件头(路径;撤销、恢复 | 还原、保存 | 改名、删除) / 工具行(显示方式;查找、历史) / 编辑区 / 页脚 ----
     this.pane = ui.h('div', 'ct-pane');
 
     this.pathLabel = ui.h('div', 'ct-path', T.noFileOpen);
@@ -216,13 +237,15 @@ class WorkspaceView {
     this.stateLabel = ui.h('span', 'ct-dim');
     this.msg = ui.msgline('');
 
-    this.saveBtn = ui.button(T.save, { size: 'sm', variant: 'primary', onClick: () => { void this.save(); } });
-    const reloadBtn = ui.button(T.revert, { size: 'sm', onClick: () => { void this.revert(); } });
-    const findBtn = ui.button(T.find, { size: 'sm', onClick: () => this.toggleFind(true) });
-    const histBtn = ui.button(T.history, { size: 'sm', onClick: () => { void this.showHistory(); } });
-    const renameBtn = ui.button(T.rename, { size: 'sm', onClick: () => this.openRenameDialog() });
-    const delBtn = ui.button(T.remove, { size: 'sm', variant: 'danger', onClick: () => { void this.remove(); } });
-    this.fileBtns = [this.saveBtn, reloadBtn, findBtn, histBtn, renameBtn, delBtn];
+    this.undoBtn = iconButton(ctx, '', ICON_UNDO, T.undo, () => this.undo());
+    this.redoBtn = iconButton(ctx, '', ICON_REDO, T.redo, () => this.redo());
+    const reloadBtn = iconButton(ctx, '', ICON_REVERT, T.revert, () => { void this.revert(); });
+    this.saveBtn = iconButton(ctx, 'is-primary', ICON_SAVE, T.save, () => { void this.save(); });
+    const renameBtn = iconButton(ctx, '', ICON_RENAME, T.rename, () => this.openRenameDialog());
+    const delBtn = iconButton(ctx, 'is-danger', ICON_DELETE, T.remove, () => { void this.remove(); });
+    const findBtn = iconButton(ctx, '', ICON_FIND, T.find, () => this.toggleFind(true));
+    const histBtn = iconButton(ctx, '', ICON_HISTORY, T.history, () => { void this.showHistory(); });
+    this.fileBtns = [this.undoBtn, this.redoBtn, reloadBtn, this.saveBtn, renameBtn, delBtn, findBtn, histBtn];
 
     const mode = ui.segmented(
       [{ value: 'edit', label: T.modeEdit }, { value: 'split', label: T.modeSplit }, { value: 'preview', label: T.modePreview }],
@@ -234,36 +257,55 @@ class WorkspaceView {
     );
 
     const head = ui.h('div', 'ct-filehead');
-    head.append(this.pathLabel, reloadBtn, this.saveBtn);
+    head.append(
+      this.pathLabel,
+      this.undoBtn, this.redoBtn, ui.h('span', 'ct-sep'),
+      reloadBtn, this.saveBtn, ui.h('span', 'ct-sep'),
+      renameBtn, delBtn,
+    );
     const tools = ui.h('div', 'ct-filetools');
-    tools.append(mode.el, ui.h('span', 'grow'), findBtn, histBtn, renameBtn, ui.h('span', 'ct-sep'), delBtn);
+    tools.append(mode.el, ui.h('span', 'grow'), findBtn, histBtn);
 
-    // ---- 查找栏 ----
+    // ---- 查找:浮在编辑区右上角的小框;点左边的箭头多一行替换 ----
     this.findInput = ui.input({
       placeholder: T.find,
       onInput: () => this.updateFindCount(),
       onCommit: () => this.jumpFind(1),
     });
-    this.replaceInput = ui.input({ placeholder: T.replaceWith });
-    this.findCount = ui.h('span', 'ct-dim', T.noMatches);
-    this.findBar = ui.rowbar();
-    this.findBar.classList.add('ct-findbar', 'ct-hidden');
-    this.findBar.append(
+    this.replaceInput = ui.input({ placeholder: T.replaceWith, onCommit: () => this.replaceOne() });
+    this.findCount = ui.h('span', 'ct-findcount');
+    this.findBar = ui.h('div', 'ct-find ct-hidden');
+    const expand = iconButton(ctx, 'ct-findexpand', ICON_CHEVRON, T.replace, () => {
+      const on = this.findBar.classList.toggle('is-replacing');
+      expand.setAttribute('aria-expanded', String(on));
+      if (on) this.replaceInput.focus();
+    });
+    expand.setAttribute('aria-expanded', 'false');
+    const findRow = ui.h('div', 'ct-findrow');
+    findRow.append(
       this.findInput,
-      ui.button(T.previous, { size: 'sm', onClick: () => this.jumpFind(-1) }),
-      ui.button(T.next, { size: 'sm', onClick: () => this.jumpFind(1) }),
       this.findCount,
-      this.replaceInput,
-      ui.button(T.replace, { size: 'sm', onClick: () => this.replaceOne() }),
-      ui.button(T.replaceAll, { size: 'sm', onClick: () => this.replaceAll() }),
-      ui.h('span', 'grow'),
-      ui.button(T.close, { size: 'sm', onClick: () => this.toggleFind(false) }),
+      iconButton(ctx, '', ICON_UP, T.previous, () => this.jumpFind(-1)),
+      iconButton(ctx, '', ICON_DOWN, T.next, () => this.jumpFind(1)),
+      iconButton(ctx, '', ICON_CLOSE, T.close, () => this.toggleFind(false)),
     );
+    const replaceRow = ui.h('div', 'ct-findrow ct-replacerow');
+    replaceRow.append(
+      this.replaceInput,
+      iconButton(ctx, '', ICON_REPLACE, T.replace, () => this.replaceOne()),
+      iconButton(ctx, '', ICON_REPLACE_ALL, T.replaceAll, () => this.replaceAll()),
+    );
+    const findRows = ui.h('div', 'ct-findrows');
+    findRows.append(findRow, replaceRow);
+    this.findBar.append(expand, findRows);
+    this.findBar.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') { ev.preventDefault(); this.toggleFind(false); }
+    }, { signal: ctx.signal });
 
-    // ---- 编辑器本体 ----
+    // ---- 编辑器本体:编辑、分栏、预览和历史共用一个固定高度,底边可以往下拖高 ----
     this.editor = ui.textarea({
       cls: 'mono ct-textarea',
-      onInput: () => { this.syncMeta(); this.updateFindCount(); },
+      onInput: () => { this.record(true); this.syncMeta(); this.updateFindCount(); },
     });
     this.editor.spellcheck = false;
     this.preview = ui.h('div', 'ct-preview');
@@ -272,11 +314,33 @@ class WorkspaceView {
 
     this.histWrap = ui.h('div', 'ct-hist ct-hidden');
 
-    const foot = ui.rowbar();
-    foot.append(this.metaLabel, ui.h('span', 'grow'), this.stateLabel);
+    const body = ui.h('div', 'ct-body');
+    body.append(this.editWrap, this.histWrap, this.findBar);
+    body.style.height = `${ctx.memo.get<number>('ws.height', 440)}px`;
+    const grip = ui.h('div', 'ct-grip');
+    grip.setAttribute('role', 'separator');
+    grip.setAttribute('aria-orientation', 'horizontal');
+    grip.title = T.dragHeight;
+    grip.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault();
+      const startY = ev.clientY;
+      const startH = body.getBoundingClientRect().height;
+      grip.setPointerCapture(ev.pointerId);
+      const move = (e: PointerEvent): void => {
+        body.style.height = `${Math.max(240, Math.round(startH + e.clientY - startY))}px`;
+      };
+      grip.addEventListener('pointermove', move, { signal: ctx.signal });
+      grip.addEventListener('pointerup', () => {
+        grip.removeEventListener('pointermove', move);
+        ctx.memo.set('ws.height', Math.round(body.getBoundingClientRect().height));
+      }, { once: true, signal: ctx.signal });
+    }, { signal: ctx.signal });
+
+    this.foot = ui.rowbar();
+    this.foot.append(this.metaLabel, ui.h('span', 'grow'), this.stateLabel);
 
     this.fileArea = ui.h('div', 'ct-file');
-    this.fileArea.append(head, tools, this.findBar, this.editWrap, this.histWrap, foot);
+    this.fileArea.append(head, tools, body, grip, this.foot);
     this.emptyNote = ui.placeholder(T.noFileOpen);
     this.emptyNote.classList.add('ct-empty');
     this.pane.append(this.emptyNote, this.fileArea, this.msg);
@@ -290,10 +354,17 @@ class WorkspaceView {
       this.editor.addEventListener(type, () => this.syncMeta(), { signal: ctx.signal });
     }
     this.editor.addEventListener('keydown', (ev) => {
+      const mod = ev.ctrlKey || ev.metaKey;
+      const key = ev.key.toLowerCase();
+      if (mod && key === 'z' && !ev.shiftKey) { ev.preventDefault(); this.undo(); return; }
+      if (mod && (key === 'y' || (key === 'z' && ev.shiftKey))) { ev.preventDefault(); this.redo(); return; }
+      if (mod && key === 'f') { ev.preventDefault(); this.toggleFind(true); return; }
+      if (mod && key === 's') { ev.preventDefault(); void this.save(); return; }
       if (ev.key !== 'Tab') return;
       ev.preventDefault();
       const a = this.editor;
       a.setRangeText('  ', a.selectionStart, a.selectionEnd, 'end');
+      this.record(false);
       this.syncMeta();
     }, { signal: ctx.signal });
 
@@ -447,6 +518,7 @@ class WorkspaceView {
         node: 'type' in node ? (node as WorkspaceNode) : null,
       };
       this.editor.value = file.content;
+      this.resetUndo();
       this.pathLabel.textContent = `${this.root}/${file.path}`;
       this.pathLabel.title = `${this.root}/${file.path}`;
       this.metaLabel.textContent = `${this.ctx.ui.fmt.bytes(file.size)} · ${stamp(file.mtime)}`;
@@ -493,6 +565,7 @@ class WorkspaceView {
     const ok = await this.ctx.ui.confirm({ title: this.T.revertTitle });
     if (!ok || !this.cur) return;
     this.editor.value = this.cur.content;
+    this.record(false);
     setMsg(this.msg, this.T.reverted);
     this.syncMeta();
   }
@@ -627,6 +700,7 @@ class WorkspaceView {
     if (!this.cur) return;
     const { ui } = this.ctx;
     const path = this.cur.path;
+    setMsg(this.msg, '');
     this.setPane('hist');
     this.histWrap.replaceChildren(ui.placeholder(this.T.fileHistoryLoading));
     let commits: Commit[] = [];
@@ -685,8 +759,8 @@ class WorkspaceView {
               onClick: () => {
                 this.setPane('edit');
                 this.editor.value = f.content;
+                this.record(false);
                 this.syncMeta();
-                setMsg(this.msg, this.T.restored);
               },
             }),
             ui.copyButton(() => f.content, { label: this.T.copyFull }),
@@ -719,7 +793,9 @@ class WorkspaceView {
     this.editWrap.classList.toggle('ct-hidden', kind !== 'edit');
     this.histWrap.classList.toggle('ct-hidden', kind !== 'hist');
     this.findBar.classList.toggle('ct-hidden', kind !== 'edit' || this.findBar.dataset.open !== '1');
+    this.foot.classList.toggle('ct-hidden', kind === 'hist');
     for (const b of this.fileBtns) b.disabled = kind === 'empty';
+    if (kind !== 'empty') this.syncUndo();
     if (kind === 'empty') {
       this.pathLabel.textContent = this.T.noFileOpen;
       this.metaLabel.textContent = '';
@@ -744,10 +820,72 @@ class WorkspaceView {
   }
 
   // -------------------------------------------------------------------------
+  // 撤销 / 恢复
+  // -------------------------------------------------------------------------
+
+  /** 打开档案时从这份内容起记。 */
+  private resetUndo(): void {
+    this.undoStack = [{ value: this.editor.value, at: 0 }];
+    this.redoStack = [];
+    this.lastTyped = 0;
+    this.syncUndo();
+  }
+
+  /** 内容变了之后记一步;`typing` 时 600ms 内的连续输入并进上一步。 */
+  private record(typing: boolean): void {
+    const now = Date.now();
+    const snap = { value: this.editor.value, at: this.editor.selectionStart };
+    if (this.undoStack[this.undoStack.length - 1]?.value === snap.value) return;
+    if (typing && now - this.lastTyped < 600 && this.undoStack.length > 1) {
+      this.undoStack[this.undoStack.length - 1] = snap;
+    } else {
+      this.undoStack.push(snap);
+      if (this.undoStack.length > 200) this.undoStack.shift();
+    }
+    this.lastTyped = typing ? now : 0;
+    this.redoStack = [];
+    this.syncUndo();
+  }
+
+  private undo(): void {
+    if (this.undoStack.length < 2) return;
+    this.redoStack.push(this.undoStack.pop()!);
+    this.applySnap(this.undoStack[this.undoStack.length - 1]);
+  }
+
+  private redo(): void {
+    const snap = this.redoStack.pop();
+    if (!snap) return;
+    this.undoStack.push(snap);
+    this.applySnap(snap);
+  }
+
+  private applySnap(snap: { value: string; at: number }): void {
+    this.editor.value = snap.value;
+    this.editor.setSelectionRange(snap.at, snap.at);
+    this.lastTyped = 0;
+    this.syncUndo();
+    this.syncMeta();
+    this.updateFindCount();
+  }
+
+  private syncUndo(): void {
+    this.undoBtn.disabled = !this.cur || this.undoStack.length < 2;
+    this.redoBtn.disabled = !this.cur || !this.redoStack.length;
+  }
+
+  // -------------------------------------------------------------------------
   // 查找 / 替换(纯前端,不发请求)
   // -------------------------------------------------------------------------
 
   private toggleFind(open: boolean): void {
+    if (open && !this.cur) return;
+    if (open && this.editWrap.classList.contains('ct-hidden')) this.setPane('edit');
+    if (open) {
+      const a = this.editor;
+      const sel = a.value.slice(a.selectionStart, a.selectionEnd);
+      if (sel && !sel.includes('\n')) this.findInput.value = sel;
+    }
     this.findBar.dataset.open = open ? '1' : '';
     this.findBar.classList.toggle('ct-hidden', !open);
     if (!open) { this.editor.focus(); return; }
@@ -771,7 +909,7 @@ class WorkspaceView {
 
   private updateFindCount(): void {
     const n = this.matches().length;
-    this.findCount.textContent = n ? this.T.matches(n) : this.T.noMatches;
+    this.findCount.textContent = n ? this.T.matches(n) : this.findInput.value ? this.T.noMatches : '';
   }
 
   private jumpFind(dir: 1 | -1): void {
@@ -792,6 +930,7 @@ class WorkspaceView {
     if (a.value.slice(a.selectionStart, a.selectionEnd) !== needle) this.jumpFind(1);
     if (a.value.slice(a.selectionStart, a.selectionEnd) === needle) {
       a.setRangeText(this.replaceInput.value, a.selectionStart, a.selectionEnd, 'end');
+      this.record(false);
     }
     this.syncMeta();
     this.updateFindCount();
@@ -801,6 +940,7 @@ class WorkspaceView {
     const needle = this.findInput.value;
     if (!needle) return;
     this.editor.value = this.editor.value.split(needle).join(this.replaceInput.value);
+    this.record(false);
     this.syncMeta();
     this.updateFindCount();
   }
