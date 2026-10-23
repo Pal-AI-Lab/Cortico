@@ -41,15 +41,6 @@ function escapeRegExp(s: string): string {
 }
 
 /** WebUI entry points receive the request language; callers that omit it use Chinese. */
-/** The scheme, host and port of an endpoint address, which a stored key belongs to; null when it does not parse. */
-export function originOf(url: unknown): string | null {
-  try {
-    return new URL(String(url)).origin;
-  } catch {
-    return null;
-  }
-}
-
 export class ProviderSettings {
   constructor(
     private readonly config: CoreConfig,
@@ -138,25 +129,12 @@ export class ProviderSettings {
     this.registry.invalidate(name);
   }
 
-  /** An address moved to another origin drops the key stored for the old one: it is set again for the new address. */
   save(name: string, entry: LLMProviderEntry, language: Language = 'zh'): void {
     const module = this.module(entry.kind);
     const prior = this.config.providers[name];
     if (prior && prior.kind !== entry.kind && this.modules.some((m) => m.id === prior.kind))
       throw new Error(text(language).kindChange);
-    const next = validateEntry(module, entry, language);
-    if (prior && next.secret && originOf(prior.baseUrl) !== originOf(next.baseUrl)) this.dropSecret(name, next.secret);
-    this.persist(name, next, this.config.activeProvider);
-  }
-
-  /** Removes variable `secret` from the endpoint's `.env`. */
-  private dropSecret(name: string, secret: string): void {
-    const file = join(this.providersDir, name, '.env');
-    if (!existsSync(file)) return;
-    const pattern = new RegExp(`^[ \\t]*${escapeRegExp(secret)}[ \\t]*=.*(\\r?\\n|$)`, 'gm');
-    const current = readTextFile(file);
-    const next = current.replace(pattern, '');
-    if (next !== current) writeSecretFile(file, next);
+    this.persist(name, validateEntry(module, entry, language), this.config.activeProvider);
   }
 
   /** 设为当前端点前，要求端点具有有效的模型配置。 */

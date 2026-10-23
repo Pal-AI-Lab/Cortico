@@ -54,6 +54,5 @@ export const text: Partial<typeof en> = {
   busy: "È in corso un'altra modifica del provider. Riprova quando è finita.",
   changedElsewhere: "La configurazione è stata modificata in un'altra pagina o in un altro bot. Ricarica prima di salvare.",
   copySourceGone: "L'origine della copia non esiste più.",
-  keyForOtherAddress: "L'indirizzo ora punta a un altro sito: inserisci di nuovo l'API Key. La chiave salvata non viene inviata al nuovo indirizzo.",
   inUse: (names: string) => `L'istanza del provider è usata da: ${names}`,
 };

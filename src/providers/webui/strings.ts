@@ -64,7 +64,6 @@ const zh = {
   busy: "另一次供应实例修改正在进行,等它结束后重试。",
   changedElsewhere: "配置已在别的页面或 bot 里改过,重新载入后再保存。",
   copySourceGone: "复制来源已不存在。",
-  keyForOtherAddress: "地址换成了另一个网站：请重新填写 API Key,已存的 Key 不会发到新地址。",
   inUse: (names: string) => `供应实例正被这些部署使用:${names}`,
 };
 export const en: typeof zh = {
@@ -121,7 +120,6 @@ export const en: typeof zh = {
   busy: "Another provider transaction is in progress. Retry after it completes.",
   changedElsewhere: "Configuration changed in another page or bot. Reload before saving.",
   copySourceGone: "Copy source no longer exists.",
-  keyForOtherAddress: "The address now points to another site: enter the API Key again. The saved key is not sent to the new address.",
   inUse: (names: string) => `Provider instance is used by: ${names}`,
 };
 export const text = (language: Language) => pick(language, {
