@@ -263,12 +263,15 @@
   max-height: min(58vh, 600px);
 }
 
-@container (max-width: 900px) {
+@container (max-width: 700px) {
   .ct-ws { grid-template-columns: minmax(0, 1fr); }
   .ct-tree { flex: none; max-height: 240px; }
   .ct-empty { min-height: 160px; }
   .ct-editwrap.ct-mode-split { grid-template-columns: minmax(0, 1fr); }
   .ct-editwrap.ct-mode-split .ct-preview { display: none; }
+}
+
+@container (max-width: 900px) {
   .ct-model-row { grid-template-columns: minmax(110px, .6fr) minmax(220px, 1.4fr) auto; }
   .ct-model-role { grid-row: 1 / 3; }
   .ct-model-row > .fieldrow:first-of-type { grid-column: 2; grid-row: 1; }
