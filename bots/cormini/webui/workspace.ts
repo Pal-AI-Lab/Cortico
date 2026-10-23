@@ -448,7 +448,9 @@ class WorkspaceView {
       row.setAttribute('role', 'button');
       if (n.type === 'dir') {
         const shown = forceOpen || depth === 0 || open.has(n.path);
-        const label = ui.h('span', null, `${shown ? '▾ ' : '▸ '}${n.name}/`);
+        const label = ui.h('span', 'ct-name', `${shown ? '▾ ' : '▸ '}${n.name}/`);
+        // 名字太长时截成省略号,悬停看全路径
+        row.title = `${n.path}/`;
         const box = ui.h('div', shown ? null : 'ct-hidden');
         row.appendChild(label);
         row.setAttribute('aria-expanded', String(shown));
@@ -472,7 +474,8 @@ class WorkspaceView {
       }
       row.dataset.path = n.path;
       if (this.cur?.path === n.path) row.classList.add('sel');
-      row.append(ui.h('span', null, n.name), ui.h('span', 'fsize', sizeText(n.size, this.ctx)));
+      row.title = n.path;
+      row.append(ui.h('span', 'ct-name', n.name), ui.h('span', 'fsize', sizeText(n.size, this.ctx)));
       const open1 = (): void => { void this.openFile(n); };
       row.addEventListener('click', open1, { signal: this.ctx.signal });
       row.addEventListener('keydown', (ev) => {
@@ -480,6 +483,16 @@ class WorkspaceView {
       }, { signal: this.ctx.signal });
       container.appendChild(row);
     }
+  }
+
+  /** 文件头的路径:目录部分先缩成省略号,文件名尽量留全。 */
+  private showPath(full: string): void {
+    const { ui } = this.ctx;
+    const cut = full.lastIndexOf('/') + 1;
+    this.pathLabel.replaceChildren(
+      ui.h('span', 'ct-pathdir', full.slice(0, cut)),
+      ui.h('span', 'ct-pathname', full.slice(cut)),
+    );
   }
 
   private markSelected(path: string): void {
@@ -521,7 +534,7 @@ class WorkspaceView {
       };
       this.editor.value = file.content;
       this.resetUndo();
-      this.pathLabel.textContent = `${this.root}/${file.path}`;
+      this.showPath(`${this.root}/${file.path}`);
       this.pathLabel.title = `${this.root}/${file.path}`;
       this.metaLabel.textContent = `${this.ctx.ui.fmt.bytes(file.size)} · ${stamp(file.mtime)}`;
       setMsg(this.msg, '');

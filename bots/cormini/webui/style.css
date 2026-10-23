@@ -152,6 +152,12 @@
 .ct-ws.is-collapsed .ct-filterrow,
 .ct-ws.is-collapsed .ct-tree { display: none; }
 
+/* 名字过长时截成省略号,大小一栏始终留在行尾;目录树不横向滚动 */
+.ct-tree { overflow-x: hidden; }
+.ct-tree .treerow { min-width: 0; }
+.ct-tree .treerow > .ct-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ct-tree .treerow > .fsize { flex: none; }
+
 /* 选中的档案只轻轻标出;目录行用字重区分,不用主题色 */
 .ct-tree .treerow.sel { background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--ink); }
 .ct-tree .treerow.sel .fsize { color: var(--ink-dim); }
@@ -206,6 +212,11 @@
   font: 600 13.5px/1.5 var(--mono);
   color: var(--ink);
 }
+
+.ct-path:has(> .ct-pathname) { display: flex; }
+.ct-pathdir { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; color: var(--ink-soft); }
+.ct-pathname { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.ct-path:has(> .ct-pathname)::after { flex: none; }
 
 .ct-path.is-dirty::after {
   content: '●';
