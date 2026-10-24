@@ -115,10 +115,8 @@ function iconButton(ctx: WebUiPanelContext, cls: string, icon: string, label: st
   const btn = ctx.ui.h('button', ('ct-iconbtn ' + cls).trim());
   btn.type = 'button';
   btn.innerHTML = icon;
-  if (label) {
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
-  }
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
   btn.addEventListener('click', onClick, { signal: ctx.signal });
   return btn;
 }
@@ -174,7 +172,7 @@ class WorkspaceView {
   private readonly undoBtn: HTMLButtonElement;
   private readonly redoBtn: HTMLButtonElement;
   private readonly foot: HTMLDivElement;
-  /** 撤销 / 恢复:编辑器自己记的快照;连续打字合成一步,替换、还原、载入旧版本各算一步。 */
+  /** 撤销 / 重做:编辑器自己记的快照;连续打字合成一步,替换、还原、载入旧版本各算一步。 */
   private undoStack: Array<{ value: string; at: number }> = [];
   private redoStack: Array<{ value: string; at: number }> = [];
   private lastTyped = 0;
@@ -197,7 +195,7 @@ class WorkspaceView {
     this.defaultDir = options.defaultDir ?? '';
     const { ui } = ctx;
 
-    // ---- 左栏:标题与按钮一行,过滤框一行,目录树占满其余高度;可以收成一条窄边 ----
+    // ---- 左栏:目录树,可以收成一条窄边 ----
     const split = ui.h('div', 'ct-ws');
     const filterInput = ui.input({
       type: 'search',
@@ -205,7 +203,7 @@ class WorkspaceView {
       onInput: (v) => { this.filter = v.trim(); this.renderTree(); },
     });
     filterInput.classList.add('ct-filter');
-    const sideToggle = iconButton(ctx, 'ct-sidetoggle', ICON_SIDE, '', () => {
+    const sideToggle = iconButton(ctx, 'ct-sidetoggle', ICON_SIDE, T.collapseSide, () => {
       setCollapsed(!split.classList.contains('is-collapsed'));
     });
     const setCollapsed = (on: boolean): void => {
@@ -229,10 +227,10 @@ class WorkspaceView {
     const side = ui.h('div', 'ct-side');
     side.append(sideHead, filterRow, this.treePane);
 
-    // ---- 右栏:文件头(路径;撤销、恢复 | 还原、保存 | 改名、删除) / 工具行(显示方式;查找、历史) / 编辑区 / 页脚 ----
+    // ---- 右栏:文件头、工具行、编辑区、页脚 ----
     this.pane = ui.h('div', 'ct-pane');
 
-    this.pathLabel = ui.h('div', 'ct-path', T.noFileOpen);
+    this.pathLabel = ui.h('div', 'ct-path');
     this.metaLabel = ui.h('span', 'ct-dim');
     this.stateLabel = ui.h('span', 'ct-dim');
     this.msg = ui.msgline('');
@@ -302,7 +300,7 @@ class WorkspaceView {
       if (ev.key === 'Escape') { ev.preventDefault(); this.toggleFind(false); }
     }, { signal: ctx.signal });
 
-    // ---- 编辑器本体:编辑、分栏、预览和历史共用一个固定高度,底边可以往下拖高 ----
+    // ---- 编辑器本体 ----
     this.editor = ui.textarea({
       cls: 'mono ct-textarea',
       onInput: () => { this.record(true); this.syncMeta(); this.updateFindCount(); },
@@ -600,7 +598,6 @@ class WorkspaceView {
       if (!out.ok) { setMsg(this.msg, out.error, true); return; }
       this.cur = null;
       this.editor.value = '';
-      this.pathLabel.textContent = this.T.removed;
       this.setPane('empty');
       setMsg(this.msg, out.result);
       void this.refreshTree();
@@ -810,13 +807,6 @@ class WorkspaceView {
     this.histWrap.classList.toggle('ct-hidden', kind !== 'hist');
     this.findBar.classList.toggle('ct-hidden', kind !== 'edit' || this.findBar.dataset.open !== '1');
     this.foot.classList.toggle('ct-hidden', kind === 'hist');
-    for (const b of this.fileBtns) b.disabled = kind === 'empty';
-    if (kind !== 'empty') this.syncUndo();
-    if (kind === 'empty') {
-      this.pathLabel.textContent = this.T.noFileOpen;
-      this.metaLabel.textContent = '';
-      this.stateLabel.textContent = '';
-    }
   }
 
   private syncMeta(): void {
@@ -836,7 +826,7 @@ class WorkspaceView {
   }
 
   // -------------------------------------------------------------------------
-  // 撤销 / 恢复
+  // 撤销 / 重做
   // -------------------------------------------------------------------------
 
   /** 打开档案时从这份内容起记。 */
@@ -886,8 +876,8 @@ class WorkspaceView {
   }
 
   private syncUndo(): void {
-    this.undoBtn.disabled = !this.cur || this.undoStack.length < 2;
-    this.redoBtn.disabled = !this.cur || !this.redoStack.length;
+    this.undoBtn.disabled = this.undoStack.length < 2;
+    this.redoBtn.disabled = !this.redoStack.length;
   }
 
   // -------------------------------------------------------------------------
@@ -895,7 +885,6 @@ class WorkspaceView {
   // -------------------------------------------------------------------------
 
   private toggleFind(open: boolean): void {
-    if (open && !this.cur) return;
     if (open && this.editWrap.classList.contains('ct-hidden')) this.setPane('edit');
     if (open) {
       const a = this.editor;

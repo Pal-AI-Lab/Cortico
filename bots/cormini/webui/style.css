@@ -71,8 +71,8 @@
 .ct-model-row input.field,
 .ct-model-row select.field { width: 100%; min-width: 0; }
 
-/* ---- 工作区:一整块,左边目录侧栏 | 右边编辑器,中间一条竖线 ----
-   侧栏可以收成一条窄边,只留展开按钮;右栏的高度决定整块的高度,目录树填满侧栏余下的部分。 */
+/* ---- 工作区:左边目录侧栏 | 右边编辑器 ----
+   整块高度由内联 height 固定;目录树和编辑区各自填满余下的高度,内容在里面滚动。 */
 .ct-ws {
   position: relative;
   display: grid;
@@ -141,7 +141,7 @@
 .ct-tree {
   flex: 1 1 0;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden auto;
   scrollbar-gutter: stable;
   padding: 0 6px 10px;
 }
@@ -152,8 +152,7 @@
 .ct-ws.is-collapsed .ct-filterrow,
 .ct-ws.is-collapsed .ct-tree { display: none; }
 
-/* 名字过长时截成省略号,大小一栏始终留在行尾;目录树不横向滚动 */
-.ct-tree { overflow-x: hidden; }
+/* 名字过长时截成省略号,大小一栏始终留在行尾 */
 .ct-tree .treerow { min-width: 0; }
 .ct-tree .treerow > .ct-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .ct-tree .treerow > .fsize { flex: none; }
@@ -186,12 +185,10 @@
   flex: 1;
   align-items: center;
   justify-content: center;
-  border: 0;
 }
 
 .ct-pane > .msgline:not(:empty) { padding: 6px 14px; border-top: 1px solid var(--line); }
 
-/* 第一行:路径(未保存时后面一个点)、还原、保存 */
 .ct-filehead {
   display: flex;
   align-items: center;
@@ -226,7 +223,6 @@
   vertical-align: 1px;
 }
 
-/* 第二行:显示方式在左;查找、历史、改名在右,删除与它们隔开 */
 .ct-filetools {
   display: flex;
   flex-wrap: wrap;
@@ -251,7 +247,6 @@
 .ct-iconbtn.is-danger:not(:disabled):hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); }
 .ct-iconbtn:disabled { opacity: .35; cursor: default; background: transparent; }
 
-/* 编辑区、分栏、预览和历史共用一个固定高度(内联 height),内容多了在里面滚动;底下的细条可以拖高 */
 .ct-body {
   position: relative;
   flex: 1 1 0;
@@ -300,7 +295,7 @@
 }
 
 .ct-findrows { display: flex; flex-direction: column; gap: 4px; }
-.ct-findrow { display: flex; align-items: center; gap: 2px; }
+.ct-findrow { display: flex; align-items: center; gap: 2px; min-height: 28px; }
 .ct-replacerow { display: none; }
 .ct-find.is-replacing .ct-replacerow { display: flex; }
 .ct-findexpand svg { transition: transform .15s ease; }
@@ -324,9 +319,6 @@
 }
 
 .ct-ws input.field:focus { border-color: color-mix(in srgb, var(--accent) 60%, var(--line-2)); }
-.ct-ws .ct-textarea.field:focus { border-color: transparent; }
-
-.ct-findrow { min-height: 28px; }
 
 .ct-findcount {
   min-width: 56px;
