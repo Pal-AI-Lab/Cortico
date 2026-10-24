@@ -271,6 +271,15 @@ describe('edit_file / delete_file 留痕', () => {
     const shown = await run(tool(p, 'git_log'), { path: 'x.md' });
     expect(shown.split('\n').filter((l) => /^[0-9a-f]{8} /.test(l)).length).toBeGreaterThanOrEqual(2);
   });
+
+  it('整份移动和按行移动各提交一次,署她的名', async () => {
+    await run(writeTool(p), { path: 'sessions/a.md', content: '一\n二\n' });
+    expect(await run(tool(p, 'move_file'), { from: 'sessions/a.md', to: 'archive/a.md' })).toBe('[moved] sessions/a.md → archive/a.md');
+    expect(await run(tool(p, 'move_file'), { from: 'archive/a.md', to: 'archive/b.md', offset: 1, limit: 1 })).toMatch(/^\[moved\] /);
+    const log = subjects();
+    expect(log).toContain('corti|她移了 sessions/a.md');
+    expect(log).toContain('corti|她移了 archive/a.md');
+  });
 });
 
 /**

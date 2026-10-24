@@ -491,15 +491,16 @@ export class CortiV extends Cormini {
           : t.name === 'edit_file' ? this.committed(t, 'edit', '[edited] ')
             : t.name === 'delete_file' ? this.committed(t, 'delete', '[deleted] ')
               : t.name === 'append_file' ? this.committed(t, 'append', '[appended] ')
-                : t.name === 'save_blob' ? this.committed(t, 'save', '[saved] ')
-                  : t)),
+                : t.name === 'move_file' ? this.committed(t, 'move', '[moved] ')
+                  : t.name === 'save_blob' ? this.committed(t, 'save', '[saved] ')
+                    : t)),
       ...this.historyTools(),
       this.recallTool(),
     ];
   }
 
   /** 成功回执触发一次提交尝试；失败回执不提交。 */
-  private committed(base: ToolDef, kind: 'edit' | 'delete' | 'save' | 'append', ok: string): ToolDef {
+  private committed(base: ToolDef, kind: 'edit' | 'delete' | 'save' | 'append' | 'move', ok: string): ToolDef {
     return {
       ...base,
       handler: async (args, ctx) => {
@@ -507,7 +508,7 @@ export class CortiV extends Cormini {
         git.ensureRepo();
         const out = await base.handler(args, ctx);
         if (typeof out === 'string' && out.startsWith(ok)) {
-          await this.commitWorkspace(git, String(args.path ?? ''), ctx.role, kind);
+          await this.commitWorkspace(git, String(args.path ?? args.from ?? ''), ctx.role, kind);
         }
         return out;
       },
@@ -737,9 +738,9 @@ export class CortiV extends Cormini {
     git: WorkspaceGit,
     path: string,
     role: string,
-    kind: 'write' | 'append' | 'edit' | 'delete' | 'save' = 'write',
+    kind: 'write' | 'append' | 'edit' | 'delete' | 'save' | 'move' = 'write',
   ): Promise<void> {
-    const verb = { write: '写了', append: '追加了', edit: '改了', delete: '删了', save: '存了' }[kind];
+    const verb = { write: '写了', append: '追加了', edit: '改了', delete: '删了', save: '存了', move: '移了' }[kind];
     const run = async (): Promise<void> => {
       try {
         await git.commitAllAsync(`${role === MAIN ? '她' : '后台整理'}${verb} ${path}`, AUTHOR_SELF);
