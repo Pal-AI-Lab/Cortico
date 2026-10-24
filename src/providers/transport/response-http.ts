@@ -31,16 +31,13 @@ export function requestJson(body: unknown): string {
 
 /**
  * SSE framing is independent of packet and line boundaries. Each character is searched for a line end once,
- * so a long line sent in many chunks costs time in proportion to its length. A line or event longer than
- * `max` UTF-16 code units fails the attempt; without `max` there is no limit.
+ * so a long line sent in many chunks costs time in proportion to its length.
  */
 export class EventDecoder {
-  constructor(private readonly max = Infinity) {}
   private buffer = '';
   /** The part of `buffer` already searched: it holds no line end. */
   private scanned = 0;
   private data: string[] = [];
-  private dataLength = 0;
   feed(text: string): string[] {
     this.buffer += text;
     const events: string[] = [];
@@ -53,17 +50,12 @@ export class EventDecoder {
       if (line === '') {
         if (this.data.length) events.push(this.data.join('\n'));
         this.data = [];
-        this.dataLength = 0;
       } else if (line.startsWith('data:')) {
-        const data = line.slice(5).replace(/^ /, '');
-        this.dataLength += data.length + 1;
-        if (this.dataLength > this.max) throw new ResponseProtocolError(`SSE event longer than ${this.max} characters`);
-        this.data.push(data);
+        this.data.push(line.slice(5).replace(/^ /, ''));
       }
     }
     this.buffer = this.buffer.slice(start);
     this.scanned = this.buffer.length;
-    if (this.buffer.length > this.max) throw new ResponseProtocolError(`SSE line longer than ${this.max} characters`);
     return events;
   }
 }
@@ -182,9 +174,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
         if (!response.body) throw new LLMError('Streaming response has no body', response.status, '');
         reader = response.body.getReader();
         const decoder = new TextDecoder();
-        // one event carries at most the whole output again (a done or completed event repeats its items), and
-        // JSON escaping at most doubles ordinary text
-        const frames = new EventDecoder(outputMax * 2);
+        const frames = new EventDecoder();
         touchContent();
         stream: for (;;) {
           const chunk = await reader.read();

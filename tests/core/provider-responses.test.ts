@@ -175,15 +175,13 @@ describe('Provider standard Responses boundary', () => {
     expect(assembly.meters()).toMatchObject({ input: 3, output: 1 });
   });
 
-  it('decodes a long event sent in small chunks, and refuses a line past the limit', () => {
-    const decoder = new EventDecoder(1 << 21);
+  it('decodes a long event sent in small chunks', () => {
+    const decoder = new EventDecoder();
     const value = 'x'.repeat(1 << 20);
     const raw = `data: ${value}\n\n`;
     const events: string[] = [];
     for (let index = 0; index < raw.length; index += 1024) events.push(...decoder.feed(raw.slice(index, index + 1024)));
     expect(events).toEqual([value]);
-    const endless = new EventDecoder(1 << 21);
-    expect(() => endless.feed('data: ' + 'x'.repeat(1 << 21))).toThrow('SSE line');
   });
 
   it('does not follow a redirect: the request never reaches the address it points to', async () => {
@@ -205,7 +203,7 @@ describe('Provider standard Responses boundary', () => {
 
   it('decodes real native Responses framing and retains encrypted reasoning and function identity', () => {
     const raw = readFileSync(new URL('../fixtures/responses-stream.sse', import.meta.url), 'utf8');
-    const decoder = new EventDecoder(1 << 21);
+    const decoder = new EventDecoder();
     const assembly = new NativeResponseAssembly();
     for (let index = 0; index < raw.length; index += 17) {
       for (const payload of decoder.feed(raw.slice(index, index + 17))) {
