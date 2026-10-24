@@ -3,16 +3,18 @@
  *
  * 路径一律相对工作区并经 `memory.insideWorkspace` 校验;写类工具的回执以 `[written]` /
  * `[edited]` / `[appended]` / `[deleted]` / `[moved]` 起头,变体据此判断要不要提交版本。
- * 移动与删除一次可以选中多份文件:一个目录下的全部,或从工作区根匹配的 glob,再按修改日期收窄。
+ * 移动收一份文件或一个文件夹,删除只收一份文件;成批整理由模型组合这几把工具完成。
  *
- * Fallback:不给行区间的 read_file 遇到超过 `WorkspaceHost.wholeReadFallbackChars()` 的文件只交回开头几行。
- * 它防的是模型不看清单里的大小、把长文件整份读进上下文;上限的推导在 Persona 的同名方法上。
+ * 两处 fallback,模型的上下文和单次输出够大时可以删掉:
+ * - 不给行区间的 read_file 遇到超过 `WorkspaceHost.wholeReadFallbackChars()` 的文件只交回开头几行;
+ *   上限的推导在 Persona 的同名方法上。
+ * - move_file 给 offset/limit 时把几行剪到另一份文件,正文不经过模型。常驻前缀的大文件只能这样瘦身,
+ *   否则要在 write_file 和 edit_file 里把正文各输出一遍,超过单次输出上限。
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
 import type { ToolDef } from 'cortico/core/types.ts';
-import { SYSTEM_TIMEZONE, parseTimeIn } from 'cortico/core/util.ts';
-import { BLOBS_DIR, LIST_DIR_CAP, globToRegExp, memHandle, type GitWorkspaceMemory, type ModifiedRange } from './memory.ts';
+import { BLOBS_DIR, LIST_DIR_CAP, globToRegExp, memHandle, type GitWorkspaceMemory } from './memory.ts';
 
 /** `glob_files` 一次最多交回的文件数。 */
 const GLOB_LIMIT = 100;
@@ -20,10 +22,8 @@ const GLOB_LIMIT = 100;
 const GREP_DEFAULT_LIMIT = 50;
 /** `grep_files` 每行交回的最大字符数,更长的截断。 */
 const GREP_LINE_CHARS = 200;
-/** 批量移动、删除的回执最多逐条列出的文件数。 */
+/** 移动文件夹的回执最多逐条列出的文件数。 */
 const BATCH_LIST_MAX = 50;
-/** 含这些字符、又不是现存文件或目录的路径当 glob 读。 */
-const WILDCARD = /[*?{]/;
 
 /** 整数参数;缺席、非数字、非有限值都当没给。 */
 function intArg(v: unknown): number | undefined {
@@ -65,37 +65,20 @@ function readHeadFallback(path: string, text: string, max: number): string {
   return `[${path} 共 ${total} 行、${text.length} 字符,整份太长,只交回${shown};用 offset 和 limit 读其余部分]\n${body}`;
 }
 
-/** `modified_before` / `modified_after` → 毫秒范围;只给日期按本机时区的零点。读不出返回一句错误。 */
-function modifiedRange(args: Record<string, unknown>): ModifiedRange | string {
-  const range: ModifiedRange = {};
-  for (const [key, field] of [['modified_before', 'before'], ['modified_after', 'after']] as const) {
-    const raw = args[key];
-    if (raw === undefined || raw === null || raw === '') continue;
-    const ms = parseTimeIn(SYSTEM_TIMEZONE, String(raw));
-    if (Number.isNaN(ms)) return `${key} 读不出:${String(raw)};写成 2026-09-01 或带时刻的 ISO 时间`;
-    range[field] = ms;
-  }
-  return range;
-}
-
-function rangeNote(range: ModifiedRange): string {
-  return range.before !== undefined || range.after !== undefined ? '(在给定的修改日期范围内)' : '';
-}
-
 /** 工作区内的路径换成规范的相对路径(`/` 分隔,根是空串);逃逸抛错。 */
 function relOf(memory: GitWorkspaceMemory, path: string): string {
   return relative(memory.memoryDir, memory.insideWorkspace(path || '.')).split(sep).join('/');
 }
 
-/** `move_file` / `delete_file` 选中的文件。`many` 时 `base` 是批量移动保留相对路径的起点。 */
+/** `move_file` 选中的文件。`many` 时 `base` 是移动文件夹保留相对路径的起点。 */
 interface Selection {
   files: string[];
   many: boolean;
   base: string;
 }
 
-/** 一份现存文件、一个目录下的全部文件,或从工作区根匹配的 glob;再按修改日期收窄。选不出返回一句错误。 */
-function select(memory: GitWorkspaceMemory, target: string, range: ModifiedRange): Selection | string {
+/** 一份现存文件,或一个目录下的全部文件。选不出返回一句错误。 */
+function select(memory: GitWorkspaceMemory, target: string): Selection | string {
   let rel: string;
   try {
     rel = relOf(memory, target);
@@ -103,15 +86,9 @@ function select(memory: GitWorkspaceMemory, target: string, range: ModifiedRange
     return errText(e);
   }
   const abs = join(memory.memoryDir, rel);
-  if (existsSync(abs)) {
-    if (!statSync(abs).isDirectory()) return { files: memory.newestFirst([rel], range), many: false, base: '' };
-    return { files: memory.newestFirst(memory.walkFiles(rel), range), many: true, base: rel };
-  }
-  const pattern = memory.normalize(target);
-  if (!WILDCARD.test(pattern)) return `${target} 不存在`;
-  const segments = pattern.split('/');
-  const base = segments.slice(0, segments.findIndex((s) => WILDCARD.test(s))).join('/');
-  return { files: memory.matchFiles(pattern, range), many: true, base };
+  if (!existsSync(abs)) return `${target} 不存在`;
+  if (!statSync(abs).isDirectory()) return { files: [rel], many: false, base: '' };
+  return { files: memory.walkFiles(rel), many: true, base: rel };
 }
 
 /** 批量回执:做成的逐条列出,没动的带理由;一份也没做成时以失败起头。 */
@@ -147,20 +124,10 @@ function isResident(host: WorkspaceHost, rel: string): boolean {
   return host.prefixResidentFiles().some((f) => resolve(f) === abs);
 }
 
-const MODIFIED_BEFORE = {
-  type: 'string',
-  description: 'Only files last modified before this date: YYYY-MM-DD (midnight, local time) or an ISO time.',
-};
-const MODIFIED_AFTER = {
-  type: 'string',
-  description: 'Only files last modified on or after this date: YYYY-MM-DD (midnight, local time) or an ISO time.',
-};
-
 const READ_FILE: Omit<ToolDef, 'handler'> = {
   name: 'read_file',
   description: 'Read a file from your workspace. Give offset and limit to read a slice of a long note '
     + '(a negative offset counts from the end, so offset -20 reads the last 20 lines). '
-    + 'list_files and glob_files show each file\'s size; read a long file by range. '
     + 'Without a range you get the whole file, or for a file too long to take in at once its opening lines and the total line count.',
   tags: ['read'],
   parameters: {
@@ -210,16 +177,12 @@ const EDIT_FILE: Omit<ToolDef, 'handler'> = {
 
 const DELETE_FILE: Omit<ToolDef, 'handler'> = {
   name: 'delete_file',
-  description: 'Delete files from your workspace: one file, every file under a folder, or every file whose path matches '
-    + 'a glob counted from the workspace root (handoffs/2026-09-*). modified_before and modified_after narrow the selection '
-    + 'by last-modified date. The constitution and other prefix-resident documents are never deleted.',
+  description: 'Delete a file from your workspace. The constitution and other prefix-resident documents cannot be deleted.',
   tags: ['write'],
   parameters: {
     type: 'object',
     properties: {
-      path: { type: 'string', description: 'A file, a folder, or a glob, relative to your workspace.' },
-      modified_before: MODIFIED_BEFORE,
-      modified_after: MODIFIED_AFTER,
+      path: { type: 'string', description: 'Path relative to your workspace.' },
     },
     required: ['path'],
   },
@@ -227,25 +190,21 @@ const DELETE_FILE: Omit<ToolDef, 'handler'> = {
 
 const MOVE_FILE: Omit<ToolDef, 'handler'> = {
   name: 'move_file',
-  description: 'Move or rename files in your workspace, or move lines from one file to another. '
-    + 'from is a file, a folder, or a glob counted from the workspace root (handoffs/2026-09-*, notes/**/*.md). '
-    + 'One file goes to the path to, or into to when that is an existing folder or ends with /. '
-    + 'A folder or a glob moves every file it selects into the folder to, keeping each file\'s path below the folder '
-    + 'or below the glob\'s leading fixed folders. '
+  description: 'Move or rename a file or a folder in your workspace, or move lines from one file to another. '
+    + 'A file goes to the path to, or into to when that is an existing folder or ends with /. '
+    + 'A folder moves with everything in it to the folder to. '
     + 'With offset and limit (numbered as in read_file) only those lines of the file from move: they are cut from it and '
-    + 'appended to the file to, which is created if missing. This splits a long file without retyping it. '
+    + 'appended to the file to, which is created if missing. '
     + 'Missing folders are created and an existing file is never overwritten. Prefix-resident documents stay where they are, '
     + 'but lines can be moved out of them.',
   tags: ['write'],
   parameters: {
     type: 'object',
     properties: {
-      from: { type: 'string', description: 'A file, a folder, or a glob, relative to your workspace.' },
+      from: { type: 'string', description: 'A file or a folder, relative to your workspace.' },
       to: { type: 'string', description: 'The new path, the destination folder, or with offset/limit the file the lines are appended to.' },
       offset: { type: 'integer', description: 'First line to move, numbered as in read_file. Give offset or limit to move lines instead of whole files.' },
       limit: { type: 'integer', description: 'How many lines to move. Omit to move through the last line.' },
-      modified_before: MODIFIED_BEFORE,
-      modified_after: MODIFIED_AFTER,
     },
     required: ['from', 'to'],
   },
@@ -258,8 +217,6 @@ const APPEND_FILE: Omit<ToolDef, 'handler'> = {
     + 'The file and any missing parent folders are created if it does not exist, so appending to a new path starts that file. '
     + 'Use this for anything that grows entry by entry — a running log, a diary, a ledger, a record of this session: '
     + 'append the new lines instead of rewriting the whole note. '
-    + 'Give such a file one period in its name (log/2026-10.md) and start the next file when the period turns, '
-    + 'so a finished period can be moved or archived whole. '
     + 'Keep write_file for when you really are replacing the whole document: a rewrite, a distillation, a restructure. '
     + 'If the file does not already end with a newline, one is added before your text.',
   tags: ['write'],
@@ -292,16 +249,13 @@ const GLOB_FILES: Omit<ToolDef, 'handler'> = {
   name: 'glob_files',
   description: 'Find files in your workspace by name pattern, most recently modified first, each with its size and last-modified date. '
     + 'Patterns not starting with **/ get it prepended, so *.md matches everywhere; '
-    + 'use a directory prefix to narrow (minecraft/worlds/*/目标.md, viewers/**/1234*.md). '
-    + 'modified_before and modified_after narrow by last-modified date.',
+    + 'use a directory prefix to narrow (minecraft/worlds/*/目标.md, viewers/**/1234*.md).',
   tags: ['read'],
   parameters: {
     type: 'object',
     properties: {
       glob_pattern: { type: 'string', description: 'Glob such as *.md, notes/**/*.md, viewers/**/1234*.md.' },
       target_directory: { type: 'string', description: 'Directory relative to your workspace to search under. Omit for the whole workspace.' },
-      modified_before: MODIFIED_BEFORE,
-      modified_after: MODIFIED_AFTER,
     },
     required: ['glob_pattern'],
   },
@@ -433,53 +387,37 @@ function editTool(host: WorkspaceHost): ToolDef {
   };
 }
 
-/**
- * 删文件:一份、一个目录下的全部,或一个 glob 选中的全部。常驻系统前缀的那几份(宪法、伙伴主档)不删;
- * 删空的目录随之删掉;整个工作区不能一次删。历史由变体的版本库保留。
- */
+/** 删一份文件。常驻系统前缀的那几份(宪法、伙伴主档)不删;删空的目录随之删掉。历史由变体的版本库保留。 */
 function deleteTool(host: WorkspaceHost): ToolDef {
   return {
     ...DELETE_FILE,
     handler: async (args, ctx) => {
       const path = String(args.path ?? '');
-      if (host.memory.normalize(path) === '') return '[delete failed] 要给出文件、文件夹或 glob;整个工作区不能一次删掉';
-      const range = modifiedRange(args);
-      if (typeof range === 'string') return `[delete failed] ${range}`;
-      const sel = select(host.memory, path, range);
-      if (typeof sel === 'string') return `[delete failed] ${sel}`;
-      if (sel.files.length === 0) return `[delete failed] 没有匹配 ${path} 的文件${rangeNote(range)}`;
-      const resident = '常驻系统前缀,不能删;要改就改内容';
-      const remove = (rel: string): string | null => {
-        if (isResident(host, rel)) return resident;
-        const denied = host.writeGuard('delete', rel, ctx.role);
-        if (denied) return denied;
-        try {
-          host.memory.deleteFile(rel);
-          host.memory.pruneEmptyDirs(rel);
-        } catch (e) {
-          return errText(e);
-        }
-        return null;
-      };
-      if (!sel.many) {
-        const why = remove(sel.files[0]!);
-        if (why === null) return `[deleted] ${path}`;
-        return `[delete failed] ${why === resident ? `${path} ${why}` : why}`;
+      let rel: string;
+      try {
+        rel = relOf(host.memory, path);
+      } catch (e) {
+        return `[delete failed] ${errText(e)}`;
       }
-      const done: string[] = [];
-      const skipped: string[] = [];
-      for (const rel of sel.files) {
-        const why = remove(rel);
-        if (why) skipped.push(`${rel}(${why})`);
-        else done.push(rel);
+      if (isResident(host, rel)) return `[delete failed] ${path} 常驻系统前缀,不能删;要改就改内容`;
+      const denied = host.writeGuard('delete', rel, ctx.role);
+      if (denied) return `[delete failed] ${denied}`;
+      const abs = join(host.memory.memoryDir, rel);
+      if (!existsSync(abs)) return `[delete failed] ${path} 不存在`;
+      if (statSync(abs).isDirectory()) return `[delete failed] ${path} 是目录,只删文件`;
+      try {
+        host.memory.deleteFile(rel);
+        host.memory.pruneEmptyDirs(rel);
+      } catch (e) {
+        return `[delete failed] ${errText(e)}`;
       }
-      return batchReceipt('[deleted]', '[delete failed]', done, skipped);
+      return `[deleted] ${path}`;
     },
   };
 }
 
 /**
- * 移动整份文件,或把一份文件的几行剪下来追加到另一份(正文不经过模型)。整份移动走 moveGuard,
+ * 移动一份文件或一个文件夹,或把一份文件的几行剪下来追加到另一份(正文不经过模型)。整份移动走 moveGuard,
  * 常驻系统前缀的文件不移走;目标已存在不覆盖;移空的源目录随之删掉。
  */
 function moveTool(host: WorkspaceHost): ToolDef {
@@ -505,11 +443,9 @@ function moveTool(host: WorkspaceHost): ToolDef {
       const offset = intArg(args.offset);
       const limit = intArg(args.limit);
       if (offset !== undefined || limit !== undefined) return moveLines(host, from, to, offset, limit, ctx.role);
-      const range = modifiedRange(args);
-      if (typeof range === 'string') return `[move failed] ${range}`;
-      const sel = select(host.memory, from, range);
+      const sel = select(host.memory, from);
       if (typeof sel === 'string') return `[move failed] ${sel}`;
-      if (sel.files.length === 0) return `[move failed] 没有匹配 ${from} 的文件${rangeNote(range)}`;
+      if (sel.files.length === 0) return `[move failed] ${from} 是空文件夹`;
       let target: string;
       try {
         target = relOf(host.memory, to);
@@ -523,11 +459,11 @@ function moveTool(host: WorkspaceHost): ToolDef {
         const why = moveOne(src, dest, ctx.role);
         return why ? `[move failed] ${why}` : `[moved] ${src} → ${dest}`;
       }
-      if (!targetIsDir && host.memory.exists(target)) return `[move failed] ${to} 是文件;移动多份文件时 to 要是文件夹`;
+      if (!targetIsDir && host.memory.exists(target)) return `[move failed] ${to} 是文件;移动文件夹时 to 要是文件夹`;
       const done: string[] = [];
       const skipped: string[] = [];
       for (const src of sel.files) {
-        const dest = posix.join(target, sel.base ? posix.relative(sel.base, src) : src);
+        const dest = posix.join(target, posix.relative(sel.base, src));
         const why = moveOne(src, dest, ctx.role);
         if (why) skipped.push(`${src}(${why})`);
         else done.push(`${src} → ${dest}`);
@@ -638,8 +574,6 @@ function globTool(host: WorkspaceHost): ToolDef {
       const pattern = String(args.glob_pattern ?? '');
       const dir = typeof args.target_directory === 'string' ? args.target_directory : '';
       if (!pattern) return '[glob failed] glob_pattern 不能为空';
-      const range = modifiedRange(args);
-      if (typeof range === 'string') return `[glob failed] ${range}`;
       let root: string;
       try {
         root = host.memory.insideWorkspace(dir || '.');
@@ -648,8 +582,8 @@ function globTool(host: WorkspaceHost): ToolDef {
       }
       if (!existsSync(root) || !statSync(root).isDirectory()) return `[glob failed] ${dir} 不是目录`;
       const prefix = host.memory.normalize(dir);
-      const hits = host.memory.globFiles(pattern, dir, range);
-      if (hits.length === 0) return `没有匹配 ${pattern} 的文件${prefix ? `(在 ${prefix}/ 下)` : ''}${rangeNote(range)}`;
+      const hits = host.memory.globFiles(pattern, dir);
+      if (hits.length === 0) return `没有匹配 ${pattern} 的文件${prefix ? `(在 ${prefix}/ 下)` : ''}`;
       const shown = hits.slice(0, GLOB_LIMIT);
       const lines = shown.map((f) => `- ${f} ${host.memory.facts(f)}`);
       if (hits.length > shown.length) lines.push(`… 另有 ${hits.length - shown.length} 个,收窄模式再找`);

@@ -124,48 +124,21 @@ describe('edit_file:精确替换', () => {
 });
 
 describe('delete_file', () => {
-  it('删掉文件并回执;宪法这类常驻前缀的文件拒删', async () => {
+  it('删掉文件和删空的目录并回执;宪法这类常驻前缀的文件拒删', async () => {
     put('notes/old.md', 'x\n');
     put('CONSTITUTION.md', '# 我\n');
     expect(await run('delete_file', { path: 'notes/old.md' })).toBe('[deleted] notes/old.md');
-    expect(existsSync(join(dir, 'notes/old.md'))).toBe(false);
+    expect(existsSync(join(dir, 'notes'))).toBe(false);
     expect(await run('delete_file', { path: 'CONSTITUTION.md' })).toContain('常驻系统前缀');
     expect(existsSync(join(dir, 'CONSTITUTION.md'))).toBe(true);
   });
 
-  it('不存在、逃逸路径、整个工作区、读不出的日期各自失败,不动文件', async () => {
+  it('不存在、逃逸路径、目录各自失败,不动文件', async () => {
     put('notes/a.md', 'x\n');
     expect(await run('delete_file', { path: 'nope.md' })).toContain('不存在');
     expect(await run('delete_file', { path: '../x.md' })).toContain('[delete failed]');
-    expect(await run('delete_file', { path: '.' })).toContain('整个工作区不能一次删掉');
-    expect(await run('delete_file', { path: 'notes', modified_before: '上个月' })).toContain('modified_before 读不出');
+    expect(await run('delete_file', { path: 'notes' })).toContain('是目录');
     expect(existsSync(join(dir, 'notes/a.md'))).toBe(true);
-  });
-
-  it('文件夹删掉其下全部文件和删空的目录;常驻前缀的跳过并说明', async () => {
-    put('notes/a.md', 'x\n');
-    put('notes/deep/b.md', 'x\n');
-    const out = await run('delete_file', { path: 'notes' });
-    expect(out.split('\n')[0]).toBe('[deleted] 2 个文件:');
-    expect(existsSync(join(dir, 'notes'))).toBe(false);
-    const root = await run('delete_file', { path: '*.md' });
-    expect(root).toContain('[delete failed] 一个也没动');
-    expect(root).toContain('CONSTITUTION.md(常驻系统前缀');
-  });
-
-  it('glob 从工作区根匹配,修改日期再收窄', async () => {
-    put('handoffs/2026-09-01.md', 'a\n');
-    put('handoffs/2026-10-01.md', 'b\n');
-    put('keep/handoffs/2026-09-02.md', 'c\n');
-    const sep = new Date(2026, 8, 15);
-    utimesSync(join(dir, 'handoffs/2026-09-01.md'), sep, sep);
-    utimesSync(join(dir, 'keep/handoffs/2026-09-02.md'), sep, sep);
-    const out = await run('delete_file', { path: 'handoffs/*', modified_before: '2026-10-01' });
-    expect(out).toBe('[deleted] 1 个文件:\n- handoffs/2026-09-01.md');
-    expect(existsSync(join(dir, 'handoffs/2026-10-01.md'))).toBe(true);
-    expect(existsSync(join(dir, 'keep/handoffs/2026-09-02.md'))).toBe(true);
-    expect(await run('delete_file', { path: 'handoffs/*', modified_after: '2027-01-01' }))
-      .toBe('[delete failed] 没有匹配 handoffs/* 的文件(在给定的修改日期范围内)');
   });
 });
 
@@ -182,29 +155,17 @@ describe('move_file:整份移动', () => {
     expect(disk('box/b.md')).toBe('other\n');
   });
 
-  it('文件夹和 glob 成批移动,保留文件夹或模式固定前缀以下的路径', async () => {
+  it('文件夹整个移动,保留其下的路径;to 是现存文件或 from 不存在时不动', async () => {
     put('notes/a.md', 'a\n');
     put('notes/deep/b.md', 'b\n');
-    put('handoffs/2026-09-01.md', 'h\n');
-    put('handoffs/2026-10-01.md', 'h\n');
     const out = await run('move_file', { from: 'notes', to: 'archive/notes' });
     expect(out.split('\n')[0]).toBe('[moved] 2 个文件:');
     expect(disk('archive/notes/deep/b.md')).toBe('b\n');
     expect(existsSync(join(dir, 'notes'))).toBe(false);
-    expect(await run('move_file', { from: 'handoffs/2026-09-*', to: 'archive/handoffs/2026-09' }))
-      .toBe('[moved] 1 个文件:\n- handoffs/2026-09-01.md → archive/handoffs/2026-09/2026-09-01.md');
-    expect(existsSync(join(dir, 'handoffs/2026-10-01.md'))).toBe(true);
-  });
-
-  it('按修改日期成批归档;to 是现存文件时不动', async () => {
-    put('log/old.md', 'o\n');
-    put('log/new.md', 'n\n');
-    const sep = new Date(2026, 8, 15);
-    utimesSync(join(dir, 'log/old.md'), sep, sep);
+    put('log/a.md', 'o\n');
     expect(await run('move_file', { from: 'log', to: 'CONSTITUTION.md' })).toContain('to 要是文件夹');
-    expect(await run('move_file', { from: 'log', to: 'archive/log', modified_before: '2026-10-01' }))
-      .toBe('[moved] 1 个文件:\n- log/old.md → archive/log/old.md');
-    expect(existsSync(join(dir, 'log/new.md'))).toBe(true);
+    expect(await run('move_file', { from: 'log/*', to: 'archive' })).toContain('不存在');
+    expect(existsSync(join(dir, 'log/a.md'))).toBe(true);
   });
 
   it('常驻前缀的文件不整份移走;moveGuard 拒绝时不动文件', async () => {
@@ -239,12 +200,12 @@ describe('move_file:按行移动', () => {
     expect(disk('tail.md')).toBe('二\n三\n');
   });
 
-  it('同一份文件、文件夹、glob、越界、二进制目录都失败,不动文件', async () => {
+  it('同一份文件、目标或来源是文件夹、越界、二进制目录都失败,不动文件', async () => {
     put('a.md', '一\n');
     put('box/x.md', 'x\n');
     expect(await run('move_file', { from: 'a.md', to: 'a.md', offset: 1 })).toContain('同一份文件');
     expect(await run('move_file', { from: 'a.md', to: 'box', offset: 1 })).toContain('to 要是文件');
-    expect(await run('move_file', { from: 'box/*', to: 'b.md', offset: 1 })).toContain('不是现存的文件');
+    expect(await run('move_file', { from: 'box', to: 'b.md', offset: 1 })).toContain('不是现存的文件');
     expect(await run('move_file', { from: 'a.md', to: 'b.md', offset: 5 })).toBe('[move failed] a.md 共 1 行,没有第 5 行');
     expect(await run('move_file', { from: 'a.md', to: 'blobs/b.md', offset: 1 })).toContain('二进制');
     expect(disk('a.md')).toBe('一\n');
@@ -288,15 +249,6 @@ describe('glob_files:按名找,最近改过的在前', () => {
     expect(paths(await run('glob_files', { glob_pattern: 'deep/**/*.md' }))).toEqual(['deep/x/c.md']);
     expect(paths(await run('glob_files', { glob_pattern: '*.md', target_directory: 'notes' }))).toEqual(['notes/a.md']);
     expect(await run('glob_files', { glob_pattern: '*.{md,txt}' })).toContain('4 个文件');
-  });
-
-  it('modified_before / modified_after 按修改时刻收窄', async () => {
-    const before = await run('glob_files', { glob_pattern: '*', modified_before: '2026-09-01T12:02:00' });
-    expect(paths(before)).toEqual(['notes/a.md', 'CONSTITUTION.md']);
-    const after = await run('glob_files', { glob_pattern: '*', modified_after: '2026-09-01T12:02:00' });
-    expect(paths(after)).toEqual(['deep/x/c.md', 'notes/b.txt']);
-    expect(await run('glob_files', { glob_pattern: '*', modified_after: '2027-01-01' }))
-      .toBe('没有匹配 * 的文件(在给定的修改日期范围内)');
   });
 
   it('没命中就说没有;目录不对就失败', async () => {

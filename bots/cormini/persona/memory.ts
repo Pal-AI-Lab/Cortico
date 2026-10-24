@@ -79,16 +79,6 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${re}$`);
 }
 
-/** 修改时刻的筛选范围(毫秒):`before` 不含,`after` 含。 */
-export interface ModifiedRange {
-  before?: number;
-  after?: number;
-}
-
-function inRange(mtimeMs: number, range: ModifiedRange): boolean {
-  return (range.before === undefined || mtimeMs < range.before) && (range.after === undefined || mtimeMs >= range.after);
-}
-
 /** 字节数的短写:B、KB(一位小数)、MB(一位小数)。 */
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -454,22 +444,11 @@ export class GitWorkspaceMemory {
    * 按名找文件的底层:模式匹配整条工作区相对路径,最近改过的在前。
    * 不以 `**` + `/` 开头的模式补上它,所以 `*.md` 找的是整棵树。
    */
-  globFiles(pattern: string, dir = '', range: ModifiedRange = {}): string[] {
+  globFiles(pattern: string, dir = ''): string[] {
     const re = globToRegExp(pattern.startsWith('**/') ? pattern : `**/${pattern}`);
-    return this.newestFirst(this.walkFiles(dir).filter((f) => re.test(f)), range);
-  }
-
-  /** 模式按整条路径从工作区根匹配(不补 `**` + `/`),最近改过的在前。移动与删除用这一种,`*.md` 只是根下那几份。 */
-  matchFiles(pattern: string, range: ModifiedRange = {}): string[] {
-    const re = globToRegExp(this.normalize(pattern));
-    return this.newestFirst(this.walkFiles().filter((f) => re.test(f)), range);
-  }
-
-  /** 工作区相对路径按修改时刻筛选,最近改过的在前。 */
-  newestFirst(files: string[], range: ModifiedRange = {}): string[] {
-    return files
+    return this.walkFiles(dir)
+      .filter((f) => re.test(f))
       .map((f) => ({ f, mtime: statSync(join(this.memoryDir, f)).mtimeMs }))
-      .filter((x) => inRange(x.mtime, range))
       .sort((a, b) => b.mtime - a.mtime)
       .map((x) => x.f);
   }

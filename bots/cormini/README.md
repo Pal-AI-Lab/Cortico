@@ -25,10 +25,10 @@ Open `http://127.0.0.1:7788/` and talk to it in the console view.
   with the standard file toolset: `read_file` (a line range or the whole file; as a fallback,
   a file longer than `(1 - softRatio) × maxTokens` characters read without a range returns
   its opening lines), `write_file`, `edit_file`
-  (exact-string replace), `append_file`, `delete_file` and `move_file` (one file, a folder or
-  a glob from the workspace root, narrowed by modified date; `move_file` also cuts a line
-  range from one file into another), `list_files` (folded directory listing) and
-  `glob_files` (by name pattern), both with each file's size and modified date, and
+  (exact-string replace), `append_file`, `delete_file` (one file), `move_file` (a file or a folder; as a
+  fallback for the model's output limit, it also cuts a line range from one file into
+  another), `list_files` (folded directory listing) and `glob_files` (by name pattern),
+  both with each file's size and modified date, and
   `grep_files` (by content); nothing else survives a context handoff. The file listing is
   part of the system prefix, so the bot always knows what it has.
 - **The constitution is the prefix.** `persona/CONSTITUTION.seed.md` initializes
