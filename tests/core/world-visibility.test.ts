@@ -236,6 +236,14 @@ describe('运行中挂载与卸载', () => {
     await expect(core.unmountWorld('nope')).rejects.toThrow('未挂载');
   });
 
+  it('同一 World 并发卸载两次：只移出它自己，其他 World 留在表里', async () => {
+    const extra = new ProbeWorld('extra');
+    extra.stop = async () => { await sleep(20); extra.stopped = true; };
+    await core.mountWorld(extra);
+    await Promise.all([core.unmountWorld('extra'), core.unmountWorld('extra')]);
+    expect(core.worldVisibility().visibility).toEqual({ probe: true });
+  });
+
   it("stop 超时或抛错仍卸载 World，并记录失败结果", async () => {
     const bad = new ProbeWorld('bad');
     bad.stop = async () => { throw new Error('停不下来'); };
