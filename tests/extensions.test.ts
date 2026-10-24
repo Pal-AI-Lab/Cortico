@@ -741,6 +741,15 @@ describe('ExtensionManager', () => {
     writeFileSync(join(root, 'extensions/package.json'), '{"name":"x"}');
     expect(readInstalled(join(root, 'extensions'))).toEqual([]);
   });
+
+  it('readInstalled:PowerShell 5.1 写出的带 BOM、CRLF 清单照常读;读不出时报错带文件路径', () => {
+    mkdirSync(join(root, 'extensions'));
+    const file = join(root, 'extensions/package.json');
+    writeFileSync(file, '﻿{\r\n    "name":  "x",\r\n    "dependencies":  {\r\n        "a":  "^1.0.0"\r\n    }\r\n}\r\n', 'utf8');
+    expect(readInstalled(join(root, 'extensions'))).toEqual([{ name: 'a', spec: '^1.0.0' }]);
+    writeFileSync(file, '{"name":', 'utf8');
+    expect(() => readInstalled(join(root, 'extensions'))).toThrow(file);
+  });
 });
 
 describe('extensionsDir', () => {

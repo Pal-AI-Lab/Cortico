@@ -12,6 +12,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
 import { LocalizedError, type Language } from './core/language.ts';
+import { readTextFile } from './core/util.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -101,9 +102,14 @@ export function extensionsDir(repoRoot: string, env: NodeJS.ProcessEnv = process
   return raw ? resolve(raw) : join(repoRoot, EXTENSIONS_DIRNAME);
 }
 
+/** 读一份 package.json;清单可能被 Windows 的工具写成带 BOM 的文本。解析失败的错误带上文件路径。 */
 function readPackageJson(file: string): ExtensionPackageJson | null {
   if (!existsSync(file)) return null;
-  return JSON.parse(readFileSync(file, 'utf8')) as ExtensionPackageJson;
+  try {
+    return JSON.parse(readTextFile(file)) as ExtensionPackageJson;
+  } catch (e) {
+    throw new Error(`${file}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** 读取 extensions/package.json 的直接依赖；目录不存在时返回空列表。 */
@@ -734,7 +740,7 @@ export class ExtensionManager {
     const pkgFile = join(this.dir, 'package.json');
     const existing = existsSync(pkgFile);
     const pkg = existing
-      ? JSON.parse(readFileSync(pkgFile, 'utf8')) as Record<string, unknown>
+      ? readPackageJson(pkgFile) as Record<string, unknown>
       : { name: 'cortico-extensions', private: true, dependencies: {} };
     const packageManager = corticoPackageManager();
     if (!existing || (packageManager && pkg.packageManager !== packageManager)) {
