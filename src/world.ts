@@ -43,7 +43,7 @@ export interface WorldContext<S extends WorldSection = WorldSection> {
   storeSecret(name: string, value: string): void;
   /** 深合并进 `worlds.<id>` 段:活对象与 config.json 同步。数组整体替换。 */
   persist(patch: DeepPartial<S>): void;
-  /** 按 cfg.enabled 同步状态：启用时激活或重启，禁用时停止。 */
+  /** 按 cfg.enabled 同步状态：启用时激活或重启，禁用时停止。排在同一 World 之前的激活、停用、重启之后执行。 */
   restart(): Promise<void>;
 }
 
@@ -204,6 +204,8 @@ export class WorldAssembly {
   readonly missing: MissingWorld[] = [];
   private host: WorldMountHost | null = null;
   private readonly cfgPath: string;
+  /** 每个 World 最后一个排队的生命周期操作，结束即移除。 */
+  private readonly lifecycleQueues = new Map<string, Promise<void>>();
 
   constructor(
     private readonly loaded: LoadedConfig<CoreConfig>,
@@ -352,8 +354,38 @@ export class WorldAssembly {
     return declared ?? def?.label ?? slot?.label ?? this.missing.find((m) => m.id === id)?.label ?? id;
   }
 
-  /** 三个动作的回执与拒绝理由按 `language` 给;省略 = 中文。 */
-  async activate(id: string, language: Language = 'zh'): Promise<string> {
+  /**
+   * 三个动作的回执与拒绝理由按 `language` 给;省略 = 中文。
+   * 同一 World 的激活、停用、重启、对账按调用顺序逐个执行，前一个失败不影响后一个。
+   */
+  activate(id: string, language: Language = 'zh'): Promise<string> {
+    return this.queued(id, () => this.activateNow(id, language));
+  }
+
+  deactivate(id: string, language: Language = 'zh'): Promise<string> {
+    return this.queued(id, () => this.deactivateNow(id, language));
+  }
+
+  restart(id: string, language: Language = 'zh'): Promise<string> {
+    return this.queued(id, () => this.restartNow(id, language));
+  }
+
+  /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
+  sync(id: string): Promise<void> {
+    return this.queued(id, () => this.syncNow(id));
+  }
+
+  private queued<T>(id: string, op: () => Promise<T>): Promise<T> {
+    const result = (this.lifecycleQueues.get(id) ?? Promise.resolve()).then(op);
+    const settled = result.then(() => undefined, () => undefined);
+    this.lifecycleQueues.set(id, settled);
+    void settled.then(() => {
+      if (this.lifecycleQueues.get(id) === settled) this.lifecycleQueues.delete(id);
+    });
+    return result;
+  }
+
+  private async activateNow(id: string, language: Language): Promise<string> {
     const t = text(language);
     const slot = this.slot(id, language);
     if (slot.mounted) return t.alreadyRunning(this.labelIn(id, language));
@@ -376,7 +408,7 @@ export class WorldAssembly {
     return t.activated(this.labelIn(id, language), id);
   }
 
-  async deactivate(id: string, language: Language = 'zh'): Promise<string> {
+  private async deactivateNow(id: string, language: Language): Promise<string> {
     const slot = this.slot(id, language);
     const wasMounted = slot.mounted;
     if (wasMounted) await this.stopSlot(slot);
@@ -385,7 +417,7 @@ export class WorldAssembly {
     return text(language).deactivated(this.labelIn(id, language), id);
   }
 
-  async restart(id: string, language: Language = 'zh'): Promise<string> {
+  private async restartNow(id: string, language: Language): Promise<string> {
     const slot = this.slot(id, language);
     if (!slot.mounted) throw new Error(text(language).notActive(this.labelIn(id, language)));
     await this.stopSlot(slot);
@@ -397,13 +429,12 @@ export class WorldAssembly {
     return text(language).restarted(this.labelIn(id, language));
   }
 
-  /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
-  async sync(id: string): Promise<void> {
+  private async syncNow(id: string): Promise<void> {
     const slot = this.slot(id);
     const enabled = (slot.definition ? this.section(slot.definition) : { enabled: true }).enabled;
     if (enabled) {
-      if (slot.mounted) await this.restart(id);
-      else await this.activate(id);
+      if (slot.mounted) await this.restartNow(id, 'zh');
+      else await this.activateNow(id, 'zh');
     } else if (slot.mounted) {
       await this.stopSlot(slot);
       this.host?.lifecycle?.({ kind: 'unmounted', id, label: slot.label });

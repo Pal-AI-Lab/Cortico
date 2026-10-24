@@ -13,7 +13,9 @@ import { loadDeployment } from '../src/deploy.ts';
 import type { BotDefinition } from '../src/bot.ts';
 import type { CoreConfig, ToolDef, World, WorldHost, WorldLifecycleEvent } from '../src/core/types.ts';
 import type { Language } from '../src/core/language.ts';
-import { makeCfg } from './core/helpers.ts';
+import { FakeLLM, makeCfg, makeFakePersona, sleep } from './core/helpers.ts';
+import { Core } from './core/fixture-core.ts';
+import { CORE_DEFAULTS } from '../src/core/config.ts';
 import { assemblyText } from '../src/strings.ts';
 
 interface ProbeSection { enabled: boolean; port: number; nested: { name: string; tags: string[] } }
@@ -426,5 +428,94 @@ describe('工具名全局唯一', () => {
     const prebuilt: World = { id: 'p', envPromptVars: () => ({}), tools: () => [tool('read_file')], start: async () => {}, stop: async () => {} };
     expect(() => assembly.addPrebuilt([prebuilt])).toThrow('占用');
     expect(assembly.mounted).toEqual([]);
+  });
+});
+
+/** 每轮回答前先等 ms 毫秒;主循环这段时间都在批次里 */
+class SlowLLM extends FakeLLM {
+  constructor(private readonly ms: number) { super(); }
+  override async chat(...args: Parameters<FakeLLM['chat']>) {
+    await sleep(this.ms);
+    return super.chat(...args);
+  }
+}
+
+describe('同一 World 的生命周期操作排队(接真 core)', () => {
+  /** stop 要 30ms、渲染环境变量要 20ms 的探针;记下自己是第几个实例 */
+  class SlowStop extends Probe {
+    static made = 0;
+    readonly n = ++SlowStop.made;
+    override async stop() { await sleep(30); await super.stop(); }
+    override async envPromptVars() { await sleep(20); return {}; }
+  }
+  const cores: Core<CoreConfig>[] = [];
+  afterEach(async () => { for (const core of cores.splice(0)) await core.stop(); });
+
+  /** 按 bot.ts 的接法:core 与装配层共用挂载表,mount/unmount 走 core。 */
+  async function wired(llm: FakeLLM = new FakeLLM()) {
+    const defs = ['qq', 'other'].map((id) => probeDefinition(id, {
+      defaults: () => ({ enabled: true, port: 1000, nested: { name: 'a', tags: [] } }),
+      create: (ctx) => new SlowStop(id, ctx),
+    }));
+    writeFileSync(join(dir, 'config.json'), JSON.stringify({ worlds: {} }), 'utf8');
+    const loaded = loadDeployment(
+      {
+        defaults: () => ({
+          ...CORE_DEFAULTS,
+          ...makeCfg(),
+          web: { ...CORE_DEFAULTS.web, port: 0 },
+          paths: { memory: 'workspace', data: 'data' },
+          worlds: worldDefaults(defs as never, ['qq', 'other']),
+        }) as never,
+      },
+      dir,
+      dir,
+    );
+    const assembly = new WorldAssembly(loaded, defs as never, ['qq', 'other']);
+    const core = new Core(loaded, {
+      persona: makeFakePersona([], { cfg: loaded.config as never, worlds: assembly.mounted }),
+      worlds: assembly.mounted,
+      llm,
+    });
+    cores.push(core);
+    assembly.bind({
+      mount: (mod) => core.mountWorld(mod),
+      unmount: async (id) => { await core.unmountWorld(id); },
+    });
+    await core.start();
+    const qqCtx = () => (assembly.slot('qq').instance as SlowStop).ctx;
+    const table = () => assembly.mounted.map((m) => `${m.id}#${(m as SlowStop).n}`).sort();
+    const expected = () => [`other#${(assembly.slot('other').instance as SlowStop).n}`, `qq#${(assembly.slot('qq').instance as SlowStop).n}`].sort();
+    return { assembly, core, qqCtx, table, expected };
+  }
+
+  it('同时调两次 ctx.restart():都成功，挂载表里每个 World 各一份且是槽位上的实例', async () => {
+    const { assembly, qqCtx, table, expected } = await wired();
+    const ctx = qqCtx();
+    await Promise.all([ctx.restart(), ctx.restart()]);
+    expect(table()).toEqual(expected());
+    expect((assembly.slot('qq').instance as SlowStop).started).toBe(1);
+  });
+
+  it('第二次 ctx.restart() 落在第一次等批末重建前缀时：排到第一次之后执行，不报未挂载', async () => {
+    const { assembly, qqCtx, table, expected } = await wired(new SlowLLM(1000));
+    const other = assembly.slot('other').instance as SlowStop;
+    await other.host!.pushEvent({ ts: new Date().toISOString(), source: 'other', type: 'other.msg', text: 'x' });
+    await sleep(100);
+    const first = qqCtx().restart();
+    await sleep(300);
+    const second = qqCtx().restart();
+    await expect(Promise.all([first, second])).resolves.toBeDefined();
+    expect(table()).toEqual(expected());
+  }, 10_000);
+
+  it('排在前面的操作失败，后面的照常执行', async () => {
+    const { assembly, table, expected } = await wired();
+    await assembly.deactivate('qq');
+    const failed = assembly.restart('qq');
+    const next = assembly.activate('qq');
+    await expect(failed).rejects.toThrow('未激活');
+    await expect(next).resolves.toContain('已启用');
+    expect(table()).toEqual(expected());
   });
 });
