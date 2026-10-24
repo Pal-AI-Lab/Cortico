@@ -741,6 +741,7 @@ export class Cormini implements Persona {
         memory: this.memory,
         writeGuard: (op, path, role) => this.writeGuard(op, path, role),
         moveGuard: (from, to, role) => this.moveGuard(from, to, role),
+        wholeReadFallbackChars: () => this.wholeReadFallbackChars(),
         readOverride: (path) => this.readOverride(path),
         prefixResidentFiles: () => this.prefixResidentFiles(),
       }),
@@ -758,6 +759,17 @@ export class Cormini implements Persona {
    */
   protected writeGuard(_op: 'write' | 'append' | 'rename' | 'delete', _path: string, _role: string): string | null {
     return null;
+  }
+
+  /**
+   * Fallback:不给行区间的 read_file 整份交回的字符上限,超过只交回开头几行。负载是一次整份读取的回执,
+   * 由 session 的上下文预算消化;取软阈值与上限之间的余量 `(1 - softRatio) × maxTokens`,一个字符最多
+   * 按一个 token 算(中文接近这个上界),这样一次读取不会把 session 从软阈值直接推过上限。
+   * 64000 × 0.15 = 9600 字符;128000 × 0.15 = 19200 字符。
+   */
+  protected wholeReadFallbackChars(): number {
+    const { maxTokens, softRatio } = this.context();
+    return Math.floor(maxTokens * (1 - softRatio));
   }
 
   /** 整份文件从 `from` 移到 `to` 的准入:缺省是源可改名、目标可写;要同时看两头的变体覆写它(如按层计数)。 */

@@ -4,6 +4,9 @@
  * 路径一律相对工作区并经 `memory.insideWorkspace` 校验;写类工具的回执以 `[written]` /
  * `[edited]` / `[appended]` / `[deleted]` / `[moved]` 起头,变体据此判断要不要提交版本。
  * 移动与删除一次可以选中多份文件:一个目录下的全部,或从工作区根匹配的 glob,再按修改日期收窄。
+ *
+ * Fallback:不给行区间的 read_file 遇到超过 `WorkspaceHost.wholeReadFallbackChars()` 的文件只交回开头几行。
+ * 它防的是模型不看清单里的大小、把长文件整份读进上下文;上限的推导在 Persona 的同名方法上。
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join, posix, relative, resolve, sep } from 'node:path';
@@ -17,8 +20,6 @@ const GLOB_LIMIT = 100;
 const GREP_DEFAULT_LIMIT = 50;
 /** `grep_files` 每行交回的最大字符数,更长的截断。 */
 const GREP_LINE_CHARS = 200;
-/** `read_file` 不给行区间时整份交回的字符上限;更长的文件只交回开头几行和总行数。 */
-export const READ_WHOLE_MAX_CHARS = 20_000;
 /** 批量移动、删除的回执最多逐条列出的文件数。 */
 const BATCH_LIST_MAX = 50;
 /** 含这些字符、又不是现存文件或目录的路径当 glob 读。 */
@@ -53,14 +54,14 @@ function lineSpan(total: number, offset: number | undefined, limit: number | und
   return { start, end };
 }
 
-/** 超过整份上限的文件:交回开头的整行(第一行就超长则截断它),抬头说清总行数、大小和怎么读其余部分。 */
-function readHead(path: string, text: string): string {
+/** Fallback:超过 `max` 的文件只交回开头的整行(第一行就超长则截断它),抬头说清总行数、大小和怎么读其余部分。 */
+function readHeadFallback(path: string, text: string, max: number): string {
   const { lines, total } = splitLines(text);
   let used = 0;
   let n = 0;
-  while (n < total && used + lines[n]!.length + 1 <= READ_WHOLE_MAX_CHARS) used += lines[n++]!.length + 1;
-  const shown = n > 0 ? `第 1-${n} 行` : `第 1 行的前 ${READ_WHOLE_MAX_CHARS} 字符`;
-  const body = n > 0 ? lines.slice(0, n).join('\n') : lines[0]!.slice(0, READ_WHOLE_MAX_CHARS);
+  while (n < total && used + lines[n]!.length + 1 <= max) used += lines[n++]!.length + 1;
+  const shown = n > 0 ? `第 1-${n} 行` : `第 1 行的前 ${max} 字符`;
+  const body = n > 0 ? lines.slice(0, n).join('\n') : lines[0]!.slice(0, max);
   return `[${path} 共 ${total} 行、${text.length} 字符,整份太长,只交回${shown};用 offset 和 limit 读其余部分]\n${body}`;
 }
 
@@ -133,6 +134,8 @@ export interface WorkspaceHost {
   /** 这份记忆在磁盘上是什么(路径安全、读写、遍历、检索、blobs、版本历史) */
   memory: GitWorkspaceMemory;
   writeGuard(op: 'write' | 'append' | 'rename' | 'delete', path: string, role: string): string | null;
+  /** Fallback:不给行区间的 read_file 整份交回的字符上限。 */
+  wholeReadFallbackChars(): number;
   /** 整份文件从 `from` 移到 `to` 的准入;返回理由就不动。 */
   moveGuard(from: string, to: string, role: string): string | null;
   readOverride(path: string): string | null;
@@ -157,7 +160,8 @@ const READ_FILE: Omit<ToolDef, 'handler'> = {
   name: 'read_file',
   description: 'Read a file from your workspace. Give offset and limit to read a slice of a long note '
     + '(a negative offset counts from the end, so offset -20 reads the last 20 lines). '
-    + `Without them you get the whole file, or for a file over ${READ_WHOLE_MAX_CHARS} characters its opening lines and the total line count.`,
+    + 'list_files and glob_files show each file\'s size; read a long file by range. '
+    + 'Without a range you get the whole file, or for a file too long to take in at once its opening lines and the total line count.',
   tags: ['read'],
   parameters: {
     type: 'object',
@@ -359,7 +363,10 @@ function readTool(host: WorkspaceHost): ToolDef {
       }
       const offset = intArg(args.offset);
       const limit = intArg(args.limit);
-      if (offset === undefined && limit === undefined) return text.length <= READ_WHOLE_MAX_CHARS ? text : readHead(path, text);
+      if (offset === undefined && limit === undefined) {
+        const max = host.wholeReadFallbackChars();
+        return text.length <= max ? text : readHeadFallback(path, text, max);
+      }
       const { lines, total } = splitLines(text);
       if (total === 0) return `[${path} 是空文件]`;
       const { start, end } = lineSpan(total, offset, limit);

@@ -22,8 +22,9 @@ Open `http://127.0.0.1:7788/` and talk to it in the console view.
 ## What it does
 
 - **The workspace is the memory.** `workspace/` is the whole of it. The bot works on it
-  with the standard file toolset: `read_file` (a line range, or the whole file up to
-  `READ_WHOLE_MAX_CHARS` and its opening lines beyond that), `write_file`, `edit_file`
+  with the standard file toolset: `read_file` (a line range or the whole file; as a fallback,
+  a file longer than `(1 - softRatio) × maxTokens` characters read without a range returns
+  its opening lines), `write_file`, `edit_file`
   (exact-string replace), `append_file`, `delete_file` and `move_file` (one file, a folder or
   a glob from the workspace root, narrowed by modified date; `move_file` also cuts a line
   range from one file into another), `list_files` (folded directory listing) and

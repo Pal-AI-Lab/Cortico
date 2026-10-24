@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { Cormini } from '../../bots/cormini/persona/persona.ts';
+import { CORMINI_CONTEXT_DEFAULTS, Cormini } from '../../bots/cormini/persona/persona.ts';
 import { globToRegExp } from '../../bots/cormini/persona/memory.ts';
-import { READ_WHOLE_MAX_CHARS } from '../../bots/cormini/persona/workspaceTools.ts';
 import { nullLogger } from '../../src/core/util.ts';
 
 
@@ -53,24 +52,32 @@ describe('read_file:整份或行区间', () => {
     expect(await run('read_file', { path: 'nope.md', offset: 1 })).toBe('[not found] nope.md');
   });
 
-  it('超过整份上限只交回开头的整行,抬头给总行数和字符数;给了区间照常取', async () => {
-    const line = 'x'.repeat(99);
-    const total = Math.ceil(READ_WHOLE_MAX_CHARS / 100) + 10;
-    const text = Array.from({ length: total }, () => line).join('\n') + '\n';
-    put('long.md', text);
-    const out = await run('read_file', { path: 'long.md' });
-    const [head, ...body] = out.split('\n');
-    const kept = Math.floor(READ_WHOLE_MAX_CHARS / 100);
-    expect(head).toBe(`[long.md 共 ${total} 行、${text.length} 字符,整份太长,只交回第 1-${kept} 行;用 offset 和 limit 读其余部分]`);
-    expect(body).toEqual(Array.from({ length: kept }, () => line));
-    expect(await run('read_file', { path: 'long.md', offset: -1 })).toBe(`[long.md 第 ${total}-${total} 行,共 ${total} 行]\n${line}`);
-  });
+  describe('超过上下文余量的整份读取只交回开头(fallback)', () => {
+    /** 上限 = (1 - softRatio) × maxTokens = 500 字符 */
+    const cap = 500;
+    beforeEach(() => {
+      p = new Cormini({ memoryDir: dir, context: () => ({ ...CORMINI_CONTEXT_DEFAULTS, maxTokens: 1000, softRatio: 0.5 }) });
+    });
 
-  it('第一行就超过上限时截断这一行', async () => {
-    put('one.md', 'y'.repeat(READ_WHOLE_MAX_CHARS + 5));
-    const out = await run('read_file', { path: 'one.md' });
-    expect(out.split('\n')[0]).toContain(`只交回第 1 行的前 ${READ_WHOLE_MAX_CHARS} 字符`);
-    expect(out.split('\n')[1]).toBe('y'.repeat(READ_WHOLE_MAX_CHARS));
+    it('交回开头的整行,抬头给总行数和字符数;给了区间照常取', async () => {
+      const line = 'x'.repeat(99);
+      const total = cap / 100 + 3;
+      const text = Array.from({ length: total }, () => line).join('\n') + '\n';
+      put('long.md', text);
+      const out = await run('read_file', { path: 'long.md' });
+      const [head, ...body] = out.split('\n');
+      const kept = cap / 100;
+      expect(head).toBe(`[long.md 共 ${total} 行、${text.length} 字符,整份太长,只交回第 1-${kept} 行;用 offset 和 limit 读其余部分]`);
+      expect(body).toEqual(Array.from({ length: kept }, () => line));
+      expect(await run('read_file', { path: 'long.md', offset: -1 })).toBe(`[long.md 第 ${total}-${total} 行,共 ${total} 行]\n${line}`);
+    });
+
+    it('第一行就超过上限时截断这一行', async () => {
+      put('one.md', 'y'.repeat(cap + 5));
+      const out = await run('read_file', { path: 'one.md' });
+      expect(out.split('\n')[0]).toContain(`只交回第 1 行的前 ${cap} 字符`);
+      expect(out.split('\n')[1]).toBe('y'.repeat(cap));
+    });
   });
 });
 
