@@ -11,6 +11,7 @@ const gateState = {
   tokenSet: false,
 };
 const calls = { enabled: [] as boolean[], conn: [] as Array<[string, string]>, restart: 0 };
+let restartFailure: Error | null = null;
 
 const qq = new QQWorld(
   { wsUrl: gateState.wsUrl, groups: [111], privates: [222], token: '' },
@@ -26,12 +27,15 @@ const qq = new QQWorld(
       setRoster: () => 'ok',
       setEnabled: (e) => { calls.enabled.push(e); gateState.enabled = e; },
       setConnection: (ws, tk) => { calls.conn.push([ws, tk]); gateState.wsUrl = ws; if (tk) gateState.tokenSet = true; },
-      restart: () => { calls.restart++; },
+      restart: async () => {
+        calls.restart++;
+        if (restartFailure) throw restartFailure;
+      },
     },
   },
 );
 const invoke = qq.webUi().invoke!;
-afterEach(() => { vi.useRealTimers(); });
+afterEach(() => { vi.useRealTimers(); restartFailure = null; });
 
 
 beforeAll(() => {
@@ -98,6 +102,15 @@ describe('gate.setEnabled', () => {
     await vi.advanceTimersByTimeAsync(299);
     expect(calls.restart).toBe(0);
     await vi.advanceTimersByTimeAsync(1);
+    expect(calls.restart).toBe(1);
+  });
+
+  it('重启失败只记日志，不留未处理的 promise 拒绝', async () => {
+    vi.useFakeTimers();
+    calls.restart = 0;
+    restartFailure = new Error('未挂载的 World: qq');
+    await invoke('gate', 'setEnabled', [false]);
+    await vi.advanceTimersByTimeAsync(300);
     expect(calls.restart).toBe(1);
   });
 });

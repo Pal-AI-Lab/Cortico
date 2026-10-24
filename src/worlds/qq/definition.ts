@@ -54,7 +54,7 @@ export const QQ: WorldDefinition<QQConfigSection> = {
             // 空串 = 保持原 token 不动
             ctx.persist(token === '' ? { wsUrl } : { wsUrl, token });
           },
-          restart: () => { void ctx.restart(); },
+          restart: () => ctx.restart(),
         },
       },
     );

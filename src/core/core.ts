@@ -663,7 +663,9 @@ export class Core<C extends CoreConfig = CoreConfig> {
     }
     const lease = this.moduleHostLeases.get(mod);
     if (lease) lease.active = false;
-    this.worlds.splice(this.worlds.indexOf(mod), 1);
+    // stop 期间同一实例可能已被另一次卸载移出
+    const at = this.worlds.indexOf(mod);
+    if (at >= 0) this.worlds.splice(at, 1);
     this.log.info(`World 已卸载: ${mod.id}`);
     if (this.started) await this.loop.reloadSystemPrefix();
     return failure;

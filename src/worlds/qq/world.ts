@@ -116,8 +116,8 @@ interface QQGatePanelDeps {
   setEnabled(enabled: boolean): void;
   /** 持久化协议端连接(wsUrl + token);token 空串=保持原值不动 */
   setConnection(wsUrl: string, token: string): void;
-  /** 落重启标志并让进程退出(启动器重新拉起,回来是暂停态) */
-  restart(): void;
+  /** 按 worlds.qq.enabled 重启或停止本 World;失败时 reject */
+  restart(): Promise<void>;
 }
 
 interface QQWorldDeps {
@@ -584,10 +584,10 @@ export class QQWorld implements World {
     throw new Error(t.unknownMethod(`gate.${method}`));
   }
 
-  /** HTTP 响应冲刷后再写重启标志并退出进程。 */
+  /** HTTP 响应发出后再重启本 World。 */
   private scheduleGateRestart(gate: QQGatePanelDeps): void {
     setTimeout(() => {
-      try { gate.restart(); } catch (err) { this.log.error('触发重启失败', { error: String(err) }); }
+      gate.restart().catch((err: unknown) => { this.log.error('重启失败', { error: String(err) }); });
     }, 300);
   }
 
