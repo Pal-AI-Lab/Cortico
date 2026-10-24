@@ -106,9 +106,16 @@ export const CORMINI_TOOL_SUMMARIES: Readonly<Record<string, DescribeText>> = {
   write_file: { zh: '新建或整份重写工作区里的一个文件。', en: 'Creates or fully rewrites a workspace file.' },
   edit_file: { zh: '把文件里一段原文换成新文字,其余不动。', en: 'Replaces one exact passage in a file and leaves the rest as is.' },
   append_file: { zh: '在文件末尾追加文字,文件不存在就新建。', en: 'Appends text to the end of a file, creating it if missing.' },
-  delete_file: { zh: '删除工作区里的一个文件;进系统前缀的文件不能删。', en: 'Deletes a workspace file; files in the system prefix cannot be deleted.' },
-  list_files: { zh: '列出工作区里的文件,点名的目录列全。', en: 'Lists workspace files; a named directory is listed in full.' },
-  glob_files: { zh: '按文件名模式找文件,最近改过的在前。', en: 'Finds files by name pattern, most recently modified first.' },
+  delete_file: {
+    zh: '删除一个文件、一个文件夹下的全部或 glob 选中的全部,可按修改日期收窄;进系统前缀的文件不删。',
+    en: 'Deletes a file, everything under a folder or everything a glob selects, optionally by modified date; files in the system prefix are never deleted.',
+  },
+  move_file: {
+    zh: '移动或改名文件(可按文件夹、glob 和修改日期成批移动),或把一份文件的几行剪到另一份里。',
+    en: 'Moves or renames files, in bulk by folder, glob and modified date, or cuts lines from one file into another.',
+  },
+  list_files: { zh: '列出工作区里的文件和各自的大小、修改日期,点名的目录列全。', en: 'Lists workspace files with size and modified date; a named directory is listed in full.' },
+  glob_files: { zh: '按文件名模式找文件,最近改过的在前,可按修改日期收窄。', en: 'Finds files by name pattern, most recently modified first, optionally by modified date.' },
   grep_files: { zh: '用正则搜工作区文件的内容。', en: 'Searches workspace file contents with a regular expression.' },
   save_blob: {
     zh: '把看到过的图片等二进制附件存进工作区,换来长期可用的句柄。',
@@ -733,6 +740,7 @@ export class Cormini implements Persona {
       ...workspaceTools({
         memory: this.memory,
         writeGuard: (op, path, role) => this.writeGuard(op, path, role),
+        moveGuard: (from, to, role) => this.moveGuard(from, to, role),
         readOverride: (path) => this.readOverride(path),
         prefixResidentFiles: () => this.prefixResidentFiles(),
       }),
@@ -752,12 +760,17 @@ export class Cormini implements Persona {
     return null;
   }
 
+  /** 整份文件从 `from` 移到 `to` 的准入:缺省是源可改名、目标可写;要同时看两头的变体覆写它(如按层计数)。 */
+  protected moveGuard(from: string, to: string, role: string): string | null {
+    return this.writeGuard('rename', from, role) ?? this.writeGuard('write', to, role);
+  }
+
   /** read_file 的虚拟文件:返回正文就不读盘(如随软件走的机制说明);null 走正常读取。 */
   protected readOverride(_path: string): string | null {
     return null;
   }
 
-  /** 逐字进系统前缀的文件:删掉它们等于改前缀,所以 delete_file 不认。 */
+  /** 逐字进系统前缀的文件:删掉或移走它们等于改前缀,所以 delete_file 和整份的 move_file 不认。 */
   protected prefixResidentFiles(): string[] {
     const partner = this.partnerDocFile();
     return [join(this.memoryDir, CONSTITUTION_FILE), ...(partner ? [partner] : [])];

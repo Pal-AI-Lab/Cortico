@@ -1,9 +1,9 @@
 /**
- * Cormini 文件工具之外,这份人格实现自己的三样:memo 容量守门、`move_file`、
+ * Cormini 文件工具之外,这份人格实现自己的三样:memo 容量守门(`move_file` 经 moveGuard 也走它)、
  * `schedule_wake` 的 schema,以及两条认知路径的 "Using your tools" 文案。
  */
-import type { ToolDef, ToolSpec } from 'cortico/core/types.ts';
-import { WorkspaceError, type GitWorkspaceMemory } from '../../cormini/persona/memory.ts';
+import type { ToolSpec } from 'cortico/core/types.ts';
+import type { GitWorkspaceMemory } from '../../cormini/persona/memory.ts';
 import { MemoTiers } from './memoTiers.ts';
 import type { PersonaRole } from './permissions.ts';
 
@@ -53,46 +53,6 @@ export function memoCapGuard(ws: GitWorkspaceMemory, memo: MemoTiers, destRel: s
     }
   }
   return null;
-}
-
-export interface MoveFileDeps {
-  ws: GitWorkspaceMemory;
-  /** 写准入(同Persona的 writeGuard):返回理由就拒绝 */
-  guard: (op: 'rename' | 'write', path: string, role: string) => string | null;
-  capGuard: (to: string, from: string) => string | null;
-}
-
-export const MOVE_FILE_DECL: Omit<ToolDef, 'handler'> = {
-  name: 'move_file',
-  description: 'Move or rename a file within your workspace. Use it to shift a memo between tiers when one is full '
-    + '(memo/ → memo/active/ → memo/archived/); parent folders are created as needed.',
-  tags: ['write'],
-  parameters: S({
-    from: { type: 'string', description: 'Current path, relative to your workspace.' },
-    to: { type: 'string', description: 'New path, relative to your workspace.' },
-  }, ['from', 'to']),
-};
-
-/** 工作区内移动或改名。memo 层间搬运走它;父目录按需创建。 */
-export function moveFileTool(deps: MoveFileDeps): ToolDef {
-  const { ws } = deps;
-  return {
-    ...MOVE_FILE_DECL,
-    handler: async (args, ctx) => {
-      const from = String(args.from ?? '');
-      const to = String(args.to ?? '');
-      if (!from || !to) return '[move failed] from 与 to 都要给';
-      const denied = deps.guard('rename', from, ctx.role) ?? deps.guard('write', to, ctx.role) ?? deps.capGuard(to, from);
-      if (denied) return `[move failed] ${denied}`;
-      try {
-        ws.renameFile(from, to);
-      } catch (e) {
-        if (e instanceof WorkspaceError) return `[move failed] ${e.message}`;
-        return `[move failed] ${e instanceof Error ? e.message : String(e)}`;
-      }
-      return `[moved] ${ws.normalize(from)} → ${ws.normalize(to)}`;
-    },
-  };
 }
 
 /** `schedule_wake` 的 schema;handler 由Persona接到 WakeManager 上。 */

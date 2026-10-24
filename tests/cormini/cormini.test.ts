@@ -107,7 +107,7 @@ describe('Cormini', () => {
   it('工具集=文件工具 + 已挂载 IO 工具 + end_turn,没有 fork、也没有保留帧名', () => {
     const names = persona.declareSessions()[0].tools().map((t) => t.name).sort();
     expect(names).toEqual([
-      'append_file', 'console_send', 'delete_file', 'edit_file', 'end_turn', 'glob_files', 'grep_files', 'list_files', 'read_file', 'save_blob', 'write_file',
+      'append_file', 'console_send', 'delete_file', 'edit_file', 'end_turn', 'glob_files', 'grep_files', 'list_files', 'move_file', 'read_file', 'save_blob', 'write_file',
     ]);
     expect(names).not.toContain('fork');
     // 外部正文由 core 以保留帧投递;session 不声明同名(含旧名)工具。

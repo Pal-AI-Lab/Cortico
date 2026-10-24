@@ -4,11 +4,12 @@
  */
 import {
   appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync,
-  renameSync, statSync, unlinkSync, writeFileSync,
+  renameSync, rmdirSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join, normalize as pathNormalize, relative, resolve, sep } from 'node:path';
 import { MEM_SCHEME, mimeOfHandle } from 'cortico/core/blobs.ts';
 import type { BlobStore } from 'cortico/core/types.ts';
+import { SYSTEM_TIMEZONE, nowIso } from 'cortico/core/util.ts';
 import { WorkspaceGit } from './workspaceGit.ts';
 
 /** 工作区层的可预期错误(路径逃逸、文件不存在等),消息可直接作为 tool result */
@@ -78,7 +79,29 @@ export function globToRegExp(glob: string): RegExp {
   return new RegExp(`^${re}$`);
 }
 
-/** 一个目录的清单行。`full` 为假时只取前 `LIST_DIR_CAP` 项,末尾补一行"共几项、怎么看全"。 */
+/** 修改时刻的筛选范围(毫秒):`before` 不含,`after` 含。 */
+export interface ModifiedRange {
+  before?: number;
+  after?: number;
+}
+
+function inRange(mtimeMs: number, range: ModifiedRange): boolean {
+  return (range.before === undefined || mtimeMs < range.before) && (range.after === undefined || mtimeMs >= range.after);
+}
+
+/** 字节数的短写:B、KB(一位小数)、MB(一位小数)。 */
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 文件清单行尾的「(大小, 最后修改日期)」;日期按本机时区。 */
+function fileFacts(size: number, mtimeMs: number): string {
+  return `(${formatSize(size)}, ${nowIso(SYSTEM_TIMEZONE, new Date(mtimeMs)).slice(0, 10)})`;
+}
+
+/** 一个目录的清单行,文件带大小和日期。`full` 为假时只取前 `LIST_DIR_CAP` 项,末尾补一行"共几项、怎么看全"。 */
 function listDirLines(abs: string, prefix: string, full: boolean): string[] {
   const names = readdirSync(abs).sort().filter((name) => !name.startsWith('.'));
   const shown = full ? names : names.slice(0, LIST_DIR_CAP);
@@ -86,8 +109,9 @@ function listDirLines(abs: string, prefix: string, full: boolean): string[] {
   for (const name of shown) {
     const child = join(abs, name);
     const rel = prefix ? `${prefix}/${name}` : name;
-    if (statSync(child).isDirectory()) out.push(...listDirLines(child, rel, false));
-    else out.push(rel);
+    const st = statSync(child);
+    if (st.isDirectory()) out.push(...listDirLines(child, rel, false));
+    else out.push(`${rel} ${fileFacts(st.size, st.mtimeMs)}`);
   }
   if (names.length > shown.length) {
     out.push(`${prefix}/ … 共 ${names.length} 项,以上只列了前 ${shown.length} 项;list_files 指定 dir 为 ${prefix} 可列出全部`);
@@ -346,6 +370,16 @@ export class GitWorkspaceMemory {
     unlinkSync(abs);
   }
 
+  /** 从 `relPath` 所在目录往上删空目录,到工作区根为止(根不删)。 */
+  pruneEmptyDirs(relPath: string): void {
+    let dir = dirname(this.resolveSafe(relPath));
+    while (dir !== this.memoryDir && dir.startsWith(this.memoryDir + sep)) {
+      if (!existsSync(dir) || readdirSync(dir).length > 0) return;
+      rmdirSync(dir);
+      dir = dirname(dir);
+    }
+  }
+
   // -------------------------------------------------------------------------
   // 遍历
   // -------------------------------------------------------------------------
@@ -420,13 +454,30 @@ export class GitWorkspaceMemory {
    * 按名找文件的底层:模式匹配整条工作区相对路径,最近改过的在前。
    * 不以 `**` + `/` 开头的模式补上它,所以 `*.md` 找的是整棵树。
    */
-  globFiles(pattern: string, dir = ''): string[] {
+  globFiles(pattern: string, dir = '', range: ModifiedRange = {}): string[] {
     const re = globToRegExp(pattern.startsWith('**/') ? pattern : `**/${pattern}`);
-    return this.walkFiles(dir)
-      .filter((f) => re.test(f))
+    return this.newestFirst(this.walkFiles(dir).filter((f) => re.test(f)), range);
+  }
+
+  /** 模式按整条路径从工作区根匹配(不补 `**` + `/`),最近改过的在前。移动与删除用这一种,`*.md` 只是根下那几份。 */
+  matchFiles(pattern: string, range: ModifiedRange = {}): string[] {
+    const re = globToRegExp(this.normalize(pattern));
+    return this.newestFirst(this.walkFiles().filter((f) => re.test(f)), range);
+  }
+
+  /** 工作区相对路径按修改时刻筛选,最近改过的在前。 */
+  newestFirst(files: string[], range: ModifiedRange = {}): string[] {
+    return files
       .map((f) => ({ f, mtime: statSync(join(this.memoryDir, f)).mtimeMs }))
+      .filter((x) => inRange(x.mtime, range))
       .sort((a, b) => b.mtime - a.mtime)
       .map((x) => x.f);
+  }
+
+  /** 一份文件清单行尾的「(大小, 最后修改日期)」。 */
+  facts(relPath: string): string {
+    const st = statSync(join(this.memoryDir, relPath));
+    return fileFacts(st.size, st.mtimeMs);
   }
 
   /**

@@ -22,11 +22,14 @@ Open `http://127.0.0.1:7788/` and talk to it in the console view.
 ## What it does
 
 - **The workspace is the memory.** `workspace/` is the whole of it. The bot works on it
-  with the standard file toolset: `read_file` (whole file or a line range), `write_file`,
-  `edit_file` (exact-string replace), `delete_file`, `list_files` (folded directory
-  listing), `glob_files` (by name pattern) and `grep_files` (by content); nothing else
-  survives a context handoff. The file listing is part of the system prefix, so the bot
-  always knows what it has.
+  with the standard file toolset: `read_file` (a line range, or the whole file up to
+  `READ_WHOLE_MAX_CHARS` and its opening lines beyond that), `write_file`, `edit_file`
+  (exact-string replace), `append_file`, `delete_file` and `move_file` (one file, a folder or
+  a glob from the workspace root, narrowed by modified date; `move_file` also cuts a line
+  range from one file into another), `list_files` (folded directory listing) and
+  `glob_files` (by name pattern), both with each file's size and modified date, and
+  `grep_files` (by content); nothing else survives a context handoff. The file listing is
+  part of the system prefix, so the bot always knows what it has.
 - **The constitution is the prefix.** `persona/CONSTITUTION.seed.md` initializes
   `workspace/CONSTITUTION.md` on first run; the workspace copy is loaded verbatim on every
   session. Edits by hand or by the bot take effect at the next session start.

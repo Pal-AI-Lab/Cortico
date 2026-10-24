@@ -15,7 +15,7 @@ import {
 import { AUTHOR_OPERATOR } from '../cormini/persona/workspaceGit.ts';
 import { CORMINI_TOOL_DECLS, CORMINI_TOOL_SUMMARIES } from '../cormini/persona/persona.ts';
 import { SURFACE_DECL } from './persona/subconscious/index.ts';
-import { MOVE_FILE_DECL, scheduleWakeSpec } from './persona/tools.ts';
+import { scheduleWakeSpec } from './persona/tools.ts';
 import { PERSONA_CONFIG_GROUP, PERSONA_DEFAULTS } from './persona/config.ts';
 import type { PersonaConfig } from './persona/config.ts';
 
@@ -206,7 +206,7 @@ const definition: BotDefinition<BotConfig> = {
   defaults: composeDefaults,
   build,
   describe: {
-    tools: describeTools([...CORMINI_TOOL_DECLS, MOVE_FILE_DECL, scheduleWakeSpec(), SURFACE_DECL], {
+    tools: describeTools([...CORMINI_TOOL_DECLS, scheduleWakeSpec(), SURFACE_DECL], {
       ...CORMINI_TOOL_SUMMARIES,
       move_file: {
         zh: '在工作区里移动或改名文件,用来在三级备忘之间搬条目。',

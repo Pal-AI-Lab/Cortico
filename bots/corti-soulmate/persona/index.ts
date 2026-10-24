@@ -22,7 +22,7 @@ import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceG
 import { MemoTiers } from './memoTiers.ts';
 import { personaWebUiDecl } from './webUiSurface.ts';
 import { memoryVars } from './memory.ts';
-import { memoCapGuard, moveFileTool, scheduleWakeSpec, toolUsageText } from './tools.ts';
+import { memoCapGuard, scheduleWakeSpec, toolUsageText } from './tools.ts';
 import { asPersonaRole, checkAccess } from './permissions.ts';
 import { WakeManager, tickTimeText } from './rhythm.ts';
 import { DREAM, Dream } from './subconscious/index.ts';
@@ -181,18 +181,6 @@ export class CortiSoulmate extends Cormini {
     return [...super.mainTailTools(), this.scheduleWakeTool()];
   }
 
-  /** 文件工具之上加 move_file(memo 三级之间搬运;people/ 改名归梦)。 */
-  protected override tools(): ToolDef[] {
-    return [
-      ...super.tools(),
-      moveFileTool({
-        ws: this.memory,
-        guard: (op, path, role) => this.writeGuard(op, path, role),
-        capGuard: (to, from) => memoCapGuard(this.memory, this.memo, to, from),
-      }),
-    ];
-  }
-
   /** 梦的工具面:文件工具 + 只读的 World 工具(翻历史、看图取证)。 */
   private dreamTools(): ToolDef[] {
     return [...this.tools(), ...this.ioTools('read')];
@@ -219,12 +207,25 @@ export class CortiSoulmate extends Cormini {
 
   /** 写入需通过角色权限、memo 容量和 CORE.md 只读检查；拒绝原因返回给 agent。 */
   protected override writeGuard(op: 'write' | 'append' | 'rename' | 'delete', path: string, role: string): string | null {
+    const denied = this.accessGuard(op, path, role);
+    if (denied) return denied;
+    if (op === 'write' || op === 'append') return memoCapGuard(this.memory, this.memo, path);
+    return null;
+  }
+
+  /** move_file:源要能改名、目标要能写;容量按搬运算,同层内改名不占新名额。 */
+  protected override moveGuard(from: string, to: string, role: string): string | null {
+    return this.accessGuard('rename', from, role)
+      ?? this.accessGuard('write', to, role)
+      ?? memoCapGuard(this.memory, this.memo, to, from);
+  }
+
+  /** CORE.md 只读与角色分区两条;容量不在这里。 */
+  private accessGuard(op: 'write' | 'append' | 'rename' | 'delete', path: string, role: string): string | null {
     const rel = normalizeWorkspacePath(path);
     if (isHarnessPath(rel)) return 'CORE.md is a system mechanics doc; read-only.';
     const res = checkAccess(asPersonaRole(role), op, rel);
-    if (!res.ok) return res.reason;
-    if (op === 'write' || op === 'append') return memoCapGuard(this.memory, this.memo, rel);
-    return null;
+    return res.ok ? null : res.reason;
   }
 
   /** CORE.md 随软件走,不在工作区里;read_file 照样读得到。 */
