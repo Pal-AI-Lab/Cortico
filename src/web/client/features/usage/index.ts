@@ -1,8 +1,7 @@
 /**
  * 用量与成本页读取跨重启保留的调用流水，按时段与范围统计 token、成本和请求次数，按各角色实际模型计价。
  * 页头下方的时间范围作用于整页；其下分为总览、Token 活跃度、用量时间序列与分组明细四节。
- * 状态属于本次 mount；换算币种例外，它记在本机 localStorage，换页与重启后沿用。
- * 定时器使用 lifecycle.interval，监听绑定 signal，tooltip 挂在本页 root。
+ * 状态属于本次 mount，换算币种除外(记在 localStorage,换页与重启后沿用);定时器使用 lifecycle.interval，监听绑定 signal，tooltip 挂在本页 root。
  * 柱图由 chart.ts 提供，活跃度格子图由 activity.ts 提供。
  */
 
@@ -16,7 +15,6 @@ import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { ACTIVITY_CONTEXT_DAYS, renderActivity } from './activity.ts';
 import { bucketLabel, renderChart } from './chart.ts';
 import { U_TYPES, themeColorResolver } from './labels.ts';
-import { localStorageOf, readCurrency, writeCurrency } from './prefs.ts';
 import { usageQuery } from './range.ts';
 import { createUsageState } from './state.ts';
 import { S } from './strings.ts';
@@ -27,6 +25,8 @@ import type { UsageAccum, UsageAggregate, UsageBucketOption, UsageDailyTokens, U
 const LIVE_MS = 15_000;
 /** 图区变宽变窄后延迟重画图表，合并连续的尺寸变化。 */
 const RESIZE_DEBOUNCE_MS = 80;
+/** 换算币种的 localStorage 键，空串表示自动 */
+const CURRENCY_KEY = 'cortico:usage-currency:v1';
 
 const BUCKETS: ReadonlyArray<{ value: UsageBucketOption; label: string }> = [
   { value: 'auto', label: S.bucketAuto },
@@ -148,13 +148,13 @@ export function mountUsage(ctx: FeatureContext): void {
   // ---- 总览：读数、成本构成与费用口径 -----------------------------------------
   const overview = ui.sheet({ title: S.sectionOverview });
   let basis = 'marginal';
-  const currencyStore = localStorageOf(root.ownerDocument);
-  let currency = readCurrency(currencyStore);
+  const storage = root.ownerDocument.defaultView!.localStorage;
+  let currency = storage.getItem(CURRENCY_KEY) ?? '';
   const currencySelect = ui.select({
     // 先按记住的币种占一个选项，取数回来前选择框不会先闪一下「自动」。
     options: [{ value: '', label: S.autoCurrency }, ...(currency ? [{ value: currency, label: currency }] : [])],
     value: currency,
-    onChange: value => { currency = value; writeCurrency(currencyStore, value); void load(); },
+    onChange: value => { currency = value; storage.setItem(CURRENCY_KEY, value); void load(); },
   });
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
   basisSelect.setAttribute('aria-label', S.ledger);
@@ -445,7 +445,7 @@ export function mountUsage(ctx: FeatureContext): void {
     // 空着而金额仍按无法换算的币种算。
     if (currency && currencies.length && !currencies.includes(currency)) {
       currency = '';
-      writeCurrency(currencyStore, '');
+      storage.setItem(CURRENCY_KEY, '');
       void load();
     }
     currencySelect.replaceChildren(...['', ...currencies].map(value => {

@@ -260,7 +260,6 @@ class FakeStorage {
   private map = new Map<string, string>();
   getItem(k: string): string | null { return this.map.has(k) ? this.map.get(k)! : null; }
   setItem(k: string, v: string): void { this.map.set(k, String(v)); }
-  removeItem(k: string): void { this.map.delete(k); }
 }
 
 class FakeWindow {
