@@ -32,7 +32,7 @@ const qq = new QQWorld(
         state.wsUrl = wsUrl;
         if (token !== '') state.token = token;
       },
-      restart: () => {},
+      restart: async () => {},
     },
   },
 );
