@@ -3,7 +3,6 @@
  */
 
 import type {
-  Disposable,
   WebUiPanelContext,
   WebUiPanel,
   WebUiSheet,
@@ -30,19 +29,16 @@ export const historyPanel: WebUiPanel = {
       failed: T.historyFailed,
       load: () => ctx.invoke<HistoryState>('state', ['']),
       render: (st) => {
-        // 状态和提交流水同在一张卡里:第二段用同样的标题样式,中间不再隔一条线
         const card = statusCard(ctx, T, st);
-        card.body.append(...commitsSection(ctx, T, st));
+        if (st.status.available && st.status.repo) card.body.append(...commitsSection(ctx, T, st));
         return [card.el];
       },
     });
   },
 };
 
-/** 每页条数的选项;缺省 30。 */
-const PAGE_SIZES = [15, 30, 60, 100] as const;
+const PAGE_SIZES = [15, 30, 60, 100];
 
-/** 仓库状态只列最近一次提交(HEAD 指的就是它)。 */
 function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiSheet {
   const { ui } = ctx;
   const card = ui.sheet({ title: T.rowLastCommit, en: 'HEAD' });
@@ -68,8 +64,8 @@ function statusCard(ctx: WebUiPanelContext, T: Text, st: HistoryState): WebUiShe
 }
 
 /**
- * 提交流水:上面是路径搜索和每页条数,中间是这一页的提交,下面是翻页。
- * 搜索边输入边查(停顿一下才发请求),只换列表,不重画输入框。
+ * 路径过滤在回车时向服务端查一次:git log 在 bot 进程里同步执行,大仓一次要几百毫秒到几秒。
+ * 服务端一次给最近若干条,翻页在前端做。
  */
 function commitsSection(ctx: WebUiPanelContext, T: Text, st: HistoryState): HTMLElement[] {
   const { ui } = ctx;
@@ -81,14 +77,12 @@ function commitsSection(ctx: WebUiPanelContext, T: Text, st: HistoryState): HTML
   let path = st.path;
   let page = 0;
   let size = ctx.memo.get<number>('hist.pageSize', 30);
-  if (!PAGE_SIZES.includes(size as typeof PAGE_SIZES[number])) size = 30;
 
   const search = ui.input({
-    type: 'search',
     value: path,
     cls: 'mono',
     placeholder: T.pathFilter,
-    onInput: (v) => schedule(v.trim()),
+    onCommit: (v) => { void query(v.trim()); },
   });
   search.classList.add('ct-histsearch');
   const sizeLabel = ui.h('label', 'ct-pagesize');
@@ -104,29 +98,20 @@ function commitsSection(ctx: WebUiPanelContext, T: Text, st: HistoryState): HTML
   top.classList.add('ct-histbar');
   top.append(search, ui.h('span', 'grow'), sizeLabel);
 
-  const list = ui.h('div', 'ct-histlist');
+  const list = ui.h('div');
   const pager = ui.rowbar();
   pager.classList.add('ct-pager');
 
-  let timer: Disposable | null = null;
-  let seq = 0;
-  function schedule(next: string): void {
-    timer?.dispose();
-    // 停顿一下再问服务端:逐次击键去跑 git log 是白烧 CPU。
-    timer = ctx.timeout(() => { void query(next); }, 300);
-  }
   async function query(next: string): Promise<void> {
-    if (next === path) return;
-    const mine = ++seq;
     try {
       const res = await ctx.invoke<HistoryState>('state', [next]);
-      if (mine !== seq || ctx.signal.aborted) return;
+      if (ctx.signal.aborted) return;
       commits = res.commits;
       path = res.path;
       page = 0;
       render();
     } catch (err) {
-      if (mine !== seq || ctx.signal.aborted) return;
+      if (ctx.signal.aborted) return;
       list.replaceChildren(ui.placeholder(`${T.historyFailed}: ${errText(err)}`));
       pager.replaceChildren();
     }
@@ -136,11 +121,10 @@ function commitsSection(ctx: WebUiPanelContext, T: Text, st: HistoryState): HTML
     list.replaceChildren();
     pager.replaceChildren();
     if (!commits.length) {
-      list.appendChild(ui.placeholder(st.status.repo ? T.noCommitsInRange : T.noRepoYet));
+      list.appendChild(ui.placeholder(T.noCommitsInRange));
       return;
     }
-    const pages = Math.max(1, Math.ceil(commits.length / size));
-    page = Math.min(page, pages - 1);
+    const pages = Math.ceil(commits.length / size);
     const from = page * size;
     const shown = commits.slice(from, from + size);
     for (const c of shown) list.append(...commitRow(ctx, T, c, path));
