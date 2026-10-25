@@ -27,6 +27,7 @@ cd extensions && corepack pnpm add <包名或目录>
 `minimumReleaseAgeExclude`。WebUI 第一次装卸或查询 registry 时建一个空的;没有它时 pnpm 把 `extensions/` 当成仓库工作区的
 一员写进根 lockfile,所以命令行先装的话先建一个空文件。WebUI 装卸或查询 registry 前还把 `extensions/package.json` 的
 `packageManager` 设成 Cortico 根 `package.json` 里的那个:corepack 与 pnpm 都按它选 pnpm 版本,旧版本建的目录随 Cortico 升级换版。
+Windows 下 WebUI 装卸扩展时给 pnpm 使用 `node-linker=hoisted`,避免受限的子进程创建依赖符号链接。
 
 装卸都按 pnpm 默认的发布时间门槛(`minimumReleaseAge`,24 小时)解析:依赖版本优先取发布满 24 小时的;范围内没有这样的版本时
 (比如点名装刚发布的版本)pnpm 照装,并把它记进 `minimumReleaseAgeExclude`,之后的装卸都按这份名单放行。

@@ -120,6 +120,7 @@ describe('loadExtensions', () => {
 
 describe('ExtensionManager', () => {
   interface Run { args: string[]; cwd: string }
+  const pnpmArgs = (...args: string[]) => process.platform === 'win32' ? [...args, '--config.node-linker=hoisted'] : args;
   function manager(booted: Partial<ExtensionSet> = {}, opts: { code?: number; hang?: boolean; packument?: unknown } = {}) {
     const runs: Run[] = [];
     let release: (() => void) | null = null;
@@ -156,13 +157,25 @@ describe('ExtensionManager', () => {
   it('install:合法包名 → pnpm add name@version,在 extensions/ 里跑;首次先造 package.json 与 pnpm-workspace.yaml', async () => {
     const { mgr, runs } = manager();
     const msg = await mgr.install({ name: '@acme/cortico-world-x', version: '^1.2.0' });
-    expect(runs).toEqual([{ args: ['add', '@acme/cortico-world-x@^1.2.0', '--config.strict-dep-builds=false'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: pnpmArgs('add', '@acme/cortico-world-x@^1.2.0', '--config.strict-dep-builds=false'), cwd: join(root, 'extensions') }]);
     expect(JSON.parse(readFileSync(join(root, 'extensions/package.json'), 'utf8'))).toMatchObject({ private: true, dependencies: {} });
     expect(existsSync(join(root, 'extensions/pnpm-workspace.yaml'))).toBe(true);
     expect(msg).toContain('重启');
     expect(msg).toContain('Done in 1s');
     await mgr.install({ name: 'plain' });
-    expect(runs[1].args).toEqual(['add', 'plain', '--config.strict-dep-builds=false']);
+    expect(runs[1].args).toEqual(pnpmArgs('add', 'plain', '--config.strict-dep-builds=false'));
+  });
+
+  it('install:Windows 使用不创建符号链接的 node linker', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!;
+    Object.defineProperty(process, 'platform', { value: 'win32' });
+    try {
+      const { mgr, runs } = manager();
+      await mgr.install({ name: 'windows-world' });
+      expect(runs[0]?.args).toEqual(['add', 'windows-world', '--config.strict-dep-builds=false', '--config.node-linker=hoisted']);
+    } finally {
+      Object.defineProperty(process, 'platform', platform);
+    }
   });
 
   it('装卸前把旧版本写下的 packageManager 换成 Cortico 自己的,依赖不动', async () => {
@@ -183,7 +196,7 @@ describe('ExtensionManager', () => {
     mkdirSync(join(root, 'my mod'));
     writeFileSync(join(root, 'my mod/package.json'), '{}');
     await mgr.install({ path: './my mod' });
-    expect(runs[0].args).toEqual(['add', join(root, 'my mod'), '--config.strict-dep-builds=false']);
+    expect(runs[0].args).toEqual(pnpmArgs('add', join(root, 'my mod'), '--config.strict-dep-builds=false'));
   });
 
   it('install:拒绝带 shell 元字符的包名、版本与路径,一次 pnpm 都不起', async () => {
@@ -214,8 +227,8 @@ describe('ExtensionManager', () => {
     const { mgr, runs } = manager();
     const msg = await mgr.install({ name: 'cortico-world-native' }, 'en');
     expect(runs.map((r) => r.args)).toEqual([
-      ['add', 'cortico-world-native', '--config.strict-dep-builds=false'],
-      ['rebuild', 'native-dep'],
+      pnpmArgs('add', 'cortico-world-native', '--config.strict-dep-builds=false'),
+      pnpmArgs('rebuild', 'native-dep'),
     ]);
     expect(readFileSync(workspaceFile, 'utf8')).toBe(workspace('true'));
     expect(msg).toContain('corepack pnpm rebuild @scope/deep');
@@ -227,8 +240,8 @@ describe('ExtensionManager', () => {
     const { mgr, runs } = manager();
     const msg = await mgr.install({ name: 'cortico-world-native' }, 'en');
     expect(runs.map((r) => r.args)).toEqual([
-      ['add', 'cortico-world-native', '--config.strict-dep-builds=false'],
-      ['rebuild', 'native-dep'],
+      pnpmArgs('add', 'cortico-world-native', '--config.strict-dep-builds=false'),
+      pnpmArgs('rebuild', 'native-dep'),
     ]);
     expect(readFileSync(join(root, 'extensions/pnpm-workspace.yaml'), 'utf8'))
       .toBe("allowBuilds:\n  '@scope/deep': set this to true or false\n  native-dep: true\n");
@@ -255,7 +268,7 @@ describe('ExtensionManager', () => {
     await expect(mgr.uninstall('absent')).rejects.toThrow('not installed');
     await expect(mgr.uninstall('bad name')).rejects.toThrow('package name');
     const msg = await mgr.uninstall('present');
-    expect(runs).toEqual([{ args: ['remove', 'present', '--config.strict-dep-builds=false'], cwd: join(root, 'extensions') }]);
+    expect(runs).toEqual([{ args: pnpmArgs('remove', 'present', '--config.strict-dep-builds=false'), cwd: join(root, 'extensions') }]);
     expect(msg).toContain('重启');
   });
 

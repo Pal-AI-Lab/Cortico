@@ -436,6 +436,8 @@ const NPMRC = '.npmrc';
 const WORKSPACE_FILE = 'pnpm-workspace.yaml';
 /** 构建脚本被跳过时 pnpm 照常退出 0;跳过的包由 `pendingBuilds()` 读出再处理。 */
 const LENIENT_BUILDS = '--config.strict-dep-builds=false';
+/** Windows 的 pnpm 子进程可能没有创建符号链接的权限;摊平依赖树不需要该权限。 */
+const WINDOWS_NODE_LINKER = '--config.node-linker=hoisted';
 
 /** pnpm-workspace.yaml 顶层 `allowBuilds:` 下的各项与所在行号;作用域包名带引号。 */
 function allowBuildsEntries(lines: readonly string[]): Array<{ line: number; indent: string; quote: string; name: string; value: string }> {
@@ -1108,7 +1110,8 @@ export class ExtensionManager {
 
   /** 在 extensions/ 里跑 pnpm,回输出的末 20 行;非零退出时抛出。 */
   private async pnpm(args: string[]): Promise<string> {
-    const { code, output } = await this.run(args, this.dir);
+    const command = process.platform === 'win32' ? [...args, WINDOWS_NODE_LINKER] : args;
+    const { code, output } = await this.run(command, this.dir);
     const tail = output.trim().split('\n').slice(-20).join('\n');
     if (code !== 0) throw extensionError((t) => t.pnpmFailed(args[0], code, tail));
     return tail;
