@@ -17,10 +17,7 @@ export class StreamErrorEvent extends LLMError {
   }
 }
 
-/** Characters of the upstream's error text an error message carries; `LLMError.body` keeps all of it. */
-const UPSTREAM_TEXT_MAX = 300;
-
-/** The upstream's error text: `error.message` or `message` of a JSON body, else the body, on one line and cut to `UPSTREAM_TEXT_MAX`. */
+/** The upstream's error text: `error.message` or `message` of a JSON body, else the body, on one line. */
 export function upstreamText(body: string): string {
   let text = body;
   try {
@@ -28,7 +25,7 @@ export function upstreamText(body: string): string {
     const message = parsed.error?.message ?? parsed.message;
     if (typeof message === 'string') text = message;
   } catch { /* not JSON: the body as it came */ }
-  return text.replace(/\s+/g, ' ').trim().slice(0, UPSTREAM_TEXT_MAX);
+  return text.replace(/\s+/g, ' ').trim();
 }
 
 /**

@@ -117,7 +117,7 @@ router 自动加载。
 
 一次生成可包含多次请求尝试,重试间隔为 1s / 4s / 10s;状态 0、408、429 与 5xx 重试,401/403 先刷新一次凭证。
 流里的 `error` 事件是上游自己报的失败,不重试。非 2xx 的错误消息是 `LLM API <状态码>: <上游的错误说明>`,
-说明取 JSON 正文的 `error.message` 或 `message`,没有就取正文,最多 300 字符;完整正文在 `GenerationError.body`。
+说明取 JSON 正文的 `error.message` 或 `message`,没有就取正文，压成一行;完整正文在 `GenerationError.body`。
 响应带 `Retry-After` 时按它退避,等待与生成中的其他等待一样可被调用方中断。
 已提交不可逆增量之后不再重试。终态只接受 `completed` 与 `incomplete`:截断落成
 `incomplete_details.reason`,被截断的工具调用由 Core 标成未执行。输出字符数超过
