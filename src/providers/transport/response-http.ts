@@ -3,7 +3,7 @@ import type { Request, Response, StreamEvent } from '../../protocol/open-respons
 import type { ItemOrigin } from '../../protocol/open-responses/context.ts';
 import { GenerationError, priceUsage, unknownMeters, type GenerateOptions, type Generation, type ProviderAttempt, type PriceSnapshot, type TokenMeters } from '../../core/generation.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
-import { LLMError, abortError, parseRetryAfter, retryDelay, reqIdSuffix } from './errors.ts';
+import { LLMError, StreamErrorEvent, abortError, parseRetryAfter, retryDelay, reqIdSuffix, upstreamText } from './errors.ts';
 import type { ResponseAssembly } from './response-assembly.ts';
 
 export interface ResponseTransport {
@@ -161,7 +161,8 @@ export async function generate(request: Request, options: GenerateOptions, origi
       attempt.status = response.status;
       attempt.requestId = response.headers.get('x-request-id');
       if (!response.ok) {
-        const error = new LLMError(`LLM API ${response.status}`, response.status, await response.text());
+        const body = await response.text();
+        const error = new LLMError(`LLM API ${response.status}${body.trim() ? `: ${upstreamText(body)}` : ''}`, response.status, body);
         retryAfterMs = parseRetryAfter(response.headers.get('retry-after'));
         if (!options.diagnostic && (response.status === 401 || response.status === 403) && !authRetried && await transport.refresh()) {
           authRetried = true;
@@ -214,7 +215,7 @@ export async function generate(request: Request, options: GenerateOptions, origi
         break;
       }
       lastError = error;
-      if (!sent || committed || runaway || (!streaming && error instanceof ResponseProtocolError)) break;
+      if (!sent || committed || runaway || error instanceof StreamErrorEvent || (!streaming && error instanceof ResponseProtocolError)) break;
       const status = error instanceof LLMError ? error.status : 0;
       if (status !== 0 && status !== 408 && status !== 429 && status < 500) break;
       if (!options.diagnostic && observed && Date.now() - started >= 20000 && !await transport.failure({

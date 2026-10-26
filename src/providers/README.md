@@ -69,8 +69,8 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 
 `response-http.ts` 处理 HTTP/SSE:一次生成可包含多次请求尝试,重试间隔为 `[1s, 4s, 10s]`;超时
 四档(流式首包 300s、非流式 120s、帧空闲 120s、内容空闲 300s);只对状态 0 / 408 / 429 / 5xx
-重试,响应带 `Retry-After` 时按它退避,401 / 403 先 `transport.refresh()`
-一次;已提交不可逆增量后不再重试;输出字符超过
+重试,流内 `error` 事件不重试,响应带 `Retry-After` 时按它退避,401 / 403 先 `transport.refresh()`
+一次;非 2xx 的错误消息带状态码和 `upstreamText()` 取出的上游说明;已提交不可逆增量后不再重试;输出字符超过
 `max_output_tokens × 12` 时终止请求并报告超限;终态只接受 `completed` / `incomplete`,`failed` 抛
 `LLMError`;每次请求尝试记录 `meters` 与 `charges`。
 
