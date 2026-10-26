@@ -47,11 +47,12 @@ import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { deriveWebUiPageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
 import { WebUiFixtureWorld } from '../src/worlds/webui-fixture/world.ts';
-import { CORE_CONFIG_GROUP, usageRates } from '../src/core/config.ts';
+import { CORE_CONFIG_GROUP } from '../src/core/config.ts';
 import { PERSONA_CONFIG_GROUP } from '../bots/corti-soulmate/persona/config.ts';
 import { readGroupValues, setByPath, type ConfigGroup } from '../src/core/config-schema.ts';
 import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR } from '../bots/cormini/persona/workspaceGit.ts';
 import { aggregateUsage } from '../src/core/cost.ts';
+import { createUsageRates } from '../src/core/usage-rates.ts';
 import { priceUsage, unknownMeters } from '../src/core/generation.ts';
 import { snapshotPrice } from '../src/providers/pricebook.ts';
 import { nullLogger } from '../src/core/util.ts';
@@ -142,6 +143,8 @@ function genUsage(): UsageRecord[] {
   return recs;
 }
 const usageRecords = genUsage();
+/** 汇率走真实的公开接口，断网时页面显示内置汇率。 */
+const devRates = createUsageRates();
 
 const qq = new QQWorld({ wsUrl: 'ws://127.0.0.1:0', groups: [424242, 998877], privates: [10086], token: '', timezone: TZ });
 const consoleWorld = new ConsoleWorld({ timezone: TZ });
@@ -1417,7 +1420,12 @@ const app = new WebApp({
   }),
   sessions: { list: () => sessionsList, messages: (id) => (id === 'main' ? session : sessionsList.some((s) => s.id === id) ? session.slice(0, 4) : null), onChange: () => {} },
   storage: () => storage,
-  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ, rates: usageRates(devCfg) }) },
+  usage: {
+    aggregate: async (opts) => {
+      const { rates, sources } = await devRates.resolve();
+      return { ...aggregateUsage(usageRecords, { ...opts, timezone: TZ, rates }), rateSources: sources };
+    },
+  },
 
   config: {
     groups: () => [...devConfigGroups,...devProviders.groups()].map((group) => ({ group, values: group.owner.startsWith('provider:') ? devProviders.values(group.id) : readGroupValues(devCfg, group) })),

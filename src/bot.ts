@@ -17,7 +17,7 @@ import type {
   ToolSchema,
 } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
-import { coreConfigGroup, usageRates } from './core/config.ts';
+import { coreConfigGroup } from './core/config.ts';
 import { resolveLanguage, type Language } from './core/language.ts';
 import { botText } from './strings.ts';
 import { updateJsonObject } from './config-file.ts';
@@ -34,6 +34,7 @@ import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
 import { aggregateUsage } from './core/cost.ts';
+import { createUsageRates } from './core/usage-rates.ts';
 import { DeadlineError, nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/webui/hub.ts';
@@ -993,6 +994,7 @@ export function createBot<C extends CoreConfig>(
         ...deriveSlotStorage(assembly, language),
       ];
     };
+    const liveRates = createUsageRates();
     webApp = new WebApp({
       store: core.store,
       memoryDir: loaded.memoryDir,
@@ -1006,7 +1008,13 @@ export function createBot<C extends CoreConfig>(
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: webUiStorage,
-      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates: usageRates(core.config) }), status: () => core.usageLog.status() },
+      usage: {
+        aggregate: async (opts) => {
+          const { rates, sources } = await liveRates.resolve();
+          return { ...aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
+        },
+        status: () => core.usageLog.status(),
+      },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
         set: (groupId: string, values: ConfigValues, language) => {

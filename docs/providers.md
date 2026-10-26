@@ -124,7 +124,7 @@ router 自动加载。
 ## 计价
 
 每次请求尝试按价目中声明的计量项计费,包括输入、输出、缓存命中与推理用量等,币种默认 USD,写入
-`data/usage.jsonl`;WebUI「用量」页与 `/api/usage` 聚合。所选币种没有原价的调用按 Core 配置 `usage.rates` 从别的币种换算(见 [configuration.md](configuration.md))。模块自带价目,端点条目的 `pricing`
+`data/usage.jsonl`;WebUI「用量」页与 `/api/usage` 聚合。所选币种没有原价的调用按 1 USD 的汇率从别的币种换算：Core 打开用量页时先向 open.er-api.com 取实时汇率，失败依次换 currency-api 的两个地址，结果缓存 12 小时，全部失败 10 分钟内不再请求；一次也没取到时用 `USAGE_RATES`(`src/core/config.ts`)里 2026-10-10 的中间价。模块自带价目,端点条目的 `pricing`
 按成本基准覆盖。`pricing` 为空时仍使用模块价目;两者都没有适用价目时,调用只记用量,
 不记金额。缺少所需计量的费用项记为未知。
 

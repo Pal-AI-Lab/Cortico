@@ -5,27 +5,16 @@ import type { Language } from './language.ts';
 import { coreGroupText } from './strings.ts';
 import { SYSTEM_TIMEZONE } from './util.ts';
 
-/** 用量报告可换算的币种与初始汇率:1 USD 合多少该币种，取 2026-10-10 的中间价。部署里可改，只认这几种。 */
+/** 用量报告可换算的币种与内置汇率:1 USD 合多少该币种。实时汇率拿不到时用它。 */
 export const USAGE_RATES: Readonly<Record<string, number>> = {
   CNY: 6.69, EUR: 0.892, JPY: 158.3, KRW: 1341, TWD: 31.9, BRL: 4.99, RUB: 85.4,
 };
-
-/** 部署配置里已声明币种的汇率;没声明的币种不参与换算。 */
-export function usageRates(config: { usage?: { rates?: Record<string, number> } }): Record<string, number> {
-  const rates = config.usage?.rates ?? {};
-  return Object.fromEntries(Object.keys(USAGE_RATES).filter((code) => typeof rates[code] === 'number').map((code) => [code, rates[code]!]));
-}
+/** USAGE_RATES 取的是这一天的中间价。 */
+export const USAGE_RATES_DATE = '2026-10-10';
 
 /** 按请求语言生成配置文案；各语言使用相同的结构与取值范围。 */
 export function coreConfigGroup(language: Language): ConfigGroup {
   const t = coreGroupText(language);
-  const rates = Object.fromEntries(Object.keys(USAGE_RATES).map((code) => [`usage.rates.${code}`, {
-    type: 'number' as const,
-    title: t.usageRate.title(code),
-    minimum: 0,
-    'x-hot': true,
-    description: t.usageRate.description,
-  }]));
   return {
     id: 'core',
     owner: 'core',
@@ -108,7 +97,6 @@ export function coreConfigGroup(language: Language): ConfigGroup {
           'x-hot': true,
           description: t.logAreas.description,
         },
-        ...rates,
       },
     },
   };
@@ -128,7 +116,6 @@ export const CORE_DEFAULTS = {
   batching: { quietGapMs: 2500, minBatchAgeMs: 0, maxBatchAgeMs: 15000, maxBatchSize: 100 },
   context: { keepPastThinking: true },
   logging: { file: 'debug' as const, stdout: 'info' as const, areas: '' },
-  usage: { rates: USAGE_RATES },
 } as const;
 
 
