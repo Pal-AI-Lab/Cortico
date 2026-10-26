@@ -2255,7 +2255,8 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .udates > input { width: 136px; flex: none; }
 .udates > input.utz { width: auto; field-sizing: content; min-width: 0; color: var(--ink-soft); pointer-events: none; }
 .uledger > select.field { width: auto; min-width: 0; padding-inline: 10px 30px; }
-.urate > input { width: 80px; }
+.uledger, .urate { flex-wrap: wrap; }
+.ursrc > a { color: inherit; }
 .unotice { margin: 10px 0 0; }
 
 /* 总览 */

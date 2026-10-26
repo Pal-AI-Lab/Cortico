@@ -1046,6 +1046,38 @@ describe('用量页挂载', () => {
     expect(seen.at(-1)).not.toContain('currency=CNY');
   });
 
+  it('简体中文下没选过币种时按 CNY 取数', async () => {
+    stubFetch({ '/api/usage': { ...sample(), currency: 'CNY', currencies: ['USD', 'CNY'], rates: { CNY: 6.7 } } });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    expect(seen.find((u) => u.startsWith('/api/usage'))).toContain('currency=CNY');
+    expect(currencyPicker(root).value).toBe('CNY');
+  });
+
+  it('换算币种旁只读显示汇率与出处', async () => {
+    const live = { kind: 'live', feed: 'Feed', site: 'https://feed.example', date: '2026-10-25' };
+    stubFetch({ '/api/usage': { ...sample(), currency: 'CNY', currencies: ['USD', 'CNY'], rates: { CNY: 6.689203 }, rateSources: { CNY: live } } });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const box = root.find('urate')!;
+    expect(box.hidden).toBe(false);
+    expect(box.findAllTag('input')).toEqual([]);
+    expect(box.textContent).toBe('1 USD = 6.6892 CNYFeed 2026-10-25');
+  });
+
+  it('汇率来自内置值时写明内置日期', async () => {
+    stubFetch({ '/api/usage': { ...sample(), currency: 'CNY', currencies: ['USD', 'CNY'], rates: { CNY: 6.69 }, rateSources: { CNY: { kind: 'builtin', date: '2026-10-10' } } } });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    expect(root.find('ursrc')!.textContent).toBe('内置 2026-10-10');
+  });
+
   it('刷新失败时保留上一次结果，整块标为过期并写明失败原因', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });

@@ -50,13 +50,19 @@ export type UsageBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
 /** 请求粒度：具体粒度或 `auto`（按跨度自适应）。 */
 export type UsageBucketOption = UsageBucketUnit | 'auto';
 
+export type UsageRateSource =
+  | { kind: 'live'; feed: string; site: string; date: string }
+  | { kind: 'builtin'; date: string };
+
 export interface UsageAggregate {
   ledger?: { pending: number; error: string | null };
   currency?: string;
   /** 这个计价基础下能显示的币种：有原价的，加上能换算到的。 */
   currencies?: string[];
-  /** 1 USD 合多少该币种，来自 Core 配置 `usage.rates`。 */
+  /** 1 USD 合多少该币种。 */
   rates?: Record<string, number>;
+  /** 各币种汇率的出处：实时接口或内置值。 */
+  rateSources?: Record<string, UsageRateSource>;
   basis?: 'marginal' | 'equivalent';
   balances?: Array<{ currency: string; basis: 'marginal' | 'equivalent'; knownAmount: number; pricedCalls: number; partialCalls: number }>;
   successful?: UsageAccum;
