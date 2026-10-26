@@ -682,6 +682,70 @@ describe('配置页', () => {
     expect(calls.filter((c) => c.body !== undefined).length).toBe(1);
   });
 
+  it('保存后重取：服务端随保存改的同组项显示新值，改过未存的项与节点本身不动', async () => {
+    vi.useFakeTimers();
+    const group = {
+      id: 'world:voice', owner: 'world:voice',
+      schema: {
+        title: '声音',
+        properties: {
+          'voice.preset': { type: 'string', title: '音色', 'x-options': 'voice.preset' },
+          'voice.audio': { type: 'string', title: '参考音频' },
+          'voice.text': { type: 'string', title: '参考文本' },
+        },
+      },
+    };
+    let server: Record<string, string> = { 'voice.preset': 'a', 'voice.audio': 'a.wav', 'voice.text': 'A' };
+    const posted: Any[] = [];
+    let releasePost = (): void => {};
+    const reply = (payload: unknown): Any => ({
+      ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)),
+    });
+    vi.stubGlobal('fetch', (url: unknown, init: Any) => {
+      const u = String(url);
+      if (u.startsWith('/api/config/options/')) {
+        return Promise.resolve(reply({ options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] }));
+      }
+      if (init?.method === 'POST') {
+        const { values } = JSON.parse(String(init.body));
+        posted.push(values);
+        // 服务端：选了音色就把它的参考音频与文本写进同组另两项。
+        return new Promise((resolve) => {
+          releasePost = () => {
+            server = { ...values, 'voice.audio': `${values['voice.preset']}.wav`, 'voice.text': values['voice.preset'].toUpperCase() };
+            resolve(reply({ ok: true, result: '已应用' }));
+          };
+        });
+      }
+      return Promise.resolve(reply({ groups: [{ group, values: server }] }));
+    });
+    const { ctx, root } = await mkCtx({ config: true });
+    mountConfig(ctx);
+    await flush();
+    const rows = root.findAll('trow');
+    const preset = rows[0].findTag('select')!;
+    const audio = rows[1].findTag('input')!;
+    const text = rows[2].findTag('input')!;
+
+    preset.value = 'b';
+    preset.dispatchEvent({ type: 'change' });
+    await vi.advanceTimersByTimeAsync(500);
+    expect(posted.length).toBe(1);
+    // 请求未回时改了另一项
+    text.value = '自己写的文本';
+    text.dispatchEvent({ type: 'change' });
+    releasePost();
+    await flush();
+
+    expect(audio.value).toBe('b.wav');
+    expect(text.value).toBe('自己写的文本');
+    expect(root.findAll('trow')[1].findTag('input')).toBe(audio);
+
+    // 下一次保存带的是服务端写过的参考音频
+    await vi.advanceTimersByTimeAsync(500);
+    expect(posted[1]).toEqual({ 'voice.preset': 'b', 'voice.audio': 'b.wav', 'voice.text': '自己写的文本' });
+  });
+
   it('只读项不进提交面（read 为 null 的那批）', async () => {
     stubFetch({
       '/api/config': {
