@@ -544,6 +544,7 @@
   .tsecdesc { color: var(--ink-soft); font-size: var(--text-detail); line-height: 1.55; margin: 5px 0 2px; }
   .trow { display: grid; grid-template-columns: 200px 180px 1fr; gap: 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
   .trow .tlabel { font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .trow .tlabel.warning { color: var(--warn); }
   .trow .ttag { font-size: 10px; color: var(--warn); border: 1px solid var(--line-strong); border-radius: 5px; padding: 0 4px; }
   .trow .tdesc { color: var(--ink-soft); font-size: var(--text-detail); line-height: 1.55; }
   .trow .tfield { display: flex; align-items: center; gap: 6px; min-width: 0; }

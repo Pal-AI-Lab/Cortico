@@ -29,6 +29,7 @@ export interface ConfigProperty {
   'x-scale'?: number;
   'x-suffix'?: string;
   'x-hot'?: boolean;
+  'x-warning'?: boolean;
   'x-options'?: string;
   'x-path'?: {
     kind: 'file' | 'directory';
@@ -471,7 +472,7 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
         }
         for (const [path, prop] of Object.entries(group.schema.properties || {})) {
           const row = ui.h('div', 'trow');
-          const label = ui.h('span', 'tlabel', prop.title || path);
+          const label = ui.h('span', prop['x-warning'] ? 'tlabel warning' : 'tlabel', prop.title || path);
           if (prop['x-hot'] === false) {
             // World 的配置在构造时读走:重启那个 World 即生效,不必重启进程。
             label.appendChild(ui.h('span', 'ttag', group.owner.startsWith('world:') ? S.restartWorld : S.restartProcess));
