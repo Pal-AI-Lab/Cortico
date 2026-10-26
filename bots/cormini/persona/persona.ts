@@ -596,6 +596,10 @@ export class Cormini implements Persona {
     );
   }
 
+  onEmptyResponse(): string | null {
+    return '上次返回为空。若仍有未完成的行动，请继续；若已无事可做，请调用 end_turn。';
+  }
+
   /**
    * 卡住恢复的成文:core 只报 {count, quietMs} 机械事实。一次抖动不值得占一条上下文。
    */

@@ -37,6 +37,7 @@ Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefiniti
 `onEmptyResponse()` 可选地返回补救提示，以 user 消息追加后重新请求；未实现、返回 null 或空白时沿用结束行为。
 仅处理 completed 且输出为空或只有空白文本的响应。连续空响应只补救一次；成功且未被打断的工具调用后可再次补救，
 与失败重试共用 `ResubmitPolicy.maxPerBatch`，并受 session 硬轮数上限约束。Core 不提供默认提示。
+Cormini 默认启用此补救，CortiSoulmate 和 CortiV 继承；自定义 Persona 可覆盖返回 null 以关闭。
 
 工具不在 Persona 上,在每个 `SessionDecl.tools()` 里;`end_turn`、`save_blob` 这类是 bot 侧的
 Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声明是模块常量(`CORMINI_TOOL_DECLS` 等),
