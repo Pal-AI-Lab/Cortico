@@ -142,7 +142,7 @@ export interface MainLoopDeps {
 export interface ResubmitPolicy {
   /** 允许重新请求的连续失败次数；例如 2 表示第三次连续失败结束本批。 */
   maxConsecutive: number;
-  /** 一批内重新请求的总次数上限。 */
+  /** 一批内失败重试与空响应补救共用的总次数上限。 */
   maxPerBatch: number;
   /** 第 n 次连续失败后的等待毫秒数,超出长度取最后一档。 */
   backoffMs: readonly number[];
@@ -1114,6 +1114,7 @@ export class MainLoop {
     const resubmit = this.d.resubmit ?? DEFAULT_RESUBMIT;
     let consecutiveFailures = 0;
     let resubmits = 0;
+    let emptyRecoveryUsed = false;
 
     for (let round = 1; ; round++) {
       if (!this.active(generation)) return;
@@ -1211,6 +1212,7 @@ export class MainLoop {
         },
       } : undefined;
       let assistant: ContextRecord[];
+      let responseCompleted = false;
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
       const prefixHash = prefixFingerprint(outbound);
@@ -1230,6 +1232,7 @@ export class MainLoop {
           llmMs = Date.now() - llmStart;
         }
         assistant = responseRecords(res.response, res.origin);
+        responseCompleted = res.response.status === 'completed';
         setAnchors({ resp: res.response.id });
         if (!this.active(generation) || flight.controller.signal.aborted) {
           if (this.active(generation) && flight.abortReason === 'interrupt') {
@@ -1340,6 +1343,9 @@ export class MainLoop {
         if (flight.phase === 'model') flight.phase = 'tools';
       }
       if (!this.active(generation)) return;
+      const emptyResponse = responseCompleted && assistant.every(({ item }) =>
+        item.type === 'message' && Array.isArray(item.content)
+        && item.content.every(part => part.type === 'output_text' && !part.text.trim()));
       assistant = this.dropReservedCalls(assistant);
       const calls = assistant.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
       this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
@@ -1356,7 +1362,24 @@ export class MainLoop {
       }
 
       if (calls.length === 0) {
-        noteRound('completed');
+        let outcome = 'completed';
+        if (emptyResponse && this.d.persona.onEmptyResponse) {
+          outcome = 'empty-response-stop';
+          if (!emptyRecoveryUsed && resubmits < resubmit.maxPerBatch && round < caps.hard) {
+            let hint: string | null = null;
+            try { hint = this.d.persona.onEmptyResponse(); }
+            catch (error) { log.warn('onEmptyResponse异常', { error: String(error) }); }
+            if (hint?.trim()) {
+              emptyRecoveryUsed = true;
+              resubmits++;
+              session.append(message('user', hint, { ts: nowIso(this.d.cfg.timezone) }));
+              log.warn('空响应，补充判断一次', { round, resubmits });
+              noteRound('empty-response-recovery');
+              continue;
+            }
+          }
+        }
+        noteRound(outcome);
         this.finishTurn();
         return;
       }
@@ -1411,6 +1434,8 @@ export class MainLoop {
             );
             if (!this.active(generation)) return;
           }
+          // 成功且未被打断的调用恢复补救机会，总预算保持不变。
+          if (!out.failed && !flight.interrupted) emptyRecoveryUsed = false;
           if (def.barrierAfter) barrierHit = true;
           if (def.endsTurn) turnEnded = true;
         }

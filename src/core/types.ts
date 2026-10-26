@@ -1018,6 +1018,8 @@ export interface Persona {
   onIdle?(): void | Promise<void>;
   /** 连续模型调用失败后恢复时调用；返回待注入文本，null 表示不注入。 */
   onStallsRecovered?(info: { count: number; quietMs: number }): string | null;
+  /** 空完成响应的可选补救提示；null 表示结束。连续空响应只补救一次，总数受重试预算限制。 */
+  onEmptyResponse?(): string | null;
   /** World 被激活、停用、重启或可见性改变时调用；启动期初始挂载不通知。 */
   onWorldLifecycle?(event: WorldLifecycleEvent): void;
   /**

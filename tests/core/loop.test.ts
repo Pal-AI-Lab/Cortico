@@ -54,7 +54,7 @@ interface RigOptions {
   /** 对模型隐藏但仍挂载运行的 World id。 */
   hiddenWorlds?: string[];
   /** 时机钩子,直接装到假Persona上 */
-  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery'>;
+  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery' | 'onEmptyResponse'>;
   /** 记录 schedule_wake 对 timers 原语的调用。 */
   onTimerSet?: (atIso: string, payload: Record<string, unknown>) => void;
   /** fork 工具的执行函数。 */
@@ -1434,6 +1434,107 @@ describe('MainLoop user事件协议', () => {
       .toBe('已发送');
     await until(() => rig.session.messages.at(-1)?.role === 'assistant');
     expect(rig.session.messages.at(-1)?.tool_calls).toBeUndefined();
+    assertPairing(rig.session.messages);
+  });
+
+  it('空响应补救后可执行工具，再次空响应仍可恢复并只发送一次', async () => {
+    const hint = '请继续或明确结束。';
+    rig = makeRig({ hooks: { onEmptyResponse: () => hint } });
+    const respond = rig.llm.respond.bind(rig.llm);
+    vi.spyOn(rig.llm, 'respond').mockImplementationOnce(async (...args) => {
+      const result = await respond(...args);
+      result.response.output = [];
+      return result;
+    });
+    rig.llm.script(textReply(''), toolReply([{ name: 'noop', id: 'read' }]), textReply(' \n '),
+      toolReply([{ name: 'send', id: 'send' }]), textReply('完成'));
+    rig.start();
+    await until(() => rig.session.messages.at(-1)?.content === '完成');
+    expect(rig.session.messages.filter(m => m.tool_call_id === 'send')).toHaveLength(1);
+    expect(rig.session.messages.filter(m => m.role === 'user' && m.content === hint)).toHaveLength(2);
+    assertPairing(rig.session.messages);
+  });
+
+  it('连续空响应只补救一次，下一次唤醒恢复机会', async () => {
+    const ended = vi.fn();
+    rig = makeRig({ hooks: { onEmptyResponse: () => '请继续或明确结束。', onTurnEnded: ended } });
+    rig.llm.script(textReply(''), textReply(''));
+    rig.start();
+    await until(() => ended.mock.calls.length === 1);
+    expect(rig.llm.calls).toHaveLength(2);
+    rig.llm.script(textReply(''), textReply('完成'));
+    rig.pushEvent('新的唤醒');
+    await until(() => ended.mock.calls.length === 2);
+    expect(rig.llm.calls).toHaveLength(4);
+    expect(rig.session.messages.at(-1)?.content).toBe('完成');
+  });
+
+  it('成功工具不清空总预算，失败重试与空响应补救共同计数', async () => {
+    const recover = vi.fn(() => '请继续或明确结束。');
+    const ended = vi.fn();
+    rig = makeRig({
+      hooks: { onEmptyResponse: recover, onTurnEnded: ended },
+      resubmit: { maxConsecutive: 2, maxPerBatch: 3, backoffMs: [0] },
+    });
+    rig.llm.throwNext = new LLMError('upstream unavailable', 503, 'unavailable');
+    rig.llm.script(textReply(''), toolReply([{ name: 'noop', id: 'first' }]), textReply(''),
+      toolReply([{ name: 'noop', id: 'second' }]), textReply(''),
+      toolReply([{ name: 'send', id: 'over-budget' }]));
+    rig.start();
+    await until(() => ended.mock.calls.length === 1);
+    expect(recover).toHaveBeenCalledTimes(2);
+    expect(rig.llm.calls).toHaveLength(6);
+    expect(rig.session.messages.some(m => m.tool_call_id === 'over-budget')).toBe(false);
+    assertPairing(rig.session.messages);
+  });
+
+  it.each([undefined, null, '  '])('补救钩子未设置或返回 %j 时直接结束', async hint => {
+    const ended = vi.fn();
+    rig = makeRig({ hooks: { onTurnEnded: ended,
+      ...(hint === undefined ? {} : { onEmptyResponse: () => hint }) } });
+    rig.llm.script(textReply(''));
+    rig.start();
+    await until(() => ended.mock.calls.length === 1);
+    expect(rig.llm.calls).toHaveLength(1);
+    expect(rig.session.messages.at(-1)?.role).toBe('assistant');
+  });
+
+  it.each(['text', 'reasoning', 'incomplete', 'cap', 'budget'])('%s 不触发空响应补救', async kind => {
+    const recover = vi.fn(() => '请继续或明确结束。');
+    const ended = vi.fn();
+    rig = makeRig({
+      hooks: { onEmptyResponse: recover, onTurnEnded: ended },
+      cfgPatch: cfg => { if (kind === 'cap') cfg.loop = { softCap: 1, hardCap: 1 }; },
+      ...(kind === 'budget' ? { resubmit: { maxConsecutive: 2, maxPerBatch: 0, backoffMs: [0] } } : {}),
+    });
+    if (kind === 'incomplete') {
+      const respond = rig.llm.respond.bind(rig.llm);
+      vi.spyOn(rig.llm, 'respond').mockImplementationOnce(async (...args) => {
+        const result = await respond(...args);
+        result.response.status = 'incomplete';
+        return result;
+      });
+    }
+    rig.llm.script({ ...textReply(kind === 'text' ? '完成' : ''),
+      ...(kind === 'reasoning' ? { reasoning_content: '无需继续。' } : {}) });
+    rig.start();
+    await until(() => ended.mock.calls.length === 1);
+    expect(recover).not.toHaveBeenCalled();
+    expect(rig.llm.calls).toHaveLength(1);
+  });
+
+  it.each(['missing_tool', 'failed_tool'])('%s 不恢复补救机会', async name => {
+    const recover = vi.fn(() => '请继续或明确结束。');
+    const ended = vi.fn();
+    rig = makeRig({
+      hooks: { onEmptyResponse: recover, onTurnEnded: ended },
+      worlds: [makeFakeIO('fixture', [makeTool('failed_tool', () => { throw new Error('failed'); })])],
+    });
+    rig.llm.script(textReply(''), toolReply([{ name, id: 'failed' }]), textReply(''));
+    rig.start();
+    await until(() => ended.mock.calls.length === 1);
+    expect(recover).toHaveBeenCalledTimes(1);
+    expect(rig.llm.calls).toHaveLength(3);
     assertPairing(rig.session.messages);
   });
 
