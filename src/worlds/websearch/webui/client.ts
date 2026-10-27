@@ -1,7 +1,7 @@
 /**
- * WebSearch 的「快速配置」页签：选搜索服务、填各家的密钥、试搜一次。
+ * WebSearch 的「快速配置」页签：选搜索服务、改各家的地址、填各家的密钥、试搜一次。
  *
- * 服务写进配置组 `worlds.websearch.provider`;密钥经 World 的 `setKey` 写进部署 .env,页面只拿得到打码后的样子。
+ * 服务和地址写进配置组 `worlds.websearch`;密钥经 World 的 `setKey` 写进部署 .env,页面只拿得到打码后的样子。
  */
 import type { WebUiClientBundle, WebUiPanel, WebUiPanelContext } from '../../../web/shared/client-panel.ts';
 import type { SearchProvider, WebSearchPanelState } from '../config.ts';
@@ -15,6 +15,10 @@ const KEY_URLS: Record<SearchProvider, string> = {
 };
 const CONFIG_GROUP = 'world:websearch';
 const PROVIDER_KEY = 'worlds.websearch.provider';
+const BASE_URL_KEYS: Record<SearchProvider, string> = {
+  brave: 'worlds.websearch.braveBaseUrl',
+  deepseek: 'worlds.websearch.deepseekBaseUrl',
+};
 
 const errText = (err: unknown): string => (err instanceof Error ? err.message : String(err));
 
@@ -31,6 +35,14 @@ const setupPanel: WebUiPanel = {
     });
     service.body.append(seg.el);
 
+    // ------------------------------------------------------------ 地址
+    const address = ui.sheet({ title: t.baseUrl, desc: t.baseUrlDesc });
+    const urlInput = ui.input({ cls: 'mono grow', onCommit: () => void saveBaseUrl() });
+    const urlSave = ui.button(t.save, { size: 'sm', onClick: () => void saveBaseUrl() });
+    const urlRow = ui.rowbar();
+    urlRow.append(urlInput, urlSave);
+    address.body.append(urlRow);
+
     // ------------------------------------------------------------ 密钥
     const keys = ui.sheet({ title: t.key, desc: t.keyDesc });
     const status = ui.h('div', 'rowbar');
@@ -45,12 +57,13 @@ const setupPanel: WebUiPanel = {
     testOut.hidden = true;
     keys.body.append(status, editRow, testOut);
 
-    root.append(service.el, keys.el);
+    root.append(service.el, address.el, keys.el);
 
     function render(next: WebSearchPanelState): void {
       state = next;
       const p = next.provider;
       seg.setValue(p);
+      urlInput.value = next.baseUrls[p];
       const masked = next.keys[p];
       const clear = ui.button(t.clear, { size: 'sm', variant: 'danger', onClick: () => void clearKey() });
       const test = ui.button(t.test, { size: 'sm', onClick: () => void runTest(test) });
@@ -82,6 +95,24 @@ const setupPanel: WebUiPanel = {
         ui.toast(errText(err), 'bad');
         if (state) seg.setValue(state.provider);
       }
+    }
+
+    async function saveBaseUrl(): Promise<void> {
+      if (!state) return;
+      const value = urlInput.value.trim();
+      if (value && !/^https?:\/\/[^/\s]/i.test(value)) {
+        ui.toast(t.baseUrlInvalid, 'bad');
+        return;
+      }
+      const off = ui.disable(urlSave, urlInput);
+      try {
+        await ctx.setConfig(CONFIG_GROUP, { [BASE_URL_KEYS[state.provider]]: value });
+        testOut.hidden = true;
+        if (await call('state')) ui.toast(t.baseUrlSaved);
+      } catch (err) {
+        ui.toast(errText(err), 'bad');
+      }
+      off.dispose();
     }
 
     async function saveKey(): Promise<void> {

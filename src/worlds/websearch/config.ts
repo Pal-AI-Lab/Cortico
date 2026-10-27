@@ -16,7 +16,16 @@ export const WEBSEARCH_DEFAULTS = {
   uiLang: 'zh-CN',
   safesearch: 'moderate' as SafeSearch,
   timeoutMs: 20000,
+  /** 配置里地址留空时也用这两个 */
+  braveBaseUrl: 'https://api.search.brave.com/res/v1',
+  deepseekBaseUrl: 'https://api.deepseek.com',
 } as const;
+
+/** 各搜索服务地址的配置键 */
+export const WEBSEARCH_BASE_URL_KEYS = {
+  brave: 'braveBaseUrl',
+  deepseek: 'deepseekBaseUrl',
+} as const satisfies Record<SearchProvider, keyof typeof WEBSEARCH_DEFAULTS>;
 
 /** 各搜索服务的密钥环境变量名(core 不认识这些名字)。DeepSeek 不用 DEEPSEEK_API_KEY:那是模型端点的,两边写同一变量会互相覆盖。 */
 export const WEBSEARCH_SECRETS: Record<SearchProvider, string> = {
@@ -24,7 +33,7 @@ export const WEBSEARCH_SECRETS: Record<SearchProvider, string> = {
   deepseek: 'DEEPSEEK_SEARCH_API_KEY',
 };
 
-/** 本 World 声明的可调项:用哪家搜索、搜哪个地区、用什么语言、多久超时。文案按界面语言给。 */
+/** 本 World 声明的可调项:用哪家搜索、各家的地址、搜哪个地区、用什么语言、多久超时。文案按界面语言给。 */
 export function webSearchConfigGroup(language: Language): ConfigGroup {
   const t = text(language);
   return {
@@ -41,6 +50,18 @@ export function webSearchConfigGroup(language: Language): ConfigGroup {
           enum: [...SEARCH_PROVIDERS],
           'x-hot': true,
           description: t.providerDescription,
+        },
+        'worlds.websearch.braveBaseUrl': {
+          type: 'string',
+          title: t.braveBaseUrlTitle,
+          'x-hot': true,
+          description: t.braveBaseUrlDescription(WEBSEARCH_DEFAULTS.braveBaseUrl),
+        },
+        'worlds.websearch.deepseekBaseUrl': {
+          type: 'string',
+          title: t.deepseekBaseUrlTitle,
+          'x-hot': true,
+          description: t.deepseekBaseUrlDescription(WEBSEARCH_DEFAULTS.deepseekBaseUrl),
         },
         'worlds.websearch.country': {
           type: 'string',
@@ -87,6 +108,10 @@ export function webSearchConfigGroup(language: Language): ConfigGroup {
 export interface WebSearchConfigSection {
   enabled: boolean;
   provider: SearchProvider;
+  /** Brave Search API 地址,请求发往 `<地址>/web/search` 等路径;空串按默认地址 */
+  braveBaseUrl: string;
+  /** DeepSeek 搜索地址,请求发往 `<地址>/v1/tools/search`;空串按默认地址 */
+  deepseekBaseUrl: string;
   country: string;
   searchLang: string;
   uiLang: string;
@@ -98,4 +123,6 @@ export interface WebSearchConfigSection {
 export interface WebSearchPanelState {
   provider: SearchProvider;
   keys: Record<SearchProvider, string | null>;
+  /** 各家实际请求的地址;配置留空时是默认地址 */
+  baseUrls: Record<SearchProvider, string>;
 }

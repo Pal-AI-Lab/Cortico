@@ -14,6 +14,7 @@ import {
   type WebSearchConfigSection,
   type WebSearchPanelState,
   webSearchConfigGroup,
+  WEBSEARCH_BASE_URL_KEYS,
   WEBSEARCH_DEFAULTS,
   WEBSEARCH_SECRETS,
 } from './config.ts';
@@ -105,16 +106,24 @@ export class WebSearchWorld implements World {
     return this.opts.secret(WEBSEARCH_SECRETS[provider]).trim();
   }
 
+  /** 配置里的地址,去掉末尾斜杠;空串或未写时为默认地址。 */
+  private baseUrl(provider: SearchProvider): string {
+    const key = WEBSEARCH_BASE_URL_KEYS[provider];
+    return (this.opts.cfg[key]?.trim() || WEBSEARCH_DEFAULTS[key]).replace(/\/+$/, '');
+  }
+
   /** 按当前服务和密钥现建客户端;没密钥时为 null。 */
   private client(): SearchClient | null {
     const provider = this.provider;
     const apiKey = this.key(provider);
     if (!apiKey) return null;
     const cfg = { ...WEBSEARCH_DEFAULTS, ...this.opts.cfg };
+    const baseUrl = this.baseUrl(provider);
     return provider === 'deepseek'
-      ? new DeepSeekClient({ apiKey, timeoutMs: cfg.timeoutMs })
+      ? new DeepSeekClient({ apiKey, baseUrl, timeoutMs: cfg.timeoutMs })
       : new BraveClient({
           apiKey,
+          baseUrl,
           country: cfg.country,
           searchLang: cfg.searchLang,
           uiLang: cfg.uiLang,
@@ -128,7 +137,8 @@ export class WebSearchWorld implements World {
       const k = this.key(p);
       return [p, k ? maskKey(k) : null];
     })) as WebSearchPanelState['keys'];
-    return { provider: this.provider, keys };
+    const baseUrls = Object.fromEntries(SEARCH_PROVIDERS.map((p) => [p, this.baseUrl(p)])) as WebSearchPanelState['baseUrls'];
+    return { provider: this.provider, keys, baseUrls };
   }
 
   private async invoke(panel: string, method: string, args: unknown[], language: Language): Promise<unknown> {

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeepSeekApiError, DeepSeekClient, deepSeekQuery } from '../../../src/worlds/websearch/deepseek-client.ts';
+import { WEBSEARCH_DEFAULTS } from '../../../src/worlds/websearch/config.ts';
 
-const client = () => new DeepSeekClient({ apiKey: 'test-key', timeoutMs: 5000 });
+const client = () => new DeepSeekClient({ apiKey: 'test-key', baseUrl: WEBSEARCH_DEFAULTS.deepseekBaseUrl, timeoutMs: 5000 });
 const body = (fetchMock: ReturnType<typeof vi.fn>, i = 0) => JSON.parse(String((fetchMock.mock.calls[i][1] as RequestInit).body));
 
 describe('deepSeekQuery', () => {
