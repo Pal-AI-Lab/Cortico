@@ -1156,6 +1156,13 @@ describe('状态效果与爆炸的事件成文', () => {
     expect(rows[0].data).toMatchObject({ x: 3.5, y: 64, z: 4.5, radius: 3, affected: 3, distance: 5 });
     expect(host.events).toHaveLength(before);
   });
+
+  it('1.21.9 起的 explosion 包(爆心在 center、只给 blockCount)照常记录', () => {
+    const { m, bot } = effectRig();
+    bot._client.emit('explosion', { center: { x: 3.5, y: 64, z: 4.5 }, radius: 3, blockCount: 0 });
+    const rows = m.logWebUi().entries().filter((e) => e.event === 'explosion');
+    expect(rows[0].msg).toContain('爆炸:(4, 64, 5) 半径 3.0,炸掉 0 格,离我 5.0 格');
+  });
 });
 
 /** 使用拒绝连接的端口隔离队列与任务号测试，避免执行已入队技能。 */
