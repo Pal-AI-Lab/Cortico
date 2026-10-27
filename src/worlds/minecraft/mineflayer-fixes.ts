@@ -319,29 +319,29 @@ export function installPathfinderToolSelection(bot: Bot, log: Logger): void {
 }
 
 /**
- * 移除 1.20.6 food 组件表中不属于该版本的 usingConvertsTo 字段，避免 trade_list 解析错位。
- * 登录前修改共享协议表；字段缺席时保持原表。
+ * 1.21 之前的 food 组件没有 usingConvertsTo,minecraft-data 的 1.20.5/1.20.6 表却列了它,
+ * 多读一个字段会让 trade_list 解析错位。只对 1.21 之前的版本摘除;登录前修改共享协议表。
  */
 function fixFoodComponentSchema(bot: Bot, log: Logger): void {
   const food = slotComponentFields(bot, 'food');
-  if (!food) return;
+  if (!food || !bot.registry.version['<']('1.21')) return;
   const i = food.findIndex((f) => f?.name === 'usingConvertsTo');
   if (i < 0) return;
   food.splice(i, 1);
-  log.info('协议表修正:1.20.6 food 组件摘除 usingConvertsTo,村民报价包(trade_list)解析恢复');
+  log.info(`协议表修正:${bot.registry.version.minecraftVersion} food 组件摘除 usingConvertsTo,村民报价包(trade_list)解析恢复`);
 }
 
 /**
- * 移除旧版本 potion_contents 表中提前出现的 customName 字段。
- * 1.20.6 仅发送 potionId、customColor、customEffects；多读字段会使含药水物品的整包解析失败。
+ * potion_contents 的 customName 从 1.21.2 起才发送,minecraft-data 的更早版本表却列了它;
+ * 多读字段会使含药水物品的整包解析失败。只对 1.21.2 之前的版本摘除,之后的版本摘了反而槽位错位。
  */
 function fixPotionContentsSchema(bot: Bot, log: Logger): void {
   const potion = slotComponentFields(bot, 'potion_contents');
-  if (!potion) return;
+  if (!potion || !bot.registry.version['<']('1.21.2')) return;
   const i = potion.findIndex((f) => f?.name === 'customName');
   if (i < 0) return;
   potion.splice(i, 1);
-  log.info('协议表修正:1.20.6 potion_contents 组件摘除 customName,带药水/水瓶的物品栏包不再被静默丢弃');
+  log.info(`协议表修正:${bot.registry.version.minecraftVersion} potion_contents 组件摘除 customName,带药水/水瓶的物品栏包不再被静默丢弃`);
 }
 
 /** SlotComponent 表里某个组件的字段数组(原地可改);表不在或形状不对给 null。 */

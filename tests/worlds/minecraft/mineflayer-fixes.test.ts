@@ -1469,7 +1469,9 @@ describe('挖掘:以服务端改掉那一格为准', () => {
  * minecraft-data 的 1.20.6 food 协议组件混入后续版本 usingConvertsTo 字段，会导致 trade_list 解码失败；安装时移除不属于该版本的字段。
  */
 describe('协议表修正:food 组件摘除 usingConvertsTo', () => {
-  function protoBot(foodFields: Array<{ name: string; type: unknown }>) {
+  const mcData = createRequire(createRequire(import.meta.url).resolve('mineflayer/package.json'))('minecraft-data') as
+    (version: string) => { version: unknown };
+  function protoBot(foodFields: Array<{ name: string; type: unknown }>, version = '1.20.6') {
     const bot = new EventEmitter() as unknown as EventEmitter & Record<string, unknown>;
     const client = new EventEmitter() as unknown as EventEmitter & Record<string, unknown>;
     client.write = (): void => {};
@@ -1480,6 +1482,7 @@ describe('协议表修正:food 组件摘除 usingConvertsTo', () => {
     bot.placeBlock = async (): Promise<void> => {};
     const food = ['container', foodFields];
     bot.registry = {
+      version: mcData(version).version,
       protocol: {
         types: {
           SlotComponent: ['container', [
@@ -1549,6 +1552,18 @@ describe('协议表修正:food 组件摘除 usingConvertsTo', () => {
     installMineflayerFixes(bot as never, rec2);
     expect((potion[1] as Array<{ name: string }>).map((f) => f.name)).toEqual(['potionId', 'customColor', 'customEffects']);
     expect(lines2.some((l) => l.msg.includes('potion_contents'))).toBe(false);
+  });
+
+  it('1.21.2 起 customName 是真字段,potion_contents 原样保留', () => {
+    const { bot } = protoBot([], '1.21.11');
+    const potion = ['container', [
+      { name: 'customEffects', type: ['array', { countType: 'varint', type: 'ItemPotionEffect' }] },
+      { name: 'customName', type: ['option', 'string'] },
+    ]];
+    const types = (bot.registry as { protocol: { types: { SlotComponent: [string, Array<{ type: unknown }>] } } }).protocol.types;
+    (types.SlotComponent[1][1].type as [string, { fields: Record<string, unknown> }])[1].fields.potion_contents = potion;
+    installMineflayerFixes(bot as never, log);
+    expect((potion[1] as Array<{ name: string }>).map((f) => f.name)).toEqual(['customEffects', 'customName']);
   });
 
   it('registry 没有协议表(测试假 bot)时不碰不炸', () => {
