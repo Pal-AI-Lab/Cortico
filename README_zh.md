@@ -139,7 +139,7 @@ Cortico 采用严格解耦的四层架构设计：
 | QQ | `qq` | 接入 QQ 群聊与私聊，支持可选的多模态视觉模型图像理解 |
 | 哔哩哔哩直播 | `bilibili` | 实时监听弹幕、礼物、醒目留言（SC）、大航海、进场通知与人流指标，附带本机 OBS 画面 Overlay |
 | Minecraft | `minecraft` | 基于 Mineflayer 接入 Minecraft 原版服务器，实现文字环境观察与高层动作执行 |
-| 网页搜索 | `websearch` | 通过 Brave Search API 或 DeepSeek 搜索 API 检索实时网络信息 |
+| 网页搜索 | `websearch` | 通过 Brave Search API 或 DeepSeek 搜索 API 检索实时网络信息;两家的地址都可换成兼容的代理 |
 
 每次发版还把 `minecraft`、`qq`、`bilibili`、`websearch` 以 `cortico-world-<id>` 发到 npm，版本与框架相同，供不内建这些 World 的应用安装。框架里已有同 id 的 World 时，装上的包不加载。
 

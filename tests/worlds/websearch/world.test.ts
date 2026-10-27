@@ -166,6 +166,14 @@ describe('WebSearchWorld 切到 DeepSeek', () => {
     expect(String(url)).toContain('api.deepseek.com');
     expect((init as RequestInit).headers).toMatchObject({ Authorization: 'Bearer ds' });
   });
+
+  it('配置了 DeepSeek 地址时请求发往该地址,末尾斜杠不重复', async () => {
+    const fetchMock = vi.fn().mockImplementation(() => okResponse({ results: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const mod = world('k', { provider: 'deepseek', deepseekBaseUrl: 'https://proxy.example/deepseek/' }, { [WEBSEARCH_SECRETS.deepseek]: 'ds' });
+    await mod.tools()[0].handler({ q: '测试查询' }, ctx);
+    expect(String(fetchMock.mock.calls[0][0])).toBe('https://proxy.example/deepseek/v1/tools/search');
+  });
 });
 
 describe('WebSearch 快速配置页签', () => {

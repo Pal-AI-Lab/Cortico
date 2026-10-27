@@ -11,6 +11,8 @@ export type SafeSearch = 'off' | 'moderate' | 'strict';
 
 export interface BraveClientConfig {
   apiKey: string;
+  /** 请求发往 `<baseUrl>/web/search` 等路径 */
+  baseUrl: string;
   country: string;
   searchLang: string;
   uiLang: string;
@@ -29,7 +31,6 @@ export class BraveApiError extends Error {
   }
 }
 
-const BASE_URL = 'https://api.search.brave.com/res/v1';
 /** HTTP 429 的有限退避间隔。 */
 const RETRY_DELAYS_MS = [1000, 3000];
 
@@ -185,7 +186,7 @@ export class BraveClient implements SearchClient {
 
   /** GET + 鉴权头 + 超时 + 429/5xx/超时退避重试;其余错误(含OPTION_NOT_IN_PLAN)直抛 */
   private async get<T>(path: string, params: URLSearchParams): Promise<T> {
-    const url = `${BASE_URL}/${path}?${params.toString()}`;
+    const url = `${this.cfg.baseUrl}/${path}?${params.toString()}`;
     let lastErr: unknown;
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
       if (attempt > 0) {

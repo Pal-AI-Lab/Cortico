@@ -9,6 +9,8 @@ import { cleanText, type Freshness, type SearchClient, type SearchOptions, type 
 
 export interface DeepSeekClientConfig {
   apiKey: string;
+  /** 请求发往 `<baseUrl>/v1/tools/search` */
+  baseUrl: string;
   timeoutMs: number;
 }
 
@@ -21,7 +23,6 @@ export class DeepSeekApiError extends Error {
   }
 }
 
-const SEARCH_URL = 'https://api.deepseek.com/v1/tools/search';
 const ENDPOINT = 'deepseek/search';
 /** 服务端对 query 的长度上限(Unicode 字符)。 */
 const QUERY_MAX = 128;
@@ -77,7 +78,7 @@ export class DeepSeekClient implements SearchClient {
       const ac = new AbortController();
       const timer = setTimeout(() => ac.abort(), this.cfg.timeoutMs);
       try {
-        const res = await fetch(SEARCH_URL, {
+        const res = await fetch(`${this.cfg.baseUrl}/v1/tools/search`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${this.cfg.apiKey}`, 'Content-Type': 'application/json', Accept: 'application/json' },
           body: JSON.stringify(body),
