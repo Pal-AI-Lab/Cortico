@@ -200,6 +200,7 @@ function webUiContribution(loaded: LoadedConfig<BotConfig>, p: WebUiParts): WebU
 
 const definition: BotDefinition<BotConfig> = {
   id: 'corti-soulmate',
+  copy: { settingsInMemory: ['CONSTITUTION.md'] },
   // 记忆系统与 Cormini 同一套(工作区即记忆,Git 记账),分层记忆建在它上面。
   memoryName: 'GitMem',
   declares: DECLARES,

@@ -52,6 +52,8 @@ export interface WorldDefinition<S extends WorldSection = WorldSection> {
   label: string;
   /** World 配置默认值，每次返回新对象；enabled=false，由 bot 声明或部署配置启用。 */
   defaults(): S;
+  /** Optional deployment copy metadata, owned by this definition. */
+  copy?: import('./manager/copy-contract.ts').WorldCopyRules;
   /** 激活前置检查。抛错 = 不能激活,错误信息原样给操作者。 */
   preflight?(ctx: WorldContext<S>): void;
   /**

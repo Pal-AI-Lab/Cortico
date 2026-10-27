@@ -50,6 +50,8 @@ export function discoverEntries(root: string): WebEntry[] {
   const core = join(root, 'src', 'web', 'client', 'main.ts');
   if (existsSync(core)) found.push({ key: CORE_KEY, entry: core });
 
+  const manager = join(root, 'src/web/client/manager/app.ts');
+  if (existsSync(manager)) found.push({key: 'manager', entry: manager});
   const providers: WebEntry[] = [];
 
   const srcDir = join(root, 'src');
@@ -78,6 +80,7 @@ export function discoverEntries(root: string): WebEntry[] {
 /** asset key → outdir 下的产物路径前缀(不含 hash 与扩展名)。 */
 function outPrefix(key: string): string {
   if (key === CORE_KEY) return 'main';
+  if (key === 'manager') return 'manager';
   return `providers/${key.replace(':', '-')}`;
 }
 
@@ -137,6 +140,7 @@ export async function buildWeb(root: string): Promise<WebUiAssetManifest> {
 
   for (const { key, entry } of entries) {
     const out = byEntry.get(entry)!;
+    if (key === 'manager') { manifest.manager = out.js; continue; }
     if (key === CORE_KEY) {
       manifest.core = out.js;
       continue;

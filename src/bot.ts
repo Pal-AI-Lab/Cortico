@@ -73,6 +73,8 @@ export interface BotDefinition<C extends CoreConfig = CoreConfig> {
   defaults(): C;
   /** 由 withWorlds() 注入的内建及扩展 World 定义；按 worlds.<id>.enabled 挂载。 */
   worlds?: readonly WorldDefinition<WorldSection>[];
+  /** Optional deployment copy metadata, owned by this definition. */
+  copy?: import('./manager/copy-contract.ts').BotCopyRules;
   /** 默认启用的 World id；缺失实现时显示不可用。对象声明可附缺失原因，未声明的 World 默认关闭。 */
   declares?: readonly WorldDeclaration[];
   /** 配置已完成合并；worlds 与 Core 共用数组，激活和停用会就地更新，Persona 应在使用时读取。 */
@@ -863,7 +865,7 @@ export function createBot<C extends CoreConfig>(
   loaded: LoadedConfig<C>,
   definition: BotDefinition<C>,
   /** 启动时加载的扩展集；未提供时不显示扩展页。扩展 bot 的包内模板只读。 */
-  opts: { extensions?: ExtensionSet } = {},
+  opts: { extensions?: ExtensionSet; management?: import('./web/management.ts').ManagedRole; access?: import('./web/auth.ts').WebUiAccess } = {},
 ): Bot<C> {
   const cfg = loaded.config;
   // 环境模板允许包和部署覆盖，WebUI 仅写部署层。
@@ -994,6 +996,8 @@ export function createBot<C extends CoreConfig>(
       ];
     };
     webApp = new WebApp({
+      management: opts.management,
+      access: opts.access,
       store: core.store,
       memoryDir: loaded.memoryDir,
       dataDir: loaded.dataDir,

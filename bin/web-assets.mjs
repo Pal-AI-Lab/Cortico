@@ -24,8 +24,9 @@ const ASSET_PREFIX = '/assets/';
  */
 function referencedUrls(manifest) {
   const out = [];
-  const m = /** @type {{ core?: unknown, providers?: Record<string, { js?: unknown, css?: unknown }> }} */ (manifest);
+  const m = /** @type {{ core?: unknown, manager?: unknown, providers?: Record<string, { js?: unknown, css?: unknown }> }} */ (manifest);
   if (typeof m.core === 'string') out.push(m.core);
+  if (typeof m.manager === 'string') out.push(m.manager);
   for (const entry of Object.values(m.providers ?? {})) {
     if (typeof entry?.js === 'string') out.push(entry.js);
     if (typeof entry?.css === 'string') out.push(entry.css);

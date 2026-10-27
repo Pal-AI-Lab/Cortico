@@ -117,6 +117,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
 
 const definition: BotDefinition<CortiVConfig> = {
   id: 'cortiv',
+  copy: { settingsInMemory: ['CONSTITUTION.md'] },
   // 记忆系统与 Cormini 同一套(工作区即记忆,Git 记账)。
   memoryName: 'GitMem',
   declares: DECLARES,

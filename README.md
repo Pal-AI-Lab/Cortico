@@ -188,3 +188,5 @@ Building something cool with Cortico? Submit a pull request to share it here!
 
 * [@可缇Corti](https://space.bilibili.com/3707044056009191) — An AI VTuber from the future
 * ...and more!
+
+For multiple characters, run `pnpm start --manager`. See [multi-character management](docs/manager.md) for first-run access and copying.

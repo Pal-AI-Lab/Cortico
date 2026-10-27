@@ -2,49 +2,27 @@
  * 读取部署的 deployment.json，加载其 bot 字段指定的 BotDefinition。
  * 部署根由 src/paths.ts 解析，代码包来自 bots/ 或已安装的 bot 扩展。
  */
+import { managementAuth } from './manager/auth.ts';
+import { attachManager } from './manager/child.ts';
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
-import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
+import { LOG_LEVEL_RANK, type LogLevel } from './core/types.ts';
 import { resolveLanguage } from './core/language.ts';
-import type { BotDefinition } from './bot.ts';
 import { createBot } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
-import { buildListing, type BotDefaults } from './deploy-listing.ts';
+import { buildListing } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
 import { announceDataDir, webUiUrlOf, consumeBootFlags, listensOnEveryInterface, startsPaused, providerAtBoot } from './boot.ts';
-import { extensionIconFile, extensionsDir, importBotDefinition, loadExtensions, locateBotPackage, readInstalled, resolveExtensionEntry, type ActiveBotPackage } from './extensions.ts';
-import { parseExtensionManifest } from './extensions/manifest.ts';
+import { loadExtensions } from './extensions.ts';
+import { loadBotDefinition, botDefaults, botPackages, packageAvatar } from './deployment-code.ts';
 import { withWorlds } from './world.ts';
 import { loadBuiltinWorlds } from './worlds/index.ts';
 import { checkFrameworkRelease } from './web/framework-release.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
-import { deploymentDir, deploymentRoot, mainRepoRoot, packageDir, providerDir, providersRoot, readDeploymentManifest, repoRoot } from './paths.ts';
-
-/**
- * botPackage 仅在部署引用扩展 bot 包时返回。
- */
-async function loadBotDefinition(
-  name: string,
-): Promise<{ definition: BotDefinition<CoreConfig>; deployDir: string; pkgDir: string; botPackage?: ActiveBotPackage }> {
-  const deployDir = deploymentDir(name);
-  const manifest = readDeploymentManifest(name);
-  if (!manifest) {
-    throw new Error(`${resolve(deployDir, 'deployment.json')} 不存在`);
-  }
-  const location = locateBotPackage(repoRoot(), manifest.bot, packageDir(manifest.bot));
-  const definition = await importBotDefinition(location, {
-    treeHas: (id) => existsSync(resolve(packageDir(id), 'index.ts')),
-  });
-  return {
-    definition,
-    deployDir,
-    pkgDir: location.pkgDir,
-    ...(location.source === 'extension' ? { botPackage: { name: location.name, id: definition.id } } : {}),
-  };
-}
+import { deploymentRoot, providerDir, providersRoot, repoRoot } from './paths.ts';
 
 /** 浏览器启动失败时保留命令行已输出的地址。 */
 function openBrowser(url: string): void {
@@ -71,44 +49,6 @@ function pickBotName(): string {
     throw new Error(`没有这个部署: ${name}。可选:${available.join(' / ')}`);
   }
   return name;
-}
-
-/** 代码包的默认值:展示名与它选的配色方案 id。 */
-async function botDefaults(bot: string): Promise<BotDefaults> {
-  const location = locateBotPackage(repoRoot(), bot, packageDir(bot));
-  const definition = await importBotDefinition(location, {
-    treeHas: (id) => existsSync(resolve(packageDir(id), 'index.ts')),
-  });
-  const defaults = definition.defaults();
-  return { displayName: defaults.displayName, scheme: defaults.web.theme };
-}
-
-/** 可以拿来建部署的代码包:仓内 `bots/<名>/`,加上装好的、声明为 bot 且入口文件在的扩展。 */
-function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
-  const treeDir = resolve(mainRepoRoot(), 'bots');
-  const tree = existsSync(treeDir)
-    ? readdirSync(treeDir).filter((id) => existsSync(resolve(treeDir, id, 'index.ts')))
-    : [];
-  const installed = readInstalled(extensionsDir(repoRoot())).filter((p) => {
-    try {
-      const dir = resolve(extensionsDir(repoRoot()), 'node_modules', p.name);
-      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
-      const parsed = parseExtensionManifest(pkg);
-      return parsed.ok && parsed.manifest.kind === 'bot' && existsSync(resolveExtensionEntry(dir, pkg));
-    } catch { return false; }
-  }).map((p) => p.name);
-  return [
-    ...tree.map((id) => ({ id, source: 'tree' as const })),
-    ...installed.filter((id) => !tree.includes(id)).map((id) => ({ id, source: 'extension' as const })),
-  ];
-}
-
-/** 装好的 bot 扩展包声明的 PNG 图标,新建部署时复制成初始头像;仓内包与其他格式没有。 */
-function packageAvatar(bot: string): string | null {
-  if (botPackages().find((p) => p.id === bot)?.source !== 'extension') return null;
-  const dir = resolve(extensionsDir(repoRoot()), 'node_modules', bot);
-  const icon = extensionIconFile(dir, JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')));
-  return icon?.type === 'image/png' ? icon.file : null;
 }
 
 /** 命令行上 `--名=值` 的值;没给这个开关时为 null。 */
@@ -218,7 +158,10 @@ async function main(): Promise<void> {
       ? activeProvider.secret
       : null;
 
-  const bot = createBot(loaded, definition, { extensions });
+  const managerPort = Number(process.env.CORTICO_MANAGER_PORT);
+  const management = process.send && managerPort ? { id: botName, managerPort, managerHost: process.env.CORTICO_MANAGER_HOST } : undefined;
+  const access = management ? managementAuth(resolve(botDir, '..', '.manager')) : undefined;
+  const bot = createBot(loaded, definition, { extensions, management, access });
 
   // 必须在启动主循环前暂停，避免首批事件提前投递。
   const paused = startsPaused();
@@ -304,6 +247,7 @@ async function main(): Promise<void> {
       process.exit(code);
     }
   };
+  if (management) attachManager(bot.core.bus, () => shutdown('manager'));
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
   // Windows 关闭窗口触发 SIGHUP,Ctrl+Break 触发 SIGBREAK;系统的退出时限可能短于关机流程。

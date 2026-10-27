@@ -1,3 +1,4 @@
+import { mountManagerSwitcher } from './manager/role-switcher.ts';
 /** WebUI 入口：贡献页路由交给 WebUiPageHost，框架路由交给对应 feature；空路由默认打开控制台。 */
 
 import { fetchManifest, get } from './core/api.ts';
@@ -269,4 +270,5 @@ export function boot(doc: Document = document): { dispose(): void } {
 // 作为 bundle 入口被加载时自动启动:真页面带着 boot-note。测试 import 时没有它,不自动跑。
 if (typeof document !== 'undefined' && document.getElementById('boot-note')) {
   boot();
+  void mountManagerSwitcher().catch(console.error);
 }

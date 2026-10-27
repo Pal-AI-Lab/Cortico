@@ -4,6 +4,7 @@ import { CONSOLE_TOOL_DECLS, ConsoleWorld } from './world.ts';
 
 export const CONSOLE: WorldDefinition<ConsoleConfigSection> = {
   id: 'console',
+  copy: {},
   label: '控制台对话',
   defaults: () => ({ ...CONSOLE_DEFAULTS }),
   create: (ctx) => new ConsoleWorld({

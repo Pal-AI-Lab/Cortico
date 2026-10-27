@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { LAUNCH_DEFAULTS } from '../../src/providers/llamacpp/options.ts';
+import { defaultBackend, LAUNCH_DEFAULTS } from '../../src/providers/llamacpp/options.ts';
 import { change, doc, flush, mountSettings } from './provider-settings-fixture.ts';
 
 const UI = '../../src/web/client/ui/index.ts';
@@ -51,7 +51,7 @@ async function mountRuntimePanel(
 }
 
 it('runtime schema fields save through the configuration transaction and retain rejected values', async () => {
-  const panel = await mountRuntimePanel({ options: { runtime: { backend: 'cpu' } } });
+  const panel = await mountRuntimePanel({ options: { runtime: { backend: defaultBackend() } } });
   try {
     change(panel.field('GPU 层数(-ngl)'), '0');
     await flush();
@@ -68,7 +68,7 @@ it('runtime schema fields save through the configuration transaction and retain 
 
 it('自备运行时目录时后端那一格禁用:目录里的二进制自己决定后端', async () => {
   const own = await mountRuntimePanel(
-    { options: { runtime: { backend: 'cpu', runtimeDir: 'D:\\llama' } } },
+    { options: { runtime: { backend: defaultBackend(), runtimeDir: 'D:\\llama' } } },
     { own: true },
   );
   try {
@@ -77,7 +77,7 @@ it('自备运行时目录时后端那一格禁用:目录里的二进制自己决
     own.cleanup();
   }
 
-  const managed = await mountRuntimePanel({ options: { runtime: { backend: 'cpu' } } });
+  const managed = await mountRuntimePanel({ options: { runtime: { backend: defaultBackend() } } });
   try {
     expect(managed.field('后端').disabled).toBe(false);
   } finally {

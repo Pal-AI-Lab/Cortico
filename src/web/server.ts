@@ -32,6 +32,8 @@ import { coerceGroupValues } from '../core/config-schema.ts';
 import { isLanguage, languageTag, LocalizedError, systemLanguage, type Language } from '../core/language.ts';
 import { serverText } from './strings.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere } from './files.ts';
+import { mountManagementRoutes, type ManagedRole } from './management.ts';
+import type { WebUiAccess } from './auth.ts';
 import { AUTH_KEY_FILE, WebUiAuth, SESSION_COOKIE, SESSION_COOKIE_MAX_AGE_SEC, cookieValue } from './auth.ts';
 import { buildDiagnostics, DIAGNOSTICS_TAIL, type DiagnosticsEndpoint } from './diagnostics.ts';
 import { WebUiAssets, WebUiPageRegistry, type WebUiPageSource } from './webui-pages.ts';
@@ -664,6 +666,8 @@ export interface WebUiSurface {
   allowedHosts?: readonly string[];
   /** 访问密码;缺省或空串时不要求登录。 */
   password?: string;
+  access?: WebUiAccess;
+  management?: ManagedRole;
   /** 登录失败的回应延迟(毫秒);缺省见 FAILED_LOGIN_DELAY_MS,测试里调到 0。 */
   failedLoginDelayMs?: number;
   /** 主循环状态快照(token/截断/梦状态…有什么给什么) */
@@ -1001,7 +1005,8 @@ export class WebApp {
   private readonly app: express.Express;
   private readonly listenHost: string;
   private readonly allowedHosts: readonly string[];
-  private readonly auth: WebUiAuth;
+  private readonly auth: WebUiAccess;
+  private offAccessChange?: () => void;
   /** WebUI 页聚合。没挂 webUiPageSources 时它也在,只是永远收到空清单。 */
   private readonly webUiPages: WebUiPageRegistry;
   private readonly assets: WebUiAssets;
@@ -1021,7 +1026,8 @@ export class WebApp {
     this.deps = deps;
     this.listenHost = deps.host ?? '127.0.0.1';
     this.allowedHosts = deps.allowedHosts ?? [];
-    this.auth = new WebUiAuth(deps.password ?? '', join(deps.dataDir, AUTH_KEY_FILE), deps.failedLoginDelayMs);
+    this.auth = deps.access ?? new WebUiAuth(deps.password ?? '', join(deps.dataDir, AUTH_KEY_FILE), deps.failedLoginDelayMs);
+    this.offAccessChange = this.auth.onChange?.(() => this.wss?.clients.forEach(client => client.close(1008, 'Login expired')));
     this.language = deps.language ?? systemLanguage();
     this.webDistDir = deps.webDistDir ?? fileURLToPath(new URL('../../dist/web', import.meta.url));
     this.extensionAssets = deps.extensions?.webUiAssets?.() ?? [];
@@ -1241,7 +1247,7 @@ export class WebApp {
   }
 
   private authorized(req: { headers: Record<string, unknown> }): boolean {
-    return !this.auth.enabled || this.auth.verify(cookieValue(req.headers.cookie, SESSION_COOKIE));
+    return !this.auth.enabled || this.auth.verify(cookieValue(req.headers.cookie, this.auth.cookieName ?? SESSION_COOKIE));
   }
 
   /** 直连 HTTPS,或反向代理报告 X-Forwarded-Proto: https。 */
@@ -1252,7 +1258,7 @@ export class WebApp {
   /** HTTPS 下加 Secure;HttpOnly 使页面脚本读不到令牌。 */
   private sessionCookie(value: string, maxAgeSec: number, req: Request): string {
     const secure = this.overHttps(req);
-    return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSec}${secure ? '; Secure' : ''}`;
+    return `${this.auth.cookieName ?? SESSION_COOKIE}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAgeSec}${secure ? '; Secure' : ''}`;
   }
 
   private serveLogin(res: Response): void {
@@ -1516,6 +1522,7 @@ export class WebApp {
   }
 
   async stop(): Promise<void> {
+    this.offAccessChange?.();
     const wss = this.wss;
     const server = this.server;
     this.wss = null;
@@ -1608,6 +1615,7 @@ export class WebApp {
       });
     });
     app.post('/api/auth/logout', wrap((req, res) => {
+      if (this.authorized(req)) this.auth.logout?.();
       res.setHeader('Set-Cookie', this.sessionCookie('', 0, req));
       res.json({ ok: true });
     }));
@@ -1617,6 +1625,8 @@ export class WebApp {
       res.setHeader(WEBUI_AUTH_HEADER, 'required');
       res.status(401).json({ error: serverText(this.languageOf(req)).loginRequired });
     });
+
+    mountManagementRoutes(app, this.deps.management);
 
     const providerRoute = (handler: (hub: ProviderHub, req: Request) => unknown) => wrap(async (req, res) => {
       if (!this.deps.providers) { res.status(503).json({ error: serverText(this.languageOf(req)).providersUnavailable }); return; }

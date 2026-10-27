@@ -5,6 +5,7 @@ import { BilibiliWorld, bilibiliToolDecls } from './world.ts';
 
 export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
   id: 'bilibili',
+  copy: { state: ['bilibili-audience', 'bilibili-overlay'], connection: {keys: ['roomId', 'sessdata'], secrets: []} },
   label: 'B 站直播间',
   defaults: () => structuredClone(BILIBILI_DEFAULTS),
   create: (ctx) => {

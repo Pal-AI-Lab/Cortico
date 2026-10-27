@@ -5,6 +5,7 @@ import { WEBSEARCH_TOOL_DECLS, WebSearchWorld } from './world.ts';
 
 export const WEBSEARCH: WorldDefinition<WebSearchConfigSection> = {
   id: 'websearch',
+  copy: {connection: {keys: [], secrets: [WEBSEARCH_SECRET]}},
   label: 'WebSearch',
   defaults: () => ({ ...WEBSEARCH_DEFAULTS }),
   create: (ctx) =>

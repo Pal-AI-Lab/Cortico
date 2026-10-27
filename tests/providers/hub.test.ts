@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ProviderRegistry } from '../../src/providers/registry.ts';
@@ -129,9 +129,12 @@ it('reports other deployment selections and live ownership without claiming stop
   writeFileSync(join(other, 'deployment.json'), '{}');
   writeFileSync(join(other, 'config.json'), JSON.stringify({ activeProvider: 'Shared', paths: { data: 'custom-data' } }));
   expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: false }]);
+  // Match a normal Node process name for macOS instance ownership checks.
+  const previousTitle = process.title;
+  process.title = basename(process.execPath);
   const lock = acquireInstanceLock(data);
   try { expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: true }]); }
-  finally { lock.release(); }
+  finally { lock.release(); process.title = previousTitle; }
   expect(hub.list('en').providers[0].usage).toEqual([{ name: 'other', running: false }]);
 });
 

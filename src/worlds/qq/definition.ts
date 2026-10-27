@@ -6,6 +6,7 @@ import { OpenRouterVLMClient } from './vlm.ts';
 
 export const QQ: WorldDefinition<QQConfigSection> = {
   id: 'qq',
+  copy: { connection: {keys: ['wsUrl', 'token', 'groups', 'privates'], secrets: []} },
   label: 'QQ',
   defaults: () => ({ ...QQ_DEFAULTS, groups: [], privates: [], vision: { ...VISION_DEFAULTS } }),
   create: (ctx) => {

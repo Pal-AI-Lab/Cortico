@@ -52,9 +52,10 @@ export function parseArgs(argv) {
  *
  * @param {readonly string[]} argv 已去掉 node 与脚本自身的那一段
  * @param {NodeJS.ProcessEnv} env
- * @returns {{ kind: 'list' } | { kind: 'create', passthrough: string[] } | { kind: 'run', bot: string | null, passthrough: string[] }}
+ * @returns {{ kind: 'manager', passthrough: string[] } | { kind: 'list' } | { kind: 'create', passthrough: string[] } | { kind: 'run', bot: string | null, passthrough: string[] }}
  */
 export function parseRequest(argv, env) {
+  if (argv.includes('--manager')) return {kind: 'manager', passthrough: argv.filter(a => a !== '--manager')};
   const { bot, passthrough } = parseArgs(argv);
   if (passthrough.includes('--list')) return { kind: 'list' };
   if (passthrough.includes('--new')) {
@@ -318,6 +319,14 @@ async function main() {
     if (code !== 0) return code;
   }
 
+  if (request.kind === 'manager') {
+    const child = fork(join(REPO_ROOT, 'src/manager/main.ts'), request.passthrough, {
+      cwd: REPO_ROOT, execArgv: ['--import', 'tsx'], stdio: 'inherit', env: process.env,
+    });
+    process.on('SIGINT', () => child.kill('SIGINT'));
+    process.on('SIGTERM', () => child.kill('SIGTERM'));
+    return await new Promise(resolve => { child.once('exit', code => resolve(code ?? 1)); child.once('error', () => resolve(1)); });
+  }
   let listing = readListing();
   let available = listing.deployments.map((d) => d.name);
   if (request.kind === 'list') {

@@ -5,6 +5,7 @@ import { MINECRAFT_TOOL_DECLS } from './world.ts';
 
 export const MINECRAFT: WorldDefinition<MinecraftConfigSection> = {
   id: 'minecraft',
+  copy: { connection: {keys: ['host', 'port', 'username', 'local', 'viewerPort'], secrets: []} },
   label: 'Minecraft',
   defaults: () => structuredClone(MINECRAFT_DEFAULTS as unknown as MinecraftConfigSection),
   // The child process isolates Mineflayer physics and pathfinding from the main loop.

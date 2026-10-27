@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { acquireInstanceLock, INSTANCE_LOCK_FILE, InstanceLockedError } from '../../src/core/instance-lock.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { makeTmpDir } from './helpers.ts';
@@ -33,10 +33,17 @@ function deadPid(): number {
 describe('acquireInstanceLock', () => {
   let tmp: ReturnType<typeof makeTmpDir>;
   const held: Array<{ release(): void }> = [];
-  beforeEach(() => (tmp = makeTmpDir()));
+  let previousTitle: string;
+  beforeEach(() => {
+    // macOS ps reports Vitest's renamed process title instead of the Node executable.
+    previousTitle = process.title;
+    process.title = basename(process.execPath);
+    tmp = makeTmpDir();
+  });
   afterEach(() => {
     for (const lock of held.splice(0)) lock.release();
     tmp.cleanup();
+    process.title = previousTitle;
   });
 
   it('第一个实例拿到锁,锁文件里记着自己的 pid', () => {

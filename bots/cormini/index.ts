@@ -62,6 +62,7 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
 
 const definition: BotDefinition<CorminiConfig> = {
   id: 'cormini',
+  copy: { settingsInMemory: ['CONSTITUTION.md'] },
   memoryName: 'GitMem',
   declares: DECLARES,
   defaults: () => ({

@@ -78,3 +78,14 @@ export class WebUiAuth {
     return false;
   }
 }
+
+/** Optional shared access policy for managed WebUIs. */
+export interface WebUiAccess {
+  readonly enabled: boolean;
+  readonly cookieName?: string;
+  issue(): string;
+  verify(token: string | null): boolean;
+  login(candidate: string): Promise<boolean>;
+  logout?(): void;
+  onChange?(listener: () => void): () => void;
+}

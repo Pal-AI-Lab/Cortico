@@ -186,3 +186,5 @@ pnpm build:web
 
 * [@可缇Corti](https://space.bilibili.com/3707044056009191) — 来自未来的 AI VTuber。
 * ...持续更新中！
+
+多角色统一管理可运行 `pnpm start --manager`。首次访问会引导设置密码，详见[多角色管理](docs/manager.md)。

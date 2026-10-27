@@ -94,6 +94,8 @@ export interface WebUiAssetManifest {
   protocolVersion: typeof WEBUI_PROTOCOL_VERSION;
   /** 内核入口；尚未构建时为 null */
   core: string | null;
+  /** Optional management center entry. */
+  manager?: string;
   /** key 为 page id。 */
   providers: Record<string, WebUiAssetEntry>;
   /** esbuild 在仓库内读到的每个源文件的 sha256，键为仓库相对路径；启动器据此判断产物是否落后于源码。 */
