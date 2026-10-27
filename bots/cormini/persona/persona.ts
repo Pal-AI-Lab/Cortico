@@ -713,8 +713,8 @@ export class Cormini implements Persona {
   }
 
   /**
-   * 主 session 的输出旁路:挂载 World 的接收器扇成一个 tap。没有任何接收器时不声明,
-   * session 不走流式。每批投递时现取,World 运行中挂载/卸载即生效。
+   * 主 session 的输出旁路:挂载 World 的接收器扇成一个 tap。没有任何接收器时不声明。
+   * 每批投递时现取,World 运行中挂载/卸载即生效。
    */
   private outputTap(): OutputTap | undefined {
     const taps = this.sortedWorlds().flatMap((m) => {
