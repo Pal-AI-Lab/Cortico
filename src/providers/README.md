@@ -117,4 +117,7 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
 `{ entry, secretValue }` 时走它。
 
+已保存端点与表单草稿共用 `ProviderSettings.probeClient`。探测提供 `onEvent` 回调，使 Chat 与
+Responses 客户端请求流式响应；客户端消费并校验响应后，回执返回用量、费用或错误。
+
 连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。
