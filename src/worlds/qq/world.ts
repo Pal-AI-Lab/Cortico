@@ -73,7 +73,15 @@ type PttTextAction = (typeof PTT_TEXT_ACTIONS)[number];
  */
 const PTT_TEXT_PROTOCOL_WAIT_MS = 30_000;
 
+/**
+ * 转写请求回了失败或空文本时,从第一次请求发出起重取的总时限。QQ 的转写结果异步写回,第一次请求
+ * 常在写回前就回失败,而请求本身已触发转写,同一条语音隔几秒再取就有。时限取协议端自己等转写结果
+ * 的最长时间:超过它仍没写回的,协议端也按失败回。到时限仍没有文本就报没转写成。
+ */
+const PTT_TEXT_RETRY_DEADLINE_MS = PTT_TEXT_PROTOCOL_WAIT_MS;
 
+/** 第一次重取前的等待,之后每次翻倍:请求回得快时,时限内在 1、3、7、15s 各重取一次。 */
+const PTT_TEXT_RETRY_FIRST_DELAY_MS = 1_000;
 
 type QQText = ReturnType<typeof text>;
 
@@ -1000,7 +1008,8 @@ export class QQWorld implements World {
   /**
    * 向协议端请求 QQ 自带的语音转文字,结果另发一条 qq.transcript,不阻塞当前投递。
    * 转写结果照常合批唤醒;没转写成也发一条说明并唤醒,因为占位已写了「正在转写中」。
-   * 只有动作不存在(1404)才换下一个动作名,超时、撤回、识别失败都按这条没转写成处理。
+   * 只有动作不存在(1404)才换下一个动作名。协议端回了其他失败或空文本就退避重取,
+   * 到 PTT_TEXT_RETRY_DEADLINE_MS 为止;超时、断线不重取,直接按没转写成处理。
    */
   private transcribeVoice(msg: OneBotGroupMessage, conv: Conv, displayName: string, when: Date): void {
     const host = this.host!;
@@ -1008,15 +1017,24 @@ export class QQWorld implements World {
     const mid = msg.message_id;
     const timeoutMs = PTT_TEXT_PROTOCOL_WAIT_MS + (this.cfg.apiTimeoutMs ?? DEFAULT_API_TIMEOUT_MS);
     void (async () => {
+      const deadline = Date.now() + PTT_TEXT_RETRY_DEADLINE_MS;
       let rep!: ExtensionResult;
-      for (const action of this.pttTextAction ? [this.pttTextAction] : PTT_TEXT_ACTIONS) {
-        rep = await driver.callExtension(action, { message_id: mid }, timeoutMs);
-        if (!rep.ok && rep.retcode === RETCODE_UNSUPPORTED_ACTION) continue;
-        if (rep.ok || rep.retcode !== undefined) this.pttTextAction = action;
-        break;
+      let text = '';
+      for (let delayMs = PTT_TEXT_RETRY_FIRST_DELAY_MS; ; delayMs *= 2) {
+        for (const action of this.pttTextAction ? [this.pttTextAction] : PTT_TEXT_ACTIONS) {
+          rep = await driver.callExtension(action, { message_id: mid }, timeoutMs);
+          if (!rep.ok && rep.retcode === RETCODE_UNSUPPORTED_ACTION) continue;
+          if (rep.ok || rep.retcode !== undefined) this.pttTextAction = action;
+          break;
+        }
+        const raw = rep.ok ? (rep.data as { text?: unknown } | null)?.text : undefined;
+        text = typeof raw === 'string' ? raw.trim() : '';
+        if (text) break;
+        // 没有 retcode 是超时或断线,再取也一样;1404 说明动作名都已试过
+        const retry = rep.ok || (rep.retcode !== undefined && rep.retcode !== RETCODE_UNSUPPORTED_ACTION);
+        if (!retry || Date.now() + delayMs > deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
       }
-      const raw = rep.ok ? (rep.data as { text?: unknown } | null)?.text : undefined;
-      const text = typeof raw === 'string' ? raw.trim() : '';
       if (text) {
         await host.pushEvent(
           {

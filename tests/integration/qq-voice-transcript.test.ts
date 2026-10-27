@@ -63,6 +63,22 @@ describe('QQ 语音转写集成', () => {
     await mock.close();
   });
 
+  it('首次转写回失败时重取,文本到了照样唤醒一次', async () => {
+    let asked = 0;
+    mock.setActionHandler('fetch_ptt_text', () => {
+      asked += 1;
+      return asked === 1
+        ? { retcode: 1200, message: '获取语音转文字结果失败' }
+        : { data: { text: '今晚吃什么' } };
+    });
+    const callsBefore = llm.calls.length;
+    mock.emitGroupMessage({ user_id: 1001, nickname: '阿明', segments: [{ type: 'record', data: { file: 'voice.amr' } }] });
+    await waitFor(() => llm.calls.length > callsBefore, 10000);
+    const turn = JSON.stringify(llm.calls[callsBefore].messages);
+    expect(turn).toContain('[QQ语音转写] 今晚吃什么');
+    expect(turn).not.toContain('语音没能转写');
+  }, 15000);
+
   it('语音占位不单独唤醒;转写结果到达时唤醒一次,占位与转写同轮可见', async () => {
     let release!: () => void;
     mock.setActionHandler('fetch_ptt_text', () =>

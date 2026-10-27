@@ -580,13 +580,24 @@ describe('语音转写', () => {
     expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text', 'voice_msg_to_text', 'voice_msg_to_text']);
   });
 
-  it('协议端回了失败(撤回、识别失败)不换动作名,发一条没转写成的说明', async () => {
+  it('协议端回了失败就用同一动作名重取多次,到时限仍失败才发没转写成的说明', async () => {
     mock.setActionHandler('fetch_ptt_text', () => ({ retcode: 200, message: '消息不存在或已被撤回' }));
-    const mid = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
-    await waitUntil(() => transcripts().length === 1, '失败说明到达');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    try {
+      const mid = mock.emitGroupMessage({ user_id: 2002, nickname: '阿强', segments: voice });
+      // 每步推进远小于调用时限,在途请求不会被判超时
+      while (transcripts().length === 0) {
+        await new Promise((r) => setImmediate(r));
+        await vi.advanceTimersByTimeAsync(100);
+      }
 
-    expect(transcripts()[0].event.text).toBe(`[系统] #${mid} 的语音没能转写:fetch_ptt_text: retcode=200 消息不存在或已被撤回`);
-    expect(pttCalls().map((c) => c.action)).toEqual(['fetch_ptt_text']);
+      expect(transcripts()[0].event.text).toBe(`[系统] #${mid} 的语音没能转写:fetch_ptt_text: retcode=200 消息不存在或已被撤回`);
+      const actions = pttCalls().map((c) => c.action);
+      expect(actions.length).toBeGreaterThan(1);
+      expect(new Set(actions)).toEqual(new Set(['fetch_ptt_text']));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('调用超时不换动作名', async () => {
