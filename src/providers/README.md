@@ -74,6 +74,10 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 `max_output_tokens × 12` 时终止请求并报告超限;终态只接受 `completed` / `incomplete`,`failed` 抛
 `LLMError`;每次请求尝试记录 `meters` 与 `charges`。
 
+`GenerateOptions.onEvent` 在场即流式请求:Chat 带 `stream: true` 与 `stream_options.include_usage`,Responses 带
+`stream: true`。生成与连接探测总是带它；只有适配器诊断流内失败时发的对照请求不带。流里没有用量时，该次尝试的
+`meters` 各项为 null;单价非零的计量列进 `charges` 的 `missing`,金额为 null。上游不能流式时由 provider 扩展处理。
+
 `responses-input.ts` 是原生 Responses 的无状态重放(system / developer 上提为
 `instructions`;思维链按 `reasoningReplay` 以签名块或 `reasoning_text` 回传,明文形态下没有记录来源
 的调用前补一项合成推理,`sendSyntheticReasoning` 为 false 时不补;来源实例、模块或兼容域与本次请求不同的 message /
@@ -117,7 +121,7 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
 `{ entry, secretValue }` 时走它。
 
-已保存端点与表单草稿共用 `ProviderSettings.probeClient`。探测提供 `onEvent` 回调，使 Chat 与
-Responses 客户端请求流式响应；客户端消费并校验响应后，回执返回用量、费用或错误。
+已保存端点与表单草稿共用 `ProviderSettings.probeClient`。探测与正式生成一样带 `onEvent`,请求流式响应；
+客户端消费并校验响应后，回执返回用量、费用或错误。
 
 连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。

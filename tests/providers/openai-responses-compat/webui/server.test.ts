@@ -79,6 +79,7 @@ describe('探测', () => {
     expect(seen.map((call) => call.replay)).toEqual(['encrypted', 'plaintext']);
     for (const { request, options } of seen) {
       expect(options.diagnostic).toBe(true);
+      expect(options.onEvent).toBeTypeOf('function');
       expect(request.max_output_tokens).toBe(PROBE_MAX_OUTPUT_TOKENS);
       expect(request.tools?.map((tool) => tool.name)).toEqual(['probe_event_frame']);
       const input = request.input as Array<{ type: string; name?: string }>;
