@@ -1,7 +1,10 @@
 import { FixtureHandoffResult as ContextHandoffResult } from './fixture-protocol.ts';
 import { createResponse, type StreamEvent, type FunctionCall } from '../../src/protocol/open-responses/index.ts';
 import { unknownMeters, type ProviderAttempt } from '../../src/core/generation.ts';
-import { FixtureTap as OutputTap } from './fixture-protocol.ts';
+import { FixtureStream, FixtureTap as OutputTap } from './fixture-protocol.ts';
+import type { ResponseClient } from '../../src/core/generation.ts';
+import type { Request } from '../../src/protocol/open-responses/index.ts';
+import { ResponsesProvider } from '../../src/providers/openai-responses-compat/native.ts';
 import { existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -73,7 +76,7 @@ interface RigOptions {
   preState?: (state: CoreState, store: JsonlEventStore) => void;
   /** 事件正文怎么进上下文(缺省=声明里不写,即 tool 帧投递) */
   eventDelivery?: 'tool' | 'user';
-  /** 输出旁路(缺省=声明里不写,即不流式) */
+  /** 输出旁路(缺省=声明里不写) */
   outputTap?: OutputTap;
   /** 模型工具调用流水(缺省=不接) */
   toolLog?: ToolCallLog;
@@ -84,6 +87,8 @@ interface RigOptions {
   resubmit?: ResubmitPolicy;
   /** 软轮数提醒；null 表示不提醒，缺省使用英文文本。 */
   softHint?: string | null;
+  /** 模型客户端(缺省=按脚本答复的 FakeLLM) */
+  llm?: ResponseClient;
 }
 
 function makeRig(opts: RigOptions = {}) {
@@ -121,7 +126,7 @@ function makeRig(opts: RigOptions = {}) {
   const decl = persona.declareSessions()[0];
   const loop = new MainLoop({
     cfg,
-    llm,
+    llm: opts.llm ?? llm,
     persona,
     decl,
     spec: () => activeSpec(cfg),
@@ -896,6 +901,29 @@ describe('MainLoop user事件协议', () => {
     assertPairing(messages);
   });
 
+  it('没有 outputTap 时模型请求也是流式请求：只收流式请求的上游照常答复', async () => {
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      bodies.push(body);
+      if (body.stream !== true) return new Response('{"error":{"message":"stream must be true"}}', { status: 400 });
+      const frames: string[] = [];
+      const stream = new FixtureStream(body as Request, (event) => frames.push(`data: ${JSON.stringify(event)}
+
+`));
+      stream.feed({ type: 'content', text: 'pong' });
+      stream.finish(undefined);
+      return new Response(frames.join(''), { headers: { 'content-type': 'text/event-stream' } });
+    });
+    try {
+      rig = makeRig({ llm: new ResponsesProvider({ baseUrl: 'https://fixture.test/v1' }) });
+      rig.start();
+      await until(() => rig.session.messages.at(-1)?.content === 'pong');
+      expect(bodies[0].stream).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
   it('思维链不进 runlog;transcript 只追加地留下 reasoning 项并带轮次锚点', async () => {
     const debugs: string[] = [];

@@ -65,6 +65,10 @@ export interface ProviderAttempt {
 }
 export interface GenerateOptions {
   signal?: AbortSignal;
+  /**
+   * Present: the request streams and each event is passed here. Generations and connection probes always
+   * pass it; the comparison request a transport sends while diagnosing a failure omits it.
+   */
   onEvent?: (event: StreamEvent) => void;
   role?: string;
   sessionId?: string;

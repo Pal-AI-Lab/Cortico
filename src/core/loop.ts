@@ -1199,17 +1199,17 @@ export class MainLoop {
           round: roundNo, outcome, llmMs, ttftMs, outputTokens: meters?.output ?? null, toolMs, ...extra,
         } });
       };
-      const tapEvents = tap ? {
-        onEvent: (event: StreamEvent): void => {
-          if (!this.active(generation) || flight.controller.signal.aborted) return;
-          if (event.type === 'response.created') setAnchors({ resp: event.response.id });
-          if (ttftMs === null && ('delta' in event || event.type === 'response.output_item.added')) ttftMs = Date.now() - roundStart;
-          const tappedEffect = tap.externalizes ? tap.externalizes(event) : defaultExternalizes(event);
-          if (tappedEffect || (event.type === 'response.output_item.done' && event.item?.type === 'function_call' && event.item.status === 'completed')) flight.externalized = true;
-          eager?.onEvent(event);
-          try { tap.onEvent(event); } catch (error) { log.warn('outputTap.onEvent异常', { err: error }); }
-        },
-      } : undefined;
+      // 生成请求一律流式:onEvent 总是传给 provider。外化判定、提前派发和 tap 只在有 tap 时运行。
+      const onEvent = (event: StreamEvent): void => {
+        if (!this.active(generation) || flight.controller.signal.aborted) return;
+        if (event.type === 'response.created') setAnchors({ resp: event.response.id });
+        if (ttftMs === null && ('delta' in event || event.type === 'response.output_item.added')) ttftMs = Date.now() - roundStart;
+        if (!tap) return;
+        const tappedEffect = tap.externalizes ? tap.externalizes(event) : defaultExternalizes(event);
+        if (tappedEffect || (event.type === 'response.output_item.done' && event.item?.type === 'function_call' && event.item.status === 'completed')) flight.externalized = true;
+        eager?.onEvent(event);
+        try { tap.onEvent(event); } catch (error) { log.warn('outputTap.onEvent异常', { err: error }); }
+      };
       let assistant: ContextRecord[];
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
@@ -1220,8 +1220,7 @@ export class MainLoop {
         let res: Awaited<ReturnType<typeof llm.respond>>;
         try {
           res = await llm.respond(responseRequest(spec, outbound, schemas), {
-            context: outbound, nativeSpec: spec,
-            ...(tapEvents ?? {}),
+            context: outbound, nativeSpec: spec, onEvent,
             role: decl.id,
             sessionId: this.mainTrack?.id,
             signal: flight.controller.signal,
