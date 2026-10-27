@@ -162,7 +162,8 @@ export class WorkspaceGit {
   private run(args: string[]): string {
     // safe.directory 仅作为本次 Git 调用的配置；-C 固定目标工作区。
     // quotepath=false 保留非 ASCII 路径，供历史记录与 numstat 匹配。
-    return execFileSync('git', ['-C', this.dir, '-c', 'safe.directory=*', '-c', 'core.quotepath=false', ...args], {
+    // fsmonitor=false 覆盖用户全局配置，工作区里不留常驻的 git fsmonitor--daemon。
+    return execFileSync('git', ['-C', this.dir, '-c', 'safe.directory=*', '-c', 'core.quotepath=false', '-c', 'core.fsmonitor=false', ...args], {
       cwd: this.dir,
       env: this.gitEnv(),
       encoding: 'utf8',
@@ -175,7 +176,7 @@ export class WorkspaceGit {
     return new Promise((resolve, reject) => {
       execFile(
         'git',
-        ['-C', this.dir, '-c', 'safe.directory=*', '-c', 'core.quotepath=false', ...args],
+        ['-C', this.dir, '-c', 'safe.directory=*', '-c', 'core.quotepath=false', '-c', 'core.fsmonitor=false', ...args],
         { cwd: this.dir, env: this.gitEnv(), encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
         (err, stdout) => (err ? reject(err) : resolve(stdout)),
       );
