@@ -5549,17 +5549,31 @@ export class MinecraftWorld implements World {
     this.hookedBots.add(bot);
 
     // 爆炸仅写 diag，不投递成文事件。
+    // 包里没有的半径、炸掉格数记 null,文案省掉那一段。
     bot._client.on('explosion', (packet: {
-      x: number; y: number; z: number; radius: number; affectedBlockOffsets: unknown[];
+      /** 1.21.9 之前的爆心 */
+      x?: number; y?: number; z?: number;
+      /** 1.21.9 起的爆心 */
+      center?: { x: number; y: number; z: number };
+      /** 1.21.2–1.21.8 不发 */
+      radius?: number;
+      /** 1.21.2 之前 */
+      affectedBlockOffsets?: unknown[];
+      /** 1.21.9 起 */
+      blockCount?: number;
     }) => {
+      const { x, y, z } = (packet.center ?? packet) as { x: number; y: number; z: number };
+      const radius = packet.radius ?? null;
+      const affected = packet.blockCount ?? packet.affectedBlockOffsets?.length ?? null;
       const at = bot.entity?.position;
-      const distance = at ? Math.hypot(at.x - packet.x, at.y - packet.y, at.z - packet.z) : null;
-      const affected = packet.affectedBlockOffsets.length;
+      const distance = at ? Math.hypot(at.x - x, at.y - y, at.z - z) : null;
       this.diag.write({
         lane: 'world', event: 'explosion',
-        msg: `爆炸:(${Math.round(packet.x)}, ${Math.round(packet.y)}, ${Math.round(packet.z)}) 半径 ${packet.radius.toFixed(1)}`
-          + `,炸掉 ${affected} 格${distance === null ? '' : `,离我 ${distance.toFixed(1)} 格`}`,
-        data: { x: packet.x, y: packet.y, z: packet.z, radius: packet.radius, affected, distance },
+        msg: `爆炸:(${Math.round(x)}, ${Math.round(y)}, ${Math.round(z)})`
+          + (radius === null ? '' : ` 半径 ${radius.toFixed(1)}`)
+          + (affected === null ? '' : `,炸掉 ${affected} 格`)
+          + (distance === null ? '' : `,离我 ${distance.toFixed(1)} 格`),
+        data: { x, y, z, radius, affected, distance },
       });
     });
     if (typeof bot.inventory?.on === 'function') {

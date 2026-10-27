@@ -244,7 +244,7 @@ const CRYSTAL_BLAST_WAIT_MS = 100;
 
 interface ExplosionPacket {
   x?: number; y?: number; z?: number;
-  /** 1.21.11 起爆心收进 center */
+  /** 1.21.9 起爆心收进 center */
   center?: { x: number; y: number; z: number };
 }
 
