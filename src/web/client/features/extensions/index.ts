@@ -201,7 +201,7 @@ export interface SearchHitView {
   publisher?: string;
   license?: string;
   keywords?: string[];
-  downloads: { total?: number; month: number; week?: number };
+  downloads: { total?: number; month?: number; week?: number };
   dependents: number;
   links: { npm?: string; repository?: string; homepage?: string };
   installed: boolean;
@@ -319,7 +319,7 @@ export function arrangeHits(
     if (keyword && !(h.keywords ?? []).some(k => k.toLowerCase().includes(keyword))) return false;
     if (opts.license && (h.license ?? '').toLowerCase() !== opts.license.trim().toLowerCase()) return false;
     if (opts.publishedSince && (h.date ?? '') < opts.publishedSince) return false;
-    if (opts.minDownloads && h.downloads.month < opts.minDownloads) return false;
+    if (opts.minDownloads && (h.downloads.month ?? 0) < opts.minDownloads) return false;
     if (opts.tags?.some((t) => !h.tags?.includes(t))) return false;
     if (opts.excludeTags?.some((t) => h.tags?.includes(t))) return false;
     if (!needle) return true;
@@ -333,7 +333,7 @@ export function arrangeHits(
     switch (opts.sort) {
       case 'certified': return Number(!!b.certified) - Number(!!a.certified) || a.name.localeCompare(b.name);
       case 'rating': return score(b) - score(a) || (b.rating?.up ?? 0) - (a.rating?.up ?? 0) || a.name.localeCompare(b.name);
-      case 'downloads': return b.downloads.month - a.downloads.month || a.name.localeCompare(b.name);
+      case 'downloads': return (b.downloads.month ?? -1) - (a.downloads.month ?? -1) || a.name.localeCompare(b.name);
       // 发布时间是 ISO 串,按串比就是按时间比;没有日期的排在最后
       case 'date': return (b.date ?? '').localeCompare(a.date ?? '') || a.name.localeCompare(b.name);
       default: return a.name.localeCompare(b.name);
@@ -1324,7 +1324,7 @@ export function mountExtensions(ctx: FeatureContext): void {
         const next = listed.supersededBy, target = states[owner].hits.find(entry => entry.name === next);
         const [before, after] = S.supersededBy.split('{}');
         const link = ui.h('a', 'extension-superseded-link', target?.displayName ?? next); link.href = '#';
-        link.addEventListener('click', event => { event.preventDefault(); openDetail(target ?? { name: next, version: '', description: '', downloads: { month: 0 }, dependents: 0, links: {}, installed: false }, owner); }, { signal });
+        link.addEventListener('click', event => { event.preventDefault(); openDetail(target ?? { name: next, version: '', description: '', downloads: {}, dependents: 0, links: {}, installed: false }, owner); }, { signal });
         const line = ui.h('p', 'extension-cta-superseded'); line.append(before, link, after); cta.append(line);
       }
       header.append(cta);
