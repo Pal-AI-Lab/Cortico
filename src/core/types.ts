@@ -982,10 +982,14 @@ export interface MemoryAssemblyContext {
   timezone: string;
 }
 
-/** 一个 World 的挂载或可见状态被装配层改变。`label` 是 WebUI 显示名。 */
+/**
+ * 一个 World 的挂载或可见状态被装配层改变,或启动期 `start()` 抛错。`label` 是 WebUI 显示名;
+ * `reason` 是 `start()` 抛出的原始错误文本。
+ */
 export type WorldLifecycleEvent =
   | { kind: 'mounted' | 'unmounted' | 'restarted'; id: string; label: string }
-  | { kind: 'visibility'; id: string; label: string; visible: boolean };
+  | { kind: 'visibility'; id: string; label: string; visible: boolean }
+  | { kind: 'start-failed'; id: string; label: string; reason: string };
 
 /**
  * Persona 定义上下文内容、session 和 Memory 操作。Core 在生命周期边界调用可选钩子。
@@ -1018,7 +1022,7 @@ export interface Persona {
   onIdle?(): void | Promise<void>;
   /** 连续模型调用失败后恢复时调用；返回待注入文本，null 表示不注入。 */
   onStallsRecovered?(info: { count: number; quietMs: number }): string | null;
-  /** World 被激活、停用、重启或可见性改变时调用；启动期初始挂载不通知。 */
+  /** World 被激活、停用、重启、可见性改变,或启动期 `start()` 抛错时调用；启动期初始挂载不通知。 */
   onWorldLifecycle?(event: WorldLifecycleEvent): void;
   /**
    * Persona 的工具名，用于拒绝重名 World。

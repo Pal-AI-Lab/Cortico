@@ -216,8 +216,8 @@ describe('激活 / 停用 / 重启', () => {
     expect(assembly.slot('a').mounted).toBe(true);
   });
 
-  it('启动期 start 抛错由 Core 报回:槽位回到未激活并带理由,enabled 不变,换上新实例;再激活成功后理由清掉', async () => {
-    const { assembly, loaded, json, mounts } = assemblyOf([probeDefinition('a')], ['a']);
+  it('启动期 start 抛错由 Core 报回:槽位回到未激活并带理由、报一次 start-failed,enabled 不变,换上新实例;再激活成功后理由清掉', async () => {
+    const { assembly, loaded, json, mounts, lifecycle } = assemblyOf([probeDefinition('a')], ['a']);
     const first = assembly.slot('a').instance;
     // Core 启动时先把失败的实例移出共用的挂载表
     assembly.mounted.splice(assembly.mounted.indexOf(first), 1);
@@ -230,9 +230,11 @@ describe('激活 / 停用 / 重启', () => {
     expect((loaded.config as unknown as { worlds: Record<string, ProbeSection> }).worlds.a.enabled).toBe(true);
     expect(json().worlds.a).toBeUndefined();
     expect(mounts).toEqual([]);
+    expect(lifecycle).toEqual([{ kind: 'start-failed', id: 'a', label: 'a 探针', reason: '端口 1000 被占用' }]);
     expect(await assembly.activate('a')).toContain('已启用');
     expect(assembly.slot('a').startFailed).toBeUndefined();
     expect(assembly.mounted.map((m) => m.id)).toEqual(['a']);
+    expect(lifecycle.map((e) => e.kind)).toEqual(['start-failed', 'mounted']);
   });
 
   it('停用:stop 旧实例、出表、写回 false,槽位换上从未 start 的新实例', async () => {

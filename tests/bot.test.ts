@@ -13,7 +13,7 @@ import { loadDeployment } from '../src/deploy.ts';
 import { WorldAssembly, worldDefaults, type WorldDefinition, type WorldSection } from '../src/world.ts';
 import { providerModules } from '../src/providers/registry.ts';
 import { repoRoot } from '../src/paths.ts';
-import type { CoreConfig, World, WorldHost } from '../src/core/types.ts';
+import type { CoreConfig, World, WorldHost, WorldLifecycleEvent } from '../src/core/types.ts';
 import type { Language } from '../src/core/language.ts';
 import { CONSOLE } from '../src/worlds/console/definition.ts';
 import { text as consoleText } from '../src/worlds/console/strings.ts';
@@ -79,8 +79,9 @@ it('removed entries are never enabled', () => {
   expect(decorate(removed, 'en').enabled).toBe(false);
 });
 
-it('a World whose start() throws at boot is left inactive with its reason; the bot and the other Worlds start, enabled stays, a later activation clears the reason', async () => {
+it('a World whose start() throws at boot is left inactive with its reason and the Persona hears start-failed; the bot and the other Worlds start, enabled stays, a later activation clears the reason', async () => {
   let boom = true;
+  const lifecycle: WorldLifecycleEvent[] = [];
   const bad = probe('bad', () => ({
     id: 'bad', envPromptVars: () => ({}), tools: () => [],
     start: async () => { if (boom) throw new Error('port 7797 in use'); }, stop: async () => {},
@@ -95,11 +96,16 @@ it('a World whose start() throws at boot is left inactive with its reason; the b
     id: 'probe-bot',
     defaults: () => config,
     worlds: [bad, good],
-    build: (_loaded, mounted) => ({ persona: makeFakePersona([], { worlds: mounted }), llm: new FakeLLM(), webUi: { enabled: false } }),
+    build: (_loaded, mounted) => {
+      const persona = makeFakePersona([], { worlds: mounted });
+      persona.onWorldLifecycle = (event) => { lifecycle.push(event); };
+      return { persona, llm: new FakeLLM(), webUi: { enabled: false } };
+    },
   });
   try {
     await app.start();
     expect(goodInstance.started).toBe(1);
+    expect(lifecycle).toEqual([{ kind: 'start-failed', id: 'bad', label: 'bad probe', reason: 'port 7797 in use' }]);
     expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good']);
     expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad'))
       .toMatchObject({ status: 'inactive', reason: 'Start failed: port 7797 in use' });
@@ -109,6 +115,7 @@ it('a World whose start() throws at boot is left inactive with its reason; the b
     await app.assembly.activate('bad', 'en');
     expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good', 'bad']);
     expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad')).toMatchObject({ status: 'active' });
+    expect(lifecycle.map((event) => event.kind)).toEqual(['start-failed', 'mounted']);
   } finally {
     await app.stop();
   }

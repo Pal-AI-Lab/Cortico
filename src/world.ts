@@ -162,7 +162,7 @@ export interface PrebuiltOptions {
 export interface WorldMountHost {
   mount(mod: World): Promise<void>;
   unmount(id: string): Promise<void>;
-  /** 装配层改了一个槽位的挂载状态(激活 / 停用 / 重启)。启动期的初始挂载不报。 */
+  /** 装配层改了一个槽位的挂载状态(激活 / 停用 / 重启),或启动期 `start()` 抛错。启动期的初始挂载不报。 */
   lifecycle?(event: WorldLifecycleEvent): void;
   /**
    * Core 保留帧与 Persona 自有工具的名称。绑定时检查已挂载实例，
@@ -374,7 +374,7 @@ export class WorldAssembly {
 
   /**
    * Core 启动期报回的 `start()` 失败:槽位回到未激活并记下理由,`enabled` 不变,
-   * 定义实例重建;Core 已把失败实例移出挂载表。
+   * 定义实例重建,报一次 start-failed;Core 已把失败实例移出挂载表。
    */
   startFailed(id: string, detail: string): void {
     const slot = this.slot(id);
@@ -383,6 +383,7 @@ export class WorldAssembly {
     slot.mounted = false;
     if (slot.definition) slot.instance = slot.definition.create(this.context(slot.definition));
     slot.startFailed = (language) => text(language).startFailed(detail);
+    this.host?.lifecycle?.({ kind: 'start-failed', id, label: slot.label, reason: detail });
   }
 
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */

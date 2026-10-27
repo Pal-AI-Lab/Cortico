@@ -105,7 +105,8 @@ handler 抛错，或返回值既不是字符串也不是带字符串 text 的对
 ## 错误隔离
 
 装配层将 World 构造失败限制在该 World。启动期 `start()` 抛错的 World 记 error、移出挂载表并带理由回到
-未激活,其余 World 照常启动,`enabled` 不变,下次启动再试;运行期激活时 `start()` 抛错回滚 `enabled`。
+未激活,经 `Persona.onWorldLifecycle` 报一次 `start-failed`,其余 World 照常启动,`enabled` 不变,下次启动再试;
+运行期激活时 `start()` 抛错回滚 `enabled`,不报事件。
 `stop()` 失败或超时会记录结果并继续卸载。`onOpening`、`onDelivery`、`onBatchEnd`、`onTurnEnded`、`onIdle` 异常记录
 warn；`onHandoff` 异常记录 error 并使用默认交接策略。其他钩子的异常由调用方处理。
 读取 `webUi()` 失败时省略该 World 的环境段，继续构建前缀。主循环异常退出时记录 event 为 `loop-exit` 的 error
