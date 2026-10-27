@@ -107,6 +107,7 @@ export const botText: Partial<typeof botEn> = {
 
 export const assemblyText: Partial<typeof assemblyEn> = {
   constructFailed: (detail: string) => `建構失敗: ${detail}`,
+  startFailed: (detail: string) => `啟動失敗: ${detail}`,
   instanceIdMismatch: (instanceId: string, definitionId: string) => `create() 回傳的實例 id「${instanceId}」與定義 id「${definitionId}」不一致,World 實例的 id 須等於定義的 id`,
   notImplemented: '本機沒有找到這個 World 的實作。',
   unknownWorld: (id: string) => `未知 World: ${id}`,

@@ -1,21 +1,23 @@
 /**
  * 扩展页里随框架提供的条目:World 取装配里不来自扩展的定义,provider 取模块表里不来自扩展的那些;
  * 运行状态(enabled / hidden)由 extensionRuntimeState 补上。
+ * 启动:一个 World 的 start() 抛错不影响 bot 与其余 World 启动。
  */
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { builtinExtensions, extensionRuntimeState } from '../src/bot.ts';
+import { builtinExtensions, createBot, deriveWorldFacts, extensionRuntimeState } from '../src/bot.ts';
+import { CORE_DEFAULTS, type LoadedConfig } from '../src/core/config.ts';
 import { loadDeployment } from '../src/deploy.ts';
 import { WorldAssembly, worldDefaults, type WorldDefinition, type WorldSection } from '../src/world.ts';
 import { providerModules } from '../src/providers/registry.ts';
 import { repoRoot } from '../src/paths.ts';
-import type { World, WorldHost } from '../src/core/types.ts';
+import type { CoreConfig, World, WorldHost } from '../src/core/types.ts';
 import type { Language } from '../src/core/language.ts';
 import { CONSOLE } from '../src/worlds/console/definition.ts';
 import { text as consoleText } from '../src/worlds/console/strings.ts';
-import { makeCfg } from './core/helpers.ts';
+import { FakeLLM, makeCfg, makeFakePersona } from './core/helpers.ts';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'bot-builtins-')); });
@@ -75,4 +77,39 @@ it('removed entries are never enabled', () => {
   const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true);
   const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, webUiClient: false, loaded: true, state: 'removed' as const };
   expect(decorate(removed, 'en').enabled).toBe(false);
+});
+
+it('a World whose start() throws at boot is left inactive with its reason; the bot and the other Worlds start, enabled stays, a later activation clears the reason', async () => {
+  let boom = true;
+  const bad = probe('bad', () => ({
+    id: 'bad', envPromptVars: () => ({}), tools: () => [],
+    start: async () => { if (boom) throw new Error('port 7797 in use'); }, stop: async () => {},
+  }));
+  const goodInstance = { id: 'good', envPromptVars: () => ({}), tools: () => [], started: 0, start: async () => { goodInstance.started++; }, stop: async () => {} };
+  const good = probe('good', () => goodInstance);
+  const worlds = { bad: { enabled: true }, good: { enabled: true } };
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ worlds }), 'utf8');
+  const config = { ...CORE_DEFAULTS, worlds } as unknown as CoreConfig;
+  const loaded: LoadedConfig<CoreConfig> = { config, secret: () => '', rootDir: dir, memoryDir: join(dir, 'memory'), dataDir: join(dir, 'data') };
+  const app = createBot(loaded, {
+    id: 'probe-bot',
+    defaults: () => config,
+    worlds: [bad, good],
+    build: (_loaded, mounted) => ({ persona: makeFakePersona([], { worlds: mounted }), llm: new FakeLLM(), webUi: { enabled: false } }),
+  });
+  try {
+    await app.start();
+    expect(goodInstance.started).toBe(1);
+    expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good']);
+    expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad'))
+      .toMatchObject({ status: 'inactive', reason: 'Start failed: port 7797 in use' });
+    expect((JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) as { worlds: typeof worlds }).worlds.bad.enabled).toBe(true);
+
+    boom = false;
+    await app.assembly.activate('bad', 'en');
+    expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good', 'bad']);
+    expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad')).toMatchObject({ status: 'active' });
+  } finally {
+    await app.stop();
+  }
 });

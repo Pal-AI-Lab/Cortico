@@ -1473,12 +1473,13 @@ const app = new WebApp({
         ...(decl?.badges ? { badges: decl.badges } : {}),
       };
     }))),
-// 模拟已安装但未激活的 World。
+// 模拟已安装但未激活的 World:启动期 start() 抛错后回到未激活,带理由。
     {
       id: 'sandbox',
       status: 'inactive' as const,
       label: '沙盒 World',
       declared: false,
+      reason: '启动失败: listen EADDRINUSE: address already in use 127.0.0.1:7797 (dev 假数据)',
     },
     // 截图夹具覆盖Persona已声明但未安装的 World 状态。
     {

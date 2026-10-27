@@ -406,6 +406,15 @@ describe('World 页的三态卡片', () => {
     expect(cardOf(root, '戊').textContent).toContain('无法加载这个 World。');
   });
 
+  it('未激活的 World 带着启动失败的理由时,理由原样上卡', async () => {
+    const { root } = await mountWith({
+      '/api/worlds': { worlds: [{ id: 'zeta', status: 'inactive', label: '己', declared: true, reason: '启动失败: 端口 7797 被占用' }] },
+    });
+    const card = cardOf(root, '己');
+    expect(card.find('msgline')!.textContent).toBe('启动失败: 端口 7797 被占用');
+    expect(card.find('msgline')!.classList.contains('bad')).toBe(true);
+  });
+
   it('未激活：卡角只有一颗激活键；没接激活开关时改成一句怎么手改 config 的说明', async () => {
     const a = await mountWith(listRoute);
     const card = cardOf(a.root, '丙渠道');

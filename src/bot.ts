@@ -478,7 +478,13 @@ export function deriveWorldFacts(
     }
     const label = decl?.label ?? assembly.labelIn(slot.id, language);
     if (!slot.mounted) {
-      return { id: slot.id, status: 'inactive' as const, label, declared: slot.declared };
+      return {
+        id: slot.id,
+        status: 'inactive' as const,
+        label,
+        declared: slot.declared,
+        ...(slot.startFailed ? { reason: slot.startFailed(language) } : {}),
+      };
     }
     return {
       id: m.id,
@@ -1170,7 +1176,7 @@ export function createBot<C extends CoreConfig>(
       if (orphans.length) core.runlog.logger('provider').warn('端点条目没有对应的 Provider 模块,不可用', { orphans });
       if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
-      await core.start();
+      for (const failure of await core.start()) assembly.startFailed(failure.worldId, failure.detail);
       app?.markReady();
       return { port };
     },
