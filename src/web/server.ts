@@ -216,9 +216,9 @@ export interface ExtensionSearchHit {
   keywords?: string[];
   /**
    * npm 的下载量,所有版本合计。`month` 是近 30 天,`week` 是近 7 天,`total` 是往前逐年累加到某年为 0 为止。
-   * npm 下载统计接口没答上来时只有搜索端点给的 `month`。
+   * 统计截至 UTC 昨天;npm 下载统计没答上来的项缺席。
    */
-  downloads: { total?: number; month: number; week?: number };
+  downloads: { total?: number; month?: number; week?: number };
   /** npm 上依赖这个包的包数 */
   dependents: number;
   links: { npm?: string; repository?: string; homepage?: string };
