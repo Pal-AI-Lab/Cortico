@@ -1,5 +1,5 @@
 import { records } from '../core/fixture-protocol.ts';
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -8,7 +8,7 @@ import { CORE_DEFAULTS, type LoadedConfig } from '../../src/core/config.ts';
 import type { CoreConfig } from '../../src/core/types.ts';
 import { ConsoleWorld } from '../../src/worlds/console/world.ts';
 import { Cormini } from '../../bots/cormini/persona/persona.ts';
-import { makeCfg, FakeLLM, toolReply, sleep } from '../core/helpers.ts';
+import { makeCfg, FakeLLM, toolReply, sleep, makeFakeHarnessApi } from '../core/helpers.ts';
 
 let dir: string;
 let memoryDir: string;
@@ -199,5 +199,86 @@ describe('Cormini', () => {
         ),
       6000,
     );
+  });
+});
+
+describe('Cormini 交接压不回软阈值时的前缀清单', () => {
+  /** 阶段预算 1000 tok、软阈值比例 0.85:软阈值 850,子树 fallback 150 字符。 */
+  const CONTEXT = () => ({ maxTokens: 1000, softRatio: 0.85, keepRatio: 0.25, firstTurn: false });
+  let wsDir: string;
+  let p: Cormini;
+  let injected: string[];
+  let handoffRequests: number;
+
+  const attach = (est: number): void => {
+    p.attach(makeFakeHarnessApi({
+      injectInternal: (text) => injected.push(text),
+      sessionInfo: (id) => ({ id, running: 0, snapshot: null, estTokens: est, hardTokens: null }),
+      requestContextHandoff: () => {
+        handoffRequests++;
+        return true;
+      },
+    }));
+  };
+  const workspace = async (): Promise<string> =>
+    (await p.systemSegments({ now: new Date(), timezone: 'Asia/Shanghai', worlds: [] }))
+      .find((s) => s.title === 'WORKSPACE')!.text;
+  const pressure = (): number => injected.filter((t) => t.includes('很早以前')).length;
+  const tidy = (): string[] => injected.filter((t) => t.includes('整理一下记忆'));
+
+  beforeEach(() => {
+    wsDir = mkdtempSync(join(tmpdir(), 'cormini-fallback-'));
+    p = new Cormini({ memoryDir: wsDir, context: CONTEXT });
+    mkdirSync(join(wsDir, 'notes'), { recursive: true });
+    writeFileSync(join(wsDir, 'notes', 'a.md'), 'x', 'utf8');
+    injected = [];
+    handoffRequests = 0;
+  });
+  afterEach(() => rmSync(wsDir, { recursive: true, force: true }));
+
+  it('每层只有几份的深树超过子树 fallback 时整棵折成一行计数', async () => {
+    for (let i = 0; i < 20; i++) {
+      mkdirSync(join(wsDir, 'venv', 'lib', `pkg${i}`), { recursive: true });
+      writeFileSync(join(wsDir, 'venv', 'lib', `pkg${i}`, 'a.py'), 'x', 'utf8');
+      writeFileSync(join(wsDir, 'venv', 'lib', `pkg${i}`, 'b.py'), 'x', 'utf8');
+    }
+    const ws = await workspace();
+    expect(ws).toContain('- venv/ (40 份;list_files 指定 dir 为 venv 可列出全部)');
+    expect(ws).not.toContain('venv/lib/');
+    expect(ws).toContain('- notes/a.md');
+  });
+
+  it('交接后仍超软阈值:只列顶层再交接一次,仍超就不再提醒和请求交接,整理记忆只请一次', async () => {
+    attach(900);
+    p.onBatchEnd();
+    p.onBatchEnd();
+    expect(handoffRequests).toBe(1);
+
+    await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    expect(await workspace()).toContain('- notes/a.md');
+    p.onBatchEnd();
+    expect(handoffRequests).toBe(2);
+    expect(await workspace()).toContain('- notes/ (1 份');
+    expect(tidy()).toHaveLength(1);
+    expect(tidy()[0]).toContain('CONSTITUTION.md');
+
+    await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    for (let i = 0; i < 5; i++) p.onBatchEnd();
+    expect(handoffRequests).toBe(2);
+    expect(pressure()).toBe(1);
+
+    // 计数回到软阈值内:常规清单与先提醒后交接都恢复;同一软阈值下不再请整理
+    attach(100);
+    p.onBatchEnd();
+    expect(await workspace()).toContain('- notes/a.md');
+    attach(900);
+    p.onBatchEnd();
+    p.onBatchEnd();
+    expect(pressure()).toBe(2);
+    expect(handoffRequests).toBe(3);
+    await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    p.onBatchEnd();
+    expect(handoffRequests).toBe(4);
+    expect(tidy()).toHaveLength(1);
   });
 });

@@ -518,6 +518,9 @@ describe('CortiV 软阈值提醒与交接', () => {
     attach(p, 900);
     p.onBatchEnd();
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), HANDOFF_CTX);
+    attach(p, 100);
+    p.onBatchEnd();
+    attach(p, 900);
     p.onBatchEnd();
     expect(injected.filter((t) => t.includes('很早以前'))).toHaveLength(2);
     expect(handoffRequests).toBe(0);
