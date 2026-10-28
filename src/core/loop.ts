@@ -500,13 +500,15 @@ export class MainLoop {
    * 按当前可见性重建工具表并记录所用 World 集合；重启恢复前缀时也执行。
    * 先逐个读取 World 的 `tools()`,抛错的经 onWorldFailed 移出挂载表,Persona 组工具表时已看不到它。
    */
-  private bindWorlds(): World[] {
+  private bindWorlds(): { visible: World[]; failed: boolean } {
     const { worlds } = this.d;
     const toolNames = new Map<World, string[]>();
+    let failed = false;
     for (const m of [...worlds.all()]) {
       try {
         toolNames.set(m, m.tools().map((t) => t.name));
       } catch (error) {
+        failed = true;
         this.d.onWorldFailed(m, `tools(): ${error instanceof Error ? error.message : String(error)}`);
       }
     }
@@ -522,7 +524,7 @@ export class MainLoop {
     this.appliedVisibleWorlds = visibleIds;
     this.appliedWorldTools = new Map(visible.map((m) => [m.id, (toolNames.get(m) ?? []).join(',')]));
     this.worldToolOwners = new Map(visible.flatMap((m) => (toolNames.get(m) ?? []).map((name) => [name, m.id] as const)));
-    return visible;
+    return { visible, failed };
   }
 
   /**
@@ -532,12 +534,12 @@ export class MainLoop {
   private async buildSystem(): Promise<ContextRecord> {
     const { persona, cfg, dirs, worlds } = this.d;
     const now = new Date();
-    let visible = this.bindWorlds();
+    let { visible } = this.bindWorlds();
     const { contexts, failed } = await collectWorldContexts(visible, dirs);
     // 等待期间已被卸载的 World 不再报失败
     const stillMounted = failed.filter(({ world }) => worlds.all().includes(world));
     for (const { world, detail } of stillMounted) this.d.onWorldFailed(world, detail);
-    if (stillMounted.length > 0) visible = this.bindWorlds();
+    if (stillMounted.length > 0) ({ visible } = this.bindWorlds());
     const bound = new Set(visible.map((m) => m.id));
     const segments = await persona.systemSegments({
       now,
@@ -1023,6 +1025,10 @@ export class MainLoop {
       return;
     }
 
+    if (this.bindWorlds().failed) {
+      await this.performSystemPrefixReload(generation);
+      if (!this.active(generation)) return;
+    }
     this.dropOrphanResults();
     const unanswered = new Set<string>();
     for (const { item } of session.records) {
@@ -1045,7 +1051,6 @@ export class MainLoop {
         id: decl.id,
         messagesRef: () => this.d.session.records,
       }) ?? null;
-      this.bindWorlds();
       await this.bootstrap(generation);
       if (!this.active(generation)) return;
 
