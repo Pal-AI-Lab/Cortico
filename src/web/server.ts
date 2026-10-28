@@ -136,7 +136,7 @@ export interface InactiveWorldInfo {
   label: string;
   /** 是否由Persona声明；false 表示部署侧选配 World。 */
   declared: boolean;
-  /** 启动期 `start()` 抛错的理由,原样显示;停用的没有。 */
+  /** 没能运行的理由(启动期 `start()` 抛错,或运行中读取环境段或 `tools()` 失败),原样显示;停用的没有。 */
   reason?: string;
 }
 

@@ -60,6 +60,8 @@ export interface CoreDeps {
   llm?: ResponseClient;
   /** World 经宿主推出一条事件时调用:pushEvent、pushDeferred 各一次,pushCandidate 每条源事件一次。 */
   onWorldPush?(worldId: string, type: string): void;
+  /** Core 在运行中卸载一个 World 时调用,见 {@link WorldFailure}。 */
+  onWorldFailed?(failure: WorldFailure): void;
 }
 
 export interface WorldStopFailure {
@@ -71,6 +73,17 @@ export interface WorldStopFailure {
 export interface WorldStartFailure {
   worldId: string;
   detail: string;
+}
+
+/**
+ * 构建前缀或工具表时读取运行中 World 的环境段或 `tools()` 失败。Core 已把实例移出挂载表、
+ * 作废它的宿主租约并开始限时 `stop()`;这次构建不含它。
+ */
+export interface WorldFailure {
+  worldId: string;
+  detail: string;
+  /** `stop()` 结束、失败或超时后兑现,不会拒绝。 */
+  stopped: Promise<void>;
 }
 
 export class Core<C extends CoreConfig = CoreConfig> {
@@ -100,6 +113,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
   private worlds: World[];
   private persona: Persona;
   private readonly onWorldPush: (worldId: string, type: string) => void;
+  private readonly onWorldFailed: (failure: WorldFailure) => void;
   private log: Logger;
   private runPromise: Promise<void> | null = null;
   /** start() 已跑过 World 启动循环;之后挂载的 World 立即 start,之前的等 start() 统一起。 */
@@ -114,6 +128,8 @@ export class Core<C extends CoreConfig = CoreConfig> {
   private readonly hiddenPushes = new Map<string, { count: number; notedAtMs: number }>();
   readonly providers: ProviderRegistry;
   private readonly moduleHostLeases = new Map<World, { active: boolean }>();
+  /** 运行中卸载的 World 尚未结束的 `stop()`。 */
+  private readonly failedStops = new Set<Promise<void>>();
 
   constructor(loaded: LoadedConfig<C>, deps: CoreDeps) {
     this.loaded = loaded;
@@ -141,6 +157,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.worlds = deps.worlds;
     this.persona = deps.persona;
     this.onWorldPush = deps.onWorldPush ?? (() => {});
+    this.onWorldFailed = deps.onWorldFailed ?? (() => {});
     this.logBlobs = new LogBlobStore(dataDir);
     this.providers = new ProviderRegistry(() => cfg.providers, {
       // 同一部署根下的部署共享端点配置和状态目录。
@@ -189,6 +206,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         all: () => this.worlds,
         visible: () => this.worlds.filter((m) => this.isWorldVisible(m.id)),
       },
+      onWorldFailed: (mod, detail) => this.failWorld(mod, detail),
       dirs: { packageDir: loaded.packageDir ?? loaded.rootDir, deploymentDir: loaded.rootDir },
       bus: this.bus,
       session: this.session,
@@ -198,7 +216,6 @@ export class Core<C extends CoreConfig = CoreConfig> {
       tracker: this.sessions,
       toolLog: this.toolLog,
       transcript: this.transcript,
-      toolOwner: (name) => this.worlds.find((m) => m.tools().some((t) => t.name === name))?.id,
     });
     this.bus.setPreemptHandler((trigger) => {
       if (trigger === 'interrupt') this.loop.interruptCurrentRound();
@@ -683,6 +700,24 @@ export class Core<C extends CoreConfig = CoreConfig> {
     return failure;
   }
 
+  /**
+   * 读取运行中 World 的环境段或 `tools()` 失败:作废租约、移出挂载表、限时 `stop()`,再报给
+   * `onWorldFailed`。不重建前缀:触发它的那次构建已不含这个 World。
+   */
+  private failWorld(mod: World, detail: string): void {
+    const lease = this.moduleHostLeases.get(mod);
+    if (lease) lease.active = false;
+    this.worlds.splice(this.worlds.indexOf(mod), 1);
+    this.log.emit('error', `World 读取失败,已卸载: ${mod.id}`, { event: 'world-failed', data: { detail } });
+    const stopped = withDeadline(Promise.resolve().then(() => mod.stop()), MODULE_STOP_MS).then(
+      () => {},
+      (e) => this.log.warn(`World 停止失败: ${mod.id}`, { err: e instanceof Error ? e.message : String(e) }),
+    );
+    this.failedStops.add(stopped);
+    void stopped.then(() => this.failedStops.delete(stopped));
+    this.onWorldFailed({ worldId: mod.id, detail, stopped });
+  }
+
   /** 先终止主循环，再并发停止 World；各步骤有独立期限，失败写入返回结果。 */
   async stop(): Promise<WorldStopFailure[]> {
     this.started = false;
@@ -717,6 +752,8 @@ export class Core<C extends CoreConfig = CoreConfig> {
       }
     }))).filter((failure): failure is WorldStopFailure => failure !== null);
     failures.push(...moduleFailures);
+    // 运行中卸载的 World 各自的 stop() 有期限,结果已记日志
+    await Promise.all(this.failedStops);
     this.usageLog.flush();
     const ledger = this.usageLog.status();
     if (ledger.pending) failures.push({ worldId: 'core.usage', detail: `${ledger.pending} usage records remain unwritten: ${ledger.error}` });

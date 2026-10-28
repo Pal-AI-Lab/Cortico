@@ -2,10 +2,10 @@
  * 验证恰好一个接收事件的常驻 session，以及 fork 的声明解析、并发统计和计量。
  * fork 模型来自活跃端点，工具和轮数来自声明；session id 仅作为查表键。
  */
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Core } from "./fixture-core.ts";
+import { Core, type WorldFailure } from "./fixture-core.ts";
 import type { LoadedConfig } from '../../src/core/config.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import type {
@@ -27,6 +27,7 @@ import {
   makeLoaded,
   makeTmpDir,
   makeTool,
+  sleep,
   textReply,
   toolReply,
 } from './helpers.ts';
@@ -357,6 +358,87 @@ describe('Core · 启动期 World 隔离', () => {
         expect(goodStarted).toBe(1);
         expect(worlds.map((m) => m.id)).toEqual(['good']);
         expect(core.loop.getStatus().running).toBe(true);
+      } finally {
+        await core.stop();
+      }
+    } finally {
+      tmp.cleanup();
+    }
+  });
+});
+
+describe('Core · 运行中读取 World 失败', () => {
+  it('envPromptVars 抛错的 World:移出挂载表、租约作废、stop 一次并报给 onWorldFailed;其余 World 照常,Core.stop 等它停完', async () => {
+    const tmp = makeTmpDir();
+    try {
+      const loaded = loadedFor(tmp.dir);
+      let host: WorldHost | null = null;
+      let stops = 0;
+      let finishStop!: () => void;
+      const stopGate = new Promise<void>((resolve) => { finishStop = resolve; });
+      const bad = makeFakeIO('bad', [makeTool('bad_act', 'x')], 'BAD 环境');
+      bad.envPromptVars = () => { throw new Error('状态未就绪'); };
+      bad.start = async (h) => { host = h; };
+      bad.stop = async () => { stops++; await stopGate; };
+      const good = makeFakeIO('good', [makeTool('good_act', 'ok')], 'GOOD 环境');
+      const worlds = [bad, good];
+      const failures: WorldFailure[] = [];
+      const core = new Core(loaded, {
+        persona: makeFakePersona([], { cfg: loaded.config, worlds }),
+        worlds,
+        llm: new FakeLLM(),
+        onWorldFailed: (failure) => { failures.push(failure); },
+      });
+      await core.start();
+      await vi.waitFor(() => expect(core.session.messages.length).toBeGreaterThan(0));
+
+      expect(failures.map(({ worldId, detail }) => ({ worldId, detail }))).toEqual([{ worldId: 'bad', detail: 'envPromptVars(): 状态未就绪' }]);
+      expect(worlds.map((m) => m.id)).toEqual(['good']);
+      expect(core.session.messages[0].content).toContain('GOOD 环境');
+      expect(core.session.messages[0].content).not.toContain('BAD 环境');
+      expect(core.loop.getToolSchemas().map((t) => t.name)).toContain('good_act');
+      expect(core.loop.getToolSchemas().map((t) => t.name)).not.toContain('bad_act');
+      await expect(host!.pushEvent({ type: 'bad.msg', ts: '2026-10-29T10:00:00+08:00', source: 'bad', text: '迟到的事件' }))
+        .rejects.toThrow('host lifecycle ended');
+      expect(core.loop.getStatus().running).toBe(true);
+      expect(stops).toBe(1);
+
+      let stopped = false;
+      const stopping = core.stop().then(() => { stopped = true; });
+      await sleep(30);
+      expect(stopped).toBe(false);
+      finishStop();
+      await stopping;
+      await failures[0].stopped;
+      expect(stops).toBe(1);
+    } finally {
+      tmp.cleanup();
+    }
+  });
+
+  it('前缀建好后一个 World 的 tools() 开始抛错:其余 World 的工具照常执行,流水的 mod 取自建表时', async () => {
+    const tmp = makeTmpDir();
+    try {
+      const loaded = loadedFor(tmp.dir);
+      let goodHost: WorldHost | null = null;
+      const bad = makeFakeIO('bad', [makeTool('bad_act', 'x')]);
+      const good = makeFakeIO('good', [makeTool('good_act', '好了')]);
+      good.start = async (h) => { goodHost = h; };
+      const worlds = [bad, good];
+      const llm = new FakeLLM();
+      const core = new Core(loaded, { persona: makeFakePersona([], { cfg: loaded.config, worlds, silent: true }), worlds, llm });
+      try {
+        await core.start();
+        await vi.waitFor(() => expect(core.session.messages.length).toBeGreaterThan(0));
+        bad.tools = () => { throw new Error('清单未加载'); };
+        llm.script(toolReply([{ name: 'good_act', id: 'g1' }]), textReply('做完了'));
+        await goodHost!.pushEvent({ type: 'good.msg', ts: '2026-10-29T10:00:00+08:00', source: 'good', text: '动手' });
+
+        const file = join(core.run.dir, 'toolcalls.jsonl');
+        await vi.waitFor(() => expect(existsSync(file) && readFileSync(file, 'utf8').trim() !== '').toBe(true), { timeout: 5000 });
+        const [row] = readFileSync(file, 'utf8').trim().split('\n').map((line) => JSON.parse(line) as Record<string, unknown>);
+        expect(row).toMatchObject({ tool: 'good_act', mod: 'good', receipt: '好了' });
+        expect(row.failed).toBeUndefined();
       } finally {
         await core.stop();
       }

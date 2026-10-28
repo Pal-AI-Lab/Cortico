@@ -9,6 +9,7 @@ import type {
   CoreConfig, DescribeText, EventDescribe, ToolDescribe, ToolSpec, World, WorldLifecycleEvent,
 } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
+import type { WorldFailure } from './core/core.ts';
 import type { BotDefinition } from './bot.ts';
 import { updateJsonObject, writeSecretFile } from './config-file.ts';
 import type { Language } from './core/language.ts';
@@ -138,8 +139,11 @@ export interface WorldSlot {
   readonly definition: WorldDefinition<WorldSection> | null;
   instance: World;
   mounted: boolean;
-  /** 启动期 `start()` 抛错的理由,按界面语言给;激活成功或停用后清掉。 */
-  startFailed?: (language: Language) => string;
+  /**
+   * 没能运行的理由:启动期 `start()` 抛错,或运行中读取环境段或 `tools()` 失败;按界面语言给,
+   * 激活成功或停用后清掉。
+   */
+  failure?: (language: Language) => string;
 }
 
 export interface MissingWorld {
@@ -382,8 +386,31 @@ export class WorldAssembly {
     if (index >= 0) this.mounted.splice(index, 1);
     slot.mounted = false;
     if (slot.definition) slot.instance = slot.definition.create(this.context(slot.definition));
-    slot.startFailed = (language) => text(language).startFailed(detail);
+    slot.failure = (language) => text(language).startFailed(detail);
     this.host?.lifecycle?.({ kind: 'start-failed', id, label: slot.label, reason: detail });
+  }
+
+  /**
+   * Core 在运行中卸载的 World:槽位回到未激活并记下理由,`enabled` 不变,报一次 failed。
+   * 旧实例的 `stop()` 结束后换上新实例,同一 World 之后排队的操作等它;`create()` 抛错时槽位移入 missing。
+   */
+  failed({ worldId, detail, stopped }: WorldFailure): void {
+    const slot = this.slot(worldId);
+    slot.mounted = false;
+    slot.failure = (language) => text(language).readFailed(detail);
+    this.host?.lifecycle?.({ kind: 'failed', id: worldId, label: slot.label, reason: detail });
+    const def = slot.definition;
+    if (!def) return;
+    void this.queued(worldId, async () => {
+      await stopped;
+      try {
+        slot.instance = def.create(this.context(def));
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        this.slots.splice(this.slots.indexOf(slot), 1);
+        this.missing.push({ id: slot.id, label: slot.label, declared: slot.declared, reason: (language) => text(language).constructFailed(reason) });
+      }
+    });
   }
 
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
@@ -420,7 +447,7 @@ export class WorldAssembly {
       throw error;
     }
     slot.mounted = true;
-    delete slot.startFailed;
+    delete slot.failure;
     this.host?.lifecycle?.({ kind: 'mounted', id, label: slot.label });
     return t.activated(this.labelIn(id, language), id);
   }
@@ -430,7 +457,7 @@ export class WorldAssembly {
     const wasMounted = slot.mounted;
     if (wasMounted) await this.stopSlot(slot);
     this.persist(id, { enabled: false });
-    delete slot.startFailed;
+    delete slot.failure;
     if (wasMounted) this.host?.lifecycle?.({ kind: 'unmounted', id, label: slot.label });
     return text(language).deactivated(this.labelIn(id, language), id);
   }
@@ -465,13 +492,25 @@ export class WorldAssembly {
     if (slot.definition) slot.instance = slot.definition.create(this.context(slot.definition));
   }
 
-  /** 工具名在 bot 内唯一。与保留名称或已挂载 World 工具冲突时拒绝挂载。 */
+  /** 工具名在 bot 内唯一。与保留名称或已挂载 World 工具冲突,或读不出自己的 `tools()` 时拒绝挂载。 */
   private toolClash(mod: World, mounted: readonly World[]): ((language: Language) => string) | null {
-    const names = new Set(mod.tools().map((t) => t.name));
+    let names: Set<string>;
+    try {
+      names = new Set(mod.tools().map((t) => t.name));
+    } catch (error) {
+      const detail = `tools(): ${error instanceof Error ? error.message : String(error)}`;
+      return (language) => text(language).readFailed(detail);
+    }
     const reserved = (this.host?.reservedToolNames?.() ?? []).filter((n) => names.has(n));
     if (reserved.length) return (language) => text(language).toolReserved(reserved);
     for (const other of mounted) {
-      const shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
+      let shared: string[];
+      try {
+        shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
+      } catch {
+        // 它自己的 tools() 失败由 Core 在下次组工具表时卸载它
+        continue;
+      }
       if (shared.length) {
         return (language) => text(language).toolClash(mod.id, other.id, shared);
       }

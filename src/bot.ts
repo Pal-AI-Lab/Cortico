@@ -483,7 +483,7 @@ export function deriveWorldFacts(
         status: 'inactive' as const,
         label,
         declared: slot.declared,
-        ...(slot.startFailed ? { reason: slot.startFailed(language) } : {}),
+        ...(slot.failure ? { reason: slot.failure(language) } : {}),
       };
     }
     return {
@@ -899,6 +899,7 @@ export function createBot<C extends CoreConfig>(
       const slot = assembly.slots.find((item) => item.id === worldId);
       undeclared.event(`worlds.${worldId}`, slot?.definition?.describe?.events, type);
     },
+    onWorldFailed: (failure) => assembly.failed(failure),
   });
   undeclared.tools('persona', definition.describe?.tools, parts.persona.ownToolNames?.() ?? []);
 

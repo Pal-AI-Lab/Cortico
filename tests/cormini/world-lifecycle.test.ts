@@ -1,5 +1,5 @@
 /**
- * World 生命周期钩子:装配层的五种事件各注入一句内部通知。措辞是Persona的,
+ * World 生命周期钩子:装配层的每种事件各注入一句内部通知。措辞是Persona的,
  * 这里钉的是"每种事件一句、经 injectInternal、kind 为 notice"。
  */
 import { describe, expect, it, afterAll } from 'vitest';
@@ -13,7 +13,7 @@ const dir = mkdtempSync(join(tmpdir(), 'cormini-lifecycle-'));
 afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
 describe('onWorldLifecycle', () => {
-  it('激活 / 停用 / 重启 / 可见性 / 启动失败各一句,带 World 显示名,走 injectInternal notice', () => {
+  it('激活 / 停用 / 重启 / 可见性 / 启动失败 / 运行中出错各一句,带 World 显示名,走 injectInternal notice', () => {
     const persona = new Cormini({
       memoryDir: dir,
       worlds: [],
@@ -27,8 +27,9 @@ describe('onWorldLifecycle', () => {
     persona.onWorldLifecycle({ kind: 'visibility', id: 'x', label: '甲渠道', visible: false });
     persona.onWorldLifecycle({ kind: 'visibility', id: 'x', label: '甲渠道', visible: true });
     persona.onWorldLifecycle({ kind: 'start-failed', id: 'x', label: '甲渠道', reason: 'listen EADDRINUSE: address already in use 127.0.0.1:7797' });
+    persona.onWorldLifecycle({ kind: 'failed', id: 'x', label: '甲渠道', reason: 'tools(): 清单未加载' });
 
-    expect(injected.map(([, kind]) => kind)).toEqual(['notice', 'notice', 'notice', 'notice', 'notice', 'notice']);
+    expect(injected.map(([, kind]) => kind)).toEqual(['notice', 'notice', 'notice', 'notice', 'notice', 'notice', 'notice']);
     const texts = injected.map(([text]) => text);
     expect(texts[0]).toBe('[system] World 「甲渠道」已激活。');
     expect(texts[1]).toBe('[system] World 「甲渠道」已停用。');
@@ -36,6 +37,7 @@ describe('onWorldLifecycle', () => {
     expect(texts[3]).toContain('已对你隐藏');
     expect(texts[4]).toContain('重新对你可见');
     expect(texts[5]).toBe('[system] World 「甲渠道」启动失败,本次运行里没有它:listen EADDRINUSE: address already in use 127.0.0.1:7797');
+    expect(texts[6]).toBe('[system] World 「甲渠道」运行中出错,已卸载,本次运行里没有它:tools(): 清单未加载');
   });
 
   it('没 attach 时什么也不做', () => {
