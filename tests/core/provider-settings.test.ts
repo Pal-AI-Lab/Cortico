@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { makeCfg, makeTmpDir } from './helpers.ts';
 import { ProviderRegistry, providerModules } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/webui/settings.ts';
+import { PROBE_MAX_OUTPUT_TOKENS } from '../../src/providers/webui/types.ts';
 import { text as providerText } from '../../src/providers/webui/strings.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { loadDeployment } from '../../src/deploy.ts';
@@ -362,25 +363,35 @@ describe('Provider 数据面:建、删、复制、密钥、模型列表、探测
   });
   it("模型列表来自实例；probe 返回状态、耗时、用量和报价，404 提示检查地址与路径", async () => {
     const { cfg, settings } = fixture();
-    cfg.providers.cloud.spec = { model: 'deepseek-flash', thinking: true, reasoningEffort: 'low', maxTokens: 4096 };
+    cfg.providers.cloud.spec = { model: 'test-model', thinking: true, reasoningEffort: 'low', maxTokens: 4096 };
     cfg.providers.cloud.pricing = [{ models: ['*'], currency: 'USD', basis: 'marginal', source: 'webui', rules: [{ meter: 'input', perMillion: 1 }, { meter: 'output', perMillion: 2 }] }];
     let status = 200;
     const bodies: Array<Record<string, unknown>> = [];
     vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
-      if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'deepseek-flash' }] }));
+      if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'test-model' }] }));
       bodies.push(JSON.parse(String(init?.body)));
       if (status !== 200) return new Response('no route', { status });
-      return new Response(JSON.stringify({
-        id: 'r', model: 'deepseek-flash', status: 'completed', service_tier: null,
+      const response = {
+        id: 'r', model: 'test-model', status: 'completed', service_tier: null,
         output: [{ type: 'reasoning', id: 'rs', summary: [], content: [], encrypted_content: 'sig' }, { type: 'message', id: 'm', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'pong', annotations: [] }] }],
         usage: { input_tokens: 10, output_tokens: 5, input_tokens_details: { cached_tokens: 4 } },
-      }));
+      };
+      const events = [
+        { type: 'response.created', response: { ...response, status: 'in_progress', output: [], usage: null } },
+        ...response.output.flatMap((item, output_index) => [
+          { type: 'response.output_item.added', output_index, item },
+          { type: 'response.output_item.done', output_index, item },
+        ]),
+        { type: 'response.completed', response },
+      ];
+      return new Response(events.map((event, sequence_number) => `data: ${JSON.stringify({ ...event, sequence_number })}\n\n`).join(''),
+        { headers: { 'content-type': 'text/event-stream' } });
     });
-    expect(await invoke(settings, 'models', { name: 'cloud' })).toEqual({ models: [{ id: 'deepseek-flash' }] });
+    expect(await invoke(settings, 'models', { name: 'cloud' })).toEqual({ models: [{ id: 'test-model' }] });
     const ok = (await invoke(settings, 'probe', { name: 'cloud' })) as Record<string, unknown>;
-    expect(ok).toMatchObject({ ok: true, status: 200, model: 'deepseek-flash', encryptedReasoning: true, usage: { input: 10, cachedInput: 4, output: 5, reasoning: null } });
+    expect(ok).toMatchObject({ ok: true, status: 200, model: 'test-model', encryptedReasoning: true, usage: { input: 10, cachedInput: 4, output: 5, reasoning: null } });
     expect(ok.charges).toEqual([{ currency: 'USD', amount: 20 / 1e6 }]);
-    expect(bodies[0]).toMatchObject({ max_output_tokens: 256, reasoning: { effort: 'low' }, store: false });
+    expect(bodies[0]).toMatchObject({ max_output_tokens: PROBE_MAX_OUTPUT_TOKENS, reasoning: { effort: 'low' }, store: false });
     status = 404;
     const missing = (await invoke(settings, 'probe', { name: 'cloud' })) as Record<string, unknown>;
     expect(missing).toMatchObject({ ok: false, status: 404 });

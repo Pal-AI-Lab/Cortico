@@ -7,6 +7,7 @@
  * x-suffix：显示单位；x-hot=false：修改后需重启。
  * x-options：从 /api/config/options/:kind 获取当前选项，配置仍存字符串。
  * x-path：选择本机路径；x-download：该路径对应的浏览器下载链接。
+ * x-warning：打开或修改后会降低安全性的项，标题用警示色。
  */
 import type { CoreConfig } from './types.ts';
 import type { Language } from './language.ts';
@@ -29,6 +30,8 @@ export interface ConfigProperty {
   'x-scale'?: number;
   'x-suffix'?: string;
   'x-hot'?: boolean;
+  /** 打开或修改后会降低安全性;WebUI 用警示色显示标题 */
+  'x-warning'?: boolean;
   /** 动态下拉的选项源 id;WebUI 打开下拉前现探 */
   'x-options'?: string;
   /** 字符串路径的本机选择器。推荐目录只作部署提示与对话框起始位置。 */

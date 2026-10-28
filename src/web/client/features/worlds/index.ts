@@ -40,7 +40,7 @@ export interface WorldView {
   visible?: boolean;
   /** 可见性已改,但当前 system 前缀还是按旧的烘出来的。 */
   prefixDrifted?: boolean;
-  /** 装不上的原因(仅 missing)。原样显示,这一页不改写措辞。 */
+  /** 装不上的原因(missing),或启动期没起来的原因(inactive)。原样显示,这一页不改写措辞。 */
   reason?: string;
   workspace?: string;
   tools?: string[];
@@ -312,6 +312,7 @@ export function mountWorlds(ctx: FeatureContext): void {
     const bar = ui.rowbar();
     bar.append(cardLamps(m), ui.pill(S.notActive, 'off'), ...declaredPills(m));
     card.body.appendChild(bar);
+    if (m.reason) card.body.appendChild(ui.msgline(m.reason, true));
     card.body.appendChild(ui.msgline(
       canActivate
         ? S.inactiveNoteActivatable

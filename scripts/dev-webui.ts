@@ -30,7 +30,7 @@ import { qqConfigGroup } from '../src/worlds/qq/config.ts';
 import { ConsoleWorld } from '../src/worlds/console/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
 import { LocalizedError, type Language } from '../src/core/language.ts';
-import { webSearchConfigGroup } from '../src/worlds/websearch/config.ts';
+import { webSearchConfigGroup, WEBSEARCH_DEFAULTS } from '../src/worlds/websearch/config.ts';
 import { minecraftClientConfigGroup, minecraftConfigGroup, MINECRAFT_DEFAULTS, minecraftPlayerConfigGroup, minecraftRhythmConfigGroup, type MinecraftConfigSection } from '../src/worlds/minecraft/config.ts';
 import { minecraftPanelDecls } from '../src/worlds/minecraft/world.ts';
 import { flatPresets, levelTypeLabels } from '../src/worlds/minecraft/server-config.ts';
@@ -47,11 +47,12 @@ import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { deriveWebUiPageSources, ioPageContribution } from '../src/bot.ts';
 import { WorldAssembly } from '../src/world.ts';
 import { WebUiFixtureWorld } from '../src/worlds/webui-fixture/world.ts';
-import { CORE_CONFIG_GROUP, usageRates } from '../src/core/config.ts';
+import { CORE_CONFIG_GROUP } from '../src/core/config.ts';
 import { PERSONA_CONFIG_GROUP } from '../bots/corti-soulmate/persona/config.ts';
 import { readGroupValues, setByPath, type ConfigGroup } from '../src/core/config-schema.ts';
 import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR } from '../bots/cormini/persona/workspaceGit.ts';
 import { aggregateUsage } from '../src/core/cost.ts';
+import { createUsageRates } from '../src/core/usage-rates.ts';
 import { priceUsage, unknownMeters } from '../src/core/generation.ts';
 import { snapshotPrice } from '../src/providers/pricebook.ts';
 import { nullLogger } from '../src/core/util.ts';
@@ -142,10 +143,18 @@ function genUsage(): UsageRecord[] {
   return recs;
 }
 const usageRecords = genUsage();
+/** 汇率走真实的公开接口，断网时页面显示内置汇率。 */
+const devRates = createUsageRates();
 
 const qq = new QQWorld({ wsUrl: 'ws://127.0.0.1:0', groups: [424242, 998877], privates: [10086], token: '', timezone: TZ });
 const consoleWorld = new ConsoleWorld({ timezone: TZ });
-const websearch = new WebSearchWorld({ apiKey: loaded.secret('BRAVE_API_KEY') });
+/** 页面上存的密钥只留在内存里，不写临时部署的 .env。 */
+const devSecrets: Record<string, string> = {};
+const websearch = new WebSearchWorld({
+  cfg: (devCfg.worlds.websearch ??= { ...WEBSEARCH_DEFAULTS }),
+  secret: (name) => devSecrets[name] ?? loaded.secret(name),
+  storeSecret: (name, value) => { devSecrets[name] = value; },
+});
 /** 使用独立 World 声明验证 WebUI 自动发现。 */
 const webUiFixture = new WebUiFixtureWorld();
 const worlds = MINIMAL ? [consoleWorld] : [qq, consoleWorld, websearch, webUiFixture];
@@ -1411,7 +1420,12 @@ const app = new WebApp({
   }),
   sessions: { list: () => sessionsList, messages: (id) => (id === 'main' ? session : sessionsList.some((s) => s.id === id) ? session.slice(0, 4) : null), onChange: () => {} },
   storage: () => storage,
-  usage: { aggregate: (opts) => aggregateUsage(usageRecords, { ...opts, timezone: TZ, rates: usageRates(devCfg) }) },
+  usage: {
+    aggregate: async (opts) => {
+      const { rates, sources } = await devRates.resolve();
+      return { ...aggregateUsage(usageRecords, { ...opts, timezone: TZ, rates }), rateSources: sources };
+    },
+  },
 
   config: {
     groups: () => [...devConfigGroups,...devProviders.groups()].map((group) => ({ group, values: group.owner.startsWith('provider:') ? devProviders.values(group.id) : readGroupValues(devCfg, group) })),
@@ -1459,12 +1473,13 @@ const app = new WebApp({
         ...(decl?.badges ? { badges: decl.badges } : {}),
       };
     }))),
-// 模拟已安装但未激活的 World。
+// 模拟已安装但未激活的 World:启动期 start() 抛错后回到未激活,带理由。
     {
       id: 'sandbox',
       status: 'inactive' as const,
       label: '沙盒 World',
       declared: false,
+      reason: '启动失败: listen EADDRINUSE: address already in use 127.0.0.1:7797 (dev 假数据)',
     },
     // 截图夹具覆盖Persona已声明但未安装的 World 状态。
     {

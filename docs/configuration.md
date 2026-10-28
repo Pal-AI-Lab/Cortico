@@ -34,7 +34,6 @@
 | `batching` | `quietGapMs 2500`、`minBatchAgeMs 0`、`maxBatchAgeMs 15000`、`maxBatchSize 100` | 事件合批投递 |
 | `context` | `keepPastThinking true` | 发给模型前的处理;阶段预算与首轮对话开关归 Persona 的段 |
 | `logging` | `file debug`、`stdout info`、`areas ''` | 日志门槛与按区域覆盖,热改 |
-| `usage.rates.<币种>` | CNY、EUR、JPY、KRW、TWD、BRL、RUB 各取 2026-10-10 的中间价 | 1 USD 合多少该币种;用量报告在 USD 与该币种之间换算都用它,0 表示该币种不参与换算。只认这七种,热改 |
 | `worlds.<id>` | 各 World 自定 | `enabled` 控制是否启用;其余字段由 World 定义 |
 | `language` | 系统区域 | WebUI 默认语言,取 `src/core/language.ts` 的 `LANGUAGES` 之一(`zh` 为简体中文),浏览器可改(见 [webui.md](webui.md)) |
 
@@ -57,6 +56,7 @@ WebUI 按 schema 渲染表单。owner 是 `core`、`persona`、`world:<id>` 或 
 | `x-options` | 下拉项 |
 | `x-path` | 用本机路径选择器填 |
 | `x-download` | 附下载动作 |
+| `x-warning` | `true`:打开或修改后会降低安全性,前端用警示色显示标题 |
 
 `POST /api/config` 按 schema 校验,忽略未声明的键。World 段通过 `WorldContext.persist` 写回,
 同时更新共享配置对象与 `config.json` 的 `worlds.<id>`。World 的密钥写入部署 `.env` 和进程环境。

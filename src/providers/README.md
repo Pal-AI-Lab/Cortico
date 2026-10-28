@@ -69,10 +69,14 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 
 `response-http.ts` 处理 HTTP/SSE:一次生成可包含多次请求尝试,重试间隔为 `[1s, 4s, 10s]`;超时
 四档(流式首包 300s、非流式 120s、帧空闲 120s、内容空闲 300s);只对状态 0 / 408 / 429 / 5xx
-重试,响应带 `Retry-After` 时按它退避,401 / 403 先 `transport.refresh()`
-一次;已提交不可逆增量后不再重试;输出字符超过
+重试,流内 `error` 事件不重试,响应带 `Retry-After` 时按它退避,401 / 403 先 `transport.refresh()`
+一次;非 2xx 的错误消息带状态码和 `upstreamText()` 取出的上游说明;已提交不可逆增量后不再重试;输出字符超过
 `max_output_tokens × 12` 时终止请求并报告超限;终态只接受 `completed` / `incomplete`,`failed` 抛
 `LLMError`;每次请求尝试记录 `meters` 与 `charges`。
+
+`GenerateOptions.onEvent` 在场即流式请求:Chat 带 `stream: true` 与 `stream_options.include_usage`,Responses 带
+`stream: true`。生成与连接探测总是带它；只有适配器诊断流内失败时发的对照请求不带。流里没有用量时，该次尝试的
+`meters` 各项为 null;单价非零的计量列进 `charges` 的 `missing`,金额为 null。上游不能流式时由 provider 扩展处理。
 
 `responses-input.ts` 是原生 Responses 的无状态重放(system / developer 上提为
 `instructions`;思维链按 `reasoningReplay` 以签名块或 `reasoning_text` 回传,明文形态下没有记录来源
@@ -116,5 +120,8 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 `host.save` 把配置交回浏览器暂存。`ProviderRegistry.previewRegistry` 按一份条目造注册表,实例不进
 运行实例缓存,浏览器刚输入的密钥作为覆盖值排在进程环境与端点 `.env` 之前;测试与模型列表带
 `{ entry, secretValue }` 时走它。
+
+已保存端点与表单草稿共用 `ProviderSettings.probeClient`。探测与正式生成一样带 `onEvent`,请求流式响应；
+客户端消费并校验响应后，回执返回用量、费用或错误。
 
 连接列表的 usage 包含其他部署的选用记录及运行锁状态，排除当前部署。运行状态按部署配置的 paths.data（缺省使用 Core 默认值）检查实例锁，不代表供应商正在处理请求，也不建立供应商独占锁。

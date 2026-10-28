@@ -16,6 +16,7 @@ import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../src/worlds/m
 import { QQWorld } from '../src/worlds/qq/world.ts';
 import { ConsoleWorld } from '../src/worlds/console/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
+import { WEBSEARCH_DEFAULTS } from '../src/worlds/websearch/config.ts';
 
 const mcCfg = structuredClone({ ...MINECRAFT_DEFAULTS, enabled: true }) as MinecraftConfigSection;
 
@@ -26,7 +27,7 @@ const MODULES: Array<() => World> = [
   () => new MinecraftWorld({ cfg: mcCfg }),
   () => new QQWorld({ wsUrl: 'ws://127.0.0.1:1', groups: [], privates: [], token: '' }),
   () => new ConsoleWorld(),
-  () => new WebSearchWorld({ apiKey: 'k' }),
+  () => new WebSearchWorld({ cfg: { ...WEBSEARCH_DEFAULTS }, secret: () => 'k', storeSecret: () => {} }),
 ];
 
 describe('环境提示词模板契约', () => {

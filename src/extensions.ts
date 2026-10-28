@@ -12,6 +12,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
 import { LocalizedError, type Language } from './core/language.ts';
+import { readTextFile } from './core/util.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -101,9 +102,14 @@ export function extensionsDir(repoRoot: string, env: NodeJS.ProcessEnv = process
   return raw ? resolve(raw) : join(repoRoot, EXTENSIONS_DIRNAME);
 }
 
+/** 读一份 package.json;清单可能被 Windows 的工具写成带 BOM 的文本。解析失败的错误带上文件路径。 */
 function readPackageJson(file: string): ExtensionPackageJson | null {
   if (!existsSync(file)) return null;
-  return JSON.parse(readFileSync(file, 'utf8')) as ExtensionPackageJson;
+  try {
+    return JSON.parse(readTextFile(file)) as ExtensionPackageJson;
+  } catch (e) {
+    throw new Error(`${file}: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 /** 读取 extensions/package.json 的直接依赖；目录不存在时返回空列表。 */
@@ -547,7 +553,6 @@ interface RegistrySearchResponse {
     };
     /** 被依赖的包数。热门包回字符串,新包回数字。 */
     dependents?: number | string;
-    downloads?: { monthly?: number };
   }>;
   total?: number;
 }
@@ -734,7 +739,7 @@ export class ExtensionManager {
     const pkgFile = join(this.dir, 'package.json');
     const existing = existsSync(pkgFile);
     const pkg = existing
-      ? JSON.parse(readFileSync(pkgFile, 'utf8')) as Record<string, unknown>
+      ? readPackageJson(pkgFile) as Record<string, unknown>
       : { name: 'cortico-extensions', private: true, dependencies: {} };
     const packageManager = corticoPackageManager();
     if (!existing || (packageManager && pkg.packageManager !== packageManager)) {
@@ -888,7 +893,7 @@ export class ExtensionManager {
             ...(p.maintainers?.length ? { maintainers: p.maintainers.flatMap((m) => m.username ? [m.username] : []) } : {}),
             ...(p.license ? { license: p.license } : {}),
             ...(p.keywords?.length ? { keywords: p.keywords } : {}),
-            downloads: { month: obj.downloads?.monthly ?? 0 },
+            downloads: {},
             dependents: Number(obj.dependents) || 0,
             links: {
               ...(p.links?.npm ? { npm: p.links.npm } : {}),
@@ -910,7 +915,8 @@ export class ExtensionManager {
   }
 
   /**
-   * 向 npm 下载统计问每个包的近 7 天、近 30 天与累计下载量。不带 scope 的合批问,带 scope 的逐个问。
+   * 向 npm 下载统计问每个包的近 7 天、近 30 天与累计下载量,都按截至 UTC 昨天的日期区间问。
+   * 不带 scope 的合批问,带 scope 的逐个问。
    * 累计按 365 天一段往前加,一个包某段为 0 就不再往前问;中间有整年无下载的包因此少计更早的下载。
    * 某次请求失败,涉及的包就缺那一项;统计接口整个不可达时返回空表,列表照常出。
    */
@@ -937,10 +943,12 @@ export class ExtensionManager {
       return counts;
     };
     const day = (date: Date) => date.toISOString().slice(0, 10);
-    const [week, month, total] = await Promise.all([point('last-week', names), point('last-month', names), (async () => {
+    const yesterday = Date.now() - 86_400_000;
+    const last = (days: number) => `${day(new Date(yesterday - (days - 1) * 86_400_000))}:${day(new Date(yesterday))}`;
+    const [week, month, total] = await Promise.all([point(last(7), names), point(last(30), names), (async () => {
       const sums = new Map<string, number>();
       let pending = names;
-      for (let end = new Date(); pending.length && day(end) >= DOWNLOADS_EPOCH;) {
+      for (let end = new Date(yesterday); pending.length && day(end) >= DOWNLOADS_EPOCH;) {
         const start = new Date(end.getTime() - (DOWNLOADS_WINDOW_DAYS - 1) * 86_400_000);
         const from = day(start) < DOWNLOADS_EPOCH ? DOWNLOADS_EPOCH : day(start);
         const counts = await point(`${from}:${day(end)}`, pending);

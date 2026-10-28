@@ -6,7 +6,7 @@
  * 按 kind 分派、契约版本、provider 形状与浏览器端产物在 tests/extensions-manifest.test.ts;
  * 扩展 import 框架的那条解析线在 tests/extensions-runtime.test.ts。
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, onTestFinished, vi } from 'vitest';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -334,12 +334,12 @@ describe('ExtensionManager', () => {
     const { mgr, urls } = manager();
     expect(await mgr.search()).toEqual([{
       name: 'a-mod', version: '1.0.0', description: 'A', publisher: 'me', license: 'MIT',
-      downloads: { month: 12 }, dependents: 7, keywords: ['cortico-world'], kind: 'world',
+      downloads: {}, dependents: 7, keywords: ['cortico-world'], kind: 'world',
       // git+https 的仓库地址收成能点的 https
       links: { npm: 'https://npm/a', repository: 'https://github.com/me/a' }, installed: true,
     }]);
     expect(await mgr.search('provider')).toEqual([{
-      name: 'a-prov', version: '3.0.0', description: 'P', downloads: { month: 3 }, dependents: 0, kind: 'provider',
+      name: 'a-prov', version: '3.0.0', description: 'P', downloads: {}, dependents: 0, kind: 'provider',
       keywords: ['cortico-provider'], links: {}, installed: false,
     }]);
     expect(urls.filter((u) => u.includes('/-/v1/search')).map((u) => decodeURIComponent(u).match(/keywords:[a-z-]+/)?.[0])).toEqual([
@@ -372,7 +372,11 @@ describe('ExtensionManager', () => {
     });
   });
 
-  it('search:下载量问 npm 下载统计,带 scope 的逐个问,累计往前加到一整段没下载为止', async () => {
+  it('search:下载量按截至 UTC 昨天的日期区间问 npm 下载统计,带 scope 的逐个问,累计往前加到一整段没下载为止', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // UTC 3-1 当天没过完,区间止于闰日 2-29
+    vi.setSystemTime(new Date('2028-03-01T00:05:00Z'));
+    onTestFinished(() => { vi.useRealTimers(); });
     const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
     // 每个包按时间倒序各段的下载量,没列出的段是 0;c-mod 统计里查不到
     const windows: Record<string, number[]> = { 'a-mod': [10, 5], '@s/b-mod': [4] };
@@ -392,8 +396,8 @@ describe('ExtensionManager', () => {
         const names = rest.slice(rest.indexOf('/') + 1).split(',');
         const entry = (name: string) => {
           if (!(name in windows)) return null;
-          if (period === 'last-week') return { downloads: 1 };
-          if (period === 'last-month') return { downloads: 3 };
+          if (period === '2028-02-23:2028-02-29') return { downloads: 1 };
+          if (period === '2028-01-31:2028-02-29') return { downloads: 3 };
           const i = asked[name] = (asked[name] ?? -1) + 1;
           return { downloads: windows[name]![i] ?? 0 };
         };
@@ -405,8 +409,8 @@ describe('ExtensionManager', () => {
     expect(Object.fromEntries(hits.map((h) => [h.name, h.downloads]))).toEqual({
       'a-mod': { total: 15, month: 3, week: 1 },
       '@s/b-mod': { total: 4, month: 3, week: 1 },
-      // 统计里查不到:只剩搜索端点的月数
-      'c-mod': { month: 99 },
+      // 统计里查不到
+      'c-mod': {},
     });
     // 不带 scope 的合批问;a-mod 问到第三段是 0 才停,b-mod 第二段就停
     expect(urls.filter((u) => u.endsWith('/a-mod,c-mod'))).toHaveLength(3);
@@ -414,7 +418,7 @@ describe('ExtensionManager', () => {
     expect(urls.filter((u) => u.endsWith('/@s/b-mod'))).toHaveLength(4);
   });
 
-  it('search:下载统计迟迟不回,列表照样出,只有搜索端点的月数', async () => {
+  it('search:下载统计迟迟不回,列表照样出,下载量缺席', async () => {
     vi.useFakeTimers();
     try {
       const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
@@ -427,7 +431,7 @@ describe('ExtensionManager', () => {
       });
       const pending = mgr.search();
       await vi.advanceTimersByTimeAsync(3000);
-      expect((await pending).map((h) => h.downloads)).toEqual([{ month: 5 }]);
+      expect((await pending).map((h) => h.downloads)).toEqual([{}]);
     } finally {
       vi.useRealTimers();
     }
@@ -740,6 +744,15 @@ describe('ExtensionManager', () => {
     mkdirSync(join(root, 'extensions'));
     writeFileSync(join(root, 'extensions/package.json'), '{"name":"x"}');
     expect(readInstalled(join(root, 'extensions'))).toEqual([]);
+  });
+
+  it('readInstalled:PowerShell 5.1 写出的带 BOM、CRLF 清单照常读;读不出时报错带文件路径', () => {
+    mkdirSync(join(root, 'extensions'));
+    const file = join(root, 'extensions/package.json');
+    writeFileSync(file, '﻿{\r\n    "name":  "x",\r\n    "dependencies":  {\r\n        "a":  "^1.0.0"\r\n    }\r\n}\r\n', 'utf8');
+    expect(readInstalled(join(root, 'extensions'))).toEqual([{ name: 'a', spec: '^1.0.0' }]);
+    writeFileSync(file, '{"name":', 'utf8');
+    expect(() => readInstalled(join(root, 'extensions'))).toThrow(file);
   });
 });
 

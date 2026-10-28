@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
-import { OpenAIHttpClient } from '../../src/providers/transport/chat.ts';
+import { OpenAIHttpClient, type StreamFailureInfo, type StreamFailureVerdict } from '../../src/providers/transport/chat.ts';
 import { mapTools, renderMessagesWithMedia } from '../../src/providers/transport/history.ts';
 import type { NativeChatMessage } from '../../src/providers/transport/native-types.ts';
 import type { ModelSpec, ToolSchema } from '../../src/core/types.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { ChatResponseAssembly, NativeResponseAssembly } from '../../src/providers/transport/response-assembly.ts';
 import { EventDecoder } from '../../src/providers/transport/response-http.ts';
-import { GenerationError, priceUsage, unknownMeters } from '../../src/core/generation.ts';
+import { GenerationError, priceUsage, unknownMeters, type Generation } from '../../src/core/generation.ts';
 import { ResponsesProvider } from '../../src/providers/openai-responses-compat/native.ts';
 import type { FunctionCall, StreamEvent } from '../../src/protocol/open-responses/index.ts';
 
@@ -175,15 +175,13 @@ describe('Provider standard Responses boundary', () => {
     expect(assembly.meters()).toMatchObject({ input: 3, output: 1 });
   });
 
-  it('decodes a long event sent in small chunks, and refuses a line past the limit', () => {
-    const decoder = new EventDecoder(1 << 21);
+  it('decodes a long event sent in small chunks', () => {
+    const decoder = new EventDecoder();
     const value = 'x'.repeat(1 << 20);
     const raw = `data: ${value}\n\n`;
     const events: string[] = [];
     for (let index = 0; index < raw.length; index += 1024) events.push(...decoder.feed(raw.slice(index, index + 1024)));
     expect(events).toEqual([value]);
-    const endless = new EventDecoder(1 << 21);
-    expect(() => endless.feed('data: ' + 'x'.repeat(1 << 21))).toThrow('SSE line');
   });
 
   it('does not follow a redirect: the request never reaches the address it points to', async () => {
@@ -205,7 +203,7 @@ describe('Provider standard Responses boundary', () => {
 
   it('decodes real native Responses framing and retains encrypted reasoning and function identity', () => {
     const raw = readFileSync(new URL('../fixtures/responses-stream.sse', import.meta.url), 'utf8');
-    const decoder = new EventDecoder(1 << 21);
+    const decoder = new EventDecoder();
     const assembly = new NativeResponseAssembly();
     for (let index = 0; index < raw.length; index += 17) {
       for (const payload of decoder.feed(raw.slice(index, index + 17))) {
@@ -261,6 +259,36 @@ describe('Provider standard Responses boundary', () => {
     });
     const result = await new ChatFixture().respond({ model: 'test' }, { signal: controller.signal });
     expect(result.attempts[0]).toMatchObject({ outcome: 'discarded', meters: { input: 10, output: 2 } });
+  });
+
+  it('diagnoses an in-stream failure with a non-streaming comparison request', async () => {
+    class Diagnosing extends ChatFixture {
+      comparison: Generation | null = null;
+      protected override async judgeStreamFailure(info: StreamFailureInfo): Promise<StreamFailureVerdict> {
+        this.comparison = await info.diagnose({ model: 'test' });
+        return { retry: false };
+      }
+    }
+    const bodies: Array<Record<string, unknown>> = [];
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      bodies.push(body);
+      if (body.stream !== true) return new Response(JSON.stringify({ id: 'cmp', choices: [{ message: { content: 'ok' }, finish_reason: 'stop' }] }));
+      // reasoning only and no finish_reason: the stream fails before anything irreversible, so the failure is judged
+      return sse([{ choices: [{ delta: { reasoning_content: 'thinking' } }] }]);
+    });
+    // the judge runs only for a stream that failed 20 s or more after it started
+    let now = 0;
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => (now += 30_000));
+    try {
+      const client = new Diagnosing();
+      const caught = await client.respond({ model: 'test' }, { onEvent: () => {} }).catch(error => error);
+      expect(caught).toBeInstanceOf(GenerationError);
+      expect(bodies.map(body => body.stream === true)).toEqual([true, false]);
+      expect(client.comparison?.response.output[0]).toMatchObject({ type: 'message' });
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it('carries consumed usage and unfinished Items on a committed stream failure', async () => {

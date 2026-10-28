@@ -6,7 +6,8 @@
  */
 
 import type { WebUi, WebUiSheet, Disposable } from '../../../shared/client-panel.ts';
-import { get, setConfig } from '../../core/api.ts';
+import { get } from '../../core/api.ts';
+import { LANGUAGE } from '../../core/language.ts';
 import { esc } from '../../ui/dom.ts';
 import { webUiFormat } from '../../ui/format.ts';
 import { getThemeStudio } from '../../theme/studio.ts';
@@ -19,7 +20,7 @@ import { usageQuery } from './range.ts';
 import { createUsageState } from './state.ts';
 import { S } from './strings.ts';
 import { createUsageTip } from './tooltip.ts';
-import type { UsageAccum, UsageAggregate, UsageBucketOption, UsageDailyTokens, UsageDim, UsageGroupStat, UsageMetric } from './types.ts';
+import type { UsageAccum, UsageAggregate, UsageBucketOption, UsageDailyTokens, UsageDim, UsageGroupStat, UsageMetric, UsageRateSource } from './types.ts';
 
 /** 自动刷新的周期。 */
 const LIVE_MS = 15_000;
@@ -27,6 +28,8 @@ const LIVE_MS = 15_000;
 const RESIZE_DEBOUNCE_MS = 80;
 /** 换算币种的 localStorage 键，空串表示自动 */
 const CURRENCY_KEY = 'cortico:usage-currency:v1';
+/** 没选过币种时用的币种，空串表示自动。 */
+const DEFAULT_CURRENCY = LANGUAGE === 'zh' ? 'CNY' : '';
 
 const BUCKETS: ReadonlyArray<{ value: UsageBucketOption; label: string }> = [
   { value: 'auto', label: S.bucketAuto },
@@ -138,7 +141,7 @@ export function mountUsage(ctx: FeatureContext): void {
   timezone.classList.add('utz');
   const dates = ui.h('span', 'udates');
   dates.append(fromInput, ui.h('span', 'ulabel', '—'), toInput, timezone);
-  /** 取数失败、账目存储异常与汇率保存失败；没有时整行不占位。 */
+  /** 取数失败与账目存储异常；没有时整行不占位。 */
   const notice = ui.msgline('', true);
   notice.classList.add('unotice');
   const rangeBar = ui.h('div', 'urangebar');
@@ -149,7 +152,7 @@ export function mountUsage(ctx: FeatureContext): void {
   const overview = ui.sheet({ title: S.sectionOverview });
   let basis = 'marginal';
   const storage = root.ownerDocument.defaultView!.localStorage;
-  let currency = storage.getItem(CURRENCY_KEY) ?? '';
+  let currency = storage.getItem(CURRENCY_KEY) ?? DEFAULT_CURRENCY;
   const currencySelect = ui.select({
     // 先按记住的币种占一个选项，取数回来前选择框不会先闪一下「自动」。
     options: [{ value: '', label: S.autoCurrency }, ...(currency ? [{ value: currency, label: currency }] : [])],
@@ -158,32 +161,12 @@ export function mountUsage(ctx: FeatureContext): void {
   });
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
   basisSelect.setAttribute('aria-label', S.ledger);
-  // 换算币种的汇率：写回 Core 配置
-  const rateInput = ui.input({ type: 'number' });
-  rateInput.min = '0';
-  rateInput.step = 'any';
-  rateInput.title = S.rateHint;
-  rateInput.setAttribute('aria-label', S.rateHint);
-  const rateCode = ui.h('span', 'ulabel');
+  // 换算币种的汇率与出处，只读
+  const rateText = ui.h('span', 'ulabel');
+  const rateSource = ui.h('span', 'ulabel ursrc');
   const rateBox = ui.h('span', 'urate');
-  rateBox.append(ui.h('span', 'ulabel', '1 USD ='), rateInput, rateCode);
+  rateBox.append(rateText, rateSource);
   rateBox.hidden = true;
-  let rateNote = '';
-  rateInput.addEventListener('change', () => {
-    const code = rateCode.textContent ?? '';
-    const value = Number(rateInput.value);
-    if (!code || !(value > 0)) { rateInput.value = rateInput.dataset.saved ?? ''; return; }
-    void setConfig('core', { [`usage.rates.${code}`]: value }, { signal: ctx.signal }).then(() => {
-      rateInput.dataset.saved = String(value);
-      rateNote = '';
-      return load();
-    }, (err) => {
-      if (isAbort(err) || ctx.signal.aborted) return;
-      rateInput.value = rateInput.dataset.saved ?? '';
-      rateNote = S.rateSaveFailed(errText(err));
-      renderNotes();
-    });
-  }, { signal: ctx.signal });
   const ledger = ui.h('span', 'uledger');
   ledger.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, rateBox);
   headActions(ui, overview, ledger);
@@ -432,10 +415,22 @@ export function mountUsage(ctx: FeatureContext): void {
 
   /** 顶部提示行只放需要处理的问题；统计口径写在总览下方。 */
   let staleNote = '';
+  function renderRateSource(source: UsageRateSource | undefined): void {
+    rateSource.textContent = '';
+    if (source?.kind === 'builtin') rateSource.textContent = S.rateBuiltin(source.date);
+    else if (source?.kind === 'live') {
+      const link = ui.h('a', '', `${source.feed} ${source.date}`);
+      link.href = source.site;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      rateSource.append(link);
+    }
+  }
+
   function renderNotes(): void {
     const d = state.data;
     const ledgerError = d?.ledger?.error ? S.ledgerError(d.ledger.pending, d.ledger.error).trim() : '';
-    notice.textContent = [staleNote, ledgerError, rateNote].filter(Boolean).join(' ');
+    notice.textContent = [staleNote, ledgerError].filter(Boolean).join(' ');
     notice.hidden = !notice.textContent;
   }
 
@@ -458,11 +453,8 @@ export function mountUsage(ctx: FeatureContext): void {
     const shown = d.currency || 'USD';
     const rate = shown === 'USD' ? undefined : d.rates?.[shown];
     rateBox.hidden = rate === undefined;
-    rateCode.textContent = shown;
-    if (rate !== undefined && doc.activeElement !== rateInput) {
-      rateInput.value = String(rate);
-      rateInput.dataset.saved = rateInput.value;
-    }
+    if (rate !== undefined) rateText.textContent = `1 USD = ${Number(rate.toPrecision(5))} ${shown}`;
+    renderRateSource(d.rateSources?.[shown]);
     billingNote.textContent = S.billingHint +
       (d.totals?.unknownUsageCalls ? S.unknownUsage(d.totals.unknownUsageCalls) : '');
     renderRange(d);

@@ -9,6 +9,25 @@ export class LLMError extends Error {
   }
 }
 
+/** An `error` event in a stream: the upstream's own failure report, which the transport does not retry. */
+export class StreamErrorEvent extends LLMError {
+  constructor(body: string) {
+    super(`Stream error event: ${upstreamText(body)}`, 0, body);
+    this.name = 'StreamErrorEvent';
+  }
+}
+
+/** The upstream's error text: `error.message` or `message` of a JSON body, else the body, on one line. */
+export function upstreamText(body: string): string {
+  let text = body;
+  try {
+    const parsed = JSON.parse(body) as { error?: { message?: unknown }; message?: unknown };
+    const message = parsed.error?.message ?? parsed.message;
+    if (typeof message === 'string') text = message;
+  } catch { /* not JSON: the body as it came */ }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
 /**
  * Whether an upstream rejection says the input exceeded the model's context. Status 0 is an
  * in-stream failure event; 400/413 are the request-rejection codes. The body patterns cover

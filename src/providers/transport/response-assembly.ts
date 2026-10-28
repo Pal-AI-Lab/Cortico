@@ -2,6 +2,7 @@ import { createResponse, type OutputItem, type Request, type Response, type Stre
 import { ResponseAccumulator, ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { standardUsage, unknownMeters, type TokenMeters } from '../../core/generation.ts';
 import { chatMeters, responseMeters } from './response-meters.ts';
+import { StreamErrorEvent } from './errors.ts';
 
 export interface ResponseAssembly {
   feed(payload: unknown, emit: (event: StreamEvent) => void): void;
@@ -32,6 +33,7 @@ export function normalizeCompletedFunctionCalls(response: Response): Response {
 /**
  * Validate native Responses Items before notifying observers.
  * Normalize response.reasoning_text.* to the schema name response.reasoning.* before validation.
+ * An `error` event, before or after response.created, ends the stream as a `StreamErrorEvent`.
  */
 export class NativeResponseAssembly implements ResponseAssembly {
   private readonly accumulator = new ResponseAccumulator();
@@ -42,6 +44,7 @@ export class NativeResponseAssembly implements ResponseAssembly {
     if ('type' in payload && (payload.type === 'response.reasoning_text.delta' || payload.type === 'response.reasoning_text.done'))
       payload = { ...payload, type: payload.type.replace('reasoning_text', 'reasoning') };
     let event = payload as StreamEvent;
+    if (event.type === 'error') throw new StreamErrorEvent(JSON.stringify(payload));
     if ('response' in event) {
       const raw = event.response;
       if (!raw || typeof raw.id !== 'string' || typeof raw.model !== 'string' || !Array.isArray(raw.output)) throw new ResponseProtocolError('Invalid native Responses resource');
@@ -51,7 +54,6 @@ export class NativeResponseAssembly implements ResponseAssembly {
     }
     this.accumulator.accept(event);
     emit(event);
-    if (event.type === 'error') throw new ResponseProtocolError(`Native response error: ${JSON.stringify(event)}`);
   }
   finish(): Response { return normalizeCompletedFunctionCalls(this.accumulator.finish()); }
   snapshot(): Response | null { return this.accumulator.snapshot(); }

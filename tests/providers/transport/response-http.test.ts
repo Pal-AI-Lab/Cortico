@@ -1,12 +1,15 @@
 /**
- * generate 的重试策略:429 按 Retry-After 决定下一次等待,408 与网络错误同入重试集。
- * Fixture 借道共享传输。
+ * generate 的重试策略:429 按 Retry-After 决定下一次等待,408 与网络错误同入重试集,
+ * 其余 4xx 与流内 error 事件不重试。Fixture 借道共享传输。
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createServer, type Server } from 'node:http';
 import { OpenAIHttpClient } from '../../../src/providers/transport/chat.ts';
 import type { NativeChatMessage } from '../../../src/providers/transport/native-types.ts';
 import type { Logger, ModelSpec, ToolSchema } from '../../../src/core/types.ts';
 import { nullLogger } from '../../../src/core/util.ts';
+import { GenerationError } from '../../../src/core/generation.ts';
+import { ResponsesProvider } from '../../../src/providers/openai-responses-compat/native.ts';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
@@ -84,5 +87,44 @@ describe('network failure detail', () => {
     await settled;
     expect(retries.length).toBeGreaterThan(0);
     expect(new Set(retries)).toEqual(new Set([text]));
+  });
+});
+
+describe('upstream rejection of a streaming request', () => {
+  const said = 'Input text data may contain inappropriate content.';
+  /** A server that answers every request with `answer`; resolves with its port. */
+  const serve = (answer: (res: import('node:http').ServerResponse) => void) => {
+    let requests = 0;
+    const server: Server = createServer((_req, res) => { requests++; answer(res); });
+    const port = new Promise<number>((done) => server.listen(0, '127.0.0.1', () => done((server.address() as { port: number }).port)));
+    return { port, requests: () => requests, close: () => server.close() };
+  };
+  const stream = async (port: number) => new ResponsesProvider({ baseUrl: `http://127.0.0.1:${port}/v1`, apiKey: 'key' })
+    .respond({ model: 'test', input: 'hi' }, { onEvent: () => {} }).catch((error: unknown) => error);
+
+  it('a 400 with a JSON body fails after one request, with the status and the upstream message', async () => {
+    const body = JSON.stringify({ error: { type: 'invalid_request_error', message: said } });
+    const server = serve((res) => res.writeHead(400, { 'content-type': 'application/json' }).end(body));
+    try {
+      const failure = await stream(await server.port);
+      expect(failure).toBeInstanceOf(GenerationError);
+      expect(failure).toMatchObject({ status: 400, body, message: `LLM API 400: ${said}` });
+      expect(server.requests()).toBe(1);
+    } finally { server.close(); }
+  });
+
+  it('an error event as the first event of a 200 stream fails after one request, with the upstream message', async () => {
+    const event = { type: 'error', sequence_number: 0, error: { type: 'invalid_request_error', code: null, message: said, param: null } };
+    const server = serve((res) => res.writeHead(200, { 'content-type': 'text/event-stream' }).end(`event: error
+data: ${JSON.stringify(event)}
+
+`));
+    try {
+      const failure = await stream(await server.port);
+      expect(failure).toBeInstanceOf(GenerationError);
+      expect(failure).toMatchObject({ status: 0, body: JSON.stringify(event) });
+      expect((failure as Error).message).toContain(said);
+      expect(server.requests()).toBe(1);
+    } finally { server.close(); }
   });
 });

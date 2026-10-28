@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { BraveApiError, BraveClient } from '../../../src/worlds/websearch/brave-client.ts';
+import { WEBSEARCH_DEFAULTS } from '../../../src/worlds/websearch/config.ts';
 
 function okResponse(payload: unknown): Response {
   return new Response(JSON.stringify(payload), { status: 200 });
@@ -8,6 +9,7 @@ function okResponse(payload: unknown): Response {
 function makeClient(): BraveClient {
   return new BraveClient({
     apiKey: 'test-key',
+    baseUrl: WEBSEARCH_DEFAULTS.braveBaseUrl,
     country: 'CN',
     searchLang: 'zh-hans',
     uiLang: 'zh-CN',
@@ -43,7 +45,7 @@ describe('BraveClient.search', () => {
     ]);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    expect(url).toContain('https://api.search.brave.com/res/v1/web/search?');
+    expect(url).toContain(`${WEBSEARCH_DEFAULTS.braveBaseUrl}/web/search?`);
     expect(url).toContain('q=OpenAI');
     expect(url).toContain('country=CN');
     expect(url).toContain('count=4');

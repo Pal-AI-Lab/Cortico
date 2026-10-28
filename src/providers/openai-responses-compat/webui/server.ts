@@ -70,7 +70,7 @@ function reasoningForm(generation: Generation): 'encrypted' | 'plaintext' | 'non
 
 async function probe(client: ResponseClient, spec: ModelSpec): Promise<ProbeOutcome> {
   try {
-    const generation = await client.respond(probeRequest(spec), { diagnostic: true, nativeSpec: spec, role: 'probe' });
+    const generation = await client.respond(probeRequest(spec), { diagnostic: true, nativeSpec: spec, role: 'probe', onEvent: () => {} });
     return { ok: true, status: generation.attempts.at(-1)?.status ?? null, reasoning: reasoningForm(generation) };
   } catch (error) {
     if (error instanceof GenerationError) return { ok: false, status: error.status, error: error.body || error.message };

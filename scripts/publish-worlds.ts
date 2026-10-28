@@ -5,6 +5,8 @@
  * 装上的包按 id 冲突不加载。
  *
  * 默认只生成目录;--pack 产出 tarball,--publish 发布。参数里列出 id 时只处理这几个。
+ * `--version=<v>` 覆盖包版本，给两次框架发版之间单独重发某个 World 用(如 `0.2.8-0`:高于已发的 0.2.7,
+ * 低于下一次框架发版的 0.2.8)。
  * 包名在 npm 上已有占位版本,版本号可能低于占位版,所以发布显式带 `--tag latest`。
  */
 import * as esbuild from 'esbuild';
@@ -53,8 +55,8 @@ export const WORLD_PACKAGES: readonly WorldPackageSpec[] = [
   },
   {
     id: 'websearch',
-    description: 'Cortico World: a web_search tool backed by the Brave Search API',
-    keywords: ['websearch', 'brave-search'],
+    description: 'Cortico World: a web_search tool backed by the Brave Search API or the DeepSeek Search API',
+    keywords: ['websearch', 'brave-search', 'deepseek'],
   },
 ];
 
@@ -260,7 +262,9 @@ async function main(): Promise<void> {
     console.error(`没有这些 World 包: ${unknown.join(', ')}`);
     process.exit(1);
   }
+  const version = argv.find((a) => a.startsWith('--version='))?.slice('--version='.length);
   const root = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as RootPackageJson;
+  if (version) root.version = version;
   const specs = WORLD_PACKAGES.filter((s) => ids.length === 0 || ids.includes(s.id));
   const staged: { name: string; out: string }[] = [];
   for (const spec of specs) {

@@ -21,7 +21,7 @@
 | 文件 | 放什么 |
 |---|---|
 | 仓库根 `.env` | 只放 `CORTICO_HOME`。密钥写在这里读不到 |
-| `<部署>/.env` | World 的密钥:`SESSDATA`、`BRAVE_API_KEY`、`OPENROUTER_API_KEY`、`VTS_AUTH_TOKEN`… |
+| `<部署>/.env` | World 的密钥:`SESSDATA`、`BRAVE_API_KEY`、`DEEPSEEK_SEARCH_API_KEY`、`OPENROUTER_API_KEY`、`VTS_AUTH_TOKEN`… |
 | `<部署根>/providers/<端点名>/.env` | 该端点的密钥,名字由端点条目的 `secret` 字段定 |
 
 密钥文件一行一个 `NAME=value`,值不能含空格。仓库根 `.env` 的 `CORTICO_HOME` 可用引号包住含空格的路径。

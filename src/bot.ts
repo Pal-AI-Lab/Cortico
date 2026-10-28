@@ -17,7 +17,7 @@ import type {
   ToolSchema,
 } from './core/types.ts';
 import type { LoadedConfig } from './core/config.ts';
-import { coreConfigGroup, usageRates } from './core/config.ts';
+import { coreConfigGroup } from './core/config.ts';
 import { resolveLanguage, type Language } from './core/language.ts';
 import { botText } from './strings.ts';
 import { updateJsonObject } from './config-file.ts';
@@ -34,6 +34,7 @@ import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
 import { aggregateUsage } from './core/cost.ts';
+import { createUsageRates } from './core/usage-rates.ts';
 import { DeadlineError, nowIso, withDeadline } from './core/util.ts';
 import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/webui/hub.ts';
@@ -479,7 +480,13 @@ export function deriveWorldFacts(
     }
     const label = decl?.label ?? assembly.labelIn(slot.id, language);
     if (!slot.mounted) {
-      return { id: slot.id, status: 'inactive' as const, label, declared: slot.declared };
+      return {
+        id: slot.id,
+        status: 'inactive' as const,
+        label,
+        declared: slot.declared,
+        ...(slot.startFailed ? { reason: slot.startFailed(language) } : {}),
+      };
     }
     return {
       id: m.id,
@@ -995,6 +1002,7 @@ export function createBot<C extends CoreConfig>(
         ...deriveSlotStorage(assembly, language),
       ];
     };
+    const liveRates = createUsageRates();
     webApp = new WebApp({
       management: opts.management,
       access: opts.access,
@@ -1010,7 +1018,13 @@ export function createBot<C extends CoreConfig>(
       defaultScheme: cfg.web.theme,
       sessions: core.sessions,
       storage: webUiStorage,
-      usage: { aggregate: (opts) => aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates: usageRates(core.config) }), status: () => core.usageLog.status() },
+      usage: {
+        aggregate: async (opts) => {
+          const { rates, sources } = await liveRates.resolve();
+          return { ...aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
+        },
+        status: () => core.usageLog.status(),
+      },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),
         set: (groupId: string, values: ConfigValues, language) => {
@@ -1166,7 +1180,7 @@ export function createBot<C extends CoreConfig>(
       if (orphans.length) core.runlog.logger('provider').warn('端点条目没有对应的 Provider 模块,不可用', { orphans });
       if (cfg.activeProvider && cfg.providers[cfg.activeProvider]) void core.providers.start(cfg.activeProvider).catch(error=>core.runlog.logger('provider').error('Provider 启动失败',{error:String(error)}));
       await parts.onStart?.({ core, loaded, port });
-      await core.start();
+      for (const failure of await core.start()) assembly.startFailed(failure.worldId, failure.detail);
       app?.markReady();
       return { port };
     },

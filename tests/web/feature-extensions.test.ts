@@ -381,6 +381,17 @@ describe('arrangeHits', () => {
   const hit = (over: Any): Any => ({ name: 'x', version: '1.0.0', description: '', downloads: { month: 0 }, dependents: 0, links: {}, installed: false, ...over });
   const opts = (over: Any): Any => ({ filter: '', hideInstalled: false, sort: 'downloads', page: 0, pageSize: 2, ...over });
 
+  it('月下载量未知的排在 0 之后,设了最低下载量时不列出', () => {
+    const hits = [
+      hit({ name: 'a-unknown', downloads: {} }),
+      hit({ name: 'z-zero', downloads: { month: 0 } }),
+      hit({ name: 'b-unknown', downloads: {} }),
+      hit({ name: 'positive', downloads: { month: 5 } }),
+    ];
+    expect(arrangeHits(hits, opts({ pageSize: 10 })).shown.map((h: Any) => h.name)).toEqual(['positive', 'z-zero', 'a-unknown', 'b-unknown']);
+    expect(arrangeHits(hits, opts({ minDownloads: 1 })).shown.map((h: Any) => h.name)).toEqual(['positive']);
+  });
+
   it('筛选看名字、描述与关键字;隐藏已安装是另一道', () => {
     const hits = [
       hit({ name: 'alpha', description: '甲' }),

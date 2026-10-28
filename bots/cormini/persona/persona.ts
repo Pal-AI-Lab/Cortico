@@ -544,8 +544,12 @@ export class Cormini implements Persona {
     this.core?.injectInternal(text, 'opening');
   }
 
-  /** World 装卸与可见性变化只报一句;工具与环境提示词的增减随前缀重载自然体现。 */
+  /** World 装卸、可见性变化与启动失败只报一句;工具与环境提示词的增减随前缀重载自然体现。 */
   onWorldLifecycle(event: WorldLifecycleEvent): void {
+    if (event.kind === 'start-failed') {
+      this.core?.injectInternal(`[system] World 「${event.label}」启动失败,本次运行里没有它:${event.reason}`, 'notice');
+      return;
+    }
     const what = event.kind === 'visibility'
       ? (event.visible ? '重新对你可见' : '已对你隐藏,它的事件不再送到你这里')
       : event.kind === 'mounted' ? '已激活'
@@ -709,8 +713,8 @@ export class Cormini implements Persona {
   }
 
   /**
-   * 主 session 的输出旁路:挂载 World 的接收器扇成一个 tap。没有任何接收器时不声明,
-   * session 不走流式。每批投递时现取,World 运行中挂载/卸载即生效。
+   * 主 session 的输出旁路:挂载 World 的接收器扇成一个 tap。没有任何接收器时不声明。
+   * 每批投递时现取,World 运行中挂载/卸载即生效。
    */
   private outputTap(): OutputTap | undefined {
     const taps = this.sortedWorlds().flatMap((m) => {

@@ -8,6 +8,7 @@ import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import { ProviderHub } from '../../src/providers/webui/hub.ts';
 import { acquireInstanceLock } from '../../src/core/instance-lock.ts';
 import { validateProviderName } from '../../src/providers/name.ts';
+import { FixtureStream } from '../core/fixture-protocol.ts';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => cleanups.splice(0).forEach(fn => fn()));
@@ -144,7 +145,11 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     seen.push({ url, auth: new Headers(init?.headers).get('authorization') });
     if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'listed-model' }] }));
-    return new Response(JSON.stringify({ id: 'r', model: 'test-model', status: 'completed', output: [{ type: 'message', id: 'm', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'pong', annotations: [] }] }], usage: { input_tokens: 1, output_tokens: 1 } }));
+    const events: string[] = [];
+    const stream = new FixtureStream(JSON.parse(String(init?.body)), event => events.push(`data: ${JSON.stringify(event)}\n\n`));
+    stream.feed({ type: 'content', text: 'pong' });
+    stream.finish({ promptTokens: 1, completionTokens: 1, cacheHitTokens: 0, cacheMissTokens: 1 });
+    return new Response(events.join(''), { headers: { 'content-type': 'text/event-stream' } });
   });
   try {
     expect(await hub.action('draft', 'models', 'en', { entry, secretValue: 'typed-key' })).toEqual({ models: [{ id: 'listed-model' }] });

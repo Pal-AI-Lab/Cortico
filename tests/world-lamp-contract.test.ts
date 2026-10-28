@@ -8,6 +8,7 @@ import { MINECRAFT_DEFAULTS, type MinecraftConfigSection } from '../src/worlds/m
 import { QQWorld } from '../src/worlds/qq/world.ts';
 import { ConsoleWorld } from '../src/worlds/console/world.ts';
 import { WebSearchWorld } from '../src/worlds/websearch/world.ts';
+import { WEBSEARCH_DEFAULTS } from '../src/worlds/websearch/config.ts';
 
 const mcCfg = structuredClone({ ...MINECRAFT_DEFAULTS, enabled: true }) as MinecraftConfigSection;
 
@@ -17,7 +18,7 @@ const MODULES: Array<() => World> = [
   () => new MinecraftWorld({ cfg: mcCfg }),
   () => new QQWorld({ wsUrl: 'ws://127.0.0.1:1', groups: [], privates: [], token: '' }),
   () => new ConsoleWorld(),
-  () => new WebSearchWorld({ apiKey: 'k' }),
+  () => new WebSearchWorld({ cfg: { ...WEBSEARCH_DEFAULTS }, secret: () => 'k', storeSecret: () => {} }),
 ];
 
 const STATES: ReadonlyArray<WorldLamp['state']> = ['online', 'loading', 'error', 'offline'];
@@ -52,8 +53,8 @@ describe('几个具体判据', () => {
   });
 
   it('没配密钥是灰：部署没填不算运行出错', () => {
-    expect(find(new WebSearchWorld({ apiKey: '' }), '密钥')?.state).toBe('offline');
-    expect(find(new WebSearchWorld({ apiKey: 'k' }), '密钥')?.state).toBe('online');
+    expect(find(new WebSearchWorld({ cfg: { ...WEBSEARCH_DEFAULTS }, secret: () => '', storeSecret: () => {} }), '密钥')?.state).toBe('offline');
+    expect(find(new WebSearchWorld({ cfg: { ...WEBSEARCH_DEFAULTS }, secret: () => 'k', storeSecret: () => {} }), '密钥')?.state).toBe('online');
   });
 
   it('QQ 连不上协议端是红，名单空着只是灰：一个是失联，一个是没设监听', () => {

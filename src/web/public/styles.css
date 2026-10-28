@@ -544,6 +544,7 @@
   .tsecdesc { color: var(--ink-soft); font-size: var(--text-detail); line-height: 1.55; margin: 5px 0 2px; }
   .trow { display: grid; grid-template-columns: 200px 180px 1fr; gap: 14px; align-items: center; padding: 9px 0; border-top: 1px solid var(--line); }
   .trow .tlabel { font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .trow .tlabel.warning { color: var(--warn); }
   .trow .ttag { font-size: 10px; color: var(--warn); border: 1px solid var(--line-strong); border-radius: 5px; padding: 0 4px; }
   .trow .tdesc { color: var(--ink-soft); font-size: var(--text-detail); line-height: 1.55; }
   .trow .tfield { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -2255,7 +2256,8 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .udates > input { width: 136px; flex: none; }
 .udates > input.utz { width: auto; field-sizing: content; min-width: 0; color: var(--ink-soft); pointer-events: none; }
 .uledger > select.field { width: auto; min-width: 0; padding-inline: 10px 30px; }
-.urate > input { width: 80px; }
+.uledger, .urate { flex-wrap: wrap; }
+.ursrc > a { color: inherit; }
 .unotice { margin: 10px 0 0; }
 
 /* 总览 */

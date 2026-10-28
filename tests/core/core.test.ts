@@ -339,3 +339,29 @@ describe('Core · session 声明与 fork 原语', () => {
     }
   });
 });
+
+describe('Core · 启动期 World 隔离', () => {
+  it('一个 World 的 start 抛错:记入返回值并移出挂载表,其余 World 照常启动,主循环照常跑', async () => {
+    const tmp = makeTmpDir();
+    try {
+      const loaded = loadedFor(tmp.dir);
+      const bad = makeFakeIO('bad');
+      bad.start = async () => { throw new Error('端口 7797 被占用'); };
+      const good = makeFakeIO('good');
+      let goodStarted = 0;
+      good.start = async () => { goodStarted++; };
+      const worlds = [bad, good];
+      const core = new Core(loaded, { persona: makeFakePersona([], { cfg: loaded.config }), worlds, llm: new FakeLLM() });
+      try {
+        expect(await core.start()).toEqual([{ worldId: 'bad', detail: '端口 7797 被占用' }]);
+        expect(goodStarted).toBe(1);
+        expect(worlds.map((m) => m.id)).toEqual(['good']);
+        expect(core.loop.getStatus().running).toBe(true);
+      } finally {
+        await core.stop();
+      }
+    } finally {
+      tmp.cleanup();
+    }
+  });
+});

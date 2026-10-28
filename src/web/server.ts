@@ -26,6 +26,7 @@ import type {
 import type { ProviderAuth, ProviderDescribe } from '../providers/base.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
+import type { UsageRateSource } from '../core/usage-rates.ts';
 import { estimateMessagesTokens } from '../core/util.ts';
 import { blobScheme } from '../core/blobs.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
@@ -137,6 +138,8 @@ export interface InactiveWorldInfo {
   label: string;
   /** 是否由Persona声明；false 表示部署侧选配 World。 */
   declared: boolean;
+  /** 启动期 `start()` 抛错的理由,原样显示;停用的没有。 */
+  reason?: string;
 }
 
 /** Persona已声明、但当前部署未提供实现的 World。仅出现在 WebUI 目录中。 */
@@ -215,9 +218,9 @@ export interface ExtensionSearchHit {
   keywords?: string[];
   /**
    * npm 的下载量,所有版本合计。`month` 是近 30 天,`week` 是近 7 天,`total` 是往前逐年累加到某年为 0 为止。
-   * npm 下载统计接口没答上来时只有搜索端点给的 `month`。
+   * 统计截至 UTC 昨天;npm 下载统计没答上来的项缺席。
    */
-  downloads: { total?: number; month: number; week?: number };
+  downloads: { total?: number; month?: number; week?: number };
   /** npm 上依赖这个包的包数 */
   dependents: number;
   links: { npm?: string; repository?: string; homepage?: string };
@@ -613,10 +616,14 @@ export interface WebAppCheckpointDeps {
 }
 
 /** 分时段/范围的用量聚合(用量·成本页数据源) */
+export type UsageReport = UsageAggregate & { rateSources?: Record<string, UsageRateSource> };
+
 export interface WebAppUsageDeps {
   status?(): { pending: number; error: string | null };
   /** `days` 与补空桶的截止时刻按部署时区解释,由实现方给定时区。 */
-  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent'; dailyTokenDays?: number }): UsageAggregate;
+  /** `rateSources` 是 `rates` 里各币种汇率的出处。 */
+  aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent'; dailyTokenDays?: number }):
+    UsageReport | Promise<UsageReport>;
 }
 
 
@@ -1774,7 +1781,7 @@ export class WebApp {
         events: this.deps.store.range({ limit: DIAGNOSTICS_TAIL }),
         latestCursor: this.deps.store.latestCursor(),
         worlds: (await this.deps.worlds?.(this.languageOf(req))) ?? [],
-        usage: this.deps.usage?.aggregate({ bucket: 'day' }) ?? null,
+        usage: (await this.deps.usage?.aggregate({ bucket: 'day' })) ?? null,
         endpoint: dbg?.activeEndpoint?.() ?? null,
       }));
     }));
@@ -2346,7 +2353,7 @@ export class WebApp {
     app.get(PREVIOUS_CONTRACT_PANEL_ROUTE, previousContractPagesOnly(previousContractPages), getPanel);
     app.post(PREVIOUS_CONTRACT_PANEL_ROUTE, previousContractPagesOnly(previousContractPages), ...postPanel);
 
-    app.get('/api/usage', wrap((req, res) => {
+    app.get('/api/usage', wrap(async (req, res) => {
       const src = this.deps.usage;
       if (!src) { res.json({ currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [] }); return; }
       const BUCKETS = ['auto', 'minute', 'hour', 'day', 'week', 'month'] as const;
@@ -2365,7 +2372,7 @@ export class WebApp {
       if (days !== undefined && days >= 1) opts.days = days;
       const dailyTokenDays = intParam(req.query.dailyTokenDays);
       if (dailyTokenDays !== undefined && dailyTokenDays >= 1) opts.dailyTokenDays = dailyTokenDays;
-      res.json({ ...src.aggregate(opts), ledger: src.status?.() });
+      res.json({ ...(await src.aggregate(opts)), ledger: src.status?.() });
     }));
 
     app.get('/api/config', wrap((req, res) => {

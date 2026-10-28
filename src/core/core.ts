@@ -67,6 +67,12 @@ export interface WorldStopFailure {
   detail: string;
 }
 
+/** 启动期 `start()` 抛错的 World。 */
+export interface WorldStartFailure {
+  worldId: string;
+  detail: string;
+}
+
 export class Core<C extends CoreConfig = CoreConfig> {
   readonly loaded: LoadedConfig<C>;
   /** 本次进程运行的标识与日志目录。 */
@@ -592,7 +598,8 @@ export class Core<C extends CoreConfig = CoreConfig> {
     track.record(usage, undefined, opts?.model, { charges: opts?.charges });
   }
 
-  async start(): Promise<void> {
+  /** 启动全部已挂载 World。`start()` 抛错的 World 移出挂载表并列入返回值,其余照常启动。 */
+  async start(): Promise<WorldStartFailure[]> {
     // 构造期已加载状态；此处再次 load 会覆盖装配后、启动前的修改。
     const repair = this.session.load();
     if (repair) {
@@ -601,13 +608,17 @@ export class Core<C extends CoreConfig = CoreConfig> {
         { ...repair, file: 'session-main.jsonl' },
       );
     }
-    for (const mod of this.worlds) {
+    const failed: WorldStartFailure[] = [];
+    for (const mod of [...this.worlds]) {
       try {
         await mod.start(this.makeHost(mod));
       } catch (error) {
         const lease = this.moduleHostLeases.get(mod);
         if (lease) lease.active = false;
-        throw error;
+        this.worlds.splice(this.worlds.indexOf(mod), 1);
+        this.log.emit('error', `World 启动失败,已跳过: ${mod.id}`, { event: 'world-start-failed', err: error });
+        failed.push({ worldId: mod.id, detail: error instanceof Error ? error.message : String(error) });
+        continue;
       }
       this.log.info(`World 已启动: ${mod.id}`);
     }
@@ -624,6 +635,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       activeProvider: this.loaded.config.activeProvider,
     });
     this.log.emit('info', 'core已启动', { event: 'started', data: { run: this.run.id } });
+    return failed;
   }
 
   /**

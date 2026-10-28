@@ -139,7 +139,7 @@ Cortico strictly separates concerns across four distinct layers:
 | QQ | `qq` | Multi-group and direct message channels with optional vision model transcription |
 | Bilibili Live | `bilibili` | Real-time danmaku, superchats, gifts, guards, and viewer traffic monitoring with local OBS overlay |
 | Minecraft | `minecraft` | Mineflayer client for vanilla servers: game state observations and high-level autonomous action dispatch |
-| Web Search | `websearch` | Real-time web search integration powered by Brave Search API |
+| Web Search | `websearch` | Real-time web search through the Brave Search API or the DeepSeek Search API; either address can point at a compatible proxy |
 
 Each release also publishes `minecraft`, `qq`, `bilibili` and `websearch` to npm as `cortico-world-<id>` at the framework's version, for apps built on Cortico that do not bundle them. Where the framework already has a World with the same id, the installed package is not loaded.
 

@@ -140,6 +140,8 @@ export interface WorldSlot {
   readonly definition: WorldDefinition<WorldSection> | null;
   instance: World;
   mounted: boolean;
+  /** 启动期 `start()` 抛错的理由,按界面语言给;激活成功或停用后清掉。 */
+  startFailed?: (language: Language) => string;
 }
 
 export interface MissingWorld {
@@ -162,7 +164,7 @@ export interface PrebuiltOptions {
 export interface WorldMountHost {
   mount(mod: World): Promise<void>;
   unmount(id: string): Promise<void>;
-  /** 装配层改了一个槽位的挂载状态(激活 / 停用 / 重启)。启动期的初始挂载不报。 */
+  /** 装配层改了一个槽位的挂载状态(激活 / 停用 / 重启),或启动期 `start()` 抛错。启动期的初始挂载不报。 */
   lifecycle?(event: WorldLifecycleEvent): void;
   /**
    * Core 保留帧与 Persona 自有工具的名称。绑定时检查已挂载实例，
@@ -372,6 +374,20 @@ export class WorldAssembly {
     return this.queued(id, () => this.restartNow(id, language));
   }
 
+  /**
+   * Core 启动期报回的 `start()` 失败:槽位回到未激活并记下理由,`enabled` 不变,
+   * 定义实例重建,报一次 start-failed;Core 已把失败实例移出挂载表。
+   */
+  startFailed(id: string, detail: string): void {
+    const slot = this.slot(id);
+    const index = this.mounted.indexOf(slot.instance);
+    if (index >= 0) this.mounted.splice(index, 1);
+    slot.mounted = false;
+    if (slot.definition) slot.instance = slot.definition.create(this.context(slot.definition));
+    slot.startFailed = (language) => text(language).startFailed(detail);
+    this.host?.lifecycle?.({ kind: 'start-failed', id, label: slot.label, reason: detail });
+  }
+
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
   sync(id: string): Promise<void> {
     return this.queued(id, () => this.syncNow(id));
@@ -406,6 +422,7 @@ export class WorldAssembly {
       throw error;
     }
     slot.mounted = true;
+    delete slot.startFailed;
     this.host?.lifecycle?.({ kind: 'mounted', id, label: slot.label });
     return t.activated(this.labelIn(id, language), id);
   }
@@ -415,6 +432,7 @@ export class WorldAssembly {
     const wasMounted = slot.mounted;
     if (wasMounted) await this.stopSlot(slot);
     this.persist(id, { enabled: false });
+    delete slot.startFailed;
     if (wasMounted) this.host?.lifecycle?.({ kind: 'unmounted', id, label: slot.label });
     return text(language).deactivated(this.labelIn(id, language), id);
   }

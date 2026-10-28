@@ -211,7 +211,7 @@ export class ProviderSettings {
     return this.probeClient(this.registry.bind(name), entry.spec, language);
   }
 
-  /** One diagnostic request through `client`; the receipt carries status, latency, usage and charges, or the failure and a hint. */
+  /** One streaming diagnostic request through `client`; the receipt carries status, latency, usage and charges, or the failure and a hint. */
   async probeClient(client: ResponseClient, spec: ModelSpec, language: Language) {
     const S = text(language);
     const request = {
@@ -220,7 +220,7 @@ export class ProviderSettings {
     };
     const started = Date.now();
     try {
-      const generation = await client.respond(request, { diagnostic: true, nativeSpec: spec, role: 'probe' });
+      const generation = await client.respond(request, { diagnostic: true, nativeSpec: spec, role: 'probe', onEvent: () => {} });
       const attempt = generation.attempts.at(-1);
       return {
         ok: true,
