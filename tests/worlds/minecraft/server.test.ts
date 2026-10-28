@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import {
-  copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync,
+  copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, renameSync, rmdirSync,
+  rmSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,6 +38,22 @@ async function waitFor(cond: () => boolean | Promise<boolean>, timeoutMs = 8000)
     if (await cond()) return;
     if (Date.now() - t0 > timeoutMs) throw new Error('waitFor 超时');
     await new Promise((r) => setTimeout(r, 20));
+  }
+}
+
+/**
+ * 递归删除,用来删含中文名的存档目录。不用 fs.rmSync:Windows 上的 Node 25.2.1 对含中文的
+ * 路径调 rmSync(递归与否都一样)会在原生层直接崩掉整个进程(退出码 127,try/catch 接不住),
+ * vitest 只报一句「Worker exited unexpectedly」,整个文件后面的用例全部丢失。
+ * unlinkSync / rmdirSync 逐个删不受影响。
+ */
+function removeTree(target: string): void {
+  if (!existsSync(target)) return;
+  if (lstatSync(target).isDirectory()) {
+    for (const name of readdirSync(target)) removeTree(join(target, name));
+    rmdirSync(target);
+  } else {
+    unlinkSync(target);
   }
 }
 
@@ -652,7 +669,8 @@ describe('MinecraftServerManager:世界身份 realm', () => {
   it('目录复制算同一个世界:两份同 uuid,不做防重', () => {
     const dir = serverDirWith('世界甲');
     const origin = makeMgr(dir).realm();
-    // 手抄一份而不用 fs.cpSync:后者在 vitest 的 worker 线程里会把整个进程带走(exit 127,无摘要)
+    // 手抄一份而不用 fs.cpSync:后者在 vitest 的 worker 线程里会把整个进程带走(exit 127,无摘要;
+    // 与 rmSync 是同一个中文路径缺陷,见 removeTree)
     mkdirSync(join(dir, '世界甲-备份'), { recursive: true });
     copyFileSync(join(dir, '世界甲', REALM_MARKER_FILE), join(dir, '世界甲-备份', REALM_MARKER_FILE));
     setLevelName(dir, '世界甲-备份');
@@ -664,8 +682,8 @@ describe('MinecraftServerManager:世界身份 realm', () => {
     const dir = serverDirWith('世界甲');
     mgr = makeMgr(dir);
     const old = mgr.realm();
-    // 删掉重开:目录名一样,世界是另一个
-    rmSync(join(dir, '世界甲'), { recursive: true, force: true });
+    // 删掉重开:目录名一样,世界是另一个(含中文路径,不能用 rmSync,见 removeTree)
+    removeTree(join(dir, '世界甲'));
     const fresh = mgr.realm();
     expect(fresh?.levelName).toBe('世界甲');
     expect(fresh?.uuid).toMatch(/^[0-9a-f-]{36}$/);
