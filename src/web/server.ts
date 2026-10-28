@@ -2415,7 +2415,6 @@ export class WebApp {
       const entry = src.groups(language).find((g) => g.group.id === groupId);
       if (!entry) { res.status(400).json({ error: serverText(language).unknownConfigGroup(groupId) }); return; }
       const values = (body.values ?? {}) as Record<string, unknown>;
-      // 校验完全按声明走:schema 里没声明的键一律忽略,WebUI 不能靠猜往配置里塞东西
       const parsed = coerceGroupValues(entry.group, values, language);
       if ('error' in parsed) { res.status(400).json({ error: parsed.error }); return; }
       const result = src.set(groupId, parsed.values, language);

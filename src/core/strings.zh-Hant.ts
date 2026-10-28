@@ -52,4 +52,6 @@ export const validationText: Partial<typeof validationEn> = {
   second: (label: string) => `${label} 第二項`,
   pairOrder: (label: string) => `${label} 的第一項不能大於第二項`,
   empty: (label: string) => `${label} 不能為空`,
+  unknownKeys: (group: string, keys: string, declared: string) => `設定組 ${group} 沒有宣告 ${keys};可寫入的鍵: ${declared}`,
+  didYouMean: (key: string, path: string) => `${key}(是否指 ${path})`,
 };

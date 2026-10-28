@@ -58,7 +58,8 @@ WebUI 按 schema 渲染表单。owner 是 `core`、`persona`、`world:<id>` 或 
 | `x-download` | 附下载动作 |
 | `x-warning` | `true`:打开或修改后会降低安全性,前端用警示色显示标题 |
 
-`POST /api/config` 按 schema 校验,忽略未声明的键。World 段通过 `WorldContext.persist` 写回,
+`POST /api/config` 按 schema 校验;`values` 的键是组里声明的完整点分路径(如 `worlds.<id>.<key>`),
+含未声明的键时回 400、一项都不写。World 段通过 `WorldContext.persist` 写回,
 同时更新共享配置对象与 `config.json` 的 `worlds.<id>`。World 的密钥写入部署 `.env` 和进程环境。
 provider 组例外:端点值写 `providers/<端点名>/config.json`,`activeProvider` 写部署 `config.json`。
 

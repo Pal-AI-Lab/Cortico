@@ -52,4 +52,6 @@ export const validationText: Partial<typeof validationEn> = {
   second: (label: string) => `${label}（2 つ目）`,
   pairOrder: (label: string) => `${label}：1 つ目の値は 2 つ目の値より大きくできません`,
   empty: (label: string) => `${label} は空にできません`,
+  unknownKeys: (group: string, keys: string, declared: string) => `設定グループ ${group} は ${keys} を宣言していません。書き込めるキー：${declared}`,
+  didYouMean: (key: string, path: string) => `${key}（${path} のことですか？）`,
 };

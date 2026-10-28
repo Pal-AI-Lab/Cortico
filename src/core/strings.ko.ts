@@ -52,4 +52,6 @@ export const validationText: Partial<typeof validationEn> = {
   second: (label: string) => `${label}(둘째 값)`,
   pairOrder: (label: string) => `${label}: 첫째 값은 둘째 값보다 클 수 없습니다`,
   empty: (label: string) => `${label}은(는) 비워 둘 수 없습니다`,
+  unknownKeys: (group: string, keys: string, declared: string) => `설정 그룹 ${group}에 선언되지 않은 키: ${keys}. 쓸 수 있는 키: ${declared}`,
+  didYouMean: (key: string, path: string) => `${key}(${path}을(를) 의미했나요?)`,
 };
