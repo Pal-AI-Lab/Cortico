@@ -1833,6 +1833,17 @@ describe('重生点与死亡:说清会落在哪儿、离多远、还剩多久', 
     }
   });
 
+  it('死亡事件带结构化计数 meta,给 B 站叠加层读', async () => {
+    const { m, bot, host } = await hooked();
+    try {
+      bot.emit('death');
+      const death = host.events.find((e) => e.text.includes('你死了'));
+      expect(death?.meta).toMatchObject({ event: 'death', today: 1, total: 1 });
+    } finally {
+      await m.stop();
+    }
+  });
+
   it('死亡回执三段:回哪儿、离死亡点多远、掉的东西还剩多久', async () => {
     const { m, bot, find } = await hooked();
     try {
@@ -2946,6 +2957,8 @@ describe('世界切换公告带暂态清单', () => {
     stub(m, { host });
     return {
       dir, host, m,
+      /** 投递给她的事件;minecraft.goals 是只归档的旁路(给 B 站叠加层),不算她听到的 */
+      said: () => host.events.filter((e) => e.type !== 'minecraft.goals'),
       goal: (args: Record<string, unknown>) => (m as any).setGoal(args) as string,
       sync: () => (m as any).syncRealm(),
       note: () => (m as any).noteWorldSwitch(),
@@ -2954,7 +2967,7 @@ describe('世界切换公告带暂态清单', () => {
   }
 
   it('换世界:公告如实说清了什么;旧世界那几条留在旧命名空间,切回去还在', () => {
-    const { dir, host, m, goal, sync, note, file } = rig();
+    const { dir, m, goal, sync, note, file, said } = rig();
     try {
       writeFileSync(file, `${JSON.stringify({ world: '旧大陆' })}\n`, 'utf8');
       goal({ add: { plan: [{ do: '验收', judgment: '现场确认目标完成' }], text: '盖新家' } });
@@ -2962,9 +2975,9 @@ describe('世界切换公告带暂态清单', () => {
       (m as any).cfg.port = 25566; // 换了台服务器 = 换了 realm
       sync();
       note();
-      expect(host.events).toHaveLength(1);
-      expect(host.events[0].text).toContain('世界换了');
-      expect(host.events[0].text).toContain('暂态已清:2 条目标随旧世界下桌');
+      expect(said()).toHaveLength(1);
+      expect(said()[0].text).toContain('世界换了');
+      expect(said()[0].text).toContain('暂态已清:2 条目标随旧世界下桌');
       // 新世界这边是干净的
       expect(goal({})).toContain('一条目标都没有');
       // 切回旧世界:那两条原样还在(保留而非删)
@@ -2991,6 +3004,8 @@ describe('世界切换公告带暂态清单', () => {
       const goal = (args: Record<string, unknown>) => (m as any).setGoal(args) as string;
       const sync = () => (m as any).syncRealm();
       const note = () => (m as any).noteWorldSwitch();
+      /** 投递给她的事件;minecraft.goals 是只归档的旁路,不算她听到的 */
+      const said = () => host.events.filter((e) => e.type !== 'minecraft.goals');
       sync();
       note(); // 首次进服:只落盘不出声
       expect(host.events).toHaveLength(0);
@@ -2999,9 +3014,9 @@ describe('世界切换公告带暂态清单', () => {
       rmSync(join(dir, 'world'), { recursive: true, force: true });
       sync();
       note();
-      expect(host.events).toHaveLength(1);
-      expect(host.events[0].text).not.toContain('世界换了'); // 名字确实没变,不编一句
-      expect(host.events[0].text).toContain('暂态已清:1 条目标随旧世界下桌');
+      expect(said()).toHaveLength(1);
+      expect(said()[0].text).not.toContain('世界换了'); // 名字确实没变,不编一句
+      expect(said()[0].text).toContain('暂态已清:1 条目标随旧世界下桌');
       expect(goal({})).toContain('一条目标都没有');
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -3032,6 +3047,27 @@ describe('mc_goal:目标操作与 diff 回执', () => {
     expect(second).toContain('这次挂上 #2 攒一组铁');
     expect(second).toContain('其余 1 条没动'); // diff 式:不全量复述
     expect(second).not.toContain('盖新家');
+  });
+
+  it('目标表一变就归档一条只读不投递的 minecraft.goals,带结构化目标', async () => {
+    const m = new MinecraftWorld({ cfg: cfg({ port: 1 }) });
+    const host = new FakeHost();
+    stub(m, { host });
+    const ctx = { role: 'test', log: console as never } as never;
+    const goal = m.tools().find((t) => t.name === 'mc_goal')!;
+    await goal.handler({ add: { plan: [{ do: '攒黑曜石', judgment: '十块到手' }, { do: '点火', judgment: '进门' }], text: '进下界' } }, ctx);
+    await new Promise((r) => setTimeout(r, 0));
+    const at = host.events.findIndex((e) => e.type === 'minecraft.goals');
+    expect(at).toBeGreaterThanOrEqual(0);
+    expect(host.events.filter((e) => e.type === 'minecraft.goals')).toHaveLength(1);
+    expect(host.pushOpts[at]?.deliver).toBe(false);
+    expect(host.events[at].meta).toEqual({
+      event: 'goals',
+      goals: [{ slot: 1, text: '进下界', progress: null, milestones: { done: 0, total: 2 }, next: '攒黑曜石' }],
+    });
+    // 只查询不改表:不发
+    await goal.handler({}, ctx);
+    expect(host.events.filter((e) => e.type === 'minecraft.goals')).toHaveLength(1);
   });
 
   it('查询列全,每条带登记时长;蓝图字段现在只存字符串', async () => {
@@ -3979,7 +4015,8 @@ describe('路标:换世界下桌、公告、现状一行', () => {
       (m as any).cfg.port = 25566;
       (m as any).syncRealm();
       (m as any).noteWorldSwitch();
-      expect(host.events[0].text).toContain('暂态已清:1 条目标、2 处地点随旧世界下桌');
+      const said = host.events.filter((e) => e.type !== 'minecraft.goals');
+      expect(said[0].text).toContain('暂态已清:1 条目标、2 处地点随旧世界下桌');
       expect((m as any).setMap({})).toContain('一处路标都没有');
     } finally {
       rmSync(dir, { recursive: true, force: true });

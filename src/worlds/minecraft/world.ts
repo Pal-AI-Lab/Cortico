@@ -4122,8 +4122,41 @@ export class MinecraftWorld implements World {
     const after = op.kind === 'done' ? [] : this.coordinateGoalPlans();
     const notices = [...before, ...after];
     if (notices.length > 0) receipt += `\n[目标旁证] ${notices.join('；')}`;
-    if (writeState() !== writeBefore) this.markGoalWrite();
+    if (writeState() !== writeBefore) {
+      this.markGoalWrite();
+      this.publishGoals(table);
+    }
     return receipt;
+  }
+
+  /**
+   * 目标表一变就落一条只归档、不投递的 `minecraft.goals`:她自己已经有回执,不必再读一遍;
+   * 这条是给别的 World(B 站写字板同步)从事件库里读结构化目标用的。
+   */
+  private publishGoals(table: GoalTable): void {
+    const goals = table.list.map((g) => {
+      const plan = goalPlanSummary(g.plan);
+      return {
+        slot: g.slot,
+        text: g.text,
+        progress: g.progress ?? null,
+        milestones: { done: plan.completed, total: plan.total },
+        next: plan.next?.do ?? null,
+      };
+    });
+    // 不走 emit:emit 会写诊断日志、结算世界摘要,这条旁路两样都不该碰
+    if (typeof this.host?.pushEvent !== 'function') return;
+    this.host.pushEvent(
+      {
+        ts: nowIso(this.timezone),
+        source: this.id,
+        type: 'minecraft.goals',
+        text: `[Minecraft] 目标表更新:${goals.length} 条`,
+        senderKey: 'minecraft',
+        meta: { event: 'goals', goals },
+      },
+      { deliver: false },
+    ).catch((e) => this.host?.log.warn('目标表旁路事件写入失败', { err: String(e) }));
   }
 
   /** done 掉一条绑着蓝图的目标时那份现场 diff;没连上服务器就没有世界可对 */
@@ -5855,6 +5888,8 @@ export class MinecraftWorld implements World {
         'minecraft.event',
         `[Minecraft] 你死了(今天第 ${toll.today} 次)。${causeLine}${this.deathNote(bot, dropAt)}${hereLine}`,
         true,
+        // 结构化读数给别的 World(B 站叠加层的死亡计数弹窗)读;正文照旧给她
+        { meta: { event: 'death', today: toll.today, total: toll.total, cause: gloss ?? cause?.text ?? null } },
       );
       if (dropAt) this.scheduleDespawnNotice(dropAt);
       // 死亡会把摄像机的附身甩掉,重生后重下;同一拍用实测坐标复核重生落点
@@ -6680,7 +6715,7 @@ export class MinecraftWorld implements World {
     type: string,
     text: string,
     urgent: boolean,
-    opts?: { deliver?: boolean; trigger?: TriggerMode; tags?: readonly EventTag[] },
+    opts?: { deliver?: boolean; trigger?: TriggerMode; tags?: readonly EventTag[]; meta?: Record<string, unknown> },
     senderKey?: string,
   ): void {
     if (!this.host) return;
@@ -6702,6 +6737,7 @@ export class MinecraftWorld implements World {
         text,
         senderKey: senderKey ?? 'minecraft',
         tags: opts?.tags,
+        ...(opts?.meta ? { meta: opts.meta } : {}),
       },
       { trigger, deliver: opts?.deliver },
     ).catch((e) => this.host?.log.warn('事件投递失败', { type, err: String(e) }));
