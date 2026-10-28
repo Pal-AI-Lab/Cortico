@@ -17,7 +17,7 @@ import type { CoreConfig, World, WorldHost, WorldLifecycleEvent } from '../src/c
 import type { Language } from '../src/core/language.ts';
 import { CONSOLE } from '../src/worlds/console/definition.ts';
 import { text as consoleText } from '../src/worlds/console/strings.ts';
-import { FakeLLM, makeCfg, makeFakePersona } from './core/helpers.ts';
+import { FakeLLM, makeCfg, makeFakePersona, makeTool } from './core/helpers.ts';
 
 let dir: string;
 beforeEach(() => { dir = mkdtempSync(join(tmpdir(), 'bot-builtins-')); });
@@ -160,6 +160,91 @@ it('a running World whose tools() throws when the prefix is rebuilt goes back to
     expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good', 'bad']);
     expect(lifecycle.map((event) => event.kind)).toEqual(['failed', 'mounted']);
   } finally {
+    await app.stop();
+  }
+});
+
+it.each([
+  ['activate', 'envPromptVars'], ['activate', 'tools'],
+  ['restart', 'envPromptVars'], ['restart', 'tools'],
+] as const)('%s rejects a World whose %s fails and waits for stop before a queued retry', async (operation, member) => {
+  let broken = false;
+  let finishStop!: () => void;
+  const stopGate = new Promise<void>((resolve) => { finishStop = resolve; });
+  class ReadProbe implements World {
+    readonly id = 'bad';
+    started = false;
+    stopped = false;
+    envPromptVars() {
+      if (broken && member === 'envPromptVars') throw new Error('read unavailable');
+      return {};
+    }
+    tools() {
+      if (broken && this.started && member === 'tools') throw new Error('read unavailable');
+      return [makeTool('bad_act', 'ok')];
+    }
+    async start() { this.started = true; }
+    async stop() { if (broken) await stopGate; this.stopped = true; }
+  }
+  const instances: ReadProbe[] = [];
+  const lifecycle: WorldLifecycleEvent[] = [];
+  const bad = probe('bad', () => {
+    const instance = new ReadProbe();
+    instances.push(instance);
+    return instance;
+  });
+  const worlds = { bad: { enabled: operation === 'restart' }, good: { enabled: true } };
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ worlds }), 'utf8');
+  const config = { ...CORE_DEFAULTS, worlds } as unknown as CoreConfig;
+  const loaded: LoadedConfig<CoreConfig> = { config, secret: () => '', rootDir: dir, memoryDir: join(dir, 'memory'), dataDir: join(dir, 'data') };
+  const app = createBot(loaded, {
+    id: 'probe-bot', defaults: () => config, worlds: [bad, probe('good')],
+    build: (_loaded, mounted) => {
+      const persona = makeFakePersona([], { worlds: mounted, silent: true });
+      persona.onWorldLifecycle = event => { lifecycle.push(event); };
+      return { persona, llm: new FakeLLM(), webUi: { enabled: false } };
+    },
+  });
+  let activation: Promise<void> | undefined;
+  try {
+    await app.start();
+    await vi.waitFor(() => expect(app.core.session.records.length).toBeGreaterThan(0));
+    // 重启先停止旧实例；新实例在 start 后读取失败。
+    if (operation === 'restart') {
+      const first = instances[0];
+      first.stop = async () => { first.stopped = true; broken = true; };
+    } else {
+      broken = true;
+    }
+    const attempt = app.assembly[operation]('bad', 'en');
+    let recovered = false;
+    activation = app.assembly.activate('bad', 'en').then(() => { recovered = true; });
+    await expect(attempt).rejects.toThrow(`Read failed: ${member}(): read unavailable`);
+    expect(app.assembly.slot('bad').mounted).toBe(false);
+    expect(app.assembly.mounted.map(world => world.id)).toEqual(['good']);
+    expect(deriveWorldFacts(app.core, app.assembly, 'en').find(facts => facts.id === 'bad'))
+      .toMatchObject({ status: 'inactive', reason: `Read failed: ${member}(): read unavailable` });
+    expect(lifecycle.map(event => event.kind)).toEqual(['failed']);
+    expect((JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) as { worlds: typeof worlds }).worlds.bad.enabled).toBe(true);
+
+    const failed = instances.at(-1)!;
+    broken = false;
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(recovered).toBe(false);
+    expect(app.assembly.slot('bad').instance).toBe(failed);
+    finishStop();
+    await activation;
+    expect(failed.stopped).toBe(true);
+    expect(app.assembly.slot('bad').instance).not.toBe(failed);
+    expect(app.assembly.mounted).toContain(app.assembly.slot('bad').instance);
+    expect(app.assembly.slot('bad').failure).toBeUndefined();
+    expect(app.core.loop.getToolSchemas().map(tool => tool.name)).toContain('bad_act');
+    expect(lifecycle.map(event => event.kind)).toEqual(['failed', 'mounted']);
+    await app.assembly.deactivate('bad', 'en');
+    expect(app.assembly.slot('bad').mounted).toBe(false);
+  } finally {
+    finishStop();
+    await activation?.catch(() => {});
     await app.stop();
   }
 });

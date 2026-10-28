@@ -141,7 +141,7 @@ export interface WorldSlot {
   mounted: boolean;
   /**
    * 没能运行的理由:启动期 `start()` 抛错,或运行中读取环境段或 `tools()` 失败;按界面语言给,
-   * 激活成功或停用后清掉。
+   * 挂载成功或停用后清掉。
    */
   failure?: (language: Language) => string;
 }
@@ -164,9 +164,10 @@ export interface PrebuiltOptions {
 
 /** Core 构造后绑定挂载与卸载方法。 */
 export interface WorldMountHost {
+  /** 前缀构建中卸载的实例须经 WorldAssembly.failed() 记录失败后返回。 */
   mount(mod: World): Promise<void>;
   unmount(id: string): Promise<void>;
-  /** 装配层改了一个槽位的挂载状态(激活 / 停用 / 重启),或启动期 `start()` 抛错。启动期的初始挂载不报。 */
+  /** 装配层改变挂载状态或报告 World 失败；启动期初始挂载不报。 */
   lifecycle?(event: WorldLifecycleEvent): void;
   /**
    * Core 保留帧与 Persona 自有工具的名称。绑定时检查已挂载实例，
@@ -212,6 +213,8 @@ export class WorldAssembly {
   private readonly cfgPath: string;
   /** 每个 World 最后一个排队的生命周期操作，结束即移除。 */
   private readonly lifecycleQueues = new Map<string, Promise<void>>();
+  /** 失败实例停止并重建后，同一 World 的下一项操作才可执行。 */
+  private readonly recoveries = new Map<string, Promise<void>>();
 
   constructor(
     private readonly loaded: LoadedConfig<CoreConfig>,
@@ -392,17 +395,18 @@ export class WorldAssembly {
 
   /**
    * Core 在运行中卸载的 World:槽位回到未激活并记下理由,`enabled` 不变,报一次 failed。
-   * 旧实例的 `stop()` 结束后换上新实例,同一 World 之后排队的操作等它;`create()` 抛错时槽位移入 missing。
+   * 旧实例的 `stop()` 结束后换上新实例,同一 World 尚未执行的操作等它;`create()` 抛错时槽位移入 missing。
    */
   failed({ worldId, detail, stopped }: WorldFailure): void {
     const slot = this.slot(worldId);
+    const instance = slot.instance;
     slot.mounted = false;
     slot.failure = (language) => text(language).readFailed(detail);
     this.host?.lifecycle?.({ kind: 'failed', id: worldId, label: slot.label, reason: detail });
     const def = slot.definition;
     if (!def) return;
-    void this.queued(worldId, async () => {
-      await stopped;
+    const recovery = stopped.then(() => {
+      if (slot.instance !== instance) return;
       try {
         slot.instance = def.create(this.context(def));
       } catch (error) {
@@ -410,6 +414,10 @@ export class WorldAssembly {
         this.slots.splice(this.slots.indexOf(slot), 1);
         this.missing.push({ id: slot.id, label: slot.label, declared: slot.declared, reason: (language) => text(language).constructFailed(reason) });
       }
+    });
+    this.recoveries.set(worldId, recovery);
+    void recovery.then(() => {
+      if (this.recoveries.get(worldId) === recovery) this.recoveries.delete(worldId);
     });
   }
 
@@ -419,7 +427,10 @@ export class WorldAssembly {
   }
 
   private queued<T>(id: string, op: () => Promise<T>): Promise<T> {
-    const result = (this.lifecycleQueues.get(id) ?? Promise.resolve()).then(op);
+    const result = (this.lifecycleQueues.get(id) ?? Promise.resolve()).then(async () => {
+      await this.recoveries.get(id);
+      return op();
+    });
     const settled = result.then(() => undefined, () => undefined);
     this.lifecycleQueues.set(id, settled);
     void settled.then(() => {
@@ -446,6 +457,7 @@ export class WorldAssembly {
       slot.instance = def.create(ctx);
       throw error;
     }
+    if (!this.mounted.includes(slot.instance)) throw new Error(slot.failure!(language));
     slot.mounted = true;
     delete slot.failure;
     this.host?.lifecycle?.({ kind: 'mounted', id, label: slot.label });
@@ -469,7 +481,9 @@ export class WorldAssembly {
     const clash = this.toolClash(slot.instance, this.mounted);
     if (clash) throw new Error(clash(language));
     await this.mountHost().mount(slot.instance);
+    if (!this.mounted.includes(slot.instance)) throw new Error(slot.failure!(language));
     slot.mounted = true;
+    delete slot.failure;
     this.host?.lifecycle?.({ kind: 'restarted', id, label: slot.label });
     return text(language).restarted(this.labelIn(id, language));
   }

@@ -909,7 +909,7 @@ export function createBot<C extends CoreConfig>(
   assembly.bind({
     mount: async (mod) => {
       await core.mountWorld(mod);
-      checkWorldTools(mod);
+      if (assembly.mounted.includes(mod)) checkWorldTools(mod);
     },
     unmount: async (id) => { await core.unmountWorld(id); },
     lifecycle: notifyLifecycle,

@@ -112,8 +112,9 @@ bot 的 `index.ts` 在 `declares` 中列出默认启用的 World id。声明但�
 `activate` / `deactivate` 热生效并写回 `worlds.<id>.enabled`。定义实例在停用或重启时重新构造;
 预建实例重启时复用现有对象,停用后不能通过 `activate` 重新挂载。
 生命周期事件(激活、停用、重启、可见性、启动期 `start()` 抛错、运行中读取 `envPromptVars()` 或 `tools()` 失败而卸载)转给
-`Persona.onWorldLifecycle`;启动期初始挂载与失败的激活不报。启动期 `start()` 抛错与运行中读取失败都不改 `enabled`,
-WebUI 的未激活卡片显示理由。
+`Persona.onWorldLifecycle`;启动期初始挂载与 `start()` 失败的激活不报。启动期 `start()` 抛错与运行中读取失败都不改 `enabled`,
+WebUI 的未激活卡片显示理由。激活或重启期间读取失败而卸载的 World 只报 `failed`,操作返回错误并保留理由;
+同一 World 的后续操作等失败实例停止、重建后执行。
 
 `describe` 列出全部工具与会推出的事件,不进提示词,写法与导出见 [extensions.md](extensions.md)「自描述」。
 装配层在 World 挂载时对照 `describe.tools` 检查 `tools()` 的工具名,经 Core 的 `onWorldPush` 对照
