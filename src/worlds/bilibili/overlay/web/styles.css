@@ -293,3 +293,88 @@ body.preview[data-wall-mode="dark"] {
   0%, 52% { opacity: 1; }
   53%, 100% { opacity: 0; }
 }
+
+/* 游戏战况 / 投票 / 弹窗 */
+.game-status-box,
+.poll-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.game-status-goal {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.game-status-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+}
+
+.game-status-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22d3ee, #a78bfa);
+  transition: width 400ms ease;
+}
+
+.poll-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.poll-option {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.poll-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(34, 211, 238, 0.28);
+  transition: width 400ms ease;
+}
+
+.poll-option > .overlay-text {
+  position: relative;
+}
+
+.toast-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: toast-in 280ms ease-out;
+}
+
+.toast-death {
+  border-left: 4px solid #f87171;
+  padding-left: 10px;
+}
+
+.toast-poll {
+  border-left: 4px solid #22d3ee;
+  padding-left: 10px;
+}
+
+@keyframes toast-in {
+  from { transform: translateY(-12px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-card { animation: none; }
+  .game-status-fill,
+  .poll-bar { transition: none; }
+}

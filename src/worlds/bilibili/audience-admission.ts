@@ -354,6 +354,12 @@ export class AudienceAdmission {
     }
   }
 
+  /** 账本里有没有这位观众(任何一次被观察过)。只读,不建条目。 */
+  knows(senderKey: string): boolean {
+    const uid = uidOf(senderKey);
+    return uid !== null && this.ledger.viewers[uid] !== undefined;
+  }
+
   importanceOf(senderKey: string, at = this.now()): ImportantAudienceParticipant | null {
     const uid = uidOf(senderKey);
     if (!uid) return null;

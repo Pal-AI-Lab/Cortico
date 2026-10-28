@@ -1080,7 +1080,7 @@ const devFakeWorlds: World[] = MINIMAL ? [] : [
 
 const devFakeWorldTools: Record<string, string[]> = {
   minecraft: ['mc_do', 'mc_queue', 'mc_check', 'mc_stop', 'mc_escape'],
-  bilibili: ['bilibili_set_announcement', 'bilibili_update_video_queue'],
+  bilibili: ['bilibili_set_announcement', 'bilibili_update_video_queue', 'bilibili_poll'],
 };
 
 /** QQ 事件面板(dev):按会话分组读假事件库 */

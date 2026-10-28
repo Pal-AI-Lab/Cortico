@@ -28,6 +28,8 @@ export const BILIBILI_DEFAULTS = {
   audienceEventTokenBudget: 1061,
   /** 重要观众常规互动占总批预算的上限比例,同时受剩余额度限制。 */
   audienceImportantShare: 0.5,
+  /** 新人进场与关注合成一条欢迎事件的窗口(秒);0 关闭 */
+  welcomeWindowSec: 20,
   overlay: cloneOverlayConfig(),
 };
 
@@ -156,6 +158,15 @@ export function bilibiliConfigGroup(language: Language): ConfigGroup {
           'x-suffix': '%',
           'x-hot': true,
           description: t.importantShareDescription,
+        },
+        'worlds.bilibili.welcomeWindowSec': {
+          type: 'integer',
+          title: t.welcomeWindowTitle,
+          minimum: 0,
+          maximum: 600,
+          'x-suffix': 's',
+          'x-hot': true,
+          description: t.welcomeWindowDescription,
         },
         'worlds.bilibili.overlay.enabled': {
           type: 'boolean',

@@ -421,6 +421,19 @@ function normalizeComponent(value: unknown, index: number): OverlayComponent {
         emptyText: text(raw.emptyText, '暂无排队视频', 500),
         hideWhenEmpty: bool(raw.hideWhenEmpty, false),
       };
+    case 'game-status':
+      return {
+        ...base,
+        kind: 'game-status',
+        showDeaths: bool(raw.showDeaths, true),
+        showGoals: bool(raw.showGoals, true),
+        maxGoals: integer(raw.maxGoals, 1, 5, 2),
+        emptyText: text(raw.emptyText, '还没有登记目标', 500),
+      };
+    case 'toast':
+      return { ...base, kind: 'toast', holdMs: integer(raw.holdMs, 1000, 30000, 5000) };
+    case 'poll':
+      return { ...base, kind: 'poll', resultHoldMs: integer(raw.resultHoldMs, 0, 120000, 15000) };
     case 'danmaku':
       return {
         ...base,

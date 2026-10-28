@@ -1,6 +1,7 @@
 /** 将原始 cmd 转换为事件、累加计数或最新读数；不处理的命令返回 null。计数与读数由 World 聚合后随批次投递。 */
 import type { TriggerMode } from '../../core/types.ts';
 import { giftFrameData } from './gift-frame.ts';
+import { pbFromBase64, pbInt, pbSub, pbText } from './protobuf.ts';
 
 export interface LiveEvent {
   kind: 'event';
@@ -35,7 +36,21 @@ interface LiveGauge {
   value: number;
 }
 
-export type Normalized = LiveEvent | LiveCount | LiveGauge;
+/**
+ * 进场/关注/分享的一个人。不是事件:World 决定它算新人欢迎、关注答谢,还是只进人流计数。
+ * action 取自 msg_type(1 进场 2 关注 3 分享 4 特别关注 5 互粉),认不出的按进场。
+ */
+export interface LiveInteract {
+  kind: 'interact';
+  action: 'enter' | 'follow' | 'share';
+  uid: number;
+  uname: string;
+  face: string;
+  /** 本房间粉丝牌等级;V2 帧不带牌子,读不到为 0 */
+  medalLevel: number;
+}
+
+export type Normalized = LiveEvent | LiveCount | LiveGauge | LiveInteract;
 
 /** 1 元 = 1000 金瓜子 */
 const COIN_PER_YUAN = 1000;
@@ -240,9 +255,14 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
     }
 
     case 'INTERACT_WORD':
-    case 'INTERACT_WORD_V2':
-      // V2 是 protobuf,分不出进场/关注/分享,一律按进场计数
-      return { kind: 'count', field: 'enter', by: 1 };
+    case 'INTERACT_WORD_V2': {
+      // 进场/关注/分享。V1 是 JSON,V2 把同样的东西放在 data.pb 的 protobuf 里
+      // (字段号同 blivedm pb.InteractWordV2:1=uid 2=uname 5=msg_type 22.2.2=face)。
+      // 解不出名字就退回只计数:计数是人流读数,不需要知道是谁。
+      const who = interactWho(cmd, data);
+      if (!who) return { kind: 'count', field: 'enter', by: 1 };
+      return { kind: 'interact', ...who };
+    }
 
     case 'LIKE_INFO_V3_CLICK':
       return { kind: 'count', field: 'like', by: 1 };
@@ -398,6 +418,43 @@ function guardToast(fields: {
       ...(renew ? { renew: true } : {}),
       avatarUrl: imageUrl(fields.face),
     },
+  };
+}
+
+function interactAction(msgType: number): LiveInteract['action'] {
+  if (msgType === 2 || msgType === 4 || msgType === 5) return 'follow';
+  if (msgType === 3) return 'share';
+  return 'enter';
+}
+
+function interactWho(cmd: string, data: Record<string, unknown>): Omit<LiveInteract, 'kind'> | null {
+  if (cmd === 'INTERACT_WORD_V2') {
+    const pb = pbFromBase64(data.pb);
+    if (!pb) return null;
+    const uid = pbInt(pb, 1) ?? 0;
+    const uname = pbText(pb, 2).trim();
+    if (uid <= 0 || !uname) return null;
+    const base = pbSub(pbSub(pb, 22), 2);
+    return {
+      action: interactAction(pbInt(pb, 5) ?? 1),
+      uid,
+      uname,
+      face: imageUrl(pbText(base, 2)),
+      medalLevel: 0,
+    };
+  }
+  const uid = num(data.uid);
+  const uname = str(data.uname).trim();
+  if (uid <= 0 || !uname) return null;
+  const medal = obj(data.fans_medal);
+  // 别的房间的牌子不算:只认挂在本房间(anchor_roomid 与本帧 roomid 一致)的牌子
+  const ownRoom = num(medal.anchor_roomid) > 0 && num(medal.anchor_roomid) === num(data.roomid);
+  return {
+    action: interactAction(num(data.msg_type)),
+    uid,
+    uname,
+    face: imageUrl(data.face ?? obj(obj(data.uinfo).base).face),
+    medalLevel: ownRoom ? num(medal.medal_level) : 0,
   };
 }
 

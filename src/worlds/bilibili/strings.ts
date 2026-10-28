@@ -13,6 +13,8 @@ const zh = {
   giftFlushTitle: '礼物即时投递门槛',
   suffixYuan: '元',
   giftFlushDescription: '达到此金额的礼物立即投递;其余礼物参与常规合批。',
+  welcomeWindowTitle: '进场欢迎合批窗口',
+  welcomeWindowDescription: '第一次来的观众进场、关注、分享在这个窗口内合成一条欢迎事件投递(同一人一场只欢迎一次);老观众进场只进人流计数。0 关闭。',
   coalesceWindowTitle: '相同消息归并窗',
   coalesceWindowDescription: '相同弹幕与常规礼物在进入事件总线前合并;0 关闭。窗口固定且不续期,flush 事件不等待。',
   coalesceMaxTitle: '归并池硬上限',
@@ -112,6 +114,8 @@ export const en: typeof zh = {
   giftFlushTitle: 'Instant gift delivery threshold',
   suffixYuan: 'CNY',
   giftFlushDescription: 'Gifts worth this much or more are delivered at once; other gifts join regular batching.',
+  welcomeWindowTitle: 'Welcome batching window',
+  welcomeWindowDescription: 'First-time viewers entering, follows and shares within this window are delivered as one welcome event (once per viewer per stream); returning viewers only count toward traffic. 0 = off.',
   coalesceWindowTitle: 'Duplicate merge window',
   coalesceWindowDescription:
     'Identical danmaku and regular gifts are merged before they enter the event bus; 0 turns this off. '

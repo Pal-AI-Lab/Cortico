@@ -24,6 +24,7 @@ export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
       audienceEventLineBudget: () => cfg.audienceEventLineBudget,
       audienceEventTokenBudget: () => cfg.audienceEventTokenBudget,
       audienceImportantShare: () => cfg.audienceImportantShare,
+      welcomeWindowSec: () => cfg.welcomeWindowSec,
       audienceLedgerFile: join(ctx.dataDir, 'bilibili-audience', 'ledger.json'),
       overlay: cfg.overlay,
       agentNoticeMaxChars: () => cfg.overlay.agentNoticeMaxChars,
@@ -47,6 +48,10 @@ export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
       bilibili_update_video_queue: {
         zh: '改写直播画面上的视频排队列表:加入、移除、调整顺序或清空。',
         en: 'Edits the video queue list on the stream overlay: add, remove, reorder or clear.',
+      },
+      bilibili_poll: {
+        zh: '发起、结束或查看一次弹幕投票:观众发选项号投票,画面上显示票数与倒计时。',
+        en: 'Opens, closes or reads a danmaku vote: viewers vote by sending the option number; the overlay shows the tally and countdown.',
       },
     }),
     events: [

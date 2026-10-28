@@ -66,6 +66,21 @@
       glyphImage: '图',
       kindVideoQueue: '视频排队',
       glyphVideoQueue: '排',
+      kindGameStatus: '游戏战况',
+      glyphGameStatus: '战',
+      kindToast: '事件弹窗',
+      glyphToast: '弹窗',
+      kindPoll: '弹幕投票',
+      glyphPoll: '票',
+      showDeaths: '显示死亡次数',
+      showGoals: '显示当前目标',
+      maxGoals: '最多显示几条目标',
+      toastHold: '每条停留(毫秒)',
+      pollResultHold: '结果保留(毫秒)',
+      liveDataNote: '数据来自 Minecraft 的死亡与 mc_goal 目标表，开播后自动刷新。',
+      pollNote: '羽书用 bilibili_poll 发起投票时出现，没有投票时隐藏。',
+      toastNote: '死亡、投票结束时弹出，平时隐藏。',
+      defaultGoalEmptyText: '还没有登记目标',
       fieldUid: '用户 UID',
       fieldGuardLevel: '大航海等级',
       fieldMedalLevel: '粉丝牌等级',
@@ -377,6 +392,21 @@
       glyphImage: 'I',
       kindVideoQueue: 'Video queue',
       glyphVideoQueue: 'Q',
+      kindGameStatus: 'Game status',
+      glyphGameStatus: 'G',
+      kindToast: 'Event toast',
+      glyphToast: 'T',
+      kindPoll: 'Danmaku poll',
+      glyphPoll: 'P',
+      showDeaths: 'Show death count',
+      showGoals: 'Show current goals',
+      maxGoals: 'Goals shown at most',
+      toastHold: 'Hold per toast (ms)',
+      pollResultHold: 'Keep result (ms)',
+      liveDataNote: 'Fed by Minecraft deaths and the mc_goal table; refreshes live.',
+      pollNote: 'Appears when the bot opens a vote with bilibili_poll; hidden otherwise.',
+      toastNote: 'Pops up on deaths and poll results; hidden otherwise.',
+      defaultGoalEmptyText: 'No goals yet',
       fieldUid: 'User UID',
       fieldGuardLevel: 'Guard level',
       fieldMedalLevel: 'Fan medal level',
@@ -684,6 +714,9 @@
     'agent-notice': [T.kindAgentNotice, 'A'],
     image: [T.kindImage, T.glyphImage],
     'video-queue': [T.kindVideoQueue, T.glyphVideoQueue],
+    'game-status': [T.kindGameStatus, T.glyphGameStatus],
+    toast: [T.kindToast, T.glyphToast],
+    poll: [T.kindPoll, T.glyphPoll],
   };
   const fontChoices = [
     'Microsoft YaHei, sans-serif',
@@ -2124,6 +2157,24 @@
         field(T.emptyPlaceholder, textInput(component.emptyText, (value) => { component.emptyText = value; }, { maxLength: 500 })),
         checkInput(T.hideWhenQueueEmpty, component.hideWhenEmpty, (value) => { component.hideWhenEmpty = value; }),
       );
+    } else if (component.kind === 'game-status') {
+      body.append(
+        h('p', 'field-note', T.liveDataNote),
+        checkInput(T.showDeaths, component.showDeaths, (value) => { component.showDeaths = value; }),
+        checkInput(T.showGoals, component.showGoals, (value) => { component.showGoals = value; }),
+        field(T.maxGoals, numberInput(component.maxGoals, (value) => { component.maxGoals = value; }, 1, 5, 1)),
+        field(T.emptyPlaceholder, textInput(component.emptyText, (value) => { component.emptyText = value; }, { maxLength: 500 })),
+      );
+    } else if (component.kind === 'toast') {
+      body.append(
+        h('p', 'field-note', T.toastNote),
+        field(T.toastHold, numberInput(component.holdMs, (value) => { component.holdMs = value; }, 1000, 30000, 100)),
+      );
+    } else if (component.kind === 'poll') {
+      body.append(
+        h('p', 'field-note', T.pollNote),
+        field(T.pollResultHold, numberInput(component.resultHoldMs, (value) => { component.resultHoldMs = value; }, 0, 120000, 1000)),
+      );
     } else if (component.kind === 'image') {
       body.append(
         field(T.imageSource, selectInput(component.source, [['external', T.externalUrl], ['upload', T.assetLibrary]], (value) => { component.source = value; }, { render: true })),
@@ -2321,6 +2372,9 @@
     else if (kind === 'fixed-notice') component = { ...base, text: T.defaultFixedText };
     else if (kind === 'agent-notice') component = { ...base, emptyText: T.defaultEmptyText, hideWhenEmpty: false, typingMs: 42 };
     else if (kind === 'video-queue') component = { ...base, axis: 'vertical', gap: 8, showIndex: true, emptyText: T.defaultQueueEmptyText, hideWhenEmpty: false };
+    else if (kind === 'game-status') component = { ...base, showDeaths: true, showGoals: true, maxGoals: 2, emptyText: T.defaultGoalEmptyText };
+    else if (kind === 'toast') component = { ...base, holdMs: 5000 };
+    else if (kind === 'poll') component = { ...base, resultHoldMs: 15000 };
     else component = { ...base, source: 'external', url: '', assetId: '', fit: 'contain', opacity: 1 };
     mutate(() => {
       editor.design.components.push(component);
@@ -2429,7 +2483,8 @@
     const width = component.kind === 'agent-notice' || component.kind.includes('notice') ? Math.min(960, canvas.width * .6) : Math.min(600, canvas.width * .35);
     const height = component.kind === 'danmaku'
       ? Math.min(560, canvas.height * .65)
-      : component.kind === 'video-queue' ? Math.min(420, canvas.height * .4) : Math.min(160, canvas.height * .2);
+      : component.kind === 'video-queue' || component.kind === 'game-status' || component.kind === 'poll'
+        ? Math.min(420, canvas.height * .4) : Math.min(160, canvas.height * .2);
     const placement = {
       id: uniqueId('placement'), componentId: component.id,
       x: Math.round((canvas.width - width) / 2), y: Math.round((canvas.height - height) / 2),

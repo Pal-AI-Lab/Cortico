@@ -10,6 +10,8 @@
   let builtinStyles = [];
   let announcement = { text: '' };
   let videoQueue = { items: [] };
+  let liveStatus = { deaths: null, goals: [], poll: null };
+  let pollTimer = 0;
   let hasEditorDraft = false;
   const feeds = new Map();
   const horizontalLanes = new Map();
@@ -47,6 +49,15 @@
       updateVideoQueues();
       return;
     }
+    if (packet.type === 'live-status' && packet.liveStatus) {
+      liveStatus = packet.liveStatus;
+      updateLiveStatus();
+      return;
+    }
+    if (packet.type === 'toast' && packet.toast) {
+      showToast(packet.toast);
+      return;
+    }
     if (packet.type === 'audience' && packet.event) renderAudience(packet.event);
   };
 
@@ -79,6 +90,7 @@
     builtinStyles = Array.isArray(packet.builtinStyles) ? packet.builtinStyles : builtinStyles;
     announcement = packet.agentAnnouncement || announcement;
     videoQueue = packet.videoQueue || videoQueue;
+    liveStatus = packet.liveStatus || liveStatus;
     renderScene();
   }
 
@@ -187,6 +199,18 @@
       content.appendChild(image);
       return;
     }
+    if (component.kind === 'game-status') {
+      renderGameStatus(element, content, component, style);
+      return;
+    }
+    if (component.kind === 'poll') {
+      renderPoll(element, content, component, style);
+      return;
+    }
+    if (component.kind === 'toast') {
+      element.hidden = true;
+      return;
+    }
     if (component.kind === 'scroll-notice') {
       const viewport = document.createElement('div');
       viewport.className = 'scroll-viewport';
@@ -196,6 +220,123 @@
       viewport.appendChild(track);
       content.appendChild(viewport);
       restartNotice(track, viewport, component, style.body);
+    }
+  }
+
+  function liveElements(kind) {
+    return Array.from(stage.children).filter((element) => element.classList.contains(kind));
+  }
+
+  function componentOf(element) {
+    return design && design.components.find((item) => item.id === element.dataset.componentId);
+  }
+
+  function updateLiveStatus() {
+    for (const element of liveElements('game-status')) {
+      const component = componentOf(element);
+      const content = element.querySelector('.component-content');
+      if (component && content) renderGameStatus(element, content, component, styleById(component.styleId));
+    }
+    for (const element of liveElements('poll')) {
+      const component = componentOf(element);
+      const content = element.querySelector('.component-content');
+      if (component && content) renderPoll(element, content, component, styleById(component.styleId));
+    }
+  }
+
+  function renderGameStatus(element, content, component, style, state = liveStatus) {
+    content.replaceChildren();
+    const box = document.createElement('div');
+    box.className = 'game-status-box';
+    if (component.showDeaths) {
+      const deaths = state.deaths;
+      const line = document.createElement('div');
+      line.className = 'game-status-deaths';
+      line.append(textElement(deaths ? `今日阵亡 ${deaths.today} 次 · 累计 ${deaths.total} 次` : '今日阵亡 0 次', style.body));
+      box.append(line);
+    }
+    if (component.showGoals) {
+      const goals = (state.goals || []).slice(0, component.maxGoals);
+      if (goals.length === 0) box.append(textElement(component.emptyText, style.username));
+      for (const goal of goals) {
+        const row = document.createElement('div');
+        row.className = 'game-status-goal';
+        const progress = goal.progress
+          ? ` ${goal.progress.current}${goal.progress.total === null ? '' : `/${goal.progress.total}`}${goal.progress.unit || ''}`
+          : '';
+        row.append(textElement(`#${goal.slot} ${goal.text}${progress}`, style.username));
+        if (goal.milestones && goal.milestones.total > 0) {
+          const bar = document.createElement('div');
+          bar.className = 'game-status-bar';
+          bar.setAttribute('role', 'progressbar');
+          bar.setAttribute('aria-valuemin', '0');
+          bar.setAttribute('aria-valuemax', String(goal.milestones.total));
+          bar.setAttribute('aria-valuenow', String(goal.milestones.done));
+          const fill = document.createElement('div');
+          fill.className = 'game-status-fill';
+          fill.style.width = `${Math.round((goal.milestones.done / goal.milestones.total) * 100)}%`;
+          bar.append(fill);
+          row.append(bar);
+        }
+        if (goal.next) row.append(textElement(`下一步：${goal.next}`, style.body));
+        box.append(row);
+      }
+    }
+    content.append(box);
+  }
+
+  function renderPoll(element, content, component, style, poll = liveStatus.poll) {
+    clearInterval(pollTimer);
+    content.replaceChildren();
+    element.hidden = !poll;
+    if (!poll) return;
+    const box = document.createElement('div');
+    box.className = 'poll-box';
+    const head = document.createElement('div');
+    head.className = 'poll-head';
+    const clock = document.createElement('span');
+    clock.className = 'poll-clock';
+    applyTextStyle(clock, style.username);
+    head.append(textElement(`投票：${poll.question}`, style.username), clock);
+    box.append(head);
+    const total = Math.max(1, poll.options.reduce((sum, option) => sum + option.votes, 0));
+    for (const option of poll.options) {
+      const row = document.createElement('div');
+      row.className = 'poll-option';
+      const bar = document.createElement('div');
+      bar.className = 'poll-bar';
+      bar.style.width = `${Math.round((option.votes / total) * 100)}%`;
+      row.append(bar, textElement(`弹幕发 ${option.key}　${option.label}`, style.body), textElement(`${option.votes} 票`, style.body));
+      box.append(row);
+    }
+    content.append(box);
+    const tick = () => {
+      if (poll.closedAt !== null) {
+        clock.textContent = `已结束 · ${poll.voters} 人投票`;
+        clearInterval(pollTimer);
+        return;
+      }
+      const left = Math.max(0, Math.round((poll.endsAt - Date.now()) / 1000));
+      clock.textContent = `${left} 秒 · ${poll.voters} 人`;
+    };
+    tick();
+    pollTimer = setInterval(tick, 500);
+  }
+
+  function showToast(toast) {
+    for (const element of liveElements('toast')) {
+      const component = componentOf(element);
+      const content = element.querySelector('.component-content');
+      if (!component || !content) continue;
+      const style = styleById(component.styleId);
+      const card = document.createElement('div');
+      card.className = `toast-card toast-${toast.kind}`;
+      card.setAttribute('role', 'status');
+      card.append(textElement(toast.title, style.username), textElement(toast.body, style.body));
+      content.replaceChildren(card);
+      element.hidden = false;
+      clearTimeout(element._toastTimer);
+      element._toastTimer = setTimeout(() => { element.hidden = true; }, component.holdMs);
     }
   }
 
@@ -479,6 +620,26 @@
       return;
     }
 
+    if (component.kind === 'game-status' || component.kind === 'poll' || component.kind === 'toast') {
+      const mockState = {
+        deaths: { today: 5, total: 23, lastCause: '掉进岩浆' },
+        goals: [{ slot: 1, text: '进下界', progress: { current: 4, total: 10, unit: '块黑曜石' }, milestones: { done: 1, total: 4 }, next: '凑够 10 块黑曜石' }],
+        poll: {
+          id: 1, question: '下一步先干什么', voters: 12, closedAt: null, endsAt: Date.now() + 45000,
+          options: [{ key: '1', label: '去挖铁', votes: 7 }, { key: '2', label: '继续舀岩浆', votes: 5 }],
+        },
+      };
+      for (const element of elements) {
+        const content = element.querySelector('.component-content');
+        if (!content) continue;
+        const style = styleById(component.styleId);
+        if (component.kind === 'game-status') renderGameStatus(element, content, component, style, mockState);
+        else if (component.kind === 'poll') renderPoll(element, content, component, style, mockState.poll);
+      }
+      if (component.kind === 'toast') showToast({ kind: 'death', title: '羽书阵亡 · 今日第 5 次', body: '死因:掉进岩浆' });
+      return;
+    }
+
     if (component.kind === 'image' && !componentImageSource(component)) {
       for (const element of elements) {
         const image = element.querySelector('.component-content img');
@@ -494,7 +655,9 @@
         ? { width: 520, height: 300 }
         : component.kind === 'video-queue'
           ? { width: 600, height: 320 }
-          : { width: 820, height: 140 };
+          : component.kind === 'game-status' || component.kind === 'poll'
+            ? { width: 520, height: 220 }
+            : { width: 820, height: 140 };
     const width = Math.min(preset.width, design.canvas.width);
     const height = Math.min(preset.height, design.canvas.height);
     const z = Math.max(0, ...design.placements.map((placement) => placement.z)) + 1;

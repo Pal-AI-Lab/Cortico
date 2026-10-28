@@ -3,7 +3,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import type { Logger } from '../../../core/types.ts';
-import type { AgentAnnouncementState, OverlayAudienceEvent, VideoQueueState } from './types.ts';
+import type {
+  AgentAnnouncementState, LiveStatusState, OverlayAudienceEvent, OverlayToast, VideoQueueState,
+} from './types.ts';
 import { OverlayAssetStore } from './assets.ts';
 
 const STATIC_DIR = fileURLToPath(new URL('./web/', import.meta.url));
@@ -149,6 +151,14 @@ export class BilibiliOverlayServer {
 
   emitVideoQueue(videoQueue: VideoQueueState): void {
     this.emit('video-queue', { videoQueue });
+  }
+
+  emitLiveStatus(liveStatus: LiveStatusState): void {
+    this.emit('live-status', { liveStatus });
+  }
+
+  emitToast(toast: OverlayToast): void {
+    this.emit('toast', { toast });
   }
 
   private emit(type: string, data: Record<string, unknown>): void {

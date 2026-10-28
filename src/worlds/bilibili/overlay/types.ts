@@ -151,13 +151,40 @@ interface VideoQueueComponent extends OverlayComponentBase {
   hideWhenEmpty: boolean;
 }
 
+/** 游戏战况:死亡次数与当前目标(数据来自 Minecraft World 的事件,见 LiveStatusState)。 */
+interface GameStatusComponent extends OverlayComponentBase {
+  kind: 'game-status';
+  showDeaths: boolean;
+  showGoals: boolean;
+  /** 最多显示几条目标 */
+  maxGoals: number;
+  emptyText: string;
+}
+
+/** 临时弹窗:死亡、投票结果这类一闪而过的提示。只收 toast 包,不常驻。 */
+interface ToastComponent extends OverlayComponentBase {
+  kind: 'toast';
+  /** 每条停留时长 */
+  holdMs: number;
+}
+
+/** 弹幕投票:题目、选项、实时票数与倒计时。没有进行中的投票时隐藏。 */
+interface PollComponent extends OverlayComponentBase {
+  kind: 'poll';
+  /** 投票结束后结果再留多久 */
+  resultHoldMs: number;
+}
+
 export type OverlayComponent =
   | DanmakuComponent
   | ScrollNoticeComponent
   | FixedNoticeComponent
   | AgentNoticeComponent
   | ImageComponent
-  | VideoQueueComponent;
+  | VideoQueueComponent
+  | GameStatusComponent
+  | ToastComponent
+  | PollComponent;
 
 export interface OverlayPlacement {
   id: string;
@@ -233,6 +260,38 @@ export interface VideoQueueState {
   items: VideoQueueItem[];
   revision: number;
   updatedAt: string | null;
+}
+
+export interface LiveStatusGoal {
+  slot: number;
+  text: string;
+  progress: { current: number; total: number | null; unit: string | null } | null;
+  milestones: { done: number; total: number };
+  next: string | null;
+}
+
+export interface LivePollState {
+  id: number;
+  question: string;
+  options: Array<{ key: string; label: string; votes: number }>;
+  /** 投票截止的毫秒戳 */
+  endsAt: number;
+  /** 已结束时为结束刻,进行中为 null */
+  closedAt: number | null;
+  voters: number;
+}
+
+/** 叠加层的实时战况。只在内存里,重启从空开始(死亡数下一次死亡时补齐)。 */
+export interface LiveStatusState {
+  deaths: { today: number; total: number; lastCause: string | null } | null;
+  goals: LiveStatusGoal[];
+  poll: LivePollState | null;
+}
+
+export interface OverlayToast {
+  kind: 'death' | 'poll' | 'info';
+  title: string;
+  body: string;
 }
 
 export interface OverlayAssetInfo {

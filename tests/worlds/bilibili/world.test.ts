@@ -12,6 +12,7 @@ import type {
 } from '../../../src/core/types.ts';
 import {
   BilibiliWorld,
+  renderWelcome,
   type BilibiliWorldOptions,
   type LiveHandlers,
 } from '../../../src/worlds/bilibili/world.ts';
@@ -241,10 +242,10 @@ describe('BilibiliWorld', () => {
     vi.useRealTimers();
   });
 
-  it('只提供本机 Agent 公告与视频排队工具，不向 B 站账号写入', async () => {
+  it('只提供本机 Agent 公告、视频排队与弹幕投票工具，不向 B 站账号写入', async () => {
     const { module } = await mount();
     const tools = module.tools();
-    expect(tools.map((tool) => tool.name)).toEqual(['bilibili_set_announcement', 'bilibili_update_video_queue']);
+    expect(tools.map((tool) => tool.name)).toEqual(['bilibili_set_announcement', 'bilibili_update_video_queue', 'bilibili_poll']);
     expect(tools[0].tags).toEqual(['speak']);
     expect((tools[0].parameters.properties as Record<string, { maxLength: number }>).text.maxLength).toBe(200);
     await module.stop();
@@ -699,6 +700,92 @@ describe('BilibiliWorld', () => {
       lane: 'important',
       importantParticipants: [{ senderKey: '41', uname: '甲', reasons: ['guard'] }],
     });
+  });
+
+  it('弹幕投票:投票弹幕只计票不进上下文,到点把结果作为 flush 事件交给她', async () => {
+    vi.useFakeTimers();
+    const { module, host, feed } = await mount();
+    const poll = module.tools().find((t) => t.name === 'bilibili_poll')!;
+    const toolCtx = { role: 'main', log: nullLogger() };
+    const opened = await poll.handler({ action: 'open', question: '下一步', options: ['挖铁', '舀岩浆'], durationSec: 30 }, toolCtx);
+    expect(opened).toContain('[poll open]');
+    expect(opened).toContain('1.挖铁 2.舀岩浆');
+    const before = host.events.length;
+    feed(danmaku(1, '甲', '1'));
+    feed(danmaku(2, '乙', '2'));
+    feed(danmaku(3, '丙', '2'));
+    feed(danmaku(4, '丁', '我选挖铁吧'));
+    await vi.advanceTimersByTimeAsync(1000);
+    await (module as any).eventWrites;
+    const delivered = host.events.slice(before);
+    // 只有那条聊天进了上下文,三张票没有
+    expect(delivered.filter((e) => e.type === 'bilibili.danmaku').map((e) => e.text)).toEqual(['[弹幕|丁] 我选挖铁吧']);
+    expect(await poll.handler({ action: 'status' }, toolCtx)).toContain('1.挖铁 1 票、2.舀岩浆 2 票');
+    await vi.advanceTimersByTimeAsync(30_000);
+    await (module as any).eventWrites;
+    const result = host.events.filter((e) => e.type === 'bilibili.poll-result');
+    expect(result).toHaveLength(1);
+    expect(result[0].text).toBe('[投票结束] 下一步:1.挖铁 1 票、2.舀岩浆 2 票(3 人投票),「舀岩浆」胜出');
+    expect(host.pushOpts[host.events.indexOf(result[0])]?.trigger).toBe('flush');
+    // 结束后数字弹幕照常是聊天
+    feed(danmaku(5, '戊', '1'));
+    await vi.advanceTimersByTimeAsync(1000);
+    await (module as any).eventWrites;
+    expect(host.events.at(-1)?.text).toBe('[弹幕|戊] 1');
+    expect(await poll.handler({ action: 'close' }, toolCtx)).toContain('没有进行中的投票');
+    await module.stop();
+  });
+
+  it('新人进场与关注合成一条欢迎事件;同一人一场只欢迎一次,老观众进场只计数', async () => {
+    vi.useFakeTimers();
+    const dir = mkdtempSync(join(tmpdir(), 'bili-welcome-'));
+    try {
+      const { module, host, feed } = await mount({
+        audienceLedgerFile: join(dir, 'ledger.json'), welcomeWindowSec: () => 20,
+      });
+      const enter = (uid: number, uname: string, msg_type = 1) =>
+        feed({ cmd: 'INTERACT_WORD', data: { uid, uname, msg_type, roomid: 6 } });
+      // 先让 7 号成为老观众:发过弹幕就进了账本
+      feed(danmaku(7, '老观众', '来了'));
+      const before = host.events.length;
+      enter(1, '新人甲');
+      enter(2, '新人乙');
+      enter(1, '新人甲'); // 同一人再进一次不重复欢迎
+      enter(7, '老观众'); // 老观众进场不欢迎
+      enter(7, '老观众', 2); // 但关注要谢
+      expect(host.events.length).toBe(before); // 窗口内一条都不发
+      await vi.advanceTimersByTimeAsync(20_000);
+      await (module as any).eventWrites;
+      const welcome = host.events.slice(before).filter((e) => e.type === 'bilibili.welcome');
+      expect(welcome).toHaveLength(1);
+      expect(welcome[0].text).toBe('[欢迎] 关注了直播间:老观众;新观众进场:新人甲、新人乙');
+      // 进场仍进人流计数(老观众那次也算)
+      expect(await host.deferred.at(-1)!.spec.render()).toContain('4 人进场');
+      // 再进一次,窗口过后也不再欢迎
+      enter(2, '新人乙');
+      await vi.advanceTimersByTimeAsync(20_000);
+      expect(host.events.filter((e) => e.type === 'bilibili.welcome')).toHaveLength(1);
+      await module.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('欢迎窗口设 0 就关掉欢迎,进场只计数', async () => {
+    vi.useFakeTimers();
+    const { module, host, feed } = await mount({ welcomeWindowSec: () => 0 });
+    feed({ cmd: 'INTERACT_WORD', data: { uid: 1, uname: '新人甲', msg_type: 1 } });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(host.events.filter((e) => e.type === 'bilibili.welcome')).toHaveLength(0);
+    expect(host.deferred).toHaveLength(1);
+    await module.stop();
+  });
+
+  it('一条欢迎最多点名 6 人,多的只报人数', () => {
+    const pool = Array.from({ length: 9 }, (_, i) => ({
+      kind: 'interact' as const, action: 'enter' as const, uid: i + 1, uname: `观众${i + 1}`, face: '', medalLevel: 0,
+    }));
+    expect(renderWelcome(pool)).toBe('[欢迎] 新观众进场:观众1、观众2、观众3、观众4、观众5、观众6 等 9 人');
   });
 
   it('人流读数不成事件:布置一条待成文的,发车刻才渲染,而且只布置一条', async () => {

@@ -271,6 +271,23 @@ describe('Bilibili Overlay 模型', () => {
     expect(normalized.components[1]).toMatchObject({ typingMs: 0 });
   });
 
+  it('战况、弹窗、投票三种组件:缺省值补齐,越界值收回范围', () => {
+    const design = structuredClone(BILIBILI_OVERLAY_DEFAULTS.design) as unknown as Record<string, unknown>;
+    const styleId = BILIBILI_OVERLAY_DEFAULTS.design.components[0]?.styleId ?? 'builtin:sky';
+    design.components = [
+      { id: 'gs', name: '战况', kind: 'game-status', styleId, maxGoals: 99 },
+      { id: 'tt', name: '弹窗', kind: 'toast', styleId, holdMs: 10 },
+      { id: 'pl', name: '投票', kind: 'poll', styleId },
+    ];
+    design.placements = [];
+    const normalized = normalizeOverlayDesign(design);
+    expect(normalized.components).toEqual([
+      { id: 'gs', name: '战况', kind: 'game-status', styleId, showDeaths: true, showGoals: true, maxGoals: 5, emptyText: '还没有登记目标' },
+      { id: 'tt', name: '弹窗', kind: 'toast', styleId, holdMs: 1000 },
+      { id: 'pl', name: '投票', kind: 'poll', styleId, resultHoldMs: 15000 },
+    ]);
+  });
+
   it('未来 schema 版本不会被静默当成 v4', () => {
     const future = { ...structuredClone(BILIBILI_OVERLAY_DEFAULTS.design), schemaVersion: 5 };
     expect(() => normalizeOverlayDesign(future)).toThrow(/schema|schemaVersion|版本/i);

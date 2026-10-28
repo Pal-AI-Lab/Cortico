@@ -201,6 +201,33 @@ describe('归一化', () => {
     });
   });
 
+  it('INTERACT_WORD_V2 解出 uid、名字、动作和头像', () => {
+    const vint = (n: number): number[] => { const out: number[] = []; let v = n; while (v > 0x7f) { out.push((v & 0x7f) | 0x80); v >>>= 7; } out.push(v); return out; };
+    const str = (field: number, s: string): number[] => { const b = [...Buffer.from(s, 'utf8')]; return [...vint((field << 3) | 2), ...vint(b.length), ...b]; };
+    const int = (field: number, n: number): number[] => [...vint(field << 3), ...vint(n)];
+    const msg = (field: number, inner: number[]): number[] => [...vint((field << 3) | 2), ...vint(inner.length), ...inner];
+    const pb = (type: number) => Buffer.from([
+      ...int(1, 123456), ...str(2, '路过的工友'), ...int(5, type), ...int(7, 1790000000),
+      ...msg(22, msg(2, str(2, '//i0.hdslb.com/face.jpg'))),
+    ]).toString('base64');
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: pb(1) } }, OPTS)).toEqual({
+      kind: 'interact', action: 'enter', uid: 123456, uname: '路过的工友',
+      face: 'https://i0.hdslb.com/face.jpg', medalLevel: 0,
+    });
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: pb(2) } }, OPTS)).toMatchObject({ action: 'follow' });
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: pb(3) } }, OPTS)).toMatchObject({ action: 'share' });
+    // 坏帧退回人流计数,不丢这一次进场
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: '!!!' } }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
+  });
+
+  it('INTERACT_WORD(V1)只认本房间的粉丝牌', () => {
+    const base = { uid: 9, uname: '阿九', msg_type: 1, roomid: 24292304 };
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { ...base, fans_medal: { anchor_roomid: 24292304, medal_level: 12 } } }, OPTS))
+      .toMatchObject({ kind: 'interact', action: 'enter', uid: 9, medalLevel: 12 });
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { ...base, fans_medal: { anchor_roomid: 1, medal_level: 20 } } }, OPTS))
+      .toMatchObject({ medalLevel: 0 });
+  });
+
   it('人流类只给计数与读数', () => {
     expect(normalize({ cmd: 'INTERACT_WORD_V2', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
     expect(normalize({ cmd: 'LIKE_INFO_V3_CLICK', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'like', by: 1 });

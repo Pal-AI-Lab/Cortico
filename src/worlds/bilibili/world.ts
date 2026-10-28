@@ -24,8 +24,11 @@ import { LiveClient, type LivePhase, type LiveStatus } from './client.ts';
 import { BrowserLogin } from './login.ts';
 import { CoalescingBuffer, type CoalescingGroup } from './coalescing-buffer.ts';
 import { giftFrameData } from './gift-frame.ts';
-import { normalize, type CountField, type GaugeField, type LiveEvent } from './normalize.ts';
+import {
+  normalize, type CountField, type GaugeField, type LiveEvent, type LiveInteract,
+} from './normalize.ts';
 import { AgentAnnouncementStore } from './overlay/announcement.ts';
+import { LiveBoard, renderPollResult } from './live-status.ts';
 import { OverlayAssetStore } from './overlay/assets.ts';
 import {
   BUILTIN_OVERLAY_STYLES,
@@ -85,6 +88,12 @@ const UNNAMED_GIFT_SAMPLE_CAP = 16;
 
 /** GUARD_BUY 始终投递；同 uid、等级不冲突的后续 TOAST 在窗口内去重。 */
 const GUARD_DEDUP_WINDOW_MS = 8_000;
+/** 本场已欢迎集合的上限;超过按先进先出丢最旧的 */
+const WELCOME_SEEN_CAP = 5000;
+/** 战况扫描与投票到点检查的间隔 */
+const LIVE_STATUS_TICK_MS = 1000;
+/** 一条欢迎事件里点名的人数上限;再多只报人数,不让一条欢迎顶满上下文 */
+const WELCOME_NAMES_MAX = 6;
 
 /** WS 与轮询共用状态变化去重窗口；窗口长于轮询间隔。 */
 const ROOM_EDGE_DEDUP_MS = 180_000;
@@ -114,6 +123,11 @@ export interface BilibiliWorldOptions {
   audienceEventLineBudget?: () => number;
   audienceEventTokenBudget?: () => number;
   audienceImportantShare?: () => number;
+  /**
+   * 热改:进场欢迎合批窗口(秒)。0 = 关闭,进场只进人流计数。
+   * 窗口内的新观众与关注合成一条 `bilibili.welcome` 事件投递。
+   */
+  welcomeWindowSec?: () => number;
   /** World 私有观众准入账本；不存昵称或正文。 */
   audienceLedgerFile?: string;
   /** 原始帧 jsonl 路径；默认位于 audienceLedgerFile 上两级目录，两者都未提供时关闭采样。 */
@@ -252,6 +266,29 @@ export function bilibiliToolDecls(
         additionalProperties: false,
       },
     },
+    {
+      name: 'bilibili_poll',
+      description:
+        'Run a danmaku vote shown on the Bilibili Overlay. open starts a vote: viewers vote by sending the option number '
+        + '(1, 2, …) as a danmaku; one vote per viewer, the last one counts; vote danmaku are counted and not shown to you. '
+        + 'When time is up the result arrives as a [投票结束] event. close ends the vote early and returns the result. '
+        + 'status returns the live tally. Only one vote at a time.',
+      tags: ['act'],
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['open', 'close', 'status'] },
+          question: { type: 'string', maxLength: 60, description: 'open only: the question, e.g. 下一步先干什么.' },
+          options: {
+            type: 'array', items: { type: 'string', maxLength: 20 }, minItems: 2, maxItems: 6,
+            description: 'open only: 2 to 6 short option labels; viewers vote with 1..N in this order.',
+          },
+          durationSec: { type: 'integer', minimum: 15, maximum: 600, description: 'open only: how long the vote runs; default 60.' },
+        },
+        required: ['action'],
+        additionalProperties: false,
+      },
+    },
   ];
 }
 
@@ -305,6 +342,17 @@ export class BilibiliWorld implements World {
 
   /** 渲染后清空的聚合读数。 */
   private agg = emptyAggregate();
+  /** 战况与投票(见 live-status.ts) */
+  private readonly liveStatus = new LiveBoard({
+    changed: (state) => this.overlayServer?.emitLiveStatus(state),
+    toast: (toast) => this.overlayServer?.emitToast(toast),
+  });
+  private liveStatusTimer: ReturnType<typeof setInterval> | null = null;
+  /** 欢迎池:窗口内待欢迎的新人与关注(见 onInteract) */
+  private welcomePool: LiveInteract[] = [];
+  private welcomeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** 本场已欢迎过的 `action:uid`,开播/启动时清空 */
+  private readonly welcomedThisStream = new Set<string>();
   /** 延迟渲染事件的入队时间；null 表示尚未入队。 */
   private armedAt: number | null = null;
 
@@ -501,6 +549,8 @@ export class BilibiliWorld implements World {
     this.host = host;
     this.armedAt = null;
     this.agg = emptyAggregate();
+    this.welcomePool = [];
+    this.welcomedThisStream.clear();
     this.coalescing.reset();
     this.eventWrites = Promise.resolve();
     this.pendingEventWrites = 0;
@@ -520,6 +570,7 @@ export class BilibiliWorld implements World {
     this.coalesceLogAt = Date.now();
     this.admissionDropped = 0;
     await this.startOverlay(host);
+    this.startLiveStatus(host);
     if (!this.opts.roomId && !this.opts.source) {
       host.log.warn('B 站直播间未配置房间号(worlds.bilibili.roomId),不接入');
       return;
@@ -540,6 +591,11 @@ export class BilibiliWorld implements World {
   async stop(): Promise<void> {
     ++this.lifecycleGeneration;
     this.login.cancel();
+    if (this.welcomeTimer) clearTimeout(this.welcomeTimer);
+    this.welcomeTimer = null;
+    this.welcomePool = [];
+    if (this.liveStatusTimer) clearInterval(this.liveStatusTimer);
+    this.liveStatusTimer = null;
     this.coalescing.flush('stop');
 
     this.flushCoalesceLog(true);
@@ -632,7 +688,7 @@ export class BilibiliWorld implements World {
   }
 
   tools(): ToolDef[] {
-    const [announcementDecl, videoQueueDecl] = bilibiliToolDecls(this.agentNoticeLimit(), this.maxQueuedVideos());
+    const [announcementDecl, videoQueueDecl, pollDecl] = bilibiliToolDecls(this.agentNoticeLimit(), this.maxQueuedVideos());
     return [
       {
         ...announcementDecl,
@@ -669,7 +725,37 @@ export class BilibiliWorld implements World {
           }
         },
       },
+      {
+        ...pollDecl,
+        handler: async (args) => this.pollTool(args),
+      },
     ];
+  }
+
+  private pollTool(args: Record<string, unknown>): string {
+    const action = args.action;
+    if (action === 'open') {
+      try {
+        const poll = this.liveStatus.openPoll({
+          question: typeof args.question === 'string' ? args.question : '',
+          options: Array.isArray(args.options) ? args.options.filter((o): o is string => typeof o === 'string') : [],
+          durationSec: typeof args.durationSec === 'number' ? args.durationSec : 60,
+        });
+        const secs = Math.round((poll.endsAt - Date.now()) / 1000);
+        const opts = poll.options.map((o) => `${o.key}.${o.label}`).join(' ');
+        return `[poll open] #${poll.id}「${poll.question}」${opts},${secs} 秒后结束;观众发数字投票。口播里把选项念给观众。`;
+      } catch (error) {
+        return `[not executed] ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+    if (action === 'close') return this.finishPoll() ?? '[not executed] 现在没有进行中的投票';
+    if (action === 'status') {
+      const poll = this.liveStatus.current.poll;
+      if (!poll) return '[poll] 现在没有投票';
+      const left = poll.closedAt === null ? `还剩 ${Math.max(0, Math.round((poll.endsAt - Date.now()) / 1000))} 秒` : '已结束';
+      return `[poll] 「${poll.question}」${poll.options.map((o) => `${o.key}.${o.label} ${o.votes} 票`).join('、')}(${poll.voters} 人,${left})`;
+    }
+    return '[bad input] action must be open, close or status';
   }
 
   private onCmd(msg: Record<string, unknown>): void {
@@ -691,6 +777,7 @@ export class BilibiliWorld implements World {
 
     if (cmd === 'LIVE') {
       this.admission.startStream({ roomId: this.status?.realRoomId ?? this.opts.roomId });
+      this.welcomedThisStream.clear();
       this.lastKnownLiving = true;
 
       if (!this.markRoomEdge(true, '弹幕服务器 LIVE 指令')) return;
@@ -700,6 +787,10 @@ export class BilibiliWorld implements World {
       if (!this.markRoomEdge(false, '弹幕服务器 PREPARING 指令')) return;
     }
 
+    if (item.kind === 'interact') {
+      this.onInteract(item);
+      return;
+    }
     if (item.kind === 'count') {
       if (item.field === 'freeGift') this.coalescing.breakRun('bilibili.gift');
       this.agg[item.field] += item.by;
@@ -720,7 +811,12 @@ export class BilibiliWorld implements World {
       if (this.suppressDuplicateGuard(item)) return;
       if (overlayEvent) this.emitOverlayAudience(overlayEvent);
     }
-    if (item.type === 'bilibili.danmaku') this.noteIdentity(item.senderKey !== undefined);
+    if (item.type === 'bilibili.danmaku') {
+      this.noteIdentity(item.senderKey !== undefined);
+      const voter = item.senderKey ?? `name:${String(item.meta?.uname ?? '')}`;
+      // 投票弹幕只计票、不进上下文:几十条「1」「2」对她没有信息量,结果会单独投递
+      if (this.liveStatus.vote(voter, String(item.meta?.body ?? ''))) return;
+    }
     this.observeAudience(item);
     this.note(item.text);
     const pending = { item, ts: nowIso(this.timezone) };
@@ -921,6 +1017,7 @@ export class BilibiliWorld implements World {
       builtinStyles: structuredClone(BUILTIN_OVERLAY_STYLES),
       agentAnnouncement: this.announcement.current,
       videoQueue: this.videoQueue.current,
+      liveStatus: this.liveStatus.current,
     };
   }
 
@@ -1046,6 +1143,108 @@ export class BilibiliWorld implements World {
   private agentNoticeLimit(): number {
     const value = this.opts.agentNoticeMaxChars?.() ?? this.overlayConfig.agentNoticeMaxChars;
     return Number.isFinite(value) ? Math.min(5000, Math.max(1, Math.round(value))) : 200;
+  }
+
+  /** 战况:挂上事件库,每秒扫一次新事件、检查投票到点 */
+  private startLiveStatus(host: WorldHost): void {
+    if (this.liveStatusTimer) clearInterval(this.liveStatusTimer);
+    this.liveStatusTimer = null;
+    // 战况只是叠加层的附加读数:读不到事件库也不能拖垮直播间接入
+    if (!host.store) return;
+    try {
+      this.liveStatus.attach(host.store);
+    } catch (error) {
+      host.log.warn('战况回看事件库失败', { err: String(error) });
+    }
+    this.liveStatusTimer = setInterval(() => this.tickLiveStatus(), LIVE_STATUS_TICK_MS);
+    this.liveStatusTimer.unref?.();
+  }
+
+  private tickLiveStatus(): void {
+    const host = this.host;
+    if (!host?.store) return;
+    try {
+      this.liveStatus.poll(host.store);
+    } catch (error) {
+      host.log.warn('战况读取事件库失败', { err: String(error) });
+    }
+    if (this.liveStatus.pollDue()) this.finishPoll();
+    this.liveStatus.expirePoll(this.pollResultHoldMs());
+  }
+
+  /** 投票结束:结果作为一条 flush 事件交给她,叠加层弹结果 */
+  private finishPoll(): string | null {
+    const result = this.liveStatus.closePoll();
+    if (!result) return null;
+    const text = renderPollResult(result);
+    this.note(text);
+    const pending: PendingLiveEvent = {
+      ts: nowIso(this.timezone),
+      item: { kind: 'event', type: 'bilibili.poll-result', trigger: 'flush', text, meta: { ...result } },
+    };
+    this.pushLiveEvent([pending], pending);
+    return text;
+  }
+
+  private pollResultHoldMs(): number {
+    const poll = this.overlayConfig.design.components.find((c) => c.kind === 'poll');
+    return poll && poll.kind === 'poll' ? poll.resultHoldMs : 15_000;
+  }
+
+  private welcomeWindowMs(): number {
+    const v = this.opts.welcomeWindowSec?.() ?? BILIBILI_DEFAULTS.welcomeWindowSec;
+    return Number.isFinite(v) && v > 0 ? Math.min(600, v) * 1000 : 0;
+  }
+
+  /**
+   * 进场/关注/分享。人流计数照旧;此外:
+   * - 账本里没见过的观众进场 → 进欢迎池(新人);见过的只计数,不打扰她。
+   * - 关注、分享 → 进欢迎池(不论新旧,这是对她的直接动作)。
+   * 欢迎池按窗口合成一条事件,同一人一场只欢迎一次。
+   * 新旧判定必须在 observe 之前做:observe 会把这个人记进账本。
+   */
+  private onInteract(item: LiveInteract): void {
+    if (item.action === 'enter') {
+      this.agg.enter += 1;
+      this.armAggregate();
+    }
+    const key = String(item.uid);
+    const fresh = !this.admission.knows(key);
+    this.admission.observe({ senderKey: key, interaction: false, guard: false, guardLevel: 0 });
+    if (this.welcomeWindowMs() === 0) return;
+    if (item.action === 'enter' && !fresh) return;
+    const tag = `${item.action}:${key}`;
+    if (this.welcomedThisStream.has(tag)) return;
+    this.welcomedThisStream.add(tag);
+    if (this.welcomedThisStream.size > WELCOME_SEEN_CAP) {
+      this.welcomedThisStream.delete(this.welcomedThisStream.values().next().value!);
+    }
+    this.welcomePool.push(item);
+    this.welcomeTimer ??= setTimeout(() => this.flushWelcome(), this.welcomeWindowMs());
+    this.welcomeTimer.unref?.();
+  }
+
+  private flushWelcome(): void {
+    if (this.welcomeTimer) clearTimeout(this.welcomeTimer);
+    this.welcomeTimer = null;
+    const pool = this.welcomePool.splice(0);
+    const host = this.host;
+    if (!host || pool.length === 0) return;
+    const text = renderWelcome(pool);
+    this.note(text);
+    const pending: PendingLiveEvent = {
+      ts: nowIso(this.timezone),
+      item: {
+        kind: 'event',
+        type: 'bilibili.welcome',
+        trigger: 'debounce',
+        text,
+        meta: {
+          viewers: pool.map((p) => ({ uid: p.uid, uname: p.uname, action: p.action })),
+        },
+      },
+    };
+    this.pushLiveEvent([pending], pending);
   }
 
   /** `piggyback` 随下一批事件投递，不触发唤醒或重置合批计时器。 */
@@ -1483,6 +1682,20 @@ function numberOption(
   const value = read?.() ?? fallback;
   const candidate = Number.isFinite(value) ? value : fallback;
   return Math.min(max, Math.max(min, candidate));
+}
+
+/** 欢迎池 → 一行事件正文。按动作分组,每组最多点名 WELCOME_NAMES_MAX 人。 */
+export function renderWelcome(pool: readonly LiveInteract[]): string {
+  const label: Record<LiveInteract['action'], string> = { enter: '新观众进场', follow: '关注了直播间', share: '分享了直播间' };
+  const parts: string[] = [];
+  for (const action of ['follow', 'share', 'enter'] as const) {
+    const names = pool.filter((p) => p.action === action).map((p) => p.uname);
+    if (names.length === 0) continue;
+    const shown = names.slice(0, WELCOME_NAMES_MAX).join('、');
+    const more = names.length > WELCOME_NAMES_MAX ? ` 等 ${names.length} 人` : '';
+    parts.push(`${label[action]}:${shown}${more}`);
+  }
+  return `[欢迎] ${parts.join(';')}`;
 }
 
 function renderAggregate(agg: Aggregate): string | null {
