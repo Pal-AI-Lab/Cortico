@@ -260,7 +260,8 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     expect(handoffRequests).toBe(2);
     expect(await workspace()).toContain('- notes/ (1 份');
     expect(tidy()).toHaveLength(1);
-    expect(tidy()[0]).toContain('CONSTITUTION.md');
+    // the bot hears what to do, not how its context works
+    expect(tidy()[0]).not.toMatch(/前缀|token|上下文|交接|CONSTITUTION/);
 
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
     for (let i = 0; i < 5; i++) p.onBatchEnd();
