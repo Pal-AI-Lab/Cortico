@@ -3883,6 +3883,41 @@ describe('MainLoop · World 读取失败只卸载该 World', () => {
     if (rig) await rig.cleanup();
   });
 
+  it('恢复 session 时 tools() 失败:首个请求使用移除该 World 的前缀和工具表,历史保留', async () => {
+    const bad = makeFakeIO('bad', [makeTool('bad_act', 'x')], 'BAD 环境');
+    const history: ChatMessage[] = [
+      { role: 'user', content: '保留的问题' },
+      { role: 'assistant', content: '保留的回答' },
+    ];
+    rig = makeRig({
+      worlds: [bad, makeFakeIO('good', [makeTool('good_act', 'ok')], 'GOOD 环境')],
+      preSession: [{ role: 'system', content: '旧前缀\nBAD 环境\nGOOD 环境' }, ...history],
+    });
+    bad.tools = () => { throw new Error('catalog unavailable'); };
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+    const request = rig.llm.calls[0];
+    expect(request.messages[0].content).toContain('GOOD 环境');
+    expect(request.messages[0].content).not.toContain('BAD 环境');
+    expect(request.messages.slice(1, 3)).toMatchObject(history);
+    expect(request.tools?.map(tool => tool.name)).toContain('good_act');
+    expect(request.tools?.map(tool => tool.name)).not.toContain('bad_act');
+    expect(rig.worldFailures).toEqual([{ id: 'bad', detail: 'tools(): catalog unavailable' }]);
+    expect(rig.loop.modulePrefixDrift()).toEqual([]);
+    const saved = new SessionLog(rig.tmp.dir);
+    saved.load();
+    expect(saved.messages[0].content).not.toContain('BAD 环境');
+    expect(saved.messages.slice(1, 3)).toMatchObject(history);
+  });
+
+  it('恢复 session 时 World 正常:保留已有 system 前缀', async () => {
+    rig = makeRig({ preSession: [{ role: 'system', content: '已保存的前缀' }] });
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+    expect(rig.llm.calls[0].messages[0].content).toBe('已保存的前缀');
+    expect(rig.worldFailures).toEqual([]);
+  });
+
   it('重载前缀时 tools() 抛错的 World 被移出:工具表与环境段都不含它,下一次请求照常', async () => {
     const bad = makeFakeIO('bad', [makeTool('bad_act', 'x')], 'BAD 环境');
     rig = makeRig({ worlds: [bad, makeFakeIO('good', [makeTool('good_act', 'ok')], 'GOOD 环境')] });
