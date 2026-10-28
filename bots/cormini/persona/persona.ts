@@ -4,7 +4,7 @@
  * protected 成员供变体继承，不属于公共 API。
  */
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
 import type { Language } from 'cortico/core/language.ts';
@@ -121,6 +121,70 @@ export const CORMINI_TOOL_SUMMARIES: Readonly<Record<string, DescribeText>> = {
   end_turn: { zh: '结束这一轮,等新事件或心跳再醒。', en: 'Ends the turn until a new event or the heartbeat wakes the bot.' },
 };
 
+/** 目录在前缀清单里折成的那一行。 */
+function foldLine(dir: string, n: number): string {
+  return `${dir} (${n} 份;list_files 指定 dir 为 ${dir.slice(0, -1)} 可列出全部)`;
+}
+
+/** `f` 的各级上级目录(带末尾 `/`),由浅到深。 */
+function ancestorDirs(f: string): string[] {
+  const out: string[] = [];
+  for (let i = f.indexOf('/'); i >= 0; i = f.indexOf('/', i + 1)) out.push(f.slice(0, i + 1));
+  return out;
+}
+
+/**
+ * 前缀清单的常规形态:根下文件逐行列出;路径总字符数超过 `subtreeChars` 的子树取最浅的一层
+ * 折成一行,直属文件超过 LIST_DIR_CAP 份的目录把这些文件折成一行。
+ */
+function foldedLines(files: string[], subtreeChars: number): string[] {
+  const subtree = new Map<string, { files: number; chars: number }>();
+  const direct = new Map<string, number>();
+  for (const f of files) {
+    const dirs = ancestorDirs(f);
+    for (const d of dirs) {
+      const s = subtree.get(d) ?? { files: 0, chars: 0 };
+      s.files++;
+      s.chars += f.length;
+      subtree.set(d, s);
+    }
+    const own = dirs.at(-1) ?? '';
+    direct.set(own, (direct.get(own) ?? 0) + 1);
+  }
+  const shown: string[] = [];
+  const folded = new Set<string>();
+  for (const f of files) {
+    const deep = ancestorDirs(f).find((d) => subtree.get(d)!.chars > subtreeChars);
+    const dir = deep ?? f.slice(0, f.lastIndexOf('/') + 1);
+    const n = deep ? subtree.get(deep)!.files : direct.get(dir)!;
+    if (!deep && (dir === '' || n <= LIST_DIR_CAP)) shown.push(f);
+    else if (!folded.has(dir)) {
+      folded.add(dir);
+      shown.push(foldLine(dir, n));
+    }
+  }
+  return shown;
+}
+
+/** 前缀清单的最简形态:根下文件逐行列出,每个顶层目录一行计数。 */
+function topLevelLines(files: string[]): string[] {
+  const counts = new Map<string, number>();
+  for (const f of files) {
+    const top = ancestorDirs(f)[0];
+    if (top) counts.set(top, (counts.get(top) ?? 0) + 1);
+  }
+  const shown: string[] = [];
+  for (const f of files) {
+    const top = ancestorDirs(f)[0];
+    if (!top) shown.push(f);
+    else if (counts.has(top)) {
+      shown.push(foldLine(top, counts.get(top)!));
+      counts.delete(top);
+    }
+  }
+  return shown;
+}
+
 /** 阶段预算、软阈值比例和交接笔记预算比例。 */
 export interface ContextStagePolicy {
   maxTokens: number;
@@ -201,6 +265,14 @@ export class Cormini implements Persona {
   protected pressureSplitAt: number | null = null;
   /** 最近一份交接笔记的工作区路径;醒来那句话用它指路 */
   protected lastHandoffFile: string | null = null;
+  /** 交接之后还没过批末检查;下一次批末据此判断交接有没有把计数压回软阈值 */
+  private handedOff = false;
+  /** 在这个软阈值下前缀清单只列顶层;计数回到软阈值内即恢复常规清单 */
+  private compactListingAt: number | null = null;
+  /** 在这个软阈值下交接已压不回计数:不再提醒、不再请求交接;计数回到软阈值内即恢复 */
+  private handoffUnreachableAt: number | null = null;
+  /** 已就这个软阈值请 bot 整理过记忆 */
+  private tidyAskedAt: number | null = null;
   readonly memory: GitWorkspaceMemory;
   /** 工作区二进制附件；mem: 句柄保存相对路径。 */
   readonly blobs: WorkspaceBlobStore;
@@ -498,26 +570,18 @@ export class Cormini implements Persona {
    * 前缀里的工作区清单。大目录折叠为一行计数(每场几十份交接笔记会撑爆缓存前缀);
    * list_files 指定目录时全量。变体经 prefixFolds() 追加自己的折叠目录。
    * 其余目录直属文件超过 LIST_DIR_CAP 份的,同样折叠为一行计数(场次蒸馏一场几份,会越攒越多)。
+   * Fallback:一棵子树逐行列出的路径总字符数超过 wholeReadFallbackChars() 时,整棵折成一行计数
+   * (每层只有几份、总数上万的深树)。点名这个目录的 list_files 能看到全部,常驻前缀里的一棵子树
+   * 不比一次整份读取能交回的更大。onBatchEnd 判定交接没能把计数压回软阈值后,只列顶层各项与计数。
    */
   protected prefixWorkspaceListing(): string {
     const files = this.memory.walkFiles();
     if (files.length === 0) return 'Your workspace is empty.';
     const folds = this.prefixFolds();
     const rest = files.filter((f) => !folds.some((d) => f.startsWith(d.prefix)));
-    const dirOf = (f: string): string => f.slice(0, f.lastIndexOf('/') + 1);
-    const perDir = new Map<string, number>();
-    for (const f of rest) perDir.set(dirOf(f), (perDir.get(dirOf(f)) ?? 0) + 1);
-    const shown: string[] = [];
-    const folded = new Set<string>();
-    for (const f of rest) {
-      const dir = dirOf(f);
-      const n = perDir.get(dir)!;
-      if (dir === '' || n <= LIST_DIR_CAP) shown.push(f);
-      else if (!folded.has(dir)) {
-        folded.add(dir);
-        shown.push(`${dir} (${n} 份;list_files 指定 dir 为 ${dir.slice(0, -1)} 可列出全部)`);
-      }
-    }
+    const shown = this.compactListingAt === this.softThreshold()
+      ? topLevelLines(rest)
+      : foldedLines(rest, this.wholeReadFallbackChars());
     for (const d of folds) {
       const n = files.filter((f) => f.startsWith(d.prefix)).length;
       if (n > 0) shown.push(d.line(n));
@@ -571,16 +635,29 @@ export class Cormini implements Persona {
    * 批末压力裁量:超软阈值先注入速记提醒(她拿到一轮落笔时间——提醒项挂 flush,
    * 下一批必含它),再超就请求交接。阶段预算是自己的裁量;越过模型物理上限的
    * 强制交接在 core。
+   * 交接后的第一次批末仍超软阈值时,前缀清单改为只列顶层再交接一次;还超就在这个软阈值下停止提醒
+   * 与交接,照常运行。交接笔记与提醒各自唤醒一批,交接压不回计数时不停下就会接连交接。
    */
   onBatchEnd(): void {
     const openedAt = this.batchOpenedAt;
     this.batchOpenedAt = null;
+    const afterHandoff = this.handedOff;
+    this.handedOff = false;
     const core = this.core;
     if (!core) return;
     const info = core.sessionInfo(MAIN);
     if (info.estTokens === null) return;
-    const { maxTokens, softRatio } = this.context();
-    if (info.estTokens <= maxTokens * softRatio) return;
+    const soft = this.softThreshold();
+    if (info.estTokens <= soft) {
+      this.compactListingAt = null;
+      this.handoffUnreachableAt = null;
+      return;
+    }
+    if (this.handoffUnreachableAt === soft) return;
+    if (afterHandoff) {
+      this.handoffFellShort(core, soft, info.estTokens);
+      return;
+    }
     if (!this.pressureWarned) {
       this.pressureWarned = true;
       // 越过软阈值的这一批是"当前语境"的起点:交接笔记按它把上一窗切成更早的历史与最近的一段。
@@ -592,11 +669,50 @@ export class Cormini implements Persona {
     core.requestContextHandoff();
   }
 
+  /** 阶段预算 × 软阈值比例;压力裁量和 fallback 状态都按这个数记。 */
+  private softThreshold(): number {
+    const { maxTokens, softRatio } = this.context();
+    return maxTokens * softRatio;
+  }
+
+  /**
+   * 交接后计数仍超软阈值:先改列最简清单再交接一次,并请 bot 整理记忆(每个软阈值一次);
+   * 已是最简清单就记下这个软阈值不可达。
+   */
+  private handoffFellShort(core: CoreApi, soft: number, estTokens: number): void {
+    const { maxTokens, softRatio } = this.context();
+    if (this.compactListingAt !== soft) {
+      this.compactListingAt = soft;
+      core.log.warn('交接后计数仍越过软阈值,前缀工作区清单改为只列顶层,再交接一次', { estTokens, maxTokens, softRatio });
+      if (this.tidyAskedAt !== soft) {
+        this.tidyAskedAt = soft;
+        core.injectInternal(this.tidyMemoryNote(), 'notice');
+      }
+      core.requestContextHandoff();
+      return;
+    }
+    this.handoffUnreachableAt = soft;
+    core.log.warn('只列顶层的前缀交接后计数仍越过软阈值,这个软阈值下不再提醒与请求交接;计数回到软阈值内或软阈值改变后恢复', {
+      estTokens, maxTokens, softRatio,
+    });
+  }
+
   /** 软阈值那一轮的速记提醒。 */
   protected pressureNote(): string {
     return (
       '[system] 交接快来了。交接会把上文全部清空,清空前最近的一段会写成交接笔记送到新会话。' +
       '很早以前的事里,你还在跟的、还想做的,现在就写进文件,再过一会儿上下文就没了。'
+    );
+  }
+
+  /** 交接压不回计数时请 bot 整理记忆;逐字进前缀的文件按工作区相对路径点名。 */
+  protected tidyMemoryNote(): string {
+    const resident = this.prefixResidentFiles()
+      .map((f) => relative(this.memoryDir, f).split(sep).join('/'))
+      .filter((f) => !f.startsWith('..'));
+    return (
+      '[system] 工作区里堆的东西太多了,找个时间整理一下记忆:用不上的大批文件收进一个文件夹,' +
+      `${resident.join('、')} 里过时、重复的内容精简掉。`
     );
   }
 
@@ -637,6 +753,7 @@ export class Cormini implements Persona {
     this.lastHandoffFile = file;
     this.pressureWarned = false;
     this.pressureSplitAt = null;
+    this.handedOff = true;
     // 醒来那句话读 lastHandoffFile,所以先写文件。
     this.core?.injectInternal(this.handoffNote(), 'handoff');
     // 两段各是一条事件,同批投递(渲染进同一帧);远近之分靠各自的抬头与时间范围。
