@@ -101,7 +101,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 |---|---|
 | `GET /api/capabilities` | 框架级表面的挂载情况 |
 | `GET /api/status` | 运行状态快照与 `uptimeSec` |
-| `GET /api/config`、`POST /api/config` | 配置组;POST 体 `{ group, values }`,按 schema 校验 |
+| `GET /api/config`、`POST /api/config` | 配置组;POST 体 `{ group, values }`,按 schema 校验;`values` 里有组 schema 没声明的键时回 400、一项都不写，回执列出可写的键 |
 | `GET /api/config/options/:kind` | schema 里 `x-options` 为 `kind` 的配置项的当前候选值 |
 | `GET /api/blob?handle=` | 附件字节 |
 | `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;激活或停用,体 `{ id, enabled }` |
