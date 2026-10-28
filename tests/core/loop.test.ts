@@ -109,6 +109,7 @@ function makeRig(opts: RigOptions = {}) {
   const worlds = opts.worlds ?? [
     makeFakeIO('qq', [makeTool('send', '已发送'), makeTool('noop', 'ok')]),
   ];
+  const worldFailures: Array<{ id: string; detail: string }> = [];
   const persona = makeFakePersona([], {
     cfg,
     worlds: worlds,
@@ -141,6 +142,10 @@ function makeRig(opts: RigOptions = {}) {
     },
     blobs: fakeBlobIntern(),
     worlds: { all: () => worlds, visible: () => worlds.filter((m) => opts.hiddenWorlds?.includes(m.id) !== true) },
+    onWorldFailed: (world, detail) => {
+      worldFailures.push({ id: world.id, detail });
+      worlds.splice(worlds.indexOf(world), 1);
+    },
     bus,
     session,
     store,
@@ -181,6 +186,8 @@ function makeRig(opts: RigOptions = {}) {
     cfg,
     bus,
     session,
+    worlds,
+    worldFailures,
     store,
     state,
     llm,
@@ -3864,5 +3871,35 @@ describe('MainLoop 异步 onDelivery', () => {
     await sleep(50);
     expect(JSON.stringify(rig.session.messages)).toBe(sessionAfterStop);
     expect(rig.llm.calls).toHaveLength(callsAfterStop);
+  });
+});
+
+/**
+ * 构建前缀或工具表时读不出一个 World 的 `tools()`:只有它经 onWorldFailed 移出,其余 World 与主循环照常。
+ */
+describe('MainLoop · World 读取失败只卸载该 World', () => {
+  let rig: ReturnType<typeof makeRig>;
+  afterEach(async () => {
+    if (rig) await rig.cleanup();
+  });
+
+  it('重载前缀时 tools() 抛错的 World 被移出:工具表与环境段都不含它,下一次请求照常', async () => {
+    const bad = makeFakeIO('bad', [makeTool('bad_act', 'x')], 'BAD 环境');
+    rig = makeRig({ worlds: [bad, makeFakeIO('good', [makeTool('good_act', 'ok')], 'GOOD 环境')] });
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+    bad.tools = () => { throw new Error('清单未加载'); };
+    await rig.loop.reloadSystemPrefix();
+
+    expect(rig.worldFailures).toEqual([{ id: 'bad', detail: 'tools(): 清单未加载' }]);
+    expect(rig.worlds.map((m) => m.id)).toEqual(['good']);
+    expect(rig.session.messages[0].content).toContain('GOOD 环境');
+    expect(rig.session.messages[0].content).not.toContain('BAD 环境');
+
+    rig.pushEvent('还在吗');
+    await until(() => rig.llm.calls.length >= 2);
+    const names = rig.llm.calls[1].tools?.map((t) => t.name) ?? [];
+    expect(names).toContain('good_act');
+    expect(names).not.toContain('bad_act');
   });
 });

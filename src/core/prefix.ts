@@ -76,8 +76,15 @@ export async function renderWorldEnvPrompt(
   mod: World,
   dirs?: EnvPromptDirs,
 ): Promise<{ text: string; sourceKey?: string }> {
+  return renderEnvTemplate(mod, await mod.envPromptVars(), dirs);
+}
+
+function renderEnvTemplate(
+  mod: World,
+  vars: Record<string, string> | null,
+  dirs: EnvPromptDirs | undefined,
+): { text: string; sourceKey?: string } {
   // null 表示省略整段，不读取模板。
-  const vars = await mod.envPromptVars();
   const doc = vars === null ? undefined : envPromptDocOf(mod);
   if (!doc) return { text: '' };
   const { path } = envPromptTemplateSource(doc, mod.id, dirs);
@@ -86,36 +93,61 @@ export async function renderWorldEnvPrompt(
   return text ? { text, sourceKey: doc.key } : { text: '' };
 }
 
-/** 环境模板提供 World 的前缀文本；工具 description 随工具定义发送。 */
+/** 读取一个 World 的环境段时出的错。`envPromptVars()` 抛的错在 `detail` 前带上成员名,模板读不出时是文件系统的错误文本。 */
+export interface WorldReadFailure {
+  world: World;
+  detail: string;
+}
+
+/**
+ * 环境模板提供 World 的前缀文本；工具 description 随工具定义发送。
+ * `envPromptVars()` 抛错或模板读不出的 World 不进 `contexts`,列入 `failed`,其余 World 照常。
+ */
 export async function collectWorldContexts(
   worlds: World[],
   dirs?: EnvPromptDirs,
-): Promise<WorldPrefixContext[]> {
+): Promise<{ contexts: WorldPrefixContext[]; failed: WorldReadFailure[] }> {
   const sorted = [...worlds].sort((a, b) => a.id.localeCompare(b.id));
-  return Promise.all(
-    sorted.map(async (mod) => {
-      const { text, sourceKey } = await renderWorldEnvPrompt(mod, dirs);
-      return {
-        id: mod.id,
-        envPrompt: text,
-        ...(sourceKey ? { sourceKey } : {}),
-      };
+  const read = await Promise.all(
+    sorted.map(async (mod): Promise<WorldPrefixContext | WorldReadFailure> => {
+      let vars: Record<string, string> | null;
+      try {
+        vars = await mod.envPromptVars();
+      } catch (error) {
+        return { world: mod, detail: `envPromptVars(): ${error instanceof Error ? error.message : String(error)}` };
+      }
+      try {
+        const { text, sourceKey } = renderEnvTemplate(mod, vars, dirs);
+        return { id: mod.id, envPrompt: text, ...(sourceKey ? { sourceKey } : {}) };
+      } catch (error) {
+        return { world: mod, detail: error instanceof Error ? error.message : String(error) };
+      }
     }),
   );
+  const contexts: WorldPrefixContext[] = [];
+  const failed: WorldReadFailure[] = [];
+  for (const item of read) {
+    if ('world' in item) failed.push(item);
+    else contexts.push(item);
+  }
+  return { contexts, failed };
 }
 
-/** 供 WebUI 观察:前缀的分段视图(与实际发出的前缀同一来源) */
+/** 供 WebUI 观察:前缀的分段视图(与实际发出的前缀同一来源);环境段读取失败的 World 省略。 */
 export async function assembleSystemSegments(deps: AssembleSystemDeps): Promise<PrefixSegment[]> {
   const { persona, worlds, now, timezone, dirs } = deps;
   return persona.systemSegments({
     now,
     timezone,
-    worlds: await collectWorldContexts(worlds, dirs),
+    worlds: (await collectWorldContexts(worlds, dirs)).contexts,
   });
 }
 
 /** 按顺序直接拼接各段，分隔符由 Persona 的段文本提供。 */
-export async function assembleSystem(deps: AssembleSystemDeps): Promise<string> {
-  const segments = await assembleSystemSegments(deps);
+export function joinSegments(segments: readonly PrefixSegment[]): string {
   return segments.map((segment) => segment.text).join('');
+}
+
+export async function assembleSystem(deps: AssembleSystemDeps): Promise<string> {
+  return joinSegments(await assembleSystemSegments(deps));
 }

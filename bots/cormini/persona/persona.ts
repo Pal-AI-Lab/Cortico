@@ -608,10 +608,14 @@ export class Cormini implements Persona {
     this.core?.injectInternal(text, 'opening');
   }
 
-  /** World 装卸、可见性变化与启动失败只报一句;工具与环境提示词的增减随前缀重载自然体现。 */
+  /** World 装卸、可见性变化、启动失败与运行中出错只报一句;工具与环境提示词的增减随前缀重载自然体现。 */
   onWorldLifecycle(event: WorldLifecycleEvent): void {
     if (event.kind === 'start-failed') {
       this.core?.injectInternal(`[system] World 「${event.label}」启动失败,本次运行里没有它:${event.reason}`, 'notice');
+      return;
+    }
+    if (event.kind === 'failed') {
+      this.core?.injectInternal(`[system] World 「${event.label}」运行中出错,已卸载,本次运行里没有它:${event.reason}`, 'notice');
       return;
     }
     const what = event.kind === 'visibility'

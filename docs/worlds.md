@@ -13,8 +13,8 @@ World 不直接访问 Memory 或调用 Persona 的工具。
 | 成员 | 含义 |
 |---|---|
 | `id` | 同时用于配置段 `worlds.<id>` 和 WebUI 页 `world:<id>` |
-| `envPromptVars()` | 环境提示词模板的当前占位符值。返回 `null` 时省略整段,`{}` 时使用无变量模板;前缀重建时重新调用 |
-| `tools()` | 这个 World 暴露的工具 |
+| `envPromptVars()` | 环境提示词模板的当前占位符值。返回 `null` 时省略整段,`{}` 时使用无变量模板;前缀重建时重新调用,抛错时这个 World 被卸载 |
+| `tools()` | 这个 World 暴露的工具;组工具表时抛错,这个 World 被卸载,挂载前抛错则不挂载 |
 | `start(host)` / `stop()` | 启动与停止;运行中挂载时先调用 `start`,成功后加入挂载表 |
 | `webUi?()` | WebUI 页声明(见 [webui.md](webui.md)) |
 | `outputTap?()` | 主 session 输出流的接收器(演出、字幕);这一刻没有接收器时返回 `undefined` |
@@ -111,7 +111,9 @@ bot 的 `index.ts` 在 `declares` 中列出默认启用的 World id。声明但�
 `WorldAssembly` 分别管理各 World:`create()` 抛错不影响其他 World 的构造;
 `activate` / `deactivate` 热生效并写回 `worlds.<id>.enabled`。定义实例在停用或重启时重新构造;
 预建实例重启时复用现有对象,停用后不能通过 `activate` 重新挂载。
-生命周期事件(激活、停用、重启、可见性、启动期 `start()` 抛错)转给 `Persona.onWorldLifecycle`;启动期初始挂载与失败的激活不报。
+生命周期事件(激活、停用、重启、可见性、启动期 `start()` 抛错、运行中读取 `envPromptVars()` 或 `tools()` 失败而卸载)转给
+`Persona.onWorldLifecycle`;启动期初始挂载与失败的激活不报。启动期 `start()` 抛错与运行中读取失败都不改 `enabled`,
+WebUI 的未激活卡片显示理由。
 
 `describe` 列出全部工具与会推出的事件,不进提示词,写法与导出见 [extensions.md](extensions.md)「自描述」。
 装配层在 World 挂载时对照 `describe.tools` 检查 `tools()` 的工具名,经 Core 的 `onWorldPush` 对照

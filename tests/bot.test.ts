@@ -1,9 +1,9 @@
 /**
  * 扩展页里随框架提供的条目:World 取装配里不来自扩展的定义,provider 取模块表里不来自扩展的那些;
  * 运行状态(enabled / hidden)由 extensionRuntimeState 补上。
- * 启动:一个 World 的 start() 抛错不影响 bot 与其余 World 启动。
+ * 启动:一个 World 的 start() 抛错不影响 bot 与其余 World 启动;运行中读不出它的 tools() 时只卸载它。
  */
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -116,6 +116,49 @@ it('a World whose start() throws at boot is left inactive with its reason and th
     expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good', 'bad']);
     expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad')).toMatchObject({ status: 'active' });
     expect(lifecycle.map((event) => event.kind)).toEqual(['start-failed', 'mounted']);
+  } finally {
+    await app.stop();
+  }
+});
+
+it('a running World whose tools() throws when the prefix is rebuilt goes back to inactive with its reason and the Persona hears failed once; enabled stays and it can be activated again', async () => {
+  let broken = false;
+  const lifecycle: WorldLifecycleEvent[] = [];
+  const bad = probe('bad', () => ({
+    id: 'bad', envPromptVars: () => ({}),
+    tools: () => { if (broken) throw new Error('catalog not loaded'); return []; },
+    start: async () => {}, stop: async () => {},
+  }));
+  const worlds = { bad: { enabled: true }, good: { enabled: true } };
+  writeFileSync(join(dir, 'config.json'), JSON.stringify({ worlds }), 'utf8');
+  const config = { ...CORE_DEFAULTS, worlds } as unknown as CoreConfig;
+  const loaded: LoadedConfig<CoreConfig> = { config, secret: () => '', rootDir: dir, memoryDir: join(dir, 'memory'), dataDir: join(dir, 'data') };
+  const app = createBot(loaded, {
+    id: 'probe-bot',
+    defaults: () => config,
+    worlds: [bad, probe('good')],
+    build: (_loaded, mounted) => {
+      const persona = makeFakePersona([], { worlds: mounted });
+      persona.onWorldLifecycle = (event) => { lifecycle.push(event); };
+      return { persona, llm: new FakeLLM(), webUi: { enabled: false } };
+    },
+  });
+  try {
+    await app.start();
+    await vi.waitFor(() => expect(app.core.session.records.length).toBeGreaterThan(0));
+    broken = true;
+    await app.core.loop.reloadSystemPrefix();
+
+    expect(lifecycle).toEqual([{ kind: 'failed', id: 'bad', label: 'bad probe', reason: 'tools(): catalog not loaded' }]);
+    expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good']);
+    expect(deriveWorldFacts(app.core, app.assembly, 'en').find((facts) => facts.id === 'bad'))
+      .toMatchObject({ status: 'inactive', reason: 'Read failed: tools(): catalog not loaded' });
+    expect((JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) as { worlds: typeof worlds }).worlds.bad.enabled).toBe(true);
+
+    broken = false;
+    await app.assembly.activate('bad', 'en');
+    expect(app.assembly.mounted.map((world) => world.id)).toEqual(['good', 'bad']);
+    expect(lifecycle.map((event) => event.kind)).toEqual(['failed', 'mounted']);
   } finally {
     await app.stop();
   }

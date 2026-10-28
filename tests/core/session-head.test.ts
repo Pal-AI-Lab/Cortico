@@ -86,6 +86,7 @@ function makeRig(opts: RigOptions = {}) {
     context: { hardTokens: () => null, estimateTokens: estimateMessagesTokens, contextOverflow: () => false },
     blobs: fakeBlobIntern(),
     worlds: { all: () => worlds, visible: () => worlds },
+    onWorldFailed: (world) => { worlds.splice(worlds.indexOf(world), 1); },
     bus,
     session,
     store,
