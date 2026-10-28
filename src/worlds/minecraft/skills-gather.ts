@@ -386,6 +386,23 @@ export async function skillFind(
     throw new SkillBlocked(categoryScopeText(target) ?? `不认识「${target}」这种方块或实体`);
   }
   ctx.search.history.sync(ctx.search.scope());
+  // 找水/岩浆时只认源方块(level=0):空桶只舀得起源方块,把流动的报成「找到了」
+  // 就是让她对着瀑布舀几十次(2026-10-26 一整天的岩浆桶)。流动的另计数,在回执里说一句。
+  const liquid = ids.length > 0 && (target === 'lava' || target === 'water');
+  let flowingSeen = 0;
+  const sourceCell = (q: Vec3): boolean => {
+    if (!liquid) return true;
+    const b = bot.blockAt(q);
+    // matchBlockIds 也会带上 lava_cauldron 这类同前缀方块:它们没有 level,不按液体判
+    if (b?.name !== target) return true;
+    if (blockProp(b, 'level') === '0') return true;
+    flowingSeen += 1;
+    return false;
+  };
+  const liquidTag = liquid ? '(源方块,空桶舀得起)' : '';
+  const flowingNote = (): string => (liquid && flowingSeen > 0
+    ? `;另外看见 ${flowingSeen} 格流动的${zhName(target)},空桶舀不了,没算进去`
+    : '');
   const start = { x: bot.entity.position.x, z: bot.entity.position.z };
   const finish = (text: string, hit: ExploreHit | null): string => {
     if (hit) rememberFindHit(ctx, target, hit);
@@ -413,9 +430,12 @@ export async function skillFind(
       }
       return best;
     }
-    const p = visibleBlocks(bot, ids, 48)[0];
+    flowingSeen = 0;
+    const p = visibleBlocks(bot, ids, 48).find(sourceCell);
     // 回执使用扫描到的实际方块名:target 可能来自不可靠的视觉识别
-    return p ? { x: p.x, y: p.y, z: p.z, what: zhName(bot.blockAt(p)?.name ?? target), entity: false } : null;
+    return p
+      ? { x: p.x, y: p.y, z: p.z, what: `${zhName(bot.blockAt(p)?.name ?? target)}${liquidTag}`, entity: false }
+      : null;
   };
 
   /** 站着扫用:这一刻看得见的全部,按距离排。 */
@@ -436,8 +456,10 @@ export async function skillFind(
         });
       }
     } else {
+      flowingSeen = 0;
       for (const q of visibleBlocks(bot, ids, radius)) {
-        out.push({ x: q.x, y: q.y, z: q.z, what: zhName(bot.blockAt(q)?.name ?? target), entity: false });
+        if (!sourceCell(q)) continue;
+        out.push({ x: q.x, y: q.y, z: q.z, what: `${zhName(bot.blockAt(q)?.name ?? target)}${liquidTag}`, entity: false });
       }
     }
     const d2 = (h: ExploreHit): number => Math.hypot(h.x - me.x, h.y - me.y, h.z - me.z);
@@ -459,7 +481,7 @@ export async function skillFind(
     if (hits.length === 0) {
       const kind = findKind(null, entityName);
       return finish(
-        `当前观察:在周围 ${radius} 格内没看见${zhThing(target)}${capped};` +
+        `当前观察:在周围 ${radius} 格内没看见${liquid ? `${zhName(target)}源方块` : zhThing(target)}${capped}${flowingNote()};` +
           `这只说明当前已加载且视线可达的观察面没有命中,不表示目标不存在` +
           `${findHistoryNote(ctx, target, kind)}。${findEmptyHint(bot, ctx, target, entityName !== null)}`,
         null,
@@ -478,7 +500,7 @@ export async function skillFind(
     const more = hits.length - shown.length;
     return finish(
       `当前观察:在周围 ${radius} 格内看见 ${hits.length} 处${zhThing(target)}${capped}: ` +
-        `${shown.join('、')}${more > 0 ? `,另有 ${more} 处` : ''}`,
+        `${shown.join('、')}${more > 0 ? `,另有 ${more} 处` : ''}${flowingNote()}`,
       hits[0],
     );
   }

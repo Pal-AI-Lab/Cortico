@@ -431,6 +431,15 @@ const PROGRESS_EVERY_MS = 30_000;
 /** 「同一件事上次什么下场」的有效期:再往前的账她多半已经换了打法 */
 const PRIOR_OUTCOME_WINDOW_MS = 15 * 60_000;
 
+/**
+ * 同类受阻熔断(见 Executor.breakerNote):同一种单(taskSignature)连续 BREAKER_TRIP 次
+ * 因同一类原因(blockedKey)没做成,再下同一种单就不接。最后一次受阻后 BREAKER_COOL_MS
+ * 自动解除;人离开那次受阻的位置 BREAKER_MOVE 格以上也解除。
+ */
+const BREAKER_TRIP = 3;
+const BREAKER_COOL_MS = 10 * 60_000;
+const BREAKER_MOVE = 6;
+
 /** 受阻头名的统计窗口与起报门槛(见 Executor.blockedHeadline) */
 const BLOCKED_HEADLINE_WINDOW_MS = 60 * 60_000;
 const BLOCKED_HEADLINE_MIN = 5;
@@ -1300,6 +1309,8 @@ interface ExecutorOptions {
    * 早被交接压掉了。关掉退回旧行为(受理单只说这一单)。
    */
   priorOutcome?: () => boolean;
+  /** 同类受阻熔断(默认开,见 BREAKER_TRIP);关掉则只警告、照样收单 */
+  blockedBreaker?: () => boolean;
   /** World 日志;不给就不记 */
   diag?: MinecraftLog;
   /** 运行中步骤的进度快照(30s 周期 + 计数过半) */
@@ -1398,6 +1409,10 @@ export class Executor {
   private readonly priorOutcomes = new Map<string, PriorOutcome>();
   /** 同类签名在 15 分钟内的提交时刻及开跑首步次数；与 priorOutcomes 共用键和窗口。 */
   private readonly roundabout = new Map<string, { submits: number[]; ran: number }>();
+  /** 熔断账:签名 → 连续同类受阻的归并键、次数、最后一次时刻、最近一条原因(见 breakerNote) */
+  private readonly breakerStreaks = new Map<string, {
+    key: string; count: number; at: number; why: string; pos: { x: number; y: number; z: number } | null;
+  }>();
   /** 受阻理由的滚动账:归并键 → 发生时刻(见 blockedHeadline;头条只报次数,不留原文) */
   private readonly blockedReasons = new Map<string, { at: number[] }>();
   /**
@@ -1480,7 +1495,7 @@ export class Executor {
     // 两道受理刻驳回排在入队之前:队列一个字都不动,任务号也不发出去。
     // 它们与前置试算不同档 —— 试算只报否定不改变执行,这两条是"这一单不能受理"。
     const refused = this.spawnGuardNote(task.steps, at) ?? this.gravityGuardNote(task.steps)
-      ?? this.poisonGuardNote(task.steps, at);
+      ?? this.poisonGuardNote(task.steps, at) ?? this.breakerNote(task.steps, at);
     const echo = echoDiff(task.steps, wrote);
     const echoText = [echo.hoist, echo.tail].filter(Boolean).join('。');
     if (refused) return `[${this.clock(at)}] 这一单我没接:${refused}${echoText ? `\n${echoText}` : ''}`;
@@ -1701,6 +1716,55 @@ export class Executor {
     entry.submits.push(at);
     this.roundabout.set(sig, entry);
     return { times: entry.submits.length, spanMs: at - first, ranBefore };
+  }
+
+  /**
+   * 熔断账入账。只有 blocked 计数,且必须与上一次同一类原因才累加;换了原因从 1 数起。
+   * 这一种单做成了(kind=null)就清账。别的单做成不算解除:她习惯在两次重试之间插一个
+   * 必成的 probe,拿它解除等于没有熔断。
+   */
+  private noteBreaker(sig: string, kind: PriorOutcome['kind'] | null, why: string | null): void {
+    const now = Date.now();
+    if (kind === null) {
+      this.breakerStreaks.delete(sig);
+      return;
+    }
+    if (kind !== 'blocked' || !why) return;
+    const key = Executor.blockedKey(why);
+    const prev = this.breakerStreaks.get(sig);
+    const fresh = prev && prev.key === key && now - prev.at <= BREAKER_COOL_MS;
+    const p = this.opts.getBot()?.entity?.position;
+    const pos = p ? { x: p.x, y: p.y, z: p.z } : null;
+    this.breakerStreaks.set(sig, { key, count: fresh ? prev.count + 1 : 1, at: now, why, pos });
+  }
+
+  /**
+   * 受理刻的熔断闸:返回拒单理由,null 放行。
+   * 解除只有两条:最后一次受阻已过 BREAKER_COOL_MS,或人已离开那次受阻的位置
+   * BREAKER_MOVE 格以上(换了地方就是换了打法)。
+   */
+  private breakerNote(steps: SkillCall[], now: number): string | null {
+    if (this.opts.blockedBreaker?.() === false) return null;
+    const sig = taskSignature(steps);
+    const s = this.breakerStreaks.get(sig);
+    if (!s || s.count < BREAKER_TRIP) return null;
+    const left = BREAKER_COOL_MS - (now - s.at);
+    const p = this.opts.getBot()?.entity?.position;
+    const moved = p && s.pos ? Math.hypot(p.x - s.pos.x, p.y - s.pos.y, p.z - s.pos.z) : 0;
+    if (left <= 0 || moved > BREAKER_MOVE) {
+      this.breakerStreaks.delete(sig);
+      return null;
+    }
+    this.opts.diag?.write({
+      lane: 'task', event: 'breaker-refused',
+      msg: `熔断:同一种单连续 ${s.count} 次因同一原因受阻,拒单`,
+      data: { sig, count: s.count, why: s.why, steps },
+    });
+    const mins = Math.max(1, Math.ceil(left / 60_000));
+    return `同一种单已经连续 ${s.count} 次因为同一个原因没做成(最近一次:${maskCoords(s.why)})。`
+      + '原样再下只会是第 ' + (s.count + 1) + ' 次,先换办法:换地方或换目标、先去拿缺的东西、'
+      + '用 find/probe 看清现场,或者干脆走另一条路线。'
+      + `人离开这里 ${BREAKER_MOVE} 格以上,或者 ${mins} 分钟后,这种单就会重新接。`;
   }
 
   /** 这一签名的单真开跑了(第 1 步进了执行循环) */
@@ -3032,6 +3096,7 @@ export class Executor {
           : null;
     if (kind) this.priorOutcomes.set(sig, { kind, why: firstWhy ?? '没说清为什么', at: Date.now() });
     else this.priorOutcomes.delete(sig);
+    this.noteBreaker(sig, kind, firstWhy);
     // 终态四分。没做成 > 做了一部分 > 完成:一单里最重的那个结局说了算。
     // 无事可做不影响终态——一单全是「附近没有掉落物」,那一单就是做完了。
     if (blockedSteps.length === 0 && partialSteps.length === 0) {

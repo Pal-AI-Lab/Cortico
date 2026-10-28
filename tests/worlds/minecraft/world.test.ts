@@ -3010,6 +3010,26 @@ describe('世界切换公告带暂态清单', () => {
   });
 });
 
+describe('执行器开关接线', () => {
+  // 回归:这两个热开关曾被插进 combat.tuning 的对象里,执行器拿不到,改配置不生效
+  it('blockedBreaker / priorOutcome 交给执行器,读的是 World 的热配置', async () => {
+    const { m } = await started();
+    try {
+      const opts = (m as any).executor.opts as { blockedBreaker?: () => boolean; priorOutcome?: () => boolean };
+      expect(opts.blockedBreaker?.()).toBe(true);
+      expect(opts.priorOutcome?.()).toBe(true);
+      (m as any).cfg.blockedBreaker = false;
+      (m as any).cfg.priorOutcome = false;
+      expect(opts.blockedBreaker?.()).toBe(false);
+      expect(opts.priorOutcome?.()).toBe(false);
+      const tuning = (m as any).combat?.opts?.tuning?.() as Record<string, unknown> | undefined;
+      if (tuning) expect(tuning).not.toHaveProperty('blockedBreaker');
+    } finally {
+      await m.stop();
+    }
+  });
+});
+
 describe('mc_goal:目标操作与 diff 回执', () => {
   /** World 不必启动:目标是她投影进来的语义,连不连得上服务器都成立 */
   function rig(day: number | null = 6) {

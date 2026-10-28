@@ -183,6 +183,8 @@ const zh = {
     precheckDescription: '受理任务时先纯读试算一遍,把「现在就做不成」的步当场写进受理回执(只报否定);每一步动手前再试算一次,判死的步不动手。关掉则回到旧行为:照跑、跑完才知道。',
     priorOutcomeTitle: '受理回执带上次下场',
     priorOutcomeDescription: '下同一件事(技能+目标相同,不看坐标数量)时,受理回执捎一句 15 分钟内上次是什么下场;上次成了就不出声。补的是已经被上下文交接压掉的那一段。关掉则受理回执只说这一单。',
+    blockedBreakerTitle: '同类受阻熔断',
+    blockedBreakerDescription: '同一种单(技能+目标相同)连续 3 次因同一个原因没做成,再下同一种单就当场拒接并要求换办法;人离开受阻位置 6 格以上或 10 分钟后自动解除。关掉则只在回执里警告、照样收单。',
     fightBackTitle: '受击反击',
     fightBackDescription: '关掉则挨打不还手,打不打交给主脑决定;血线以下的脱离不受它影响。',
     fleeHealthTitle: '脱离战斗血线',
@@ -496,6 +498,10 @@ export const en: typeof zh = {
     priorOutcomeDescription: 'When the same task is issued again (same skill and target, ignoring coordinates and counts), '
       + 'the acceptance receipt adds the outcome of the previous attempt within 15 minutes; nothing is added if it succeeded. '
       + 'This restores what a context handoff dropped. Off = the receipt covers only the current task.',
+    blockedBreakerTitle: 'Repeated-block breaker',
+    blockedBreakerDescription: 'After the same task (same skill and target) is blocked 3 times in a row for the same reason, '
+      + 'the same task is refused on submit until the bot moves 6+ blocks away or 10 minutes pass. '
+      + 'Off = only warn in the receipt and accept the task anyway.',
     fightBackTitle: 'Fight back when hit',
     fightBackDescription: 'Off = no counterattack when hit; the main model decides whether to fight. '
       + 'Fleeing below the flee health is unaffected.',

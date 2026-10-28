@@ -530,6 +530,42 @@ describe('find:站着扫与边走边找', () => {
     expect(bot.entity.position.x).toBe(0.5); // 一步都不走
   });
 
+  it('找岩浆只认源方块:流动岩浆不报成目标,另起一句说看见几格流动的', async () => {
+    const me = new V(0.5, 64, 0.5);
+    // (4,64,0) 是流动岩浆(level=3,崖壁淌下来那种),(9,63,0) 才是湖面源方块
+    const levels = new Map([['4,64,0', 3], ['9,63,0', 0], ['5,64,2', 6]]);
+    const bot = {
+      ...standBot([]),
+      registry: {
+        blocks: { 11: { name: 'lava' } },
+        blocksByName: { lava: { id: 11, name: 'lava' } },
+        items: {}, itemsByName: {},
+      },
+      findBlocks: () => [new V(4, 64, 0), new V(5, 64, 2), new V(9, 63, 0)],
+      blockAt: (v: V) => {
+        const level = levels.get(`${v.x},${v.y},${v.z}`);
+        return level === undefined ? null : { name: 'lava', position: v, getProperties: () => ({ level }) };
+      },
+    };
+    bot.entity.position = me;
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'find', target: 'lava', distance: 32 }]);
+    await waitUntil(() => reports.length === 1, 8000);
+    const t = reports[0].text;
+    expect(t).toContain('看见 1 处');
+    expect(t).toContain('(9, 63, 0)');
+    expect(t).toContain('源方块,空桶舀得起');
+    expect(t).not.toContain('(4, 64, 0)');
+    expect(t).toContain('另外看见 2 格流动的岩浆');
+
+    // 全是流动的:报没看见源方块,同样点破流动的数量
+    const dry = makeExecutorOn({ ...bot, findBlocks: () => [new V(4, 64, 0)] });
+    dry.exec.submit([{ skill: 'find', target: 'lava', distance: 32 }]);
+    await waitUntil(() => dry.reports.length === 1, 8000);
+    expect(dry.reports[0].text).toContain('没看见岩浆源方块');
+    expect(dry.reports[0].text).toContain('另外看见 1 格流动的岩浆');
+  });
+
   it('站着扫过视线闸:看不见的那几处一个字都不报', async () => {
     const bot = standBot([[6, 64, 0], [8, 64, 0]], { blind: ['8,64,0'] });
     const { exec, reports } = makeExecutorOn(bot);
@@ -2489,6 +2525,57 @@ describe('终态四分与受理刻回顾', () => {
   });
 
 
+  it('同类受阻熔断:同一种单连撞 3 次同一原因,第 4 次当场拒接,队列不动', async () => {
+    const { bot } = chestBot({ inv: { cobblestone: 640 } });
+    bot.findBlocks = () => [];
+    const { exec, reports } = makeExecutorOn(bot);
+    for (let i = 1; i <= 3; i++) {
+      exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }]);
+      await waitUntil(() => reports.length === i, 8000);
+      expect(reports[i - 1].kind).toBe('blocked');
+    }
+    const refused = exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }]);
+    expect(refused).toContain('这一单我没接');
+    expect(refused).toContain('连续 3 次');
+    expect(refused).toContain('先换办法');
+    await sleep(50);
+    expect(reports).toHaveLength(3);
+    // 换一种单不受影响:熔断按签名,不是全局停摆
+    const other = exec.submit([{ skill: 'stow', item: 'coal', count: 1 }]);
+    expect(other).not.toContain('没接');
+    await waitUntil(() => reports.length === 4, 8000);
+    exec.shutdown();
+  });
+
+  it('同类受阻熔断:人走开 6 格以上就解除;关掉开关则照样收单', async () => {
+    const { bot } = chestBot({ inv: { cobblestone: 640 } });
+    bot.findBlocks = () => [];
+    const { exec, reports } = makeExecutorOn(bot);
+    for (let i = 1; i <= 3; i++) {
+      exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }]);
+      await waitUntil(() => reports.length === i, 8000);
+    }
+    expect(exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }])).toContain('没接');
+    const p = bot.entity.position;
+    bot.entity.position = new V(p.x + 10, p.y, p.z);
+    expect(exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }])).not.toContain('没接');
+    await waitUntil(() => reports.length === 4, 8000);
+    exec.shutdown();
+
+    const { bot: bot2 } = chestBot({ inv: { cobblestone: 640 } });
+    bot2.findBlocks = () => [];
+    const reports2: TaskReport[] = [];
+    const off = new Executor({
+      getBot: () => bot2 as never, report: (r) => reports2.push(r), log, nextId: nextTaskId(),
+      blockedBreaker: () => false,
+    });
+    for (let i = 1; i <= 4; i++) {
+      expect(off.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }])).not.toContain('没接');
+      await waitUntil(() => reports2.length === i, 8000);
+    }
+    off.shutdown();
+  });
+
   it('受阻头名只在这一单自己也撞在那一类上时才浮', async () => {
     const bot = combatBot({});
     const { exec } = makeExecutorOn(bot);
@@ -2531,7 +2618,12 @@ describe('终态四分与受理刻回顾', () => {
     // 32 格内一个容器都没有:stow 圆石固定撞「没有箱子」,stow 煤炭固定撞「包里没有」
     const { bot } = chestBot({ inv: { cobblestone: 640 } });
     bot.findBlocks = () => [];
-    const { exec, reports } = makeExecutorOn(bot);
+    // 这一条量的是头条计数:同一种单要连撞 7 次,熔断得关掉(熔断另有专测)
+    const reports: TaskReport[] = [];
+    const exec = new Executor({
+      getBot: () => bot as never, report: (r) => reports.push(r), log, nextId: nextTaskId(),
+      blockedBreaker: () => false,
+    });
     for (let i = 1; i <= 5; i++) {
       exec.submit([{ skill: 'stow', item: 'cobblestone', count: 1 }]);
       await waitUntil(() => reports.length === i, 8000);

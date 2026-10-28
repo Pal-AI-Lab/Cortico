@@ -3671,6 +3671,8 @@ export class MinecraftWorld implements World {
         abort: () => this.ranged?.abort(),
       },
       precheck: () => this.cfg.precheck,
+      priorOutcome: () => this.cfg.priorOutcome,
+      blockedBreaker: () => this.cfg.blockedBreaker,
       diag: this.diag,
       // 技能只读规矩;改它的唯一入口是 mc_policy(工具面,不进队列)
       policy: {

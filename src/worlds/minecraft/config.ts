@@ -56,6 +56,8 @@ export const MINECRAFT_DEFAULTS = {
   precheck: true,
   /** 受理回执附上相同任务的上次终态。 */
   priorOutcome: true,
+  /** 同一种单连续 3 次因同一原因受阻后拒接同一种单,直到换地方或 10 分钟后。 */
+  blockedBreaker: true,
   reflex: {
     /** 受击反击 */
     fightBack: true,
@@ -200,6 +202,7 @@ export interface MinecraftConfigSection {
   precheck: boolean;
   /** 受理回执附相同任务的上次终态；默认开启。 */
   priorOutcome: boolean;
+  blockedBreaker: boolean;
   reflex: {
     fightBack: boolean; fleeHealth: number;
     reactCooldownSec: number; antiDrown: boolean; antiLava: boolean;
@@ -320,6 +323,10 @@ export function minecraftRhythmConfigGroup(language: Language): ConfigGroup {
         'worlds.minecraft.priorOutcome': {
           type: 'boolean', title: t.priorOutcomeTitle, 'x-hot': true,
           description: t.priorOutcomeDescription,
+        },
+        'worlds.minecraft.blockedBreaker': {
+          type: 'boolean', title: t.blockedBreakerTitle, 'x-hot': true,
+          description: t.blockedBreakerDescription,
         },
         'worlds.minecraft.reflex.fightBack': {
           type: 'boolean', title: t.fightBackTitle, 'x-hot': true,
