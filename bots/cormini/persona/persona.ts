@@ -4,7 +4,7 @@
  * protected 成员供变体继承，不属于公共 API。
  */
 import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
 import type { Language } from 'cortico/core/language.ts';
@@ -705,15 +705,9 @@ export class Cormini implements Persona {
     );
   }
 
-  /** 交接压不回计数时请 bot 整理记忆;逐字进前缀的文件按工作区相对路径点名。 */
+  /** 交接压不回计数时请 bot 整理记忆;只说要做什么,不提计数、前缀这些内部的东西。 */
   protected tidyMemoryNote(): string {
-    const resident = this.prefixResidentFiles()
-      .map((f) => relative(this.memoryDir, f).split(sep).join('/'))
-      .filter((f) => !f.startsWith('..'));
-    return (
-      '[system] 工作区里堆的东西太多了,找个时间整理一下记忆:用不上的大批文件收进一个文件夹,' +
-      `${resident.join('、')} 里过时、重复的内容精简掉。`
-    );
+    return '[system] 记忆有点乱了,找个时间整理一下记忆:用不上的大批文件收进一个文件夹,过时、重复的内容精简掉。';
   }
 
   /**
