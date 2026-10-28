@@ -255,7 +255,7 @@ describe('全系统集成(控制台对话链路)', () => {
     const hn = (await cget()).groups.find((x) => x.group.id === 'core')!;
     expect(hn.group.schema.properties['context.maxTokens']).toBeUndefined();
     r = await cpost({ group: 'core', values: { 'context.maxTokens': 8000 } });
-    expect(r.status).toBe(200);
+    expect(r.status).toBe(400);
     expect(bot.core.config.context.maxTokens).toBe(111000);
   });
 

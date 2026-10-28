@@ -33,9 +33,11 @@ describe('coerceGroupValues', () => {
     expect(r).toEqual({ values: { 'a.count': 3 } });
   });
 
-  it("忽略未声明的配置键", () => {
-    const r = coerce({ 'a.count': 3, 'api.key': 'stolen', 'a.nonexistent': 1 });
-    expect(r).toEqual({ values: { 'a.count': 3 } });
+  it('含未声明的键时整体拒绝，末段唯一命中声明键时附上该键', () => {
+    const r = coerce({ 'a.count': 3, count: 4, 'api.key': 'stolen' });
+    expect(r).toEqual({
+      error: `配置组 test 没有声明 count(是否指 a.count), api.key;可写的键: ${Object.keys(GROUP.schema.properties).join(', ')}`,
+    });
   });
 
   it('整数取整,小数保留;越界按 minimum/maximum 拒', () => {

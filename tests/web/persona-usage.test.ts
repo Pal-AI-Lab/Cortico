@@ -119,7 +119,7 @@ describe('/api/config', () => {
   it('POST 按组校验并热改(部分更新);越界值 400', async () => {
     const ok = await postJ('/api/config', {
       group: PERSONA_CONFIG_GROUP.id,
-      values: { 'dream.maxRounds': 3, 'context.keepPastThinking': false },
+      values: { 'dream.maxRounds': 3 },
       persist: false,
     });
     expect(ok.status).toBe(200);
@@ -145,7 +145,7 @@ describe('/api/config', () => {
       group: 'core',
       values: { 'providers.deepseek.baseUrl': 'http://evil', activeProvider: 'evil' },
     });
-    expect(sneak.status).toBe(200);
+    expect(sneak.status).toBe(400);
     expect(cfg.providers).toEqual({});
     expect(cfg.activeProvider).toBe('');
   });

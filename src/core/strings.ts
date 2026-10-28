@@ -109,6 +109,8 @@ const validationZh = {
   second: (label: string) => `${label} 第二项`,
   pairOrder: (label: string) => `${label} 的第一项不能大于第二项`,
   empty: (label: string) => `${label} 不能为空`,
+  unknownKeys: (group: string, keys: string, declared: string) => `配置组 ${group} 没有声明 ${keys};可写的键: ${declared}`,
+  didYouMean: (key: string, path: string) => `${key}(是否指 ${path})`,
 };
 export const validationEn: typeof validationZh = {
   notNumber: (label: string) => `${label} must be a number`,
@@ -120,6 +122,8 @@ export const validationEn: typeof validationZh = {
   second: (label: string) => `${label} (second)`,
   pairOrder: (label: string) => `${label}: the first value cannot exceed the second`,
   empty: (label: string) => `${label} cannot be empty`,
+  unknownKeys: (group: string, keys: string, declared: string) => `Setting group ${group} does not declare ${keys}; writable keys: ${declared}`,
+  didYouMean: (key: string, path: string) => `${key} (did you mean ${path}?)`,
 };
 export const validationText = (language: Language) => pick(language, {
   zh: validationZh, en: validationEn, 'zh-Hant': validationZhHant, ja: validationJa,

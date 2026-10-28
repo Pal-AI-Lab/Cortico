@@ -51,4 +51,6 @@ export const validationText: Partial<typeof validationEn> = {
   second: (label: string) => `${label} (2e valeur)`,
   pairOrder: (label: string) => `${label} : la première valeur ne peut pas dépasser la seconde`,
   empty: (label: string) => `${label} ne peut pas être vide`,
+  unknownKeys: (group: string, keys: string, declared: string) => `Le groupe de réglages ${group} ne déclare pas ${keys} ; clés modifiables : ${declared}`,
+  didYouMean: (key: string, path: string) => `${key} (vouliez-vous dire ${path} ?)`,
 };

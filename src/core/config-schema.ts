@@ -131,13 +131,26 @@ const numberIn = (
   return n;
 };
 
-/** 按声明校验提交值；忽略未知字段。回执采用请求语言，默认中文。 */
+/**
+ * 按声明校验提交值。body 含组里未声明的键时整体拒绝，回执列出这些键和组里可写的键；
+ * 末段与恰好一个声明键相同的未知键附上那个键。回执采用请求语言，默认中文。
+ */
 export function coerceGroupValues(
   group: ConfigGroup,
   body: Record<string, unknown>,
   language: Language = 'zh',
 ): { values: ConfigValues } | { error: string } {
   const text = validationText(language);
+  const declared = Object.keys(group.schema.properties);
+  const unknown = Object.keys(body).filter((key) => !Object.hasOwn(group.schema.properties, key));
+  if (unknown.length > 0) {
+    const tail = (key: string) => key.slice(key.lastIndexOf('.') + 1);
+    const named = unknown.map((key) => {
+      const hits = declared.filter((path) => tail(path) === tail(key));
+      return hits.length === 1 ? text.didYouMean(key, hits[0]) : key;
+    });
+    return { error: text.unknownKeys(group.id, named.join(', '), declared.join(', ')) };
+  }
   const out: ConfigValues = {};
   for (const [path, prop] of Object.entries(group.schema.properties)) {
     if (!(path in body)) continue;
