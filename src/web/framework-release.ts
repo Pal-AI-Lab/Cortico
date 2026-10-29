@@ -1,7 +1,7 @@
 /** 框架更新提示：`package.json` 的版本低于 GitHub 最新正式 Release 时给出新版本。 */
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { repoRoot } from '../paths.ts';
+import { readTextFile } from '../core/util.ts';
 
 const RELEASE_URL = 'https://api.github.com/repos/Pal-AI-Lab/Cortico/releases/latest';
 /** 与仓库其余出站元数据查询同一时限。 */
@@ -31,7 +31,7 @@ function isNewer(latest: string, current: string): boolean {
 export async function checkFrameworkRelease(
   root = repoRoot(), releaseUrl = RELEASE_URL, signal: AbortSignal = AbortSignal.timeout(RELEASE_TIMEOUT_MS),
 ): Promise<FrameworkReleaseStatus> {
-  const { version } = JSON.parse(await readFile(join(root, 'package.json'), 'utf8')) as { version: string };
+  const { version } = JSON.parse(readTextFile(join(root, 'package.json'))) as { version: string };
   const response = await fetch(releaseUrl, {
     headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cortico' },
     signal,

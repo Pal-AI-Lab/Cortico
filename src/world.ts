@@ -3,7 +3,7 @@
  * 挂载状态与启动状态分开，实际启动由 Core 管理。定义实例在停用和重启时重新构造；
  * 预建实例重启时复用原对象。名称、标签与缺失原因来自定义或 bot 声明。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   CoreConfig, DescribeText, EventDescribe, ToolDescribe, ToolSpec, World, WorldLifecycleEvent,
@@ -14,6 +14,7 @@ import type { BotDefinition } from './bot.ts';
 import { updateJsonObject, writeSecretFile } from './config-file.ts';
 import type { Language } from './core/language.ts';
 import { assemblyText as text } from './strings.ts';
+import { readTextFile } from './core/util.ts';
 
 /** 每个 World 配置段的最小形状。 */
 export interface WorldSection {
@@ -193,7 +194,7 @@ function assignDeep(target: Record<string, unknown>, patch: Record<string, unkno
 function writeEnvLine(envPath: string, name: string, value: string): void {
   if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error(`storeSecret: "${name}" is not an environment variable name`);
   if (!value || /\s/.test(value)) throw new Error(`storeSecret: the value of ${name} is empty or holds whitespace`);
-  const prev = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+  const prev = existsSync(envPath) ? readTextFile(envPath) : '';
   const line = `${name}=${value}`;
   const pattern = new RegExp(`^[ \\t]*${name}\\s*=.*$`, 'm');
   const next = pattern.test(prev)

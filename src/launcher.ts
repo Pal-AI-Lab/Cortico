@@ -3,7 +3,7 @@
  * 部署根由 src/paths.ts 解析，代码包来自 bots/ 或已安装的 bot 扩展。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { webAssetsProblem } from '../bin/web-assets.mjs';
@@ -22,6 +22,7 @@ import { loadBuiltinWorlds } from './worlds/index.ts';
 import { checkFrameworkRelease } from './web/framework-release.ts';
 import { providerModules, registerProviderModules } from './providers/registry.ts';
 import { deploymentDir, deploymentRoot, mainRepoRoot, packageDir, providerDir, providersRoot, readDeploymentManifest, repoRoot } from './paths.ts';
+import { readTextFile } from './core/util.ts';
 
 /**
  * botPackage 仅在部署引用扩展 bot 包时返回。
@@ -92,7 +93,7 @@ function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
   const installed = readInstalled(extensionsDir(repoRoot())).filter((p) => {
     try {
       const dir = resolve(extensionsDir(repoRoot()), 'node_modules', p.name);
-      const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8'));
+      const pkg = JSON.parse(readTextFile(resolve(dir, 'package.json')));
       const parsed = parseExtensionManifest(pkg);
       return parsed.ok && parsed.manifest.kind === 'bot' && existsSync(resolveExtensionEntry(dir, pkg));
     } catch { return false; }
@@ -107,7 +108,7 @@ function botPackages(): Array<{ id: string; source: 'tree' | 'extension' }> {
 function packageAvatar(bot: string): string | null {
   if (botPackages().find((p) => p.id === bot)?.source !== 'extension') return null;
   const dir = resolve(extensionsDir(repoRoot()), 'node_modules', bot);
-  const icon = extensionIconFile(dir, JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')));
+  const icon = extensionIconFile(dir, JSON.parse(readTextFile(resolve(dir, 'package.json'))));
   return icon?.type === 'image/png' ? icon.file : null;
 }
 

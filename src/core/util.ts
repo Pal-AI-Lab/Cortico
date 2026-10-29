@@ -400,18 +400,25 @@ export function shortId(prefix = ''): string {
 }
 
 /**
- * 读一个手写的文本文件:按 BOM 选编码,UTF-8 与 UTF-16 LE 都读得出来,BOM 不进返回值。
- * 没有 BOM 就是 UTF-8。Windows 的 shell 重定向写出的是带 BOM 的 UTF-8 或 UTF-16 LE。
+ * 读一个文本文件:按 BOM 选编码,UTF-8 与 UTF-16 LE 都读得出来,BOM 不进返回值。
+ * 仓里整份读文本都走它：人、agent 或扩展作者改过的文件可能出自 Windows PowerShell 5.1,那是带 BOM 的 UTF-8 或 UTF-16 LE。
  */
 export function readTextFile(file: string): string {
-  const bytes = readFileSync(file);
-  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
-    return bytes.subarray(2).toString('utf16le');
-  }
+  return decodeText(readFileSync(file));
+}
+
+/** 文本文件的字节解码成字符串，规则同 readTextFile;没有 BOM 就是 UTF-8。 */
+export function decodeText(bytes: Buffer): string {
+  if (isUtf16Le(bytes)) return bytes.subarray(2).toString('utf16le');
   if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) {
     return bytes.subarray(3).toString('utf8');
   }
   return bytes.toString('utf8');
+}
+
+/** 字节以 UTF-16 LE 的 BOM(FF FE)开头。这样的文件接着追加 UTF-8 文本前要先整份转成 UTF-8。 */
+export function isUtf16Le(bytes: Buffer): boolean {
+  return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe;
 }
 
 /** 键名像凭据的值抹成 `***`;数组与嵌套对象逐层走。导出记录与配置副本前过一遍。 */

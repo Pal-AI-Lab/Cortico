@@ -17,6 +17,19 @@ const STYLESHEET = 'styles.css';
 const ASSET_PREFIX = '/assets/';
 
 /**
+ * 按 BOM 选编码读文本，规则同 `src/core/util.ts` 的 readTextFile;本文件在 tsx 装好之前运行，import 不了 TS。
+ *
+ * @param {string} file
+ * @returns {string}
+ */
+function readTextFile(file) {
+  const bytes = readFileSync(file);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return bytes.subarray(2).toString('utf16le');
+  if (bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return bytes.subarray(3).toString('utf8');
+  return bytes.toString('utf8');
+}
+
+/**
  * 清单里引用到的全部产物 URL。
  *
  * @param {unknown} manifest
@@ -77,7 +90,7 @@ export function webAssetsProblem(root) {
   if (!existsSync(manifestFile)) return `缺少 ${MANIFEST}`;
   let manifest;
   try {
-    manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+    manifest = JSON.parse(readTextFile(manifestFile));
   } catch (err) {
     return `${MANIFEST} 解析失败: ${err instanceof Error ? err.message : String(err)}`;
   }

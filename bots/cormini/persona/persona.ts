@@ -3,7 +3,7 @@
  * memory.ts 提供存储，workspaceTools.ts 与 blobs.ts 提供工具，handoffNote.ts 渲染交接笔记。
  * protected 成员供变体继承，不属于公共 API。
  */
-import { existsSync, readFileSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
+import { existsSync, writeFileSync, rmSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSections, renderTemplate } from 'cortico/core/template.ts';
@@ -35,6 +35,7 @@ import type {
   ToolTag,
 } from 'cortico/core/types.ts';
 import { defaultExternalizes } from 'cortico/core/types.ts';
+import { readTextFile } from 'cortico/core/util.ts';
 
 /** 默认的存在方式自述源文件;bot 不覆盖 orientation 时读它,WebUI 可编辑同一份。 */
 /** 前缀装配模板与 World 段模板住在软件包里(跟着代码走),不在人格工作区。 */
@@ -297,7 +298,7 @@ export class Cormini implements Persona {
     const orientation = opts.orientation;
     this.orientation = typeof orientation === 'function'
       ? orientation
-      : () => orientation ?? readFileSync(this.orientationSource(), 'utf8').trim();
+      : () => orientation ?? readTextFile(this.orientationSource()).trim();
     this.worlds = opts.worlds ?? [];
     const baseline = opts.tickDelayMs ?? ((): null => null);
     this.heartbeat = new Heartbeat(
@@ -401,7 +402,7 @@ export class Cormini implements Persona {
    */
   async systemSegments(ctx: SystemPrefixContext): Promise<PrefixSegment[]> {
     // 每个 World 独占前缀段,使可见性变更保持原子性;段的外壳套同一份模板。
-    const envSection = readFileSync(this.templateFile('ENV_SECTION.md'), 'utf8');
+    const envSection = readTextFile(this.templateFile('ENV_SECTION.md'));
     const moduleSections = ctx.worlds
       .filter((m) => m.envPrompt.trim())
       .map((m) => ({
@@ -413,7 +414,7 @@ export class Cormini implements Persona {
         }).trimEnd(),
       }));
 
-    const rendered = renderSections(readFileSync(this.templateFile('PREFIX.md'), 'utf8'), {
+    const rendered = renderSections(readTextFile(this.templateFile('PREFIX.md')), {
       ...this.prefixVars(ctx),
       'worlds.envPrompts': moduleSections.map((s) => s.text).join('\n'),
     });
@@ -449,7 +450,7 @@ export class Cormini implements Persona {
   protected prefixVars(_ctx: SystemPrefixContext): Record<string, string> {
     return {
       'persona.orientation': this.orientation(),
-      'persona.constitution': readFileSync(join(this.memoryDir, CONSTITUTION_FILE), 'utf8').trim(),
+      'persona.constitution': readTextFile(join(this.memoryDir, CONSTITUTION_FILE)).trim(),
       'persona.partner': this.partnerDoc(),
       'persona.memoryNote': this.memoryNote(),
       'persona.workspace': this.prefixWorkspaceListing(),
@@ -491,7 +492,7 @@ export class Cormini implements Persona {
     const file = this.partnerDocFile();
     if (!file) return '';
     try {
-      return readFileSync(file, 'utf8').trim();
+      return readTextFile(file).trim();
     } catch {
       return '';
     }
@@ -500,7 +501,7 @@ export class Cormini implements Persona {
   /** 前缀 MEMORY 段此刻的文本;现读,编辑即生效(与 ORIENTATION 同)。 */
   protected memoryNote(): string {
     const file = this.memoryNoteFile();
-    return file ? readFileSync(file, 'utf8').trim() : '';
+    return file ? readTextFile(file).trim() : '';
   }
 
   /**
@@ -512,7 +513,7 @@ export class Cormini implements Persona {
     if (!dir || !this.context().firstTurn) return [];
     const read = (name: string): string => {
       try {
-        return readFileSync(join(dir, name), 'utf8').trim();
+        return readTextFile(join(dir, name)).trim();
       } catch {
         return '';
       }
@@ -560,7 +561,7 @@ export class Cormini implements Persona {
   promptVarValues(_ctx?: { now: Date; timezone: string }): Record<string, string> {
     return {
       'persona.orientation': this.orientation(),
-      'persona.constitution': readFileSync(join(this.memoryDir, CONSTITUTION_FILE), 'utf8').trim(),
+      'persona.constitution': readTextFile(join(this.memoryDir, CONSTITUTION_FILE)).trim(),
       'persona.memoryNote': this.memoryNote(),
       'persona.workspace': this.prefixWorkspaceListing(),
     };

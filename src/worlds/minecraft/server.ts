@@ -1,6 +1,6 @@
 /** 管理本地 Minecraft 服务器进程、stdin 指令及 TCP 连通性检测。停止时先发送 save-all flush 和 stop，超时后强制终止。 */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { connect } from 'node:net';
@@ -9,6 +9,7 @@ import {
   loadProperties, readProperty, saveProperties, settingsFrom, writeProperty,
 } from './server-config.ts';
 import { readLevelDat } from './level-dat.ts';
+import { readTextFile } from '../../core/util.ts';
 
 export type MinecraftServerPhase = 'stopped' | 'starting' | 'running' | 'error';
 
@@ -189,7 +190,7 @@ export function readRealmMarker(worldDir: string): RealmMarker | null {
   const file = realmMarkerPath(worldDir);
   if (!existsSync(file)) return null;
   try {
-    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const parsed: unknown = JSON.parse(readTextFile(file));
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return null;
     const { uuid, levelName, createdAt } = parsed as Record<string, unknown>;
     if (typeof uuid !== 'string' || !uuid.trim()) return null;

@@ -2,13 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
   mkdirSync,
-  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
-import { estimateTokens } from '../../core/util.ts';
+import { estimateTokens, readTextFile } from '../../core/util.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MINUTE_MS = 60 * 1000;
@@ -822,7 +821,7 @@ export class AudienceAdmission {
     if (!existsSync(this.file) && existsSync(backup)) renameSync(backup, this.file);
     if (!existsSync(this.file)) return null;
     try {
-      return parseLedger(JSON.parse(readFileSync(this.file, 'utf8')));
+      return parseLedger(JSON.parse(readTextFile(this.file)));
     } catch (error) {
       throw new Error(`invalid audience ledger ${this.file}: ${error instanceof Error ? error.message : String(error)}`);
     }

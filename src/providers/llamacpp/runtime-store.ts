@@ -3,13 +3,14 @@
  * Download and unpack into <dir>.partial, write the completion marker, then rename to the destination.
  * A later installation removes any remaining partial directory before starting.
  */
-import { existsSync, mkdirSync, readFileSync, rmSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Logger } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import { downloadFile, extractArchive } from './archive.ts';
 import type { ReleasePlan } from './options.ts';
 import { text, type Text } from './strings.ts';
+import { readTextFile } from '../../core/util.ts';
 
 export const RUNTIME_MARKER = 'cortico-runtime.json';
 const RUNTIME_ID = 'llama.cpp';
@@ -58,7 +59,7 @@ export class RuntimeStore {
 
   marker(dir: string): RuntimeMarker | null {
     try {
-      return JSON.parse(readFileSync(join(dir, RUNTIME_MARKER), 'utf8')) as RuntimeMarker;
+      return JSON.parse(readTextFile(join(dir, RUNTIME_MARKER))) as RuntimeMarker;
     } catch {
       return null;
     }

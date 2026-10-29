@@ -3,7 +3,7 @@
  * World environment text is rendered from templates and supplied to that hook.
  * Core joins the returned segments in order; their text remains opaque to Core.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { renderTemplate } from './template.ts';
 import type {
@@ -13,6 +13,7 @@ import type {
   PrefixSegment,
   PromptDocDecl,
 } from './types.ts';
+import { readTextFile } from './util.ts';
 
 export interface AssembleSystemDeps {
   persona: Persona;
@@ -88,7 +89,7 @@ function renderEnvTemplate(
   const doc = vars === null ? undefined : envPromptDocOf(mod);
   if (!doc) return { text: '' };
   const { path } = envPromptTemplateSource(doc, mod.id, dirs);
-  const text = renderTemplate(readFileSync(path, 'utf8'), vars ?? {}).trim();
+  const text = renderTemplate(readTextFile(path), vars ?? {}).trim();
   // 空段不提供模板编辑来源。
   return text ? { text, sourceKey: doc.key } : { text: '' };
 }

@@ -6,7 +6,7 @@
  * 语义文本化投递，prismarine-viewer 画面由 OBS 采集。将 "minecraft" 列入
  * worlds.vtuber.delayedSources 可延迟 vtuber 侧投递，避免画面先行。
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -18,7 +18,7 @@ import { selfDamageText, takeSelfDamage } from './damage-source.ts';
 import { readMapDat } from './level-dat.ts';
 import { readMapId } from './item-facts.ts';
 import { Vec3 } from 'vec3';
-import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE, readTextFile } from '../../core/util.ts';
 import { Bridge } from './bridge.ts';
 import {
   REPEATED_QUERY_RECEIPT, RoundOnceGate, roundTokenOf,
@@ -1627,7 +1627,7 @@ export class BlueprintBook {
     if (!this.file || !existsSync(this.file)) return;
     let data: BlueprintCacheFile;
     try {
-      const raw = readFileSync(this.file, 'utf8').trim();
+      const raw = readTextFile(this.file).trim();
       if (!raw) return;
       data = JSON.parse(raw) as BlueprintCacheFile;
     } catch (e) {
@@ -3164,7 +3164,7 @@ export class MinecraftWorld implements World {
       // 上下文截断时读取当前非默认设置，同时注明被蓝图预留收口的垫脚料。
       'minecraft.policy': renderPolicyEnv(this.policy.get(), false, this.blueprintHeldScaffold()),
       'minecraft.camera': this.cfg.client.enabled
-        ? readFileSync(CAMERA_NOTE_FILE, 'utf8').trim()
+        ? readTextFile(CAMERA_NOTE_FILE).trim()
         : '',
     };
   }
@@ -5314,7 +5314,7 @@ export class MinecraftWorld implements World {
     let prev: string | null = null;
     if (this.worldFile) {
       try {
-        prev = (JSON.parse(readFileSync(this.worldFile, 'utf8')) as { world?: string }).world ?? null;
+        prev = (JSON.parse(readTextFile(this.worldFile)) as { world?: string }).world ?? null;
       } catch { /* 首次或文件缺损:当作没有上一个世界 */ }
       if (prev !== cur) {
         try {

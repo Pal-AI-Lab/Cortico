@@ -14,9 +14,10 @@
  * 端点表(`<部署根>/providers/<端点名>/config.json`)只改一处:`kind` `openai-compat` →
  * `openai-responses-compat`。事件库、session 与游标一律不碰。
  */
-import { existsSync, readdirSync, readFileSync, renameSync, writeFileSync, copyFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, renameSync, writeFileSync, copyFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { deploymentRoot } from '../src/paths.ts';
+import { readTextFile } from '../src/core/util.ts';
 
 const apply = process.argv.includes('--apply');
 const root = deploymentRoot();
@@ -33,7 +34,7 @@ function moveIf(from: string, to: string, what: string): void {
 function migrateConfig(dir: string): { memoryDefault: boolean; memoryDir: string } {
   const file = join(dir, 'config.json');
   if (!existsSync(file)) return { memoryDefault: true, memoryDir: join(dir, 'memory') };
-  const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  const raw = JSON.parse(readTextFile(file)) as Record<string, unknown>;
   let changed = false;
   if ('io' in raw && !('worlds' in raw)) {
     raw.worlds = raw.io;
@@ -83,7 +84,7 @@ if (existsSync(providersDir)) {
   for (const name of readdirSync(providersDir)) {
     const file = join(providersDir, name, 'config.json');
     if (!existsSync(file)) continue;
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+    const raw = JSON.parse(readTextFile(file)) as Record<string, unknown>;
     const next = typeof raw.kind === 'string' ? PROVIDER_KIND_RENAMES[raw.kind] : undefined;
     if (!next) continue;
     steps.push({

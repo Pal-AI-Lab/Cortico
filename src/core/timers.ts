@@ -2,11 +2,11 @@
  * 通用持久定时器:到点回调持有方、跨重启恢复。载荷不透明——
  * 闹钟的备注、阻断、关键词这些语义归持有它的Persona。
  */
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { retryBusy } from './fs-busy.ts';
 import type { Logger, TimerEntry, TimersApi } from './types.ts';
-import { nullLogger, shortId } from './util.ts';
+import { nullLogger, shortId, readTextFile } from './util.ts';
 
 const MAX_TIMEOUT = 2 ** 31 - 1; // setTimeout上限(~24.8天)
 
@@ -112,7 +112,7 @@ export class TimerStore implements TimersApi {
   private load(): void {
     if (existsSync(this.file)) {
       try {
-        const raw = JSON.parse(readFileSync(this.file, 'utf8')) as TimerEntry[];
+        const raw = JSON.parse(readTextFile(this.file)) as TimerEntry[];
         this.entries = Array.isArray(raw) ? raw : [];
       } catch {
         this.log.warn('timers.json损坏,已重置为空');

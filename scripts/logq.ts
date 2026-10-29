@@ -9,13 +9,13 @@
  * `HH:MM[:SS]` 落在 run 开机那天的 run 时区,同日早于开机而次日仍在 run 内的算次日。
  * 大文件按行流式读,`--limit` 只保留尾部环形缓冲。
  */
-import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, createReadStream, existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { LOG_LEVEL_RANK, type EventEnvelope, type LogLevel, type LogRecord, type UsageRecord } from '../src/core/types.ts';
 import { deploymentRoot } from '../src/paths.ts';
-import { redactSecrets } from '../src/core/util.ts';
+import { redactSecrets, readTextFile } from '../src/core/util.ts';
 export { redactSecrets };
 import type { ToolCallEntry } from '../src/core/tool-log.ts';
 import type { TranscriptItemRecord, TranscriptRecord } from '../src/core/transcript.ts';
@@ -139,7 +139,7 @@ export function readRunsIndex(dataDir: string): RunRow[] {
   const file = join(dataDir, 'runs', 'index.jsonl');
   if (!existsSync(file)) return [];
   const byRun = new Map<string, RunRow>();
-  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+  for (const line of readTextFile(file).split(/\r?\n/)) {
     if (!line.trim()) continue;
     let row: RunRow;
     try { row = JSON.parse(line) as RunRow; } catch { continue; }
@@ -185,7 +185,7 @@ function startedAtOf(run: string, runDir: string, row: RunRow | undefined): stri
   if (row?.startedAt) return row.startedAt;
   const first = logFiles(runDir)[0];
   if (first) {
-    for (const line of readFileSync(first, 'utf8').split('\n', 5)) {
+    for (const line of readTextFile(first).split('\n', 5)) {
       const m = /"ts":"([^"]+)"/.exec(line);
       if (m) return m[1];
     }
@@ -881,7 +881,7 @@ export async function bundle(ctx: RunContext, outDir: string): Promise<string[]>
 
   const indexSrc = join(ctx.dataDir, 'runs', 'index.jsonl');
   const indexLines = existsSync(indexSrc)
-    ? readFileSync(indexSrc, 'utf8').split(/\r?\n/).filter((line) => line.includes(`"run":"${ctx.run}"`))
+    ? readTextFile(indexSrc).split(/\r?\n/).filter((line) => line.includes(`"run":"${ctx.run}"`))
     : [];
   const indexFile = join(dest, 'index.jsonl');
   writeFileSync(indexFile, indexLines.length ? `${indexLines.join('\n')}\n` : '', 'utf8');
@@ -890,7 +890,7 @@ export async function bundle(ctx: RunContext, outDir: string): Promise<string[]>
   const config = join(dirname(ctx.dataDir), 'config.json');
   if (existsSync(config)) {
     const configFile = join(dest, 'config.json');
-    writeFileSync(configFile, `${JSON.stringify(redactSecrets(JSON.parse(readFileSync(config, 'utf8'))), null, 2)}\n`, 'utf8');
+    writeFileSync(configFile, `${JSON.stringify(redactSecrets(JSON.parse(readTextFile(config))), null, 2)}\n`, 'utf8');
     files.push(configFile);
   }
 

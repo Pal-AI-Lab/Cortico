@@ -5,11 +5,11 @@
  * PID 复用:锁 startedAt 早于本机开机时刻，或该 PID 现在的可执行文件名与锁里记的 execPath 不同，都按陈旧锁处理。
  */
 import { spawnSync } from 'node:child_process';
-import { closeSync, existsSync, openSync, readFileSync, readlinkSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
+import { closeSync, existsSync, openSync, readlinkSync, renameSync, rmSync, writeFileSync, writeSync } from 'node:fs';
 import { uptime } from 'node:os';
 import { basename, join } from 'node:path';
 import type { Logger } from './types.ts';
-import { nullLogger } from './util.ts';
+import { nullLogger, readTextFile } from './util.ts';
 
 export const INSTANCE_LOCK_FILE = 'instance.lock';
 
@@ -89,7 +89,7 @@ function ownerStillRunning(p: LockPayload): boolean {
 
 function readPayload(file: string): LockPayload | null {
   try {
-    const raw = JSON.parse(readFileSync(file, 'utf8')) as Partial<LockPayload>;
+    const raw = JSON.parse(readTextFile(file)) as Partial<LockPayload>;
     if (!Number.isInteger(raw.pid)) return null;
     return {
       pid: raw.pid as number,

@@ -12,7 +12,7 @@ import { join } from 'node:path';
 import type { Logger, LLMUsage } from '../../core/types.ts';
 import type { VLMClient, VLMMessage } from './vlm.ts';
 import { downloadImageBytes, MIME_EXT } from './image-download.ts';
-import { shortTime, nullLogger } from '../../core/util.ts';
+import { shortTime, nullLogger, readTextFile } from '../../core/util.ts';
 import { VISION_DEFAULT_PROMPT } from './vision-prompt.ts';
 
 /** 一张图的持久化记录(registry.jsonl一行) */
@@ -568,7 +568,7 @@ export class VisionService {
     if (!existsSync(this.registryPath)) return;
     let content: string;
     try {
-      content = readFileSync(this.registryPath, 'utf8');
+      content = readTextFile(this.registryPath);
     } catch {
       return;
     }

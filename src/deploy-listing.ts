@@ -2,10 +2,11 @@
  * 启动器菜单的数据：每份部署的代码包、展示名与配色，以及可选的 bot 代码包清单。
  * 颜色在这里解析成 `#rrggbb`，启动器只负责画；配色取部署的 theme.json，没有则取 web.theme。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { normalizeStoredTheme, resolvePalette, type ThemeAppearance } from './web/shared/theme.ts';
 import { THEME_FILE } from './web/theme-store.ts';
+import { readTextFile } from './core/util.ts';
 
 /** 菜单一行用得到的几个颜色。 */
 export interface RowColors {
@@ -70,7 +71,7 @@ function appearanceOf(mode: string): ThemeAppearance {
 function readJson(file: string): Record<string, unknown> | null {
   if (!existsSync(file)) return null;
   try {
-    const value = JSON.parse(readFileSync(file, 'utf8')) as unknown;
+    const value = JSON.parse(readTextFile(file)) as unknown;
     return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
   } catch {
     return null;

@@ -1,10 +1,11 @@
 /** 读取和写入 server.properties，列出存档及其 level.dat 元数据。生成参数仅用于生成区块，不重新生成已有区块。 */
-import { existsSync, readFileSync, readdirSync, statSync, writeFileSync, type Dirent } from 'node:fs';
+import { existsSync, readdirSync, statSync, writeFileSync, type Dirent } from 'node:fs';
 import { join } from 'node:path';
 import { readLevelDat, type LevelDatInfo } from './level-dat.ts';
 import { offlineUuid } from './client-launch.ts';
 import type { Language } from '../../core/language.ts';
 import { text } from './strings.ts';
+import { readTextFile } from '../../core/util.ts';
 
 export const GAMEMODES = ['survival', 'creative', 'adventure', 'spectator'] as const;
 export const DIFFICULTIES = ['peaceful', 'easy', 'normal', 'hard'] as const;
@@ -294,7 +295,7 @@ function propertiesPath(serverDir: string): string {
 
 export function loadProperties(serverDir: string): Line[] {
   const file = propertiesPath(serverDir);
-  return existsSync(file) ? parseProperties(readFileSync(file, 'utf8')) : [];
+  return existsSync(file) ? parseProperties(readTextFile(file)) : [];
 }
 
 export function saveProperties(serverDir: string, lines: Line[]): void {
@@ -377,7 +378,7 @@ export function readOps(serverDir: string): OpEntry[] {
   const file = opsPath(serverDir);
   if (!serverDir || !existsSync(file)) return [];
   try {
-    const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+    const parsed: unknown = JSON.parse(readTextFile(file));
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((e): e is OpEntry => typeof e === 'object' && e !== null && 'name' in e);
   } catch {
@@ -394,7 +395,7 @@ export function resolveUuid(serverDir: string, name: string): string {
   const file = join(serverDir, 'usercache.json');
   if (serverDir && existsSync(file)) {
     try {
-      const parsed: unknown = JSON.parse(readFileSync(file, 'utf8'));
+      const parsed: unknown = JSON.parse(readTextFile(file));
       if (Array.isArray(parsed)) {
         const hit = parsed.find(
           (e) => typeof e === 'object' && e !== null && (e as { name?: unknown }).name === name,

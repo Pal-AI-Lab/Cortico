@@ -9,7 +9,7 @@ import {
 import { dirname, isAbsolute, join, normalize as pathNormalize, relative, resolve, sep } from 'node:path';
 import { MEM_SCHEME, mimeOfHandle } from 'cortico/core/blobs.ts';
 import type { BlobStore } from 'cortico/core/types.ts';
-import { SYSTEM_TIMEZONE, nowIso } from 'cortico/core/util.ts';
+import { SYSTEM_TIMEZONE, nowIso, readTextFile } from 'cortico/core/util.ts';
 import { WorkspaceGit } from './workspaceGit.ts';
 
 /** 工作区层的可预期错误(路径逃逸、文件不存在等),消息可直接作为 tool result */
@@ -298,7 +298,7 @@ export class GitWorkspaceMemory {
     if (statSync(abs).isDirectory()) {
       throw new WorkspaceError(`${this.normalize(relPath)} 是目录,用 list_dir 查看它`);
     }
-    return readFileSync(abs, 'utf8');
+    return readTextFile(abs);
   }
 
   /** 同目录临时文件写完后 rename；失败时移除临时文件并保留原始错误。 */
@@ -331,7 +331,7 @@ export class GitWorkspaceMemory {
     mkdirSync(dirname(abs), { recursive: true });
     let payload = content;
     if (existsSync(abs)) {
-      const prev = readFileSync(abs, 'utf8');
+      const prev = readTextFile(abs);
       if (prev.length > 0 && !prev.endsWith('\n')) payload = '\n' + payload;
     }
     appendFileSync(abs, payload, 'utf8');

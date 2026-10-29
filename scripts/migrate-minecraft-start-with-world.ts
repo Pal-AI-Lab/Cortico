@@ -7,9 +7,10 @@
  * 旧键为 true 时 World 启动即起受管服务器,新键 true 的行为相同。两个键都在时保留新键、删掉旧键。
  * 只处理部署根下含 deployment.json 的目录。
  */
-import { copyFileSync, existsSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readdirSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deploymentRoot } from '../src/paths.ts';
+import { readTextFile } from '../src/core/util.ts';
 
 const apply = process.argv.includes('--apply');
 const root = deploymentRoot();
@@ -24,7 +25,7 @@ for (const name of readdirSync(root)) {
   const dir = join(root, name);
   const file = join(dir, 'config.json');
   if (!statSync(dir).isDirectory() || !existsSync(join(dir, 'deployment.json')) || !existsSync(file)) continue;
-  const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<string, unknown>;
+  const raw = JSON.parse(readTextFile(file)) as Record<string, unknown>;
   const worlds = raw.worlds as Record<string, unknown> | undefined;
   const minecraft = worlds?.minecraft as Record<string, unknown> | undefined;
   const local = minecraft?.local as Record<string, unknown> | undefined;

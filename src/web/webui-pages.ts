@@ -1,6 +1,5 @@
 /** 将 WebUiPageSource 贡献组装为 manifest；逐个隔离异常、校验声明，并解析面板调用、流与资源。 */
 
-import { readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import type { Logger } from '../core/types.ts';
 import { extensionAssetUrl, type ExtensionWebUiAsset } from '../extensions/manifest.ts';
@@ -20,6 +19,7 @@ import {
   type WebUiPageContribution,
   type WebUiStream,
 } from './shared/webui-protocol.ts';
+import { readTextFile } from '../core/util.ts';
 
 /**
  * 一页的来源。装配层为每个 World / 每个 bot 的控制面造一个。
@@ -86,7 +86,7 @@ export class WebUiAssets {
     const file = join(this.distDir, 'asset-manifest.json');
     let raw: string;
     try {
-      raw = readFileSync(file, 'utf8');
+      raw = readTextFile(file);
     } catch {
       this.manifest = { protocolVersion: WEBUI_PROTOCOL_VERSION, core: null, providers: {} };
       return;

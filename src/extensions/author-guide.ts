@@ -4,11 +4,12 @@
  * 这两段只提示,不计入失败;读者是作者和作者的 coding agent,所以只有英文。
  * 标签规则与申请格式以索引仓的 DESIGN.md、TAGS.md 为准。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { extensionPackageFile } from '../extensions.ts';
 import { fetchIndexFile } from './market.ts';
 import type { ExtensionPackageJson } from './manifest.ts';
+import { readTextFile } from '../core/util.ts';
 
 const INDEX_REPO = 'Pal-AI-Lab/cortico-extensions';
 const INDEX_REPO_URL = `https://github.com/${INDEX_REPO}`;
@@ -175,7 +176,7 @@ function publishSection(pkgDir: string, pkg: ExtensionPackageJson, declared: str
   if (!existsSync(changelog)) {
     lines.push('  ⚠ No CHANGELOG.md. The market shows release notes from a "## <version>" section per version in CHANGELOG.md at the package root.');
   } else if (pkg.version) {
-    lines.push(changelogHasVersion(readFileSync(changelog, 'utf8'), pkg.version)
+    lines.push(changelogHasVersion(readTextFile(changelog), pkg.version)
       ? `  ✓ CHANGELOG.md has a "## ${pkg.version}" section.`
       : `  ⚠ CHANGELOG.md has no "## ${pkg.version}" heading; this version shows without release notes.`);
   }

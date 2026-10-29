@@ -1,5 +1,5 @@
 /** Persona 的人物档案概览面板。工作区与版本历史两块在 bots/cormini/persona/webUiSurface.ts。 */
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { Language } from 'cortico/core/language.ts';
@@ -11,6 +11,7 @@ import {
 } from '../../cormini/persona/webUiSurface.ts';
 import type { GitWorkspaceMemory } from '../../cormini/persona/memory.ts';
 import { VIEWERS_DIR, viewerMemoryNote } from './viewers.ts';
+import { readTextFile } from 'cortico/core/util.ts';
 
 export const MEMORY_PANEL: WorldPanelDecl = {
   id: 'memory',
@@ -72,7 +73,7 @@ function memoryState(ws: GitWorkspaceMemory): MemoryState {
   const constitutionAbs = join(ws.memoryDir, 'CONSTITUTION.md');
   let constitutionChars = 0;
   try {
-    constitutionChars = readFileSync(constitutionAbs, 'utf8').trim().length;
+    constitutionChars = readTextFile(constitutionAbs).trim().length;
   } catch {
     constitutionChars = 0;
   }
@@ -97,7 +98,7 @@ function memoryState(ws: GitWorkspaceMemory): MemoryState {
         const path = `${VIEWERS_DIR}/${sourceEnt.name}/${fileEnt.name}`;
         let summary = '';
         try {
-          summary = readFileSync(join(sourceDir, fileEnt.name), 'utf8')
+          summary = readTextFile(join(sourceDir, fileEnt.name))
             .split('\n').map((l) => l.trim()).find(Boolean) ?? '';
         } catch {
           summary = '';

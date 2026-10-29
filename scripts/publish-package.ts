@@ -2,10 +2,11 @@
  * 生成 npm 发布包 dist/package：框架源码、发布清单、README 与 LICENSE。
  * 默认只生成目录;--pack 产出 tarball,--publish 发布。清单缺少源码用到的第三方包时退出码为 1。
  */
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readTextFile } from '../src/core/util.ts';
 
 /** 发布包的名字;与扩展代码里 `cortico/<src 下路径>` 的前缀一致。 */
 export const PACKAGE_NAME = 'cortico';
@@ -109,7 +110,7 @@ export function corticoEntries(dir: string): string[] {
       const full = join(current, entry.name);
       if (entry.isDirectory()) walk(full);
       else if (entry.name.endsWith('.ts')) {
-        for (const spec of importSpecifiers(readFileSync(full, 'utf8'))) {
+        for (const spec of importSpecifiers(readTextFile(full))) {
           if (spec.startsWith(`${PACKAGE_NAME}/`)) found.add(spec.slice(PACKAGE_NAME.length + 1));
         }
       }
@@ -146,7 +147,7 @@ export function importClosure(srcDir: string, entries: readonly string[]): { fil
     const file = queue.pop() as string;
     if (seen.has(file) || !existsSync(file)) continue;
     seen.add(file);
-    for (const spec of importSpecifiers(readFileSync(file, 'utf8'))) {
+    for (const spec of importSpecifiers(readTextFile(file))) {
       if (spec.startsWith('node:')) continue;
       if (spec.startsWith('.')) queue.push(resolve(dirname(file), spec));
       else if (spec.startsWith(`${PACKAGE_NAME}/`)) queue.push(resolve(srcDir, spec.slice(PACKAGE_NAME.length + 1)));
@@ -176,7 +177,7 @@ function npm(args: string[]): number {
 }
 
 async function main(): Promise<void> {
-  const root = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as RootPackageJson;
+  const root = JSON.parse(readTextFile(join(REPO_ROOT, 'package.json'))) as RootPackageJson;
   const manifest = buildManifest(root);
   const { files, externals } = importClosure(join(REPO_ROOT, 'src'), contractEntries(REPO_ROOT));
   const missing = missingDependencies(manifest, externals);

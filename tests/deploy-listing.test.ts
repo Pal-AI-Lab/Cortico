@@ -71,6 +71,16 @@ describe('部署清单', () => {
     expect(listing.root).toBe(dir);
   });
 
+  it('部署 config.json 带 UTF-8 BOM 或是 UTF-16 LE:展示名照样读得出', async () => {
+    const dir = root({ bom: { 'deployment.json': { bot: 'cortiv' } }, utf16: { 'deployment.json': { bot: 'cortiv' } } });
+    // Windows PowerShell 5.1 按行改写后的样子:CRLF,`Set-Content -Encoding UTF8` 带 BOM,`>` 是 UTF-16 LE
+    const config = JSON.stringify({ displayName: '值班的那位' }, null, 2).replace(/\n/g, '\r\n');
+    writeFileSync(join(dir, 'bom', 'config.json'), Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(config, 'utf8')]));
+    writeFileSync(join(dir, 'utf16', 'config.json'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(config, 'utf16le')]));
+    const listing = await buildListing({ root: dir, deployments: ['bom', 'utf16'], packages: [], defaultsOf });
+    expect(listing.deployments.map((d) => d.displayName)).toEqual(['值班的那位', '值班的那位']);
+  });
+
   it('配色:部署 config.json 的 web.theme 压过代码包选的方案', async () => {
     const dir = root({
       a: { 'deployment.json': { bot: 'cortiv' } },

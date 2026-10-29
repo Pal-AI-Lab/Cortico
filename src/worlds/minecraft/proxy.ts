@@ -1,9 +1,9 @@
 /** 主进程中的 Minecraft World 代理。游戏连接、执行器和客户端管理在引擎子进程；此处转发工具、事件、WebUI 及存储请求，并每秒推送配置。 */
 import { fork, type ChildProcess } from 'node:child_process';
-import { nowIso, SYSTEM_TIMEZONE } from '../../core/util.ts';
+import { nowIso, SYSTEM_TIMEZONE, readTextFile } from '../../core/util.ts';
 import { emitLogNote, logChildStdio } from '../../core/ipc-logger.ts';
 import { childExecArgv } from '../../extensions/runtime.ts';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -99,7 +99,7 @@ export class MinecraftWorldProxy implements World {
       'minecraft.explored': renderExploredLedger(loadExplored(this.storageFileOf('minecraft-explored'))),
       'minecraft.policy': renderPolicyEnv(loadPolicy(this.storageFileOf('minecraft-policy'))),
       'minecraft.camera': this.opts.cfg.client.enabled
-        ? readFileSync(CAMERA_NOTE_FILE, 'utf8').trim()
+        ? readTextFile(CAMERA_NOTE_FILE).trim()
         : '',
     };
   }

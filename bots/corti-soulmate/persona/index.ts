@@ -5,7 +5,7 @@ import { hasRole } from 'cortico/protocol/open-responses/context-helpers.ts';
  * 交接快照进入串行梦队列，结果经 MEMORY 3 与事件回到主 session。
  * 工作区改动按批次提交 Git；rhythm.ts 提供昼夜心跳和 schedule_wake。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -14,7 +14,7 @@ import type {
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
 import type { BotConfig } from '../index.ts';
-import { hourIn } from 'cortico/core/util.ts';
+import { hourIn, readTextFile } from 'cortico/core/util.ts';
 import { renderTemplate } from 'cortico/core/template.ts';
 import { Cormini, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
 import { WorkspaceError, normalizeWorkspacePath } from '../../cormini/persona/memory.ts';
@@ -233,7 +233,7 @@ export class CortiSoulmate extends Cormini {
     if (!isHarnessPath(path)) return null;
     const file = this.textFile('CORE.md');
     if (!existsSync(file)) throw new WorkspaceError('CORE.md 暂不可用(软件包内未找到该文件)');
-    return readFileSync(file, 'utf8');
+    return readTextFile(file);
   }
 
   /** 读取部署 prompts/ 同名覆盖文件；不存在时读取包内默认文件。 */
@@ -273,11 +273,11 @@ export class CortiSoulmate extends Cormini {
   }
 
   orientationText(): string {
-    return readFileSync(this.orientationSource(), 'utf8');
+    return readTextFile(this.orientationSource());
   }
 
   constitutionText(): string {
-    return readFileSync(join(this.memoryDir, 'CONSTITUTION.md'), 'utf8');
+    return readTextFile(join(this.memoryDir, 'CONSTITUTION.md'));
   }
 
   toolUsageText(sessionId: string): string {
@@ -298,7 +298,7 @@ export class CortiSoulmate extends Cormini {
   /** MEMORY 0~4:模板 + 活数据。五层的引导语与空态措辞全在 MEMORY.md 里。 */
   assembleMemory(ctx: MemoryAssemblyContext): string {
     return renderTemplate(
-      readFileSync(this.textFile('MEMORY.md'), 'utf8'),
+      readTextFile(this.textFile('MEMORY.md')),
       memoryVars(this.memory, this.memo, ctx, this.emergences()),
     ).trim();
   }

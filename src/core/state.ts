@@ -1,7 +1,8 @@
 /** Core 机械状态，持久化到 `<dataDir>/core-state.json`。 */
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { retryBusy } from './fs-busy.ts';
+import { readTextFile } from './util.ts';
 
 export interface CoreStateData {
   /** 上次截断时刻ISO */
@@ -58,7 +59,7 @@ export class CoreState {
     this.data = freshDefaults();
     if (!existsSync(this.file)) return;
     try {
-      const raw = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<CoreStateData>;
+      const raw = JSON.parse(readTextFile(this.file)) as Partial<CoreStateData>;
       this.data = {
         lastTruncateAt: raw.lastTruncateAt ?? DEFAULTS.lastTruncateAt,
         lastDeliveredCursor: Number.isInteger(raw.lastDeliveredCursor)

@@ -2,7 +2,7 @@
  * 检查扩展的 manifest、入口导入、导出结构、WebUI 产物与构造契约。
  * 有检查失败时退出码为 1;不启动扩展或验证外部服务。
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -34,6 +34,7 @@ import {
 } from '../src/extensions.ts';
 import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
 import { authorGuide } from '../src/extensions/author-guide.ts';
+import { readTextFile } from '../src/core/util.ts';
 
 const builtinWorlds = await loadBuiltinWorlds();
 
@@ -66,7 +67,7 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8')) as ExtensionPackageJson;
+  const pkg = JSON.parse(readTextFile(pkgFile)) as ExtensionPackageJson;
 
   console.log(`Directory: ${pkgDir}`);
   console.log(`Package:   ${pkg.name ?? '(package.json has no name)'}@${pkg.version ?? '(no version)'}`);
