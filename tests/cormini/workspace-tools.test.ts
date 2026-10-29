@@ -81,6 +81,24 @@ describe('read_file:整份或行区间', () => {
   });
 });
 
+describe('Windows PowerShell 5.1 写出的工作区文件', () => {
+  const encodings = {
+    'UTF-8 BOM': (text: string) => Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(text, 'utf8')]),
+    'UTF-16 LE': (text: string) => Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]),
+  };
+  for (const [name, encode] of Object.entries(encodings)) {
+    it(`${name}:读、搜、追加、改都按原文,改写后存成 UTF-8`, async () => {
+      writeFileSync(join(dir, 'note.md'), encode('# 笔记\r\n铃兰\r\n'));
+      expect(await run('read_file', { path: 'note.md' })).toBe('# 笔记\r\n铃兰\r\n');
+      expect(await run('grep_files', { pattern: '^# 笔记' })).toContain('note.md:1: # 笔记');
+      await run('append_file', { path: 'note.md', content: '二\n' });
+      expect(await run('read_file', { path: 'note.md' })).toBe('# 笔记\r\n铃兰\r\n二\n');
+      expect(await run('edit_file', { path: 'note.md', old_string: '铃兰', new_string: '铃兰花' })).toContain('[edited]');
+      expect(disk('note.md')).toBe('# 笔记\r\n铃兰花\r\n二\n');
+    });
+  }
+});
+
 describe('edit_file:精确替换', () => {
   const profile = 'viewers/bilibili/1.md';
   beforeEach(() => put(profile, '抬杠王(1) — 旧摘要\n\n2026-08-01 来过。\n'));
