@@ -24,6 +24,7 @@ import type {
   ExtensionUpdateResult,
 } from './web/server.ts';
 import {
+  authorLanguage,
   EXTENSION_API_VERSIONS,
   EXTENSION_KEYWORDS,
   ICON_TYPES,
@@ -623,13 +624,14 @@ export function packageAuthor(pkg: ExtensionPackageJson): string | undefined {
   return (typeof pkg.author === 'string' ? pkg.author.match(/^[^(<]*/)![0].trim() : pkg.author?.name) || undefined;
 }
 
-/** 本机 package.json 里详情页显示的字段,与 npm 包文档同形;不联网就能给出。 */
-export function packageMetadata(pkg: ExtensionPackageJson): Partial<ExtensionPackageDetail> {
+/** 本机 package.json 里详情页显示的字段,与 npm 包文档同形;不联网就能给出。显示名按 `authorLanguage` 取 `locales`。 */
+export function packageMetadata(pkg: ExtensionPackageJson, language: Language): Partial<ExtensionPackageDetail> {
   const parsed = parseExtensionManifest(pkg);
+  const displayName = parsed.ok ? parsed.manifest.locales?.[authorLanguage(language)]?.displayName ?? parsed.manifest.displayName : undefined;
   const repository = urlOf(pkg.repository);
   const bugs = urlOf(pkg.bugs);
   return {
-    ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
+    ...(displayName ? { displayName } : {}),
     ...(pkg.description ? { description: pkg.description } : {}),
     ...(pkg.license ? { license: pkg.license } : {}),
     ...(pkg.engines?.node ? { engines: pkg.engines.node } : {}),
@@ -789,7 +791,7 @@ export class ExtensionManager {
         ...r,
         reason: r.reason?.(language),
         warnings: r.warnings?.(language),
-        ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
+        ...(pkg ? { metadata: packageMetadata(pkg, language) } : {}),
         ...(author ? { author } : {}),
         ...(pkg && extensionIconFile(pkgDir, pkg) ? { icon: true } : {}),
         ...(spec === undefined ? {} : { installedVersion }),
@@ -813,7 +815,7 @@ export class ExtensionManager {
         loaded: false,
         state: 'pending-restart',
         ...(pkg?.description ? { description: pkg.description } : {}),
-        ...(pkg ? { metadata: packageMetadata(pkg) } : {}),
+        ...(pkg ? { metadata: packageMetadata(pkg, language) } : {}),
         ...(pkg && packageAuthor(pkg) ? { author: packageAuthor(pkg) } : {}),
         ...(pkg && extensionIconFile(join(this.dir, 'node_modules', ...name.split('/')), pkg) ? { icon: true } : {}),
       });
@@ -982,6 +984,7 @@ export class ExtensionManager {
     if (!latest || !v) throw extensionError((t) => t.registryNoVersion(name, version ?? 'latest'), 502);
 
     const parsed = parseExtensionManifest(v, language);
+    const displayName = parsed.ok ? parsed.manifest.locales?.[authorLanguage(language)]?.displayName ?? parsed.manifest.displayName : undefined;
     const times = Object.keys(doc.versions ?? {}).map((version) => [version, doc.time?.[version] ?? ''] as const);
     const history = times
       .sort((a, b) => (a[1] < b[1] ? 1 : -1))
@@ -1002,7 +1005,7 @@ export class ExtensionManager {
     return {
       name,
       version: latest,
-      ...(parsed.ok && parsed.manifest.displayName ? { displayName: parsed.manifest.displayName } : {}),
+      ...(displayName ? { displayName } : {}),
       ...(v.description ? { description: v.description } : {}),
       ...(v.license ? { license: v.license } : {}),
       ...(v.keywords?.length ? { keywords: v.keywords } : {}),

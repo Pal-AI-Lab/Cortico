@@ -534,7 +534,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
   const version = pkg.version ?? null;
   const common = {
     spec: 'builtin', version, installedVersion: version, webUiClient: false, builtin: true,
-    author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg), location: repoRoot(),
+    author: BUILTIN_AUTHOR, metadata: packageMetadata(pkg, language), location: repoRoot(),
   } as const;
   const external = new Set(set.worlds.map((world) => world.id));
   const candidates = [...assembly.definitions, ...assembly.slots.filter((slot) => !slot.definition)];

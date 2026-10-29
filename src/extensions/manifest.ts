@@ -4,7 +4,7 @@
  * previous-contract.ts 过渡)。
  * webUiClient 和 webUiStyle 是预构建产物的包内相对路径；服务端分配 URL。
  * 包必须使用 type=module，使扩展与框架通过同一 ESM 解析方式共享模块实例。
- * 扩展市场读的 tags、locales、screenshots 框架不用,这里只校验形状,不合格给 warning。
+ * 扩展市场读的 tags、locales、screenshots 这里只校验形状,不合格给 warning;合格的 locales 还给本机包的显示名用。
  */
 
 import type { Language } from '../core/language.ts';
@@ -42,6 +42,8 @@ export const ICON_TYPES: Readonly<Record<string, string>> = { '.png': 'image/png
 export interface ExtensionManifest {
   /** WebUI 卡片与详情的标题;缺席时用包名。读它不需要导入包代码。 */
   displayName?: string;
+  /** 作者写的中英两份显示名与简介,按 `authorLanguage` 取。 */
+  locales?: ExtensionLocales;
   /** 包内相对路径,`.png` / `.webp` / `.svg`;WebUI 卡片的头像。bot 包的 png 图标还是新建部署的初始头像。 */
   icon?: string;
   kind: ExtensionKind;
@@ -84,6 +86,11 @@ export function isSafeRelativeFile(p: unknown): p is string {
   if (p.includes('\\') || p.startsWith('/') || /^[A-Za-z]:/.test(p)) return false;
   return !p.split('/').some((seg) => seg === '..' || seg === '');
 }
+
+export type ExtensionLocales = Partial<Record<'zh' | 'en', { displayName?: string; description?: string }>>;
+
+/** 作者写的文字(`locales`、自描述)只有 zh 与 en 两份:zh 读 zh,zh-Hant 与其余语言读 en。 */
+export const authorLanguage = (language: Language): 'zh' | 'en' => language === 'zh' ? 'zh' : 'en';
 
 const isStringArray = (v: unknown): boolean => Array.isArray(v) && v.every((item) => typeof item === 'string');
 
@@ -177,6 +184,7 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
     warnings,
     manifest: {
       ...(displayName ? { displayName } : {}),
+      ...(m.locales !== undefined && isLocales(m.locales) ? { locales: m.locales as ExtensionLocales } : {}),
       ...(icon ? { icon } : {}),
       kind: kind as ExtensionKind,
       api: api as number,

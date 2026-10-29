@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage } from '../../src/extensions.ts';
+import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage, packageMetadata } from '../../src/extensions.ts';
 import {
   EXTENSION_API_VERSIONS,
   EXTENSION_ASSET_PREFIX,
@@ -186,6 +186,11 @@ describe('displayName', () => {
       expect(parsed.ok && parsed.manifest.displayName).toBeUndefined();
       expect(parsed.warnings.join('\n')).toContain('displayName');
     }
+  });
+  it('本机包详情的显示名按 authorLanguage 取 locales,缺了用顶层', () => {
+    const named = { name: 'x', type: 'module', cortico: { kind: 'world', api: EXTENSION_API_VERSIONS.world, displayName: 'DeepSeek Usage', locales: { zh: { displayName: 'DeepSeek 余额' } } } };
+    expect(packageMetadata(named, 'zh').displayName).toBe('DeepSeek 余额');
+    expect(packageMetadata(named, 'zh-Hant').displayName).toBe('DeepSeek Usage');
   });
 });
 

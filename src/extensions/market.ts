@@ -25,6 +25,7 @@ import type {
   MarketIndexBase,
   MarketTag,
 } from '../web/server.ts';
+import { authorLanguage } from './manifest.ts';
 import { text } from './strings.ts';
 import { readTextFile } from '../core/util.ts';
 
@@ -140,8 +141,6 @@ function marketError(message: (t: ReturnType<typeof text>) => string, status: nu
 }
 
 const pickText = (value: Bilingual, language: Language) => baseLanguage(language) === 'zh' ? value.zh : value.en;
-/** 作者写的文字(`locales`、自描述)只有 zh 与 en 两份:zh 读 zh,zh-Hant 与其余语言读 en。 */
-const authorLanguage = (language: Language): 'zh' | 'en' => language === 'zh' ? 'zh' : 'en';
 const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
 /** 包名当文件名,作用域包的 `/` 换成 `__`。 */
 const fileName = (name: string) => name.replace('/', '__');
