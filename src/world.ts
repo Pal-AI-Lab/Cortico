@@ -213,8 +213,6 @@ export class WorldAssembly {
   private readonly cfgPath: string;
   /** 每个 World 最后一个排队的生命周期操作，结束即移除。 */
   private readonly lifecycleQueues = new Map<string, Promise<void>>();
-  /** 失败实例停止并重建后，同一 World 的下一项操作才可执行。 */
-  private readonly recoveries = new Map<string, Promise<void>>();
 
   constructor(
     private readonly loaded: LoadedConfig<CoreConfig>,
@@ -394,31 +392,23 @@ export class WorldAssembly {
   }
 
   /**
-   * Core 在运行中卸载的 World:槽位回到未激活并记下理由,`enabled` 不变,报一次 failed。
-   * 旧实例的 `stop()` 结束后换上新实例,同一 World 尚未执行的操作等它;`create()` 抛错时槽位移入 missing。
+   * Core 在运行中卸载的 World:槽位回到未激活并记下理由,`enabled` 不变,报一次 failed,换上新实例;
+   * 这在主循环建前缀时发生,`create()` 抛错时槽位移入 missing。
    */
-  failed({ worldId, detail, stopped }: WorldFailure): void {
+  failed({ worldId, detail }: WorldFailure): void {
     const slot = this.slot(worldId);
-    const instance = slot.instance;
     slot.mounted = false;
     slot.failure = (language) => text(language).readFailed(detail);
     this.host?.lifecycle?.({ kind: 'failed', id: worldId, label: slot.label, reason: detail });
     const def = slot.definition;
     if (!def) return;
-    const recovery = stopped.then(() => {
-      if (slot.instance !== instance) return;
-      try {
-        slot.instance = def.create(this.context(def));
-      } catch (error) {
-        const reason = error instanceof Error ? error.message : String(error);
-        this.slots.splice(this.slots.indexOf(slot), 1);
-        this.missing.push({ id: slot.id, label: slot.label, declared: slot.declared, reason: (language) => text(language).constructFailed(reason) });
-      }
-    });
-    this.recoveries.set(worldId, recovery);
-    void recovery.then(() => {
-      if (this.recoveries.get(worldId) === recovery) this.recoveries.delete(worldId);
-    });
+    try {
+      slot.instance = def.create(this.context(def));
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.slots.splice(this.slots.indexOf(slot), 1);
+      this.missing.push({ id: slot.id, label: slot.label, declared: slot.declared, reason: (language) => text(language).constructFailed(reason) });
+    }
   }
 
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
@@ -427,10 +417,7 @@ export class WorldAssembly {
   }
 
   private queued<T>(id: string, op: () => Promise<T>): Promise<T> {
-    const result = (this.lifecycleQueues.get(id) ?? Promise.resolve()).then(async () => {
-      await this.recoveries.get(id);
-      return op();
-    });
+    const result = (this.lifecycleQueues.get(id) ?? Promise.resolve()).then(op);
     const settled = result.then(() => undefined, () => undefined);
     this.lifecycleQueues.set(id, settled);
     void settled.then(() => {
@@ -457,7 +444,11 @@ export class WorldAssembly {
       slot.instance = def.create(ctx);
       throw error;
     }
-    if (!this.mounted.includes(slot.instance)) throw new Error(slot.failure!(language));
+    // 挂载时读取失败、已被卸载:和 start() 抛错一样回滚 enabled
+    if (!this.mounted.includes(slot.instance)) {
+      this.persist(id, { enabled: false });
+      throw new Error(slot.failure!(language));
+    }
     slot.mounted = true;
     delete slot.failure;
     this.host?.lifecycle?.({ kind: 'mounted', id, label: slot.label });
@@ -518,13 +509,7 @@ export class WorldAssembly {
     const reserved = (this.host?.reservedToolNames?.() ?? []).filter((n) => names.has(n));
     if (reserved.length) return (language) => text(language).toolReserved(reserved);
     for (const other of mounted) {
-      let shared: string[];
-      try {
-        shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
-      } catch {
-        // 它自己的 tools() 失败由 Core 在下次组工具表时卸载它
-        continue;
-      }
+      const shared = other.tools().map((t) => t.name).filter((n) => names.has(n));
       if (shared.length) {
         return (language) => text(language).toolClash(mod.id, other.id, shared);
       }

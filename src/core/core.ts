@@ -82,8 +82,6 @@ export interface WorldStartFailure {
 export interface WorldFailure {
   worldId: string;
   detail: string;
-  /** `stop()` 结束、失败或超时后兑现,不会拒绝。 */
-  stopped: Promise<void>;
 }
 
 export class Core<C extends CoreConfig = CoreConfig> {
@@ -130,6 +128,8 @@ export class Core<C extends CoreConfig = CoreConfig> {
   private readonly moduleHostLeases = new Map<World, { active: boolean }>();
   /** 运行中卸载的 World 尚未结束的 `stop()`。 */
   private readonly failedStops = new Set<Promise<void>>();
+  /** unmountWorld 正在 `stop()` 的实例;期间读取失败只移出挂载表,停用或重启照常走完。 */
+  private readonly stopping = new Set<World>();
 
   constructor(loaded: LoadedConfig<C>, deps: CoreDeps) {
     this.loaded = loaded;
@@ -682,12 +682,15 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const mod = this.worlds[index];
     let failure: WorldStopFailure | null = null;
     if (this.started) {
+      this.stopping.add(mod);
       try {
         await withDeadline(mod.stop(), MODULE_STOP_MS);
       } catch (e) {
         const detail = e instanceof Error ? e.message : String(e);
         this.log.warn(`World 停止失败: ${mod.id}`, { err: detail });
         failure = { worldId: mod.id, detail };
+      } finally {
+        this.stopping.delete(mod);
       }
     }
     const lease = this.moduleHostLeases.get(mod);
@@ -708,6 +711,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     const lease = this.moduleHostLeases.get(mod);
     if (lease) lease.active = false;
     this.worlds.splice(this.worlds.indexOf(mod), 1);
+    if (this.stopping.has(mod)) return;
     this.log.emit('error', `World 读取失败,已卸载: ${mod.id}`, { event: 'world-failed', data: { detail } });
     const stopped = withDeadline(Promise.resolve().then(() => mod.stop()), MODULE_STOP_MS).then(
       () => {},
@@ -715,7 +719,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     );
     this.failedStops.add(stopped);
     void stopped.then(() => this.failedStops.delete(stopped));
-    this.onWorldFailed({ worldId: mod.id, detail, stopped });
+    this.onWorldFailed({ worldId: mod.id, detail });
   }
 
   /** 先终止主循环，再并发停止 World；各步骤有独立期限，失败写入返回结果。 */

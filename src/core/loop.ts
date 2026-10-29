@@ -120,7 +120,7 @@ export interface MainLoopDeps {
   /** 已挂载 World 的**实时**视图(可见性可被运维改;见 WorldView) */
   worlds: WorldView;
   /**
-   * 构建前缀或工具表时读取一个已挂载 World 的 `envPromptVars()`、环境模板或 `tools()` 失败。
+   * 构建前缀或工具表时读取一个已挂载 World 的 `envPromptVars()` 或 `tools()` 失败。
    * 返回前须把它移出 `worlds.all()`;这次构建不含它,其余 World 照常。
    */
   onWorldFailed(world: World, detail: string): void;

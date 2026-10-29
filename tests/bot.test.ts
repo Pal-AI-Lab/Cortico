@@ -121,7 +121,7 @@ it('a World whose start() throws at boot is left inactive with its reason and th
   }
 });
 
-it('a running World whose tools() throws when the prefix is rebuilt goes back to inactive with its reason and the Persona hears failed once; enabled stays and it can be activated again', async () => {
+it('a running World whose tools() throws when the prefix is rebuilt goes back to inactive with its reason and the Persona hears failed once (a throwing hook does not stop the rebuild); enabled stays and it can be activated again', async () => {
   let broken = false;
   const lifecycle: WorldLifecycleEvent[] = [];
   const bad = probe('bad', () => ({
@@ -139,7 +139,8 @@ it('a running World whose tools() throws when the prefix is rebuilt goes back to
     worlds: [bad, probe('good')],
     build: (_loaded, mounted) => {
       const persona = makeFakePersona([], { worlds: mounted });
-      persona.onWorldLifecycle = (event) => { lifecycle.push(event); };
+      // Persona 的钩子抛错只记 warn,不打断这次前缀重建
+      persona.onWorldLifecycle = (event) => { lifecycle.push(event); if (event.kind === 'failed') throw new Error('hook failed'); };
       return { persona, llm: new FakeLLM(), webUi: { enabled: false } };
     },
   });
@@ -167,10 +168,8 @@ it('a running World whose tools() throws when the prefix is rebuilt goes back to
 it.each([
   ['activate', 'envPromptVars'], ['activate', 'tools'],
   ['restart', 'envPromptVars'], ['restart', 'tools'],
-] as const)('%s rejects a World whose %s fails and waits for stop before a queued retry', async (operation, member) => {
+] as const)('%s rejects a World whose %s fails; activate rolls back enabled and a retry mounts a new instance', async (operation, member) => {
   let broken = false;
-  let finishStop!: () => void;
-  const stopGate = new Promise<void>((resolve) => { finishStop = resolve; });
   class ReadProbe implements World {
     readonly id = 'bad';
     started = false;
@@ -184,7 +183,7 @@ it.each([
       return [makeTool('bad_act', 'ok')];
     }
     async start() { this.started = true; }
-    async stop() { if (broken) await stopGate; this.stopped = true; }
+    async stop() { this.stopped = true; }
   }
   const instances: ReadProbe[] = [];
   const lifecycle: WorldLifecycleEvent[] = [];
@@ -205,7 +204,6 @@ it.each([
       return { persona, llm: new FakeLLM(), webUi: { enabled: false } };
     },
   });
-  let activation: Promise<void> | undefined;
   try {
     await app.start();
     await vi.waitFor(() => expect(app.core.session.records.length).toBeGreaterThan(0));
@@ -217,23 +215,17 @@ it.each([
       broken = true;
     }
     const attempt = app.assembly[operation]('bad', 'en');
-    let recovered = false;
-    activation = app.assembly.activate('bad', 'en').then(() => { recovered = true; });
     await expect(attempt).rejects.toThrow(`Read failed: ${member}(): read unavailable`);
     expect(app.assembly.slot('bad').mounted).toBe(false);
     expect(app.assembly.mounted.map(world => world.id)).toEqual(['good']);
     expect(deriveWorldFacts(app.core, app.assembly, 'en').find(facts => facts.id === 'bad'))
       .toMatchObject({ status: 'inactive', reason: `Read failed: ${member}(): read unavailable` });
     expect(lifecycle.map(event => event.kind)).toEqual(['failed']);
-    expect((JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) as { worlds: typeof worlds }).worlds.bad.enabled).toBe(true);
+    expect((JSON.parse(readFileSync(join(dir, 'config.json'), 'utf8')) as { worlds: typeof worlds }).worlds.bad.enabled).toBe(operation === 'restart');
 
-    const failed = instances.at(-1)!;
+    const failed = instances.at(-2)!;
     broken = false;
-    await new Promise(resolve => setTimeout(resolve, 20));
-    expect(recovered).toBe(false);
-    expect(app.assembly.slot('bad').instance).toBe(failed);
-    finishStop();
-    await activation;
+    await app.assembly.activate('bad', 'en');
     expect(failed.stopped).toBe(true);
     expect(app.assembly.slot('bad').instance).not.toBe(failed);
     expect(app.assembly.mounted).toContain(app.assembly.slot('bad').instance);
@@ -243,8 +235,6 @@ it.each([
     await app.assembly.deactivate('bad', 'en');
     expect(app.assembly.slot('bad').mounted).toBe(false);
   } finally {
-    finishStop();
-    await activation?.catch(() => {});
     await app.stop();
   }
 });

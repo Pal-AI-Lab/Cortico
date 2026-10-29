@@ -903,8 +903,13 @@ export function createBot<C extends CoreConfig>(
   });
   undeclared.tools('persona', definition.describe?.tools, parts.persona.ownToolNames?.() ?? []);
 
+  // 运行中读取失败的事件从主循环建前缀时发出,钩子的异常不能穿过主循环
   const notifyLifecycle = (event: WorldLifecycleEvent): void => {
-    parts.persona.onWorldLifecycle?.(event);
+    try {
+      parts.persona.onWorldLifecycle?.(event);
+    } catch (error) {
+      core.runlog.logger('persona').warn('onWorldLifecycle 失败', { kind: event.kind, id: event.id, err: error instanceof Error ? error.message : String(error) });
+    }
   };
   assembly.bind({
     mount: async (mod) => {

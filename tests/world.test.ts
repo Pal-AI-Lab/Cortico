@@ -551,14 +551,12 @@ describe('读取 World 失败', () => {
     expect(assembly.mounted.map((m) => m.id)).toEqual(['b']);
   });
 
-  it('Core 运行中卸载的 World:槽位回到未激活并带理由,enabled 不变,报一次 failed;旧实例 stop 结束后才换新实例,排在后面的激活等它', async () => {
+  it('Core 运行中卸载的 World:槽位回到未激活并带理由,enabled 不变,报一次 failed,换上新实例', async () => {
     const { assembly, loaded, lifecycle, json } = assemblyOf([probeDefinition('a')], ['a']);
     const first = assembly.slot('a').instance;
     // Core 先把它移出共用的挂载表
     assembly.mounted.splice(assembly.mounted.indexOf(first), 1);
-    let finishStop!: () => void;
-    const stopped = new Promise<void>((resolve) => { finishStop = resolve; });
-    assembly.failed({ worldId: 'a', detail: 'tools(): 清单未加载', stopped });
+    assembly.failed({ worldId: 'a', detail: 'tools(): 清单未加载' });
 
     expect(assembly.slot('a').mounted).toBe(false);
     expect(assembly.slot('a').failure?.('zh')).toBe('读取失败: tools(): 清单未加载');
@@ -567,13 +565,8 @@ describe('读取 World 失败', () => {
     expect((loaded.config as unknown as { worlds: Record<string, ProbeSection> }).worlds.a.enabled).toBe(true);
     expect(json().worlds.a).toBeUndefined();
 
-    const activation = assembly.activate('a');
-    await sleep(10);
-    expect(assembly.slot('a').mounted).toBe(false);
-    expect(assembly.slot('a').instance).toBe(first);
-    finishStop();
-    expect(await activation).toContain('已启用');
     expect(assembly.slot('a').instance).not.toBe(first);
+    expect(await assembly.activate('a')).toContain('已启用');
     expect((assembly.slot('a').instance as Probe).started).toBe(1);
     expect(assembly.slot('a').failure).toBeUndefined();
   });
