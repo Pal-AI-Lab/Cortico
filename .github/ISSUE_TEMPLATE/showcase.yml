@@ -1,0 +1,52 @@
+name: Showcase request / 社区曝光申请
+description: Ask to be featured in the Pal AI community notice or community news. / 申请上 Pal AI 社区更新公告或社区新闻。
+labels: [showcase]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Project name / 作品名称
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link / 链接
+      description: Repository, extension listing, video or website. / 仓库、扩展市场条目、视频或网站。
+    validations:
+      required: true
+  - type: input
+    id: credit
+    attributes:
+      label: How to credit you / 署名
+      description: The name we should write, e.g. "@X". / 公告里怎么称呼你,例如「@X 老师」里的 X。
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: What it is and how to use it / 是什么、怎么装、怎么用
+      description: One or two sentences. / 一两句话。
+    validations:
+      required: true
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where / 想上哪个
+      options:
+        - Either / 都行
+        - Community notice / 社区更新公告
+        - Community news video / 社区新闻视频
+    validations:
+      required: true
+  - type: textarea
+    id: media
+    attributes:
+      label: Screenshots or video (optional) / 截图或视频(选填)
+      description: Drag files here or paste links. / 把文件拖进来或贴链接。
+  - type: checkboxes
+    id: consent
+    attributes:
+      label: Permission / 授权
+      options:
+        - label: Pal AI may crop, edit and repost the material above. / 同意 Pal AI 剪辑、转载上面的素材。
