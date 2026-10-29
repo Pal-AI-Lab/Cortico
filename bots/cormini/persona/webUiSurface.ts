@@ -9,6 +9,7 @@ import { join } from 'node:path';
 
 import type { Language } from 'cortico/core/language.ts';
 import type { WorldPanelDecl } from 'cortico/core/types.ts';
+import { decodeText } from 'cortico/core/util.ts';
 import type { GitWorkspaceMemory } from './memory.ts';
 import { AUTHOR_OPERATOR } from './workspaceGit.ts';
 import { panelText } from './strings.ts';
@@ -137,10 +138,11 @@ function readFilePanel(t: Text, ws: GitWorkspaceMemory, rel: string): WorkspaceF
   if (st.isDirectory()) throw new Error(t.isDirectory(path));
   if (st.size > FILE_MAX_BYTES) throw new Error(t.tooLargeToPreview);
   const buf = readFileSync(abs);
-  if (buf.includes(0)) throw new Error(t.binaryFile);
+  const content = decodeText(buf);
+  if (content.includes('\0')) throw new Error(t.binaryFile);
   return {
     path,
-    content: buf.toString('utf8'),
+    content,
     revision: revisionOf(buf),
     size: st.size,
     mtime: st.mtime.toISOString(),
