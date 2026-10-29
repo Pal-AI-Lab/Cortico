@@ -3,9 +3,9 @@
  * 两者按 UTF-8 读都读不出原文。
  */
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { nowIso, parseTimeIn, readTextFile } from '../../src/core/util.ts';
 
 const dirs: string[] = [];
@@ -47,6 +47,19 @@ describe('readTextFile', () => {
     const file = join(tempDir(), 'c.txt');
     writeUtf8Bom(file, '{ "bot": "cormini" }');
     expect(readTextFile(file)).toBe('{ "bot": "cormini" }');
+  });
+
+  it('仓里读文本文件都走 readTextFile,只有 Core 按字节偏移截断或分段读的两份追加日志例外', () => {
+    const repo = join(import.meta.dirname, '../..');
+    const offenders: string[] = [];
+    for (const top of ['src', 'bin', 'bots', 'scripts', 'templates']) {
+      for (const rel of readdirSync(join(repo, top), { recursive: true }) as string[]) {
+        const path = `${top}/${rel.split(sep).join('/')}`;
+        if (!/\.(ts|tsx|mjs)$/.test(path) || /(^|\/)(node_modules|tests)\//.test(path) || path.endsWith('.test.ts')) continue;
+        if (/readFile(Sync)?\([^;]*?['"]utf-?8['"]/.test(readFileSync(join(repo, path), 'utf8'))) offenders.push(path);
+      }
+    }
+    expect(offenders.sort()).toEqual(['src/core/event-store.ts', 'src/protocol/open-responses/context-log.ts']);
   });
 });
 

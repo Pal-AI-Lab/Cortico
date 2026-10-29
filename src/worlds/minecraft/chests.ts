@@ -2,9 +2,10 @@
  * 按维度与坐标保存容器上次读取的内容，供容器选择、快照和蓝图材料统计使用。
  * 炉子另外记录槽位与预计完成时间；工作站记录放置时刻。
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { ItemStack } from './terrain.ts';
+import { readTextFile } from '../../core/util.ts';
 
 /** 炉子族方块名(原版三种炉子;槽位名照原版 input/fuel/output) */
 export const FURNACE_BLOCKS = ['furnace', 'smoker', 'blast_furnace'] as const;
@@ -259,7 +260,7 @@ export class ChestBook {
 
   private load(): void {
     if (!this.file || !existsSync(this.file)) return;
-    const raw = readFileSync(this.file, 'utf8').trim();
+    const raw = readTextFile(this.file).trim();
     if (!raw) return;
     const data = JSON.parse(raw) as Record<string, ChestRecord>;
     for (const [k, v] of Object.entries(data)) {

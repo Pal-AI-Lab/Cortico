@@ -13,7 +13,7 @@ import { functionCall, functionResult, message } from '../src/protocol/open-resp
  *   CORTICO_DEV_MINIMAL=1 npx tsx scripts/dev-webui.ts   → 只挂框架级那一套(见下方 MINIMAL)
  *   CORTICO_DEV_PASSWORD=xxx npx tsx scripts/dev-webui.ts → 带访问密码起,用来看登录页
  */
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -55,7 +55,7 @@ import { aggregateUsage } from '../src/core/cost.ts';
 import { createUsageRates } from '../src/core/usage-rates.ts';
 import { priceUsage, unknownMeters } from '../src/core/generation.ts';
 import { snapshotPrice } from '../src/providers/pricebook.ts';
-import { nullLogger } from '../src/core/util.ts';
+import { nullLogger, readTextFile } from '../src/core/util.ts';
 import type {
   World, WorldWebUiDecl, ToolSchema, ToolTag, UsageRecord,
 } from '../src/core/types.ts';
@@ -410,8 +410,8 @@ const devPromptDocs = [
       { name: 'memory.all', description: 'MEMORY 0~4 整块。', multiline: true },
     ],
   },
-  { key: 'worlds.console.envPrompt', title: '控制台 · 环境提示词', scope: 'world' as const, description: '控制台对话环境的常驻事实。', content: readFileSync(promptDocPathOf(consoleWorld), 'utf8'), revision: 'dev-web-1' },
-  { key: 'worlds.websearch.envPrompt', title: 'WebSearch · 环境提示词', scope: 'world' as const, description: '搜索工具 World 的可选常驻环境。', content: readFileSync(promptDocPathOf(websearch), 'utf8'), revision: 'dev-search-1' },
+  { key: 'worlds.console.envPrompt', title: '控制台 · 环境提示词', scope: 'world' as const, description: '控制台对话环境的常驻事实。', content: readTextFile(promptDocPathOf(consoleWorld)), revision: 'dev-web-1' },
+  { key: 'worlds.websearch.envPrompt', title: 'WebSearch · 环境提示词', scope: 'world' as const, description: '搜索工具 World 的可选常驻环境。', content: readTextFile(promptDocPathOf(websearch)), revision: 'dev-search-1' },
 ];
 
 const port = Number(process.env.CORTICO_PORT || 8848);

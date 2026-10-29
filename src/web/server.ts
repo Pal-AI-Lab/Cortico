@@ -27,7 +27,7 @@ import type { ProviderAuth, ProviderDescribe } from '../providers/base.ts';
 import type { SessionStats } from '../core/sessions.ts';
 import type { UsageAggregate, UsageBucketOption } from '../core/cost.ts';
 import type { UsageRateSource } from '../core/usage-rates.ts';
-import { estimateMessagesTokens } from '../core/util.ts';
+import { estimateMessagesTokens, readTextFile } from '../core/util.ts';
 import { blobScheme } from '../core/blobs.ts';
 import { coerceGroupValues } from '../core/config-schema.ts';
 import { isLanguage, languageTag, LocalizedError, systemLanguage, type Language } from '../core/language.ts';
@@ -1264,7 +1264,7 @@ export class WebApp {
 
   private serveLogin(res: Response): void {
     const file = fileURLToPath(new URL('./public/login.html', import.meta.url));
-    let html = readFileSync(file, 'utf8');
+    let html = readTextFile(file);
     html = html.replace('<html lang="zh-CN">', `<html lang="${languageTag(this.language)}">`);
     res.setHeader('Cache-Control', 'no-store');
     res.type('html').send(html);
@@ -2459,7 +2459,7 @@ export class WebApp {
       const file = join(publicDir, 'index.html');
       let html: string;
       try {
-        html = readFileSync(file, 'utf8');
+        html = readTextFile(file);
       } catch (err) {
         res.status(500).send(String(err));
         return;

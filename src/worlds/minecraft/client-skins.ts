@@ -6,6 +6,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Logger } from '../../core/types.ts';
+import { readTextFile } from '../../core/util.ts';
 
 export type SkinRole = 'bot' | 'player';
 
@@ -141,7 +142,7 @@ export function applySkins(
       done.push(username);
     }
     const configFile = join(gameDir, CSL_DIR, CSL_CONFIG);
-    const prev = existsSync(configFile) ? readFileSync(configFile, 'utf8') : '';
+    const prev = existsSync(configFile) ? readTextFile(configFile) : '';
     const next = mergeSkinLoaderConfig(prev);
     if (next !== prev) {
       mkdirSync(join(gameDir, CSL_DIR), { recursive: true });

@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { writeStateFile } from './state-file.ts';
 import type { AgentAnnouncementState } from './types.ts';
+import { readTextFile } from '../../../core/util.ts';
 
 const EMPTY_STATE: AgentAnnouncementState = {
   schemaVersion: 1,
@@ -38,7 +39,7 @@ export class AgentAnnouncementStore {
   private load(): void {
     if (!this.file || !existsSync(this.file)) return;
     try {
-      const raw = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<AgentAnnouncementState>;
+      const raw = JSON.parse(readTextFile(this.file)) as Partial<AgentAnnouncementState>;
       if (raw.schemaVersion !== 1 || typeof raw.text !== 'string') return;
       this.state = {
         schemaVersion: 1,

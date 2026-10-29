@@ -40,6 +40,8 @@ Windows 把 WebUI 事件发给前台进程组里的每一个进程。`bin/cortic
 
 ## 文本文件编码
 
-部署清单、部署配置、共享端点配置、包内 World 配置与密钥文件按 BOM 解码:UTF-8、
-带 BOM 的 UTF-8 与 UTF-16 LE 都读得出来。PowerShell 5.1 的 `>` 与 `Out-File` 默认写 UTF-16 LE,
+框架、仓内 bot 与 World 整份读取的文本文件都按 BOM 解码:UTF-8、带 BOM 的 UTF-8 与 UTF-16 LE 都读得出来,
+包括部署里的配置、密钥、提示词与 Memory 里的文件，以及扩展的 `package.json`。整份改写时存成无 BOM 的 UTF-8。
+`data/` 下由 Core 续写、按字节偏移读的日志(事件分片、session 文件、`usage.jsonl`、`log.jsonl`)只认无 BOM 的 UTF-8。
+PowerShell 5.1 的 `>` 与 `Out-File` 默认写 UTF-16 LE,
 `Set-Content` 默认写当前代码页的 ANSI;非 ASCII 内容用 `-Encoding utf8` 指明。

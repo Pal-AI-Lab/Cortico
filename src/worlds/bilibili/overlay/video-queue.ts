@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { writeStateFile } from './state-file.ts';
 import type { VideoQueueItem, VideoQueueState } from './types.ts';
+import { readTextFile } from '../../../core/util.ts';
 
 /** BV 号是 `BV1` 加 9 位 base58 字符。 */
 const BVID_RE = /(?<![0-9A-Za-z])[Bb][Vv]1[1-9A-HJ-NP-Za-km-z]{9}(?![0-9A-Za-z])/;
@@ -82,7 +83,7 @@ export class VideoQueueStore {
   private load(): void {
     if (!this.file || !existsSync(this.file)) return;
     try {
-      const raw = JSON.parse(readFileSync(this.file, 'utf8')) as Partial<VideoQueueState>;
+      const raw = JSON.parse(readTextFile(this.file)) as Partial<VideoQueueState>;
       if (raw.schemaVersion !== 1 || !Array.isArray(raw.items)) return;
       this.state = {
         schemaVersion: 1,

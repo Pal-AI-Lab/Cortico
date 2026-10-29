@@ -2,9 +2,9 @@
  * 持久化最近一次记录死亡的世界、死亡计数与近期死因。
  * 每日计数以部署时区 06:00 为日界；记录不同世界的死亡时重置并覆盖原账本。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { nowIso } from '../../core/util.ts';
+import { nowIso, readTextFile } from '../../core/util.ts';
 
 /** 死亡时刻、服务端死因原文与坐标；未获取死因时为 null。 */
 interface DeathFact {
@@ -45,7 +45,7 @@ export function loadDeaths(file: string | null): DeathToll {
   if (!file || !existsSync(file)) return { ...EMPTY };
   let data: Partial<DeathToll>;
   try {
-    data = JSON.parse(readFileSync(file, 'utf8')) as Partial<DeathToll>;
+    data = JSON.parse(readTextFile(file)) as Partial<DeathToll>;
   } catch {
     return { ...EMPTY };
   }

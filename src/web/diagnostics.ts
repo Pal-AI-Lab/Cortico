@@ -7,11 +7,11 @@
  */
 
 import { dirname, join } from 'node:path';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import type { ContextRecord } from '../protocol/open-responses/context.ts';
 import type { EventEnvelope, LogRecord, ModelSpec } from '../core/types.ts';
 import type { SessionStats } from '../core/sessions.ts';
-import { redactSecrets } from '../core/util.ts';
+import { redactSecrets, readTextFile } from '../core/util.ts';
 import { logPredicate, readRunsIndex, readTailRecordsWhere, type RunIndexRow } from './files.ts';
 
 /**
@@ -76,7 +76,7 @@ export interface DiagnosticsBundle {
 }
 
 function readJson(file: string): unknown {
-  return existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as unknown) : null;
+  return existsSync(file) ? (JSON.parse(readTextFile(file)) as unknown) : null;
 }
 
 export function buildDiagnostics(sources: DiagnosticsSources): DiagnosticsBundle {

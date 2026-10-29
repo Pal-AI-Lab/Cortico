@@ -3,7 +3,7 @@
  * `pnpm check:extension` 共用。World 与 bot 在 `dry-mount.ts` 的假部署里构造,读 `webUi('zh')` 声明的
  * 提示词模板原文;provider 只读模块字段。不调用 `start()`。报告只有英文。
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { isDeepStrictEqual } from 'node:util';
 import type { CoreConfig, PromptDocDecl, ToolSchema } from '../core/types.ts';
 import type { BotDefinition } from '../bot.ts';
@@ -13,6 +13,7 @@ import { extensionPackageFile } from '../extensions.ts';
 import type { ExtensionKind } from './manifest.ts';
 import type { ExtensionDescribeFile, PromptDescribe } from './describe.ts';
 import { fakeLoadedConfig, fakeWorldContext, type BotDryMountOptions, type DryMountReport } from './dry-mount.ts';
+import { readTextFile } from '../core/util.ts';
 
 /** `cortico.describe` 缺省时的包内路径。 */
 export const DEFAULT_DESCRIBE_FILE = 'describe.json';
@@ -32,7 +33,7 @@ function promptsOf(docs: readonly PromptDocDecl[]): PromptDescribe[] {
   for (const doc of docs) {
     if (seen.has(doc.key) || !existsSync(doc.path)) continue;
     seen.add(doc.key);
-    prompts.push({ key: doc.key, title: doc.title, ...(doc.role ? { role: doc.role } : {}), content: readFileSync(doc.path, 'utf8') });
+    prompts.push({ key: doc.key, title: doc.title, ...(doc.role ? { role: doc.role } : {}), content: readTextFile(doc.path) });
   }
   return prompts;
 }
@@ -163,7 +164,7 @@ export async function checkDescribe(
   }
   let written: unknown;
   try {
-    written = JSON.parse(readFileSync(file, 'utf8'));
+    written = JSON.parse(readTextFile(file));
   } catch (error) {
     failures.push(`${describePath} is not valid JSON (${error instanceof Error ? error.message : String(error)}). ${rerun}`);
     return report;

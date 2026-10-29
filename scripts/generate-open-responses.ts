@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { readTextFile } from '../src/core/util.ts';
 
 type Schema = {
   $ref?: string; type?: string | string[]; enum?: unknown[]; const?: unknown;
@@ -44,5 +45,5 @@ const generated = [
   '',
 ].join('\n');
 if (process.argv.includes('--check')) {
-  if (readFileSync(resolve(root, 'generated.ts'), 'utf8') !== generated) throw new Error('Open Responses types are out of date');
+  if (readTextFile(resolve(root, 'generated.ts')) !== generated) throw new Error('Open Responses types are out of date');
 } else writeFileSync(resolve(root, 'generated.ts'), generated);

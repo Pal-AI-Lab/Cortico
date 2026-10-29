@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readTextFile } from 'cortico/core/util.ts';
 
 /** 人物档案目录;首见唤起按 viewers/<来源>/<键>.md 机械查档。 */
 export const VIEWERS_DIR = 'viewers';
@@ -16,5 +16,5 @@ export const VIEWER_MEMORY_NOTE_FILE = join(
 
 /** 此刻的说明文本;前缀与 WebUI 记忆面板共读这一份。 */
 export function viewerMemoryNote(): string {
-  return readFileSync(VIEWER_MEMORY_NOTE_FILE, 'utf8').trim();
+  return readTextFile(VIEWER_MEMORY_NOTE_FILE).trim();
 }

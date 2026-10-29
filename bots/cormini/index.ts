@@ -1,6 +1,5 @@
 /** Model choices are bot-owned; framework WebUI surfaces are derived by `createBot`. */
 import { resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
 import type { CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
@@ -9,6 +8,7 @@ import { describeTools, type WorldDeclaration } from 'cortico/world.ts';
 import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
 import { CORMINI_CONTEXT_DEFAULTS, CORMINI_TOOL_DECLS, CORMINI_TOOL_SUMMARIES, Cormini, type ContextStagePolicy } from './persona/persona.ts';
 import { contextStageConfigGroup } from './persona/config.ts';
+import { readTextFile } from 'cortico/core/util.ts';
 
 const HERE = resolve(import.meta.dirname);
 
@@ -33,7 +33,7 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
     memoryDir: loaded.memoryDir,
     context: () => cfg.context,
     rounds: { ...cfg.rounds },
-    seedConstitution: readFileSync(resolve(HERE, 'persona/CONSTITUTION.seed.md'), 'utf8'),
+    seedConstitution: readTextFile(resolve(HERE, 'persona/CONSTITUTION.seed.md')),
     worlds: worlds,
     // 部署侧的自述覆盖:存在就用它,WebUI 保存也落到那边(见 PromptDocDecl.deploymentPath)。
     orientationOverrideFile: resolve(loaded.rootDir, 'prompts', 'ORIENTATION.md'),

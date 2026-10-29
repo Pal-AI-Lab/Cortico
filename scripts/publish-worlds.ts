@@ -10,7 +10,7 @@
  * 包名在 npm 上已有占位版本,版本号可能低于占位版,所以发布显式带 `--tag latest`。
  */
 import * as esbuild from 'esbuild';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { dirname, join, relative, resolve, sep } from 'node:path';
@@ -18,6 +18,7 @@ import { pathToFileURL } from 'node:url';
 import { EXTENSION_API_VERSIONS, FRAMEWORK_SPECIFIER } from '../src/extensions/manifest.ts';
 import { DEFAULT_DESCRIBE_FILE, exportDescribe } from '../src/extensions/describe-export.ts';
 import type { RootPackageJson } from './publish-package.ts';
+import { readTextFile } from '../src/core/util.ts';
 
 export interface WorldPackageSpec {
   id: string;
@@ -108,7 +109,7 @@ export function planWorldPackage(id: string): WorldPackagePlan {
   for (const file of walk(worldDir)) {
     if (!file.endsWith('.ts') || file.startsWith(webUiDir + sep)) continue;
     const rel = posix(relative(worldDir, file));
-    const text = readFileSync(file, 'utf8').replace(RELATIVE_RE, (whole, head: string, quote: string, spec: string) => {
+    const text = readTextFile(file).replace(RELATIVE_RE, (whole, head: string, quote: string, spec: string) => {
       const target = resolve(dirname(file), spec);
       if (target.startsWith(worldDir + sep)) return whole;
       if (!target.startsWith(SRC_DIR + sep) || head.startsWith('new URL')) {
@@ -133,7 +134,7 @@ export function planWorldPackage(id: string): WorldPackagePlan {
  * 只对测过的那一版成立。
  */
 function installedVersion(name: string): string {
-  const pkg = JSON.parse(readFileSync(join(REPO_ROOT, 'node_modules', ...name.split('/'), 'package.json'), 'utf8')) as { version: string };
+  const pkg = JSON.parse(readTextFile(join(REPO_ROOT, 'node_modules', ...name.split('/'), 'package.json'))) as { version: string };
   return pkg.version;
 }
 
@@ -263,7 +264,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   const version = argv.find((a) => a.startsWith('--version='))?.slice('--version='.length);
-  const root = JSON.parse(readFileSync(join(REPO_ROOT, 'package.json'), 'utf8')) as RootPackageJson;
+  const root = JSON.parse(readTextFile(join(REPO_ROOT, 'package.json'))) as RootPackageJson;
   if (version) root.version = version;
   const specs = WORLD_PACKAGES.filter((s) => ids.length === 0 || ids.includes(s.id));
   const staged: { name: string; out: string }[] = [];

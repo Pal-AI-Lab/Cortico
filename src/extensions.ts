@@ -7,7 +7,7 @@
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
@@ -469,7 +469,7 @@ function ignoredBuilds(dir: string): string[] {
   const file = join(dir, 'node_modules', '.modules.yaml');
   if (!existsSync(file)) return [];
   let state: { ignoredBuilds?: unknown };
-  try { state = JSON.parse(readFileSync(file, 'utf8')) as typeof state; } catch { return []; }
+  try { state = JSON.parse(readTextFile(file)) as typeof state; } catch { return []; }
   if (!Array.isArray(state.ignoredBuilds)) return [];
   return state.ignoredBuilds.filter((e): e is string => typeof e === 'string').map((e) => /^(@?[^@]+)@/.exec(e)?.[1] ?? e);
 }
@@ -480,7 +480,7 @@ function ignoredBuilds(dir: string): string[] {
  */
 function pendingBuilds(dir: string): string[] {
   const file = join(dir, WORKSPACE_FILE);
-  const entries = existsSync(file) ? allowBuildsEntries(readFileSync(file, 'utf8').split(/\r?\n/)) : [];
+  const entries = existsSync(file) ? allowBuildsEntries(readTextFile(file).split(/\r?\n/)) : [];
   const undecided = entries.filter(({ value }) => value !== 'true' && value !== 'false').map(({ name }) => name);
   const unrecorded = ignoredBuilds(dir).filter((name) => !entries.some((e) => e.name === name));
   return [...new Set([...undecided, ...unrecorded])];
@@ -490,7 +490,7 @@ function pendingBuilds(dir: string): string[] {
 function setAllowBuilds(dir: string, names: readonly string[], value: string): void {
   if (!names.length) return;
   const file = join(dir, WORKSPACE_FILE);
-  const raw = readFileSync(file, 'utf8');
+  const raw = readTextFile(file);
   const lines = raw.split(/\r?\n/);
   const entries = allowBuildsEntries(lines);
   for (const { line, indent, quote, name } of entries) {
@@ -510,7 +510,7 @@ function setAllowBuilds(dir: string, names: readonly string[], value: string): v
 }
 /** Cortico 自己 package.json 的 `packageManager`;发布到 npm 的 cortico 包没有这个字段。 */
 function corticoPackageManager(): string | undefined {
-  const { packageManager } = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { packageManager?: unknown };
+  const { packageManager } = JSON.parse(readTextFile(join(repoRoot(), 'package.json'))) as { packageManager?: unknown };
   return typeof packageManager === 'string' ? packageManager : undefined;
 }
 /** .npmrc 里设默认源的那一行;`@scope:registry=` 不算。 */
@@ -707,7 +707,7 @@ export class ExtensionManager {
   configuredRegistry(): string | null {
     const file = join(this.dir, NPMRC);
     if (!existsSync(file)) return null;
-    const values = readFileSync(file, 'utf8').split(/\r?\n/).flatMap((line) => REGISTRY_LINE.exec(line)?.[1].trim() ?? []);
+    const values = readTextFile(file).split(/\r?\n/).flatMap((line) => REGISTRY_LINE.exec(line)?.[1].trim() ?? []);
     return values.at(-1) ?? null;
   }
 
@@ -719,7 +719,7 @@ export class ExtensionManager {
     const value = url.trim();
     if (value && !(/^https?:\/\/\S+$/i.test(value) && URL.canParse(value))) throw extensionError((t) => t.badRegistry(value));
     const file = join(this.prepareDir(), NPMRC);
-    const raw = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const raw = existsSync(file) ? readTextFile(file) : '';
     const eol = raw.includes('\r\n') ? '\r\n' : '\n';
     const lines = raw ? raw.replace(/\r?\n$/, '').split(/\r?\n/) : [];
     const at = lines.findIndex((line) => REGISTRY_LINE.test(line));

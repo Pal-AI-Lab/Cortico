@@ -1,5 +1,5 @@
 /** 装配 Core、Persona、World 与 WebUI；具体 bot 的配置和行为由 BotDefinition 提供。 */
-import { existsSync, mkdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import type {
@@ -35,7 +35,7 @@ import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts'
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
 import { aggregateUsage } from './core/cost.ts';
 import { createUsageRates } from './core/usage-rates.ts';
-import { DeadlineError, nowIso, withDeadline } from './core/util.ts';
+import { DeadlineError, nowIso, withDeadline, readTextFile } from './core/util.ts';
 import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/webui/hub.ts';
 import { ProviderSettings } from './providers/webui/settings.ts';
@@ -383,7 +383,7 @@ function derivePrompts<C extends CoreConfig>(
     return out;
   };
 
-  const readSource = (path: string): string => (existsSync(path) ? readFileSync(path, 'utf8') : '');
+  const readSource = (path: string): string => (existsSync(path) ? readTextFile(path) : '');
 
   const readDoc = (d: Doc, values: Record<string, string>): PromptDocument => {
     const { readPath, origin } = sourceOf(d);
@@ -530,7 +530,7 @@ const BUILTIN_AUTHOR = 'phantivia';
  * 以及不来自扩展的 provider 模块。World 的状态取本进程的装配。
  */
 export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, language: Language): ExtensionInfo[] {
-  const pkg = JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as ExtensionPackageJson;
+  const pkg = JSON.parse(readTextFile(join(repoRoot(), 'package.json'))) as ExtensionPackageJson;
   const version = pkg.version ?? null;
   const common = {
     spec: 'builtin', version, installedVersion: version, webUiClient: false, builtin: true,

@@ -2,10 +2,10 @@
  * 一次进程运行对应一个 run，运行日志保存在 data/runs/<run>/。
  * index.jsonl 在启动与正常关机时各追加一行；暂停沿用 run，重启创建新 run。
  */
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { nowIso } from './util.ts';
+import { nowIso, readTextFile } from './util.ts';
 
 export interface RunInfo {
   id: string;
@@ -48,14 +48,14 @@ export function listRuns(dataDir: string): string[] {
 function gitSha(repoRoot: string | undefined): string | null {
   if (!repoRoot) return null;
   try {
-    const head = readFileSync(join(repoRoot, '.git', 'HEAD'), 'utf8').trim();
+    const head = readTextFile(join(repoRoot, '.git', 'HEAD')).trim();
     if (!head.startsWith('ref:')) return head.slice(0, 12);
     const ref = head.slice(4).trim();
     const refFile = resolve(repoRoot, '.git', ref);
-    if (existsSync(refFile)) return readFileSync(refFile, 'utf8').trim().slice(0, 12);
+    if (existsSync(refFile)) return readTextFile(refFile).trim().slice(0, 12);
     const packed = join(repoRoot, '.git', 'packed-refs');
     if (!existsSync(packed)) return null;
-    for (const line of readFileSync(packed, 'utf8').split('\n')) {
+    for (const line of readTextFile(packed).split('\n')) {
       const [sha, name] = line.trim().split(' ');
       if (name === ref) return sha.slice(0, 12);
     }
@@ -69,7 +69,7 @@ function gitSha(repoRoot: string | undefined): string | null {
 function lastIndexedRun(runsDir: string): string | null {
   const file = join(runsDir, 'index.jsonl');
   if (!existsSync(file)) return null;
-  const lines = readFileSync(file, 'utf8').split('\n');
+  const lines = readTextFile(file).split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i].trim()) continue;
     try {

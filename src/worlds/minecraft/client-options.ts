@@ -2,9 +2,10 @@
  * 启动前写入 options.txt 和 SpectatorPlus 客户端配置。
  * 共用 gameDir 的客户端共用设置文件；独立设置需要不同目录。
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import type { Logger } from '../../core/types.ts';
+import { readTextFile } from '../../core/util.ts';
 
 /**
  * 合并 options.txt 时保留行序与未覆盖键,缺失键追加到末尾。
@@ -30,7 +31,7 @@ export function mergeOptions(prev: string, overrides: Record<string, string>): s
 function writeOptions(gameDir: string, overrides: Record<string, string>, note: string, log: Logger): void {
   const file = join(gameDir, 'options.txt');
   try {
-    const prev = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const prev = existsSync(file) ? readTextFile(file) : '';
     const next = mergeOptions(prev, overrides);
     if (next === prev) return;
     writeFileSync(file, next, 'utf8');
@@ -71,7 +72,7 @@ export function mergeSpectatorPlusConfig(prev: string, overrides: Record<string,
 export function applySpectatorPlusConfig(gameDir: string, log: Logger, openScreens: boolean): void {
   const file = join(gameDir, 'config', 'spectatorplus', 'client.json');
   try {
-    const prev = existsSync(file) ? readFileSync(file, 'utf8') : '';
+    const prev = existsSync(file) ? readTextFile(file) : '';
     const next = mergeSpectatorPlusConfig(prev, { openScreens });
     if (next === prev) return;
     mkdirSync(dirname(file), { recursive: true });

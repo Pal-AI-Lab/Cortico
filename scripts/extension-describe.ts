@@ -3,7 +3,7 @@
  * package.json 的 cortico 块。内容来自默认导出的 describe 与干装载结果,见 src/extensions/describe-export.ts。
  * 定义没写 describe 或构造失败时退出码为 1。
  */
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ import { parseExtensionManifest, type ExtensionPackageJson } from '../src/extens
 import { registerFrameworkResolver } from '../src/extensions/runtime.ts';
 import { DEFAULT_DESCRIBE_FILE, MISSING_DESCRIBE, exportDescribe } from '../src/extensions/describe-export.ts';
 import { extensionShapeMismatch, isBotDefinition, isProviderModule, isWorldDefinition, resolveExtensionEntry } from '../src/extensions.ts';
+import { readTextFile } from '../src/core/util.ts';
 
 function exit(message: string): void {
   console.error(message);
@@ -23,7 +24,7 @@ async function main(): Promise<void> {
   const pkgDir = resolve(process.cwd(), arg);
   const pkgFile = join(pkgDir, 'package.json');
   if (!existsSync(pkgFile)) return exit(`${pkgFile} does not exist: the argument must be the extension package root, the directory that holds package.json.`);
-  const pkg = JSON.parse(readFileSync(pkgFile, 'utf8')) as ExtensionPackageJson & { files?: unknown };
+  const pkg = JSON.parse(readTextFile(pkgFile)) as ExtensionPackageJson & { files?: unknown };
 
   const parsed = parseExtensionManifest(pkg, 'en');
   for (const warning of parsed.warnings) console.log(`⚠ ${warning}`);

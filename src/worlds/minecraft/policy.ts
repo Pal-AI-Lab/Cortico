@@ -10,9 +10,10 @@
  * 连入播报点明是上一场留下的。`fight` 是例外:重启回 `DEFAULT_FIGHT`(回弹本身也要
  * 播报),理由见 `loadPolicyReport`。
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { zhName } from './names.ts';
+import { readTextFile } from '../../core/util.ts';
 
 /** 赶路遇坎挖还是垫;接寻路器的挖/垫代价系数 */
 export type TravelPrefer = 'auto' | 'dig' | 'place';
@@ -424,7 +425,7 @@ export function loadPolicyReport(file: string | null): PolicyLoad {
   if (!file || !existsSync(file)) return { settings: out, droppedFight: null };
   let data: Record<string, unknown>;
   try {
-    const raw = readFileSync(file, 'utf8').trim();
+    const raw = readTextFile(file).trim();
     if (!raw) return { settings: out, droppedFight: null };
     data = JSON.parse(raw) as Record<string, unknown>;
   } catch {

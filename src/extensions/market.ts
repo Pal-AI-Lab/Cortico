@@ -5,7 +5,7 @@
  * 没登录时评论读 Action 写进索引仓的 `comments/` 快照:App 私钥不随 Cortico 分发,匿名读不了 Discussions。
  */
 
-import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { baseLanguage, LocalizedError, type Language } from '../core/language.ts';
 import type { Logger, ToolTag } from '../core/types.ts';
@@ -26,6 +26,7 @@ import type {
   MarketTag,
 } from '../web/server.ts';
 import { text } from './strings.ts';
+import { readTextFile } from '../core/util.ts';
 
 const REPO_OWNER = 'Pal-AI-Lab';
 const REPO_NAME = 'cortico-extensions';
@@ -474,7 +475,7 @@ export class ExtensionMarket {
 
   private token(): TokenFile | null {
     const file = join(this.dir, GITHUB_TOKEN_FILE);
-    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as TokenFile : null;
+    return existsSync(file) ? JSON.parse(readTextFile(file)) as TokenFile : null;
   }
 
   private checkName(name: string): void {
@@ -487,7 +488,7 @@ export class ExtensionMarket {
 
   private readJsonFile<T>(name: string): T | null {
     const file = join(this.dir, name);
-    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) as T : null;
+    return existsSync(file) ? JSON.parse(readTextFile(file)) as T : null;
   }
 
   private writeJsonFile(name: string, value: unknown): void {

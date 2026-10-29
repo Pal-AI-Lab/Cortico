@@ -1,9 +1,10 @@
 /** 按世界与维度分别记录 8 个方向的历史最远距离与末端群系。 */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { normalizeDimension } from './escape.ts';
 import { zhBiome, zhDimension } from './names.ts';
 import { DIRECTION_ZH, type Direction } from './terrain.ts';
+import { readTextFile } from '../../core/util.ts';
 
 interface ExploreRecord {
   distance: number;
@@ -72,7 +73,7 @@ export function loadExplored(file: string | null): ExploreLedger {
   if (!file || !existsSync(file)) return empty();
   let data: unknown;
   try {
-    const raw = readFileSync(file, 'utf8').trim();
+    const raw = readTextFile(file).trim();
     if (!raw) return empty();
     data = JSON.parse(raw);
   } catch {

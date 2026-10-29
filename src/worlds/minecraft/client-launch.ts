@@ -3,8 +3,9 @@
  * client.ts 管理进程生命周期。
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { readTextFile } from '../../core/util.ts';
 
 interface Rule {
   action?: 'allow' | 'disallow';
@@ -147,7 +148,7 @@ function loadVersionChain(gameDir: string, versionId: string): VersionJson[] | {
     if (!existsSync(file)) return { error: `找不到版本文件 ${file}` };
     let json: VersionJson;
     try {
-      json = JSON.parse(readFileSync(file, 'utf8')) as VersionJson;
+      json = JSON.parse(readTextFile(file)) as VersionJson;
     } catch (err) {
       return { error: `版本文件解析失败 ${file}: ${(err as Error).message}` };
     }

@@ -5,8 +5,9 @@
  * WebSocket 升级与只能带 URL 的 GET 调用随之携带。
  */
 import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readTextFile } from '../core/util.ts';
 
 export const SESSION_COOKIE = 'cortico_session';
 export const AUTH_KEY_FILE = 'web-auth.key';
@@ -53,7 +54,7 @@ export class WebUiAuth {
   /** 这个密码在这个数据目录下的登录令牌；盐文件在第一次用到时生成，解码后不是 SALT_BYTES 字节时重新生成。 */
   issue(): string {
     if (this.token === null) {
-      let salt = existsSync(this.keyFile) ? Buffer.from(readFileSync(this.keyFile, 'utf8').trim(), 'hex') : Buffer.alloc(0);
+      let salt = existsSync(this.keyFile) ? Buffer.from(readTextFile(this.keyFile).trim(), 'hex') : Buffer.alloc(0);
       if (salt.length !== SALT_BYTES) {
         salt = randomBytes(SALT_BYTES);
         mkdirSync(dirname(this.keyFile), { recursive: true });

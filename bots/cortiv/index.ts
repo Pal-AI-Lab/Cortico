@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { readFileSync } from 'node:fs';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
 import type { ConfigGroup, CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
@@ -11,6 +10,7 @@ import type { MinecraftConfigSection } from 'cortico/worlds/minecraft/config.ts'
 import { CORTIV_TOOL_DECLS, CortiV } from './persona/persona.ts';
 import { CORMINI_TOOL_SUMMARIES, type ContextStagePolicy } from '../cormini/persona/persona.ts';
 import { contextStageConfigGroup } from '../cormini/persona/config.ts';
+import { readTextFile } from 'cortico/core/util.ts';
 
 const HERE = resolve(import.meta.dirname);
 
@@ -85,7 +85,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
     memoryDir: loaded.memoryDir,
     context: () => cfg.context,
     rounds: { ...cfg.rounds },
-    seedConstitution: readFileSync(resolve(HERE, 'persona/CONSTITUTION.seed.md'), 'utf8'),
+    seedConstitution: readTextFile(resolve(HERE, 'persona/CONSTITUTION.seed.md')),
     worlds: worlds,
     // Persona把它自报为可编辑的静态前缀源(Persona卡),前缀也从它现读。
     orientationFile: ORIENTATION_FILE,

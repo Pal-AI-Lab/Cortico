@@ -2,8 +2,9 @@
  * 按维度与坐标持久化已完成成果，跨任务保留。
  * 寻路禁止在登记格头顶垫脚、也不挖登记格；显式挖掘与放置仍执行，并在回执中报告涉及的成果数量。
  */
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { readTextFile } from '../../core/util.ts';
 
 /** 登记的三类。`blueprint` 是完工蓝图占的格,`farmland` 是锄成的耕地,`crop` 是种下的作物 */
 type WorkKind = 'blueprint' | 'farmland' | 'crop';
@@ -61,7 +62,7 @@ function parseFile(raw: string): WorksFile {
 export function loadWorks(file: string | null): WorksFile {
   if (!file || !existsSync(file)) return {};
   try {
-    const raw = readFileSync(file, 'utf8').trim();
+    const raw = readTextFile(file).trim();
     return raw ? parseFile(raw) : {};
   } catch {
     return {};

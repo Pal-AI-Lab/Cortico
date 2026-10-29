@@ -14,7 +14,6 @@
  * `check:extension` 不经过本模块,上一版契约的包在那里判失败。删除时连同调用点(搜 previous-contract)、
  * 各语言 strings 里的 `previousContract` 与文档里写过渡层的段落一起删。
  */
-import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { NextFunction, Request, Response } from 'express';
@@ -23,6 +22,7 @@ import type { CoreConfig } from '../core/types.ts';
 import type { ProviderModule } from '../providers/base.ts';
 import type { WorldDeclaration, WorldDefinition, WorldSection } from '../world.ts';
 import type { ExtensionKind } from './manifest.ts';
+import { readTextFile } from '../core/util.ts';
 
 /** 写死而不由当前版本减一推出:契约再加一时这里不会跟着指向新的上一版。 */
 export const PREVIOUS_CONTRACT_VERSIONS: Readonly<Record<ExtensionKind, number>> = {
@@ -123,7 +123,7 @@ const importerDirs = new Map<string, boolean>();
 function corticoBlockAt(dir: string): Record<string, unknown> | null {
   let raw: string;
   try {
-    raw = readFileSync(join(dir, 'package.json'), 'utf8');
+    raw = readTextFile(join(dir, 'package.json'));
   } catch {
     return null;
   }

@@ -1,5 +1,6 @@
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readSync } from 'node:fs';
+import { closeSync, existsSync, fstatSync, openSync, readSync } from 'node:fs';
 import { LOG_LEVEL_RANK, type LogLevel, type LogRecord } from '../core/types.ts';
+import { readTextFile } from '../core/util.ts';
 
 const TAIL_CHUNK = 512 * 1024;
 /** 过滤查询从文件尾部向前最多扫这么多字节 */
@@ -96,7 +97,7 @@ export interface RunIndexRow {
 export function readRunsIndex(file: string): RunIndexRow[] {
   if (!existsSync(file)) return [];
   const byRun = new Map<string, RunIndexRow>();
-  for (const line of readFileSync(file, 'utf8').split(/\r?\n/)) {
+  for (const line of readTextFile(file).split(/\r?\n/)) {
     if (!line.trim()) continue;
     let row: RunIndexRow;
     try { row = JSON.parse(line) as RunIndexRow; } catch { continue; }

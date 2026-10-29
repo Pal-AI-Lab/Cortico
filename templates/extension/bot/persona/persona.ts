@@ -1,5 +1,5 @@
 /** Persona 示例：PREFIX.md 渲染前缀，MEMORY.md 全文与 World 环境段进入前缀；memory_write 追加笔记，blobs/ 保存附件，session 声明收集 World 工具。 */
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   BlobStore,
@@ -15,6 +15,7 @@ import type {
 } from 'cortico/core/types.ts';
 import { renderTemplate } from 'cortico/core/template.ts';
 import { FileBlobStore } from './blobs.ts';
+import { readTextFile } from 'cortico/core/util.ts';
 
 export const MEMORY_FILE = 'MEMORY.md';
 const MAIN = 'main';
@@ -66,7 +67,7 @@ export class ExamplePersona implements Persona {
     mkdirSync(this.memoryDir, { recursive: true });
     const memory = join(this.memoryDir, MEMORY_FILE);
     if (!existsSync(memory)) {
-      writeFileSync(memory, readFileSync(join(opts.packageDir, 'persona', 'MEMORY.seed.md'), 'utf8'), 'utf8');
+      writeFileSync(memory, readTextFile(join(opts.packageDir, 'persona', 'MEMORY.seed.md')), 'utf8');
     }
     this.blobs = new FileBlobStore(this.memoryDir);
   }
@@ -77,7 +78,7 @@ export class ExamplePersona implements Persona {
 
   /** 前缀 = 一份模板渲染出的一段;记忆整份进去,每个 World 的环境提示词各占一节。 */
   async systemSegments(ctx: SystemPrefixContext): Promise<PrefixSegment[]> {
-    const template = readFileSync(join(this.opts.packageDir, 'persona', 'PREFIX.md'), 'utf8');
+    const template = readTextFile(join(this.opts.packageDir, 'persona', 'PREFIX.md'));
     const envPrompts = ctx.worlds
       .filter((w) => w.envPrompt.trim())
       .map((w) => `## ${w.id}\n${w.envPrompt.trim()}`)
@@ -86,7 +87,7 @@ export class ExamplePersona implements Persona {
       {
         title: 'PREFIX',
         text: renderTemplate(template, {
-          'persona.memory': readFileSync(join(this.memoryDir, MEMORY_FILE), 'utf8').trim(),
+          'persona.memory': readTextFile(join(this.memoryDir, MEMORY_FILE)).trim(),
           'worlds.envPrompts': envPrompts,
         }),
       },

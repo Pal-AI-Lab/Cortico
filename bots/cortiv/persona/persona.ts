@@ -24,7 +24,7 @@ import { hasRole, textOf } from 'cortico/protocol/open-responses/context-helpers
  *    工具面 = World 点名的那几把 + 她自己的工作区文件工具;单实例、15 分钟封顶。
  */
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import type {
   CognitionContext,
@@ -39,7 +39,7 @@ import type {
   ToolDef,
 } from 'cortico/core/types.ts';
 import type { Language } from 'cortico/core/language.ts';
-import { DeadlineError, estimateTokens, withDeadline } from 'cortico/core/util.ts';
+import { DeadlineError, estimateTokens, withDeadline, readTextFile } from 'cortico/core/util.ts';
 import { CORMINI_TOOL_DECLS, Cormini, HANDOFF_DIR, MAIN, type CorminiOptions } from '../../cormini/persona/persona.ts';
 import { AUTHOR_SELF, type WorkspaceGit } from '../../cormini/persona/workspaceGit.ts';
 import { personaWebUiDecl } from './webUiSurface.ts';
@@ -584,7 +584,7 @@ export class CortiV extends Cormini {
       if (!statSync(dir).isDirectory()) continue;
       for (const file of readdirSync(dir)) {
         if (file.startsWith('.') || !file.endsWith('.md')) continue;
-        const content = readFileSync(join(dir, file), 'utf8');
+        const content = readTextFile(join(dir, file));
         const summary = content.split('\n').map((l) => l.trim()).find(Boolean) ?? '';
         out.push({ source, key: file.slice(0, -3), path: `${VIEWERS_DIR}/${source}/${file}`, summary, content });
       }
@@ -635,7 +635,7 @@ export class CortiV extends Cormini {
   /** 工作区里这一刻的正文;不存在或读不出返回 null(逃逸路径同样走 null) */
   private readWorkspaceFile(path: string): string | null {
     try {
-      return readFileSync(this.memory.insideWorkspace(path), 'utf8');
+      return readTextFile(this.memory.insideWorkspace(path));
     } catch {
       return null;
     }
@@ -849,7 +849,7 @@ export class CortiV extends Cormini {
     if (uname) this.viewerNames.set(seenKey, uname);
     let content: string | null = null;
     try {
-      content = readFileSync(file, 'utf8');
+      content = readTextFile(file);
     } catch { /* 没档案:走下面的立档提示 */ }
     if (content === null) {
       this.nudgeEnroll(e, seenKey, key, hits, budget, qualified);
@@ -1006,14 +1006,14 @@ export class CortiV extends Cormini {
   /** 梦这一轮写的交接笔记;没写成就返回空串(上一场的旧文件不冒充新的) */
   private readRecent(): string {
     try {
-      return readFileSync(this.memory.insideWorkspace(RECENT_FILE), 'utf8').trim();
+      return readTextFile(this.memory.insideWorkspace(RECENT_FILE)).trim();
     } catch {
       return '';
     }
   }
 
   private dreamPrompt(): string {
-    const constitution = readFileSync(join(this.memoryDir, 'CONSTITUTION.md'), 'utf8').trim();
+    const constitution = readTextFile(join(this.memoryDir, 'CONSTITUTION.md')).trim();
     return [
       '你是下面这份人格在一次上下文交接后的后台整理线程。你与新会话里的主意识是同一个“我”;',
       '主意识此刻仍醒着,在新会话里继续直播/对话。',
