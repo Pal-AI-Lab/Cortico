@@ -93,7 +93,7 @@ function renderEnvTemplate(
   return text ? { text, sourceKey: doc.key } : { text: '' };
 }
 
-/** 读取一个 World 的环境段时出的错。`envPromptVars()` 抛的错在 `detail` 前带上成员名,模板读不出时是文件系统的错误文本。 */
+/** 读取一个 World 的 `envPromptVars()` 时出的错,`detail` 前带上成员名。 */
 export interface WorldReadFailure {
   world: World;
   detail: string;
@@ -101,7 +101,7 @@ export interface WorldReadFailure {
 
 /**
  * 环境模板提供 World 的前缀文本；工具 description 随工具定义发送。
- * `envPromptVars()` 抛错或模板读不出的 World 不进 `contexts`,列入 `failed`,其余 World 照常。
+ * `envPromptVars()` 抛错的 World 不进 `contexts`,列入 `failed`,其余 World 照常。
  */
 export async function collectWorldContexts(
   worlds: World[],
@@ -116,12 +116,8 @@ export async function collectWorldContexts(
       } catch (error) {
         return { world: mod, detail: `envPromptVars(): ${error instanceof Error ? error.message : String(error)}` };
       }
-      try {
-        const { text, sourceKey } = renderEnvTemplate(mod, vars, dirs);
-        return { id: mod.id, envPrompt: text, ...(sourceKey ? { sourceKey } : {}) };
-      } catch (error) {
-        return { world: mod, detail: error instanceof Error ? error.message : String(error) };
-      }
+      const { text, sourceKey } = renderEnvTemplate(mod, vars, dirs);
+      return { id: mod.id, envPrompt: text, ...(sourceKey ? { sourceKey } : {}) };
     }),
   );
   const contexts: WorldPrefixContext[] = [];

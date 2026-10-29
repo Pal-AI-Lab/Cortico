@@ -107,7 +107,7 @@ handler 抛错，或返回值既不是字符串也不是带字符串 text 的对
 装配层将 World 构造失败限制在该 World。启动期 `start()` 抛错的 World 记 error、移出挂载表并带理由回到
 未激活,经 `Persona.onWorldLifecycle` 报一次 `start-failed`,其余 World 照常启动,`enabled` 不变,下次启动再试;
 运行期激活时 `start()` 抛错回滚 `enabled`,不报事件。
-构建前缀或工具表时读取一个已挂载 World 的 `envPromptVars()`、环境模板或 `tools()` 抛错:Core 把它移出挂载表、
+构建前缀或工具表时读取一个已挂载 World 的 `envPromptVars()` 或 `tools()` 抛错:Core 把它移出挂载表、
 作废租约、限时 `stop()`,这次构建不含它,其余 World 照常;装配层带理由把槽位回到未激活,`enabled` 不变,
 报一次 `failed`。恢复已有 session 时若工具读取失败而卸载 World,首个请求前重建 system 前缀,保留历史消息。
 工具流水的 World 归属取自建工具表时读到的工具名。

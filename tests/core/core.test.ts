@@ -409,7 +409,6 @@ describe('Core · 运行中读取 World 失败', () => {
       expect(stopped).toBe(false);
       finishStop();
       await stopping;
-      await failures[0].stopped;
       expect(stops).toBe(1);
     } finally {
       tmp.cleanup();

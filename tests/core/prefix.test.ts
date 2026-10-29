@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -149,15 +149,12 @@ describe('环境提示词的三层覆盖', () => {
 });
 
 describe('collectWorldContexts', () => {
-  it('envPromptVars() 抛错或模板读不出的 World 列入 failed,其余照常进 contexts', async () => {
+  it('envPromptVars() 抛错的 World 列入 failed,其余照常进 contexts', async () => {
     const thrown = makeFakeIO('thrown');
     thrown.envPromptVars = () => { throw new Error('状态未就绪'); };
-    const gone = makeFakeIO('gone');
-    rmSync(gone.webUi!()!.promptDocs![0].path);
-    const { contexts, failed } = await collectWorldContexts([thrown, makeFakeIO('ok', [], 'ok 环境'), gone]);
+    const { contexts, failed } = await collectWorldContexts([thrown, makeFakeIO('ok', [], 'ok 环境')]);
     expect(contexts).toEqual([{ id: 'ok', envPrompt: 'ok 环境', sourceKey: 'worlds.ok.envPrompt' }]);
     expect(failed.map(({ world, detail }) => [world.id, detail])).toEqual([
-      ['gone', expect.stringContaining('ENOENT')],
       ['thrown', 'envPromptVars(): 状态未就绪'],
     ]);
   });
