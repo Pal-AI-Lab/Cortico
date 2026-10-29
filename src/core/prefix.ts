@@ -129,7 +129,10 @@ export async function collectWorldContexts(
   return { contexts, failed };
 }
 
-/** 供 WebUI 观察:前缀的分段视图(与实际发出的前缀同一来源);环境段读取失败的 World 省略。 */
+/**
+ * 供 WebUI 观察:前缀的分段视图,和主循环组前缀走同一条 collectWorldContexts 与 Persona.systemSegments。
+ * 环境段读取失败的 World 在这里只省略、不卸载,所以视图可能和 session 里上一次发出的前缀不同。
+ */
 export async function assembleSystemSegments(deps: AssembleSystemDeps): Promise<PrefixSegment[]> {
   const { persona, worlds, now, timezone, dirs } = deps;
   return persona.systemSegments({
