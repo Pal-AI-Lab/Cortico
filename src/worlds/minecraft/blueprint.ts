@@ -76,6 +76,11 @@ function validateSize(value: unknown, path = 'size_xyz'): SizeXYZ {
   return result as SizeXYZ;
 }
 
+/** 资源名是否合法;命名空间可省,省略时按 `minecraft`(`stone_button`、`minecraft:stone_button`) */
+export function isResourceName(id: string): boolean {
+  return IDENTIFIER_PATTERN.test(id.includes(':') ? id : `minecraft:${id}`);
+}
+
 /** 方块 id:必须带命名空间,全小写(`minecraft:oak_planks`) */
 export function parseBlockId(value: unknown, path = 'block id'): string {
   const id = expectString(value, path);
