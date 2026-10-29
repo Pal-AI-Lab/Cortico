@@ -7,8 +7,10 @@
  * 声明了 dryRun 的技能(入队时一律按试算跑)。结构约束只有一个家,长出新技能时同步。
  *
  * 横向规则(build 的 shape-锚点数、use 的 at/target 互斥、craft 的 item/grid 二选一)
- * 不进表,走技能自己的 parse 钩子;钩子接管该步的全部校验与规范化。
+ * 不进表,走技能自己的 parse 钩子;钩子接管该步其余的校验与规范化。物品英文 id 的形状
+ * 在钩子之前按表统一校验(见 `ITEM_ID_HINT`)。
  */
+import { isResourceName } from './blueprint.ts';
 import {
   ANCHOR_COUNT, FACE_NAMES, SHAPE_NAMES,
   type Anchor, type BlockFace, type BoxFill, type ShapeName,
@@ -322,6 +324,7 @@ type FieldSpec = {
   doc?: string;
   schema?: Record<string, unknown>;
 } & (
+  /** hint 说这个字段写什么,进 schema 说明与缺参报错 */
   | { kind: 'string'; required?: true; hint?: string }
   /** 一串英文 id(可带 `#类别`);空数组等于没写 */
   | { kind: 'names'; hint?: string }
@@ -367,6 +370,12 @@ interface SkillSpec {
 export type MarkLookup = (name: string) => [number, number, number] | { error: string } | null;
 
 const RELATIVE_HINT = '数字或 "~"/"~-3" 相对写法';
+
+/**
+ * hint 含这一串的字段收物品英文 id。parseSteps 在技能钩子之前校验形状,不是资源名
+ * (中文名、带空格、大写)就整批退回;认不认得这个物品留给执行。
+ */
+const ITEM_ID_HINT = '物品英文 id';
 
 /** 一步 use 里连着右键的次数上限 */
 const USE_TIMES_MAX = 16;
@@ -1014,7 +1023,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  边走边找时加 "until" = 路上看见这里头任何一样就停下来报坐标(算做完)。
                                                  名单写方块英文 id,也认类别 ${UNTIL_CATEGORY_DOC};站着扫用不上它`,
     fields: [
-      { key: 'target', kind: 'string', required: true, hint: '要找的方块或活物英文 id', doc: '方块或实体英文 id' },
+      { key: 'target', kind: 'string', required: true, hint: '要找的方块或活物英文 id' },
       {
         key: 'direction', kind: 'enum', values: Object.keys(DIRECTIONS),
         error: `find 的 direction 要是 ${Object.keys(DIRECTIONS).join('/')} 之一`,
@@ -1049,7 +1058,7 @@ const SKILLS: readonly SkillSpec[] = [
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       { key: 'buried', kind: 'flag' },
       { key: 'mature', kind: 'flag' },
-      { key: 'tool', kind: 'string', hint: '物品英文 id 或 fastest', doc: '只覆盖本步;不写时节约耐久' },
+      { key: 'tool', kind: 'string', hint: `${ITEM_ID_HINT} 或 fastest`, doc: '只覆盖本步;不写时节约耐久' },
     ],
   },
   {
@@ -1078,7 +1087,7 @@ const SKILLS: readonly SkillSpec[] = [
       { key: 'at', kind: 'anchor', required: true, error: `tunnel 要 at:[x,y,z](通道终点;${RELATIVE_HINT})`, doc: '通道终点' },
       { key: 'spiral', kind: 'flag', doc: '正上/正下时改挖 2×2 螺旋楼梯(上下都能走)' },
       { key: 'dryRun', kind: 'flag' },
-      { key: 'tool', kind: 'string', hint: '物品英文 id 或 fastest', doc: '只覆盖本步;不写时节约耐久' },
+      { key: 'tool', kind: 'string', hint: `${ITEM_ID_HINT} 或 fastest`, doc: '只覆盖本步;不写时节约耐久' },
       {
         key: 'until', kind: 'names', hint: `方块英文 id 或类别 ${UNTIL_CATEGORY_DOC}`,
         doc: '挖的路上碰到这里头任何一样就停',
@@ -1172,7 +1181,7 @@ const SKILLS: readonly SkillSpec[] = [
       },
       { key: 'fill', kind: 'enum', values: ['solid', 'outline', 'edges'], error: 'fill 只认 solid/outline/edges' },
       { key: 'dryRun', kind: 'flag' },
-      { key: 'tool', kind: 'string', hint: '物品英文 id 或 fastest', doc: '只覆盖本步;不写时节约耐久' },
+      { key: 'tool', kind: 'string', hint: `${ITEM_ID_HINT} 或 fastest`, doc: '只覆盖本步;不写时节约耐久' },
     ],
   },
   {
@@ -1352,7 +1361,7 @@ const SKILLS: readonly SkillSpec[] = [
         key: 'at', kind: 'anchor', required: true,
         error: `enchant 要 at:[x,y,z](${RELATIVE_HINT}),指着附魔台那一格`,
       },
-      { key: 'item', kind: 'string', required: true, hint: '要附魔的物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: `要附魔的${ITEM_ID_HINT}` },
       { key: 'index', kind: 'int', lo: 1, hi: 3, def: 1, doc: '不写 = 只看报价;写了 = 按那一档下手' },
     ],
   },
@@ -1370,7 +1379,7 @@ const SKILLS: readonly SkillSpec[] = [
     parse: parseAnvil,
     fields: [
       { key: 'op', kind: 'enum', values: ['repair', 'combine', 'rename'], required: true, error: 'anvil 的 op 只认 repair/combine/rename' },
-      { key: 'item', kind: 'string', required: true, hint: '左格物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: `左格${ITEM_ID_HINT}` },
       { key: 'with', kind: 'string', doc: 'repair/combine 必写:右格放什么' },
       { key: 'name', kind: 'string', doc: 'rename 必写:新名字' },
       // 挑选词的说明只挂第一处:字段池按 (技能, doc) 逐条印,六个技能各写一遍就是印六遍
@@ -1386,7 +1395,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  返了多少点经验。at 不写就用附近 16 格内的砂轮`,
     parse: parseGrindstone,
     fields: [
-      { key: 'item', kind: 'string', required: true, hint: '要磨的物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: `要磨的${ITEM_ID_HINT}` },
       { key: 'with', kind: 'string', doc: '合修:同种的另一件' },
       { key: 'pick', kind: 'string' },
       { key: 'withPick', kind: 'string' },
@@ -1423,7 +1432,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)`,
     parse: parseEquip,
     fields: [
-      { key: 'item', kind: 'string', hint: '物品英文 id', doc: '不写 = 把手腾空' },
+      { key: 'item', kind: 'string', hint: ITEM_ID_HINT, doc: '不写 = 把手腾空' },
       { key: 'pick', kind: 'string' },
       { key: 'hand', kind: 'enum', values: ['main', 'off'], error: 'equip 的 hand 只认 main/off', doc: '不写 = 按物品分槽' },
     ],
@@ -1442,7 +1451,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  把东西放到指定的地方。最远约 8 格,远了先走近。
                                                  抛物线的落点由服务端算,回执只说朝哪儿扔的`,
     fields: [
-      { key: 'item', kind: 'string', required: true, hint: '物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: ITEM_ID_HINT },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       {
         key: 'at', kind: 'anchor', error: `toss 的 at 要 [x,y,z](${RELATIVE_HINT})`,
@@ -1457,7 +1466,7 @@ const SKILLS: readonly SkillSpec[] = [
 {"skill":"stow","item":"enchanted_book","pick":"精准采集","count":1}
                                                  同 id 的几件里只存点名的那件(留下别的)`,
     fields: [
-      { key: 'item', kind: 'string', required: true, hint: '物品英文 id' },
+      { key: 'item', kind: 'string', required: true, hint: ITEM_ID_HINT },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1 },
       { key: 'pick', kind: 'string' },
     ],
@@ -1469,7 +1478,7 @@ const SKILLS: readonly SkillSpec[] = [
                                                  定量取物必须同时写 item 和 count,不默认数量`,
     parse: parseTake,
     fields: [
-      { key: 'item', kind: 'string', hint: '物品英文 id', doc: '定量取物时与 count 一起写' },
+      { key: 'item', kind: 'string', hint: ITEM_ID_HINT, doc: '定量取物时与 count 一起写' },
       { key: 'count', kind: 'int', lo: 1, hi: 64, def: 1, doc: '定量取物必须显式写;不再默认成 1' },
       { key: 'at', kind: 'anchor', error: `take 的 at 要 [x,y,z](${RELATIVE_HINT})`, doc: '点名哪一格容器' },
       { key: 'all', kind: 'flag', doc: '只在 at+all:true 时清空指定容器' },
@@ -1570,13 +1579,24 @@ function widenField(
   return out;
 }
 
+function hintOf(f: FieldSpec): string | undefined {
+  return f.kind === 'string' || f.kind === 'names' ? f.hint : undefined;
+}
+
 /** 一个字段在某技能下的用处标注:「smelt」「goto(只写 [x,z] …)」「flee(1-128)」 */
-function fieldUse(skill: string, f: FieldSpec, merged: Record<string, unknown>): string {
+function fieldUse(
+  skill: string,
+  f: FieldSpec,
+  merged: Record<string, unknown>,
+  sharedHint: string | undefined,
+): string {
   const bits: string[] = [];
   // 区间被别的技能撑宽了才写出来,否则 schema 自身就说清楚了
   if (f.kind === 'int' && (merged.minimum !== f.lo || merged.maximum !== f.hi)) {
     bits.push(`${f.lo}-${f.hi}`);
   }
+  const hint = hintOf(f);
+  if (hint && hint !== sharedHint) bits.push(hint);
   if (f.doc) bits.push(f.doc);
   return bits.length ? `${skill}(${bits.join(';')})` : skill;
 }
@@ -1599,8 +1619,12 @@ function stepSchemaOf(skills: readonly SkillSpec[]): Record<string, unknown> {
     }
   }
   const fields = [...pool].map(([key, { schema, uses }]) => {
-    const notes = uses.map(([skill, f]) => fieldUse(skill, f, schema));
-    return [key, { ...schema, description: `用于 ${notes.join(' / ')}` }] as const;
+    // 各技能的 hint 相同时提到开头,只写一次
+    const hints = new Set(uses.map(([, f]) => hintOf(f)));
+    const shared = hints.size === 1 ? [...hints][0] : undefined;
+    const notes = uses.map(([skill, f]) => fieldUse(skill, f, schema, shared));
+    const lead = shared ? `${shared}。` : '';
+    return [key, { ...schema, description: `${lead}用于 ${notes.join(' / ')}` }] as const;
   });
   return {
     type: 'object',
@@ -1699,6 +1723,18 @@ function parseByFields(
   return { step: out as unknown as SkillCall, ...(notes.length > 0 ? { notes } : {}) };
 }
 
+/** hint 含 `ITEM_ID_HINT` 的字段里第一个不是资源名的值,报成整批退回的错误 */
+function itemIdError(spec: SkillSpec, c: Record<string, unknown>, at: string): string | null {
+  for (const f of spec.fields) {
+    if (f.kind !== 'string' || !f.hint?.includes(ITEM_ID_HINT)) continue;
+    const s = str(c[f.key]);
+    if (s !== null && !isResourceName(s)) {
+      return `${at} ${spec.name} 的 ${f.key} 要写${f.hint},给了 ${JSON.stringify(s)};英文 id 形如 stone_button`;
+    }
+  }
+  return null;
+}
+
 /**
  * 这个技能不收、被整个丢掉的键。值是 null/undefined 的不算:schema 是一份扁平
  * 字段池,模型把用不上的字段填成 null 是照 schema 写的,不是她想说什么。
@@ -1737,6 +1773,8 @@ export function parseSteps(
     if (!spec) {
       return { error: `${at}的 skill「${String(c.skill)}」不是技能表里的动作` };
     }
+    const idError = itemIdError(spec, c, at);
+    if (idError) return { error: idError };
     const parsed = spec.parse ? spec.parse(c, at, marks) : parseByFields(spec, c, at, marks);
     if ('error' in parsed) return parsed;
     const step = parsed.step;
