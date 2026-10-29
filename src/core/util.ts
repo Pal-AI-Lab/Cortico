@@ -416,7 +416,7 @@ export function decodeText(bytes: Buffer): string {
   return bytes.toString('utf8');
 }
 
-/** 字节以 UTF-16 LE 的 BOM(FF FE)开头。这样的文件接着追加 UTF-8 文本前要先整份转成 UTF-8。 */
+/** 字节以 UTF-16 LE 的 BOM(FF FE)开头。 */
 export function isUtf16Le(bytes: Buffer): boolean {
   return bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe;
 }
