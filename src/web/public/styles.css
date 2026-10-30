@@ -537,6 +537,8 @@
   /* The scrollbar has its place from the start (10px each side, as on the pages), so its appearing changes no
      width; the side padding gives those 10px back, keeping the content 20px in. */
   .modalbody { flex: 1; min-height: 0; overflow: auto; padding: 16px 10px; scrollbar-gutter: stable both-edges; }
+  /* A confirm or notice: its buttons stand clear of the text above them, the card's padding below. */
+  .confirm-card .modalbody > .rowbar:last-child { margin: 20px 0 0; }
 
 
   .segwrap { display: inline-flex; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
@@ -1154,7 +1156,8 @@
     font-family: var(--sans);
     font-size: 13px;
   }
-  select.field:not([multiple]):not([size]) {
+  /* A select's arrow, which a text field with suggestions (base/ui/dropdown.ts) carries too. */
+  select.field:not([multiple]):not([size]), input.field:is([list],[data-combo-list]) {
     appearance: none;
     padding-right: 36px;
     background-image: linear-gradient(45deg, transparent 50%, var(--muted-foreground) 50%),
@@ -1637,7 +1640,8 @@ mark.extension-hit { color: inherit; background: color-mix(in srgb, var(--accent
 .extension-toolbar { align-items: center; gap: 12px; }
 .extension-size { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; white-space: nowrap; }
 .extension-size select { width: auto; min-width: 90px; }
-.extension-pager { font-size: 12px; min-height: 36px; }
+/* Spaced from the cards above as 运行诊断's pager is from its table: 10px, 32px tall. */
+.extension-pager { font-size: 12px; min-height: 32px; margin-top: 10px; }
 .extension-manual-actions { align-items: center; margin-top: 12px; gap: 10px; }
 .extension-install-help{display:grid}
 .extension-install-help>span{grid-area:1/1}
@@ -2379,22 +2383,16 @@ input:where([type="checkbox"], [type="radio"]):where(:not(.setcontrol > .check >
 .u-tip.hover-hint{max-width:min(280px,calc(100vw - 16px));padding:5px 9px;border-radius:8px;font:12px/1.45 var(--sans);color:var(--ink);box-shadow:0 6px 18px -8px var(--shadow-strong);animation:hover-hint-in 120ms ease-out}
 @keyframes hover-hint-in{from{opacity:0}}
 
-/* Dropdowns (base/ui/dropdown.ts): every select, and every text field with suggestions (which carries the
-   select's arrow), opens its list in one white rounded box, the row under the pointer highlighted and the chosen
+/* Dropdowns (base/ui/dropdown.ts): every select, and every text field with suggestions, opens its list in one white rounded box, the row under the pointer highlighted and the chosen
    one bold. It fades in as it opens and is gone at once when it closes. */
-input.field:is([list],[data-combo-list]){padding-right:36px;background-image:linear-gradient(45deg,transparent 50%,var(--muted-foreground) 50%),linear-gradient(135deg,var(--muted-foreground) 50%,transparent 50%);background-position:right 18px center,right 14px center;background-size:4px 4px;background-repeat:no-repeat}
 input.field:is([list],[data-combo-list])::-webkit-calendar-picker-indicator{display:none!important}
-.combo-list{position:fixed;z-index:130;box-sizing:border-box;margin:0;padding:4px 0 4px 4px;max-width:min(480px,calc(100vw - 16px));max-height:min(320px,60vh);overflow-y:auto;overscroll-behavior:contain;background:var(--sheet);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -14px var(--shadow-strong);color:var(--ink);font:13px/1.35 var(--sans);transition:opacity 120ms ease-out}
+.combo-list{position:fixed;z-index:130;box-sizing:border-box;margin:0;padding:4px 0 4px 4px;max-width:min(480px,calc(100vw - 16px));max-height:min(320px,60vh);overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;background:var(--sheet);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -14px var(--shadow-strong);color:var(--ink);font:13px/1.35 var(--sans);transition:opacity 120ms ease-out}
 .combo-list[hidden]{display:none}
 @starting-style{.combo-list{opacity:0}}
-/* Its scrollbar is the pages' one: thin, no arrows, on a clear track, in the room the right padding gives up,
-   so it never narrows the rows. */
-.combo-list{scrollbar-gutter:stable}
-.combo-list::-webkit-scrollbar{width:10px}
-.combo-list::-webkit-scrollbar-button{display:none;height:0}
-.combo-list::-webkit-scrollbar-thumb{background:var(--line-2);border:3px solid transparent;border-radius:6px;background-clip:padding-box}
-.combo-list::-webkit-scrollbar-thumb:hover{background:var(--line-strong);background-clip:padding-box}
+/* Its scrollbar is the pages' own (the global ::-webkit-scrollbar rules), kept in the gutter the right padding
+   gives up, so it never narrows the rows. */
 .combo-option{display:flex;align-items:center;gap:8px;min-height:30px;padding:5px 10px;border-radius:6px;white-space:nowrap;cursor:pointer}
+.combo-label{min-width:0;overflow:hidden;text-overflow:ellipsis}
 .combo-option.is-active{background:var(--surface-hover)}
 .combo-option[aria-selected=true]{font-weight:600}
 .combo-option[aria-selected=true]::after{content:"";flex:none;width:9px;height:5px;margin-left:auto;border:solid var(--ink-dim);border-width:0 0 1.5px 1.5px;transform:translateY(-2px) rotate(-45deg)}
@@ -2402,12 +2400,14 @@ input.field:is([list],[data-combo-list])::-webkit-calendar-picker-indicator{disp
 @media (prefers-reduced-motion: reduce){.u-tip.hover-hint{animation:none}.combo-list{transition:none}}
 
 /* The extension info page's pictures (extensions/gallery.ts): a row that pages sideways, and a lightbox. */
+.extension-gallery-section{display:contents}
 .extension-gallery{position:relative;margin:4px 0 6px}
-.extension-gallery-track{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.extension-gallery-track{container-type:inline-size;display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
 .extension-gallery-track::-webkit-scrollbar{display:none}
 .extension-gallery-shot{flex:none;scroll-snap-align:start;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--sheet-2);cursor:zoom-in;transition:border-color .15s,box-shadow .15s}
 .extension-gallery-shot:hover{border-color:var(--line-strong);box-shadow:0 8px 20px -14px var(--shadow-strong)}
-.extension-gallery-shot img{display:block;height:180px;width:auto;min-width:120px;max-width:min(520px,80vw);object-fit:cover}
+/* A picture is never wider than the row it sits in (the info column can be narrow). */
+.extension-gallery-shot img{display:block;height:180px;width:auto;min-width:120px;max-width:min(520px,100cqw);object-fit:cover}
 .extension-gallery-nav{position:absolute;top:50%;display:grid;place-items:center;width:32px;height:32px;margin-top:-16px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--sheet);color:var(--ink);box-shadow:0 4px 14px -6px var(--shadow-strong);cursor:pointer;transition:opacity .15s}
 .extension-gallery-nav:disabled{opacity:0;pointer-events:none}
 .extension-gallery-nav.is-prev{left:8px}

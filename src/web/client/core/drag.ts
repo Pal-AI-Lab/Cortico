@@ -3,7 +3,8 @@
  * shows its cursor and a faint snapshot of the element and does not scroll the list. The pressed
  * element lifts out as a copy that follows the pointer up and down with the pointer itself hidden, and
  * stays behind as an empty place the list moves to where it would land (see moveGap). Near the list's
- * top or bottom the list scrolls. Esc, or releasing nowhere, cancels. The list decides where things
+ * top or bottom the list scrolls. Esc, a cancelled pointer or the window losing focus cancels; a drag
+ * the page is left in the middle of just ends, so the pointer shows again. The list decides where things
  * land and what a drop means.
  */
 import { prefersStill } from './motion.ts';
@@ -17,7 +18,7 @@ export interface DragListOptions {
   locate(y: number): void;
   /** The drop. The copy is gone by now; `copyTop` is where it showed, to slide the element in from. */
   drop(el: HTMLElement, copyTop: number): void;
-  /** A drag that ended without a drop (Esc, a cancelled pointer). */
+  /** A drag that ended without a drop (Esc, a cancelled pointer, the window losing focus). */
   cancel(): void;
   /** The positioned box the copy is laid in; the copy stays inside its content, so the list cannot grow under it. */
   layer: HTMLElement;
@@ -96,6 +97,8 @@ export function dragList(root: HTMLElement, opts: DragListOptions, signal: Abort
   const abandon = () => { press = undefined; if (lift) { end(); opts.cancel(); } };
   win.addEventListener('pointercancel', event => { if (press && event.pointerId === press.id) abandon(); }, { signal });
   doc.addEventListener('keydown', event => { if (event.key === 'Escape' && lift) abandon(); }, { signal });
+  win.addEventListener('blur', abandon, { signal });
+  signal.addEventListener('abort', () => { press = undefined; end(); }, { once: true });
   function end() {
     if (!lift) return;
     if (lift.frame !== undefined) win.cancelAnimationFrame(lift.frame);

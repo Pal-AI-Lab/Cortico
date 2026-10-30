@@ -94,17 +94,6 @@ function headActions(ui: WebUi, sheet: WebUiSheet, ...actions: HTMLElement[]): v
   head.append(title, ...actions);
 }
 
-/** 选择框宽度取最长的选项：换选项、换币种时它不变宽窄，旁边的控件不被推动。 */
-function fitWidest(select: HTMLSelectElement): void {
-  const doc = select.ownerDocument, style = doc.defaultView!.getComputedStyle(select);
-  const context = doc.createElement('canvas').getContext('2d');
-  if (!context || !style.fontSize) return;
-  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
-  const text = Math.max(0, ...[...select.options].map(option => context.measureText(option.textContent ?? '').width));
-  const edges = ['padding-left', 'padding-right', 'border-left-width', 'border-right-width'].reduce((sum, name) => sum + (parseFloat(style.getPropertyValue(name)) || 0), 0);
-  select.style.width = `${Math.ceil(text + edges) + 2}px`;
-}
-
 /** 控件条里的一组：小标签加它管的控件。 */
 function group(ui: WebUi, label: string, ...controls: HTMLElement[]): HTMLSpanElement {
   const el = ui.h('span', 'ugroup');
@@ -185,7 +174,6 @@ export function mountUsage(ctx: FeatureContext): void {
   rateBox.hidden = true;
   const ledger = ui.h('span', 'uledger');
   ledger.append(rateBox, ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect);
-  fitWidest(basisSelect); fitWidest(currencySelect);
   headActions(ui, overview, ledger);
   const cards = ui.h('div', 'ukpis');
   const compBox = ui.h('div', 'ucomp');
@@ -464,7 +452,7 @@ export function mountUsage(ctx: FeatureContext): void {
       option.textContent = value ? currencyName(value) : S.autoCurrency;
       return option;
     }));
-    currencySelect.value = currency; fitWidest(currencySelect);
+    currencySelect.value = currency;
     const shown = d.currency || 'USD';
     const rate = shown === 'USD' ? undefined : d.rates?.[shown];
     rateBox.hidden = rate === undefined;

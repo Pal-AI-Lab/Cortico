@@ -2,6 +2,7 @@
 
 import { get, post, pickPath } from '../../core/api.ts';
 import { icon, brandMark } from '../../ui/icons.ts';
+import { notice } from '../../ui/index.ts';
 import { renderMarkdown } from './markdown.ts';
 import { gallery, takeImages } from './gallery.ts';
 import type { FeatureContext } from '../feature.ts';
@@ -1587,7 +1588,7 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
       }
       // After the description, its pictures: the listing's screenshots, then those from the text. Only shown when there are any.
       const images = [...(listed?.screenshots ?? []).map(src => ({ src, alt: '' })), ...blurb.images];
-      if (images.length) info.append(ui.h('h4', '', S.gallery), gallery(doc, images, signal));
+      if (images.length) info.append(gallery(doc, images, signal));
       info.append(ui.h('h4', '', S.information));
       if (item?.reason) info.append(ui.msgline(item.reason, true));
       if (item?.webUi === 'missing') info.append(ui.msgline(S.noteWebUiMissing, true));
@@ -1686,7 +1687,7 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
       if (report?.error) { win.sessionStorage.removeItem(storageKey + ':restart'); throw new Error(report.error); }
       const incomplete = (report?.steps ?? []).filter(step => !step.ok);
       if (report && incomplete.length) {
-        void ui.confirm({
+        void notice(ui, {
           title: supervised ? S.doneRestartSupervised : S.doneRestart,
           body: [report.result ?? S.resultDefault, '', ...incomplete.map(step => `✗ ${step.label} · ${step.detail ?? S.stepIncomplete}`)].join('\n'),
         });

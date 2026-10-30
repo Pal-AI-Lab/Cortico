@@ -22,6 +22,7 @@ export const S: Partial<typeof en> = {
   cancel: '취소',
   proceedAnyway: '그래도 계속',
   confirm: '확인',
+  gotIt: '확인했어요',
   close: '✕ 닫기 (Esc)',
   tooManyImages: (max: number) => `메시지 하나에 이미지는 최대 ${max}장입니다`,
   messageInput: '메시지 입력',

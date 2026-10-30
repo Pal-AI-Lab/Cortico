@@ -22,6 +22,7 @@ export const S: Partial<typeof en> = {
   cancel: '取消',
   proceedAnyway: '仍要繼續',
   confirm: '確認',
+  gotIt: '知道了',
   close: '✕ 關閉 (Esc)',
   tooManyImages: (max: number) => `一則訊息最多 ${max} 張圖`,
   messageInput: '訊息輸入',

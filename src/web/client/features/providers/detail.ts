@@ -8,6 +8,7 @@ import { LANGUAGE } from '../../core/language.ts';
 import { pricingEditor } from '../../webui-pages/builtins/llm-settings/pricing-panel.ts';
 import type { Disposable } from '../../../shared/client-panel.ts';
 import { S } from './strings.ts';
+import { notice } from '../../ui/index.ts';
 
 export interface DetailController { dispose(): void; }
 interface Options {
@@ -288,7 +289,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     if (saved) {
       actions.append(ui.button(S.remove, { variant: 'danger', onClick: ev => run(async () => {
         const current = await get<Detail>(connectionPath(saved.name), opts);
-        if (current.references.length) { await ui.confirm({ title: S.remove, body: S.referenced + current.references.join(', ') }); return; }
+        if (current.references.length) { await notice(ui, { title: S.remove, body: S.referenced + current.references.join(', ') }); return; }
         if (!(await ui.confirm({ title: S.remove, body: S.deleteConfirm, danger: true }))) return;
         await post(connectionPath(saved.name) + '/delete', { expectedRevision: saved.revision }, opts); await options.deleted();
       }, ev.currentTarget as HTMLElement) }), ui.button(S.duplicate, { onClick: ev => run(() => options.duplicate({ original: null, copyFrom: { name: saved.name, revision: saved.revision }, name: (validateProviderName(saved.name) ? 'Connection' : saved.name) + '-Copy', entry: structuredClone(saved.entry), secretValue: '', raw: {} }), ev.currentTarget as HTMLElement) }));

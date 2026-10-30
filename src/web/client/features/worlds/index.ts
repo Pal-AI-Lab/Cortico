@@ -680,6 +680,8 @@ export function mountWorlds(ctx: FeatureContext): void {
   }
   function render(): void {
     if (!worldsReady || !extensionsReady || signal.aborted) return;
+    // A row or group being dragged keeps the list as it is; the drop renders it again.
+    if (readyList.querySelector('.is-dragging')) return;
     const items = worldLibrary(worlds, extensions, recent);
     readyList.querySelector('.placeholder')?.remove();
     lampNodes.clear(); renderRail(items);

@@ -41,6 +41,6 @@
     "tests/web/extension-catalog.test.ts",
     "tests/web/feature-world-library.test.ts",
     "tests/web/usage-money.test.ts",
-    "tests/web/ui-hover-hint.test.ts"
+    "tests/web/ui-shared-widgets.test.ts"
   ]
 }

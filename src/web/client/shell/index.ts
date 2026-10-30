@@ -15,6 +15,7 @@ import type { WebUiLamp, WebUiPageManifest } from '../../shared/webui-protocol.t
 import { createAvatarControl } from './avatar.ts';
 import { S } from './strings.ts';
 import { navHidden, NAV_HIDDEN_EVENT } from '../core/world-nav.ts';
+import { notice } from '../ui/index.ts';
 
 const DEFAULT_BRAND = 'bot';
 const FRAMEWORK_NAME = 'Cortico';
@@ -217,7 +218,7 @@ export function createShell(deps: ShellDeps): WebUiShell {
         .some((check) => check.status !== 'verified-ended');
       const lines = steps.map((s) =>
         `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.elapsedMs / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
-      void ui.confirm({
+      void notice(ui, {
         title: !localComplete
           ? S.resultLocalIncomplete
           : externalUnverified

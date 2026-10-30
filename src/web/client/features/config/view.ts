@@ -119,8 +119,8 @@ function isAbort(err: unknown): boolean {
 }
 
 /**
- * `x-options` 下拉。页加载先探一次(原生 `<select>` 同步弹出,第一次打开用这份);
- * pointerdown/focus 再探,给下次打开用。探测失败只留当前值。
+ * `x-options` 下拉。页加载先探一次;pointerdown/focus 再探,打开着的列表随选项更新
+ * (base/ui/dropdown.ts)。探测失败只留当前值。
  */
 function optionsField(
   ui: WebUi,

@@ -5,7 +5,9 @@
  * field, with the pages' thin scrollbar. A click opens it and a second click closes it; ↑/↓ move,
  * Enter picks (Space too on a select), Esc closes only the list. A select's list starts at its value;
  * a text field's shows every suggestion when opened and those containing the text while typing.
- * The page's own elements stay the source: options and datalists are read each time the list opens.
+ * The page's own elements stay the source: options and datalists are read each time the list opens,
+ * and a select's open list follows its options when the page replaces them (one fetched on press, say).
+ * A row too long for the box ends in an ellipsis.
  */
 const LIST_ATTR = 'data-combo-list';
 const EDGE = 8;
@@ -24,6 +26,8 @@ export function mountDropdowns(doc: Document, signal: AbortSignal): void {
   let field: Field | null = null;
   let items: Item[] = [];
   let active = -1;
+  // Watches the open select's options; set up in open, dropped in close.
+  const watch = typeof win.MutationObserver === 'function' ? new win.MutationObserver(() => { if (field && isSelect(field)) open(field); }) : undefined;
 
   const isSelect = (el: Field): el is HTMLSelectElement => el instanceof win.HTMLSelectElement;
   /** The field an event is about, if it is one this list serves; a text field's `list` (the system popup) is taken away. */
@@ -50,6 +54,7 @@ export function mountDropdowns(doc: Document, signal: AbortSignal): void {
 
   const close = (): void => {
     if (field) { field.setAttribute('aria-expanded', 'false'); field.removeAttribute('aria-activedescendant'); }
+    watch?.disconnect();
     field = null; items = []; active = -1; box.hidden = true; box.replaceChildren();
   };
   const place = (el: Field): void => {
@@ -88,13 +93,17 @@ export function mountDropdowns(doc: Document, signal: AbortSignal): void {
       row.setAttribute('role', 'option');
       row.setAttribute('aria-selected', String(item.value === el.value));
       if (item.disabled) row.setAttribute('aria-disabled', 'true');
-      row.textContent = item.label;
+      row.append(Object.assign(doc.createElement('span'), { className: 'combo-label', textContent: item.label }));
       return row;
     }));
     box.hidden = false;
     el.setAttribute('aria-expanded', 'true');
     place(el);
-    if (isSelect(el)) mark(shown.findIndex(item => item.value === el.value));
+    if (isSelect(el)) {
+      mark(shown.findIndex(item => item.value === el.value));
+      watch?.disconnect();
+      watch?.observe(el, { childList: true, subtree: true, characterData: true });
+    }
   };
   const pick = (index: number): void => {
     const el = field, item = items[index];
