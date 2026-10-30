@@ -33,7 +33,7 @@ export interface ForkDeps {
   mainHead?(): readonly ContextRecord[];
   /** 当前 session 列表(判断 fork 是否已结束) */
   sessions(): readonly SessionStat[];
-  /** 当前观察目标变了(卡条要重画选中态) */
+  /** 当前观察目标变了(卡条要重画选中态)，或它的上下文估算更新了 */
   onChange(): void;
   onError(err: unknown): void;
 }
@@ -41,6 +41,8 @@ export interface ForkDeps {
 export interface ForkView {
   readonly id: string;
   readonly label: string;
+  /** 看着的 fork 下一次请求的上下文估算，取自它最近一次消息拉取；主视图或还没取到时是 null。 */
+  readonly estTokens: number | null;
   /** 切去看某个 session。`MAIN_ID` 回主视图。 */
   switchTo(id: string, label: string): void;
   /** 主 session 的消息变了(实时帧):在主视图时才需要动。 */
@@ -54,6 +56,7 @@ export function createForkView(deps: ForkDeps): ForkView {
   let id = MAIN_ID;
   let label = MAIN_LABEL;
   let lastRevision = '';
+  let estTokens: number | null = null;
   let poll: Disposable | null = null;
 
   const stopPolling = (): void => {
@@ -105,6 +108,11 @@ export function createForkView(deps: ForkDeps): ForkView {
         { signal: deps.signal },
       );
       if (id !== asked) return; // 期间用户又切了,这份回应已经过期
+      const nextEst = typeof data?.estTokens === 'number' ? data.estTokens : null;
+      if (nextEst !== estTokens) {
+        estTokens = nextEst;
+        deps.onChange();
+      }
       const messages = Array.isArray(data?.messages) ? data.messages : [];
       const revision = messageRevision(messages);
       if (!force && revision === lastRevision) {
@@ -137,12 +145,16 @@ export function createForkView(deps: ForkDeps): ForkView {
     get label(): string {
       return label;
     },
+    get estTokens(): number | null {
+      return estTokens;
+    },
     switchTo(next, nextLabel) {
       if (id === next) return;
       stopPolling();
       id = next;
       label = nextLabel;
       lastRevision = '';
+      estTokens = null;
       deps.onChange();
       if (next === MAIN_ID) {
         timeline.rebuild(deps.mainMessages(), { head: deps.mainHead?.() ?? null });

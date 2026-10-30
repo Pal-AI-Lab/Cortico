@@ -68,7 +68,9 @@ export const S: Partial<typeof en> = {
 
   // sessions.ts
   sessionBandTitle: '이번 실행의 세션별 누적 사용량',
-  sessionCache: (pct: string) => `캐시 ${pct}`,
+  sessionStats: (pct: string, tokens: string) => `캐시 ${pct} · 누적 ${tokens}`,
+  sessionTotalInputTitle: (label: string) => `${label}의 이번 실행 모든 호출의 입력 토큰 합계`,
+  sessionCacheTitle: (label: string) => `${label}의 이번 실행 모든 호출의 캐시 적중률`,
   sessionCardTitle: (
     label: string,
     id: string,

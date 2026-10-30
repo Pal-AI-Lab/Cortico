@@ -92,12 +92,12 @@ export function createSessionBand(deps: SessionBandDeps): SessionBand {
     card.className = ['sesscard', running ? 'running' : '', `r-${s.role}`, s.id === currentId ? 'sel' : '']
       .filter((c) => c !== '')
       .join(' ');
-    // main 的累计输入与缓存命中率写在第一行,卡上只留名字
+    // main 的累计输入与缓存命中率写在顶栏,卡上只留名字;其余会话写缓存命中率与累计输入
     const info = ui.h('span');
     info.appendChild(ui.h('b', null, s.label));
     if (s.id !== MAIN_ID) {
       const cache = s.cacheHitRate == null ? '-' : ui.fmt.percent(s.cacheHitRate);
-      info.appendChild(ui.h('span', 'shr', ` ${S.sessionCache(cache)}`));
+      info.appendChild(ui.h('span', 'shr', ` ${S.sessionStats(cache, ui.fmt.count(s.promptTokens))}`));
     }
     card.replaceChildren(ui.h('span', 'sdot'), info);
     card.title = S.sessionCardTitle(

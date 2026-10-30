@@ -30,7 +30,7 @@ import { pageIntro } from '../../ui/page.ts';
 import { promptInput } from '../../ui/prompt-input.tsx';
 import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
-import { applyDisplayName, createConnectionButton, createStatusBand, phaseLabel } from './status.ts';
+import { applyDisplayName, createConnectionButton, createStatusBand, phaseLabel, type ViewedSession } from './status.ts';
 import { S } from './strings.ts';
 import { createTimeline } from './timeline.ts';
 import type { UsageAggregate } from '../usage/types.ts';
@@ -309,6 +309,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     sessions: () => state.sessions,
     onChange: () => {
       sessionBand.render(state.sessions, fork.id);
+      renderStatus();
       syncPlaceholder();
       syncActivity();
     },
@@ -334,10 +335,15 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const mainStat = (): SessionStat | null => state.sessions.find((s) => s.id === MAIN_ID) ?? null;
+  /** 看着 fork 时顶栏的 token 三项报它的;主视图时是 null。 */
+  const viewed = (): ViewedSession | null => fork.isMain()
+    ? null
+    : { label: fork.label, stat: state.sessions.find((s) => s.id === fork.id) ?? null, estTokens: fork.estTokens };
+  const renderStatus = (): void => status.render(state.status, mainStat(), viewed());
 
   const setStatus = (st: StatusSnapshot | null): void => {
     state.status = st;
-    status.render(st, mainStat());
+    renderStatus();
     connection.render(st);
     providerReady = st?.modelConnection?.ready === true;
     syncPlaceholder();
@@ -355,7 +361,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     const after = mainStat()?.calls;
     // 会话统计与账本在同一处记账：main 的调用数涨了，账本里已有那次调用
     if (before !== undefined && after !== undefined && after > before) refreshCostSoon();
-    status.render(state.status, mainStat());
+    renderStatus();
     sessionBand.render(list, fork.id);
     fork.noteSessions();
   };

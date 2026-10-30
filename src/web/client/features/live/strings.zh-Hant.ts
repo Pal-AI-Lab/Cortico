@@ -68,7 +68,9 @@ export const S: Partial<typeof en> = {
 
   // sessions.ts
   sessionBandTitle: 'Session 本次執行累計用量',
-  sessionCache: (pct: string) => `快取${pct}`,
+  sessionStats: (pct: string, tokens: string) => `快取 ${pct} · 累計 ${tokens}`,
+  sessionTotalInputTitle: (label: string) => `${label} 本次執行所有呼叫的輸入 token 總和`,
+  sessionCacheTitle: (label: string) => `${label} 本次執行所有呼叫的快取命中率`,
   sessionCardTitle: (
     label: string,
     id: string,

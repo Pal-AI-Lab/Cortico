@@ -70,17 +70,29 @@ export function createConnectionButton(ui: WebUi, open: (name: string | null) =>
   };
 }
 
+/** 控制台正在看的 fork:顶栏的 token 三项改报它的数字。 */
+export interface ViewedSession {
+  label: string;
+  /** 会话统计里它那一项;还没有时省略累计输入与缓存。 */
+  stat: SessionStat | null;
+  /** 它下一次请求的上下文估算;已结束或还没取到时省略。 */
+  estTokens: number | null;
+}
+
 export interface StatusBand {
   el: HTMLElement;
-  /** `main` 是会话统计里主会话那一项(累计输入与缓存命中率取自它);还没有时省略那两项。 */
-  render(st: StatusSnapshot | null, main?: SessionStat | null): void;
+  /**
+   * `main` 是会话统计里主会话那一项(累计输入与缓存命中率取自它);还没有时省略那两项。
+   * 给了 `viewed` 时，下次提交、累计输入与缓存改报那个 fork 的，前面写它的名字;运行状态各项不变。
+   */
+  render(st: StatusSnapshot | null, main?: SessionStat | null, viewed?: ViewedSession | null): void;
 }
 
 export function createStatusBand(ui: WebUi): StatusBand {
   const el = ui.h('div', 'chips');
   return {
     el,
-    render(st, main) {
+    render(st, main, viewed) {
       while (el.children.length) el.children[0].remove();
       if (!st) {
         el.appendChild(ui.chip(S.chipDisconnected));
@@ -94,17 +106,21 @@ export function createStatusBand(ui: WebUi): StatusBand {
       if (loop.behind) el.appendChild(ui.chip(S.chipBehind(loop.behind), 'warn'));
       // 人格概念(「梦中」这类)由Persona自报文本,框架照画不解释。
       for (const chip of chipsOf(st)) el.appendChild(ui.chip(chip.label, chip.tone));
-      // token 三项:下次提交的上下文估算;main 本次运行累计的输入与缓存命中率
-      if (loop.estTokens != null) {
-        const next = chipOf(ui, [S.chipNextSend, { b: ui.fmt.count(loop.estTokens) }, ' tok']);
+      // token 三项:下次提交的上下文估算，累计的输入与缓存命中率。看着 fork 时报它的，前面写它的名字。
+      const prefix = viewed ? `${viewed.label} · ` : '';
+      const ended = viewed?.stat?.endedAt != null;
+      const estTokens = viewed ? (ended ? null : viewed.estTokens) : loop.estTokens;
+      if (estTokens != null) {
+        const next = chipOf(ui, [prefix + S.chipNextSend, { b: ui.fmt.count(estTokens) }, ' tok']);
         next.title = S.nextSendTitle;
         el.appendChild(next);
       }
-      if (main) {
-        const input = chipOf(ui, [S.chipTotalInput, { b: ui.fmt.count(main.promptTokens) }, ' tok']);
-        input.title = S.totalInputTitle;
-        const cache = chipOf(ui, [S.chipCache, { b: main.cacheHitRate == null ? '-' : ui.fmt.percent(main.cacheHitRate) }]);
-        cache.title = S.cacheTitle;
+      const totals = viewed ? viewed.stat : main;
+      if (totals) {
+        const input = chipOf(ui, [prefix + S.chipTotalInput, { b: ui.fmt.count(totals.promptTokens) }, ' tok']);
+        input.title = viewed ? S.sessionTotalInputTitle(viewed.label) : S.totalInputTitle;
+        const cache = chipOf(ui, [prefix + S.chipCache, { b: totals.cacheHitRate == null ? '-' : ui.fmt.percent(totals.cacheHitRate) }]);
+        cache.title = viewed ? S.sessionCacheTitle(viewed.label) : S.cacheTitle;
         el.append(input, cache);
       }
       if (loop.messageCount != null) el.appendChild(chipOf(ui, [{ b: loop.messageCount }, S.chipMsgs]));
