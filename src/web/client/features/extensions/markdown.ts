@@ -41,7 +41,8 @@ export function renderMarkdown(doc: Document, source: string): DocumentFragment 
     if (/^```/.test(line)) {
       flush();
       const code: string[] = [];
-      while (++i < lines.length && !/^```/.test(lines[i])) code.push(lines[i]);
+      // Only a line of the fence alone closes the block, as on GitHub: text right after a fence stays in it.
+      while (++i < lines.length && !/^```\s*$/.test(lines[i])) code.push(lines[i]);
       const pre = doc.createElement('pre'); const el = doc.createElement('code'); el.textContent = code.join('\n'); pre.appendChild(el); out.appendChild(pre);
       continue;
     }
