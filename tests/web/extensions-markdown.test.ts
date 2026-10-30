@@ -24,4 +24,12 @@ describe('renderMarkdown', () => {
     expect(links[0].target).toBe('_blank');
     expect(box.textContent).toContain('[坏](javascript:alert(1))');
   });
+  it('closes a code block only on a fence alone on its line, so text written right after one still shows', () => {
+    const box = render(['```markdown', '', '```官方大佬，此为求助帖'].join('\n'));
+    expect(box.querySelectorAll('pre')).toHaveLength(1);
+    expect(box.querySelector('pre')!.textContent).toContain('官方大佬，此为求助帖');
+    const closed = render(['```', 'code', '```  ', 'after'].join('\n'));
+    expect(closed.querySelector('pre')!.textContent).toBe('code');
+    expect(closed.querySelector('p')!.textContent).toBe('after');
+  });
 });
