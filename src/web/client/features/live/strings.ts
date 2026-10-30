@@ -77,7 +77,9 @@ const zh = {
 
   // sessions.ts
   sessionBandTitle: "Session 本次运行累计用量",
-  sessionCache: (pct: string) => `缓存${pct}`,
+  sessionStats: (pct: string, tokens: string) => `缓存 ${pct} · 累计 ${tokens}`,
+  sessionTotalInputTitle: (label: string) => `${label} 本次运行所有调用的输入 token 之和`,
+  sessionCacheTitle: (label: string) => `${label} 本次运行所有调用的缓存命中率`,
   sessionCardTitle: (
     label: string,
     id: string,
@@ -224,7 +226,9 @@ export const en: typeof zh = {
 
   // sessions.ts
   sessionBandTitle: "Session usage for this run",
-  sessionCache: (pct: string) => `cache ${pct}`,
+  sessionStats: (pct: string, tokens: string) => `cache ${pct} · total ${tokens}`,
+  sessionTotalInputTitle: (label: string) => `Input tokens of all ${label} calls in this run`,
+  sessionCacheTitle: (label: string) => `Cache hit rate over all ${label} calls in this run`,
   sessionCardTitle: (
     label: string,
     id: string,

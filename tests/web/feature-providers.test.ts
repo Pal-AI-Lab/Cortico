@@ -7,7 +7,13 @@ const { createWebUi } = await import(UI);
 const { Lifecycle } = await import(LIFE);
 const { mountProviders, providersFeature } = await import(FEATURE);
 const lifecycles: any[] = [];
-const flush = async () => { for (let i = 0; i < 40; i++) await Promise.resolve(); };
+/** 等页面处理完已发出的请求：Response 正文在有的 Node 版本里跨宏任务才读完，只排微任务不够。 */
+const flush = async () => {
+  for (let turn = 0; turn < 5; turn++) {
+    await new Promise((done) => setTimeout(done, 0));
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+  }
+};
 const entry = { kind: 'sample', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
 const BLOCKS = { endpoint: { id: 'endpoint', title: '连接', builtin: 'connection-endpoint', defaultOpen: true }, model: { id: 'model', title: '模型与生成', builtin: 'connection-model', defaultOpen: true }, pricing: { id: 'pricing', title: '成本与计价', builtin: 'connection-pricing', defaultOpen: false }, protocol: { id: 'protocol', title: '高级协议', builtin: 'connection-protocol', defaultOpen: false } };
 const DEFAULT_SECTIONS = [BLOCKS.endpoint, BLOCKS.model, BLOCKS.pricing, BLOCKS.protocol];

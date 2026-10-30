@@ -68,7 +68,9 @@ export const S: Partial<typeof en> = {
 
   // sessions.ts
   sessionBandTitle: 'Uso das sessões nesta execução',
-  sessionCache: (pct: string) => `cache: ${pct}`,
+  sessionStats: (pct: string, tokens: string) => `cache ${pct} · total ${tokens}`,
+  sessionTotalInputTitle: (label: string) => `Tokens de entrada de todas as chamadas de ${label} nesta execução`,
+  sessionCacheTitle: (label: string) => `Taxa de acerto de cache de todas as chamadas de ${label} nesta execução`,
   sessionCardTitle: (
     label: string,
     id: string,
