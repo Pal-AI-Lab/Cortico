@@ -3,6 +3,7 @@
 import { get, post, pickPath } from '../../core/api.ts';
 import { icon, brandMark } from '../../ui/icons.ts';
 import { renderMarkdown } from './markdown.ts';
+import { gallery, takeImages } from './gallery.ts';
 import type { FeatureContext } from '../feature.ts';
 import { S } from './strings.ts';
 import { CATALOG_CATEGORY_IDS, inCatalogCategory, isFunctionTag, type CatalogCategory } from './catalog.ts';
@@ -798,7 +799,7 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
   function cardTag(id: string) {
     if (isExclusion(id)) {
       const chip = tagChip(id, { onToggle: () => toggleExclude(id) });
-      chip.classList.add('is-exclusion'); chip.setAttribute('aria-label', S.excludeTag(tagLabel(id) ?? id)); chip.append(icon(doc, 'eye', 'icon extension-tag-eye'));
+      chip.classList.add('is-exclusion'); chip.setAttribute('aria-label', S.excludeTag(tagLabel(id) ?? id));
       return chip;
     }
     const state = states[kind];
@@ -1220,9 +1221,9 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
   /** The market's cards by package, for animating a re-render (see measureReflow): cards that go leave
    * sideways first, then the rest close up. */
   const measureCards = () => marketGrid?.isConnected ? measureReflow(marketGrid, ':scope > .extension-market-card', card => card.dataset.name) : undefined;
-  function renderMarket(keepHeight = false) {
+  /** `toTop`: the list goes back to its top before the motion plays, so every card then in view moves alike. */
+  function renderMarket(toTop = false) {
     const reflow = measureCards();
-    if (!keepHeight) marketGrid.style.minHeight = '';
     const state = states[kind];
     paintCategories?.();
     const listed = (pool: SearchHitView[]) => pool.filter(hit => inCatalogCategory(hit.tags, state.catalogCategory)).map(h => ({ ...named(h), installed: installed.some(p => p.name === h.name && p.state !== 'removed') })).filter(h => state.installation !== 'installed' || h.installed);
@@ -1307,7 +1308,9 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
     renderInView();
     for (const [control, paint] of detailControls) if (control.isConnected) paint(); else detailControls.delete(control);
     if (!result.matched) marketGrid.append(emptyMarket(state));
-    pager(marketPager, result.matched, result.page, pageSize(), page => { marketGrid.style.minHeight = `${marketGrid.getBoundingClientRect().height}px`; state.page = page; renderMarket(true); save(); });
+    // Another page starts at the top of the list at once, however many cards it has.
+    pager(marketPager, result.matched, result.page, pageSize(), page => { state.page = page; renderMarket(true); save(); });
+    if (toTop) scrollRoot.scrollTop = 0;
     reflow?.play();
   }
   /**
@@ -1570,7 +1573,9 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
         main.append(tabs.el, ...pages.map(page => page.el)); show(tab);
       } else main.append(info);
       const intro = ui.h('div', 'extension-intro');
-      intro.append(renderMarkdown(doc, item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—'));
+      // Pictures in the description go to the gallery below; the text keeps the rest.
+      const blurb = takeImages(item?.builtin ? [item.description, S.builtinNote].filter(Boolean).join(' ') : data.description ?? '—');
+      intro.append(renderMarkdown(doc, blurb.text || '—'));
       info.append(ui.h('h4', '', S.introduction), intro);
       // 内建条目要有对应的 npm 包才在索引里
       const indexed = (!item?.builtin || !!listed) && Object.keys(marketIndex.tags).length > 0;
@@ -1580,11 +1585,9 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
         if (indexed) { const report = ui.h('a', 'extension-tag-feedback', S.feedbackTags); report.href = tagIssueUrl(listed?.name ?? data.name); report.target = '_blank'; report.rel = 'noopener noreferrer'; row.append(report); }
         info.append(row);
       }
-      if (listed?.screenshots?.length) {
-        const shots = ui.h('div', 'extension-screenshots');
-        for (const src of listed.screenshots) { const image = ui.h('img'); image.src = src; image.alt = ''; image.loading = 'lazy'; shots.append(image); }
-        info.append(shots);
-      }
+      // After the description, its pictures: the listing's screenshots, then those from the text. Only shown when there are any.
+      const images = [...(listed?.screenshots ?? []).map(src => ({ src, alt: '' })), ...blurb.images];
+      if (images.length) info.append(ui.h('h4', '', S.gallery), gallery(doc, images, signal));
       info.append(ui.h('h4', '', S.information));
       if (item?.reason) info.append(ui.msgline(item.reason, true));
       if (item?.webUi === 'missing') info.append(ui.msgline(S.noteWebUiMissing, true));

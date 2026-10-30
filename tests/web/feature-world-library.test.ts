@@ -216,17 +216,16 @@ describe('package authors', () => {
   });
 });
 describe('installation feedback', () => {
-  it('releases pagination height when a search reduces the catalog', async () => {
+  it('starts another page at the top of the list, holding no height from the last', async () => {
     stub();
     const { root } = mount(); await flush();
     const size = $('.extension-size select', root);
     size.value = '10'; size.dispatchEvent(new Event('change', { bubbles: true }));
     const grid = marketCards(root);
-    (grid as Any).getBoundingClientRect = () => ({ height: 1800 });
+    const scroller = $('.world-catalog-scroll', root);
+    scroller.scrollTop = 900;
     button($('.extension-pager', root), extensionStrings.nextPage).click();
-    expect(grid.style.minHeight).toBe('1800px');
-    filterMarket(root, 'found');
-    expect(grid.children).toHaveLength(1);
+    expect(scroller.scrollTop).toBe(0);
     expect(grid.style.minHeight).toBe('');
   });
   async function detail(root: Any) {

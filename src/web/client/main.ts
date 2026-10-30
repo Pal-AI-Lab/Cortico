@@ -11,6 +11,8 @@ import { BUILTIN_PANELS } from './webui-pages/builtins.ts';
 import { WebUiPageHost, PROVIDER_ROUTE } from './webui-pages/host.ts';
 import { WebUiPageLoader } from './webui-pages/loader.ts';
 import { createWebUi } from './ui/index.ts';
+import { mountHoverHints } from './ui/hover-hint.ts';
+import { mountDropdowns } from './ui/dropdown.ts';
 import { subscribeLamps } from './ui/lamp.ts';
 import { applyStoredTheme } from './theme/studio.ts';
 import { createShell } from './shell/index.ts';
@@ -102,6 +104,9 @@ export function boot(doc: Document = document): { dispose(): void } {
    * capability 过滤,贡献方那段完全由 manifest 驱动。
    */
   const shellLife = new Lifecycle(onError);
+  // 整页的 title 改由自己的提示框显示，下拉框与带候选的输入框打开同一种列表。
+  mountHoverHints(doc, shellLife.signal);
+  mountDropdowns(doc, shellLife.signal);
   const shell = createShell({
     doc,
     ui: createWebUi({ memo, overlayHost: doc.body, signal: shellLife.signal, doc }),
