@@ -156,34 +156,34 @@ export interface ToolsView {
 export function createToolsView(ui: WebUi): ToolsView {
   const sheet = ui.sheet({
     title: S.toolsTitle,
-    en: 'tool schemas',
     desc: S.toolsDesc,
   });
   const bar = ui.rowbar();
-  const count = ui.chip(S.toolCount(0));
+  bar.classList.add('schema-toolbar');
   const search = ui.input({
     type: 'search',
     placeholder: S.toolsFilter,
     onInput: (v) => applyFilter(v),
   });
-  bar.append(count, search);
+  bar.append(search);
   const groups = ui.h('div', 'schema-groups');
   const noteLine = ui.msgline('');
   sheet.body.append(bar, noteLine, groups);
 
-  /** 分栏与卡片,筛选时按这两张表逐个开关,不重建 DOM。 */
-  let sections: Array<{ el: HTMLElement; cards: CardEntry[] }> = [];
+  /** 分栏与卡片,筛选时按这两张表逐个开关,不重建 DOM;分栏标题旁的数目随筛选变。 */
+  let sections: Array<{ el: HTMLElement; count: HTMLElement; cards: CardEntry[] }> = [];
 
   function applyFilter(raw: string): void {
     const q = raw.trim().toLocaleLowerCase();
     for (const sec of sections) {
-      let any = false;
+      let shown = 0;
       for (const card of sec.cards) {
         const hit = !q || card.haystack.includes(q);
-        card.el.className = hit ? 'tool-schema-card' : 'tool-schema-card hidden';
-        any = any || hit;
+        card.el.classList.toggle('hidden', !hit);
+        if (hit) shown++;
       }
-      sec.el.className = any ? 'toolgroup schema-group' : 'toolgroup schema-group hidden';
+      sec.el.classList.toggle('hidden', shown === 0);
+      sec.count.textContent = S.toolCount(shown);
     }
   }
 
@@ -192,19 +192,30 @@ export function createToolsView(ui: WebUi): ToolsView {
     render(schemas) {
       while (groups.children.length) groups.children[0].remove();
       sections = [];
-      count.textContent = S.toolCount(schemas.length);
       if (!schemas.length) {
         groups.appendChild(ui.placeholder(S.toolsEmpty));
         return;
       }
       for (const [name, tools] of groupTools(schemas)) {
         if (!tools.length) continue;
+        // 分栏标题可点:收起或展开这一栏的全部工具,右侧 + / − 表示当前状态。
         const section = ui.h('section', 'toolgroup schema-group');
-        section.appendChild(ui.h('div', 'gt', name));
+        const head = ui.h('button', 'toolgroup-head');
+        head.type = 'button';
+        head.setAttribute('aria-expanded', 'true');
+        const count = ui.h('span', 'toolgroup-count', S.toolCount(tools.length));
+        head.append(ui.h('span', 'gt', name), count, ui.h('span', 'grow'), ui.h('span', 'toolgroup-sign'));
+        const list = ui.h('div', 'toolgroup-list');
+        head.addEventListener('click', () => {
+          const open = head.getAttribute('aria-expanded') !== 'true';
+          head.setAttribute('aria-expanded', String(open));
+          section.classList.toggle('is-collapsed', !open);
+        });
         const cards = tools.map((t) => toolSchemaCard(ui, t));
-        for (const c of cards) section.appendChild(c.el);
+        for (const c of cards) list.appendChild(c.el);
+        section.append(head, list);
         groups.appendChild(section);
-        sections.push({ el: section, cards });
+        sections.push({ el: section, count, cards });
       }
       applyFilter(search.value);
     },

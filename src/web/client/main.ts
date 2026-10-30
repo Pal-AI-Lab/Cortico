@@ -1,5 +1,6 @@
 /** WebUI 入口：贡献页路由交给 WebUiPageHost，框架路由交给对应 feature；空路由默认打开控制台。 */
 
+import { createMemo } from './core/memo.ts';
 import { fetchManifest, get } from './core/api.ts';
 import { withLanguage } from './core/language.ts';
 import { Lifecycle } from './core/lifecycle.ts';
@@ -20,11 +21,10 @@ import { coreFeature } from './features/core/index.ts';
 import { usageFeature } from './features/usage/index.ts';
 import { providersFeature } from './features/providers/index.ts';
 import { worldsFeature } from './features/worlds/index.ts';
-import { extensionsFeature } from './features/extensions/index.ts';
+import { botsFeature } from './features/bot-templates/index.ts';
 import { appearanceFeature } from './features/appearance/index.ts';
 import { promptsFeature } from './features/prompts/index.ts';
 import { settingsFeature } from './features/settings/index.ts';
-import type { WebUiMemo } from '../shared/client-panel.ts';
 
 /**
  * WebUI 自己的页面。与贡献方的页无关——那一路完全由 manifest 驱动。
@@ -34,34 +34,10 @@ import type { WebUiMemo } from '../shared/client-panel.ts';
  */
 export const FEATURES: readonly FrameworkFeature[] = [
   liveFeature, coreFeature, usageFeature, providersFeature,
-  worldsFeature, extensionsFeature, promptsFeature, appearanceFeature,
+  worldsFeature, botsFeature, promptsFeature, appearanceFeature,
   settingsFeature,
 ];
 
-/** localStorage 后端；无痕模式下静默降级成内存，不抛。 */
-export function createMemo(prefix: string): WebUiMemo {
-  const fallback = new Map<string, unknown>();
-  return {
-    get<T>(key: string, dflt: T): T {
-      const k = prefix + key;
-      // 本会话写过的值优先:localStorage 写不进去(无痕、配额满)时只有内存表是新的。
-      if (fallback.has(k)) return fallback.get(k) as T;
-      try {
-        const raw = localStorage.getItem(k);
-        return raw === null ? dflt : (JSON.parse(raw) as T);
-      } catch {
-        return dflt;
-      }
-    },
-    set(key: string, value: unknown): void {
-      const k = prefix + key;
-      fallback.set(k, value);
-      try {
-        localStorage.setItem(k, JSON.stringify(value));
-      } catch { /* 无痕/配额满:这轮只留在内存里 */ }
-    },
-  };
-}
 
 export function boot(doc: Document = document): { dispose(): void } {
   // 首次渲染前应用主题。

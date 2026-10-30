@@ -17,6 +17,38 @@ import type {
 import { IMAGE_DEFAULTS, isImageFile, normalizeImage } from './images.ts';
 import { S } from './strings.ts';
 
+export interface PromptInputOptions extends WebUiPromptInputOptions {
+  /**
+   * localStorage key under which the unsent text and images outlive the page and the window;
+   * removed once they are sent. Images that do not fit the storage quota are not kept.
+   */
+  draftKey?: string;
+}
+
+interface Draft {
+  text: string;
+  images: WebUiImageAttachment[];
+}
+
+function readDraft(key: string): Draft {
+  try {
+    const images = JSON.parse(localStorage.getItem(`${key}.images`) ?? '[]') as unknown;
+    return { text: localStorage.getItem(key) ?? '', images: Array.isArray(images) ? images as WebUiImageAttachment[] : [] };
+  } catch {
+    return { text: '', images: [] };
+  }
+}
+
+/** Writes one part of a draft; an empty part removes its key. */
+function writeDraft(key: string, value: string | null): void {
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
+  }
+}
+
 interface ComposerHandle {
   focus(): void;
   setDisabled(disabled: boolean): void;
@@ -111,11 +143,14 @@ function Thumbnail({ item, onRemove }: { item: Attached; onRemove(): void }): Re
   );
 }
 
-const PromptComposer = React.forwardRef<ComposerHandle, { opts: WebUiPromptInputOptions }>(
+const PromptComposer = React.forwardRef<ComposerHandle, { opts: PromptInputOptions }>(
   ({ opts }, ref) => {
-    const [value, setValue] = React.useState('');
+    const draftKey = opts.draftKey;
+    const [draft] = React.useState<Draft>(() => (draftKey ? readDraft(draftKey) : { text: '', images: [] }));
+    const [value, setValue] = React.useState(draft.text);
     const [disabled, setDisabled] = React.useState(opts.disabled ?? false);
-    const [attached, setAttached] = React.useState<Attached[]>([]);
+    const [attached, setAttached] = React.useState<Attached[]>(() =>
+      draft.images.map((image, i) => ({ id: i + 1, image, src: `data:${image.mime};base64,${image.base64}` })));
     /** 还在解码/缩放中的张数。>0 时发送钮暂停,免得把半批图发出去。 */
     const [pending, setPending] = React.useState(0);
     /** 最近一次拒收的理由。下一次成功入托盘或用户改动文本时清掉。 */
@@ -127,9 +162,17 @@ const PromptComposer = React.forwardRef<ComposerHandle, { opts: WebUiPromptInput
     const tools = React.useRef<HTMLSpanElement>(null);
     const leading = React.useRef<HTMLSpanElement>(null);
     const picker = React.useRef<HTMLInputElement>(null);
-    const nextId = React.useRef(1);
+    const nextId = React.useRef(draft.images.length + 1);
     const imagesOpts = opts.images;
     const maxImages = imagesOpts ? (imagesOpts.max ?? IMAGE_DEFAULTS.max) : 0;
+
+    // text and images under two keys: a keystroke does not re-serialize the images
+    React.useEffect(() => {
+      if (draftKey) writeDraft(draftKey, value || null);
+    }, [draftKey, value]);
+    React.useEffect(() => {
+      if (draftKey) writeDraft(`${draftKey}.images`, attached.length ? JSON.stringify(attached.map((a) => a.image)) : null);
+    }, [draftKey, attached]);
 
     React.useLayoutEffect(() => {
       const node = opts.tools;
@@ -315,7 +358,7 @@ PromptComposer.displayName = 'PromptComposer';
 export function promptInput(
   doc: Document,
   signal: AbortSignal,
-  opts: WebUiPromptInputOptions,
+  opts: PromptInputOptions,
 ): WebUiPromptInput {
   const el = doc.createElement('div');
   el.className = 'prompt-input-host';

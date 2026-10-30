@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: '설정', marketTab: '확장 마켓',
   pageTitle: '모델 연결', navLabel: '모델 연결', navGroup: 'Core', create: '+ 새 연결 인스턴스', newName: '이름 없는 인스턴스',
   createHint: '인스턴스는 공급자 설정 한 세트를 카드로 저장한 것입니다.',
   empty: '아직 모델 연결이 없습니다', emptyHint: '모델 연결을 추가해야 추론할 수 있습니다.',
-  eraseConfirm: '삭제 확인',
   connect: '연결', activate: '현재 연결로 설정', active: '현재 모델', missing: '현재 모델 연결이 없습니다. 설정에서 참조: ',
   inUse: (names: string) => `사용 중: ${names}`, selectedBy: (names: string) => `${names}에서 선택함(실행 안 됨)`,
   names: (list: string[]) => list.join(', '),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: '추론 강도', thinking: '추론 사용', temperature: '온도', maxTokens: '최대 출력 token', context: '컨텍스트 한도', tier: '서비스 등급', images: '이미지 허용',
   catalogNoWindow: '모델 목록에 이 모델의 컨텍스트 한도가 없습니다. 공급자 문서를 보고 직접 입력하세요.',
   catalogMaxOutput: (tokens: number) => `모델 목록에 나온 최대 출력은 ${tokens} token입니다.`,
-  advancedHint: '사용자 지정 API 게이트웨이나 호환 서비스를 쓸 때만 조정하세요.', secret: '자격 증명 환경 변수 이름',
+  secret: '자격 증명 환경 변수 이름',
   extraHeaders: '추가 요청 헤더(JSON 객체)', extraBody: '추가 요청 본문(JSON 객체)', priceRules: '전체 가격 규칙(JSON 배열)',
   shared: '공유 설정: 여러 봇이 이 연결을 사용할 수 있습니다. 변경하면 이 공유 설정이 바뀝니다. 다른 설정이 필요하면 새 연결을 만드세요.',
   remove: '연결 삭제', duplicate: '연결 복제', cancel: '변경 취소', save: '저장', saved: '저장했습니다',

@@ -28,6 +28,7 @@ export interface SessionStat {
   cacheHitTokens: number;
   cacheHitRate: number | null;
   messageCount: number;
+  startedAt?: string;
   /** null = 还在跑 */
   endedAt?: string | null;
 }

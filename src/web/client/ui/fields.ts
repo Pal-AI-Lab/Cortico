@@ -27,7 +27,12 @@ function wire(
   if (opts.value != null) el.value = opts.value;
   if (opts.disabled) el.disabled = true;
   const onInput = opts.onInput;
-  if (onInput) el.addEventListener(event, () => onInput(el.value), { signal });
+  if (onInput) {
+    // 输入法组词期间的拼音字母不算输入:选好词(compositionend)才报。Chrome 的最后一个 input
+    // 在 compositionend 之前、仍带 isComposing;Firefox 的在之后,会多报一次同样的值,无妨。
+    el.addEventListener(event, (ev: Event) => { if (!(ev as InputEvent).isComposing) onInput(el.value); }, { signal });
+    el.addEventListener('compositionend', () => onInput(el.value), { signal });
+  }
   const onChange = opts.onChange;
   if (onChange) el.addEventListener('change', () => onChange(el.value), { signal });
   const onCommit = opts.onCommit;

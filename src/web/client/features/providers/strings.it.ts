@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: 'Impostazioni', marketTab: 'Mercato estensioni',
   pageTitle: 'Connessioni ai modelli', navLabel: 'Connessioni ai modelli', navGroup: 'Core', create: '+ Nuova istanza di connessione', newName: 'Istanza senza nome',
   createHint: "Un'istanza è un insieme di impostazioni del provider salvato come scheda.",
   empty: 'Ancora nessuna connessione ai modelli', emptyHint: "Aggiungi una connessione a un modello per abilitare l'inferenza.",
-  eraseConfirm: 'Conferma eliminazione',
   connect: 'Connetti', activate: 'Imposta come connessione attuale', active: 'Modello attuale', missing: 'Connessione al modello attuale mancante: ',
   inUse: (names: string) => `In uso da: ${names}`, selectedBy: (names: string) => `Selezionata da ${names} (non in esecuzione)`,
   names: (list: string[]) => list.join(', '),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: 'Sforzo di ragionamento', thinking: 'Abilita ragionamento', temperature: 'Temperatura', maxTokens: 'Token massimi in uscita', context: 'Limite di contesto', tier: 'Livello di servizio', images: 'Accetta immagini',
   catalogNoWindow: "L'elenco dei modelli non indica una finestra di contesto per questo modello; inseriscila dalla documentazione del provider.",
   catalogMaxOutput: (tokens: number) => `L'elenco dei modelli indica un output massimo di ${tokens} token.`,
-  advancedHint: 'Modifica solo per gateway API personalizzati o servizi compatibili.', secret: 'Variabile di ambiente delle credenziali',
+  secret: 'Variabile di ambiente delle credenziali',
   extraHeaders: 'Header aggiuntivi (oggetto JSON)', extraBody: 'Corpo della richiesta aggiuntivo (oggetto JSON)', priceRules: 'Regole di prezzo complete (array JSON)',
   shared: "Configurazione condivisa: più bot possono usare questa connessione. Le modifiche aggiornano questa configurazione condivisa; crea un'altra connessione se ti servono impostazioni diverse.",
   remove: 'Elimina connessione', duplicate: 'Duplica connessione', cancel: 'Annulla modifiche', save: 'Salva', saved: 'Salvato',

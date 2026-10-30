@@ -8,7 +8,8 @@ import type { HfFile, HfRepo } from '../huggingface.ts';
 import type { ModelsState } from './server.ts';
 import { pick } from '../../../core/language.ts';
 import { panel } from '../strings.ts';
-import { HITS_PER_PAGE } from '../../../web/client/features/extensions/index.ts';
+/** 每次搜索取回的仓库数。 */
+const HITS_PER_PAGE = 12;
 
 const POLL_MS = 2_000;
 

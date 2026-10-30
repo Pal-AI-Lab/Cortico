@@ -1,8 +1,8 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
-  sectionDisk: '디스크의 data/(재시작 후에도 유지)',
-  sectionMemory: '메모리 임시 저장(재시작하면 비워짐)',
+  sectionDisk: '디스크에 저장',
+  sectionMemory: '메모리에만',
   nukeAll: '⚠ 서버 저장소 전체 비우기',
   clear: '지우기',
   dangerTitle: (label: string) => `⚠ 위험한 작업: ${label}`,

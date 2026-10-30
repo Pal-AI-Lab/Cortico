@@ -53,9 +53,9 @@ World 先在 World 页停用。
 `link:` 本机扩展不查 npm；registry 查询失败的包显示错误，不算已是最新。连接失败和读正文时断线的错误里都带出错的主机和底层错误码
 (例如证书不符时的 `ERR_TLS_CERT_ALTNAME_INVALID`)。
 搜索、详情和检查更新用安装时的 registry:在 `extensions/` 里跑 `pnpm config get registry`,
-读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。结果在进程内缓存,在扩展页以外改了配置要重启进程;
+读 `extensions/` 与用户的 .npmrc、`pnpm_config_registry`,不读外层工作区的配置。结果在进程内缓存,在扩展市场以外改了配置要重启进程;
 pnpm 读不出地址时这三处都报 pnpm 的错误。
-扩展页的「npm 源」读写 `extensions/.npmrc` 的 `registry=` 行,其余行原样保留,填空保存删掉这一行;写入后缓存作废,
+扩展市场的「npm 源」读写 `extensions/.npmrc` 的 `registry=` 行,其余行原样保留,填空保存删掉这一行;写入后缓存作废,
 检查更新、搜索、详情和 `pnpm add` 立即改用新源。接口是内部路由 `GET /api/extensions/registry`
 (回 `configured`,即 .npmrc 里的值或 null,以及 pnpm 实际用的 `registry`,读不出时换成 `registryError`)与
 `POST /api/extensions/registry`(体 `{ registry }`,只收 http(s) 地址,回应同 GET)。
@@ -68,15 +68,15 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 
 ## 市场的官方索引
 
-扩展页的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、图标、截图、能力摘要、自描述与更新日志来自官方索引仓
+扩展市场的标签、徽标(认证、官方、新品)、喜欢 / 不喜欢、评论、图标、截图、能力摘要、自描述与更新日志来自官方索引仓
 [Pal-AI-Lab/cortico-extensions](https://github.com/Pal-AI-Lab/cortico-extensions),文件格式以那里的 DESIGN.md 为准。
 `src/extensions/market.ts` 读索引仓 main 上的 `index.json`、`catalog.json`、`packages/<包名>.json` 与评论快照,
 每个文件依次问两处:
 
-1. 索引源:默认 `https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main`,扩展页「索引源」配了地址时换成它。
+1. 索引源:默认 `https://raw.githubusercontent.com/Pal-AI-Lab/cortico-extensions/main`,扩展市场「索引源」配了地址时换成它。
    配的地址要与 raw 同样的目录结构(`<地址>/index.json`、`<地址>/catalog.json`、`<地址>/packages/<包名>.json`)。3 秒没回算失败。
 2. GitHub contents API `https://api.github.com/repos/Pal-AI-Lab/cortico-extensions/contents/<路径>?ref=main`
-   (`Accept: application/vnd.github.raw`)。扩展页登录了 GitHub 时带上 `github-token.json` 的令牌(每小时 5000 次),
+   (`Accept: application/vnd.github.raw`)。扩展市场登录了 GitHub 时带上 `github-token.json` 的令牌(每小时 5000 次),
    没登录时不带(每个 IP 每小时 60 次)。5 秒没回算失败。
 
 连不上、超时、回 404 以外的非 2xx(含额度用完时的 403 / 429)或正文不是 JSON 时问下一处;404 当作文件不存在,不再往下问。
@@ -96,10 +96,10 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
   语言取 `locales`:简体中文读 `zh`,繁体中文与其余语言读 `en`,没有时用顶层的。
 - `schema` 不是 1 的文件当作读不到。`index.json` 与 `catalog.json` 每次读到新的一份都写进扩展目录的 `market-index.json`、
   `market-catalog.json`;读不到时先用本进程上次读到的,再用这两个文件,拉黑照常生效,`index.stale` 是这次读取失败的原因,
-  扩展页提示内容可能已过期。`index.json` 一份都没有时 `index` 只有 `error`,结果原样返回;`catalog.json` 一份都没有时
+  扩展市场提示内容可能已过期。`index.json` 一份都没有时 `index` 只有 `error`,结果原样返回;`catalog.json` 一份都没有时
   结果不带它补的字段。
 
-扩展页「索引源」读写扩展目录的 `market.json`(`{ "indexBase": "<地址>" }`),只收 http(s) 地址,末尾的 `/` 去掉,填空保存删掉
+扩展市场「索引源」读写扩展目录的 `market.json`(`{ "indexBase": "<地址>" }`),只收 http(s) 地址,末尾的 `/` 去掉,填空保存删掉
 这个文件;写入后内存里读到的索引文件作废,下次读改问新的源。镜像给出的拉黑名单、标签、徽标与评分由运营镜像的一方决定。
 接口是内部路由 `GET /api/extensions/index-base`(回 `{ configured, base }`:`configured` 是配的地址或 null,`base` 是先问的那一处)
 与 `POST /api/extensions/index-base`(体 `{ indexBase }`,回应同 GET)。
@@ -226,7 +226,7 @@ WebUI 面板可选。自定义面板的 `src/webui/client.ts` 默认导出 `{ pa
 (`"main": "./index.ts"`),框架经 tsx 跑它。
 
 在部署的 `deployment.json` 中将 `bot` 设为包名即可引用。存在同名 `bots/<名>/` 时优先使用仓内版本。
-一个进程只跑一个 bot,所以装了好几个 bot 包也只 import 被引用的那一个,其余在扩展页上标
+一个进程只跑一个 bot,所以装了好几个 bot 包也只 import 被引用的那一个,其余在扩展市场上标
 「已装,本部署未用」。bot 的 `id` 不得与仓内 `bots/` 任一目录同名:WebUI 面板产物按
 `persona:<id>` 找,撞名会拿到仓内那份。
 
@@ -280,7 +280,7 @@ World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`
 装配层会为未启用的 World 创建实例,因此所有 World 都必须能以默认配置构造。
 
 最后两段只提示,不计入失败。「Tags」按「市场的官方索引」的两处来源读索引仓 main 上的 `index.json`,不带令牌;环境变量
-`CORTICO_MARKET_INDEX_BASE` 设了地址时用它代替 raw.githubusercontent.com,目录结构要求与扩展页的「索引源」相同。
+`CORTICO_MARKET_INDEX_BASE` 设了地址时用它代替 raw.githubusercontent.com,目录结构要求与扩展市场的「索引源」相同。
 两处都读不到或 `schema` 不是 1 时跳过并写出原因;`cortico.tags` 为空时列出整张词表与每个标签的 `when`,不认识的标签给出名字接近的,
 并列出提示与警示标签供对照;官方在 `overrides` 里改过这个包的标签时写出改动与申请格式。「Before publishing」列出声明的标签、
 `CHANGELOG.md` 有没有当前版本的一节、`os`、`cortico.describe` 指的文件在不在,以及向官方提扩展申请的纯文本格式。
@@ -307,7 +307,7 @@ bot **7**。版本不符的扩展不能加载,页面显示「需要升级」;上
 
 上一版契约(world 5、provider 5、bot 6)的包是例外,经过渡层 `src/extensions/previous-contract.ts` 照常加载:
 旧接口名(`console()`、`BotParts.console`、manifest 的 `consoleClient` / `consoleStyle`、改过名的
-`cortico/` 模块路径、面板脚本直接请求的 `/api/console/providers/...`)接到新名上,扩展页与市场的详情给一条
+`cortico/` 模块路径、面板脚本直接请求的 `/api/console/providers/...`)接到新名上,扩展市场与市场的详情给一条
 warning。Cortico 下一个大版本删除这个过渡层,届时这些包不再加载。`pnpm check:extension` 对上一版契约判失败。
 
 加一的判据按类分:`WorldDefinition` 不兼容变更只加 world,`ProviderModule` 只加 provider,

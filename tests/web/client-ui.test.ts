@@ -288,16 +288,17 @@ describe('WebUiFormat', () => {
     expect(fmt.clock(1_700_000_000_000)).toBe('');
   });
 
-  it('money：<1 保 4 位，>=1 保 2 位，币种缺省 USD 渲染成 $，其余代码原样前置', async () => {
+  it('money：两位小数，币种缺省 USD；有符号的币种写符号，没有的写代码', async () => {
     const fmt = await load();
-    expect(fmt.money(null)).toBe('$0');
-    expect(fmt.money(0)).toBe('$0.0000');
-    expect(fmt.money(0.0123456)).toBe('$0.0123');
-    expect(fmt.money(0.9999)).toBe('$0.9999');
-    expect(fmt.money(1)).toBe('$1.00');
+    expect(fmt.money(null)).toBe('$0.00');
+    expect(fmt.money(0)).toBe('$0.00');
+    expect(fmt.money(0.004)).toBe('$0.00');
+    expect(fmt.money(0.1267)).toBe('$0.13');
     expect(fmt.money(12.345)).toBe('$12.35');
     expect(fmt.money(1, 'USD')).toBe('$1.00');
-    expect(fmt.money(1, 'EUR')).toBe('EUR 1.00');
+    expect(fmt.money(0.1267, 'EUR')).toBe('€0.13');
+    expect(fmt.money(2, 'HKD')).toBe('HK$2.00');
+    expect(fmt.money(2, 'XQZ')).toBe('XQZ 2.00');
   });
 
   it('duration：ms / s / m s / h m 四档，1s 以上先量化到 0.1s', async () => {

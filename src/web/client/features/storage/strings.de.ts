@@ -1,8 +1,8 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
-  sectionDisk: 'Persistiert in data/ (übersteht Neustart)',
-  sectionMemory: 'Im Arbeitsspeicher (beim Neustart geleert)',
+  sectionDisk: 'Auf der Festplatte',
+  sectionMemory: 'Nur im Arbeitsspeicher',
   nukeAll: '⚠ Gesamten Server-Speicher leeren',
   clear: 'Leeren',
   dangerTitle: (label: string) => `⚠ Gefährlich: ${label}`,

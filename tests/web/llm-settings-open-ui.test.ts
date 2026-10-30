@@ -405,7 +405,7 @@ describe('探测与模型列表', () => {
     expect(text).toContain('alpha-large-2026');
     expect(text).toContain('输入 12 · 缓存命中 0 · 输出 5 · 推理 40');
     expect(text).toContain('有');
-    expect(text).toContain('$0.0012');
+    expect(text).toContain('$0.00');
     expect(view.root.querySelector('.msgline.bad')).toBeNull();
   });
   it('失败的探测把 error 与 hint 放进警示行', async () => {
@@ -432,12 +432,12 @@ describe('探测与模型列表', () => {
     });
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
-    button(view.root, '取模型列表').click();
+    button(view.root, '获取模型列表').click();
     await flush();
     const model = byLabel(view.root, '模型');
     expect(model.tagName).toBe('SELECT');
     expect([...model.options].map((o: Any) => o.value)).toEqual(['alpha-large', 'alpha-mini']);
-    expect(view.root.textContent).toContain('取到 2 个模型。');
+    expect(view.root.textContent).toContain('获取到 2 个模型。');
     expect(byLabel(view.root, '上下文窗口').value).toBe('128000');
     expect(server.last('save').spec.contextWindow).toBe(128000);
     change(byLabel(view.root, '模型'), 'alpha-mini');
@@ -451,10 +451,10 @@ describe('探测与模型列表', () => {
     };
     const view = await mountPanel(server.invoke);
     cleanup = view.cleanup;
-    button(view.root, '取模型列表').click();
+    button(view.root, '获取模型列表').click();
     await flush();
     expect(byLabel(view.root, '模型').tagName).toBe('INPUT');
-    expect(view.root.textContent).toContain('取不到模型列表：Error: 端点不提供模型列表');
+    expect(view.root.textContent).toContain('无法获取模型列表：Error: 端点不提供模型列表');
   });
   it('模型名没有默认候选:占位符是通用的,手填一个目录外的名字照样保存', async () => {
     const server = fakeSettings([instance()]);

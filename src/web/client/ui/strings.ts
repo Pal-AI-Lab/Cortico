@@ -11,7 +11,7 @@ import { S as ru } from './strings.ru.ts';
 
 const zh = {
   copy: '复制',
-  copyNothing: '取不到要复制的内容',
+  copyNothing: '没有可复制的内容',
   copied: '已复制',
   copyFailed: '复制失败，已展开文本供手动选取',
   imageReadFailed: '读取图片失败',

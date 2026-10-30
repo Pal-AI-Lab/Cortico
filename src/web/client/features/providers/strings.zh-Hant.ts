@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: '設定', marketTab: '擴充市集',
   pageTitle: '模型供應商', navLabel: '模型供應商', navGroup: 'Core', create: '+ 新增供應商實例', newName: '未命名實例',
-  createHint: '實例 = 填一組供應商設定儲存成卡片',
+  createHint: '實例 = 填寫一組供應商設定，儲存成卡片',
   empty: '還沒有模型供應商', emptyHint: '新增一條模型連線後，Cortico 才能進行模型推理。',
-  eraseConfirm: '確認刪除',
   connect: '連線', activate: '設為目前供應商', active: '目前模型', missing: '目前模型供應商不存在，設定中引用：',
   inUse: (names: string) => `其他實例使用中：${names}`, selectedBy: (names: string) => `已被 ${names} 選用（未執行）`,
   names: (list: string[]) => list.join('、'),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: '推理強度', thinking: '開啟推理', temperature: '溫度', maxTokens: '最大輸出 token', context: '上下文上限', tier: '服務檔位', images: '接受圖片',
   catalogNoWindow: '目錄沒有給出這個模型的上下文上限；請依服務商文件手動填寫。',
   catalogMaxOutput: (tokens: number) => `目錄給出的最大輸出為 ${tokens} token。`,
-  advancedHint: '僅在使用自訂 API 閘道或相容服務時調整。', secret: '金鑰環境變數名稱',
+  secret: '金鑰環境變數名稱',
   extraHeaders: '附加請求標頭（JSON object）', extraBody: '附加請求內容（JSON object）', priceRules: '完整計價規則（JSON array）',
   shared: '共享設定：此供應商可被多個 Bot 使用。修改會改變這份共享設定；若需要不同參數，建議新增一個供應商。',
   remove: '刪除供應商', duplicate: '複製供應商', cancel: '放棄變更', save: '儲存', saved: '已儲存',

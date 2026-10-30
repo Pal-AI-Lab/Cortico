@@ -94,8 +94,14 @@ export class Router {
     this.current = parseHash(this.deps.win.location.hash);
     const handler = (): void => { void this.onHashChange(); };
     this.deps.win.addEventListener('hashchange', handler);
+    // 离开拦截同样拦住整页卸载(关闭、刷新)。
+    const unload = (event: Event): void => { if (this.firstBlock()) event.preventDefault(); };
+    this.deps.win.addEventListener('beforeunload', unload);
     this.emit();
-    return toDisposable(() => this.deps.win.removeEventListener('hashchange', handler));
+    return toDisposable(() => {
+      this.deps.win.removeEventListener('hashchange', handler);
+      this.deps.win.removeEventListener('beforeunload', unload);
+    });
   }
 
   onChange(cb: (route: Route) => void): Disposable {

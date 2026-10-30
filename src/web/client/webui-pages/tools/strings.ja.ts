@@ -1,7 +1,7 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
-  ioGroup: (name: string | undefined) => `IO ツール · ${name}`,
+  ioGroup: (name: string | undefined) => `World ツール · ${name}`,
   groupCore: 'ネイティブ操作 · core',
   groupPersona: '記憶 / ファイルツール · Persona',
   noDescription: '（ツールの説明がありません）',

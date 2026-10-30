@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -23,11 +22,10 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `${sec}초마다 다시 가져오며, 이 페이지를 떠나면 멈춥니다`,
   refresh: '새로 고침',
   granularity: '단위',
-  autoBucket: (unit: UsageBucketUnit) => `자동(${{ minute: '분 단위', hour: '시간 단위', day: '일 단위', week: '주 단위', month: '월 단위' }[unit]})`,
   autoCurrency: '통화 자동',
   rateBuiltin: (date: string) => `내장 ${date}`,
-  basisMarginal: '한계 비용',
-  basisEquivalent: 'API 환산 비용',
+  basisMarginal: '실제 지출',
+  basisEquivalent: 'API 가격으로 환산',
   ledger: '비용 기준',
   compTitle: '비용 구성',
   mainTitle: '사용량 시계열',

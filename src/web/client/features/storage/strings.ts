@@ -10,8 +10,8 @@ import { S as it } from './strings.it.ts';
 import { S as ru } from './strings.ru.ts';
 
 const zh = {
-  sectionDisk: '落盘 data/（重启后仍在）',
-  sectionMemory: '内存暂存（重启即清零）',
+  sectionDisk: '保存在磁盘',
+  sectionMemory: '只在内存',
   nukeAll: '⚠ 一键清空服务端全部存储',
   clear: '清除',
   dangerTitle: (label: string) => `⚠ 危险操作：${label}`,
@@ -31,8 +31,8 @@ const zh = {
 };
 
 export const en: typeof zh = {
-  sectionDisk: 'Persisted data/ (survives restart)',
-  sectionMemory: 'In-memory (cleared on restart)',
+  sectionDisk: 'Saved to disk',
+  sectionMemory: 'In memory only',
   nukeAll: '⚠ Clear all server storage',
   clear: 'Clear',
   dangerTitle: (label: string) => `⚠ Dangerous: ${label}`,

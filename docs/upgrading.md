@@ -3,7 +3,7 @@
 # 把扩展升到当前契约
 
 当前契约版本是 world **6**、provider **6**、bot **7**(`EXTENSION_API_VERSIONS`)。`cortico.api` 还是
-world 5、provider 5、bot 6 的包经过渡层照常加载,扩展页给一条 warning;Cortico 下一个大版本删除过渡层,
+world 5、provider 5、bot 6 的包经过渡层照常加载,扩展市场给一条 warning;Cortico 下一个大版本删除过渡层,
 那之后这些包加载不了。`pnpm check:extension` 现在就对它们判失败。按下面改完、重新发布即可。
 English below.
 

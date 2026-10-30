@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 const pl = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
@@ -25,11 +24,10 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `Busca de novo a cada ${sec} s; para ao sair desta página`,
   refresh: 'Atualizar',
   granularity: 'Granularidade',
-  autoBucket: (unit: UsageBucketUnit) => `Automático (${{ minute: 'por minuto', hour: 'por hora', day: 'por dia', week: 'por semana', month: 'por mês' }[unit]})`,
   autoCurrency: 'Moeda automática',
   rateBuiltin: (date: string) => `embutido ${date}`,
-  basisMarginal: 'Custo marginal',
-  basisEquivalent: 'Custo equivalente de API',
+  basisMarginal: 'Gasto real',
+  basisEquivalent: 'A preço de API',
   ledger: 'Base de custo',
   compTitle: 'Composição do custo',
   mainTitle: 'Série temporal de uso',

@@ -5,6 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const MAIN = '../../src/web/client/main.ts';
+const MEMO = '../../src/web/client/core/memo.ts';
 
 type Any = any;
 
@@ -23,7 +24,7 @@ afterEach(() => {
 
 describe('createMemo', () => {
   it('localStorage 写不进去时读回本会话写的值,不是落盘的旧值', async () => {
-    const { createMemo } = (await import(MAIN)) as Any;
+    const { createMemo } = (await import(MEMO)) as Any;
     localStorage.setItem('cortico.test.k', JSON.stringify('old'));
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new DOMException('quota', 'QuotaExceededError');
@@ -34,7 +35,7 @@ describe('createMemo', () => {
   });
 
   it('没写过就读 localStorage;没有记录或记录坏了都退回缺省', async () => {
-    const { createMemo } = (await import(MAIN)) as Any;
+    const { createMemo } = (await import(MEMO)) as Any;
     localStorage.setItem('cortico.test.k', JSON.stringify({ n: 1 }));
     localStorage.setItem('cortico.test.bad', '{not json');
     const memo = createMemo('cortico.test.');

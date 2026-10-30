@@ -1,6 +1,7 @@
 import type { WebUi } from '../../../../shared/client-panel.ts';
 import { pick, type Language } from '../../../../../core/language.ts';
 import { panel } from './strings.ts';
+import { currencyName } from '../../../ui/format.ts';
 
 interface Rule {
   meter: string;
@@ -84,7 +85,7 @@ export function pricingEditor(
         ui.kv([
           {
             k: row.model,
-            v: `${quote.currency} · ${quote.basis === 'marginal' ? S.marginal : S.equivalent}`,
+            v: `${currencyName(quote.currency)} · ${quote.basis === 'marginal' ? S.marginal : S.equivalent}`,
           },
         ]),
         ui.msgline(

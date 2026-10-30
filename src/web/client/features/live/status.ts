@@ -3,13 +3,13 @@
  */
 
 import type { WebUi } from '../../../shared/client-panel.ts';
-import { chipsOf, loopOf, type RunPhase, type StatusSnapshot } from './protocol.ts';
+import { chipsOf, loopOf, type RunPhase, type SessionStat, type StatusSnapshot } from './protocol.ts';
 import { S } from './strings.ts';
 
 /** 一枚 chip:纯文本片段与要加粗的读数交替。 */
 type ChipPart = string | { b: string | number };
 
-function chipOf(ui: WebUi, parts: readonly ChipPart[]): HTMLElement {
+export function chipOf(ui: WebUi, parts: readonly ChipPart[]): HTMLElement {
   const c = ui.chip('');
   for (const p of parts) {
     if (typeof p === 'string') c.appendChild(ui.h('span', null, p));
@@ -46,16 +46,41 @@ export function phaseLabel(ui: WebUi, phase: RunPhase | null): string | null {
   return parts.join(' · ');
 }
 
+export interface ConnectionButton {
+  el: HTMLButtonElement;
+  render(st: StatusSnapshot | null): void;
+}
+
+/** 当前模型供应商:名字与模型,悬停看模块与地址;点击打开它在「模型供应商」里的设置,没有选中的就打开列表。 */
+export function createConnectionButton(ui: WebUi, open: (name: string | null) => void): ConnectionButton {
+  let name: string | null = null;
+  // ui.button 的点击监听随本页 signal 解除
+  const el = ui.button('', { onClick: () => open(name) });
+  el.className = 'live-connection';
+  const value = ui.h('span', 'live-connection-value');
+  el.append(ui.h('span', 'live-connection-label', S.currentProvider), value);
+  return {
+    el,
+    render(st) {
+      const conn = st?.modelConnection;
+      name = conn?.name ?? null;
+      value.textContent = conn ? `${conn.name} · ${conn.model ?? '-'}` : S.noProvider;
+      el.title = conn ? `${conn.moduleTitle} (${conn.module})\n${conn.baseUrl}` : S.noProvider;
+    },
+  };
+}
+
 export interface StatusBand {
   el: HTMLElement;
-  render(st: StatusSnapshot | null): void;
+  /** `main` 是会话统计里主会话那一项(累计输入与缓存命中率取自它);还没有时省略那两项。 */
+  render(st: StatusSnapshot | null, main?: SessionStat | null): void;
 }
 
 export function createStatusBand(ui: WebUi): StatusBand {
   const el = ui.h('div', 'chips');
   return {
     el,
-    render(st) {
+    render(st, main) {
       while (el.children.length) el.children[0].remove();
       if (!st) {
         el.appendChild(ui.chip(S.chipDisconnected));
@@ -69,14 +94,18 @@ export function createStatusBand(ui: WebUi): StatusBand {
       if (loop.behind) el.appendChild(ui.chip(S.chipBehind(loop.behind), 'warn'));
       // 人格概念(「梦中」这类)由Persona自报文本,框架照画不解释。
       for (const chip of chipsOf(st)) el.appendChild(ui.chip(chip.label, chip.tone));
+      // token 三项:下次提交的上下文估算;main 本次运行累计的输入与缓存命中率
       if (loop.estTokens != null) {
-        el.appendChild(chipOf(ui, [{ b: ui.fmt.count(loop.estTokens) }, ' tok']));
+        const next = chipOf(ui, [S.chipNextSend, { b: ui.fmt.count(loop.estTokens) }, ' tok']);
+        next.title = S.nextSendTitle;
+        el.appendChild(next);
       }
-      const u = loop.lastUsage;
-      if (u && u.promptTokens) {
-        el.appendChild(
-          chipOf(ui, [S.chipCache, { b: ui.fmt.percent((u.cacheHitTokens || 0) / u.promptTokens) }]),
-        );
+      if (main) {
+        const input = chipOf(ui, [S.chipTotalInput, { b: ui.fmt.count(main.promptTokens) }, ' tok']);
+        input.title = S.totalInputTitle;
+        const cache = chipOf(ui, [S.chipCache, { b: main.cacheHitRate == null ? '-' : ui.fmt.percent(main.cacheHitRate) }]);
+        cache.title = S.cacheTitle;
+        el.append(input, cache);
       }
       if (loop.messageCount != null) el.appendChild(chipOf(ui, [{ b: loop.messageCount }, S.chipMsgs]));
       if (loop.batchesHandled != null) {

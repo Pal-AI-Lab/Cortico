@@ -14,6 +14,7 @@ import type { WebUi } from '../../shared/client-panel.ts';
 import type { WebUiLamp, WebUiPageManifest } from '../../shared/webui-protocol.ts';
 import { createAvatarControl } from './avatar.ts';
 import { S } from './strings.ts';
+import { navHidden, NAV_HIDDEN_EVENT } from '../core/world-nav.ts';
 
 const DEFAULT_BRAND = 'bot';
 const FRAMEWORK_NAME = 'Cortico';
@@ -407,7 +408,9 @@ export function createShell(deps: ShellDeps): WebUiShell {
       }
     }
 
-    const worlds = listed.filter((page) => page.kind === 'world');
+    // 用户在 World 列表里设为不显示在侧栏的那些不列。
+    const hidden = doc.defaultView ? navHidden(doc.defaultView) : new Set<string>();
+    const worlds = listed.filter((page) => page.kind === 'world' && !hidden.has(page.id));
     if (worldRoots.length || worlds.length) {
       const group = ui.h('div', 'navgroup navgroup-world-tree');
       group.setAttribute('role', 'group');
@@ -521,6 +524,7 @@ export function createShell(deps: ShellDeps): WebUiShell {
   })();
 
   renderNav();
+  doc.defaultView?.addEventListener(NAV_HIDDEN_EVENT, renderNav, { signal });
 
   return {
     el,

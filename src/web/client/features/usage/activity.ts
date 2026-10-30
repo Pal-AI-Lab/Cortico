@@ -11,7 +11,7 @@ import type { UsageTip } from './tooltip.ts';
 import type { UsageDailyTokens } from './types.ts';
 
 const DAY_MS = 86_400_000;
-/** 格子边长与间距（px），与 src/web/public/styles.css 中 .uactivity 的 --cell / --gap 一致。 */
+/** 格子边长与间距（px），与 cost.css 的 --cell / --gap 一致。 */
 const CELL = 12;
 const GAP = 3;
 /** 取数时从范围末日往前取多少天的按天数据，范围之外的部分作对照。 */
@@ -21,7 +21,7 @@ const MONTH_GAP = 3;
 /** 换范围时着色/褪色依次扫过各列，每列的延迟与整段扫过的上限（ms）。 */
 const SWEEP_STEP_MS = 18;
 const SWEEP_MAX_MS = 600;
-/** 单个格子着色/褪色的时长，与 src/web/public/styles.css 中 .ugrid .ucell 的 opacity / filter 过渡一致。 */
+/** 单个格子着色/褪色的时长，与 cost.css 中 .ucell 的 opacity / filter 过渡一致。 */
 const SWEEP_FADE_MS = 240;
 
 export interface ActivityDeps {

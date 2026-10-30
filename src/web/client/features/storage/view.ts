@@ -63,9 +63,8 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
   function row(p: StoragePartView): HTMLDivElement {
     const item = ui.h('div', 'strow');
     const info = ui.h('div', 'stinfo');
-    const label = ui.h('div', 'stlabel', p.label);
-    if (p.location) label.appendChild(ui.h('span', 'stloc', p.location));
-    info.appendChild(label);
+    info.appendChild(ui.h('div', 'stlabel', p.label));
+    if (p.location) info.appendChild(ui.h('div', 'stloc', p.location));
     if (p.note) info.appendChild(ui.h('div', 'stnote', p.note));
     const stat = ui.h('div', 'ststat', p.stat || '');
     const btn = ui.button(S.clear, {
@@ -145,8 +144,9 @@ export function createStorageView(deps: StorageViewDeps): StorageView {
       for (const [kind, title] of [['disk', S.sectionDisk], ['memory', S.sectionMemory]] as const) {
         const items = parts.filter((p) => p.kind === kind);
         if (!items.length) continue;
-        body.appendChild(ui.h('div', 'stacklabel', title));
-        for (const p of items) body.appendChild(row(p));
+        const card = ui.sheet({ title });
+        for (const p of items) card.body.appendChild(row(p));
+        body.appendChild(card.el);
       }
     } catch (err) {
       if (isAbort(err) || signal.aborted) return;

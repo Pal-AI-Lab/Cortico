@@ -1,8 +1,9 @@
 /** 使用运行时 token 估算口径，将标准 Item 按显示类别汇总。 */
 
-import { itemText, type ContextRecord } from '../../../../protocol/open-responses/context.ts';
+import type { ContextRecord } from '../../../../protocol/open-responses/context.ts';
+import { itemText } from '../../../../protocol/open-responses/context.ts';
 import type { WebUi } from '../../../shared/client-panel.ts';
-import { estimateMessagesTokens } from '../../../../protocol/open-responses/tokens.ts';
+import { estimateMessagesTokens, estimateTokens } from '../../../../protocol/open-responses/tokens.ts';
 import {
   contextOf,
   loopOf,
@@ -11,22 +12,9 @@ import {
 } from './protocol.ts';
 import { S } from './strings.ts';
 
-/**
- * 字数 → token 估算。与服务端 `estimateTokens` 同一口径:中日韩与全角标点按 0.6,
- * 其余按 0.3。**不是账单**,只求与截断判据同源。
- */
+/** 将非字符串输入归一后按字符估算 token。 */
 export function estTok(text: unknown): number {
-  let cjk = 0;
-  let other = 0;
-  for (const ch of String(text ?? '')) {
-    const c = ch.codePointAt(0) ?? 0;
-    if ((c >= 0x4e00 && c <= 0x9fff) || (c >= 0x3000 && c <= 0x30ff) || (c >= 0xff00 && c <= 0xffef)) {
-      cjk++;
-    } else {
-      other++;
-    }
-  }
-  return Math.ceil(cjk * 0.6 + other * 0.3);
+  return estimateTokens(String(text ?? ''));
 }
 
 /** 一个 JSON 值折算成 token(工具参数、工具表 schema 都这么算)。 */
@@ -58,7 +46,7 @@ const CTX_CATS: readonly ContextCategoryDef[] = [
 
 const CTX_GROUPS: readonly string[] = [S.groupPrefix, S.groupTools, S.groupDialogue];
 
-/** 按 ━━━ 段名 ━━━ 拆分前缀；未匹配的文本归入前言。上下文与提示词页共用。 */
+/** 按 ━━━ 段名 ━━━ 拆分前缀；未匹配的文本归入前言。 */
 export function parsePrefixSegments(systemText: string): Record<string, string> {
   const map: Record<string, string> = {};
   if (!systemText) return map;

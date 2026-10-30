@@ -1,11 +1,14 @@
-/** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。类别取路由第二段。 */
+/** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。World 与供应商页面共用内容。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
 import { icon, brandMark } from '../../ui/icons.ts';
-import { pageIntro } from '../../ui/page.ts';
 import { renderMarkdown } from './markdown.ts';
-import type { FeatureContext, FrameworkFeature } from '../feature.ts';
+import type { FeatureContext } from '../feature.ts';
 import { S } from './strings.ts';
+import { CATALOG_CATEGORY_IDS, inCatalogCategory, isFunctionTag, type CatalogCategory } from './catalog.ts';
+import { problemPopover, scrollerOf, wheelDelta } from '../../ui/problem.ts';
+import { fold, measureReflow, prefersStill } from '../../core/motion.ts';
+import { matchRanges, matchRank, prepareFields, searchTerms, type MatchRank, type PreparedFields } from './search.ts';
 
 /** 扩展类别。与 `ExtensionKind` 同形;这一页只用它分组与选关键字。 */
 export type ExtensionKindView = 'world' | 'provider' | 'bot';
@@ -27,7 +30,6 @@ export interface ExtensionView {
   webUi?: 'none' | 'served' | 'missing';
   loaded: boolean;
   reason?: string;
-  warnings?: string[];
   worldId?: string;
   label?: string;
   enabled?: boolean;
@@ -102,8 +104,6 @@ export interface ChangelogView {
 export interface SummaryView {
   tools?: number;
   events?: number;
-  toolTokens?: number;
-  envPromptTokens?: number;
   protocols?: string[];
   auth?: Array<'api-key' | 'oauth' | 'device-code' | 'web-session'>;
   input?: Array<'text' | 'image' | 'audio' | 'video'>;
@@ -163,8 +163,6 @@ export interface MarketIndexView {
   /** 「新品」算首次发布后多少天 */
   newDays?: number;
   error?: string;
-  /** 这次没读到、用的是上次读到的索引时,这次读取失败的原因 */
-  stale?: string;
 }
 
 interface UpdateView {
@@ -186,12 +184,6 @@ interface RegistryView {
   registryError?: string;
 }
 
-/** `/api/extensions/index-base` 的回应:扩展页配的索引源(没配时 null)与先问的那一处。 */
-interface IndexBaseView {
-  configured: string | null;
-  base: string;
-}
-
 /** 与 `ExtensionSearchHit` 同形。 */
 export interface SearchHitView {
   name: string;
@@ -206,6 +198,8 @@ export interface SearchHitView {
   links: { npm?: string; repository?: string; homepage?: string };
   installed: boolean;
   kind?: ExtensionKindView;
+  /** 页面自己补的名字:包文档或本地安装给的显示名,只用于搜索 */
+  aliases?: string[];
   /** 以下来自官方索引,索引读不到时缺席。 */
   displayName?: string;
   /** 合并后的标签 id:作者声明的、keywords 里命中词表的、官方加的,减去官方删的 */
@@ -244,7 +238,7 @@ export interface PackageDetailView {
   published?: string;
   created?: string;
   versionCount: number;
-  history: Array<{ version: string; date: string; problems?: string[]; warnings?: string[] }>;
+  history: Array<{ version: string; date: string; problems?: string[] }>;
   deprecated?: string;
   manifest?: { kind: ExtensionKindView; api: number; webUiClient?: string; webUiStyle?: string };
   problems?: string[];
@@ -276,6 +270,8 @@ export const HIT_SORTS: readonly HitSort[] = ['certified', 'name', 'date', 'down
 
 export interface ArrangeOptions {
   filter: string;
+  /** 标签 id 换成显示名,搜索词也比标签名 */
+  tagLabel?: (id: string) => string | undefined;
   hideInstalled: boolean;
   sort: HitSort;
   page: number;
@@ -298,16 +294,41 @@ export interface ArrangeOptions {
   minDownloads?: number;
 }
 
+/** 把文本写进 `el`,命中的部分包进 `<mark>`。 */
+function writeMarked(el: HTMLElement, text: string, terms: readonly string[]): void {
+  const doc = el.ownerDocument, nodes: Node[] = [];
+  let at = 0;
+  for (const [start, end] of matchRanges(text, terms)) {
+    if (start > at) nodes.push(doc.createTextNode(text.slice(at, start)));
+    const mark = doc.createElement('mark'); mark.className = 'extension-hit'; mark.textContent = text.slice(start, end); nodes.push(mark);
+    at = end;
+  }
+  if (at < text.length || !nodes.length) nodes.push(doc.createTextNode(text.slice(at)));
+  el.replaceChildren(...nodes);
+}
+
+/** 规整过的搜索字段按包缓存,内容没变就不重算;每敲一个字都要过一遍整份结果。 */
+const preparedHits = new Map<string, { key: string; fields: PreparedFields }>();
+function searchFields(h: SearchHitView, tagLabel?: (id: string) => string | undefined): PreparedFields {
+  const labels = [...(h.tags ?? []).map(id => tagLabel?.(id) ?? id), ...h.keywords ?? [], h.author, h.publisher, ...h.maintainers ?? []];
+  const parts = { names: [h.name, h.displayName, ...h.aliases ?? []], labels, text: [h.description, h.note] };
+  const key = JSON.stringify(parts), cached = preparedHits.get(h.name);
+  if (cached?.key === key) return cached.fields;
+  const fields = prepareFields(parts); preparedHits.set(h.name, { key, fields });
+  return fields;
+}
+
 /**
  * 在整份结果上筛选、排序、切页。registry 的搜索端点在 `keywords:` 过滤下不按文本
- * 缩小结果,所以文本匹配在这里做:包名、描述、关键字任一命中即算。
+ * 缩小结果,所以文本匹配在这里做,规则见 search.ts。有搜索词时先按命中档次,同档再按 `sort`。
  * `page` 超出范围时收回最后一页,返回值里的 `page` 是实际用的那一页。
  */
 export function arrangeHits(
   hits: readonly SearchHitView[],
   opts: ArrangeOptions,
 ): { matched: number; pages: number; page: number; shown: SearchHitView[] } {
-  const needle = opts.filter.trim().toLowerCase();
+  const terms = searchTerms(opts.filter);
+  const ranks = new Map<SearchHitView, MatchRank>();
   const matched = hits.filter((h) => {
     if (opts.hideInstalled && h.installed) return false;
     if (opts.officialOnly && !h.official) return false;
@@ -322,14 +343,15 @@ export function arrangeHits(
     if (opts.minDownloads && (h.downloads.month ?? 0) < opts.minDownloads) return false;
     if (opts.tags?.some((t) => !h.tags?.includes(t))) return false;
     if (opts.excludeTags?.some((t) => h.tags?.includes(t))) return false;
-    if (!needle) return true;
-    return h.name.toLowerCase().includes(needle)
-      || (h.displayName ?? '').toLowerCase().includes(needle)
-      || h.description.toLowerCase().includes(needle)
-      || (h.keywords ?? []).some((k) => k.toLowerCase().includes(needle));
+    if (!terms.length) return true;
+    const rank = matchRank(terms, searchFields(h, opts.tagLabel));
+    if (rank === undefined) return false;
+    ranks.set(h, rank); return true;
   });
   const score = (h: SearchHitView) => h.rating ? h.rating.up - h.rating.down : -Infinity;
   matched.sort((a, b) => {
+    const ahead = (ranks.get(b) ?? 0) - (ranks.get(a) ?? 0);
+    if (ahead) return ahead;
     switch (opts.sort) {
       case 'certified': return Number(!!b.certified) - Number(!!a.certified) || a.name.localeCompare(b.name);
       case 'rating': return score(b) - score(a) || (b.rating?.up ?? 0) - (a.rating?.up ?? 0) || a.name.localeCompare(b.name);
@@ -361,23 +383,6 @@ export function osText(os: readonly string[]): string {
     : S.osExcept(os.map(value => platformName(value.slice(1))).join(S.listSeparator));
 }
 
-/** 按 semver 比大小。预发布版排在同号正式版之前,预发布标识之间按字符串比。 */
-export function compareVersions(a: string, b: string): number {
-  const parse = (v: string) => { const i = v.indexOf('-'); return { core: (i < 0 ? v : v.slice(0, i)).split('.').map(Number), pre: i < 0 ? '' : v.slice(i + 1) }; };
-  const x = parse(a), y = parse(b);
-  for (let i = 0; i < 3; i++) { const d = (x.core[i] || 0) - (y.core[i] || 0); if (d) return d; }
-  if (x.pre === y.pre) return 0;
-  if (!x.pre) return 1;
-  if (!y.pre) return -1;
-  return x.pre < y.pre ? -1 : 1;
-}
-/** 已装版本(不含)到目标版本(含)之间写了说明的版本,新的在前。 */
-export function changesBetween(versions: readonly string[] | undefined, from: string, to: string): string[] {
-  return (versions ?? [])
-    .filter(version => compareVersions(version, from) > 0 && compareVersions(version, to) <= 0)
-    .sort((a, b) => compareVersions(b, a));
-}
-
 type Target = { name: string; version?: string } | { path: string };
 interface Life { deployment: string; bootId: string; ready: boolean }
 interface PowerReport { result?: string; error?: string; steps?: Array<{ label: string; ok: boolean; elapsedMs: number; detail?: string }> }
@@ -387,16 +392,17 @@ export function restartOutcome(before: Life, next: Life): 'waiting' | 'ready' | 
 }
 /** 每个类别页签各自记住的筛选、分页与滚动位置。操作结果不跨刷新保存。 */
 interface CategoryState {
-  installedFilter: string; installedSize: number; marketSize: number;
-  filter: string; sort: HitSort; hide: boolean; page: number; installedPage: number; scroll: number;
-  tags: string[]; hideWarnings: boolean; officialOnly: boolean; certifiedOnly: boolean; newOnly: boolean;
+  marketSize: number;
+  filter: string; sort: HitSort; page: number; scroll: number;
+  /** `tags` must all be on a package. 推荐 is one of certified and official. */
+  tags: string[]; officialOnly: boolean; certifiedOnly: boolean; newOnly: boolean;
   advanced: boolean; author: string; keyword: string; license: string; sinceDays: number; minDownloads: number;
   hits: SearchHitView[]; fetched: boolean; generation: number; messages: Record<string, { text: string; bad: boolean }>;
   source: 'npm' | 'local'; input: string;
+  catalogCategory: CatalogCategory; filtersFolded: boolean;
+  /** Extension catalog: list every package, only installed ones, or only those not installed. */
+  installation: 'all' | 'installed' | 'available';
 }
-export const HITS_PER_PAGE = 12;
-/** 卡片网格的列数,按内容区宽度取。 */
-export function extensionColumns(width: number): number { return width >= 1000 ? 3 : width >= 660 ? 2 : 1; }
 /** 手动安装的 npm 输入:包名,可带 `@` 精确版本或 dist-tag。 */
 export function parseInstallInput(raw: string): Target | null {
   const match = /^((?:@[a-z0-9_.-]+\/)?[a-z0-9][a-z0-9_.-]*)(?:@([a-zA-Z0-9][a-zA-Z0-9._-]*))?$/.exec(raw.trim());
@@ -410,38 +416,66 @@ export const tagIssueUrl = (name: string): string =>
 /** 已装包图标的地址;版本号放进查询串,换版本后浏览器重新取。 */
 export const iconUrl = (name: string, version: string | null | undefined): string =>
   '/api/extensions/icon?name=' + encodeURIComponent(name) + (version ? '&v=' + encodeURIComponent(version) : '');
-const categories: ExtensionKindView[] = ['world', 'provider', 'bot'];
-const TAB_ICONS = { world: 'boxes', provider: 'cpu', bot: 'bot' } as const;
+/** World、供应商与 Bot 模板三类扩展。 */
+type Category = ExtensionKindView;
+const categories: Category[] = ['world', 'provider', 'bot'];
 const LINK_ICONS = { npm: 'package', repository: 'code', homepage: 'home', bugs: 'alert' } as const;
-/** World 卡片能力摘要的黄 / 红两档:超过前一个数标黄,超过后一个数标红。token 数按 catalog 里的估算。 */
-const SPEC_LEVELS = {
-  toolCount: [10, 20],
-  toolTokens: [2500, 6000],
-  envPromptTokens: [1000, 2500],
-} as const satisfies Record<string, readonly [number, number]>;
 const stateLabels = { loaded: S.disabled, failed: S.stateFailed, 'pending-restart': S.statePendingRestart, removed: S.stateRemoved, idle: S.template };
 const errorText = (error: unknown) => error instanceof Error ? error.message : String(error);
 
-export function mountExtensions(ctx: FeatureContext): void {
-  const { root, ui, lifecycle, signal, router } = ctx;
+export interface ExtensionWorkspace {
+  statusRoot: HTMLElement;
+  restartRoot: HTMLElement;
+  beforeReload(): void;
+  onLoadError(): void;
+  onChange(items: readonly ExtensionView[]): void;
+  /** `from` is where the package's icon was on screen when the install started. */
+  onAdded(name: string, from?: DOMRect): void;
+  /** Shows the installed package's row in the World library. */
+  reveal(name: string): void;
+  /** The installed packages that have an update, by name, each time that set changes. */
+  onUpdates(updates: ReadonlyMap<string, { installedVersion: string; latestVersion: string }>): void;
+}
+/** Resolves the control an operation's error popover points at; the control may be re-rendered meanwhile. */
+export type Anchor = () => Element | null | undefined;
+export interface ExtensionController {
+  /**
+   * Shows the market again: restores its scroll and renders the cards in view at once, until `until`
+   * settles. A reveal passes its end: under its clip the browser does not count those cards as in
+   * view, so they would stay blank until it ended.
+   */
+  activate(until?: Promise<unknown>): void;
+  /** Opens the package's install information: installed version, location and releases. */
+  details(name: string): void;
+  remove(name: string, anchor: Anchor): Promise<void>;
+}
+
+export function mountExtensionContent(ctx: FeatureContext, kind: Category, workspace?: ExtensionWorkspace): ExtensionController {
+  const { root, ui, lifecycle, signal } = ctx;
   const win = root.ownerDocument.defaultView!;
+  const restartRoot = workspace?.restartRoot ?? ui.h('div', 'extension-catalog-restart');
   const canRestart = ctx.capabilities.restart === true;
   const supervised = ctx.capabilities.supervised === true;
   const storageKey = 'cortico.extensions.v3:' + win.location.origin;
   const states = Object.fromEntries(categories.map(kind => [kind, {
-    installedFilter: '', installedSize: 0, marketSize: 0,
-    filter: '', sort: 'certified', hide: false, page: 0, installedPage: 0, scroll: 0, tags: [], hideWarnings: false, officialOnly: false, certifiedOnly: false, newOnly: false, advanced: false, author: '', keyword: '', license: '', sinceDays: 0, minDownloads: 0, hits: [], fetched: false, generation: 0,
-    messages: {}, source: 'npm', input: '',
-  } satisfies CategoryState])) as unknown as Record<ExtensionKindView, CategoryState>;
+    marketSize: 0,
+    filter: '', sort: 'certified', page: 0, scroll: 0, tags: [], officialOnly: false, certifiedOnly: false, newOnly: false, advanced: false, author: '', keyword: '', license: '', sinceDays: 0, minDownloads: 0, hits: [], fetched: false, generation: 0,
+    messages: {}, source: 'npm', input: '', catalogCategory: 'all', filtersFolded: false, installation: 'all',
+  } satisfies CategoryState])) as unknown as Record<Category, CategoryState>;
   try {
     const saved = JSON.parse(win.sessionStorage.getItem(storageKey) ?? '{}');
     for (const kind of categories) if (saved[kind]) Object.assign(states[kind], saved[kind], { hits: [], fetched: false, generation: 0, messages: {} });
     for (const kind of categories) if (!HIT_SORTS.includes(states[kind].sort)) states[kind].sort = 'certified';
+    for (const kind of categories) if (!CATALOG_CATEGORY_IDS.includes(states[kind].catalogCategory)) states[kind].catalogCategory = 'all';
   } catch { /* Storage can be disabled by the browser. */ }
-  let kind: ExtensionKindView = categories.includes(router.route.segments[1] as ExtensionKindView) ? router.route.segments[1] as ExtensionKindView : 'world';
-  let columns = extensionColumns(root.clientWidth);
+  /** 注意事项 the viewer excludes. They outlast the session and apply to both markets. */
+  const exclusionsKey = 'cortico.extensions.exclusions.v1:' + win.location.origin;
+  let exclusions: string[] = [];
+  try { const saved: unknown = JSON.parse(win.localStorage.getItem(exclusionsKey) ?? '[]'); if (Array.isArray(saved)) exclusions = saved.filter((id): id is string => typeof id === 'string'); } catch { /* Storage can be disabled by the browser. */ }
+  const saveExclusions = () => { try { win.localStorage.setItem(exclusionsKey, JSON.stringify(exclusions)); } catch { /* Optional browser state. */ } };
   let installed: ExtensionView[] = [];
   let updates = new Map<string, UpdateView>();
+  const announceUpdates = () => workspace?.onUpdates(new Map(updates));
   let directory = '';
   /** 服务端的 `process.platform`;列表回来之前是空串,这时不按平台拦安装。 */
   let platform = '';
@@ -457,72 +491,105 @@ export function mountExtensions(ctx: FeatureContext): void {
   let registryInput: HTMLInputElement | null = null;
   /** npm 源下拉是否展开;读不出源时自动展开。 */
   let registryOpen = false;
-  let indexBaseSetting: IndexBaseView | null = null;
-  /** 索引源输入框里没保存的值;切换类别页签时保留。 */
-  let indexBaseDraft: string | null = null;
-  let indexBaseInput: HTMLInputElement | null = null;
-  let indexBaseOpen = false;
-  let loadGeneration = 0;
+  let loadGeneration = 0, updateGeneration = 0;
+  /**
+   * The extension catalog's hits before any sidebar choice. Excluded tags take their packages out first, so no
+   * sidebar choice brings them back; `unexcluded` keeps them, to count what the exclusions hide.
+   */
+  const catalogHits = (state: CategoryState, unexcluded = false): SearchHitView[] => {
+    const hits = [...state.hits];
+    // Providers and Bot templates have no separate library, so local packages remain accessible without npm results.
+    if (kind !== 'world') for (const item of installed) {
+      if (item.kind !== kind || item.state === 'removed' || hits.some(hit => hit.name === item.name)) continue;
+      hits.push({ name: item.name, version: item.installedVersion ?? item.version ?? '', description: item.description ?? item.metadata?.description ?? '', displayName: item.metadata?.displayName ?? item.label,
+        author: item.author ?? item.metadata?.author, kind, installed: true, downloads: { month: 0 }, dependents: 0, links: item.metadata?.links ?? {} });
+    }
+    const excluded = unexcluded ? [] : exclusions;
+    return excluded.length ? hits.filter(hit => !(hit.tags ?? []).some(id => excluded.includes(id))) : hits;
+  };
+  /** Repaints the extension catalog's category list: counts and the selected category. */
+  let paintCategories: (() => void) | undefined;
+  /** A second click on the selected category goes back to all. Picking a category starts its tags afresh: 推荐, selected tags and exclusions are cleared. */
+  function selectCategory(value: CatalogCategory) {
+    const state = states[kind]; state.catalogCategory = state.catalogCategory === value ? 'all' : value;
+    state.tags = []; state.certifiedOnly = state.officialOnly = state.newOnly = false;
+    if (exclusions.length) { exclusions = []; saveExclusions(); }
+    state.page = 0; renderMarket(); save();
+  }
+  /** Loads and searches in flight; the catalog toolbar's refresh icon spins while any runs. */
+  let refreshing = 0;
+  let refreshControl: HTMLElement | undefined;
+  /** The spinning icon finishes its current turn before it stops. */
+  const settleSpin = () => {
+    const turning = refreshControl?.querySelector('.icon')?.getAnimations?.()[0];
+    if (!turning) { refreshControl?.classList.remove('is-spinning'); return; }
+    refreshControl!.addEventListener('animationiteration', () => { if (!refreshing) refreshControl?.classList.remove('is-spinning'); }, { once: true, signal });
+  };
+  const refreshed = <T,>(work: Promise<T>) => {
+    refreshing++; refreshControl?.classList.add('is-spinning');
+    return work.finally(() => { if (--refreshing === 0) settleSpin(); });
+  };
+  /** The refresh button hides the cards while the list reloads, then deals them back in, so a refresh shows even when nothing changed. */
+  let replays = 0;
+  async function replayCards(work: Promise<unknown>) {
+    const run = ++replays, grid = marketGrid;
+    if (prefersStill(win)) { await work; return; }
+    grid.classList.add('is-reloading');
+    await Promise.all([work.catch(() => {}), new Promise(resolve => win.setTimeout(resolve, 110))]);
+    if (signal.aborted || run !== replays) return;
+    grid.classList.remove('is-reloading');
+    grid.querySelectorAll<HTMLElement>(':scope > .extension-market-card').forEach((card, index) => card.animate?.([{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'none' }], { duration: 180, delay: Math.min(index, 10) * 20, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'backwards' }));
+  }
   let installedFetched = false;
   let restoringScroll = true;
   const restoreScroll = () => {
-    if (!restoringScroll || !installedFetched || !states[kind].fetched) return;
-    root.scrollTop = states[kind].scroll;
+    if (root.hidden || !restoringScroll || !installedFetched || !states[kind].fetched) return;
+    scrollRoot.scrollTop = states[kind].scroll;
     restoringScroll = false;
   };
   /** 正在安装或删除的包;同一个包的第二次操作等前一次回来。 */
   const busy = new Set<string>();
-  let armed: (() => void) | null = null;
-  const disarm = () => { armed?.(); armed = null; };
   const doc = root.ownerDocument;
-  doc.addEventListener('click', event => { if (!(event.target as Element).closest('.extension-erase')) disarm(); }, { signal });
-  doc.addEventListener('keydown', event => { if (event.key === 'Escape') disarm(); }, { signal });
+  const scrollRoot = ui.h('div', 'world-catalog-scroll');
+  root.addEventListener('wheel', event => {
+    const target = event.target as Element;
+    if (target.closest('.world-catalog-scroll, .world-catalog-filters, select, textarea')) return;
+    const own = scrollerOf(target); if (own && root.contains(own) && own !== root) return;
+    event.preventDefault(); scrollRoot.scrollBy({ top: wheelDelta(event) });
+  }, { passive: false, signal });
+  const narrowFilters = win.matchMedia?.('(max-width: 760px)');
+  let narrowFiltersOpen = false;
+  let syncFilterLayout: (() => void) | undefined;
+  narrowFilters?.addEventListener('change', () => syncFilterLayout?.(), { signal });
   // 历史版本下拉:在同一个抽屉里点别处就收起;确认框等别的浮层里的点击不算
   doc.addEventListener('click', event => { for (const open of doc.querySelectorAll<HTMLDetailsElement>('.extension-releases[open]')) if (!open.contains(event.target as Node) && open.closest('.modalcard')?.contains(event.target as Node)) open.open = false; }, { signal });
-  const intro = pageIntro(ui, S.introTitle, S.scope);
-  const tabs = ui.h('div', 'extension-tabs'); tabs.setAttribute('role', 'tablist'); tabs.setAttribute('aria-label', S.introTitle);
-  const indicator = ui.h('span', 'extension-tab-indicator'); indicator.setAttribute('aria-hidden', 'true'); tabs.append(indicator);
-  const panel = ui.h('div', 'extension-category'); panel.setAttribute('role', 'tabpanel'); panel.id = 'extension-category';
-  const tabButtons = categories.map((value, index) => {
-    const button = ui.button('', { onClick: () => router.navigate(['extensions', value]) });
-    const text = ui.h('span', 'extension-tab-text'); text.append(ui.h('span', 'extension-tab-label', S.tabs[value]), ui.h('span', 'extension-tab-note', S.tabNotes[value]));
-    button.append(icon(doc, TAB_ICONS[value]), text);
-    button.id = 'extension-tab-' + value; button.setAttribute('role', 'tab'); button.setAttribute('aria-controls', panel.id);
-    button.addEventListener('keydown', event => {
-      const target = event.key === 'ArrowRight' ? (index + 1) % 3 : event.key === 'ArrowLeft' ? (index + 2) % 3 : event.key === 'Home' ? 0 : event.key === 'End' ? 2 : -1;
-      if (target >= 0) { event.preventDefault(); tabButtons.forEach((b, i) => b.tabIndex = i === target ? 0 : -1); tabButtons[target].focus(); }
-    }, { signal }); tabs.append(button); return button;
-  });
-  root.append(intro, tabs, panel);
-  let installedGrid: HTMLElement, marketGrid: HTMLElement, installedPager: HTMLElement, marketPager: HTMLElement;
-  let tagBar: HTMLElement | undefined, clearButton: HTMLButtonElement | undefined, licenseList: HTMLElement | undefined;
+  const panel = ui.h('div', 'extension-category world-catalog');
+  root.append(panel);
+  let marketGrid: HTMLElement, marketPager: HTMLElement;
+  let tagBar: HTMLElement | undefined, activeBar: HTMLElement | undefined, warningControl: HTMLElement | undefined, clearButton: HTMLButtonElement | undefined, licenseList: HTMLElement | undefined;
   let messageNodes: Record<string, HTMLElement> = {};
   const save = () => {
-    if (!restoringScroll) states[kind].scroll = root.scrollTop;
+    if (!root.hidden && !restoringScroll) states[kind].scroll = scrollRoot.scrollTop;
     try {
-      win.sessionStorage.setItem(storageKey, JSON.stringify(Object.fromEntries(categories.map(k => {
-        const { hits: _hits, fetched: _fetched, generation: _gen, messages: _messages, ...s } = states[k];
-        return [k, s];
-      }))));
+      const { hits: _hits, fetched: _fetched, generation: _gen, messages: _messages, ...saved } = states[kind];
+      win.sessionStorage.setItem(storageKey, JSON.stringify({ ...JSON.parse(win.sessionStorage.getItem(storageKey) ?? '{}'), [kind]: saved }));
     } catch { /* Optional browser state. */ }
   };
-  root.addEventListener('scroll', save, { signal, passive: true }); lifecycle.add(save);
+  scrollRoot.addEventListener('scroll', save, { signal, passive: true }); lifecycle.add(save);
   for (const event of ['wheel', 'touchstart', 'pointerdown', 'keydown']) root.addEventListener(event, () => { restoringScroll = false; }, { signal, passive: true });
-  function message(owner: ExtensionKindView, area: string, text: string, bad = false) {
+  function message(owner: Category, area: string, text: string, bad = false) {
     states[owner].messages[area] = { text, bad };
     if (owner === kind && messageNodes[area]) { messageNodes[area].textContent = text; messageNodes[area].className = 'msgline' + (bad ? ' bad' : ''); }
   }
-  const pageSize = (area: 'installed' | 'market', owner = kind) => area === 'installed' ? states[owner].installedSize || columns * 2 : states[owner].marketSize || columns * 4;
-  function sizePicker(area: 'installed' | 'market') {
-    const state = states[kind], key = area === 'installed' ? 'installedSize' : 'marketSize';
-    const label = ui.h('label', 'extension-size'); label.dataset.area = area; label.append(ui.h('span', '', S.perPage));
-    label.append(ui.select({ value: String(state[key]), options: [0, 3, 6, 12, 24, 48].map(value => ({ value: String(value), label: value ? String(value) : S.automaticCount(columns * (area === 'installed' ? 2 : 4)) })), onChange: value => {
-      state[key] = Number(value); (area === 'installed' ? installedGrid : marketGrid).style.minHeight = ''; if (area === 'installed') { state.installedPage = 0; renderInstalled(); } else { state.page = 0; renderMarket(); } save();
+  /** The extension catalog lists one card per row, so it pages in fixed sizes instead of filling columns. */
+  const CATALOG_PAGE_SIZES = [10, 20, 30, 50], CATALOG_PAGE_SIZE = 30;
+  const pageSize = () => CATALOG_PAGE_SIZES.includes(states[kind].marketSize) ? states[kind].marketSize : CATALOG_PAGE_SIZE;
+  function sizePicker() {
+    const state = states[kind];
+    const label = ui.h('label', 'extension-size'); label.append(ui.h('span', '', S.perPage));
+    label.append(ui.select({ value: String(pageSize()), options: CATALOG_PAGE_SIZES.map(value => ({ value: String(value), label: String(value) })), onChange: value => {
+      state.marketSize = Number(value); state.page = 0; renderMarket(); save();
     } })); return label;
-  }
-  function stabilizeGrid(grid: HTMLElement, total: number, size: number, rowHeight: number) {
-    const rows = Math.ceil(Math.min(total, size) / columns);
-    grid.style.gridTemplateRows = rows ? `repeat(${rows}, minmax(${rowHeight}px, auto))` : '';
   }
   function pager(node: HTMLElement, total: number, page: number, size: number, change: (page: number) => void) {
     node.classList.add('extension-pager');
@@ -534,13 +601,21 @@ export function mountExtensions(ctx: FeatureContext): void {
   }
   /** 包文档按 name@version 缓存,失败的也留着:registry 连不上时翻页、筛选不会反复重发。 */
   const detailsCache = new Map<string, Promise<PackageDetailView>>();
+  /** 包文档里的显示名:索引没给显示名的包,卡片标题等文档回来才有,搜索也要认它。 */
+  const documentNames = new Map<string, string>();
+  /** 卡片标题可能用到的其他名字(包文档的、本地安装的显示名与名称),搜索都认。 */
+  const named = (hit: SearchHitView): SearchHitView => {
+    const local = installed.find(item => item.name === hit.name);
+    const aliases = [documentNames.get(hit.name), local?.metadata?.displayName, local?.label].filter((name): name is string => !!name && name !== hit.displayName);
+    return aliases.length ? { ...hit, aliases } : hit;
+  };
   function fetchDetail(name: string, version?: string) {
     const key = name + '@' + (version ?? 'latest');
     let request = detailsCache.get(key);
     if (!request) {
       request = get<PackageDetailView>('/api/extensions/package?name=' + encodeURIComponent(name) + (version ? '&version=' + encodeURIComponent(version) : ''), { signal });
       detailsCache.set(key, request);
-      void request.catch(() => { /* The rejection is kept for this page's lifetime. */ });
+      void request.then(data => { if (data.displayName) documentNames.set(name, data.displayName); }, () => { /* The rejection is kept for this page's lifetime. */ });
     }
     return request;
   }
@@ -597,6 +672,10 @@ export function mountExtensions(ctx: FeatureContext): void {
   const hideSoon = () => { keepHint(); hideTimer = lifecycle.timeout(hideHint, 150); };
   hintBox.addEventListener('pointerenter', keepHint, { signal });
   hintBox.addEventListener('pointerleave', hideSoon, { signal });
+  let hintAnchor: Element | null = null;
+  // Floating tips sit over the page; the wheel still scrolls what is under them.
+  hintBox.addEventListener('wheel', event => { const target = scrollerOf(hintAnchor); hideHint(); if (target) { event.preventDefault(); target.scrollBy({ top: wheelDelta(event) }); } }, { passive: false, signal });
+  const problems = problemPopover(doc, signal);
   doc.addEventListener('scroll', hideHint, { capture: true, passive: true, signal });
   const HINT_LINK = /\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g;
   const plainHint = (text: string) => text.replace(HINT_LINK, '$1');
@@ -613,7 +692,7 @@ export function mountExtensions(ctx: FeatureContext): void {
   function attachHint(el: HTMLElement, title: string | (() => string), text?: string) {
     if (text) el.setAttribute('aria-description', plainHint(text));
     const show = () => {
-      keepHint();
+      keepHint(); hintAnchor = el;
       const heading = typeof title === 'string' ? title : title(); if (!heading) return;
       hintBox.replaceChildren(ui.h('b', '', heading), ...(text ? [hintBody(text)] : [])); hintBox.classList.toggle('is-title-only', !text); hintBox.classList.remove('hidden');
       const target = el.getBoundingClientRect(), tip = hintBox.getBoundingClientRect(), view = doc.documentElement;
@@ -624,12 +703,24 @@ export function mountExtensions(ctx: FeatureContext): void {
     el.addEventListener('pointerenter', show, { signal }); el.addEventListener('focus', show, { signal });
     el.addEventListener('pointerleave', hideSoon, { signal }); el.addEventListener('blur', hideHint, { signal });
   }
-  /** 标签:悬停显示说明。给了 `onToggle` 就是筛选按钮,点它不打开卡片。 */
-  function tagChip(id: string, opts?: { active?: boolean; count?: number; onToggle?: () => void }) {
+  /**
+   * A sidebar row keeps its explanation behind a question mark beside the name, shown while the row is hovered;
+   * hovering the mark opens it, and a click on the mark does not press the row.
+   */
+  function helpMark(row: HTMLElement, title: string, text: string) {
+    row.setAttribute('aria-description', plainHint(text));
+    const mark = ui.h('span', 'extension-tag-help'); mark.append(icon(doc, 'help'));
+    attachHint(mark, title, text);
+    mark.addEventListener('click', event => event.stopPropagation(), { signal });
+    return mark;
+  }
+  /** 标签:悬停显示说明,侧栏里(`helpMark`)改由名字旁的问号显示。给了 `onToggle` 就是筛选按钮,点它不打开卡片。 */
+  function tagChip(id: string, opts?: { active?: boolean; count?: number; onToggle?: () => void; helpMark?: boolean }) {
     const tag = marketIndex.tags[id];
     const el = ui.h(opts?.onToggle ? 'button' : 'span', 'extension-tag' + (tag.style ? ' is-' + tag.style : '') + (opts?.active ? ' is-active' : ''));
-    el.append(ui.h('span', '', tag.label)); if (opts?.count !== undefined) el.append(ui.h('span', 'extension-tag-count', String(opts.count)));
-    attachHint(el, tag.label, tag.hint);
+    el.append(ui.h('span', '', tag.label));
+    if (!opts?.helpMark) attachHint(el, tag.label, tag.hint); else if (tag.hint) el.append(helpMark(el, tag.label, tag.hint));
+    if (opts?.count !== undefined) el.append(ui.h('span', 'extension-tag-count', String(opts.count)));
     const toggle = opts?.onToggle;
     if (toggle) {
       (el as HTMLButtonElement).type = 'button'; el.setAttribute('aria-pressed', String(!!opts?.active));
@@ -639,16 +730,15 @@ export function mountExtensions(ctx: FeatureContext): void {
     return el;
   }
   function badge(cls: string, mark: Parameters<typeof icon>[1], label: string, hint: string) { const el = ui.h('span', cls); el.append(icon(doc, mark), ui.h('span', '', label)); attachHint(el, label, hint); return el; }
-  /** `active`:正按这个徽标筛选。 */
-  const officialBadge = (active = false) => badge('extension-official-badge' + (active ? ' is-active' : ''), 'cortico', S.officialRelease, S.officialHint);
-  const certifiedBadge = (active = false) => badge('extension-certified-badge' + (active ? ' is-active' : ''), 'shield-check', S.certified, S.certifiedHint);
-  const newBadge = (active = false) => badge('extension-new-badge' + (active ? ' is-active' : ''), 'sparkles', S.newLabel, S.newHint(marketIndex.newDays ?? 14));
+  const officialBadge = () => badge('extension-official-badge', 'cortico', S.officialRelease, S.officialHint);
+  const certifiedBadge = () => badge('extension-certified-badge', 'shield-check', S.certified, S.certifiedHint);
+  const newBadge = () => badge('extension-new-badge', 'sparkles', S.newLabel, S.newHint(marketIndex.newDays ?? 14));
   /** 一个包的全部徽标。 */
-  function badgesOf(hit: SearchHitView, state: CategoryState) {
+  function badgesOf(hit: SearchHitView) {
     return [
-      ...(hit.certified ? [certifiedBadge(state.certifiedOnly)] : []),
-      ...(hit.official ? [officialBadge(state.officialOnly)] : []),
-      ...(hit.isNew ? [newBadge(state.newOnly)] : []),
+      ...(hit.certified ? [certifiedBadge()] : []),
+      ...(hit.official ? [officialBadge()] : []),
+      ...(hit.isNew ? [newBadge()] : []),
     ];
   }
   /** 列表回来之前不知道本机平台,先当装得上。 */
@@ -666,16 +756,60 @@ export function mountExtensions(ctx: FeatureContext): void {
       ...(state.sinceDays ? { publishedSince: new Date(Date.now() - state.sinceDays * 86_400_000).toISOString() } : {}),
     };
   }
-  /** 「清除筛选」清搜索词、标签、徽标筛选与高级搜索,不动两个隐藏开关。 */
-  const filtersActive = (state: CategoryState) => !!(state.filter.trim() || state.tags.length || state.officialOnly || state.certifiedOnly || state.newOnly || state.author.trim() || state.keyword.trim() || state.license.trim() || state.sinceDays || state.minDownloads);
-  function clearFilters() {
-    Object.assign(states[kind], { filter: '', tags: [], officialOnly: false, certifiedOnly: false, newOnly: false, author: '', keyword: '', license: '', sinceDays: 0, minDownloads: 0, page: 0 });
+  /** 「清除筛选」清搜索词、标签、徽标筛选与高级搜索,保留注意事项的排除。 */
+  const filtersActive = (state: CategoryState) => !!((state.catalogCategory !== 'all' || state.installation !== 'all') || state.filter.trim() || state.tags.length || state.officialOnly || state.certifiedOnly || state.newOnly || state.author.trim() || state.keyword.trim() || state.license.trim() || state.sinceDays || state.minDownloads);
+  /** 「清除其他筛选」只留下搜索词。 */
+  function clearFilters(keepQuery = false) {
+    Object.assign(states[kind], { catalogCategory: 'all', installation: 'all', filter: keepQuery ? states[kind].filter : '', tags: [], officialOnly: false, certifiedOnly: false, newOnly: false, author: '', keyword: '', license: '', sinceDays: 0, minDownloads: 0, page: 0 });
     save(); render();
   }
+  const tagLabel = (id: string) => marketIndex.tags[id]?.label;
+  /** 没有结果时的说明;搜索词在去掉其他筛选后有结果,就说有几个并给出一键清除。 */
+  function emptyMarket(state: CategoryState): HTMLElement {
+    if (!state.fetched) return ui.placeholder(S.searching);
+    const all = catalogHits(state).map(named);
+    if (!all.length) return ui.placeholder(registry ? S.noPackagesAt(registry) : S.noPackages);
+    const elsewhere = state.filter.trim() ? arrangeHits(all, { filter: state.filter, tagLabel, sort: state.sort, hideInstalled: false, page: 0, pageSize: 1 }).matched : 0;
+    if (!elsewhere) return noResult();
+    const box = noResult(ui.h('p', 'extension-empty-note', S.hitsElsewhere(elsewhere)), ui.button(S.clearOtherFilters, { onClick: () => clearFilters(true) }));
+    box.classList.add('extension-hits-elsewhere');
+    return box;
+  }
+  /** Nothing matches: the Cortico mark, the line beneath, and whatever else the case adds below. */
+  function noResult(...more: HTMLElement[]) {
+    const box = ui.h('div', 'extension-empty'); box.append(brandMark(doc, 'extension-empty-mark'), ui.h('p', '', S.noHits), ...more);
+    return box;
+  }
+  /** 注意事项 only exclude: the notice and warning tags, and after them the plain tags that pick no category. */
+  const isExclusion = (id: string) => { const tag = marketIndex.tags[id]; return !!tag && (tag.style === 'notice' || tag.style === 'warning' || (!tag.style && !isFunctionTag(id))); };
   function toggleTag(id: string) {
     const state = states[kind];
     state.tags = state.tags.includes(id) ? state.tags.filter(t => t !== id) : [...state.tags, id];
     state.page = 0; renderMarket(); save();
+  }
+  /** Excluding a tag drops it from the selection and is kept across sessions. */
+  function toggleExclude(id: string) {
+    const state = states[kind];
+    exclusions = exclusions.includes(id) ? exclusions.filter(t => t !== id) : [...exclusions, id]; saveExclusions();
+    state.tags = state.tags.filter(t => t !== id);
+    state.page = 0; renderMarket(); save();
+  }
+  /** A tag on a card: a 注意事项 strikes through and shows a grey eye on hover, and a click excludes it; any other tag adds to the selection within the current category. */
+  function cardTag(id: string) {
+    if (isExclusion(id)) {
+      const chip = tagChip(id, { onToggle: () => toggleExclude(id) });
+      chip.classList.add('is-exclusion'); chip.setAttribute('aria-label', S.excludeTag(tagLabel(id) ?? id)); chip.append(icon(doc, 'eye', 'icon extension-tag-eye'));
+      return chip;
+    }
+    const state = states[kind];
+    return tagChip(id, { active: state.tags.includes(id), onToggle: () => toggleTag(id) });
+  }
+  const warningsHidden = () => { const warnings = warningTags(); return !!warnings.length && warnings.every(id => exclusions.includes(id)); };
+  /** The toolbar's warning switch: excludes every warning tag at once, or lets them all back. */
+  function toggleWarnings() {
+    const warnings = warningTags(), all = warnings.every(id => exclusions.includes(id));
+    exclusions = all ? exclusions.filter(id => !warnings.includes(id)) : [...new Set([...exclusions, ...warnings])]; saveExclusions();
+    const state = states[kind]; state.tags = state.tags.filter(id => !exclusions.includes(id)); state.page = 0; renderMarket(); save();
   }
   /** 「+N」自己也要落在第二行,放不下就再多收一个。 */
   function foldTags(row: HTMLElement) {
@@ -686,6 +820,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     const from = row.getBoundingClientRect().height;
     row.style.maxHeight = '';
     const chips = [...row.children] as HTMLElement[];
+    for (const chip of chips) chip.inert = false;
     const lines = [...new Set(chips.map(top))].sort((a, b) => a - b);
     if (lines.length <= 2) { row.classList.remove('is-folded'); return; }
     const more = ui.h('button', 'extension-tag extension-tag-more') as HTMLButtonElement; more.type = 'button';
@@ -697,46 +832,18 @@ export function mountExtensions(ctx: FeatureContext): void {
     }
     const folded = top(more) + more.getBoundingClientRect().height;
     row.classList.add('is-folded');
+    chips.forEach((chip, index) => { chip.inert = index >= cut; });
     if (opened) { row.style.maxHeight = from + 'px'; void row.offsetHeight; }
     row.style.maxHeight = folded + 'px';
     more.setAttribute('aria-label', S.moreTags(chips.length - cut));
     more.addEventListener('click', event => {
       event.stopPropagation();
       more.remove(); row.classList.add('is-open');
+      for (const chip of chips) chip.inert = false;
+      chips[cut]?.focus({ preventScroll: true });
       row.style.maxHeight = row.scrollHeight + 'px';
     }, { signal });
     more.addEventListener('keydown', event => event.stopPropagation(), { signal });
-  }
-  /**
-   * 能力摘要:World 是工具数、事件数与环境提示词 token 数,供应商是协议、登录与输入,Bot 是 World 数与 Memory。
-   * 工具数按 SPEC_LEVELS 取个数与工具定义 token 两档里较严的一档着色。
-   */
-  function summaryLine(owner: ExtensionKindView, summary?: SummaryView) {
-    const line = ui.h('div', 'extension-card-spec');
-    if (!summary) return line;
-    const part = (name: Parameters<typeof icon>[1] | null, text: string) => { const el = ui.h('span', ''); if (name) el.append(icon(doc, name)); el.append(ui.h('span', '', text)); line.append(el); return el; };
-    const level = (value: number | undefined, [caution, alert]: readonly [number, number]) => value === undefined ? 0 : value > alert ? 2 : value > caution ? 1 : 0;
-    const tint = (el: HTMLElement, rank: number) => { if (rank) el.classList.add(rank === 2 ? 'is-alert' : 'is-caution'); };
-    if (owner === 'provider') {
-      const text = [summary.protocols?.join(S.listSeparator), summary.auth?.map(a => S.authNames[a]).join(S.listSeparator), summary.input?.map(i => S.inputNames[i]).join(S.listSeparator), summary.local ? S.runsLocal : ''].filter(Boolean).join(S.metaSeparator);
-      if (text) part('cpu', text);
-    } else if (owner === 'bot') {
-      if (summary.worlds !== undefined) part('boxes', S.worldCount(summary.worlds));
-      if (summary.memory) part(null, S.labelled(S.memory, summary.memory));
-    } else {
-      if (summary.tools) {
-        const el = part('wrench', S.toolCount(summary.tools));
-        tint(el, Math.max(level(summary.tools, SPEC_LEVELS.toolCount), level(summary.toolTokens, SPEC_LEVELS.toolTokens)));
-        if (summary.toolTokens !== undefined) attachHint(el, S.toolsHint(summary.tools, summary.toolTokens));
-      }
-      if (summary.events) part('zap', S.eventCount(summary.events));
-      if (summary.envPromptTokens) {
-        const el = part('text', S.prefixSize(ui.fmt.count(summary.envPromptTokens)));
-        tint(el, level(summary.envPromptTokens, SPEC_LEVELS.envPromptTokens));
-        attachHint(el, S.prefixHint(summary.envPromptTokens));
-      }
-    }
-    return line;
   }
   function describeSection(describe?: ExtensionDescribeView): { title: string; el: HTMLElement } | null {
     if (!describe) return null;
@@ -757,7 +864,8 @@ export function mountExtensions(ctx: FeatureContext): void {
       }
       return list;
     };
-    const heading = (text: string, count?: number) => { const h = ui.h('h5', '', text); if (count !== undefined) h.append(ui.h('span', 'extension-describe-count', String(count))); return h; };
+    // Headed like the information tab's 简介; a count follows the title.
+    const heading = (text: string, count?: number) => { const h = ui.h('h4', 'extension-detail-heading-note', text); if (count !== undefined) h.append(ui.h('span', 'extension-describe-count', String(count))); return h; };
     if (describe.provider) {
       const p = describe.provider;
       section.append(ui.kv([
@@ -795,11 +903,11 @@ export function mountExtensions(ctx: FeatureContext): void {
     if (!describe?.prompts?.length) return null;
     const section = ui.h('section', 'extension-describe extension-prompts');
     for (const prompt of describe.prompts) {
-      const head = ui.h('div', 'extension-prompt-head');
-      head.append(ui.h('h5', '', prompt.title), ui.h('code', '', prompt.key), copyIcon(prompt.content));
+      // Headed like the information tab's 简介; the prompt's key follows the title.
+      const head = ui.h('h4', 'extension-detail-heading-note', prompt.title); head.append(ui.h('code', '', prompt.key));
       section.append(head, ui.h('pre', 'extension-prompt-body', prompt.content));
     }
-    return { title: describe.bot ? S.promptsTabBot : S.promptsTabWorld, el: section };
+    return { title: S.promptsTabWorld, el: section };
   }
   /** 统计项。给了 `title` 才有悬停,`detail` 是悬停里的完整读数。 */
   function stat(kind: string, parts: Array<SVGSVGElement | string>, title?: string, detail?: string) {
@@ -1029,109 +1137,123 @@ export function mountExtensions(ctx: FeatureContext): void {
     void page();
     return section;
   }
-  /** 几个版本的更新说明,新的在前。 */
-  function showChanges(title: string, changes: ReadonlyArray<[string, string]>, url?: string) {
-    const box = ui.h('div', 'extension-changes');
-    for (const [version, text] of changes) {
-      const section = ui.h('section'); const body = ui.h('div', 'extension-changes-body');
-      body.append(renderMarkdown(doc, text)); section.append(ui.h('h4', '', version), body); box.append(section);
-    }
-    if (url && /^https?:\/\//i.test(url)) { const link = ui.h('a', 'extension-discussion-link', S.changelogLink); link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; box.append(link); }
-    ui.drawer(S.changesTitle(title), box);
-    box.closest('.modalcard')?.classList.add('extension-changes-card');
+  function details(name: string) {
+    const item = installed.find(item => item.name === name);
+    if (item) { showLocal(item); return; }
+    const hit = states[kind].hits.find(hit => hit.name === name);
+    if (hit) openDetail(hit, kind);
   }
-  function installedCard(item: ExtensionView) {
-    const card = ui.h('article', 'extension-card extension-installed-card' + (item.enabled ? ' is-enabled' : ''));
-    card.tabIndex = 0; card.setAttribute('aria-label', item.metadata?.displayName ?? item.label ?? item.name);
-    card.addEventListener('click', event => { if (!(event.target as Element).closest('button, a')) showLocal(item); }, { signal });
-    card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); showLocal(item); } }, { signal });
-    const heading = ui.h('div', 'extension-card-heading');
-    heading.append(packageAvatar(item.icon ? iconUrl(item.name, item.installedVersion ?? item.version) : undefined));
-    const title = ui.h('span', 'extension-card-title', item.metadata?.displayName ?? item.label ?? item.name); title.title = item.label ?? item.name;
-    heading.append(title); if (item.enabled) heading.append(ui.pill(item.kind === 'provider' ? S.alreadyInstalled : item.kind === 'bot' ? S.adopted : S.stateLoaded, 'on'));
-    card.append(heading);
-    const text = item.state === 'removed' || item.state === 'pending-restart' || item.state === 'failed' ? stateLabels[item.state] : item.kind === 'provider' ? S.alreadyInstalled : item.enabled ? (item.kind === 'bot' ? S.adopted : S.enabled) : stateLabels[item.state];
-    const failed = item.state === 'failed';
-    const symbol = failed ? '!' : item.state === 'pending-restart' ? '◷' : item.enabled ? '●' : '○';
-    const author = item.author ?? S.unknownAuthor;
-    card.append(ui.h('div', 'extension-meta', [item.builtin ? S.builtin : '', S.version(item.installedVersion ?? item.version ?? '—'), S.author(author)].filter(Boolean).join(' · ')));
-    const status = ui.h('div', 'extension-status' + (failed ? ' bad' : item.enabled ? ' on' : ' off'), `${symbol} ${text}`);
-    if (item.description) card.append(ui.h('p', 'extension-description', item.description));
-    if (item.blocked) card.append(ui.msgline(S.blocked(item.blocked), true));
-    const version = ui.h('div', 'extension-secondary');
-    const update = updates.get(item.name);
+  function renderRestart() {
+    const pending = installed.some(item => (item.kind === kind || !item.kind) && (item.state === 'pending-restart' || item.state === 'removed'));
+    const button = restartRoot.querySelector<HTMLButtonElement>('.extension-restart');
+    if (button) { button.hidden = !pending; button.disabled = busy.size > 0 || restartRoot.classList.contains('is-restarting'); }
+  }
+  /** The market card's control; an installed package's leads to its row. */
+  function getButton(hit: SearchHitView & { installed: boolean }, owner: Category): HTMLButtonElement {
+    return installControl(hit, owner, {
+      anchor: () => marketGrid.querySelector(`.extension-market-card[data-name="${CSS.escape(hit.name)}"] .extension-get`),
+      onInstalled: () => { if (workspace) workspace.reveal(hit.name); else details(hit.name); },
+    });
+  }
+  /**
+   * The install control the market cards and the detail page share: install, its progress, an
+   * available update, or the installed mark (a link when `onInstalled` is given). Errors open beside
+   * the control `anchor` finds; `blocked` keeps an install from starting.
+   */
+  function installControl(hit: SearchHitView & { installed: boolean }, owner: Category, opts: { anchor: Anchor; onInstalled?: () => void; blocked?: boolean }): HTMLButtonElement {
+    const update = updates.get(hit.name), working = busy.has(hit.name), { anchor } = opts;
+    if (hit.installed && !update && !working) {
+      const done = ui.h('button', 'extension-get is-installed') as HTMLButtonElement; done.type = 'button';
+      done.setAttribute('aria-label', S.alreadyInstalled); attachHint(done, S.alreadyInstalled); done.append(icon(doc, 'check'));
+      const open = opts.onInstalled;
+      if (open) done.addEventListener('click', event => { event.stopPropagation(); open(); }, { signal });
+      else done.classList.add('is-mark');
+      return done;
+    }
+    const label = working ? S.progress(hit.installed ? S.updatedAction : S.installedAction, hit.name) : update ? `${S.updateAction} ${S.updateVersions(update.installedVersion, update.latestVersion)}` : owner === 'world' ? S.addToLibrary : S.install;
+    const button = ui.h('button', 'extension-get' + (working ? ' is-working' : update ? ' is-update' : '')) as HTMLButtonElement; button.type = 'button';
+    button.setAttribute('aria-label', label);
+    if (working) {
+      const svg = 'http://www.w3.org/2000/svg';
+      const ring = doc.createElementNS(svg, 'svg'); ring.setAttribute('viewBox', '0 0 32 32'); ring.setAttribute('class', 'extension-get-ring'); ring.setAttribute('aria-hidden', 'true');
+      for (const cls of ['track', 'arc']) { const circle = doc.createElementNS(svg, 'circle'); for (const [key, value] of Object.entries({ cx: '16', cy: '16', r: '13', class: cls })) circle.setAttribute(key, value); ring.append(circle); }
+      button.append(ring); button.disabled = true; return button;
+    }
+    button.append(icon(doc, update ? 'update' : 'download'));
     if (update) {
-      version.classList.add('extension-update');
-      const alert = ui.h('span', 'extension-update-icon', '!'); alert.setAttribute('aria-hidden', 'true');
-      version.append(alert, ui.h('span', '', S.updateVersions(update.installedVersion, update.latestVersion)));
-      const button = ui.button(S.updateAction, { size: 'sm', onClick: () => void operate('install', { name: item.name, version: update.latestVersion }, 'management', kind) });
-      button.disabled = !!update.problems.length || busy.has(item.name); button.title = update.problems.join('\n');
-      const changelog = states[kind].hits.find(hit => hit.name === item.name)?.changelog;
-      const versions = changesBetween(changelog?.versions, update.installedVersion, update.latestVersion);
-      if (versions.length) {
-        const notes = ui.h('button', 'extension-update-notes', S.updateNotes) as HTMLButtonElement; notes.type = 'button';
-        const owner = kind;
-        notes.addEventListener('click', event => {
-          event.stopPropagation();
-          void fetchDetail(item.name).then(data => {
-            if (signal.aborted) return;
-            const changes = versions.flatMap(v => data.changelog?.[v] ? [[v, data.changelog[v]] as [string, string]] : []);
-            showChanges(item.metadata?.displayName ?? item.label ?? item.name, changes, changelog?.url);
-          }).catch(error => { if (!signal.aborted) message(owner, 'management', errorText(error), true); });
-        }, { signal });
-        version.append(notes);
-      }
-      version.append(button);
-    } else version.textContent = item.hidden ? S.hidden : item.installedVersion && item.version !== item.installedVersion ? S.runtimeVersion(item.version ?? '—') : '';
-    if (version.hasChildNodes()) card.append(version);
-    for (const problem of update?.problems ?? []) card.append(ui.msgline(problem, true));
-    const footer = ui.h('div', 'extension-status-row'); footer.append(status);
-    if (item.state !== 'removed') {
-      const remove = ui.h('button', 'connection-erase extension-erase') as HTMLButtonElement; remove.type = 'button';
-      const text = ui.h('span', 'connection-erase-text'); text.append(ui.h('span', '', S.eraseConfirm));
-      remove.append(icon(doc, 'trash'), text); remove.setAttribute('aria-label', S.remove); remove.title = S.removeBody;
-      if (item.builtin) { remove.disabled = true; remove.title = S.builtinNote; }
-      else if (item.enabled && item.kind !== 'provider') { remove.disabled = true; remove.title = S.removeInUse; }
-      else remove.disabled = busy.has(item.name);
-      const owner = kind;
-      remove.addEventListener('click', event => {
-        event.stopPropagation(); const wasArmed = remove.classList.contains('is-armed'); disarm();
-        if (wasArmed) { void operate('delete', { name: item.name }, 'management', owner); return; }
-        remove.classList.add('is-armed'); remove.setAttribute('aria-label', S.eraseConfirm);
-        const warning = ui.msgline(S.removeBody, true); card.insertBefore(warning, footer);
-        armed = () => { remove.classList.remove('is-armed'); remove.setAttribute('aria-label', S.remove); warning.remove(); };
-      }, { signal });
-      footer.append(remove);
+      button.disabled = !!update.problems.length; attachHint(button, label, update.problems.join('\n') || undefined);
+      button.addEventListener('click', event => { event.stopPropagation(); void operate('install', { name: hit.name, version: update.latestVersion }, 'market', owner, anchor); }, { signal });
+      return button;
     }
-    card.append(footer); return card;
+    attachHint(button, label);
+    button.disabled = !!opts.blocked || !osSupported(hit.os ?? []);
+    button.addEventListener('click', async event => {
+      event.stopPropagation(); button.disabled = true;
+      const warnings = (hit.tags ?? []).filter(id => marketIndex.tags[id]?.style === 'warning');
+      if (warnings.length && !await ui.confirm({ title: S.installWarningTitle, body: S.installWarningBody(hit.name, warnings.map(id => `${marketIndex.tags[id].label}${S.labelSeparator}${plainHint(marketIndex.tags[id].hint)}`), hit.note), danger: true })) { button.disabled = false; return; }
+      if (!signal.aborted) await operate('install', { name: hit.name, version: hit.version }, 'market', owner, anchor);
+    }, { signal });
+    return button;
   }
-  function renderInstalled() {
-    if (!installedGrid) return;
-    const needle = states[kind].installedFilter.trim().toLowerCase();
-    const mine = installed.filter(p => (p.kind === kind || !p.kind && kind === 'world') && (!needle || [p.label, p.name, p.description, p.worldId].some(value => value?.toLowerCase().includes(needle)))).sort((a, b) => a.name.localeCompare(b.name));
-    const state = states[kind], size = pageSize('installed'); if (installedFetched) state.installedPage = Math.min(state.installedPage, Math.max(0, Math.ceil(mine.length / size) - 1));
-    installedGrid.replaceChildren(...mine.slice(state.installedPage * size, (state.installedPage + 1) * size).map(installedCard));
-    stabilizeGrid(installedGrid, mine.length, size, 150);
-    if (!mine.length) installedGrid.append(ui.placeholder(S.noExtensions));
-    pager(installedPager, mine.length, state.installedPage, size, page => { installedGrid.style.minHeight = `${installedGrid.getBoundingClientRect().height}px`; state.installedPage = page; renderInstalled(); save(); });
+  /** A card's content height, which its placeholder stands in for while it skips rendering. */
+  const contentHeight = (card: HTMLElement) => {
+    const style = win.getComputedStyle(card), edge = (name: string) => parseFloat(style.getPropertyValue(name)) || 0;
+    return Math.max(0, card.offsetHeight - edge('padding-top') - edge('padding-bottom') - edge('border-top-width') - edge('border-bottom-width'));
+  };
+  /** The end of the market's reveal while it runs (see ExtensionController.activate); renders meanwhile hold their cards until then. */
+  let revealEnd: Promise<unknown> | undefined;
+  /**
+   * Renders the cards in the window now rather than a frame later, so this frame's layout, which a
+   * reflow measures, is the one that will show. A rendered card's own height can bring the next one
+   * into view. They go back to skipping by themselves once drawn, or once `until` settles.
+   */
+  function renderInView(until = revealEnd) {
+    const bottom = scrollerOf(marketGrid)?.getBoundingClientRect().bottom ?? win.innerHeight, shown: HTMLElement[] = [];
+    for (const card of marketGrid.querySelectorAll<HTMLElement>(':scope > .extension-market-card')) {
+      const box = card.getBoundingClientRect();
+      if (box.top >= bottom) break;
+      if (box.bottom > 0) { card.classList.add('is-in-view'); shown.push(card); }
+    }
+    const release = () => { for (const card of shown) card.classList.remove('is-in-view'); };
+    if (until) void until.then(release, release); else win.requestAnimationFrame(() => win.requestAnimationFrame(release));
   }
-  function renderMarket() {
+  /** The market's cards by package, for animating a re-render (see measureReflow): cards that go leave
+   * sideways first, then the rest close up. */
+  const measureCards = () => marketGrid?.isConnected ? measureReflow(marketGrid, ':scope > .extension-market-card', card => card.dataset.name) : undefined;
+  function renderMarket(keepHeight = false) {
+    const reflow = measureCards();
+    if (!keepHeight) marketGrid.style.minHeight = '';
     const state = states[kind];
-    const hits = state.hits.map(h => ({ ...h, installed: installed.some(p => p.name === h.name && p.state !== 'removed') }));
-    state.tags = state.tags.filter(id => marketIndex.tags[id]);
-    const result = arrangeHits(hits, { filter: state.filter, sort: state.sort, hideInstalled: state.hide, page: state.page, pageSize: pageSize('market'), tags: state.tags, excludeTags: state.hideWarnings ? warningTags() : [], officialOnly: state.officialOnly, certifiedOnly: state.certifiedOnly, newOnly: state.newOnly, ...advancedFilters(state) }); if (state.fetched) state.page = result.page;
+    paintCategories?.();
+    const listed = (pool: SearchHitView[]) => pool.filter(hit => inCatalogCategory(hit.tags, state.catalogCategory)).map(h => ({ ...named(h), installed: installed.some(p => p.name === h.name && p.state !== 'removed') })).filter(h => state.installation !== 'installed' || h.installed);
+    const hits = listed(catalogHits(state)), unexcluded = listed(catalogHits(state, true));
+    // 注意事项 only exclude, so a selection carried over from before holds none of them.
+    state.tags = state.tags.filter(id => marketIndex.tags[id] && !isExclusion(id) && !exclusions.includes(id));
+    const terms = searchTerms(state.filter);
+    const arrange: ArrangeOptions = { filter: state.filter, tagLabel, sort: state.sort, hideInstalled: state.installation === 'available', page: state.page, pageSize: pageSize(), tags: state.tags, officialOnly: state.officialOnly, certifiedOnly: state.certifiedOnly, newOnly: state.newOnly, ...advancedFilters(state) };
+    const result = arrangeHits(hits, arrange); if (state.fetched) state.page = result.page;
     if (clearButton) clearButton.disabled = !filtersActive(state);
     if (licenseList) licenseList.replaceChildren(...[...new Set(hits.map(h => h.license).filter(Boolean))].sort().map(value => { const option = ui.h('option') as HTMLOptionElement; option.value = value!; return option; }));
-    renderTagBar(hits);
+    renderTagBar(hits, unexcluded);
+    renderActive(state, exclusions.length ? arrangeHits(unexcluded, { ...arrange, page: 0, pageSize: 1 }).matched - result.matched : 0);
+    const focused = doc.activeElement instanceof win.HTMLElement && marketGrid.contains(doc.activeElement) ? doc.activeElement : null;
+    const focusName = focused?.closest<HTMLElement>('.extension-market-card')?.dataset.name;
+    const focusAction = focused?.classList.contains('extension-get');
+    // Cards skip rendering until scrolled to, sized by a placeholder meanwhile. A re-render builds new
+    // cards, so each takes over the height its predecessor had: the list keeps its layout, above the
+    // window too, instead of every card falling back to the placeholder's height.
+    const heights = new Map([...marketGrid.querySelectorAll<HTMLElement>(':scope > .extension-market-card[data-name]')].map(card => [card.dataset.name!, contentHeight(card)]));
     marketGrid.replaceChildren(...result.shown.map(hit => {
       const card = ui.h('article', 'extension-card extension-market-card' + (hit.installed ? ' is-installed' : ''));
       const owner = kind; card.tabIndex = 0; card.setAttribute('role', 'button'); card.setAttribute('aria-label', hit.displayName ?? hit.name);
-      card.addEventListener('click', () => openDetail(hit, owner), { signal });
-      card.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(hit, owner); } }, { signal });
+      card.addEventListener('click', event => { if (!(event.target as Element).closest('button, a')) openDetail(hit, owner); }, { signal });
+      card.addEventListener('keydown', event => { if (event.target === card && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); openDetail(hit, owner); } }, { signal });
       const heading = ui.h('div', 'extension-card-heading'); const local = installed.find(item => item.name === hit.name);
+      const listed = state.hits.some(item => item.name === hit.name);
       const titleBlock = ui.h('div', 'extension-card-titleblock'), titleLine = ui.h('div', 'extension-card-titleline');
-      const title = ui.h('span', 'extension-card-title', hit.displayName ?? local?.metadata?.displayName ?? local?.label ?? hit.name);
-      titleLine.append(title); if (hit.installed) titleLine.append(ui.pill(S.alreadyInstalled));
+      const title = ui.h('span', 'extension-card-title');
+      writeMarked(title, hit.displayName ?? local?.metadata?.displayName ?? local?.label ?? hit.name, terms);
+      titleLine.append(title);
       const metaRow = ui.h('div', 'extension-card-metarow');
       // 署名用 author,悬停 npm 账号;没有 author 时写 `npm@账号`。
       // author 在包文档里,回来之前只写版本。发布者是 GitHub Actions 时改用维护者。
@@ -1141,90 +1263,170 @@ export function mountExtensions(ctx: FeatureContext): void {
         const publisher = hit.publisher && hit.publisher !== 'GitHub Actions' ? hit.publisher : undefined;
         const account = hit.maintainers?.[0] ?? publisher ?? maintainers?.[0];
         const name = author ?? (account ? `npm@${account}` : S.authorMissing);
-        byline.textContent = known ? `${name}${S.metaSeparator}v${hit.version}` : `v${hit.version}`;
+        const version = local?.builtin ? S.builtin : hit.version ? `v${hit.version}` : '';
+        byline.textContent = [known ? name : '', version].filter(Boolean).join(S.metaSeparator);
         bylineHint = author && account ? `npm: @${account}` : '';
         if (bylineHint) byline.setAttribute('aria-description', bylineHint); else byline.removeAttribute('aria-description');
       };
       sign(undefined, hit.author, !!hit.author);
-      metaRow.append(byline, ...badgesOf(hit, state));
+      metaRow.append(byline, ...badgesOf(hit));
       // 搜索结果没带 os 时等包文档
       const placeOs = (os?: readonly string[]) => { metaRow.querySelector('.extension-os')?.remove(); if (os?.length) metaRow.append(osBadge(os)); };
       placeOs(hit.os);
-      titleBlock.append(titleLine, metaRow);
+      titleLine.append(metaRow); titleBlock.append(titleLine);
       heading.append(packageAvatar(hit.icon ?? (local?.icon ? iconUrl(local.name, local.installedVersion ?? local.version) : undefined)), titleBlock);
-      void fetchDetail(hit.name, hit.version).then(data => {
+      if (listed) void fetchDetail(hit.name, hit.version).then(data => {
         if (signal.aborted) return;
-        if (data.displayName && !hit.displayName) title.textContent = data.displayName;
+        if (data.displayName && !hit.displayName) writeMarked(title, data.displayName, terms);
         sign(data.maintainers, data.author, true);
         if (!hit.os) placeOs(data.os);
       }).catch(() => { /* Search results remain usable when package metadata is unavailable. */ });
-      card.append(heading, ui.h('p', 'extension-description', hit.description));
-      card.append(summaryLine(owner, hit.summary));
-      const tags = orderedTags(hit.tags);
+      const description = ui.h('p', 'extension-description'); writeMarked(description, hit.description, terms);
+      card.append(heading, description);
+      const tags = orderedTags(hit.tags).sort((a, b) => Number(state.tags.includes(b)) - Number(state.tags.includes(a)));
       if (tags.length) {
-        const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(id => tagChip(id, { active: state.tags.includes(id), onToggle: () => toggleTag(id) }))); card.append(row);
+        const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(cardTag)); card.append(row);
         card.addEventListener('pointerleave', () => { if (row.classList.contains('is-open')) foldTags(row); }, { signal });
       }
       const foot = ui.h('div', 'extension-card-foot');
       if (hit.rating) foot.append(votes(hit.name, hit.rating), commentCount(hit.name, hit.rating, () => openDetail(hit, owner, true)));
-      foot.append(downloadsStat(hit));
+      if (kind !== 'world' && local && (local.state === 'pending-restart' || local.state === 'failed')) foot.append(ui.h('span', '', stateLabels[local.state]));
+      if (listed) foot.append(downloadsStat(hit));
       if (hit.date) foot.append(dateStat(hit.date));
       card.append(foot);
+      card.dataset.name = hit.name; card.append(getButton(hit, owner));
+      const known = heights.get(hit.name); if (known) card.style.containIntrinsicHeight = `auto ${known}px`;
       return card;
     }));
-    stabilizeGrid(marketGrid, result.matched, pageSize('market'), 232);
+    if (focusName) {
+      const card = [...marketGrid.querySelectorAll<HTMLElement>('.extension-market-card')].find(card => card.dataset.name === focusName);
+      const action = focusAction ? card?.querySelector<HTMLButtonElement>('.extension-get:not(:disabled)') : undefined;
+      (action ?? card)?.focus({ preventScroll: true });
+    }
     for (const row of marketGrid.querySelectorAll<HTMLElement>('.extension-card .extension-tag-row')) foldTags(row);
-    if (!result.matched) marketGrid.append(ui.placeholder(state.fetched ? state.hits.length ? S.noHits : registry ? S.noPackagesAt(registry) : S.noPackages : S.searching));
-    pager(marketPager, result.matched, result.page, pageSize('market'), page => { marketGrid.style.minHeight = `${marketGrid.getBoundingClientRect().height}px`; state.page = page; renderMarket(); save(); });
+    renderInView();
+    for (const [control, paint] of detailControls) if (control.isConnected) paint(); else detailControls.delete(control);
+    if (!result.matched) marketGrid.append(emptyMarket(state));
+    pager(marketPager, result.matched, result.page, pageSize(), page => { marketGrid.style.minHeight = `${marketGrid.getBoundingClientRect().height}px`; state.page = page; renderMarket(true); save(); });
+    reflow?.play();
   }
-  /** 标签筛选条:本页签结果里出现过的标签;选中的在前,其余按颜色分组(红色最后)、组内按出现次数;选中的要求全部带上。 */
-  function renderTagBar(hits: readonly SearchHitView[]) {
+  /**
+   * The sidebar below the categories. 推荐 picks one of certified and official, with 新品 beside them on its own; 系列
+   * select and must all be on a package; 注意事项 only exclude, the plain ones (本地模型 and the like) last. Counts
+   * are what the category and installation leave; an excluded row counts what it hides.
+   */
+  function renderTagBar(hits: readonly SearchHitView[], unexcluded: readonly SearchHitView[]) {
     if (!tagBar) return;
-    const state = states[kind];
-    const counts = new Map<string, number>();
-    for (const hit of hits) for (const id of hit.tags ?? []) if (marketIndex.tags[id]) counts.set(id, (counts.get(id) ?? 0) + 1);
-    const officialCount = hits.filter(h => h.official).length, certifiedCount = hits.filter(h => h.certified).length, newCount = hits.filter(h => h.isNew).length;
-    tagBar.hidden = !counts.size && !officialCount && !certifiedCount && !newCount;
-    const selected = (id: string) => Number(!state.tags.includes(id));
-    const barGroup = (id: string) => { const group = tagGroup(id); return group === -2 ? 2 : group; };
-    const ids = orderedTags([...counts.keys()]).sort((a, b) => selected(a) - selected(b) || barGroup(a) - barGroup(b) || counts.get(b)! - counts.get(a)!);
-    const chips = ui.h('div', 'extension-tag-row');
-    const badgeToggle = (key: 'newOnly' | 'certifiedOnly' | 'officialOnly', mark: Parameters<typeof icon>[1], label: string, hint: string, count: number) => {
-      if (!count) return;
-      const toggle = ui.h('button', 'extension-tag is-badge extension-badge-toggle' + (key === 'newOnly' ? ' is-new' : '') + (state[key] ? ' is-active' : '')) as HTMLButtonElement; toggle.type = 'button';
-      toggle.append(icon(doc, mark), ui.h('span', '', label), ui.h('span', 'extension-tag-count', String(count)));
-      attachHint(toggle, label, hint); toggle.setAttribute('aria-pressed', String(state[key]));
-      toggle.addEventListener('click', () => { state[key] = !state[key]; state.page = 0; renderMarket(); save(); }, { signal });
-      chips.append(toggle);
+    const state = states[kind], excluded = exclusions;
+    const tally = (list: readonly SearchHitView[]) => { const counts = new Map<string, number>(); for (const hit of list) for (const id of hit.tags ?? []) if (marketIndex.tags[id]) counts.set(id, (counts.get(id) ?? 0) + 1); return counts; };
+    const counts = tally(hits), present = tally(unexcluded);
+    const ids = orderedTags([...present.keys()]);
+    const style = (id: string) => marketIndex.tags[id].style;
+    const badgeRow = (on: boolean, mark: Parameters<typeof icon>[1], label: string, hint: string, count: number, onClick: () => void, cls = '') => {
+      const toggle = ui.h('button', 'extension-tag is-badge extension-badge-toggle' + cls + (on ? ' is-active' : '')) as HTMLButtonElement; toggle.type = 'button';
+      toggle.append(icon(doc, mark), ui.h('span', '', label), helpMark(toggle, label, hint), ui.h('span', 'extension-tag-count', String(count)));
+      toggle.setAttribute('aria-pressed', String(on));
+      toggle.addEventListener('click', () => { onClick(); state.page = 0; renderMarket(); save(); }, { signal });
+      return toggle;
     };
-    badgeToggle('certifiedOnly', 'shield-check', S.certified, S.certifiedHint, certifiedCount);
-    badgeToggle('officialOnly', 'cortico', S.officialRelease, S.officialHint, officialCount);
-    badgeToggle('newOnly', 'sparkles', S.newLabel, S.newHint(marketIndex.newDays ?? 14), newCount);
-    chips.append(...ids.map(id => tagChip(id, { active: state.tags.includes(id), count: counts.get(id), onToggle: () => toggleTag(id) })));
-    tagBar.replaceChildren(ui.h('span', 'extension-tagbar-label', S.tagFilter), chips);
+    const pick = (key: 'certifiedOnly' | 'officialOnly') => () => { const on = !state[key]; state.certifiedOnly = state.officialOnly = false; state[key] = on; };
+    const certifiedCount = hits.filter(h => h.certified).length, officialCount = hits.filter(h => h.official).length, newCount = hits.filter(h => h.isNew).length;
+    const recommended = [
+      ...certifiedCount || state.certifiedOnly ? [badgeRow(state.certifiedOnly, 'shield-check', S.certified, S.certifiedHint, certifiedCount, pick('certifiedOnly'))] : [],
+      ...officialCount || state.officialOnly ? [badgeRow(state.officialOnly, 'cortico', S.officialRelease, S.officialHint, officialCount, pick('officialOnly'))] : [],
+      ...newCount || state.newOnly ? [badgeRow(state.newOnly, 'sparkles', S.newLabel, S.newHint(marketIndex.newDays ?? 14), newCount, () => { state.newOnly = !state.newOnly; }, ' is-new')] : [],
+    ];
+    const select = (id: string) => tagChip(id, { active: state.tags.includes(id), count: counts.get(id) ?? 0, onToggle: () => toggleTag(id), helpMark: true });
+    // 注意事项: the row itself excludes; the eye at its end shows it.
+    const exclude = (id: string) => {
+      const off = excluded.includes(id), row = tagChip(id, { count: present.get(id) ?? 0, onToggle: () => toggleExclude(id), helpMark: true });
+      row.classList.add('is-exclusion'); row.classList.toggle('is-excluded', off); row.setAttribute('aria-pressed', String(off));
+      row.setAttribute('aria-label', (off ? S.stopExcluding : S.excludeTag)(tagLabel(id) ?? id));
+      row.append(icon(doc, off ? 'eye-off' : 'eye', 'icon extension-tag-eye'));
+      return row;
+    };
+    const cautions = orderedTags([...new Set([...present.keys(), ...exclusions])]).filter(isExclusion);
+    const groups: Array<[string, HTMLElement[]]> = [
+      [S.tagGroups.badges, recommended],
+      [S.tagGroups.series, ids.filter(id => style(id) === 'official' && (counts.has(id) || state.tags.includes(id))).map(select)],
+      [S.tagGroups.cautions, [...cautions.filter(id => style(id)), ...cautions.filter(id => !style(id))].map(exclude)],
+    ];
+    tagBar.replaceChildren(...groups.filter(([, items]) => items.length).flatMap(([label, items]) => {
+      const row = ui.h('div', 'extension-tag-row'); row.append(...items);
+      return [ui.h('span', 'extension-tagbar-label', label), row];
+    }));
+    warningControl?.classList.toggle('is-open', warningsHidden()); warningControl?.setAttribute('aria-pressed', String(warningsHidden()));
+    tagBar.hidden = !tagBar.childElementCount;
   }
-  async function load(): Promise<boolean> {
+  /**
+   * Above the cards: the first line names what is selected, the second what is excluded and how many packages
+   * that hides here. Each item removes itself.
+   */
+  function renderActive(state: CategoryState, hidden: number) {
+    if (!activeBar) return;
+    const item = (label: string, onRemove: () => void, cls = '') => {
+      const button = ui.h('button', 'extension-active-item' + cls) as HTMLButtonElement; button.type = 'button';
+      button.append(ui.h('span', '', label), icon(doc, 'close')); button.setAttribute('aria-label', S.removeFilter(label));
+      button.addEventListener('click', onRemove, { signal });
+      return button;
+    };
+    // The installation switch and the advanced fields are drawn with the panel, so removing them redraws it.
+    const drop = (change: () => void) => () => { change(); state.page = 0; save(); render(); };
+    const chosen = [
+      ...state.catalogCategory !== 'all' ? [item(S.catalogCategories[state.catalogCategory], drop(() => { state.catalogCategory = 'all'; }))] : [],
+      ...state.installation !== 'all' ? [item(state.installation === 'installed' ? S.alreadyInstalled : S.notInstalled, drop(() => { state.installation = 'all'; }))] : [],
+      ...state.certifiedOnly ? [item(S.certified, drop(() => { state.certifiedOnly = false; }))] : [],
+      ...state.officialOnly ? [item(S.officialRelease, drop(() => { state.officialOnly = false; }))] : [],
+      ...state.newOnly ? [item(S.newLabel, drop(() => { state.newOnly = false; }))] : [],
+      ...state.tags.map(id => item(tagLabel(id) ?? id, drop(() => { state.tags = state.tags.filter(t => t !== id); }))),
+      ...state.author.trim() ? [item(`${S.advancedAuthor}: ${state.author.trim()}`, drop(() => { state.author = ''; }))] : [],
+      ...state.keyword.trim() ? [item(`${S.advancedKeyword}: ${state.keyword.trim()}`, drop(() => { state.keyword = ''; }))] : [],
+      ...state.license.trim() ? [item(`${S.advancedLicense}: ${state.license.trim()}`, drop(() => { state.license = ''; }))] : [],
+      ...state.sinceDays ? [item(S.sinceLabel(state.sinceDays), drop(() => { state.sinceDays = 0; }))] : [],
+      ...state.minDownloads ? [item(`${S.advancedDownloads} ${ui.fmt.count(state.minDownloads)}`, drop(() => { state.minDownloads = 0; }))] : [],
+    ];
+    const excluded = exclusions.filter(id => marketIndex.tags[id]).map(id => {
+      const el = item(tagLabel(id)!, () => toggleExclude(id), ' is-excluded'); const tone = marketIndex.tags[id].style; if (tone) el.classList.add('is-' + tone);
+      return el;
+    });
+    const line = (label: string, items: HTMLElement[], note?: string) => {
+      // Items that wrap line up under the first item, not under the label.
+      const row = ui.h('div', 'extension-active-row'), list = ui.h('div', 'extension-active-items'); list.append(...items);
+      if (note) list.append(ui.h('span', 'extension-active-note', note));
+      row.append(ui.h('span', 'extension-active-label', label), list);
+      return row;
+    };
+    activeBar.replaceChildren(
+      ...chosen.length ? [line(S.activeChosen, chosen)] : [],
+      ...excluded.length ? [line(S.activeExcluded, excluded, hidden ? S.hiddenByExclusions(hidden) : undefined)] : [],
+    );
+    activeBar.hidden = !activeBar.childElementCount;
+  }
+  function load(): Promise<boolean> { return refreshed(loadList()); }
+  async function loadList(): Promise<boolean> {
     if (signal.aborted) return false;
     const generation = ++loadGeneration;
     try {
       const data = await get<{ dir: string; platform?: string; extensions: ExtensionView[] }>('/api/extensions', { signal });
       if (signal.aborted || generation !== loadGeneration) return !signal.aborted;
-      installed = data.extensions; installedFetched = true; directory = data.dir; platform = data.platform ?? ''; const dirNode = root.querySelector('.extension-directory'); if (dirNode) dirNode.textContent = S.labelled(S.directory, directory); renderInstalled(); renderMarket(); restoreScroll(); return true;
-    } catch (error) { if (!signal.aborted) { installedFetched = true; message(kind, 'management', S.listLoadFailed(errorText(error)), true); restoreScroll(); } return false; }
+      installed = data.extensions; installedFetched = true; directory = data.dir; platform = data.platform ?? ''; renderRestart(); renderMarket(); restoreScroll(); workspace?.onChange(installed.filter(item => item.kind === kind || !item.kind)); return true;
+    } catch (error) { if (!signal.aborted && generation === loadGeneration) { installedFetched = true; message(kind, 'management', S.listLoadFailed(errorText(error)), true); restoreScroll(); workspace?.onLoadError(); } return false; }
   }
   async function checkUpdates() {
     if (signal.aborted) return;
-    try { const data = await get<UpdateResultView>('/api/extensions/updates', { signal }); if (signal.aborted) return; updates = new Map(data.updates.map(u => [u.name, u])); renderInstalled(); if (data.errors.length) message(kind, 'management', S.updateCheckFailed(data.errors.map(e => `${e.name}: ${e.error}`).join('; ')), true); }
-    catch (error) { if (!signal.aborted) message(kind, 'management', S.updateCheckFailed(errorText(error)), true); }
+    const generation = ++updateGeneration;
+    try { const data = await get<UpdateResultView>('/api/extensions/updates', { signal }); if (signal.aborted || generation !== updateGeneration) return; updates = new Map(data.updates.map(u => [u.name, u])); announceUpdates(); renderRestart(); renderMarket(); if (data.errors.length) message(kind, 'management', S.updateCheckFailed(data.errors.map(e => `${e.name}: ${e.error}`).join('; ')), true); }
+    catch (error) { if (!signal.aborted && generation === updateGeneration) message(kind, 'management', S.updateCheckFailed(errorText(error)), true); }
   }
-  async function search(owner: ExtensionKindView) {
+  function search(owner: Category) { return refreshed(searchMarket(owner)); }
+  async function searchMarket(owner: Category) {
     const state = states[owner], generation = ++state.generation;
-    message(owner, 'market', S.searching);
+    message(owner, 'market', '');
     try {
       const data = await get<{ hits: SearchHitView[]; partial?: boolean; registry?: string; index?: MarketIndexView }>(`/api/extensions/search?kind=${owner}`, { signal });
       if (signal.aborted || state.generation !== generation) return;
       registry = data.registry ?? ''; marketIndex = data.index ?? { tags: {} }; state.hits = data.hits; state.fetched = true;
-      message(owner, 'market', [data.partial ? S.partial : '', data.index?.error ? S.indexFailed(data.index.error) : '', data.index?.stale ? S.indexStale(data.index.stale) : ''].filter(Boolean).join('\n')); if (owner === kind) { renderInstalled(); renderMarket(); restoreScroll(); }
+      message(owner, 'market', [data.partial ? S.partial : '', data.index?.error ? S.indexFailed(data.index.error) : ''].filter(Boolean).join('\n')); if (owner === kind) { renderRestart(); renderMarket(); restoreScroll(); }
     } catch (error) { if (!signal.aborted && state.generation === generation) { state.fetched = true; message(owner, 'market', S.searchFailed(errorText(error)), true); if (owner === kind) { renderMarket(); restoreScroll(); } } }
   }
   async function loadRegistry() {
@@ -1240,7 +1442,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     try { registrySetting = await post<RegistryView>('/api/extensions/registry', { registry: value }, { signal }); }
     catch (error) { if (!signal.aborted) message(owner, 'registry', errorText(error), true); return; }
     if (signal.aborted) return;
-    registryDraft = null; detailsCache.clear(); updates = new Map();
+    registryDraft = null; detailsCache.clear(); updates = new Map(); announceUpdates();
     for (const state of Object.values(states)) {
       state.hits = []; state.fetched = false; state.generation++; delete state.messages.market;
       if (state.messages.management?.bad) delete state.messages.management;
@@ -1249,29 +1451,17 @@ export function mountExtensions(ctx: FeatureContext): void {
     message(owner, 'registry', registrySetting.registry ? S.registrySaved(registrySetting.registry) : registrySetting.registryError ?? '', !registrySetting.registry);
     void checkUpdates(); void search(owner);
   }
-  async function loadIndexBase() {
-    try { indexBaseSetting = await get<IndexBaseView>('/api/extensions/index-base', { signal }); }
-    catch (error) { if (!signal.aborted) message(kind, 'indexBase', errorText(error), true); return; }
-    if (signal.aborted) return;
-    if (indexBaseInput) { indexBaseInput.placeholder = indexBaseSetting.base; if (indexBaseDraft === null) indexBaseInput.value = indexBaseSetting.configured ?? ''; }
-  }
-  /** 换索引源后已取到的搜索结果与包详情都作废,按新源重取。 */
-  async function saveIndexBase(value: string) {
-    const owner = kind;
-    try { indexBaseSetting = await post<IndexBaseView>('/api/extensions/index-base', { indexBase: value }, { signal }); }
-    catch (error) { if (!signal.aborted) message(owner, 'indexBase', errorText(error), true); return; }
-    if (signal.aborted) return;
-    indexBaseDraft = null; detailsCache.clear();
-    for (const state of Object.values(states)) { state.hits = []; state.fetched = false; state.generation++; delete state.messages.market; }
-    render();
-    message(owner, 'indexBase', S.indexBaseSaved(indexBaseSetting.base));
-    void search(owner);
-  }
-  /** 安装先按当前类别检查声明再装;删除直接卸。两者都改磁盘,重启进程后生效。 */
-  async function operate(action: 'install' | 'delete', target: Target, area: string, owner: ExtensionKindView) {
+  /**
+   * Installation checks the package kind before writing; install and delete take effect after restart.
+   * Catalog operations show progress on the action button and errors beside `anchor`.
+   */
+  async function operate(action: 'install' | 'delete', target: Target, area: string, owner: Category, anchor?: Anchor, onFeedback?: (note: { text: string; bad: boolean }) => void) {
     const identity = 'name' in target ? target.name : target.path; if (busy.has(identity)) return;
-    const actionLabel = action === 'delete' ? S.deletedAction : installed.some(item => item.name === identity) ? S.updatedAction : S.installedAction;
-    busy.add(identity); renderInstalled(); message(owner, area, S.progress(actionLabel, identity));
+    const actionLabel = action === 'delete' ? S.deletedAction : installed.some(item => item.name === identity && item.state !== 'removed') ? S.updatedAction : S.installedAction;
+    const quiet = !!anchor;
+    const report = (text: string, bad = false) => { if (onFeedback) onFeedback({ text, bad }); else message(owner, area, text, bad); };
+    let problem: string | undefined;
+    busy.add(identity); renderRestart(); renderMarket(); if (!quiet) report(S.progress(actionLabel, identity));
     try {
       let name = identity, version: string | undefined, resultKind: string | undefined;
       if (action === 'install') {
@@ -1282,15 +1472,24 @@ export function mountExtensions(ctx: FeatureContext): void {
         await post('/api/extensions/uninstall', { name: identity }, { signal });
       }
       if (signal.aborted) return;
-      const restartHint = action === 'delete' || resultKind !== 'bot' ? ' ' + S.restartNeeded : '';
       const activateHint = actionLabel === S.installedAction && resultKind === 'world' ? ' ' + S.worldActivateHint : '';
-      message(owner, area, `${S.completed(actionLabel, name)}${version ? ' ' + S.version(version) : ''}${restartHint}${activateHint}`);
-      updates.delete(name);
-      if (!await load()) message(owner, area, S.completed(actionLabel, name) + ' ' + S.syncedFailed, true);
-    } catch (error) { if (!signal.aborted) message(owner, area, errorText(error), true); }
-    finally { busy.delete(identity); if (!signal.aborted) renderInstalled(); }
+      if (!quiet) report(`${S.completed(actionLabel, name)}${version ? ' ' + S.version(version) : ''} ${S.restartNeeded}${activateHint}`);
+      updateGeneration++; if (updates.delete(name)) announceUpdates();
+      if (action === 'install' && actionLabel === S.installedAction) workspace?.onAdded(name, anchor?.()?.closest('.extension-market-card')?.querySelector('.extension-avatar')?.getBoundingClientRect());
+      if (!await load()) report(S.completed(actionLabel, name) + ' ' + S.syncedFailed, true);
+    } catch (error) { if (!signal.aborted) problem = errorText(error); }
+    finally { busy.delete(identity); if (!signal.aborted) { renderRestart(); renderMarket(); } }
+    if (problem === undefined || signal.aborted) return;
+    const control = quiet ? anchor?.() : null;
+    if (control?.isConnected) problems.show(control, problem); else report(problem, true);
   }
-  function renderDetail(box: HTMLElement, data: PackageDetailView, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
+  async function remove(name: string, anchor: Anchor) {
+    if (busy.has(name) || !await ui.confirm({ title: S.remove, body: S.removeBody, danger: true }) || signal.aborted) return;
+    await operate('delete', { name }, 'management', kind, anchor);
+  }
+  /** The detail page's install control, repainted whenever the market's cards are. */
+  const detailControls = new Map<HTMLElement, () => void>();
+  function renderDetail(box: HTMLElement, data: PackageDetailView, owner: Category, hit?: SearchHitView, item?: ExtensionView) {
       const title = box.closest('.modalcard')?.querySelector('.modaltitle');
       if (title) title.textContent = data.displayName ?? item?.metadata?.displayName ?? item?.label ?? data.name;
       const historyOpen = box.querySelector('details')?.open ?? false;
@@ -1302,32 +1501,46 @@ export function mountExtensions(ctx: FeatureContext): void {
       const heading = ui.h('div', 'extension-detail-heading');
       heading.append(ui.h('div', 'extension-detail-name', data.displayName ?? local?.metadata?.displayName ?? local?.label ?? data.name));
       heading.append(ui.h('div', 'extension-detail-sub', item?.builtin ? S.builtin : `${data.name}@${local?.installedVersion ?? data.version}`));
-      const badgeList = listed ? badgesOf(listed, states[owner]) : [];
+      const badgeList = listed ? badgesOf(listed) : [];
       if (badgeList.length) { const badges = ui.h('div', 'extension-detail-badges'); badges.append(...badgeList); heading.append(badges); }
       header.append(heading);
-      const cta = ui.h('div', 'extension-detail-cta');
-      if (!item) {
-        const isInstalled = installed.some(item => item.name === data.name && item.state !== 'removed');
-        const warnings = tags.filter(id => marketIndex.tags[id].style === 'warning');
-        const button = ui.button(isInstalled ? S.alreadyInstalled : S.install, { variant: 'primary', onClick: async () => {
-          button.disabled = true;
-          if (warnings.length && !await ui.confirm({ title: S.installWarningTitle, body: S.installWarningBody(data.name, warnings.map(id => `${marketIndex.tags[id].label}${S.labelSeparator}${plainHint(marketIndex.tags[id].hint)}`), listed?.note), danger: true })) { button.disabled = false; return; }
-          void operate('install', { name: data.name, version: data.version }, 'market', owner).finally(() => { if (box.isConnected) button.disabled = installed.some(item => item.name === data.name && item.state !== 'removed'); });
+      // The control centres on the header; what goes under it (problems, removal, the version history)
+      // hangs below it, outside the centring.
+      const cta = ui.h('div', 'extension-detail-cta'), below = ui.h('div', 'extension-detail-cta-below');
+      // The market card's control, repainted with the cards: install, its progress, an update, installed.
+      if (!item?.builtin) {
+        const isInstalled = () => installed.some(entry => entry.name === data.name && entry.state !== 'removed');
+        const os = listed?.os ?? data.os, base = listed ?? { description: data.description ?? '', downloads: { month: 0 }, dependents: 0, links: {} };
+        const blocked = !data.manifest || !!data.problems?.length || data.manifest.kind !== owner;
+        const control = ui.h('div', 'extension-detail-control'), anchor: Anchor = () => control.querySelector('.extension-get');
+        const paint = () => control.replaceChildren(installControl({ ...base, name: data.name, version: data.version, os, installed: isInstalled() }, owner, { anchor, blocked }));
+        paint(); detailControls.set(control, paint); cta.append(control);
+        if (!isInstalled()) {
+          for (const text of data.problems ?? []) below.append(ui.h('p', 'extension-cta-problem', text));
+          if (!osSupported(os)) below.append(ui.h('p', 'extension-cta-problem', S.osUnsupported(platformName(platform))));
+        }
+      }
+      if (owner === 'bot' && local && local.state !== 'removed') below.append(ui.h('p', 'extension-create-help', S.createBody), ui.h('pre', '', 'pnpm start --new'));
+      if (owner !== 'world' && local && local.state !== 'removed') {
+        const erase = ui.button(S.remove, { variant: 'danger', onClick: async () => {
+          erase.disabled = true;
+          try {
+            await remove(local.name, () => erase);
+            if (!installed.some(item => item.name === local.name && item.state !== 'removed')) detailDrawer?.dispose();
+          } finally { erase.disabled = !!local.builtin || busy.has(local.name); }
         } });
-        button.classList.add('extension-detail-install'); if (!isInstalled) button.prepend(icon(doc, 'download'));
-        const os = listed?.os ?? data.os, osBlocked = !isInstalled && !osSupported(os);
-        button.disabled = isInstalled || !data.manifest || !!data.problems?.length || data.manifest.kind !== owner || osBlocked; cta.append(button);
-        for (const text of data.problems ?? []) cta.append(ui.h('p', 'extension-cta-problem', text));
-        if (osBlocked) cta.append(ui.h('p', 'extension-cta-problem', S.osUnsupported(platformName(platform))));
+        erase.disabled = !!local.builtin || busy.has(local.name);
+        if (local.builtin) erase.title = S.builtinNote;
+        below.append(erase);
       }
       if (listed?.supersededBy) {
         const next = listed.supersededBy, target = states[owner].hits.find(entry => entry.name === next);
         const [before, after] = S.supersededBy.split('{}');
         const link = ui.h('a', 'extension-superseded-link', target?.displayName ?? next); link.href = '#';
         link.addEventListener('click', event => { event.preventDefault(); openDetail(target ?? { name: next, version: '', description: '', downloads: {}, dependents: 0, links: {}, installed: false }, owner); }, { signal });
-        const line = ui.h('p', 'extension-cta-superseded'); line.append(before, link, after); cta.append(line);
+        const line = ui.h('p', 'extension-cta-superseded'); line.append(before, link, after); below.append(line);
       }
-      header.append(cta);
+      cta.append(below); header.append(cta);
       const links = ui.rowbar(); links.classList.add('extension-detail-actions');
       for (const [name, href] of Object.entries(data.links)) if (href && /^https?:\/\//i.test(href)) {
         const label = S.linkNames[name as keyof typeof S.linkNames];
@@ -1361,10 +1574,11 @@ export function mountExtensions(ctx: FeatureContext): void {
       info.append(ui.h('h4', '', S.introduction), intro);
       // 内建条目要有对应的 npm 包才在索引里
       const indexed = (!item?.builtin || !!listed) && Object.keys(marketIndex.tags).length > 0;
-      if (tags.length) { const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(id => tagChip(id))); info.append(row); }
-      if (indexed) {
-        const report = ui.h('a', 'extension-tag-feedback', S.feedbackTags); report.href = tagIssueUrl(listed?.name ?? data.name); report.target = '_blank'; report.rel = 'noopener noreferrer';
-        info.append(report);
+      // The tag feedback link follows the last tag on its line.
+      if (tags.length || indexed) {
+        const row = ui.h('div', 'extension-tag-row'); row.append(...tags.map(id => tagChip(id)));
+        if (indexed) { const report = ui.h('a', 'extension-tag-feedback', S.feedbackTags); report.href = tagIssueUrl(listed?.name ?? data.name); report.target = '_blank'; report.rel = 'noopener noreferrer'; row.append(report); }
+        info.append(row);
       }
       if (listed?.screenshots?.length) {
         const shots = ui.h('div', 'extension-screenshots');
@@ -1374,7 +1588,7 @@ export function mountExtensions(ctx: FeatureContext): void {
       info.append(ui.h('h4', '', S.information));
       if (item?.reason) info.append(ui.msgline(item.reason, true));
       if (item?.webUi === 'missing') info.append(ui.msgline(S.noteWebUiMissing, true));
-      for (const text of new Set([...item?.warnings ?? [], ...item ? data.problems ?? [] : [], ...data.warnings])) info.append(ui.msgline(text, true));
+      for (const text of [...item ? data.problems ?? [] : [], ...data.warnings]) info.append(ui.msgline(text, true));
       if (data.deprecated) info.append(ui.msgline(S.deprecated(data.deprecated), true));
       const rows = [
         { k: S.authorLabel, v: item?.author ?? data.author ?? S.unknownAuthor },
@@ -1402,7 +1616,6 @@ export function mountExtensions(ctx: FeatureContext): void {
           button.classList.add('extension-version-action');
           button.disabled = same || incompatible || linked || busy.has(data.name);
           if (linked) button.title = S.localVersionNote;
-          else if (!same && !incompatible && release.warnings?.length) button.title = release.warnings.join('\n');
           const notes = data.changelog?.[release.version];
           let label: HTMLElement = ui.h('code', '', release.version), body: HTMLElement | null = null;
           if (notes) {
@@ -1417,36 +1630,34 @@ export function mountExtensions(ctx: FeatureContext): void {
           if (body) row.append(body);
           history.append(row);
         }
-        releases.append(data.history.length ? history : ui.h('p', 'muted extension-history-empty', S.noHistory)); cta.append(releases);
+        releases.append(data.history.length ? history : ui.h('p', 'muted extension-history-empty', S.noHistory)); below.append(releases);
       }
-      if (item?.kind === 'bot') info.append(ui.h('p', 'extension-create-help', S.createBody), ui.h('pre', '', 'pnpm start --new'));
       columns.classList.toggle('is-split', indexed); box.closest('.modalcard')?.classList.toggle('extension-detail-card', indexed);
       if (indexed) { const side = ui.h('aside', 'extension-detail-side'); side.append(commentsSection(listed?.name ?? data.name, listed?.rating)); columns.append(side); }
   }
+  function detailFeedback(box: HTMLElement, note: { text: string; bad: boolean }) {
+    const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback');
+    if (feedback) { feedback.textContent = note.text; feedback.classList.toggle('bad', note.bad); }
+  }
   /** 历史版本走与市场安装相同的 check → install;结果同时写进抽屉。 */
-  async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: ExtensionKindView, hit?: SearchHitView, item?: ExtensionView) {
+  async function installRelease(box: HTMLElement, data: PackageDetailView, version: string, owner: Category, hit?: SearchHitView, item?: ExtensionView) {
     const current = installed.find(entry => entry.name === data.name && entry.state !== 'removed');
-    const warnings = data.history.find(release => release.version === version)?.warnings ?? [];
-    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: [S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), ...warnings].join('\n'), danger: true })) return;
+    if (busy.has(data.name) || !await ui.confirm({ title: S.versionConfirmTitle, body: S.versionConfirmBody(data.name, current?.installedVersion ?? current?.version ?? null, version), danger: true })) return;
     if (signal.aborted || busy.has(data.name)) return;
-    const show = (note: { text: string; bad: boolean } | undefined) => {
-      const feedback = box.querySelector<HTMLElement>('.extension-operation-feedback');
-      if (feedback && note) { feedback.textContent = note.text; feedback.classList.toggle('bad', note.bad); }
-    };
-    const done = operate('install', { name: data.name, version }, 'management', owner);
+    let result: { text: string; bad: boolean } | undefined;
+    const done = operate('install', { name: data.name, version }, 'management', owner, undefined, note => { result = note; detailFeedback(box, note); });
     box.querySelectorAll<HTMLButtonElement>('.extension-version-action').forEach(button => { button.disabled = true; });
-    show(states[owner].messages.management);
     await done;
-    const result = states[owner].messages.management;
     await checkUpdates();
     if (signal.aborted || !box.isConnected) return;
     renderDetail(box, data, owner, hit, item && installed.find(entry => entry.name === data.name && entry.state !== 'removed'));
-    show(result);
+    if (result) detailFeedback(box, result);
   }
   /** `toComments`:打开后滚到评论区(从卡片上的评论数点进来)。 */
-  function openDetail(hit: SearchHitView, owner: ExtensionKindView, toComments = false) {
-    const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail));
+  function openDetail(hit: SearchHitView, owner: Category, toComments = false) {
     const item = installed.find(item => item.name === hit.name && item.state !== 'removed');
+    if (kind !== 'world' && item && !toComments) { showLocal(item); return; }
+    const box = ui.h('div', 'extension-detail'); box.append(ui.placeholder(S.loadingDetail));
     detailDrawer?.dispose(); detailDrawer = ui.drawer(item?.metadata?.displayName ?? item?.label ?? hit.name, box);
     void fetchDetail(hit.name, hit.version || undefined).then(data => {
       if (!signal.aborted && box.isConnected) { renderDetail(box, data, owner, hit); if (toComments) box.querySelector('.extension-comments')?.scrollIntoView({ block: 'start' }); }
@@ -1463,7 +1674,8 @@ export function mountExtensions(ctx: FeatureContext): void {
     try {
       const before = await get<Life>('/api/run/lifecycle', { signal });
       save(); win.sessionStorage.setItem(storageKey + ':restart', JSON.stringify(before));
-      message(kind, 'management', supervised ? S.reloadWait : S.restartManual);
+      showRestarting(true);
+      if (!supervised) message(kind, 'management', S.restartManual);
       let report: PowerReport | undefined;
       try { report = await post<PowerReport>('/api/run/restart', undefined, { signal }); } catch (error) {
         if ((error as { status?: number }).status) { win.sessionStorage.removeItem(storageKey + ':restart'); throw error; }
@@ -1477,53 +1689,49 @@ export function mountExtensions(ctx: FeatureContext): void {
         });
       }
       watchRestart(before);
-    } catch (error) { if (!signal.aborted) message(kind, 'management', errorText(error), true); }
+    } catch (error) { if (!signal.aborted) { win.sessionStorage.removeItem(storageKey + ':restart'); showRestarting(false); message(kind, 'management', errorText(error), true); } }
+  }
+  /** Disables the restart control while the process is restarting. */
+  function showRestarting(on: boolean) {
+    restartRoot.classList.toggle('is-restarting', on);
+    renderRestart();
   }
   function watchRestart(before: Life) {
     const check = async () => {
       if (signal.aborted) return;
       try {
         const next = await get<Life>('/api/run/lifecycle', { signal });
-        if (restartOutcome(before, next) === 'wrong-deployment') { win.sessionStorage.removeItem(storageKey + ':restart'); message(kind, 'management', S.otherBot, true); return; }
-        if (restartOutcome(before, next) === 'ready') { win.sessionStorage.removeItem(storageKey + ':restart'); save(); win.location.reload(); return; }
+        if (restartOutcome(before, next) === 'wrong-deployment') { win.sessionStorage.removeItem(storageKey + ':restart'); showRestarting(false); message(kind, 'management', S.otherBot, true); return; }
+        if (restartOutcome(before, next) === 'ready') { win.sessionStorage.removeItem(storageKey + ':restart'); save(); workspace?.beforeReload(); win.location.reload(); return; }
       } catch { /* Wait while the listener is unavailable. */ }
       lifecycle.timeout(() => void check(), 1000);
     }; void check();
   }
+  /** The extension catalog's manual install fold, kept open across re-renders. */
+  let manualOpen = false;
   function render() {
-    const state = states[kind]; tabs.style.setProperty('--tab-index', String(categories.indexOf(kind)));
-    tabButtons.forEach((button, i) => { const active = categories[i] === kind; button.setAttribute('aria-selected', String(active)); button.tabIndex = active ? 0 : -1; }); panel.setAttribute('aria-labelledby', 'extension-tab-' + kind);
+    const state = states[kind];
+    const keptScroll = scrollRoot.scrollTop;
+    // The panel is rebuilt with a new grid; its cards still move from where the old ones were.
+    const reflow = measureCards();
+    manualOpen = panel.querySelector<HTMLDetailsElement>('.world-manual')?.open ?? manualOpen;
     panel.replaceChildren(); messageNodes = {};
-    const managed = ui.sheet({ title: S.installedTitle });
-    const bar = ui.rowbar(); bar.classList.add('extension-toolbar');
-    managed.el.querySelector('h3')!.append(ui.h('span', 'extension-directory', S.labelled(S.directory, directory)));
-    const installedFilters = ui.input({ type: 'search', value: state.installedFilter, placeholder: S.installedFilter, onInput: value => { state.installedFilter = value; state.installedPage = 0; renderInstalled(); save(); } });
-    installedFilters.setAttribute('aria-label', S.installedFilter); bar.append(installedFilters, sizePicker('installed'));
-    if (canRestart) { const button = ui.button(S.restartProcess, { onClick: () => void restart() }); button.classList.add('extension-restart'); bar.append(button); }
-    bar.append(ui.button(S.refresh, { onClick: () => { void load(); void checkUpdates(); } }));
-    messageNodes.management = ui.msgline(kind === 'bot' ? S.createBody : kind === 'provider' ? S.providerManagement : S.idleManagement); messageNodes.management.setAttribute('role', 'status'); installedGrid = ui.h('div', 'extension-grid extension-installed-grid'); installedPager = ui.rowbar();
-    managed.body.append(bar, messageNodes.management, installedGrid, installedPager);
-    const marketSheet = ui.sheet({ title: S.market }); messageNodes.market = ui.msgline(); messageNodes.market.setAttribute('role', 'status');
+    const restartButton = canRestart ? ui.button(S.restartProcess, { onClick: () => void restart() }) : undefined;
+    restartButton?.classList.add('extension-restart');
+    messageNodes.management = ui.msgline(); messageNodes.management.setAttribute('role', 'status');
+    messageNodes.market = ui.msgline(); messageNodes.market.setAttribute('role', 'status');
     const filters = ui.rowbar(); filters.classList.add('extension-toolbar');
-    const clear = clearButton = ui.button('', { onClick: clearFilters }); clear.classList.add('extension-clear'); clear.append(icon(doc, 'close'), ui.h('span', '', S.clearFilters));
-    filters.append(ui.input({ type: 'search', value: state.filter, placeholder: S.filterPlaceholder, onInput: value => { state.filter = value; state.page = 0; renderMarket(); save(); } }), ui.select({ value: state.sort, options: HIT_SORTS.map(value => ({ value, label: S.sortLabel[value] })), onChange: value => { state.sort = value as HitSort; state.page = 0; renderMarket(); save(); } }), sizePicker('market'), clear, ui.button(S.refresh, { onClick: () => void search(kind) }));
-    const options = ui.h('div', 'extension-search-options');
+    const clear = clearButton = ui.button('', { onClick: () => clearFilters() }); clear.classList.add('extension-clear'); clear.append(icon(doc, 'close'), ui.h('span', '', S.clearFilters));
+    filters.append(ui.input({ type: 'search', value: state.filter, placeholder: S.filterPlaceholder, onInput: value => { state.filter = value; state.page = 0; renderMarket(); save(); } }), ui.select({ value: state.sort, options: HIT_SORTS.map(value => ({ value, label: S.sortLabel[value] })), onChange: value => { state.sort = value as HitSort; state.page = 0; renderMarket(); save(); } }), sizePicker(), clear, ui.button(S.refresh, { onClick: () => { void replayCards(Promise.all([load(), search(kind)])); void checkUpdates(); } }));
     const advancedToggle = ui.h('button', 'extension-advanced-toggle' + (state.advanced ? ' is-open' : ''), S.advancedSearch) as HTMLButtonElement; advancedToggle.type = 'button';
     advancedToggle.setAttribute('aria-expanded', String(state.advanced)); advancedToggle.setAttribute('aria-controls', 'extension-advanced');
-    advancedToggle.addEventListener('click', () => { state.advanced = !state.advanced; save(); render(); }, { signal });
-    const switches = ui.h('div', 'extension-switches');
-    switches.append(
-      ui.checkbox(S.hideInstalled, { checked: state.hide, onChange: value => { state.hide = value; state.page = 0; renderMarket(); save(); } }).el,
-      ui.checkbox(S.hideWarnings, { checked: state.hideWarnings, onChange: value => { state.hideWarnings = value; state.page = 0; renderMarket(); save(); } }).el,
-    );
+    advancedToggle.addEventListener('click', () => {
+      state.advanced = !state.advanced; save();
+      advancedToggle.classList.toggle('is-open', state.advanced); advancedToggle.setAttribute('aria-expanded', String(state.advanced)); fold(advanced, state.advanced);
+    }, { signal });
     const registryToggle = ui.h('button', 'extension-advanced-toggle extension-registry-toggle' + (registryOpen ? ' is-open' : ''), S.registryLabel) as HTMLButtonElement; registryToggle.type = 'button';
     registryToggle.setAttribute('aria-expanded', String(registryOpen)); registryToggle.setAttribute('aria-controls', 'extension-registry');
-    registryToggle.addEventListener('click', () => { registryOpen = !registryOpen; registryPanel.hidden = !registryOpen; registryToggle.classList.toggle('is-open', registryOpen); registryToggle.setAttribute('aria-expanded', String(registryOpen)); }, { signal });
-    const indexBaseToggle = ui.h('button', 'extension-advanced-toggle' + (indexBaseOpen ? ' is-open' : ''), S.indexBaseLabel) as HTMLButtonElement; indexBaseToggle.type = 'button';
-    indexBaseToggle.setAttribute('aria-expanded', String(indexBaseOpen)); indexBaseToggle.setAttribute('aria-controls', 'extension-index-base');
-    indexBaseToggle.addEventListener('click', () => { indexBaseOpen = !indexBaseOpen; indexBasePanel.hidden = !indexBaseOpen; indexBaseToggle.classList.toggle('is-open', indexBaseOpen); indexBaseToggle.setAttribute('aria-expanded', String(indexBaseOpen)); }, { signal });
-    const toggles = ui.h('div', 'extension-search-toggles'); toggles.append(advancedToggle, registryToggle, indexBaseToggle);
-    options.append(toggles, switches);
+    registryToggle.addEventListener('click', () => { registryOpen = !registryOpen; fold(registryPanel, registryOpen); registryToggle.classList.toggle('is-open', registryOpen); registryToggle.setAttribute('aria-expanded', String(registryOpen)); }, { signal });
     const advanced = ui.h('div', 'extension-advanced'); advanced.id = 'extension-advanced'; advanced.hidden = !state.advanced;
     const field = (label: string, control: HTMLElement) => { const el = ui.h('label', 'extension-advanced-field'); el.append(ui.h('span', '', label), control); return el; };
     const text = (key: 'author' | 'keyword' | 'license', placeholder: string) => ui.input({ value: state[key], placeholder, onInput: value => { state[key] = value; state.page = 0; renderMarket(); save(); } });
@@ -1531,7 +1739,7 @@ export function mountExtensions(ctx: FeatureContext): void {
     licenseList = ui.h('datalist'); licenseList.id = 'extension-licenses';
     const since = ui.select({ value: String(state.sinceDays), options: [0, 7, 30, 90, 365].map(days => ({ value: String(days), label: S.sinceLabel(days) })), onChange: value => { state.sinceDays = Number(value); state.page = 0; renderMarket(); save(); } });
     const minimum = ui.input({ type: 'number', value: state.minDownloads ? String(state.minDownloads) : '', placeholder: '0', onInput: value => { state.minDownloads = Math.max(0, Number(value) || 0); state.page = 0; renderMarket(); save(); } }); minimum.min = '0';
-    advanced.append(field(S.advancedAuthor, text('author', S.advancedAuthorHint)), field(S.advancedKeyword, text('keyword', 'tts')), field(S.advancedLicense, license), field(S.advancedSince, since), field(S.advancedDownloads, minimum), licenseList);
+    advanced.append(field(S.advancedAuthor, text('author', 'Pal AI Lab')), field(S.advancedKeyword, text('keyword', 'tts')), field(S.advancedLicense, license), field(S.advancedSince, since), field(S.advancedDownloads, minimum), licenseList);
     const registryBar = ui.rowbar(); registryBar.classList.add('extension-toolbar');
     const registryField = registryInput = ui.input({ value: registryDraft ?? registrySetting?.configured ?? '', placeholder: registrySetting?.registry ?? '', onInput: value => { registryDraft = value; } });
     registryField.setAttribute('aria-label', S.registryLabel);
@@ -1540,50 +1748,114 @@ export function mountExtensions(ctx: FeatureContext): void {
     messageNodes.registry = ui.msgline(S.registryHelp); messageNodes.registry.setAttribute('role', 'status');
     const registryPanel = ui.h('div', 'extension-registry'); registryPanel.id = 'extension-registry'; registryPanel.hidden = !registryOpen;
     registryPanel.append(registryBar, messageNodes.registry);
-    const indexBaseBar = ui.rowbar(); indexBaseBar.classList.add('extension-toolbar');
-    const indexBaseField = indexBaseInput = ui.input({ value: indexBaseDraft ?? indexBaseSetting?.configured ?? '', placeholder: indexBaseSetting?.base ?? '', onInput: value => { indexBaseDraft = value; } });
-    indexBaseField.setAttribute('aria-label', S.indexBaseLabel);
-    const saveIndexBaseButton = ui.button(S.registrySave, { onClick: async () => { const lock = ui.disable(saveIndexBaseButton); try { await saveIndexBase(indexBaseField.value); } finally { lock.dispose(); } } });
-    indexBaseBar.append(indexBaseField, saveIndexBaseButton);
-    messageNodes.indexBase = ui.msgline(S.indexBaseHelp); messageNodes.indexBase.setAttribute('role', 'status');
-    const indexBasePanel = ui.h('div', 'extension-index-base'); indexBasePanel.id = 'extension-index-base'; indexBasePanel.hidden = !indexBaseOpen;
-    indexBasePanel.append(indexBaseBar, messageNodes.indexBase);
     tagBar = ui.h('div', 'extension-tagbar'); tagBar.hidden = true;
-    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar(); marketSheet.body.append(filters, advanced, options, registryPanel, indexBasePanel, tagBar, messageNodes.market, marketGrid, marketPager);
+    activeBar = ui.h('div', 'extension-active-filters'); activeBar.hidden = true;
+    marketGrid = ui.h('div', 'extension-grid'); marketPager = ui.rowbar();
     const manual = ui.sheet({ title: S.manual }); messageNodes.manual = ui.msgline(); messageNodes.manual.setAttribute('role', 'status');
-    const source = ui.segmented([{ value: 'npm', label: S.npm }, { value: 'local', label: S.local }], { value: state.source, onSelect: value => { state.source = value as 'npm' | 'local'; state.input = ''; render(); save(); } });
-    const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, placeholder: state.source === 'npm' ? `@scope/cortico-${kind}-demo@1.2.3` : '', onInput: value => { state.input = value; } });
-    input.setAttribute('aria-label', state.source === 'npm' ? S.packageLabel : S.pathLabel); manualBar.append(input);
-    if (state.source === 'local') manualBar.append(ui.button(S.folder, { onClick: async () => { try { const path = await pickPath({ kind: 'directory', currentPath: input.value }, { signal }); if (path) { state.input = input.value = path; } } catch (error) { message(kind, 'manual', errorText(error), true); } } }));
+    let inputRevision = 0;
+    const source = ui.segmented([{ value: 'npm', label: S.npm }, { value: 'local', label: S.local }], { value: state.source, onSelect: value => { inputRevision++; state.source = value as 'npm' | 'local'; state.input = input.value = ''; syncSource(); save(); } });
+    const manualBar = ui.rowbar(); const input = ui.input({ value: state.input, onInput: value => { inputRevision++; state.input = value; } });
+    const folder = ui.button(S.folder, { onClick: async () => { try { const path = await pickPath({ kind: 'directory', currentPath: input.value }, { signal }); if (path) { inputRevision++; state.input = input.value = path; } } catch (error) { message(kind, 'manual', errorText(error), true); } } });
+    folder.classList.add('extension-manual-folder');
+    manualBar.append(input, folder);
     const target = (): Target => { if (state.source === 'local' && state.input.trim()) return { path: state.input.trim() }; const value = parseInstallInput(state.input); if (!value) throw new Error(S.invalidInput); return value; };
     const owner = kind;
-    const check = ui.button(S.check, { onClick: async () => { const lock = ui.disable(check); try { const data = await post<{ name: string; version: string; kind: string }>('/api/extensions/check', { target: target(), kind: owner }, { signal }); message(owner, 'manual', `${S.checkOk} · ${data.name}@${data.version} · ${data.kind}`); } catch (error) { message(owner, 'manual', errorText(error), true); } finally { lock.dispose(); } } });
+    const check = ui.button(S.check, { onClick: async () => { const revision = inputRevision, lock = ui.disable(check); try { const data = await post<{ name: string; version: string; kind: string }>('/api/extensions/check', { target: target(), kind: owner }, { signal }); if (revision === inputRevision && !signal.aborted) message(owner, 'manual', `${S.checkOk} · ${data.name}@${data.version} · ${data.kind}`); } catch (error) { if (revision === inputRevision && !signal.aborted) message(owner, 'manual', errorText(error), true); } finally { lock.dispose(); } } });
     const install = ui.button(S.install, { variant: 'primary', onClick: () => { try { void operate('install', target(), 'manual', owner); } catch (error) { message(owner, 'manual', errorText(error), true); } } });
     const manualActions = ui.rowbar(); manualActions.classList.add('extension-manual-actions'); manualActions.append(check, install, messageNodes.manual);
-    manual.body.append(ui.h('p', 'sh-desc extension-install-help', state.source === 'npm' ? S.npmHelp : S.localHelp), source.el, manualBar, manualActions);
-    panel.append(managed.el, marketSheet.el, manual.el); root.style.setProperty('--extension-columns', String(columns));
+    const installHelp = ui.h('div', 'sh-desc extension-install-help');
+    const help = { npm: ui.h('span', '', S.npmHelp), local: ui.h('span', '', S.localHelp) };
+    installHelp.append(help.npm, help.local);
+    // Both explanations keep their layout space, including when translated text wraps.
+    function syncSource() {
+      const local = state.source === 'local';
+      input.placeholder = local ? '' : `@scope/cortico-${kind}-demo@1.2.3`;
+      input.setAttribute('aria-label', local ? S.pathLabel : S.packageLabel);
+      folder.setAttribute('aria-hidden', String(!local)); folder.disabled = !local;
+      for (const [key, text] of Object.entries(help)) text.setAttribute('aria-hidden', String(key !== state.source));
+    }
+    syncSource();
+    const row = ui.h('div', 'world-manual-source'); row.append(source.el, installHelp); manual.body.append(row, manualBar, manualActions);
+    {
+      messageNodes.management.textContent = '';
+      restartRoot.replaceChildren(...(restartButton ? [restartButton] : []));
+      if (workspace) workspace.statusRoot.replaceChildren(messageNodes.management);
+      else panel.append(messageNodes.management, restartRoot);
+      const body = ui.h('div', 'world-catalog-body');
+      const side = ui.h('aside', 'world-catalog-filters'); side.id = `${kind}-catalog-filters`;
+      const toggle = ui.button(S.filterSidebar, { size: 'sm', onClick: () => {
+        const open = side.hidden;
+        if (narrowFilters?.matches) narrowFiltersOpen = open; else state.filtersFolded = !open;
+        fold(side, open, { axis: narrowFilters?.matches ? 'y' : 'x' }); toggle.setAttribute('aria-expanded', String(open)); save();
+      } });
+      syncFilterLayout = () => {
+        side.hidden = narrowFilters?.matches ? !narrowFiltersOpen : state.filtersFolded;
+        toggle.setAttribute('aria-expanded', String(!side.hidden));
+      };
+      syncFilterLayout(); toggle.setAttribute('aria-controls', side.id);
+      filters.insertBefore(toggle, clear);
+      const categoryList = ui.h('div', 'world-catalog-categories');
+      const categoryButtons = CATALOG_CATEGORY_IDS.map(value => {
+        const button = ui.button(S.catalogCategories[value], { onClick: () => selectCategory(value) });
+        button.dataset.category = value; button.append(ui.h('span', 'extension-tag-count')); categoryList.append(button);
+        return button;
+      });
+      paintCategories = () => {
+        for (const button of categoryButtons) {
+          const value = button.dataset.category as CatalogCategory, count = catalogHits(state).filter(hit => inCatalogCategory(hit.tags, value)).length;
+          button.setAttribute('aria-pressed', String(state.catalogCategory === value));
+          button.querySelector('.extension-tag-count')!.textContent = state.fetched ? String(count) : '';
+          button.hidden = state.fetched && !count && value !== 'all' && state.catalogCategory !== value;
+        }
+      };
+      for (const [button, mark, label] of [[advancedToggle, 'sliders', S.advancedSearch], [registryToggle, 'globe', S.registryLabel]] as const) {
+        button.classList.add('world-catalog-toggle'); button.replaceChildren(icon(doc, mark));
+        button.setAttribute('aria-label', label); attachHint(button, label);
+        filters.insertBefore(button, clear);
+      }
+      // The toolbar's secondary actions are icons with name tags, so the row fits beside the search field.
+      const refresh = filters.lastElementChild as HTMLButtonElement;
+      for (const [button, mark, label] of [[toggle, 'sidebar', S.filterSidebar], [clear, 'close', S.clearFilters], [refresh, 'refresh', S.refresh.replace(/^↻\s*/, '')]] as const) {
+        button.className = 'world-catalog-toggle'; button.replaceChildren(icon(doc, mark));
+        button.setAttribute('aria-label', label); attachHint(button, label);
+      }
+      clear.classList.add('extension-clear');
+      refreshControl = refresh; refresh.classList.toggle('is-spinning', refreshing > 0);
+      const warnings = warningControl = ui.h('button', 'world-catalog-toggle') as HTMLButtonElement; warnings.type = 'button';
+      warnings.append(icon(doc, 'warning')); warnings.setAttribute('aria-label', S.hideWarnings); attachHint(warnings, S.hideWarnings);
+      warnings.addEventListener('click', toggleWarnings, { signal });
+      filters.insertBefore(warnings, refresh);
+      const installation = ui.segmented([{ value: 'all', label: S.catalogCategories.all }, { value: 'installed', label: S.alreadyInstalled }, { value: 'available', label: S.notInstalled }], {
+        value: state.installation, onSelect: value => { state.installation = value as CategoryState['installation']; state.page = 0; renderMarket(); save(); },
+      });
+      installation.el.classList.add('world-catalog-installation');
+      side.append(installation.el, ui.h('h3', '', S.catalogCategory), categoryList, tagBar);
+      const manualFold = ui.h('details', 'world-manual') as HTMLDetailsElement; manualFold.append(ui.h('summary', '', S.manual), manual.body);
+      manualFold.open = manualOpen;
+      scrollRoot.replaceChildren(activeBar, marketGrid, marketPager, manualFold);
+      body.append(side, scrollRoot);
+      panel.append(filters, advanced, registryPanel, messageNodes.market, body);
+    }
     for (const [area, value] of Object.entries(state.messages)) if (messageNodes[area]) { messageNodes[area].textContent = value.text; messageNodes[area].className = 'msgline' + (value.bad ? ' bad' : ''); }
-    renderInstalled(); renderMarket();
+    renderRestart(); renderMarket();
+    scrollRoot.scrollTop = keptScroll;
+    reflow?.play(marketGrid);
   }
-  lifecycle.own(router.onChange(route => {
-    const next = route.segments[1] as ExtensionKindView; if (!categories.includes(next) || next === kind || route.segments[0] !== 'extensions') return;
-    save(); kind = next; restoringScroll = true; render(); restoreScroll(); if (!states[kind].fetched) void search(kind);
-  }));
   // 只看宽度变化
   let panelWidth = panel.clientWidth;
   if (typeof win.ResizeObserver === 'function') { const observer = new win.ResizeObserver(() => {
-    if (panel.clientWidth === panelWidth) return;
+    if (!panel.clientWidth || panel.clientWidth === panelWidth) return;
     panelWidth = panel.clientWidth;
-    const next = extensionColumns(panelWidth);
-    if (next === columns) { for (const row of marketGrid.querySelectorAll<HTMLElement>('.extension-card .extension-tag-row')) if (!row.classList.contains('is-open')) foldTags(row); return; }
-    for (const state of Object.values(states)) { if (!state.installedSize) state.installedPage = Math.floor(state.installedPage * columns / next); if (!state.marketSize) state.page = Math.floor(state.page * columns / next); }
-    columns = next; installedGrid.style.minHeight = ''; marketGrid.style.minHeight = '';
-    for (const label of panel.querySelectorAll<HTMLElement>('.extension-size')) { const option = label.querySelector('option[value="0"]'); if (option) option.textContent = S.automaticCount(columns * (label.dataset.area === 'installed' ? 2 : 4)); }
-    root.style.setProperty('--extension-columns', String(columns)); renderInstalled(); renderMarket();
+    for (const row of marketGrid.querySelectorAll<HTMLElement>('.extension-card .extension-tag-row')) if (!row.classList.contains('is-open')) foldTags(row);
   }); observer.observe(panel); lifecycle.add(() => observer.disconnect()); }
   render();
-  if (!categories.includes(router.route.segments[1] as ExtensionKindView)) router.replace(['extensions', kind]);
-  void load(); void checkUpdates(); void search(kind); void loadRegistry(); void loadIndexBase();
-  try { const marker = win.sessionStorage.getItem(storageKey + ':restart'); if (marker) { message(kind, 'management', S.reloadWait); watchRestart(JSON.parse(marker)); } } catch { /* Invalid recovery marker. */ }
+  void load(); void checkUpdates(); void search(kind); void loadRegistry();
+  try { const marker = win.sessionStorage.getItem(storageKey + ':restart'); if (marker) { showRestarting(true); if (!workspace) message(kind, 'management', S.reloadWait); watchRestart(JSON.parse(marker)); } } catch { /* Invalid recovery marker. */ }
+  const activate = (until?: Promise<unknown>) => {
+    const own = revealEnd = until;
+    const over = () => { if (revealEnd === own) revealEnd = undefined; };
+    if (own) void own.then(over, over);
+    restoreScroll(); renderInView(until);
+  };
+  return { details, remove, activate };
 }
-export const extensionsFeature: FrameworkFeature = { route: 'extensions', label: S.navLabel, icon: 'download', navGroup: S.navGroup, needsAny: ['extensions'], mount: mountExtensions };
