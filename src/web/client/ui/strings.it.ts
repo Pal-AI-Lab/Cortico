@@ -22,6 +22,7 @@ export const S: Partial<typeof en> = {
   cancel: 'Annulla',
   proceedAnyway: 'Procedi comunque',
   confirm: 'Conferma',
+  gotIt: 'Ho capito',
   close: '✕ Chiudi (Esc)',
   tooManyImages: (max: number) => `Al massimo ${max} immagini per messaggio`,
   messageInput: 'Inserimento messaggio',

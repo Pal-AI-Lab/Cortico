@@ -706,8 +706,11 @@ describe('provider connection cards', () => {
     const { root } = await openConnections({ references: { b: ['main'] }, onDelete: (url: Any) => deleted.push(url) });
     const trash = (name: Any) => $(`.connection-card[data-provider="${name}"] .connection-erase`, root);
     trash('b').click(); await flush();
+    // Only told: one button, nothing to choose.
     expect($('.modal').textContent).toContain('main');
-    answer(true); await flush();
+    const only = $$('.modal .confirm-card button');
+    expect(only).toHaveLength(1);
+    only[0].click(); await flush();
     expect(deleted).toEqual([]);
     trash('a').click(); await flush();
     answer(false); await flush();
@@ -1128,6 +1131,20 @@ describe('World library and catalog', () => {
     const saved = JSON.parse(window.localStorage.getItem('cortico.world-groups.v1')!);
     expect(Object.values(saved.groups)).toEqual([expect.objectContaining({ name: '聊天', collapsed: true, items: [] })]);
     expect(saved.top[0]).toMatch(/^group:/);
+  });
+  it('ends a drag the window or the page walks away from, so the pointer shows again', async () => {
+    const { root, ctx, lifecycle } = await openWorlds();
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const pointer = (type: Any, target: Any, y: Any) => { const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: y }); Object.defineProperty(event, 'pointerId', { value: 1 }); target.dispatchEvent(event); };
+    const lift = () => { pointer('pointerdown', $('.world-ready-list .world-library-entry .world-blade', root), 10); pointer('pointermove', window, 400); };
+    const hidden = () => document.documentElement.classList.contains('is-list-dragging');
+    lift(); expect(hidden()).toBe(true);
+    window.dispatchEvent(new Event('blur'));
+    expect(hidden()).toBe(false);
+    expect($('.world-drag-copy', root)).toBeNull();
+    lift(); expect(hidden()).toBe(true);
+    lives.splice(lives.indexOf(lifecycle), 1); lifecycle.dispose();
+    expect(hidden()).toBe(false);
   });
   it('drags a row with the pointer: a lifted copy, no cursor, and the click after the drop opens nothing', async () => {
     const { root, ctx } = await openWorlds();

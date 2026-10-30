@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-/** Hover hints (`ui/hover-hint.ts`) and the extension info page's pictures (`extensions/gallery.ts`). */
+/** Shared widgets: hover hints (`ui/hover-hint.ts`), dropdown lists (`ui/dropdown.ts`) and the extension info page's pictures (`extensions/gallery.ts`). */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 const { mountHoverHints } = (await import('../../src/web/client/ui/hover-hint.ts')) as Any;
 const { gallery, takeImages } = (await import('../../src/web/client/features/extensions/gallery.ts')) as Any;
@@ -137,5 +137,52 @@ describe('select dropdowns', () => {
     // A closed select's arrows are left to it.
     key('ArrowUp');
     expect(box.hidden).toBe(true);
+  });
+});
+
+describe('widget edge cases', () => {
+  it('drops a picture that fails to load, and the whole section once none is left', () => {
+    const life = new AbortController(); lives.push(life);
+    const section = gallery(document, [{ src: 'https://example.com/1.png', alt: '' }, { src: 'https://example.com/2.png', alt: '' }], life.signal);
+    document.body.append(section);
+    expect($('h4', section)).not.toBeNull();
+    const [one, two] = $$('.extension-gallery-shot img', section);
+    one.dispatchEvent(new Event('error'));
+    expect($$('.extension-gallery-shot', section)).toHaveLength(1);
+    expect(section.isConnected).toBe(true);
+    two.dispatchEvent(new Event('error'));
+    expect(section.isConnected).toBe(false);
+  });
+
+  it('keeps an open select list in step with options the page replaces', async () => {
+    const { mountDropdowns } = (await import('../../src/web/client/ui/dropdown.ts')) as Any;
+    const life = new AbortController(); lives.push(life);
+    mountDropdowns(document, life.signal);
+    const select = document.createElement('select'); select.className = 'field';
+    select.append(Object.assign(document.createElement('option'), { value: 'a', textContent: 'A' }));
+    document.body.append(select);
+    select.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, button: 0 }));
+    const rows = () => $$('.combo-list .combo-option').map((row: Any) => row.textContent);
+    expect(rows()).toEqual(['A']);
+    select.append(Object.assign(document.createElement('option'), { value: 'b', textContent: 'B' }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(rows()).toEqual(['A', 'B']);
+  });
+});
+
+describe('notice dialogs', () => {
+  it('tells with a single 知道了 and nothing to choose, where a confirm asks with two buttons', async () => {
+    const { createWebUi, notice } = (await import('../../src/web/client/ui/index.ts')) as Any;
+    const { S } = (await import('../../src/web/client/ui/strings.ts')) as Any;
+    const life = new AbortController(); lives.push(life);
+    const ui = createWebUi({ memo: { get: () => undefined, set: () => {} }, overlayHost: document.body, signal: life.signal, doc: document });
+    const done = notice(ui, { title: '删除供应商', body: '此供应商正在被以下 Bot 使用，不能删除：main' });
+    const buttons = () => $$('.modal .confirm-card button').map((button: Any) => button.textContent);
+    expect(buttons()).toEqual([S.gotIt]);
+    $('.modal .confirm-card button').click();
+    await expect(done).resolves.toBeUndefined();
+    expect($('.modal')).toBeNull();
+    void ui.confirm({ title: '确认？' });
+    expect(buttons()).toEqual([S.cancel, S.confirm]);
   });
 });

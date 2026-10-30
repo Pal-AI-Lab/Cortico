@@ -33,20 +33,30 @@ function picture(doc: Document, image: GalleryImage): HTMLImageElement {
   return img;
 }
 
-/** The row of pictures; it follows the page's signal. */
+/**
+ * The 图片 section: its heading and the row of pictures, following the page's signal. A picture that
+ * fails to load leaves the row (and the lightbox); when none is left the section goes too.
+ */
 export function gallery(doc: Document, images: readonly GalleryImage[], signal: AbortSignal): HTMLElement {
   const win = doc.defaultView;
+  const section = doc.createElement('div');
+  section.className = 'extension-gallery-section';
+  const heading = doc.createElement('h4');
+  heading.textContent = S.gallery;
   const el = doc.createElement('div');
   el.className = 'extension-gallery';
   const track = doc.createElement('div');
   track.className = 'extension-gallery-track';
+  /** The pictures still in the row, in order. */
+  const shown = () => [...track.children].map(shot => images[Number((shot as HTMLElement).dataset.index)]);
   images.forEach((image, index) => {
     const shot = doc.createElement('button');
-    shot.type = 'button'; shot.className = 'extension-gallery-shot';
+    shot.type = 'button'; shot.className = 'extension-gallery-shot'; shot.dataset.index = String(index);
     shot.setAttribute('aria-label', image.alt || S.galleryOpen(index + 1, images.length));
     const img = picture(doc, image); img.loading = 'lazy';
+    img.addEventListener('error', () => { shot.remove(); if (!track.childElementCount) section.remove(); else update(); }, { signal });
     shot.append(img);
-    shot.addEventListener('click', () => openLightbox(doc, images, index, signal), { signal });
+    shot.addEventListener('click', () => { const live = shown(); openLightbox(doc, live, live.indexOf(image), signal); }, { signal });
     track.append(shot);
   });
   const page = (direction: -1 | 1) => () => track.scrollBy({ left: direction * track.clientWidth * 0.8, behavior: prefersStill(win) ? 'auto' : 'smooth' });
@@ -67,7 +77,8 @@ export function gallery(doc: Document, images: readonly GalleryImage[], signal: 
   }
   update();
   el.append(track, prev, next);
-  return el;
+  section.append(heading, el);
+  return section;
 }
 
 function openLightbox(doc: Document, images: readonly GalleryImage[], start: number, signal: AbortSignal): void {

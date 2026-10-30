@@ -22,6 +22,7 @@ export const S: Partial<typeof en> = {
   cancel: 'Cancelar',
   proceedAnyway: 'Continuar de todos modos',
   confirm: 'Confirmar',
+  gotIt: 'Entendido',
   close: '✕ Cerrar (Esc)',
   tooManyImages: (max: number) => `Máximo ${max} ${max === 1 ? 'imagen' : 'imágenes'} por mensaje`,
   messageInput: 'Entrada de mensaje',

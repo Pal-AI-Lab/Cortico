@@ -99,10 +99,13 @@ export function toast(
   return layer;
 }
 
-/** 模态确认。resolve 之后 DOM 与监听都已清干净。`body` 是节点时原样挂入;`ok` 换掉确认键的字。 */
+/**
+ * 模态确认。resolve 之后 DOM 与监听都已清干净。`body` 是节点时原样挂入;`ok` 换掉确认键的字。
+ * `notice`:只是告知,只有一个「知道了」(见 notice)。
+ */
 export function confirm(
   env: OverlayEnv,
-  opts: { title: string; body?: string | HTMLElement; danger?: boolean; ok?: string },
+  opts: { title: string; body?: string | HTMLElement; danger?: boolean; ok?: string; notice?: boolean },
 ): Promise<boolean> {
   // 面板已经卸了:不弹窗,直接按"没答应"收场
   if (env.signal.aborted) return Promise.resolve(false);
@@ -127,10 +130,10 @@ export function confirm(
 
     const bar = rowbar(doc);
     bar.appendChild(h(doc, 'span', 'grow'));
-    bar.appendChild(
+    if (!opts.notice) bar.appendChild(
       button(doc, modal.signal, S.cancel, { size: 'sm', onClick: () => settle(false) }),
     );
-    const ok = button(doc, modal.signal, opts.ok ?? (opts.danger ? S.proceedAnyway : S.confirm), {
+    const ok = button(doc, modal.signal, opts.ok ?? (opts.notice ? S.gotIt : opts.danger ? S.proceedAnyway : S.confirm), {
       size: 'sm',
       variant: opts.danger ? 'danger' : 'primary',
       onClick: () => settle(true),
@@ -142,6 +145,11 @@ export function confirm(
     modal.el.appendChild(card);
     ok.focus?.();
   });
+}
+
+/** 告知:与 confirm 同一张卡,只有一个「知道了」,没有要选的。 */
+export function notice(env: OverlayEnv, opts: { title: string; body?: string | HTMLElement }): Promise<void> {
+  return confirm(env, { ...opts, notice: true }).then(() => undefined);
 }
 
 /** busy 不响应 Esc、遮罩或关闭按钮；由返回的 Disposable 或面板 abort 关闭。 */
