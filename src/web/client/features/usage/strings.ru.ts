@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -23,12 +22,11 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `Запрашивает данные каждые ${sec} с; останавливается, когда вы уходите с этой страницы`,
   refresh: 'Обновить',
   granularity: 'Детализация',
-  autoBucket: (unit: UsageBucketUnit) => `Авто (${{ minute: 'по минутам', hour: 'по часам', day: 'по дням', week: 'по неделям', month: 'по месяцам' }[unit]})`,
   autoCurrency: 'Валюта автоматически',
   rateBuiltin: (date: string) => `встроенный ${date}`,
-  basisMarginal: 'Предельная стоимость',
-  basisEquivalent: 'Эквивалентная стоимость API',
-  ledger: 'Основа стоимости',
+  basisMarginal: 'Фактические расходы',
+  basisEquivalent: 'По ценам API',
+  ledger: 'Основа расчёта',
   compTitle: 'Структура затрат',
   mainTitle: 'Расход во времени',
   split: 'Разбивка',
@@ -58,7 +56,7 @@ export const S: Partial<typeof en> = {
   cardOutput: 'Выходные token',
   reasoningShare: (pct: string) => `рассуждение ${pct}`,
   cardCoverage: 'Покрытие ценами',
-  unpriced: (n: number) => `Вызовов без полной цены при текущей основе стоимости: ${n}`,
+  unpriced: (n: number) => `Вызовов без полной цены при текущей основе расчёта: ${n}`,
   cardPeak: 'Пик',
   cardFailed: 'Неудачные вызовы',
   failedCalls: (n: string) => `${n} выз.`,
@@ -73,7 +71,7 @@ export const S: Partial<typeof en> = {
   sectionBreakdown: 'Разбивка',
   less: 'Меньше',
   more: 'Больше',
-  compUnpriced: (n: number) => `Вызовов без полной цены при текущей основе стоимости: ${n}; стоимость включает только известную часть.`,
+  compUnpriced: (n: number) => `Вызовов без полной цены при текущей основе расчёта: ${n}; стоимость включает только известную часть.`,
   stale: (err: string, at: string) => `Не удалось обновить: ${err}. Ниже результаты, полученные в ${at}.`,
   billingHint: 'Рассчитано по снимку цен на момент запроса. ' +
     'Итоги включают неудачные, вытесненные и диагностические запросы; валюты и основы стоимости суммируются отдельно.',

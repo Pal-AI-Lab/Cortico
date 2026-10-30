@@ -6,6 +6,7 @@
 
 import type { Disposable } from '../../../shared/client-panel.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
+import { pageTabs } from '../../ui/page-tabs.ts';
 import { pageIntro } from '../../ui/page.ts';
 import { get } from '../../core/api.ts';
 import { browserSocketEnv, openFrameworkSocket, type SocketEnv } from '../../core/websocket.ts';
@@ -36,13 +37,8 @@ interface SubDef {
   need: string | null;
 }
 
-/** 只读的观察子页;其余子页会改配置或删数据,单独成组。 */
-const OBSERVE_SUBS = new Set(['run', 'sessions', 'events', 'runlog']);
-
 const CORE_SUBS: readonly SubDef[] = [
   { id: 'run', label: S.subRun, need: null },
-  { id: 'sessions', label: S.subSessions, need: 'sessions' },
-  { id: 'events', label: S.subEvents, need: null },
   { id: 'runlog', label: S.subRunlog, need: null },
   { id: 'data', label: S.subData, need: 'storage' },
   { id: 'config', label: S.subConfig, need: 'config' },
@@ -67,6 +63,9 @@ export function createCoreFeature(opts: CoreFeatureOptions = {}): FrameworkFeatu
 
 export const coreFeature: FrameworkFeature = createCoreFeature();
 
+/** 上次停留的子页，跨窗口保留。 */
+const LAST_SUB_KEY = 'cortico.core.sub';
+
 function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   const { ui } = ctx;
 
@@ -76,23 +75,21 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const subs = CORE_SUBS.filter((s) => s.need === null || ctx.capabilities[s.need] === true);
-  const wanted = str(ctx.route.segments[1]);
+  // 没指定子页时回到上次停留的那个；切换子页时记下来。
+  const storage = ((): Storage | null => { try { return ctx.root.ownerDocument.defaultView?.localStorage ?? null; } catch { return null; } })();
+  const wanted = str(ctx.route.segments[1]) || (storage?.getItem(LAST_SUB_KEY) ?? '');
   let current = subs.some((s) => s.id === wanted) ? wanted : (subs[0]?.id ?? 'run');
 
   // ── 页头 ─────────────────────────────────────────────────────────
   const view = ui.h('div', 'coreview');
   const head = pageIntro(ui, S.pageTitle);
   head.className = 'featureintro pagehead';
-  const tabGroup = (ids: readonly SubDef[]) => ui.segmented(
-    ids.map((s) => ({ value: s.id, label: s.label })),
-    { value: current, onSelect: (v) => show(v, true) },
-  );
-  const observeSubs = subs.filter((s) => OBSERVE_SUBS.has(s.id));
-  const maintainSubs = subs.filter((s) => !OBSERVE_SUBS.has(s.id));
-  const tabs = [tabGroup(observeSubs), ...(maintainSubs.length ? [tabGroup(maintainSubs)] : [])];
-  const tabBar = ui.h('div', 'subtabs');
-  tabBar.append(ui.h('span', 'subtabgroup', S.groupObserve), tabs[0].el);
-  if (tabs[1]) tabBar.append(ui.h('span', 'subtabgroup', S.groupMaintain), tabs[1].el);
+  // 换子页是换页面，用页内栏目条。
+  const tabs = pageTabs(ctx.root.ownerDocument, ctx.signal, subs.map((s) => ({ value: s.id, label: s.label })), {
+    value: current,
+    onSelect: (v) => show(v, true),
+  });
+  const tabBar = tabs.el;
   const net = ui.msgline('');
   const exportButton = ui.button('', {
     size: 'sm',
@@ -103,7 +100,7 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       });
     },
   });
-  exportButton.className += ' btn-ico';
+  exportButton.className = 'pagetabs-action';
   exportButton.append(icon(ctx.root.ownerDocument, 'download'), ui.h('span', null, LIVE_S.exportDiagnostics));
   tabBar.append(net, ui.h('span', 'grow'), exportButton);
   const scroll = ui.h('div', 'scroll');
@@ -117,8 +114,12 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     net.textContent = online ? '' : S.netOffline;
   };
 
-  // ── 六个子页 ─────────────────────────────────────────────────────
-  const run = createRunView({ ui });
+  // ── 子页 ─────────────────────────────────────────────────────────
+  const run = createRunView({
+    ui,
+    openProvider: (name) => ctx.router.navigate(name ? ['providers', name] : ['providers']),
+  });
+  const hasSessions = ctx.capabilities.sessions === true;
   const sessions = createSessionTable(ui);
   const events = createEventsView({
     ui,
@@ -135,8 +136,6 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   });
   // Core 自己的存储项与配置组:按 owner 取,World / Persona / Memory 的各在自己页上。
   const data = createStorageView({ ui, signal: ctx.signal, filter: (p) => p.owner === 'core', clearAll: true });
-  const dataSheet = ui.sheet({ title: S.dataTitle, en: 'core storage', desc: S.dataDesc });
-  dataSheet.body.appendChild(data.el);
   const config = createConfigView({
     ui,
     lifecycle: ctx.lifecycle,
@@ -145,29 +144,26 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     showOwner: false,
     emptyText: S.configEmpty,
   });
-  const configSheet = ui.sheet({ title: S.configTitle, en: 'core config', desc: S.configDesc });
-  configSheet.body.appendChild(config.el);
+
+  const runPane = ui.h('div', 'core-run');
+  runPane.append(run.el, ...(hasSessions ? [sessions.el] : []), events.el);
 
   const panes: Record<string, HTMLElement> = {
-    run: run.el,
-    sessions: sessions.el,
-    events: events.el,
+    run: runPane,
     runlog: runlog.el,
-    data: dataSheet.el,
-    config: configSheet.el,
+    data: data.el,
+    config: config.el,
   };
 
   /** 每次进入某个子页要做的事。进来才拉数据——没打开的页不该占网络。 */
   const enter: Record<string, () => void> = {
     run: () => {
-      run.render(state.status);
-      if (!hasDebug) void refreshStatus();
-    },
-    sessions: () => {
+      run.render(state.status, state.sessions);
       sessions.render(state.sessions);
-      if (!hasDebug) void refreshSessions();
-    },
-    events: () => {
+      if (!hasDebug) {
+        void refreshStatus();
+        if (hasSessions) void refreshSessions();
+      }
       void events.init();
       events.setPolling(!hasDebug);
     },
@@ -186,10 +182,11 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     const next = subs.some((s) => s.id === sub) ? sub : (subs[0]?.id ?? 'run');
     if (next !== current) {
       // 离开事件流就停它的轮询:一个看不见的表不该继续问服务端要数据。
-      if (current === 'events') events.setPolling(false);
+      if (current === 'run') events.setPolling(false);
       current = next;
     }
-    for (const t of tabs) t.setValue(current);
+    tabs.setValue(current);
+    try { storage?.setItem(LAST_SUB_KEY, current); } catch { /* 存不下就只记本次 */ }
     while (measure.children.length) measure.children[0].remove();
     const pane = panes[current];
     if (pane) measure.appendChild(pane);
@@ -212,7 +209,7 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       const st = await get<StatusSnapshot>('/api/status', { signal: ctx.signal });
       state.status = st;
       setNet(true);
-      if (current === 'run') run.render(st);
+      if (current === 'run') run.render(st, state.sessions);
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       setNet(false);
@@ -224,7 +221,10 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
     try {
       const d = await get<{ sessions?: SessionStat[] }>('/api/sessions', { signal: ctx.signal });
       state.sessions = d?.sessions ?? [];
-      if (current === 'sessions') sessions.render(state.sessions);
+      if (current === 'run') {
+        sessions.render(state.sessions);
+        run.render(state.status, state.sessions);
+      }
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
       ctx.onError(err);
@@ -244,20 +244,25 @@ function mountHarness(ctx: FeatureContext, env: SocketEnv): Disposable | void {
           case 'hello':
             state.sessions = arr<SessionStat>(f.sessions);
             state.status = (f.status as StatusSnapshot | null) ?? null;
-            if (current === 'run') run.render(state.status);
-            if (current === 'sessions') sessions.render(state.sessions);
+            if (current === 'run') {
+              run.render(state.status, state.sessions);
+              sessions.render(state.sessions);
+            }
             break;
           case 'status':
             state.status = (f.status as StatusSnapshot | null) ?? null;
-            if (current === 'run') run.render(state.status);
+            if (current === 'run') run.render(state.status, state.sessions);
             break;
           case 'sessions':
             state.sessions = arr<SessionStat>(f.sessions);
-            if (current === 'sessions') sessions.render(state.sessions);
+            if (current === 'run') {
+              run.render(state.status, state.sessions);
+              sessions.render(state.sessions);
+            }
             break;
           // 有推送就不必轮询:到了才追一次。
           case 'event':
-            if (current === 'events') void events.poll();
+            if (current === 'run') void events.poll();
             break;
           case 'runlog':
             if (current === 'runlog') runlog.noteLive();

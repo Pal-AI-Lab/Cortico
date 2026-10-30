@@ -31,7 +31,7 @@ async function fixture(names = ['Alpha', 'Beta'], active = names[0] ?? '', { sec
   const root = document.createElement('div'); document.body.append(root);
   const lifecycle = new Lifecycle(() => {}); lifecycles.push(lifecycle);
   const ui = createWebUi({ memo: { get: (_: string, fallback: unknown) => fallback, set: () => {} }, overlayHost: document.body, signal: lifecycle.signal, doc: document });
-  const ctx = { root, ui, lifecycle, signal: lifecycle.signal, route: { segments: ['providers'] }, router: { addLeaveDecision: () => ({ dispose() {} }), onChange: () => ({ dispose() {} }) }, onError: (error: unknown) => { throw error; }, capabilities: {} };
+  const ctx = { root, ui, lifecycle, signal: lifecycle.signal, route: { segments: ['providers'] }, router: { route: { segments: ['providers'], query: {} }, navigate: () => {}, addLeaveDecision: () => ({ dispose() {} }), onChange: () => ({ dispose() {} }) }, onError: (error: unknown) => { throw error; }, capabilities: {} };
   await mountProviders(ctx); await flush(); return { root, calls, ctx };
 }
 afterEach(() => { lifecycles.splice(0).forEach(life => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); localStorage.clear(); });
@@ -139,15 +139,18 @@ it('ordinary connection names do not inherit phantom browser drafts', async () =
   expect(root.querySelector('[aria-label="供应商名称"]')?.getAttribute('aria-invalid')).not.toBe('true');
 });
 
-it('deleting from a card asks once on the button and carries the revision it listed', async () => {
+it('deleting from a card asks in a dialog and carries the revision it listed', async () => {
   const { root, calls } = await fixture();
   const erase = root.querySelector('[data-provider="Beta"] .connection-erase') as HTMLButtonElement;
+  const dialog = () => document.querySelector('.confirm-card');
   erase.click(); await flush();
-  expect(erase.classList.contains('is-armed')).toBe(true);
+  expect(dialog()?.textContent).toContain('删除');
   expect(calls.some(call => call.path.endsWith('/delete'))).toBe(false);
-  root.click(); await flush();
-  expect(erase.classList.contains('is-armed')).toBe(false);
-  erase.click(); erase.click(); await flush();
+  // 取消:什么都不发
+  (dialog()!.querySelector('button:not(.danger)') as HTMLButtonElement).click(); await flush();
+  expect(calls.some(call => call.path.endsWith('/delete'))).toBe(false);
+  erase.click(); await flush();
+  ([...dialog()!.querySelectorAll('button')].find(button => button.classList.contains('danger')) as HTMLButtonElement).click(); await flush();
   const deletion = calls.find(call => call.path.endsWith('/delete'))!;
   expect(deletion.path).toBe('/api/providers/Beta/delete');
   expect(deletion.body).toEqual({ expectedRevision: 'r1' });
@@ -184,7 +187,7 @@ it('a fetched list shows its count; picking a model fills the model, context win
   const picker = root.querySelector('select[aria-label="模型列表"]') as HTMLSelectElement;
   expect(picker.hidden).toBe(true);
   ([...root.querySelectorAll('button')].find(button => button.textContent === '获取模型列表') as HTMLButtonElement).click(); await flush();
-  expect(root.querySelector('.connection-test button + select + .msgline')?.textContent).toBe('取到 2 个模型。');
+  expect(root.querySelector('.connection-test button + select + .msgline')?.textContent).toBe('获取到 2 个模型。');
   expect(picker.hidden).toBe(false);
   expect([...picker.options].map(option => option.textContent)).toEqual(['—', 'Alpha Mini', 'beta-text']);
   expect(picker.value).toBe('');

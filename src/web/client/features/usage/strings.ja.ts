@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -23,12 +22,11 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `${sec} 秒ごとに再取得します。このページを離れると停止します`,
   refresh: '更新',
   granularity: '粒度',
-  autoBucket: (unit: UsageBucketUnit) => `自動(${{ minute: '分単位', hour: '時間単位', day: '日単位', week: '週単位', month: '月単位' }[unit]})`,
   autoCurrency: '通貨を自動選択',
   rateBuiltin: (date: string) => `組み込み ${date}`,
-  basisMarginal: '限界費用',
-  basisEquivalent: 'API 換算費用',
-  ledger: '費用の基準',
+  basisMarginal: '実際の支出',
+  basisEquivalent: 'API 価格で換算',
+  ledger: '集計基準',
   compTitle: 'コストの内訳',
   mainTitle: '使用量の推移',
   split: '分割',
@@ -58,7 +56,7 @@ export const S: Partial<typeof en> = {
   cardOutput: '出力 token',
   reasoningShare: (pct: string) => `思考 ${pct}`,
   cardCoverage: '料金の適用範囲',
-  unpriced: (n: number) => `${n} 回は現在の費用の基準で料金を完全には計算できていません`,
+  unpriced: (n: number) => `${n} 回は現在の集計基準で料金を完全には計算できていません`,
   cardPeak: 'ピーク',
   cardFailed: '失敗した呼び出し',
   failedCalls: (n: string) => `${n} 回`,
@@ -73,7 +71,7 @@ export const S: Partial<typeof en> = {
   sectionBreakdown: '内訳',
   less: '少',
   more: '多',
-  compUnpriced: (n: number) => `${n} 回の呼び出しは現在の費用の基準で料金を完全には計算できていないため、コストには判明している部分だけを含みます。`,
+  compUnpriced: (n: number) => `${n} 回の呼び出しは現在の集計基準で料金を完全には計算できていないため、コストには判明している部分だけを含みます。`,
   stale: (err: string, at: string) => `更新に失敗しました：${err}。以下は ${at} に取得した結果です。`,
   billingHint: 'リクエスト時点の料金スナップショットで集計しています。' +
     '合計には失敗、プリエンプト、診断のリクエストも含みます。通貨と費用の基準は別々に集計します。',

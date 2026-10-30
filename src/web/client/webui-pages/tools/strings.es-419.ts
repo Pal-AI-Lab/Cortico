@@ -1,7 +1,7 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
-  ioGroup: (name: string | undefined) => `Herramientas IO · ${name}`,
+  ioGroup: (name: string | undefined) => `Herramientas de World · ${name}`,
   groupCore: 'Acciones nativas · core',
   groupPersona: 'Herramientas de memoria / archivos · Persona',
   noDescription: '(sin descripción de la herramienta)',

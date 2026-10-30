@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -23,12 +22,11 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `每 ${sec} 秒重新取得一次；離開本頁自動停止`,
   refresh: '重新整理',
   granularity: '粒度',
-  autoBucket: (unit: UsageBucketUnit) => `自動(${{ minute: '按分鐘', hour: '按小時', day: '按天', week: '按週', month: '按月' }[unit]})`,
   autoCurrency: '自動幣別',
   rateBuiltin: (date: string) => `內建 ${date}`,
-  basisMarginal: '邊際費用',
-  basisEquivalent: 'API 等價費用',
-  ledger: '費用口徑',
+  basisMarginal: '實際支出',
+  basisEquivalent: '按 API 價折算',
+  ledger: '計費口徑',
   compTitle: '成本構成',
   mainTitle: '用量時間序列',
   split: '拆分',
@@ -58,7 +56,7 @@ export const S: Partial<typeof en> = {
   cardOutput: '輸出 token',
   reasoningShare: (pct: string) => `思維鏈 ${pct}`,
   cardCoverage: '報價覆蓋',
-  unpriced: (n: number) => `${n} 次在目前費用口徑未完整計價`,
+  unpriced: (n: number) => `${n} 次在目前計費口徑未完整計價`,
   cardPeak: '峰值',
   cardFailed: '失敗流',
   failedCalls: (n: string) => `${n} 次`,
@@ -73,7 +71,7 @@ export const S: Partial<typeof en> = {
   sectionBreakdown: '分組明細',
   less: '少',
   more: '多',
-  compUnpriced: (n: number) => `${n} 次呼叫在目前費用口徑未完整計價，成本只含已知部分。`,
+  compUnpriced: (n: number) => `${n} 次呼叫在目前計費口徑未完整計價，成本只含已知部分。`,
   stale: (err: string, at: string) => `重新整理失敗：${err}。下方是 ${at} 取回的結果。`,
   billingHint: '依請求時的報價快照統計。' +
     '總量包含失敗、搶占與診斷請求；幣別和費用口徑分別彙總。',

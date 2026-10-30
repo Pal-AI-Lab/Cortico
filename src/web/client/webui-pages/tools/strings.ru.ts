@@ -7,7 +7,7 @@ const plural = (n: number, one: string, few: string, many: string) => {
 };
 
 export const S: Partial<typeof en> = {
-  ioGroup: (name: string | undefined) => `Инструменты IO · ${name}`,
+  ioGroup: (name: string | undefined) => `Инструменты World · ${name}`,
   groupCore: 'Встроенные действия · core',
   groupPersona: 'Инструменты памяти / файлов · Persona',
   noDescription: '(нет описания инструмента)',

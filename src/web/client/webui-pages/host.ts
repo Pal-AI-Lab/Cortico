@@ -2,22 +2,19 @@
  * WebUI Page Host 根据 manifest 渲染导航与面板，并管理挂载和卸载；不依赖具体页的名称。扩展加载、mount 或面板解析失败仅将对应面板替换为错误卡，不影响其他页与框架。
  */
 
-import {
-  WEBUI_PROTOCOL_VERSION,
-  type WebUiManifest,
-  type WebUiPageManifest,
-  type WebUiStorageRef,
-  type WebUiPanelManifest,
-} from '../../shared/webui-protocol.ts';
+import { WEBUI_PROTOCOL_VERSION } from '../../shared/webui-protocol.ts';
+import type { WebUiManifest, WebUiPageManifest, WebUiStorageRef, WebUiPanelManifest } from '../../shared/webui-protocol.ts';
 import type { WebUiMemo, WebUiPanel, WebUiPanelContext, Disposable } from '../../shared/client-panel.ts';
 import { get, post } from '../core/api.ts';
 import { Lifecycle } from '../core/lifecycle.ts';
 import type { Router } from '../core/router.ts';
 import type { SocketLike } from '../core/stream.ts';
 import { createWebUi } from '../ui/index.ts';
-import { lampRow } from '../ui/lamp.ts';
-import { createConfigView } from '../features/config/view.ts';
+import { pageTabs, type PageTabs } from '../ui/page-tabs.ts';
+import { pageBadges } from '../ui/page-badges.ts';
+import { createConfigView, type ConfigValue } from '../features/config/view.ts';
 import type { ToolSchemaDoc } from '../features/live/protocol.ts';
+import { createTemplateView } from '../features/prompts/template-view.ts';
 import { createPromptsView } from '../features/prompts/view.ts';
 import { createStorageView } from '../features/storage/view.ts';
 import { S as TOOLS } from './tools/strings.ts';
@@ -27,6 +24,9 @@ import type { BuiltinPanels } from './builtins.ts';
 import { createPanelContext, namespacedMemo } from './context.ts';
 import { WebUiPageLoader } from './loader.ts';
 import { S } from './strings.ts';
+import { S as WORLD } from '../features/worlds/strings.ts';
+import { takeReturn } from '../core/world-nav.ts';
+import { icon } from '../ui/icons.ts';
 
 /** WebUI 页路由的首段，与框架页路由分开。 */
 export const PROVIDER_ROUTE = 'provider';
@@ -84,12 +84,19 @@ export class WebUiPageHost {
   private readonly deps: WebUiPageHostDeps;
   private snapshot: WebUiManifest | null = null;
   private mounted: MountedPanel | null = null;
+  /** The World page this visit came to from the World list; its header shows a way back. */
+  private backFor: string | null = null;
+  /** Per World page, the values its restart-only settings had when the World last started; kept while the window is open. */
+  private readonly restartApplied = new Map<string, Map<string, ConfigValue>>();
   private panes: Panes | null = null;
+  /** 页头里的页签。同一页内切换页签且页头内容没变时保留它，下面那根线才能滑过去。 */
+  private tabs: { pageId: string; key: string; bar: PageTabs } | null = null;
   /**
    * 挂载代号。异步 mount 期间用户可能已经走了；回来时对不上号就整个丢弃，
    * 免得把一个已经不该存在的面板贴进 DOM。
    */
   private generation = 0;
+  private chromeStop: AbortController | null = null;
   private readonly navListeners = new Set<() => void>();
 
   constructor(deps: WebUiPageHostDeps) {
@@ -172,11 +179,24 @@ export class WebUiPageHost {
   /** 卸载当前面板：abort → dispose → 清空 root。顺序见 client-panel.ts 的说明。 */
   unmount(): void {
     const cur = this.mounted;
+    this.backFor = null;
     this.mounted = null;
     this.panes = null;
+    this.chromeStop?.abort();
+    this.chromeStop = null;
+    this.tabs = null;
     this.generation++;
     if (cur) cur.lifecycle.dispose();
     this.deps.root.replaceChildren();
+  }
+
+  /** 同一页内换页签：只卸面板、清面板槽，页头留着，页签的选中滑块才能滑过去。 */
+  private unmountPanel(): void {
+    const cur = this.mounted;
+    this.mounted = null;
+    this.generation++;
+    if (cur) cur.lifecycle.dispose();
+    this.panes?.slot.replaceChildren();
   }
 
   /** 建（或复用）页头与面板槽两个容器。 */
@@ -208,7 +228,8 @@ export class WebUiPageHost {
   }
 
   private async showInner(pageId: string, panelId?: string): Promise<void> {
-    this.unmount();
+    if (this.tabs?.pageId === pageId) this.unmountPanel();
+    else this.unmount();
     const gen = this.generation;
 
     const page = this.find(pageId);
@@ -221,11 +242,12 @@ export class WebUiPageHost {
     const configGroups = this.configGroupsOf(page);
     const storage = this.storageOf(page);
     const tools = this.toolsTabOf(page);
-    const wanted = panelId ?? panels[0]?.id
-      ?? (configGroups.length ? PROVIDER_CONFIG_ROUTE : undefined)
-      ?? (prompts.length ? PROVIDER_PROMPTS_ROUTE : undefined)
-      ?? (storage.length ? PROVIDER_STORAGE_ROUTE : undefined)
-      ?? (tools ? PROVIDER_TOOLS_ROUTE : undefined);
+    // 没指定页签时回到上次停留的那个(仍存在的话)；每次落到某个页签都记下来。
+    const tabIds = this.tabsOf(page).map((t) => t.value);
+    const memoKey = `tab:${pageId}`;
+    const last = this.deps.memo.get<string>(memoKey, '');
+    const wanted = panelId ?? (tabIds.includes(last) ? last : tabIds[0]);
+    if (wanted && tabIds.includes(wanted)) this.deps.memo.set(memoKey, wanted);
     if (wanted === PROVIDER_CONFIG_ROUTE && configGroups.length) {
       this.renderChrome(pageId, PROVIDER_CONFIG_ROUTE);
       await this.showConfig(pageId, configGroups, gen);
@@ -249,20 +271,10 @@ export class WebUiPageHost {
     const panel = wanted ? panels.find((p) => p.id === wanted) : undefined;
     if (!panel) {
       this.renderChrome(pageId, wanted);
-      if (panels.length === 0 && prompts.length === 0 && configGroups.length === 0
-        && storage.length === 0 && !tools) {
+      if (tabIds.length === 0) {
         this.appendNote(S.noPanels(page.label));
       } else {
-        this.renderError(
-          S.noSuchPanel(page.label, wanted ?? ''),
-          S.provides([
-            ...panels.map((p) => p.id),
-            ...(configGroups.length ? [PROVIDER_CONFIG_ROUTE] : []),
-            ...(prompts.length ? [PROVIDER_PROMPTS_ROUTE] : []),
-            ...(storage.length ? [PROVIDER_STORAGE_ROUTE] : []),
-            ...(tools ? [PROVIDER_TOOLS_ROUTE] : []),
-          ].join(' / ')),
-        );
+        this.renderError(S.noSuchPanel(page.label, wanted ?? ''), S.provides(tabIds.join(' / ')));
       }
       return;
     }
@@ -396,6 +408,18 @@ export class WebUiPageHost {
     return asArray(page.storageParts);
   }
 
+  /** 这一页的页签,依次是面板、配置、提示词模板、数据清理、工具表(有的才列)。 */
+  private tabsOf(page: WebUiPageManifest): Array<{ value: string; label: string }> {
+    const prompts = asArray(page.prompts);
+    return [
+      ...tabbed(page).map((p) => ({ value: p.id, label: p.title || p.id })),
+      ...(this.configGroupsOf(page).length ? [{ value: PROVIDER_CONFIG_ROUTE, label: S.configTab }] : []),
+      ...(prompts.length ? [{ value: PROVIDER_PROMPTS_ROUTE, label: prompts.length === 1 ? prompts[0]!.title : S.promptsTab }] : []),
+      ...(this.storageOf(page).length ? [{ value: PROVIDER_STORAGE_ROUTE, label: S.storageTab }] : []),
+      ...(this.toolsTabOf(page) ? [{ value: PROVIDER_TOOLS_ROUTE, label: S.toolsTab }] : []),
+    ];
+  }
+
   /** Persona 页才有工具表页签,且要部署挂着 /api/tool-schemas。 */
   private toolsTabOf(page: WebUiPageManifest): boolean {
     if (page.kind !== 'persona' || page.availability !== 'active') return false;
@@ -444,9 +468,7 @@ export class WebUiPageHost {
       signal: lifecycle.signal,
       filter: (part) => refs.some((r) => r.owner === part.owner && r.key === part.key),
     });
-    const sheet = ui.sheet({ title: S.storageTitle, en: 'storage', desc: S.storageDesc });
-    sheet.body.appendChild(view.el);
-    slot.appendChild(sheet.el);
+    slot.appendChild(view.el);
     await view.load();
     if (gen !== this.generation) lifecycle.dispose();
   }
@@ -463,6 +485,8 @@ export class WebUiPageHost {
       doc: this.deps.doc,
     });
     const wanted = new Set(groupIds);
+    const page = this.find(pageId);
+    const worldId = page?.kind === 'world' ? pageId.slice('world:'.length) : undefined;
     const view = createConfigView({
       ui,
       lifecycle,
@@ -470,14 +494,17 @@ export class WebUiPageHost {
       filter: (group) => wanted.has(group.id),
       showOwner: false,
       emptyText: S.configEmpty,
+      ...(worldId ? { restart: {
+        label: WORLD.restartWorld,
+        applied: this.restartApplied.get(pageId) ?? this.restartApplied.set(pageId, new Map()).get(pageId)!,
+        run: async () => {
+          if (!await ui.confirm({ title: WORLD.restartTitle(page?.label || worldId), body: WORLD.restartBody })) return false;
+          await post('/api/worlds/restart', { id: worldId }, { signal: lifecycle.signal });
+          return true;
+        },
+      } } : {}),
     });
-    const sheet = ui.sheet({
-      title: S.configTitle,
-      en: 'config',
-      desc: S.configDesc,
-    });
-    sheet.body.appendChild(view.el);
-    slot.appendChild(sheet.el);
+    slot.appendChild(view.el);
     await view.load();
     if (gen !== this.generation) lifecycle.dispose();
   }
@@ -493,6 +520,34 @@ export class WebUiPageHost {
       signal: lifecycle.signal,
       doc: this.deps.doc,
     });
+    // World 的环境提示词用「系统提示词」页的编辑器
+    const page = this.find(pageId);
+    if (page?.kind === 'world') {
+      const configured = this.configGroupsOf(page).length > 0;
+      const view = createTemplateView({
+        ui,
+        lifecycle,
+        signal: lifecycle.signal,
+        addLeaveGuard: (fn) => this.deps.router.addLeaveGuard(fn),
+        onError: this.deps.onError,
+        keys,
+        ...(configured ? { openConfig: () => this.deps.router.navigate(this.routeOf(pageId, PROVIDER_CONFIG_ROUTE)) } : {}),
+      });
+      slot.appendChild(view.el);
+      await view.load();
+      if (gen !== this.generation) lifecycle.dispose();
+      return;
+    }
+    // 已在系统提示词里的模板与「系统提示词」页编辑的是同一份文件：这里照常列出，卡片标题旁标出同步。
+    let inPrefix = new Set<string>();
+    try {
+      const out = await get<{ segments?: Array<{ sourceKey?: string }> }>('/api/prompts/prefix', { signal: lifecycle.signal });
+      inPrefix = new Set((out?.segments ?? []).flatMap((seg) => (seg.sourceKey ? [seg.sourceKey] : [])));
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') return;
+      this.deps.onError(err); // 取不到前缀就不标同步
+    }
+    if (gen !== this.generation) { lifecycle.dispose(); return; }
     const view = createPromptsView({
       ui,
       lifecycle,
@@ -500,6 +555,7 @@ export class WebUiPageHost {
       addLeaveGuard: (fn) => this.deps.router.addLeaveGuard(fn),
       onError: this.deps.onError,
       keys,
+      shared: inPrefix,
     });
     slot.appendChild(view.el);
     await view.load();
@@ -523,107 +579,91 @@ export class WebUiPageHost {
   private renderChrome(pageId: string, activePanel?: string): void {
     const page = this.find(pageId);
     const { chrome } = this.ensurePanes();
-    chrome.replaceChildren();
-    if (!page) return;
+    if (!page) {
+      chrome.replaceChildren();
+      this.chromeStop?.abort();
+      this.chromeStop = null;
+      this.tabs = null;
+      return;
+    }
 
+    const items = this.tabsOf(page);
+    // 页头里画的字段与页签都没变时才复用整个页头。
+    // The visit that came from the World list keeps its way back while it stays on this page.
+    if (this.backFor !== pageId) this.backFor = page.kind === 'world' && takeReturn(this.deps.doc.defaultView!, pageId) ? pageId : null;
+    const back = this.backFor === pageId;
+    const key = JSON.stringify([items, page.label, page.kind, page.availability, page.badges, page.agentVisible, page.prefixDrifted, page.reason, page.links, page.undeclared, back]);
+    if (this.tabs && this.tabs.pageId === pageId && this.tabs.key === key) {
+      this.tabs.bar.setValue(activePanel ?? '');
+      return;
+    }
+    chrome.replaceChildren();
+    this.chromeStop?.abort();
+    this.chromeStop = new AbortController();
+    this.tabs = null;
     const ui = this.ui();
     const head = ui.h('header', 'featureintro providerintro');
-    const title = ui.h('h1', 'pagetitle', page.label);
-    // 未激活页的状态由框架提供。
-    title.appendChild(lampRow(
-      this.deps.doc,
-      page.availability === 'active'
-        ? page.lamps ?? []
-        : [{ label: S.assembly, state: 'offline', hint: page.availability === 'missing' ? S.notInstalled : S.notActivated }],
-    ));
-    head.appendChild(title);
-    chrome.append(head);
-    const bar = ui.rowbar();
+    head.classList.toggle('is-world', page.kind === 'world');
+    const row = ui.h('div', 'pagetitle-row');
+    // 人格与记忆页以用途作标题，实现名作小注；其余页仍用声明的名字。
+    const purpose = page.kind === 'persona' ? S.personaTitle : page.kind === 'memory' ? S.memoryTitle : null;
+    const title = ui.h('h1', 'pagetitle', purpose ?? page.label);
+    if (purpose) title.appendChild(ui.h('span', 'pagetitle-name', page.label));
+    // A World page opened from the World list leads back to it.
+    if (back) {
+      const button = ui.h('button', 'pagetitle-back') as HTMLButtonElement; button.type = 'button';
+      button.title = S.backToWorlds; button.setAttribute('aria-label', S.backToWorlds); button.append(icon(this.deps.doc, 'arrow-left'));
+      button.addEventListener('click', () => { this.backFor = null; this.deps.router.navigate(['world']); }, { signal: this.chromeStop.signal });
+      row.appendChild(button);
+    }
+    row.appendChild(title);
 
+    const badges = ui.h('div', 'pagetitle-badges');
     for (const badge of asArray(page.badges)) {
-      bar.appendChild(ui.pill(`${badge.label} ${badge.value}`, badge.tone));
+      badges.appendChild(ui.pill(`${badge.label} ${badge.value}`, badge.tone));
     }
     if (page.availability !== 'active') {
-      bar.appendChild(ui.pill(page.availability === 'missing' ? S.notInstalled : S.notActivated, 'off'));
+      badges.appendChild(ui.pill(page.availability === 'missing' ? S.notInstalled : S.notActivated, 'off'));
     }
-    if (page.agentVisible === false) bar.appendChild(ui.pill(S.hidden, 'off'));
-    if (page.prefixDrifted) {
-      bar.appendChild(ui.button(S.reloadPrefix, {
-        size: 'sm',
-        onClick: () => { void this.reloadPrefix(ui); },
+    if (page.agentVisible === false) badges.appendChild(ui.pill(S.hidden, 'off'));
+    if (badges.children.length && page.kind !== 'world') row.appendChild(badges);
+
+    const actions = ui.h('div', 'pagetitle-actions');
+    const textButton = (label: string, onClick: () => void): HTMLButtonElement => {
+      const button = ui.h('button', 'pagetitle-link', label);
+      button.type = 'button';
+      button.addEventListener('click', onClick);
+      return button;
+    };
+    if (page.prefixDrifted) actions.appendChild(textButton(S.reloadPrefix, () => { void this.reloadPrefix(ui); }));
+    for (const link of asArray(page.links)) {
+      actions.appendChild(textButton(link.label || S.open, () => {
+        this.deps.doc.defaultView?.open(resolveWebUiLinkHref(this.deps.doc, link), '_blank', 'noopener');
       }));
     }
-    bar.appendChild(ui.h('span', 'grow'));
-
-    for (const link of asArray(page.links)) {
-      const open = ui.button(link.label || S.open, {
-        variant: 'primary',
-        size: 'sm',
-        onClick: () => {
-          this.deps.doc.defaultView?.open(
-            resolveWebUiLinkHref(this.deps.doc, link),
-            '_blank',
-            'noopener',
-          );
-        },
-      });
-      bar.appendChild(open);
+    if (actions.children.length) row.appendChild(actions);
+    head.appendChild(row);
+    if (page.kind === 'world' && badges.children.length) {
+      head.append(pageBadges(this.deps.doc, this.deps.overlayHost, this.chromeStop.signal, Array.from(badges.children) as HTMLElement[]));
     }
-    if (bar.children.length > 1) chrome.appendChild(bar);
+    if (page.kind === 'memory') head.appendChild(ui.h('p', 'pagedesc', S.memoryDesc));
+    chrome.append(head);
+
+    if (items.length > 1) {
+      const bar = pageTabs(this.deps.doc, this.chromeStop.signal, items, {
+        value: activePanel ?? '',
+        onSelect: (panelId) => this.deps.router.navigate(this.routeOf(page.id, panelId)),
+      });
+      bar.el.classList.add('providertabs');
+      chrome.appendChild(bar.el);
+      this.tabs = { pageId, key, bar };
+    }
     if (page.reason) chrome.appendChild(ui.msgline(page.reason, true));
     const undeclared = [
       page.undeclared?.tools.length ? S.undeclaredTools(page.undeclared.tools.join(', ')) : '',
       page.undeclared?.events.length ? S.undeclaredEvents(page.undeclared.events.join(', ')) : '',
     ].filter(Boolean);
     if (undeclared.length) chrome.appendChild(ui.msgline(undeclared.join(' · ')));
-
-    const panels = tabbed(page);
-    const prompts = asArray(page.prompts);
-    const configGroups = this.configGroupsOf(page);
-    const storage = this.storageOf(page);
-    const tools = this.toolsTabOf(page);
-    if (panels.length + (configGroups.length ? 1 : 0) + (prompts.length ? 1 : 0)
-      + (storage.length ? 1 : 0) + (tools ? 1 : 0) > 1) {
-      const tabs = ui.rowbar();
-      const go = (panelId: string): void => this.deps.router.navigate(this.routeOf(page.id, panelId));
-      for (const p of panels) {
-        const btn = ui.button(p.title || p.id, {
-          size: 'sm',
-          variant: p.id === activePanel ? 'primary' : 'plain',
-          onClick: () => go(p.id),
-        });
-        tabs.appendChild(btn);
-      }
-      if (configGroups.length) {
-        tabs.appendChild(ui.button(S.configTab, {
-          size: 'sm',
-          variant: activePanel === PROVIDER_CONFIG_ROUTE ? 'primary' : 'plain',
-          onClick: () => go(PROVIDER_CONFIG_ROUTE),
-        }));
-      }
-      if (prompts.length) {
-        tabs.appendChild(ui.button(prompts.length === 1 ? prompts[0]!.title : S.promptsTab, {
-          size: 'sm',
-          variant: activePanel === PROVIDER_PROMPTS_ROUTE ? 'primary' : 'plain',
-          onClick: () => go(PROVIDER_PROMPTS_ROUTE),
-        }));
-      }
-      if (storage.length) {
-        tabs.appendChild(ui.button(S.storageTab, {
-          size: 'sm',
-          variant: activePanel === PROVIDER_STORAGE_ROUTE ? 'primary' : 'plain',
-          onClick: () => go(PROVIDER_STORAGE_ROUTE),
-        }));
-      }
-      if (tools) {
-        tabs.appendChild(ui.button(S.toolsTab, {
-          size: 'sm',
-          variant: activePanel === PROVIDER_TOOLS_ROUTE ? 'primary' : 'plain',
-          onClick: () => go(PROVIDER_TOOLS_ROUTE),
-        }));
-      }
-      chrome.appendChild(tabs);
-    }
   }
 
   /** 重载前缀后重新读取 manifest 中的漂移状态。 */
@@ -652,7 +692,7 @@ export class WebUiPageHost {
 
   private renderErrorInto(target: HTMLElement, title: string, detail: string): void {
     const ui = this.ui();
-    const card = ui.sheet({ title, en: 'panel error' });
+    const card = ui.sheet({ title });
     card.body.appendChild(ui.msgline(detail, true));
     target.appendChild(card.el);
   }

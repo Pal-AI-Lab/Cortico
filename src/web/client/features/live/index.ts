@@ -26,11 +26,14 @@ import {
   type ToolSchemaDoc,
 } from './protocol.ts';
 import { icon } from '../../ui/icons.ts';
+import { pageIntro } from '../../ui/page.ts';
+import { promptInput } from '../../ui/prompt-input.tsx';
 import { createOnboarding, type OnboardingView } from './onboarding.ts';
 import { createSessionBand } from './sessions.ts';
-import { applyDisplayName, createStatusBand, phaseLabel } from './status.ts';
+import { applyDisplayName, createConnectionButton, createStatusBand, phaseLabel } from './status.ts';
 import { S } from './strings.ts';
 import { createTimeline } from './timeline.ts';
+import type { UsageAggregate } from '../usage/types.ts';
 
 const DEBUG_WS_PATH = '/ws/debug';
 const SESSIONS_WS_PATH = '/ws/sessions';
@@ -90,7 +93,7 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
 
   const view = ui.h('div', 'liveview');
   const band = ui.h('div', 'liveband');
-  view.appendChild(band);
+  view.append(pageIntro(ui, S.navLabel), band);
   ctx.root.appendChild(view);
 
   // ── 顶栏 ──────────────────────────────────────────────────────────
@@ -164,15 +167,49 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const summary = ui.h('div', 'live-summary');
-  const connection = ui.button('', { onClick: () => ctx.router.navigate(state.status?.modelConnection ? ['providers', state.status.modelConnection.name] : ['providers']) });
-  connection.className = 'live-connection';
-  const connectionValue = ui.h('span', 'live-connection-value');
-  connection.append(ui.h('span', 'live-connection-label', S.currentProvider), connectionValue);
-  summary.append(status.el, ui.h('span', 'grow'), connection, netEl);
-  band.append(summary, sessionBand.el);
+  const connection = createConnectionButton(ui, (name) => ctx.router.navigate(name ? ['providers', name] : ['providers']));
+  // 今日花费:`/api/usage` 部署时区的今天;没有 usage 能力、totals 为 null 或取不到时不显示。
+  // 服务端每次都整本读账本，所以只在挂载时和 main 记下一次调用后重取，过了零点要等下一次调用才换到新的一天。
+  const cost = ui.button('', { onClick: () => ctx.router.navigate(['usage']) });
+  cost.className = 'live-cost';
+  cost.hidden = true;
+  const usageOn = ctx.capabilities.usage === true;
+  let costSeq = 0;
+  const loadCost = async (): Promise<void> => {
+    const seq = ++costSeq;
+    try {
+      const d = await get<UsageAggregate>('/api/usage?bucket=day&days=1', { signal: ctx.signal });
+      if (seq !== costSeq) return;
+      const t = d.totals;
+      cost.hidden = !t;
+      if (!t) return;
+      const partial = (t.unpricedCalls || 0) > 0 ? '+' : '';
+      cost.textContent = S.todayCost(ui.fmt.money(t.cost ?? 0, d.currency || 'USD') + partial);
+      cost.title = S.todayCostTitle(t.calls || 0);
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError' || seq !== costSeq) return;
+      cost.hidden = true;
+    }
+  };
+  let costSoon: ReturnType<typeof setTimeout> | undefined;
+  /** 去抖：同一轮里接连几次调用只重取一回。 */
+  const refreshCostSoon = (): void => {
+    if (!usageOn) return;
+    clearTimeout(costSoon);
+    costSoon = setTimeout(() => { void loadCost(); }, 4000);
+  };
+  ctx.signal.addEventListener('abort', () => clearTimeout(costSoon), { once: true });
+  if (usageOn) void loadCost();
+
+  // 右边三项是一组:放不下时整组换行
+  const right = ui.h('div', 'live-summary-right');
+  right.append(connection.el, cost, netEl);
+  summary.append(status.el, right);
+  const sessions = ui.h('div', 'live-sessions');
+  sessions.append(ui.h('span', 'live-sessions-label', S.sessionsLabel), sessionBand.el);
+  band.append(summary, sessions);
 
   const exportButton = ui.button('', {
-    size: 'sm',
     onClick: () => {
       void exportDiagnostics({ ui, doc, signal: ctx.signal }).catch((err: unknown) => {
         ui.toast(S.exportFailed, 'bad');
@@ -180,13 +217,14 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       });
     },
   });
-  exportButton.className += ' btn-ico';
+  exportButton.className = 'live-export';
   exportButton.append(icon(doc, 'download'), ui.h('span', null, S.exportDiagnostics));
+  sessions.appendChild(exportButton);
 
-  const composer = ui.promptInput({
+  const composer = promptInput(doc, ctx.signal, {
     label: S.composerLabel,
+    draftKey: 'cortico.console.draft.live',
     placeholder: S.composerPlaceholder,
-    leading: exportButton,
     tools: ctxAnchor,
     images: { max: 8 },
     onSubmit: (text, images) => {
@@ -295,13 +333,13 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
       : S.ctxWaiting;
   };
 
+  const mainStat = (): SessionStat | null => state.sessions.find((s) => s.id === MAIN_ID) ?? null;
+
   const setStatus = (st: StatusSnapshot | null): void => {
     state.status = st;
-    status.render(st);
-    const current = st?.modelConnection;
-    connectionValue.textContent = current ? `${current.name} · ${current.model ?? '—'}` : S.noProvider;
-    connection.title = current ? `${current.moduleTitle} (${current.module})\n${current.baseUrl}` : S.noProvider;
-    providerReady = current?.ready === true;
+    status.render(st, mainStat());
+    connection.render(st);
+    providerReady = st?.modelConnection?.ready === true;
     syncPlaceholder();
     onboarding?.setProvider(providerReady);
     if (st && applyDisplayName(doc, st.displayName, state.displayName)) {
@@ -312,7 +350,12 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
   };
 
   const setSessions = (list: SessionStat[]): void => {
+    const before = mainStat()?.calls;
     state.sessions = list;
+    const after = mainStat()?.calls;
+    // 会话统计与账本在同一处记账：main 的调用数涨了，账本里已有那次调用
+    if (before !== undefined && after !== undefined && after > before) refreshCostSoon();
+    status.render(state.status, mainStat());
     sessionBand.render(list, fork.id);
     fork.noteSessions();
   };

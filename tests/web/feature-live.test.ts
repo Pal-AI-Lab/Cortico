@@ -9,6 +9,12 @@ import { responseTimelineFixture } from './response-timeline-fixture.ts';
 import { records } from '../core/fixture-protocol.ts';
 import {record,message,functionCall,functionResult}from'../../src/protocol/open-responses/context.ts';
 import {estimateMessagesTokens}from'../../src/protocol/open-responses/tokens.ts';
+import { extendMiniElement, miniWindow } from './mini-dom.ts';
+
+// 控制台的输入器直接取自 prompt-input(为了草稿保留),这里改道到每个用例装的桩上。
+vi.mock('../../src/web/client/ui/prompt-input.tsx', () => ({
+  promptInput: (_doc: unknown, _signal: unknown, opts: unknown) => (globalThis as { __promptInput?: (o: unknown) => unknown }).__promptInput!(opts),
+}));
 
 const UI_ENTRY = '../../src/web/client/ui/index.ts';
 const LIFECYCLE_ENTRY = '../../src/web/client/core/lifecycle.ts';
@@ -194,11 +200,13 @@ class FakeEl {
   }
 }
 
+extendMiniElement(FakeEl);
+
 class FakeDoc {
   listeners = new Listeners();
   body: FakeEl;
   title = '';
-  defaultView: Any = undefined;
+  defaultView: Any = miniWindow();
   constructor() {
     this.body = new FakeEl('body', this);
   }
@@ -353,7 +361,7 @@ function mkCtx(capabilities: Record<string, boolean>, hash = '#/live'): Ctx {
     },
   };
   const ui = createWebUi({ memo, overlayHost: doc.body, doc, signal: lifecycle.signal });
-  ui.promptInput = (opts: Any): Any => {
+  ui.promptInput = (globalThis as Any).__promptInput = (opts: Any): Any => {
     const el = ui.h('div', 'prompt-input-host');
     el.appendChild(ui.h('textarea', 'prompt-textarea'));
     if (opts.leading) el.appendChild(opts.leading);
@@ -1018,7 +1026,7 @@ describe('导出诊断', () => {
     live.createLiveFeature({ env }).mount(ctx);
     sockets[0].emit({ t: 'hello', session: [message('user', '在吗')] });
 
-    const button = root.find('btn-ico') as FakeEl;
+    const button = root.find('live-export') as FakeEl;
     expect(button.textContent).not.toBe('');
     button.dispatchEvent({ type: 'click' });
     expect(fetched).not.toContain('/api/diagnostics');
@@ -1039,7 +1047,7 @@ describe('导出诊断', () => {
     const { env } = fakeEnv();
     const { ctx, root, doc, errors } = mkCtx({ debug: true });
     live.createLiveFeature({ env }).mount(ctx);
-    (root.find('btn-ico') as FakeEl).dispatchEvent({ type: 'click' });
+    (root.find('live-export') as FakeEl).dispatchEvent({ type: 'click' });
     confirmExport(doc);
     await flush();
     expect(fetched).toContain('/api/diagnostics');

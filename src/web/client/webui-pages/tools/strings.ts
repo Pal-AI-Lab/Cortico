@@ -10,7 +10,7 @@ import { S as it } from './strings.it.ts';
 import { S as ru } from './strings.ru.ts';
 
 const zh = {
-  ioGroup: (name: string | undefined) => `IO 工具 · ${name}`,
+  ioGroup: (name: string | undefined) => `World 工具 · ${name}`,
   groupCore: '原生动作 · core',
   groupPersona: '记忆 / 文件工具 · Persona',
   noDescription: '（未填写工具说明）',
@@ -33,7 +33,7 @@ const zh = {
 };
 
 export const en: typeof zh = {
-  ioGroup: (name: string | undefined) => `IO tools · ${name}`,
+  ioGroup: (name: string | undefined) => `World tools · ${name}`,
   groupCore: 'Native actions · core',
   groupPersona: 'Memory / file tools · Persona',
   noDescription: '(no tool description)',

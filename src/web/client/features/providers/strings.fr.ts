@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: 'Configuration', marketTab: 'Marché des extensions',
   pageTitle: 'Connexions de modèles', navLabel: 'Connexions de modèles', navGroup: 'Core', create: '+ Nouvelle instance de connexion', newName: 'Instance sans nom',
   createHint: 'Une instance est un ensemble de réglages de fournisseur enregistré sous forme de carte.',
   empty: 'Aucune connexion de modèle', emptyHint: "Ajoutez une connexion de modèle pour activer l'inférence.",
-  eraseConfirm: 'Confirmer la suppression',
   connect: 'Connecter', activate: 'Définir comme connexion actuelle', active: 'Modèle actuel', missing: 'Connexion de modèle actuelle introuvable : ',
   inUse: (names: string) => `Utilisée par : ${names}`, selectedBy: (names: string) => `Sélectionnée par ${names} (non lancé)`,
   names: (list: string[]) => list.join(', '),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: 'Effort de raisonnement', thinking: 'Activer le raisonnement', temperature: 'Température', maxTokens: 'Tokens de sortie max', context: 'Limite de contexte', tier: 'Niveau de service', images: 'Accepter les images',
   catalogNoWindow: "La liste des modèles n'indique pas de fenêtre de contexte pour ce modèle ; renseignez-la d'après la documentation du fournisseur.",
   catalogMaxOutput: (tokens: number) => `La liste des modèles indique une sortie maximale de ${tokens} tokens.`,
-  advancedHint: "À ajuster uniquement pour des passerelles d'API personnalisées ou des services compatibles.", secret: "Variable d'environnement de l'identifiant",
+  secret: "Variable d'environnement de l'identifiant",
   extraHeaders: 'En-têtes supplémentaires (objet JSON)', extraBody: 'Corps de requête supplémentaire (objet JSON)', priceRules: 'Règles de tarification complètes (tableau JSON)',
   shared: 'Configuration partagée : plusieurs bots peuvent utiliser cette connexion. Les modifications mettent à jour cette configuration partagée ; créez une autre connexion si vous avez besoin de réglages différents.',
   remove: 'Supprimer la connexion', duplicate: 'Dupliquer la connexion', cancel: 'Annuler les modifications', save: 'Enregistrer', saved: 'Enregistré',

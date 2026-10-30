@@ -8,6 +8,7 @@
 
 import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import { get, pickPath, post } from '../../core/api.ts';
+import { LANGUAGE } from '../../core/language.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { icon } from '../../ui/icons.ts';
 import { S } from './strings.ts';
@@ -29,6 +30,7 @@ export interface ConfigProperty {
   'x-scale'?: number;
   'x-suffix'?: string;
   'x-hot'?: boolean;
+  /** 打开或修改后会降低安全性;标题用警示色。 */
   'x-warning'?: boolean;
   'x-options'?: string;
   'x-path'?: {
@@ -234,6 +236,28 @@ function pathField(
   };
 }
 
+/** 输入框里显示的数：最多四位小数，去掉末尾的 0。 */
+function shown(n: number): string {
+  return String(Number(n.toFixed(4)));
+}
+
+/**
+ * 数字输入框。显示值按 `shown` 取整；字段在最近一次赋值后没改过时读回原值——一组配置整组保存，
+ * 改别的字段不该把这一项的精度截掉。
+ */
+function numberInput(inp: HTMLInputElement): { read: () => number; write: (n: number) => void } {
+  let exact = 0;
+  let untouched: string | null = null;
+  return {
+    read: () => (inp.value === untouched ? exact : Number(inp.value)),
+    write: (n) => {
+      exact = n;
+      inp.value = shown(n);
+      untouched = inp.value;
+    },
+  };
+}
+
 /** 渲染属性并返回存储单位的取值器；值变化经 onChange 提交。 */
 export function configField(
   ui: WebUi,
@@ -277,18 +301,19 @@ export function configField(
     if (prop.multipleOf != null) inp.step = String(prop.multipleOf / scale);
     if (prop.nullable) {
       // nullable 字段以空输入表示 null，0 保持为数值。
-      const write = (v: unknown): void => { inp.value = v == null ? '' : String(Number(v) / scale); };
-      write(val);
       inp.placeholder = S.leaveBlank;
-      return {
-        node: inp,
-        read: () => (inp.value.trim() === '' ? null : Number(inp.value) * scale),
-        write,
+      const num = numberInput(inp);
+      const write = (v: unknown): void => {
+        if (v == null) inp.value = '';
+        else num.write(Number(v) / scale);
       };
+      write(val);
+      return { node: inp, read: () => (inp.value.trim() === '' ? null : num.read() * scale), write };
     }
-    const write = (v: unknown): void => { inp.value = String((Number(v) || 0) / scale); };
+    const num = numberInput(inp);
+    const write = (v: unknown): void => num.write((Number(v) || 0) / scale);
     write(val);
-    return { node: inp, read: () => Number(inp.value) * scale, write };
+    return { node: inp, read: () => num.read() * scale, write };
   }
 
   // 仅两个 number/integer 的数组可编辑，其余数组只读。
@@ -323,6 +348,57 @@ export function configField(
   return { node: ui.h('span', 'tdesc', JSON.stringify(val)), read: null, write: null };
 }
 
+/**
+ * 同一父键下一串数字项(如 `usage.rates.CNY`、`usage.rates.EUR`):说明相同,标题都是同一句话后接各自的键。
+ * 这样的一串单成一张卡,跟在所属组后面:标题与说明各写一次,每项一个小输入框。
+ */
+interface FieldRun {
+  title: string;
+  description?: string;
+  items: Array<[path: string, key: string, prop: ConfigProperty]>;
+}
+
+/** 把属性按顺序切成单项与 FieldRun;少于两项的串仍按单项画。 */
+function splitRuns(entries: Array<[string, ConfigProperty]>): Array<[string, ConfigProperty] | FieldRun> {
+  const runKey = (path: string, prop: ConfigProperty): { parent: string; key: string; title: string } | null => {
+    const dot = path.lastIndexOf('.');
+    if (dot <= 0 || (prop.type !== 'number' && prop.type !== 'integer')) return null;
+    const key = path.slice(dot + 1);
+    const title = prop.title ?? '';
+    if (!title.endsWith(key)) return null;
+    const head = title.slice(0, -key.length).trim();
+    return head ? { parent: path.slice(0, dot), key, title: head } : null;
+  };
+  const out: Array<[string, ConfigProperty] | FieldRun> = [];
+  for (let i = 0; i < entries.length;) {
+    const [path, prop] = entries[i]!;
+    const first = runKey(path, prop);
+    let j = i + 1;
+    const items: FieldRun['items'] = first ? [[path, first.key, prop]] : [];
+    while (first && j < entries.length) {
+      const [p2, prop2] = entries[j]!;
+      const next = runKey(p2, prop2);
+      if (!next || next.parent !== first.parent || next.title !== first.title || prop2.description !== prop.description) break;
+      items.push([p2, next.key, prop2]);
+      j++;
+    }
+    if (first && items.length > 1) {
+      out.push({ title: first.title, ...(prop.description ? { description: prop.description } : {}), items });
+      i = j;
+    } else {
+      out.push(entries[i]!);
+      i++;
+    }
+  }
+  return out;
+}
+
+/** 三个大写字母的键当作货币代码,换成界面语言里的名字;认不出就原样。 */
+function keyName(key: string): string {
+  if (!/^[A-Z]{3}$/.test(key)) return key;
+  return new Intl.DisplayNames([LANGUAGE], { type: 'currency' }).of(key) ?? key;
+}
+
 export interface ConfigViewDeps {
   ui: WebUi;
   lifecycle: Lifecycle;
@@ -338,6 +414,12 @@ export interface ConfigViewDeps {
   emptyText?: string;
   /** 是否显示组的 owner 标签。 */
   showOwner?: boolean;
+  /**
+   * A World page's restart. The bar gets its button and a note while a saved value of a setting
+   * that takes effect on World restart differs from `applied`, the value the World last started
+   * with; the caller keeps `applied` across visits.
+   */
+  restart?: { label: string; applied: Map<string, ConfigValue>; run(): Promise<boolean> };
 }
 
 export interface ConfigView {
@@ -355,9 +437,27 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
   const el = ui.h('div', 'configview');
   const body = ui.h('div');
   const bar = ui.actions();
-  const msg = ui.msgline();
+  // 保存之前这一行说明修改会自动保存,保存后换成结果。
+  const msg = ui.msgline(S.autoSaves);
+  msg.classList.add('is-hint');
   bar.append(msg, ui.h('span', 'grow'));
   el.append(body, bar);
+  const restart = deps.restart;
+  const restartNote = ui.h('span', 'config-restart-note', S.worldRestartPending); restartNote.hidden = true;
+  const key = (r: { groupId: string; path: string }) => `${r.groupId}\u0000${r.path}`;
+  function paintPending(): void {
+    if (restart) restartNote.hidden = !readers.some((r) => r.cold && restart.applied.has(key(r)) && !sameValue(r.saved, restart.applied.get(key(r))!));
+  }
+  if (restart) {
+    el.classList.add('has-restart');
+    const button = ui.button(restart.label, { size: 'sm', onClick: async () => {
+      const lock = ui.disable(button);
+      try { if (await restart.run() && !signal.aborted) { for (const r of readers) if (r.cold) restart.applied.set(key(r), r.saved); paintPending(); setMsg(S.autoSaves); msg.classList.add('is-hint'); } }
+      catch (err) { if (!isAbort(err) && !signal.aborted) setMsg(errText(err), true); }
+      finally { lock.dispose(); }
+    } });
+    bar.append(restartNote, button);
+  }
 
   /**
    * 每次 load 重建本次页面的组、路径与取值器列表。
@@ -369,6 +469,10 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
     read: () => ConfigValue;
     write: (value: unknown) => void;
     saved: ConfigValue;
+    /** The value when the page loaded; a save that brings every field back to it reports nothing. */
+    loaded: ConfigValue;
+    /** Takes effect only after a restart (`x-hot: false`). */
+    cold: boolean;
   }> = [];
   /** 已发出、尚未回复的保存请求数。 */
   let saving = 0;
@@ -388,14 +492,16 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
       const values: Record<string, ConfigValue> = {};
       for (const r of sent) values[r.path] = r.read();
       setMsg(S.saving);
-      const out = await post<{ result?: string }>(
+      await post<{ result?: string }>(
         '/api/config',
         { group: groupId, values },
         { signal },
       );
       if (signal.aborted) return;
       for (const r of sent) r.saved = values[r.path];
-      setMsg('✓ ' + (out.result || groupId));
+      paintPending();
+      if (readers.every((r) => sameValue(r.saved, r.loaded))) { setMsg(S.autoSaves); msg.classList.add('is-hint'); }
+      else setMsg('✓ ' + S.saved);
       void refresh();
     } catch (err) {
       if (isAbort(err) || signal.aborted) return;
@@ -463,33 +569,68 @@ export function createConfigView(deps: ConfigViewDeps): ConfigView {
         ));
         return;
       }
+      // 每组一节，每项一行 setrow。
       for (const { group, values } of groups) {
-        const sec = ui.h('div', 'tsection', group.schema.title || group.id);
-        if (showOwner) sec.appendChild(ui.h('span', 'ttag', OWNER_LABEL[group.owner] || group.owner));
-        body.appendChild(sec);
-        if (group.schema.description) {
-          body.appendChild(ui.h('div', 'tsecdesc', group.schema.description));
-        }
-        for (const [path, prop] of Object.entries(group.schema.properties || {})) {
-          const row = ui.h('div', 'trow');
-          const label = ui.h('span', prop['x-warning'] ? 'tlabel warning' : 'tlabel', prop.title || path);
+        const card = ui.sheet({ title: group.schema.title || group.id, ...(group.schema.description ? { desc: group.schema.description } : {}) });
+        if (showOwner) card.el.querySelector('h3')!.appendChild(ui.h('span', 'ttag', OWNER_LABEL[group.owner] || group.owner));
+        const runs: HTMLElement[] = [];
+        for (const entry of splitRuns(Object.entries(group.schema.properties || {}))) {
+          if (!Array.isArray(entry)) {
+            const runCard = ui.sheet({ title: entry.title, ...(entry.description ? { desc: entry.description } : {}) });
+            runs.push(runCard.el);
+            const grid = ui.h('div', 'configgrid');
+            for (const [path, key, prop] of entry.items) {
+              const cell = ui.h('label', 'configcell');
+              const name = ui.h('span', 'configcell-name', keyName(key));
+              if (name.textContent !== key) name.appendChild(ui.h('span', 'en', key));
+              const field = configField(ui, prop, (values || {})[path], () => queueSave(group.id), signal);
+              cell.append(name, field.node);
+              if (prop['x-suffix']) cell.appendChild(ui.h('span', 'tunit', prop['x-suffix']));
+              if (prop['x-hot'] === false) cell.appendChild(ui.h('span', 'ttag', group.owner.startsWith('world:') ? S.restartWorld : S.restartProcess));
+              grid.appendChild(cell);
+              if (field.read && field.write) { const value = field.read(); readers.push({ groupId: group.id, path, read: field.read, write: field.write, saved: value, loaded: value, cold: prop['x-hot'] === false }); }
+            }
+            runCard.body.appendChild(grid);
+            continue;
+          }
+          const [path, prop] = entry;
+          const row = ui.h('div', 'setrow configrow');
+          const label = ui.h('div', prop['x-warning'] ? 'setlabel warning' : 'setlabel', prop.title || path);
+          const control = ui.h('div', 'setcontrol');
+          const line = ui.h('div', 'configline');
+          control.appendChild(line);
+          let read: (() => ConfigValue) | null;
+          let write: ((value: unknown) => void) | null;
+          if (prop.type === 'boolean') {
+            const box = ui.checkbox('', { checked: !!(values || {})[path], onChange: () => queueSave(group.id) });
+            box.input.setAttribute('aria-label', prop.title || path);
+            // switchbox 把勾选框画成开关
+            line.classList.add('switchbox');
+            line.appendChild(box.el);
+            read = () => box.checked;
+            write = (v) => box.setChecked(!!v);
+          } else {
+            const field = configField(ui, prop, (values || {})[path], () => queueSave(group.id), signal);
+            const fieldWrap = ui.h('div', 'tfield');
+            fieldWrap.appendChild(field.node);
+            if (prop['x-suffix']) fieldWrap.appendChild(ui.h('span', 'tunit', prop['x-suffix']));
+            line.appendChild(fieldWrap);
+            read = field.read;
+            write = field.write;
+          }
           if (prop['x-hot'] === false) {
             // World 的配置在构造时读走:重启那个 World 即生效,不必重启进程。
-            label.appendChild(ui.h('span', 'ttag', group.owner.startsWith('world:') ? S.restartWorld : S.restartProcess));
+            line.appendChild(ui.h('span', 'ttag', group.owner.startsWith('world:') ? S.restartWorld : S.restartProcess));
           }
-          row.appendChild(label);
-          const { node, read, write } = configField(ui, prop, (values || {})[path], () => queueSave(group.id), signal);
-          const fieldWrap = ui.h('div', 'tfield');
-          fieldWrap.appendChild(node);
-          if (prop['x-suffix'] && prop.type !== 'boolean') {
-            fieldWrap.appendChild(ui.h('span', 'tunit', prop['x-suffix']));
-          }
-          row.appendChild(fieldWrap);
-          row.appendChild(ui.h('span', 'tdesc', prop.description || ''));
-          body.appendChild(row);
-          if (read && write) readers.push({ groupId: group.id, path, read, write, saved: read() });
+          if (prop.description) control.appendChild(ui.h('p', 'setnote', prop.description));
+          row.append(label, control);
+          card.body.appendChild(row);
+          if (read && write) { const value = read(); readers.push({ groupId: group.id, path, read, write, saved: value, loaded: value, cold: prop['x-hot'] === false }); }
         }
+        body.append(card.el, ...runs);
       }
+      // A restart-only value first seen here is what the running World started with.
+      if (restart) { for (const r of readers) if (r.cold && !restart.applied.has(key(r))) restart.applied.set(key(r), r.saved); paintPending(); }
     } catch (err) {
       if (isAbort(err) || signal.aborted) return;
       body.replaceChildren(ui.placeholder(S.loadFailed(errText(err))));

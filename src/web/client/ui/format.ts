@@ -9,6 +9,40 @@ function pad2(n: number): string {
   return n < 10 ? '0' + n : String(n);
 }
 
+const symbols = new Map<string, string>();
+/**
+ * A currency's symbol: ¥ for CNY, € for EUR, $ for USD. Other dollars keep their country (HK$, CA$) so they
+ * are not read as US dollars; a code the runtime does not know stays as the code.
+ */
+export function currencySymbol(currency?: string): string {
+  const code = currency || 'USD';
+  let symbol = symbols.get(code);
+  if (symbol === undefined) {
+    const shown = (currencyDisplay: 'narrowSymbol' | 'symbol') => new Intl.NumberFormat('en', { style: 'currency', currency: code, currencyDisplay }).formatToParts(0).find(part => part.type === 'currency')?.value;
+    try { symbol = shown('narrowSymbol'); if (symbol === '$' && code !== 'USD') symbol = shown('symbol'); } catch { symbol = undefined; }
+    if (!symbol || symbol === code) symbol = code;
+    symbols.set(code, symbol);
+  }
+  return symbol;
+}
+
+/** A currency named in a list or label: its symbol and code (¥ CNY), since ¥ alone is also JPY. */
+export function currencyName(currency?: string): string {
+  const code = currency || 'USD', symbol = currencySymbol(code);
+  return symbol === code ? code : `${symbol} ${code}`;
+}
+
+/**
+ * An amount with its currency's symbol (¥1.46, $0.13, -$0.20); a code without a symbol precedes it. Average costs may
+ * request three decimals. An amount that rounds to zero is written without a sign.
+ */
+export function formatMoney(n: number | null | undefined, currency?: string, decimals: 2 | 3 = 2): string {
+  const code = currency || 'USD', symbol = currencySymbol(code);
+  const digits = Math.abs(n ?? 0).toFixed(decimals);
+  const sign = (n ?? 0) < 0 && Number(digits) !== 0 ? '-' : '';
+  return sign + (symbol === code ? code + ' ' : symbol) + digits;
+}
+
 export const webUiFormat: WebUiFormat = {
   /** **满 10000 才转 k**（9999 仍是 9999，不是 10.0k） */
   count(n) {
@@ -40,15 +74,7 @@ export const webUiFormat: WebUiFormat = {
     return typeof ts === 'string' && ts.length >= 19 ? ts.slice(11, 19) : '';
   },
 
-  /**
-   * `<1` 保 4 位小数（单次调用成本常在 0.0x），`>=1` 保 2 位。
-   * 币种是 ISO 代码：`USD`（缺省）渲染成 `$`，其余代码原样前置并空一格（`EUR 1.00`）。
-   */
-  money(n, currency) {
-    const code = currency || 'USD';
-    const prefix = code === 'USD' ? '$' : code + ' ';
-    return prefix + (n == null ? '0' : n < 1 ? n.toFixed(4) : n.toFixed(2));
-  },
+  money: formatMoney,
 
   /**
    * 毫秒时长，口径在这里定死：

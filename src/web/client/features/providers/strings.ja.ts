@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: '設定', marketTab: '拡張マーケット',
   pageTitle: 'モデル接続', navLabel: 'モデル接続', navGroup: 'Core', create: '+ 新しい接続インスタンス', newName: '名前のないインスタンス',
   createHint: 'インスタンスとは、プロバイダー設定の 1 セットをカードとして保存したものです。',
   empty: 'モデル接続はまだありません', emptyHint: 'モデル接続を追加すると推論できるようになります。',
-  eraseConfirm: '削除を確定',
   connect: '接続', activate: '現在の接続に設定', active: '現在のモデル', missing: '現在のモデル接続が存在しません。設定での参照：',
   inUse: (names: string) => `使用中：${names}`, selectedBy: (names: string) => `${names} が選択中（未実行）`,
   names: (list: string[]) => list.join('、'),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: '推論の強さ', thinking: '推論を有効化', temperature: '温度', maxTokens: '最大出力 token 数', context: 'コンテキスト上限', tier: 'サービス階層', images: '画像を受け付ける',
   catalogNoWindow: 'モデル一覧にこのモデルのコンテキスト上限が記載されていません。プロバイダーのドキュメントを参照して入力してください。',
   catalogMaxOutput: (tokens: number) => `モデル一覧に記載された最大出力は ${tokens} token です。`,
-  advancedHint: 'カスタム API ゲートウェイや互換サービスを使う場合にのみ調整してください。', secret: '認証情報の環境変数名',
+  secret: '認証情報の環境変数名',
   extraHeaders: '追加リクエストヘッダー（JSON オブジェクト）', extraBody: '追加リクエストボディ（JSON オブジェクト）', priceRules: '料金ルール全体（JSON 配列）',
   shared: '共有設定：この接続は複数のボットで使えます。変更するとこの共有設定が変わります。異なる設定が必要な場合は新しい接続を作成してください。',
   remove: '接続を削除', duplicate: '接続を複製', cancel: '変更を破棄', save: '保存', saved: '保存しました',

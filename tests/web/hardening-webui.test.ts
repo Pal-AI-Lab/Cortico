@@ -81,10 +81,28 @@ class FakeEl {
   attrs = new Map<string, string>();
   listeners = new Listeners();
   ownText = '';
+  hidden = false;
+  dataset: Record<string, string> = {};
+  style: Any = { setProperty(): void {}, removeProperty(): void {} };
 
   constructor(tag: string, doc: FakeDoc) {
     this.tagName = tag;
     this.ownerDocument = doc;
+  }
+
+  get classList() {
+    const list = () => this.className.split(/\s+/).filter(Boolean);
+    const write = (names: string[]) => { this.className = names.join(' '); };
+    return {
+      add: (...names: string[]) => write([...new Set([...list(), ...names])]),
+      remove: (...names: string[]) => write(list().filter((n) => !names.includes(n))),
+      contains: (name: string) => list().includes(name),
+      toggle: (name: string, force?: boolean) => {
+        const on = force ?? !list().includes(name);
+        write(on ? [...new Set([...list(), name])] : list().filter((n) => n !== name));
+        return on;
+      },
+    };
   }
 
   get textContent(): string {
@@ -117,6 +135,8 @@ class FakeEl {
   }
   setAttribute(k: string, v: string): void { this.attrs.set(k, v); }
   getAttribute(k: string): string | null { return this.attrs.get(k) ?? null; }
+  removeAttribute(k: string): void { this.attrs.delete(k); }
+  hasAttribute(k: string): boolean { return this.attrs.has(k); }
   focus(): void {}
   addEventListener(type: string, fn: Listener, opts?: ListenOptions): void {
     this.listeners.add(type, fn, opts);
@@ -1804,7 +1824,7 @@ describe('工具 schema · 纯函数', () => {
     expect(groups.map(([k]: Any) => k)).toEqual([
       '原生动作 · core',
       '记忆 / 文件工具 · Persona',
-      'IO 工具 · 某 World',
+      'World 工具 · 某 World',
     ]);
     expect(groups[0][1].map((t: Any) => t.name)).toEqual(['schedule_wake', 'fork']);
     expect(groups[1][1].map((t: Any) => t.name)).toEqual(['read_file', 'noop']);

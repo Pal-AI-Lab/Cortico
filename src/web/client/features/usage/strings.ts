@@ -1,5 +1,4 @@
 import { pick } from '../../core/language.ts';
-import type { UsageBucketUnit } from './types.ts';
 import { S as zhHant } from './strings.zh-Hant.ts';
 import { S as ja } from './strings.ja.ts';
 import { S as ko } from './strings.ko.ts';
@@ -29,16 +28,14 @@ const zh = {
   presetCustom: '自定义',
   metricCost: '成本',
   liveRefresh: '自动刷新',
-  liveRefreshTitle: (sec: number) => `每 ${sec} 秒重取一次；离开本页自动停`,
+  liveRefreshTitle: (sec: number) => `每 ${sec} 秒重新获取一次；离开本页自动停止`,
   refresh: '刷新',
   granularity: '粒度',
-  /** 粒度选「自动」时，选择器旁写出服务端实际用的粒度。 */
-  autoBucket: (unit: UsageBucketUnit) => `自动(${{ minute: '按分钟', hour: '按小时', day: '按天', week: '按周', month: '按月' }[unit]})`,
   autoCurrency: '自动币种',
   rateBuiltin: (date: string) => `内置 ${date}`,
-  basisMarginal: '边际费用',
-  basisEquivalent: 'API 等价费用',
-  ledger: '费用口径',
+  basisMarginal: '实际支出',
+  basisEquivalent: '按 API 价折算',
+  ledger: '计费口径',
   compTitle: '成本构成',
   mainTitle: '用量时间序列',
   split: '拆分',
@@ -68,7 +65,7 @@ const zh = {
   cardOutput: '输出 token',
   reasoningShare: (pct: string) => `思维链 ${pct}`,
   cardCoverage: '报价覆盖',
-  unpriced: (n: number) => `${n} 次在当前费用口径未完整计价`,
+  unpriced: (n: number) => `${n} 次在当前计费口径未完整计价`,
   cardPeak: '峰值',
   cardFailed: '失败流',
   failedCalls: (n: string) => `${n} 次`,
@@ -83,7 +80,7 @@ const zh = {
   sectionBreakdown: '分组明细',
   less: '少',
   more: '多',
-  compUnpriced: (n: number) => `${n} 次调用在当前费用口径未完整计价，成本只含已知部分。`,
+  compUnpriced: (n: number) => `${n} 次调用在当前计费口径未完整计价，成本只含已知部分。`,
   stale: (err: string, at: string) => `刷新失败：${err}。下方是 ${at} 取回的结果。`,
   billingHint: '按请求时的报价快照统计。' +
     '总量包含失败、抢占与诊断请求；币种和费用口径分别汇总。',
@@ -134,11 +131,10 @@ export const en: typeof zh = {
   liveRefreshTitle: (sec: number) => `Refetches every ${sec} s; stops when you leave this page`,
   refresh: 'Refresh',
   granularity: 'Granularity',
-  autoBucket: (unit: UsageBucketUnit) => `Auto (${{ minute: 'per minute', hour: 'hourly', day: 'daily', week: 'weekly', month: 'monthly' }[unit]})`,
   autoCurrency: 'Auto currency',
   rateBuiltin: (date: string) => `built-in ${date}`,
-  basisMarginal: 'Marginal cost',
-  basisEquivalent: 'API-equivalent cost',
+  basisMarginal: 'Actual spend',
+  basisEquivalent: 'At API prices',
   ledger: 'Cost basis',
   compTitle: 'Cost breakdown',
   mainTitle: 'Usage time series',

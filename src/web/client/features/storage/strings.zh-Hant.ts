@@ -1,8 +1,8 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
-  sectionDisk: '寫入磁碟 data/（重新啟動後仍在）',
-  sectionMemory: '記憶體暫存（重新啟動即清零）',
+  sectionDisk: '儲存在磁碟',
+  sectionMemory: '只在記憶體',
   nukeAll: '⚠ 一鍵清空伺服器端全部儲存',
   clear: '清除',
   dangerTitle: (label: string) => `⚠ 危險操作：${label}`,

@@ -1,6 +1,7 @@
 /** 使用模拟 DOM 与接口验证页面行为；浏览器源码由变量动态 import 加载，类型由 tsconfig.web.json 检查。 */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { extendMiniElement } from './mini-dom.ts';
 
 const CONFIG = '../../src/web/client/features/config/view.ts';
 const STORAGE = '../../src/web/client/features/storage/view.ts';
@@ -191,6 +192,8 @@ class FakeWindow {
     return { getPropertyValue: (k: string): string => vars[k] ?? '' };
   }
 }
+
+extendMiniElement(FakeEl);
 
 class FakeDoc {
   listeners = new Listeners();
@@ -556,7 +559,7 @@ describe('配置页', () => {
     mountConfig(ctx);
     await flush();
 
-    const sections = root.findAll('tsection');
+    const sections = root.findAll('sheet');
     expect(sections.length).toBe(2);
     expect(sections[0].textContent).toContain('主循环');
     expect(sections[0].textContent).toContain('core');
@@ -570,7 +573,7 @@ describe('配置页', () => {
     const { ctx, root } = await mkCtx({ config: true });
     mountConfig(ctx, (group) => group.owner === 'core');
     await flush();
-    const sections = root.findAll('tsection');
+    const sections = root.findAll('sheet');
     expect(sections.length).toBe(1);
     expect(sections[0].textContent).toContain('主循环');
     expect(root.textContent).not.toContain('样例 World');
@@ -582,17 +585,17 @@ describe('配置页', () => {
     expect(none.root.textContent).not.toContain('未提供配置项');
   });
 
-  it('x-suffix 印成单位、x-hot:false 标"重启生效"、description 落在说明列', async () => {
+  it('x-suffix 印成单位、x-hot:false 标"重启生效"、description 写在控件下面', async () => {
     stubFetch({ '/api/config': configPayload });
     const { ctx, root } = await mkCtx({ config: true });
     mountConfig(ctx);
     await flush();
 
-    const rows = root.findAll('trow');
+    const rows = root.findAll('setrow');
     expect(rows.length).toBe(3);
     expect(rows[0].find('tunit')!.textContent).toBe('秒');
-    expect(rows[0].find('tdesc')!.textContent).toBe('多久醒一次');
-    expect(rows[1].find('tlabel')!.textContent).toContain('重启生效');
+    expect(rows[0].find('setnote')!.textContent).toBe('多久醒一次');
+    expect(rows[1].textContent).toContain('重启生效');
     // boolean 不配单位（"开启 秒"没有意义）
     expect(rows[1].find('tunit')).toBeNull();
   });
@@ -608,7 +611,7 @@ describe('配置页', () => {
     expect(root.findButton('应用')).toBeFalsy();
     expect(root.textContent).not.toContain('仅本次运行');
 
-    const inp = root.findAll('trow')[0].findTag('input')!;
+    const inp = root.findAll('setrow')[0].findTag('input')!;
     inp.value = '45';                                  // 显示 45 秒
     inp.dispatchEvent({ type: 'change' });
     await vi.advanceTimersByTimeAsync(500);
@@ -671,7 +674,7 @@ describe('配置页', () => {
     await flush();
     calls.length = 0;
 
-    const inp = root.findAll('trow')[0].findTag('input')!;
+    const inp = root.findAll('setrow')[0].findTag('input')!;
     for (const v of ['1', '12', '123']) {
       inp.value = v;
       inp.dispatchEvent({ type: 'change' });
@@ -722,7 +725,7 @@ describe('配置页', () => {
     const { ctx, root } = await mkCtx({ config: true });
     mountConfig(ctx);
     await flush();
-    const rows = root.findAll('trow');
+    const rows = root.findAll('setrow');
     const preset = rows[0].findTag('select')!;
     const audio = rows[1].findTag('input')!;
     const text = rows[2].findTag('input')!;
@@ -739,7 +742,7 @@ describe('配置页', () => {
 
     expect(audio.value).toBe('b.wav');
     expect(text.value).toBe('自己写的文本');
-    expect(root.findAll('trow')[1].findTag('input')).toBe(audio);
+    expect(root.findAll('setrow')[1].findTag('input')).toBe(audio);
 
     // 下一次保存带的是服务端写过的参考音频
     await vi.advanceTimersByTimeAsync(500);
@@ -763,7 +766,7 @@ describe('配置页', () => {
     await flush();
     calls.length = 0;
     vi.useFakeTimers();
-    root.findAll('trow')[1].findTag('input')!.dispatchEvent({ type: 'change' });
+    root.findAll('setrow')[1].findTag('input')!.dispatchEvent({ type: 'change' });
     await vi.advanceTimersByTimeAsync(500);
     await flush();
     expect(calls[0].body.values).toEqual({ b: 5 });
@@ -791,7 +794,7 @@ describe('配置页', () => {
     mountConfig(ctx);
     await flush();
     stubFailing(400, '这一组不认识那个键');
-    root.findAll('trow')[0].findTag('input')!.dispatchEvent({ type: 'change' });
+    root.findAll('setrow')[0].findTag('input')!.dispatchEvent({ type: 'change' });
     await vi.advanceTimersByTimeAsync(500);
     await flush();
     expect(root.find('msgline')!.textContent).toContain('这一组不认识那个键');
@@ -822,19 +825,19 @@ const parts = [
 ];
 
 describe('存储页', () => {
-  it('filter 只画归属匹配的项;落盘在内存前,空小节不留标题,一项不剩时说这一页没有', async () => {
+  it('filter 只画归属匹配的项;落盘在内存前,各成一张卡,空的不画,一项不剩时说这一页没有', async () => {
     stubFetch({ '/api/storage': { parts } });
     const { ctx, root } = await mkCtx({ storage: true });
     mountStorage(ctx, { filter: (p) => p.owner === 'world:sample' });
     await flush();
     expect(root.findAll('strow').map((r: Any) => r.find('stlabel')!.textContent)).toEqual(['World 落盘', 'World 内存']);
-    expect(root.findAll('stacklabel').map((l: Any) => l.textContent)).toEqual(['落盘 data/（重启后仍在）', '内存暂存（重启即清零）']);
+    expect(root.findAll('sheet').map((l: Any) => l.findTag('h3')!.textContent)).toEqual(['保存在磁盘', '只在内存']);
     expect(root.findButton('⚠ 一键清空服务端全部存储')).toBeNull();
 
     const disk = await mkCtx({ storage: true });
     mountStorage(disk.ctx, { filter: (p) => p.key === 'events' });
     await flush();
-    expect(disk.root.findAll('stacklabel').map((l: Any) => l.textContent)).toEqual(['落盘 data/（重启后仍在）']);
+    expect(disk.root.findAll('sheet').map((l: Any) => l.findTag('h3')!.textContent)).toEqual(['保存在磁盘']);
 
     const none = await mkCtx({ storage: true });
     mountStorage(none.ctx, { filter: () => false });
@@ -849,7 +852,7 @@ describe('存储页', () => {
     await flush();
 
     expect(root.findAll('strow').length).toBe(4);
-    expect(root.findAll('stacklabel').length).toBe(2);
+    expect(root.findAll('sheet').length).toBe(2);
     expect(root.find('stloc')!.textContent).toBe('data/events.jsonl');
     expect(root.find('ststat')!.textContent).toBe('128 条');
     // danger 的那颗是危险配色

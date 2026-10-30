@@ -1,18 +1,18 @@
 /**
  * 用量与成本页读取跨重启保留的调用流水，按时段与范围统计 token、成本和请求次数，按各角色实际模型计价。
  * 页头下方的时间范围作用于整页；其下分为总览、Token 活跃度、用量时间序列与分组明细四节。
- * 状态属于本次 mount，换算币种除外(记在 localStorage,换页与重启后沿用);定时器使用 lifecycle.interval，监听绑定 signal，tooltip 挂在本页 root。
+ * 状态属于本次 mount，换算币种除外(存在 memo 里，换页与重启后沿用);定时器使用 lifecycle.interval，监听绑定 signal，tooltip 挂在本页 root。
  * 柱图由 chart.ts 提供，活跃度格子图由 activity.ts 提供。
  */
 
 import type { WebUi, WebUiSheet, Disposable } from '../../../shared/client-panel.ts';
 import { get } from '../../core/api.ts';
-import { LANGUAGE } from '../../core/language.ts';
+import { createMemo } from '../../core/memo.ts';
 import { esc } from '../../ui/dom.ts';
-import { webUiFormat } from '../../ui/format.ts';
+import { webUiFormat, currencyName, currencySymbol, formatMoney } from '../../ui/format.ts';
 import { getThemeStudio } from '../../theme/studio.ts';
-import { pageIntro } from '../../ui/page.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
+import { pageIntro } from '../../ui/page.ts';
 import { ACTIVITY_CONTEXT_DAYS, renderActivity } from './activity.ts';
 import { bucketLabel, renderChart } from './chart.ts';
 import { U_TYPES, themeColorResolver } from './labels.ts';
@@ -26,10 +26,9 @@ import type { UsageAccum, UsageAggregate, UsageBucketOption, UsageDailyTokens, U
 const LIVE_MS = 15_000;
 /** 图区变宽变窄后延迟重画图表，合并连续的尺寸变化。 */
 const RESIZE_DEBOUNCE_MS = 80;
-/** 换算币种的 localStorage 键，空串表示自动 */
-const CURRENCY_KEY = 'cortico:usage-currency:v1';
-/** 没选过币种时用的币种，空串表示自动。 */
-const DEFAULT_CURRENCY = LANGUAGE === 'zh' ? 'CNY' : '';
+
+/** 换算币种，空串表示自动 */
+const memo = createMemo('cortico.usage.');
 
 const BUCKETS: ReadonlyArray<{ value: UsageBucketOption; label: string }> = [
   { value: 'auto', label: S.bucketAuto },
@@ -62,17 +61,27 @@ const SPLITS: ReadonlyArray<{ dim: UsageDim; label: string }> = [
 ];
 
 /** 已知金额。全部未计价为「未知」;部分未计价时金额是下限,后缀标出。 */
-function costText(amount: number, a: Partial<UsageAccum>, cur: string): string {
+function costText(amount: number, a: Partial<UsageAccum>, cur: string, decimals: 2 | 3 = 2): string {
   const unpriced = a.unpricedCalls || 0;
   if (unpriced > 0 && !(a.pricedCalls || 0) && !amount) return S.unknown;
-  return webUiFormat.money(amount, cur) + (unpriced > 0 ? S.partialMark : '');
+  return formatMoney(amount, cur, decimals) + (unpriced > 0 ? S.partialMark : '');
+}
+
+/** 读数卡里的金额，「+未计价」用小一号的字。 */
+function costValue(ui: WebUi, amount: number, a: Partial<UsageAccum>, cur: string, decimals: 2 | 3 = 2): HTMLElement {
+  const text = costText(amount, a, cur, decimals);
+  const mark = S.partialMark.trim();
+  const el = ui.h('span');
+  if (!text.endsWith(S.partialMark)) { el.textContent = text; return el; }
+  el.append(text.slice(0, -S.partialMark.length), ui.h('span', 'stat-mark', mark));
+  return el;
 }
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-/** abort 不是失败，是"这一页已经不在了"。 */
+/** 离开页面引起的 abort,不当作失败显示。 */
 function isAbort(err: unknown): boolean {
   return (err as { name?: unknown } | null)?.name === 'AbortError';
 }
@@ -83,6 +92,17 @@ function headActions(ui: WebUi, sheet: WebUiSheet, ...actions: HTMLElement[]): v
   const head = ui.h('div', 'usec-head');
   title.replaceWith(head);
   head.append(title, ...actions);
+}
+
+/** 选择框宽度取最长的选项：换选项、换币种时它不变宽窄，旁边的控件不被推动。 */
+function fitWidest(select: HTMLSelectElement): void {
+  const doc = select.ownerDocument, style = doc.defaultView!.getComputedStyle(select);
+  const context = doc.createElement('canvas').getContext('2d');
+  if (!context || !style.fontSize) return;
+  context.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const text = Math.max(0, ...[...select.options].map(option => context.measureText(option.textContent ?? '').width));
+  const edges = ['padding-left', 'padding-right', 'border-left-width', 'border-right-width'].reduce((sum, name) => sum + (parseFloat(style.getPropertyValue(name)) || 0), 0);
+  select.style.width = `${Math.ceil(text + edges) + 2}px`;
 }
 
 /** 控件条里的一组：小标签加它管的控件。 */
@@ -105,10 +125,7 @@ export function mountUsage(ctx: FeatureContext): void {
     onChange: (on) => setLive(on),
   });
   const refreshBtn = ui.button(S.refresh, { size: 'sm', onClick: () => void load() });
-  const intro = pageIntro(ui, S.pageTitle);
-  const introActs = ui.h('div', 'uintroacts');
-  introActs.append(liveBox.el, refreshBtn);
-  intro.appendChild(introActs);
+  const intro = pageIntro(ui, S.pageTitle, undefined, [liveBox.el, refreshBtn]);
 
   // ---- 时间范围：页头第二行，随页头吸顶 --------------------------------------
   // 日期框一直在：预设档显示它算出的范围，改日期即切到自定义档，切换时这一行不变形。
@@ -148,27 +165,27 @@ export function mountUsage(ctx: FeatureContext): void {
   rangeBar.append(presets.el, dates);
   intro.append(rangeBar, notice);
 
-  // ---- 总览：读数、成本构成与费用口径 -----------------------------------------
+  // ---- 总览：读数、成本构成与计费口径 -----------------------------------------
   const overview = ui.sheet({ title: S.sectionOverview });
   let basis = 'marginal';
-  const storage = root.ownerDocument.defaultView!.localStorage;
-  let currency = storage.getItem(CURRENCY_KEY) ?? DEFAULT_CURRENCY;
+  let currency = memo.get('currency', '');
+  // 数据回来前先按记住的币种显示，免得选择框闪一下「自动」。
   const currencySelect = ui.select({
-    // 先按记住的币种占一个选项，取数回来前选择框不会先闪一下「自动」。
-    options: [{ value: '', label: S.autoCurrency }, ...(currency ? [{ value: currency, label: currency }] : [])],
-    value: currency,
-    onChange: value => { currency = value; storage.setItem(CURRENCY_KEY, value); void load(); },
+    options: [{ value: '', label: S.autoCurrency }, ...(currency ? [{ value: currency, label: currencyName(currency) }] : [])],
+    onChange: value => { currency = value; memo.set('currency', value); void load(); },
   });
+  currencySelect.value = currency;
   const basisSelect = ui.select({ options: [{value:'marginal',label:S.basisMarginal},{value:'equivalent',label:S.basisEquivalent}], onChange: value => { basis = value; void load(); } });
   basisSelect.setAttribute('aria-label', S.ledger);
-  // 换算币种的汇率与出处，只读
+  // 换算币种的汇率与出处，只读。放在「计费口径」左边：控件靠右排，它出现、变长只往左长，不推动选择框。
   const rateText = ui.h('span', 'ulabel');
   const rateSource = ui.h('span', 'ulabel ursrc');
   const rateBox = ui.h('span', 'urate');
   rateBox.append(rateText, rateSource);
   rateBox.hidden = true;
   const ledger = ui.h('span', 'uledger');
-  ledger.append(ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect, rateBox);
+  ledger.append(rateBox, ui.h('span', 'ulabel', S.ledger), basisSelect, currencySelect);
+  fitWidest(basisSelect); fitWidest(currencySelect);
   headActions(ui, overview, ledger);
   const cards = ui.h('div', 'ukpis');
   const compBox = ui.h('div', 'ucomp');
@@ -197,8 +214,6 @@ export function mountUsage(ctx: FeatureContext): void {
     onSelect: (v) => { state.bucket = v as UsageBucketOption; void load(); },
   });
   bucketSeg.el.classList.add('uswitch');
-  const bucketNote = ui.h('span', 'uauto');
-  bucketNote.hidden = true;
   // 拆分维度可多选：同一组按钮，按下的高亮。
   const splitWrap = ui.h('div', 'segwrap sm umulti');
   const splitBtns = SPLITS.map(({ dim, label }) => {
@@ -222,7 +237,7 @@ export function mountUsage(ctx: FeatureContext): void {
   const mainBox = ui.h('div', 'uchart');
   const mainNote = ui.h('p', 'muted unote');
   const chartCtrls = ui.h('div', 'uctrls');
-  chartCtrls.append(group(ui, S.granularity, bucketSeg.el, bucketNote), group(ui, S.split, splitWrap, sortBox.el));
+  chartCtrls.append(group(ui, S.granularity, bucketSeg.el), group(ui, S.split, splitWrap, sortBox.el));
   trend.body.append(chartCtrls, mainLegend, mainBox, mainNote);
 
   // ---- 分组明细：同一时刻显示一张 -------------------------------------------
@@ -308,7 +323,7 @@ export function mountUsage(ctx: FeatureContext): void {
 
     const items: Parameters<typeof ui.stat>[0][] = [
       {
-        k: S.cardKnownCost, v: costText(t.cost || 0, t, cur), accent: true,
+        k: S.cardKnownCost, v: costValue(ui, t.cost || 0, t, cur), accent: true,
         unit: unpriced > 0 ? S.unpriced(unpriced) : `${S.cardCoverage} ${t.pricedCalls || 0} / ${calls}`,
       },
       {
@@ -319,8 +334,8 @@ export function mountUsage(ctx: FeatureContext): void {
       },
       { k: S.cardInput, v: webUiFormat.count(t.promptTokens || 0), unit: S.hitRate(webUiFormat.percent(t.cacheHitRate)) },
       { k: S.cardOutput, v: webUiFormat.count(t.completionTokens || 0), unit: S.reasoningShare(webUiFormat.percent(rShare)) },
-      { k: S.cardAvgCost, v: okCalls ? costText(avgCost, successful, cur) : '—', unit: okCalls ? S.approxTok(webUiFormat.count(Math.round(avgTok))) : '' },
-      { k: S.cardPeak, v: peak ? costText(peak.cost || 0, peak, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
+      { k: S.cardAvgCost, v: okCalls ? costValue(ui, avgCost, successful, cur, 3) : '—', unit: okCalls ? S.approxTok(webUiFormat.count(Math.round(avgTok))) : '' },
+      { k: S.cardPeak, v: peak ? costValue(ui, peak.cost || 0, peak, cur) : '—', unit: peak ? bucketLabel(peak.bucket, d.bucket || 'day') : '' },
     ];
     cards.replaceChildren(...items.map((item) => {
       const el = ui.stat(item);
@@ -380,7 +395,7 @@ export function mountUsage(ctx: FeatureContext): void {
 
   /**
    * 首列印的是**声明方给的名字**，后面跟 id 原文；给不出名字就只印 id。角色 id 由Persona定义、
-   * 模型名由供应商定义，WebUI 两边都不认识，也就不为任何一边备一张翻译表。
+   * 模型名由供应商定义，控制台两边都不认识，也就不为任何一边备一张翻译表。
    */
   function renderGroup(
     table: ReturnType<WebUi['table']>,
@@ -400,7 +415,7 @@ export function mountUsage(ctx: FeatureContext): void {
         { text: webUiFormat.count(g.completionTokens), cls: 'mono' },
         { text: webUiFormat.percent(g.cacheHitRate), cls: 'mono' },
         { text: costText(g.cost || 0, g, cur), cls: 'mono' },
-        { text: costText(avg, g, cur), cls: 'mono' },
+        { text: costText(avg, g, cur, 3), cls: 'mono' },
       ]);
     }
   }
@@ -434,40 +449,38 @@ export function mountUsage(ctx: FeatureContext): void {
     notice.hidden = !notice.textContent;
   }
 
-  function renderAll(d: UsageAggregate): void {
+  function renderAll(d: UsageAggregate, daily: readonly UsageDailyTokens[] | null): void {
     const currencies = d.currencies ?? [];
-    // 记住的币种可能已不在可选集（汇率被删、账目里无此币种）：清掉偏好退回自动，否则选择框
+    // 记住的币种可能已不在可选集（账目里无此币种）：清掉偏好退回自动，否则选择框
     // 空着而金额仍按无法换算的币种算。
     if (currency && currencies.length && !currencies.includes(currency)) {
       currency = '';
-      storage.setItem(CURRENCY_KEY, '');
+      memo.set('currency', '');
       void load();
     }
     currencySelect.replaceChildren(...['', ...currencies].map(value => {
       const option = doc.createElement('option');
       option.value = value;
-      option.textContent = value || S.autoCurrency;
+      option.textContent = value ? currencyName(value) : S.autoCurrency;
       return option;
     }));
-    currencySelect.value = currency;
+    currencySelect.value = currency; fitWidest(currencySelect);
     const shown = d.currency || 'USD';
     const rate = shown === 'USD' ? undefined : d.rates?.[shown];
     rateBox.hidden = rate === undefined;
-    if (rate !== undefined) rateText.textContent = `1 USD = ${Number(rate.toPrecision(5))} ${shown}`;
+    if (rate !== undefined) rateText.textContent = `${currencySymbol('USD')}1 = ${currencySymbol(shown)}${Number(rate.toPrecision(5))}`;
     renderRateSource(d.rateSources?.[shown]);
     billingNote.textContent = S.billingHint +
       (d.totals?.unknownUsageCalls ? S.unknownUsage(d.totals.unknownUsageCalls) : '');
     renderRange(d);
-    bucketNote.textContent = state.bucket === 'auto' && d.bucket ? S.autoBucket(d.bucket) : '';
-    bucketNote.hidden = !bucketNote.textContent;
     renderNotes();
     renderCards(d);
     renderComposition(d);
-    if (d.dailyTokens && d.from && d.to) {
+    if (daily && d.from && d.to) {
       const prev = activityData;
-      activityData = { daily: d.dailyTokens, from: d.from, to: d.to };
+      activityData = { daily, from: d.from, to: d.to };
       const moved = prev && (prev.from !== d.from || prev.to !== d.to);
-      renderActivity({ ui, box: activityBox, tip }, d.dailyTokens, activityData, !prev ? 'enter' : moved ? prev : null);
+      renderActivity({ ui, box: activityBox, tip }, daily, activityData, !prev ? 'enter' : moved ? prev : null);
     }
     const cur = d.currency || 'USD';
     renderGroup(groupTables.role, d.byRole || [], cur);
@@ -482,7 +495,7 @@ export function mountUsage(ctx: FeatureContext): void {
   let generation = 0;
   let loadedAt = '';
 
-  /** 一次请求取回整页数据：主数据按所选粒度分桶，活跃度格子图用同一次聚合附带的逐日 token 合计。 */
+  /** 主数据按所选粒度分桶;活跃度格子图的逐日 token 由同一次请求的 dailyTokenDays 带回。 */
   async function load(): Promise<void> {
     const mine = ++generation;
     const extra = `&basis=${basis}&currency=${encodeURIComponent(currency)}&dailyTokenDays=${ACTIVITY_CONTEXT_DAYS}`;
@@ -496,7 +509,7 @@ export function mountUsage(ctx: FeatureContext): void {
       loadedAt = ui.fmt.clock(new Date().toISOString());
       staleNote = '';
       results.classList.remove('u-stale');
-      renderAll(d);
+      renderAll(d, d.dailyTokens ?? null);
     } catch (err) {
       if (isAbort(err) || ctx.signal.aborted || mine !== generation) return;
       if (!state.data) {

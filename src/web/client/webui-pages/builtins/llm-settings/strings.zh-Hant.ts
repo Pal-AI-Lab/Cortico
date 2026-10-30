@@ -37,7 +37,7 @@ export const panel: Partial<typeof en> = {
   modelName: '明確模型名稱',
   fetchModels: '取得模型清單',
   modelsFetched: (count: number) => `取得 ${count} 個模型。`,
-  modelListFailed: (message: string) => `取不到模型清單：${message}`,
+  modelListFailed: (message: string) => `無法取得模型清單：${message}`,
   selectModel: '選擇模型',
   unsupportedTier: (current: string) => `目前檔位未支援：${current}`,
   thinkingOn: '開啟',

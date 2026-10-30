@@ -27,6 +27,19 @@
     "tests/web/settings-general.test.ts",
     "tests/web/feature-providers.test.ts",
     "tests/web/feature-extensions.test.ts",
-    "tests/web/extensions-markdown.test.ts"
+    "tests/web/extensions-markdown.test.ts",
+    "tests/web/prompts-editor.test.ts",
+    "tests/web/prompts-page.test.ts",
+    "tests/web/prompt-input-draft.test.ts",
+    "tests/web/ui-page-chrome.test.ts",
+    "tests/web/feature-config-view.test.ts",
+    "tests/web/core-pager.test.ts",
+    "tests/web/live-sessions.test.ts",
+    "tests/web/core-motion.test.ts",
+    "tests/web/world-groups.test.ts",
+    "tests/web/extension-search.test.ts",
+    "tests/web/extension-catalog.test.ts",
+    "tests/web/feature-world-library.test.ts",
+    "tests/web/usage-money.test.ts"
   ]
 }

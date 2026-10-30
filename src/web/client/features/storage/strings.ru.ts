@@ -7,8 +7,8 @@ const plural = (n: number, one: string, few: string, many: string) => {
 };
 
 export const S: Partial<typeof en> = {
-  sectionDisk: 'data/ на диске (сохраняется после перезапуска)',
-  sectionMemory: 'В памяти (очищается при перезапуске)',
+  sectionDisk: 'На диске',
+  sectionMemory: 'Только в памяти',
   nukeAll: '⚠ Очистить всё хранилище сервера',
   clear: 'Очистить',
   dangerTitle: (label: string) => `⚠ Опасно: ${label}`,

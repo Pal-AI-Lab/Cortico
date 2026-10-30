@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: 'Configurações', marketTab: 'Mercado de extensões',
   pageTitle: 'Conexões de modelo', navLabel: 'Conexões de modelo', navGroup: 'Core', create: '+ Nova instância de conexão', newName: 'Instância sem nome',
   createHint: 'Uma instância é um conjunto de configurações do provedor salvo como cartão.',
   empty: 'Ainda não há conexões de modelo', emptyHint: 'Adicione uma conexão de modelo para habilitar a inferência.',
-  eraseConfirm: 'Confirmar exclusão',
   connect: 'Conectar', activate: 'Definir como conexão atual', active: 'Modelo atual', missing: 'A conexão de modelo atual não existe: ',
   inUse: (names: string) => `Em uso por: ${names}`, selectedBy: (names: string) => `Selecionada por ${names} (fora de execução)`,
   names: (list: string[]) => list.join(', '),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: 'Esforço de raciocínio', thinking: 'Ativar raciocínio', temperature: 'Temperatura', maxTokens: 'Máximo de tokens de saída', context: 'Limite de contexto', tier: 'Nível de serviço', images: 'Aceitar imagens',
   catalogNoWindow: 'A lista de modelos não informa a janela de contexto deste modelo; preencha com base na documentação do provedor.',
   catalogMaxOutput: (tokens: number) => `A lista de modelos informa uma saída máxima de ${tokens} tokens.`,
-  advancedHint: 'Ajuste apenas para gateways de API personalizados ou serviços compatíveis.', secret: 'Variável de ambiente da credencial',
+  secret: 'Variável de ambiente da credencial',
   extraHeaders: 'Cabeçalhos extras (objeto JSON)', extraBody: 'Corpo de requisição extra (objeto JSON)', priceRules: 'Regras de preço completas (array JSON)',
   shared: 'Configuração compartilhada: vários bots podem usar esta conexão. As alterações atualizam esta configuração compartilhada; crie outra conexão se precisar de configurações diferentes.',
   remove: 'Excluir conexão', duplicate: 'Duplicar conexão', cancel: 'Descartar alterações', save: 'Salvar', saved: 'Salvo',

@@ -1,10 +1,10 @@
 import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
+  settingsTab: 'Einstellungen', marketTab: 'Erweiterungsmarkt',
   pageTitle: 'Modellverbindungen', navLabel: 'Modellverbindungen', navGroup: 'Core', create: '+ Neue Verbindungsinstanz', newName: 'Unbenannte Instanz',
   createHint: 'Eine Instanz ist ein Satz Anbieter-Einstellungen, gespeichert als Karte.',
   empty: 'Noch keine Modellverbindungen', emptyHint: 'Füge eine Modellverbindung hinzu, um Inferenz zu ermöglichen.',
-  eraseConfirm: 'Löschen bestätigen',
   connect: 'Verbinden', activate: 'Als aktuelle Verbindung festlegen', active: 'Aktuelles Modell', missing: 'Aktuelle Modellverbindung fehlt: ',
   inUse: (names: string) => `Verwendet von: ${names}`, selectedBy: (names: string) => `Ausgewählt von ${names} (läuft nicht)`,
   names: (list: string[]) => list.join(', '),
@@ -18,7 +18,7 @@ export const S: Partial<typeof en> = {
   reasoning: 'Denkaufwand', thinking: 'Denkprozess aktivieren', temperature: 'Temperatur', maxTokens: 'Max. Ausgabe-Tokens', context: 'Kontextlimit', tier: 'Servicestufe', images: 'Bilder akzeptieren',
   catalogNoWindow: 'Die Modellliste nennt kein Kontextfenster für dieses Modell; trage es laut Dokumentation des Anbieters ein.',
   catalogMaxOutput: (tokens: number) => `Die Modellliste nennt eine maximale Ausgabe von ${tokens} Tokens.`,
-  advancedHint: 'Nur für eigene API-Gateways oder kompatible Dienste anpassen.', secret: 'Umgebungsvariable für Zugangsdaten',
+  secret: 'Umgebungsvariable für Zugangsdaten',
   extraHeaders: 'Zusätzliche Header (JSON-Objekt)', extraBody: 'Zusätzlicher Anfrage-Body (JSON-Objekt)', priceRules: 'Vollständige Preisregeln (JSON-Array)',
   shared: 'Geteilte Konfiguration: Mehrere Bots können diese Verbindung nutzen. Änderungen aktualisieren diese geteilte Konfiguration; lege eine weitere Verbindung an, wenn du andere Einstellungen brauchst.',
   remove: 'Verbindung löschen', duplicate: 'Verbindung duplizieren', cancel: 'Änderungen verwerfen', save: 'Speichern', saved: 'Gespeichert',

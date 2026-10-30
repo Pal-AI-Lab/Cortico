@@ -4,6 +4,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { extendMiniElement, miniWindow } from './mini-dom.ts';
 
 const UI_ENTRY = '../../src/web/client/ui/index.ts';
 const LIFECYCLE_ENTRY = '../../src/web/client/core/lifecycle.ts';
@@ -200,11 +201,13 @@ class FakeEl {
   }
 }
 
+extendMiniElement(FakeEl);
+
 class FakeDoc {
   listeners = new Listeners();
   body: FakeEl;
   title = '';
-  defaultView: Any = undefined;
+  defaultView: Any = miniWindow();
   constructor() {
     this.body = new FakeEl('body', this);
   }
@@ -391,7 +394,9 @@ function defaultReply(url: string): unknown {
 }
 
 /** 子页签那一排(`.seg` 按钮)。 */
-const segs = (root: FakeEl): FakeEl[] => root.findAll('seg');
+const segs = (root: FakeEl): FakeEl[] => root.findAll('pagetab');
+/** 「运行」里事件流那张表(排在会话统计之后)。 */
+const eventsBody = (root: FakeEl): FakeEl => (root.findAll('tablewrap').at(-1) as FakeEl).findTag('tbody') as FakeEl;
 
 /**
  * 让挂起的 promise 链跑完。
@@ -463,26 +468,21 @@ describe('core 子页签', () => {
     const { env } = fakeEnv();
     const { ctx, root } = mkCtx({ debug: true });
     core.createCoreFeature({ env }).mount(ctx);
-    expect(segs(root).map((s) => s.textContent)).toEqual(['运行', '事件流', '运行日志']);
+    expect(segs(root).map((s) => s.textContent)).toEqual(['运行', '运行日志']);
   });
 
-  it('全挂时六个都在,默认落在第一个(ORIENTATION 与工具表都不在这——前者 core 不持,后者归 Persona 页)', () => {
+  it('全挂时四个都在,默认落在第一个(会话统计与事件流并在「运行」里;工具表归 Persona 页)', () => {
     stubFetch(defaultReply);
     const { env } = fakeEnv();
     const { ctx, root } = mkCtx(ALL_CAPS);
     core.createCoreFeature({ env }).mount(ctx);
     expect(root.findTag('h1')!.textContent).toBe('运行诊断');
-    expect(segs(root).map((s) => s.textContent)).toEqual([
-      '运行',
-      '会话统计',
-      '事件流',
-      '运行日志',
-      '数据',
-      '配置',
-    ]);
-    expect(root.find('subtabs')).not.toBe(null);
+    expect(segs(root).map((s) => s.textContent)).toEqual(['运行', '运行日志', '数据清理', '配置']);
+    expect(root.find('pagetabs')).not.toBe(null);
     expect(segs(root)[0].className).toContain('active');
-    expect(root.find('statgrid')).not.toBe(null);
+    expect(root.find('core-summary')).not.toBe(null);
+    // 会话统计与事件流两张表都在「运行」里
+    expect(root.findAll('tablewrap').length).toBe(2);
   });
 
   it('数据子页只列 owner 是 core 的项,带一键清空;配置子页只画 owner 是 core 的组', async () => {
@@ -507,17 +507,17 @@ describe('core 子页签', () => {
     const config = mkCtx(ALL_CAPS, '#/core/config');
     core.createCoreFeature({ env }).mount(config.ctx);
     await flush();
-    expect(config.root.findAll('tsection').map((s) => s.textContent)).toEqual(['主循环']);
+    expect(config.root.findAll('sheet').map((s) => s.findTag('h3')!.textContent)).toEqual(['主循环']);
   });
 
   it('进来时按路由第二段落在对应子页', async () => {
     stubFetch(defaultReply);
     const { env } = fakeEnv();
-    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/events');
+    const { ctx, root } = mkCtx(ALL_CAPS, '#/core/runlog');
     core.createCoreFeature({ env }).mount(ctx);
     await flush();
-    expect(segs(root)[2].className).toContain('active');
-    expect(fetched.some((u) => u.startsWith('/api/events?limit=100'))).toBe(true);
+    expect(segs(root)[1].className).toContain('active');
+    expect(fetched.some((u) => u.startsWith('/api/log?'))).toBe(true);
   });
 
   it('路由第二段不认识时退回第一个子页,不留白页', () => {
@@ -533,7 +533,7 @@ describe('core 子页签', () => {
     const { env } = fakeEnv();
     const { ctx, root, win } = mkCtx(ALL_CAPS);
     core.createCoreFeature({ env }).mount(ctx);
-    segs(root)[3].dispatchEvent({ type: 'click' });
+    segs(root)[1].dispatchEvent({ type: 'click' });
     expect(win.location.hash).toBe('#/core/runlog');
   });
 });
@@ -557,12 +557,12 @@ describe('运行态', () => {
         loop: { estTokens: 12345, messageCount: 9, paused: true, behind: 3, lastDeliveredCursor: 4 },
       },
     });
-    const grid = root.find('statgrid') as FakeEl;
-    expect(grid.children.length).toBe(11);
-    expect(grid.textContent).toContain('12.3k');
-    expect(grid.children[0].textContent).toContain('暂停');
-    expect(grid.children[1].textContent).toContain('3');
-    expect(grid.children[2].textContent).toContain('4/ 7');
+    const summary = root.find('core-summary') as FakeEl;
+    const band = summary.children[0];
+    expect(band.children[0].textContent).toContain('暂停');
+    expect(band.children[1].textContent).toContain('3');
+    expect(band.textContent).toContain('12.3k');
+    expect(summary.find('live-summary-right')!.textContent).toContain('投递 4 / 7');
   });
 
   // 暂停/继续与关机都不在这一页:它们在左栏右下角(shell),测试在 shell.test.ts。
@@ -585,11 +585,11 @@ describe('事件流', () => {
     const { ctx, root } = mkCtx(ALL_CAPS, '#/core/events');
     core.createCoreFeature({ env }).mount(ctx);
     await flush();
-    const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
+    const body = eventsBody(root);
     expect(body.children.length).toBe(2);
     expect(body.textContent).toContain('10:00:00');
-    const list = root.findTag('datalist') as FakeEl;
-    expect(list.children.map((o) => o.value)).toEqual(['a', 'b']);
+    const sources = root.find('core-filter-source') as FakeEl;
+    expect(sources.children.map((o) => o.value)).toEqual(['', 'a', 'b']);
   });
 
   it('有调试通道就不自己轮询;event 帧到了才追一次', async () => {
@@ -621,18 +621,18 @@ describe('事件流', () => {
     sockets[0].up();
     sockets[0].emit({ t: 'event' });
     await flush();
-    const body = (root.find('tablewrap') as FakeEl).findTag('tbody') as FakeEl;
-    expect(body.children.map((r) => r.children[0].textContent)).toEqual(['#1000', '#1001', '#1002', '#1003']);
+    // 新的在前
+    expect(eventsBody(root).children.map((r) => r.children[0].textContent)).toEqual(['#1003', '#1002', '#1001', '#1000']);
   });
 
-  it('没有调试通道才退回轮询,离开子页即停', async () => {
+  it('没有调试通道才退回轮询,离开「运行」即停', async () => {
     stubFetch(defaultReply);
     const { env } = fakeEnv();
     const { ctx, root, lifecycle } = mkCtx({ sessions: false }, '#/core/events');
     core.createCoreFeature({ env }).mount(ctx);
     await flush();
     expect(vi.getTimerCount()).toBe(1);
-    segs(root)[0].dispatchEvent({ type: 'click' }); // 切到「运行」
+    segs(root)[1].dispatchEvent({ type: 'click' }); // 切到「运行日志」
     expect(vi.getTimerCount()).toBe(0);
     lifecycle.dispose();
     expect(vi.getTimerCount()).toBe(0);
@@ -678,12 +678,13 @@ describe('运行日志', () => {
     expect(body.children.length).toBe(2);
     expect(lastLogUrl()).toContain('level=debug');
     expect(lastLogUrl()).toContain('run=r-b');
-    expect(body.children[0].textContent).toContain('×3');
-    expect(body.children[1].textContent).toContain('y/llm-failed');
-    expect(body.children[1].textContent).toContain('{"k":1}');
-    expect(body.children[1].textContent).toContain('upstream 502');
+    // 新的在前
+    expect(body.children[1].textContent).toContain('×3');
+    expect(body.children[0].textContent).toContain('y/llm-failed');
+    expect(body.children[0].textContent).toContain('{"k":1}');
+    expect(body.children[0].textContent).toContain('upstream 502');
     // 级别格与 err 段都是 .lv-error;err 段在正文格里,排在后面
-    expect(body.children[1].findAll('lv-error').at(-1)?.textContent).toBe(' upstream 502');
+    expect(body.children[0].findAll('lv-error').at(-1)?.textContent).toBe(' upstream 502');
 
     const [runSel, levelSel] = root.findAllTag('select');
     expect(runSel.children.map((o) => o.value)).toEqual(['r-b', 'r-a']);

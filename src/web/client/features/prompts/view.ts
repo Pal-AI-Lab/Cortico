@@ -4,6 +4,7 @@ import type { WebUi, Disposable } from '../../../shared/client-panel.ts';
 import { get, post } from '../../core/api.ts';
 import type { Lifecycle } from '../../core/lifecycle.ts';
 import { S } from './strings.ts';
+import { sharedTemplate } from './titles.ts';
 import type { EnvPromptOrigin } from '../../../../core/prefix.ts';
 
 /** 一个占位符:声明 + 此刻的实际展开值。 */
@@ -36,6 +37,8 @@ export interface PromptsViewDeps {
   onError(err: unknown): void;
   /** 只展示这些源；省略时展示全部。 */
   keys?: readonly string[];
+  /** 也在「系统提示词」页编辑的模板：卡片用那边的名字，并标出两边同步。 */
+  shared?: ReadonlySet<string>;
 }
 
 export interface PromptsView {
@@ -110,12 +113,13 @@ export function createPromptsView(deps: PromptsViewDeps): PromptsView {
   );
 
   const card = (doc: PromptDoc): HTMLElement => {
+    const named = deps.shared?.has(doc.key) ? sharedTemplate(doc.key) : null;
     const sheet = ui.sheet({
-      title: doc.title,
-      en: S.editableTemplate,
-      desc: doc.description || S.cardDescDefault,
+      title: named?.title ?? doc.title,
+      desc: named?.detail ?? (doc.description || S.cardDescDefault),
     });
     sheet.el.className += ' prompt-card';
+    if (deps.shared?.has(doc.key)) sheet.el.querySelector('h3')!.appendChild(ui.chip(S.syncedChip, 'plain'));
     let revision = doc.revision;
     /** World 的环境提示词多说一句此刻读的是哪一层:保存永远落到部署层,包与 World 那两份不动。 */
     const loadedText = (): string => doc.origin === 'deployment'

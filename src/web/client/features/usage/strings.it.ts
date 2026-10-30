@@ -1,5 +1,4 @@
 import type { en } from './strings.ts';
-import type { UsageBucketUnit } from './types.ts';
 
 export const S: Partial<typeof en> = {
   // index.ts
@@ -23,11 +22,10 @@ export const S: Partial<typeof en> = {
   liveRefreshTitle: (sec: number) => `Ricarica ogni ${sec} s; si ferma quando lasci questa pagina`,
   refresh: 'Aggiorna',
   granularity: 'Granularità',
-  autoBucket: (unit: UsageBucketUnit) => `Automatico (${{ minute: 'per minuto', hour: 'per ora', day: 'per giorno', week: 'per settimana', month: 'per mese' }[unit]})`,
   autoCurrency: 'Valuta automatica',
   rateBuiltin: (date: string) => `integrato ${date}`,
-  basisMarginal: 'Costo marginale',
-  basisEquivalent: 'Costo equivalente API',
+  basisMarginal: 'Spesa effettiva',
+  basisEquivalent: 'A prezzo API',
   ledger: 'Base di costo',
   compTitle: 'Composizione dei costi',
   mainTitle: "Serie temporale dell'uso",

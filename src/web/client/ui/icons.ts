@@ -39,7 +39,18 @@ export type WebUiIconName =
   | 'reply'
   | 'shield-check'
   | 'sparkles'
-  | 'github';
+  | 'github'
+  | 'sliders'
+  | 'globe'
+  | 'check'
+  | 'sidebar'
+  | 'update'
+  | 'warning'
+  | 'arrow-left'
+  | 'radio-on'
+  | 'radio-off'
+  | 'info'
+  | 'help';
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect' | 'line', attrs: Readonly<Record<string, string>>];
 
@@ -74,9 +85,10 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z' }],
   ],
   play: [['path', { d: 'm8 5 11 7-11 7V5Z' }]],
+  // Drawn half a unit low so the glyph, open at the top, is centred in its box.
   power: [
-    ['path', { d: 'M12 3v8' }],
-    ['path', { d: 'M17.7 6.3a8 8 0 1 1-11.4 0' }],
+    ['path', { d: 'M12 3.5v8' }],
+    ['path', { d: 'M17.7 6.8a8 8 0 1 1-11.4 0' }],
   ],
   pause: [
     ['rect', { x: '7', y: '5', width: '3', height: '14', rx: '1' }],
@@ -126,11 +138,11 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M21 3v6h-6' }],
   ],
   trash: [
-    ['path', { d: 'M4 7h16' }],
-    ['path', { d: 'M9.5 7V5h5v2' }],
-    ['path', { d: 'M6.5 7v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2V7' }],
-    ['path', { d: 'M10 11v6' }],
-    ['path', { d: 'M14 11v6' }],
+    ['path', { d: 'M4 6h16' }],
+    ['path', { d: 'M9.5 6V4h5v2' }],
+    ['path', { d: 'M6.5 6v12a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2V6' }],
+    ['path', { d: 'M10 10v6' }],
+    ['path', { d: 'M14 10v6' }],
   ],
   'vote-up': [['path', { d: 'M12 6.5 19 17.5H5Z' }]],
   'vote-down': [['path', { d: 'M12 17.5 5 6.5h14Z' }]],
@@ -191,6 +203,55 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['rect', { x: '3', y: '4', width: '18', height: '12', rx: '2' }],
     ['path', { d: 'M8 20h8' }],
     ['path', { d: 'M12 16v4' }],
+  ],
+  sliders: [
+    ['path', { d: 'M4 7h10' }],
+    ['path', { d: 'M18 7h2' }],
+    ['circle', { cx: '16', cy: '7', r: '2' }],
+    ['path', { d: 'M4 17h3' }],
+    ['path', { d: 'M11 17h9' }],
+    ['circle', { cx: '9', cy: '17', r: '2' }],
+  ],
+  globe: [
+    ['circle', { cx: '12', cy: '12', r: '9' }],
+    ['path', { d: 'M3 12h18' }],
+    ['path', { d: 'M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18' }],
+  ],
+  check: [['path', { d: 'm5 12.5 4.5 4.5L19 7.5' }]],
+  'arrow-left': [
+    ['path', { d: 'M19 12H5' }],
+    ['path', { d: 'm11 6-6 6 6 6' }],
+  ],
+  'radio-on': [
+    ['circle', { cx: '12', cy: '12', r: '7' }],
+    ['circle', { cx: '12', cy: '12', r: '3', fill: 'currentColor' }],
+  ],
+  'radio-off': [
+    ['circle', { cx: '12', cy: '12', r: '7' }],
+  ],
+  warning: [
+    ['path', { d: 'M10.3 4.2 2.6 17.5a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 4.2a2 2 0 0 0-3.4 0Z' }],
+    ['path', { d: 'M12 9.5v4' }],
+    ['path', { d: 'M12 17h.01' }],
+  ],
+  help: [
+    ['circle', { cx: '12', cy: '12', r: '9' }],
+    ['path', { d: 'M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.1-2.5 3.6' }],
+    ['path', { d: 'M12 16.8h.01' }],
+  ],
+  info: [
+    ['circle', { cx: '12', cy: '12', r: '9' }],
+    ['path', { d: 'M12 11v5' }],
+    ['path', { d: 'M12 8h.01' }],
+  ],
+  // An available update: a solid up arrow with a straight stem, so it does not read as the circled info
+  // and alert marks it often sits beside.
+  update: [
+    ['path', { d: 'M12 3.5 18.5 10.5H13.9V19a1 1 0 0 1-1 1h-1.8a1 1 0 0 1-1-1V10.5H5.5Z', fill: 'currentColor', 'stroke-width': '1.2' }],
+  ],
+  sidebar: [
+    ['rect', { x: '3.5', y: '4.5', width: '17', height: '15', rx: '2.5' }],
+    ['path', { d: 'M9.5 4.5v15' }],
   ],
   calendar: [
     ['rect', { x: '3.5', y: '5', width: '17', height: '15.5', rx: '2.5' }],

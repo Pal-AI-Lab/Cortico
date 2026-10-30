@@ -2,7 +2,7 @@ import type { en } from './strings.ts';
 
 export const S: Partial<typeof en> = {
   copy: '複製',
-  copyNothing: '取不到要複製的內容',
+  copyNothing: '沒有可複製的內容',
   copied: '已複製',
   copyFailed: '複製失敗，已展開文字供手動選取',
   imageReadFailed: '讀取圖片失敗',

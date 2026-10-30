@@ -95,7 +95,6 @@ export function button(
     onClick?: (ev: MouseEvent) => void;
   },
 ): HTMLButtonElement {
-  // class 顺序与既有前端一致:`btn sm primary`
   let cls = 'btn';
   if (opts?.size === 'sm') cls += ' sm';
   if (opts?.variant === 'primary' || opts?.variant === 'danger') cls += ' ' + opts.variant;
