@@ -47,6 +47,8 @@ export type WebUiIconName =
   | 'update'
   | 'warning'
   | 'arrow-left'
+  | 'chevron-left'
+  | 'chevron-right'
   | 'radio-on'
   | 'radio-off'
   | 'info'
@@ -222,6 +224,8 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M19 12H5' }],
     ['path', { d: 'm11 6-6 6 6 6' }],
   ],
+  'chevron-left': [['path', { d: 'm15 18-6-6 6-6' }]],
+  'chevron-right': [['path', { d: 'm9 18 6-6-6-6' }]],
   'radio-on': [
     ['circle', { cx: '12', cy: '12', r: '7' }],
     ['circle', { cx: '12', cy: '12', r: '3', fill: 'currentColor' }],

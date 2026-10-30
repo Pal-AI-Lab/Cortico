@@ -1610,7 +1610,8 @@
 /* Extension categories own their scrolling, pagination and action feedback. */
 .brand .wordmark { height: 36px; }
 /* 扩展页分区 */
-.extension-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:10px; margin:0; border:0; }
+/* Rows keep their own height, however few cards a page has. */
+.extension-grid { display:grid; grid-template-columns:minmax(0,1fr); align-content:start; gap:10px; margin:0; border:0; }
 .extension-card { position:relative; min-width:0; display:flex; flex-direction:column; gap:8px; border:1px solid var(--border); border-radius:12px; padding:16px 76px; background:var(--sheet); transition:border-color .11s ease; }
 .extension-card-heading { display:flex; align-items:center; gap:12px; min-width:0; flex-wrap:nowrap; }
 .extension-card-title { font: inherit; font-size: 16px; font-weight: 600; color: var(--foreground); text-align: left; background: none; border: none; padding: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; min-width: 0; max-width: 100%; }
@@ -1736,8 +1737,6 @@ button.extension-tag { cursor: pointer; }
 .extension-event code { font-size: 12px; color: var(--ink); }
 .extension-describe-more { margin-top: 8px; }
 .extension-detail-main > .extension-tag-row { margin-top: 12px; }
-.extension-screenshots { display: flex; gap: 10px; overflow-x: auto; margin: 14px 0 4px; padding-bottom: 4px; }
-.extension-screenshots img { height: 160px; width: auto; max-width: none; border-radius: 10px; border: 1px solid var(--line); }
 .extension-tag-feedback { align-self: center; font-size: 12px; }
 /* 详情两栏 */
 .modalcard.extension-detail-card { width: min(1240px, 94vw); }
@@ -1959,10 +1958,9 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-intro{padding-bottom:0}
 .world-intro>.pagetabs{margin-top:16px;border-bottom:0}
 .world-workspace-status:not(:has(>.msgline:not(:empty))){display:none}
-/* The compact field of the World pages' toolbars, filter row, panels and group names: 32px, the focus
-   shown by the border alone. */
+/* The compact field of the World pages' toolbars, filter row, panels and group names: 32px; its focus is
+   every other page's. */
 :is(.world-catalog,.world-library-tools,.world-group-head) :is(input:not([type=checkbox]):not([type=radio]),select){height:32px;min-height:32px;padding-block:0;font-size:12.5px}
-:is(.world-catalog,.world-library-tools,.world-group-head) :is(input,select):is(:focus,:focus-visible){outline:none;box-shadow:none;border-color:var(--line-strong)}
 .world-manual .btn{min-height:32px}
 .world-name{font:inherit;color:inherit;border:0;padding:0;background:none;text-align:left;cursor:pointer}
 .world-name:hover{color:var(--accent)}
@@ -1972,9 +1970,10 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 @property --world-inset{syntax:'<length>';inherits:true;initial-value:0px}
 .featureslot-world>.world-workspace{--world-rail-width:72px;--world-gap:20px;--world-inset:max(calc(var(--page-gutter) + 10px),calc((100cqw - var(--content-width)) / 2));--world-entry-width:100cqw;--world-duration:290ms;--world-easing:cubic-bezier(.32,.72,0,1);interpolate-size:allow-keywords;position:relative;container-type:inline-size;display:block;flex:1;min-height:0;max-width:none;padding:0 var(--world-inset)}
 .world-library{display:flex;flex-direction:column;min-height:0;height:100%;width:100%}
-.world-library-list{overflow-anchor:none;flex:1;min-height:0;width:calc(100% + var(--world-inset));margin-right:calc(-1 * var(--world-inset));padding-right:calc(var(--world-inset) - 10px);overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-gutter:stable;padding-bottom:24px;transition:width var(--world-duration) var(--world-easing),padding var(--world-duration) var(--world-easing)}
+/* 4px of room on the left (given back by the margin) so a focused field there shows its whole ring. */
+.world-library-list{overflow-anchor:none;flex:1;min-height:0;width:calc(100% + var(--world-inset) + 4px);margin-left:-4px;padding-left:4px;margin-right:calc(-1 * var(--world-inset));padding-right:calc(var(--world-inset) - 10px);overflow-y:auto;overflow-x:hidden;overscroll-behavior-y:contain;scrollbar-gutter:stable;padding-bottom:24px;transition:width var(--world-duration) var(--world-easing),padding var(--world-duration) var(--world-easing)}
 /* In the market view the rail's scrollbar runs along the divider. */
-.world-workspace[data-view=market] .world-library-list{width:calc(var(--world-rail-width) + var(--world-gap));padding-right:0}
+.world-workspace[data-view=market] .world-library-list{width:calc(var(--world-rail-width) + var(--world-gap) + 4px);padding-right:0}
 .world-library-heading{height:auto;margin:2px 0 12px;font:600 15px/1.4 var(--sans);letter-spacing:-.01em;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:height var(--world-duration) var(--world-easing),margin var(--world-duration) var(--world-easing),opacity 140ms}
 .world-workspace[data-view=market] .world-library-heading{height:0;margin:0;opacity:0}
 .world-pending-list,.world-ready-list{display:flow-root}
@@ -2045,7 +2044,8 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-workspace-status>.msgline{margin:4px 0 8px}
 .world-pane{display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}
 .world-pane[hidden]{display:none}
-.world-market{z-index:2;position:absolute;left:calc(var(--world-inset) + var(--world-rail-width) + var(--world-gap));right:0;top:0;bottom:0;overflow:hidden;padding-left:24px;border-left:1px solid var(--line)}
+/* Clipped, but with room for a focused field's ring (2px outline, 2px off) at the edges: the toolbar sits at its top. */
+.world-market{z-index:2;position:absolute;left:calc(var(--world-inset) + var(--world-rail-width) + var(--world-gap));right:0;top:0;bottom:0;overflow:clip;overflow-clip-margin:4px;padding-left:24px;border-left:1px solid var(--line)}
 .world-blade.is-configurable{cursor:pointer}
 .world-library-entry:has(.world-blade.is-configurable:hover){border-color:var(--line-strong)}
 .world-workspace[data-view=market] .world-blade{opacity:0;transition-delay:80ms}
@@ -2060,7 +2060,8 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-blade-identity h3>.world-name-info:hover{opacity:1}
 /* An available update: an up arrow after the info button, in the update's colour. */
 .world-blade-identity h3>.world-name-update{flex:none;width:24px;height:24px;margin:-2px 0 -2px -2px;color:var(--accent)}
-.world-blade-identity h3>.world-name-update .icon{width:15px;height:15px}
+/* The same 14px box as the info icon beside it, so both sit on the same pixels; the arrow is drawn a little larger about its centre. */
+.world-blade-identity h3>.world-name-update .icon{width:14px;height:14px;transform:scale(1.07)}
 .world-blade-identity h3>.world-name-update:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .world-blade-identity code{display:block;color:var(--ink-dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 .world-blade-signals{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;color:var(--ink-dim);font-size:12px}
@@ -2147,7 +2148,7 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-catalog-filters .extension-tag:is(:hover,:focus-visible) .extension-tag-help{opacity:1}
 .world-catalog-filters .extension-tag-help:hover{color:var(--ink)}
 @media (hover:none){.world-catalog-filters .extension-tag-help{opacity:1}}
-/* On a card a 注意事项 previews its hiding while hovered: the name strikes through and the same grey eye takes room. */
+/* On a card a 注意事项 previews its hiding while hovered: the name strikes through, the chip keeps its width. */
 .extension-market-card .extension-tag.is-exclusion:is(:hover,:focus-visible)>span:first-child{text-decoration:line-through}
 /* A selected tag leads its card's tags and is filled, as cards showed it before. */
 .extension-market-card .extension-tag.is-active,.extension-market-card button.extension-tag.is-active:hover{color:var(--on-accent);background:var(--accent);border-color:var(--accent);font-weight:600}
@@ -2158,11 +2159,12 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .extension-empty p{margin:0}
 .extension-empty>p:first-of-type{font-size:16px;font-weight:600;color:var(--empty-ink)}
 .extension-empty .extension-empty-note{font-size:12px;color:var(--ink-dim)}
-.extension-market-card .extension-tag-eye{flex:none;width:0;height:12px;margin-left:-5px;color:var(--ink-dim);opacity:0;transition:width 110ms,margin 110ms,opacity 110ms}
-.extension-market-card .extension-tag.is-exclusion:is(:hover,:focus-visible) .extension-tag-eye{width:12px;margin-left:0;opacity:1}
 @media (hover:none){.world-catalog-filters .extension-tag.is-exclusion{padding-right:34px}.world-catalog-filters .extension-tag-eye{opacity:1}}
 /* Above the cards: a line of selections, then a line of exclusions with what they hide. */
 .extension-active-filters{display:grid;gap:6px;margin:2px 0 12px}
+/* In the market they stay at the top while the cards scroll under them, on the page colour so nothing shows through. */
+/* The 已选 line sits level with the 全部 / 已安装 / 未安装 switch beside it (31px tall, 24px rows: 3.5px above). */
+.world-catalog-scroll>.extension-active-filters{position:sticky;top:0;z-index:3;margin:0 -10px 10px;padding:3.5px 10px 8px;background:var(--background)}
 .extension-active-filters[hidden]{display:none}
 .extension-active-row{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:6px 8px}
 .extension-active-label{min-width:3.5em;font-size:12px;line-height:24px;color:var(--ink-dim)}
@@ -2257,7 +2259,8 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 }
 @media(prefers-reduced-motion:reduce){.extension-get-ring,.extension-get-ring .arc,.world-dock-tip{animation:none}.world-library-entry,.world-library-list,.world-library-heading,.world-library-label,.world-pending-group,.world-avatar{transition:none}.world-library-item:is(:hover,:focus-visible,:active) .world-avatar{transform:none}}
 /* My World's filter row folds away in the market view. */
-.world-library-tools{flex:none;display:flex;align-items:center;gap:8px;width:var(--world-entry-width);height:auto;margin:0 0 12px;overflow:hidden;transition:height var(--world-duration) var(--world-easing),margin var(--world-duration) var(--world-easing),opacity 140ms}
+/* Its fields fill it edge to edge; the clip leaves room for their focus ring. */
+.world-library-tools{flex:none;display:flex;align-items:center;gap:8px;width:var(--world-entry-width);height:auto;margin:0 0 12px;overflow:clip;overflow-clip-margin:4px;transition:height var(--world-duration) var(--world-easing),margin var(--world-duration) var(--world-easing),opacity 140ms}
 .world-library-tools input[type=search]{flex:0 1 240px;min-width:120px}
 .world-library-tools select{width:auto}
 .world-library-tools>.btn{margin-left:auto;min-height:32px;font-size:12px}
@@ -2371,3 +2374,56 @@ input:where([type="checkbox"], [type="radio"]):where(:not(.setcontrol > .check >
 .liveview > .featureintro > .pagetitle { padding-bottom: 16px; border-bottom: 1px solid var(--border); }
 .tlscroll { scrollbar-gutter: stable both-edges; padding-left: var(--page-gutter); padding-right: var(--page-gutter); }
 .tlinner, .tlthink { max-width: var(--content-width); }
+
+/* Hover hints (base/ui/hover-hint.ts): the shared .u-tip box, smaller, fading in. */
+.u-tip.hover-hint{max-width:min(280px,calc(100vw - 16px));padding:5px 9px;border-radius:8px;font:12px/1.45 var(--sans);color:var(--ink);box-shadow:0 6px 18px -8px var(--shadow-strong);animation:hover-hint-in 120ms ease-out}
+@keyframes hover-hint-in{from{opacity:0}}
+
+/* Dropdowns (base/ui/dropdown.ts): every select, and every text field with suggestions (which carries the
+   select's arrow), opens its list in one white rounded box, the row under the pointer highlighted and the chosen
+   one bold. It fades in as it opens and is gone at once when it closes. */
+input.field:is([list],[data-combo-list]){padding-right:36px;background-image:linear-gradient(45deg,transparent 50%,var(--muted-foreground) 50%),linear-gradient(135deg,var(--muted-foreground) 50%,transparent 50%);background-position:right 18px center,right 14px center;background-size:4px 4px;background-repeat:no-repeat}
+input.field:is([list],[data-combo-list])::-webkit-calendar-picker-indicator{display:none!important}
+.combo-list{position:fixed;z-index:130;box-sizing:border-box;margin:0;padding:4px 0 4px 4px;max-width:min(480px,calc(100vw - 16px));max-height:min(320px,60vh);overflow-y:auto;overscroll-behavior:contain;background:var(--sheet);border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 30px -14px var(--shadow-strong);color:var(--ink);font:13px/1.35 var(--sans);transition:opacity 120ms ease-out}
+.combo-list[hidden]{display:none}
+@starting-style{.combo-list{opacity:0}}
+/* Its scrollbar is the pages' one: thin, no arrows, on a clear track, in the room the right padding gives up,
+   so it never narrows the rows. */
+.combo-list{scrollbar-gutter:stable}
+.combo-list::-webkit-scrollbar{width:10px}
+.combo-list::-webkit-scrollbar-button{display:none;height:0}
+.combo-list::-webkit-scrollbar-thumb{background:var(--line-2);border:3px solid transparent;border-radius:6px;background-clip:padding-box}
+.combo-list::-webkit-scrollbar-thumb:hover{background:var(--line-strong);background-clip:padding-box}
+.combo-option{display:flex;align-items:center;gap:8px;min-height:30px;padding:5px 10px;border-radius:6px;white-space:nowrap;cursor:pointer}
+.combo-option.is-active{background:var(--surface-hover)}
+.combo-option[aria-selected=true]{font-weight:600}
+.combo-option[aria-selected=true]::after{content:"";flex:none;width:9px;height:5px;margin-left:auto;border:solid var(--ink-dim);border-width:0 0 1.5px 1.5px;transform:translateY(-2px) rotate(-45deg)}
+.combo-option[aria-disabled=true]{color:var(--ink-dim);cursor:default}
+@media (prefers-reduced-motion: reduce){.u-tip.hover-hint{animation:none}.combo-list{transition:none}}
+
+/* The extension info page's pictures (extensions/gallery.ts): a row that pages sideways, and a lightbox. */
+.extension-gallery{position:relative;margin:4px 0 6px}
+.extension-gallery-track{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain}
+.extension-gallery-track::-webkit-scrollbar{display:none}
+.extension-gallery-shot{flex:none;scroll-snap-align:start;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--sheet-2);cursor:zoom-in;transition:border-color .15s,box-shadow .15s}
+.extension-gallery-shot:hover{border-color:var(--line-strong);box-shadow:0 8px 20px -14px var(--shadow-strong)}
+.extension-gallery-shot img{display:block;height:180px;width:auto;min-width:120px;max-width:min(520px,80vw);object-fit:cover}
+.extension-gallery-nav{position:absolute;top:50%;display:grid;place-items:center;width:32px;height:32px;margin-top:-16px;padding:0;border:1px solid var(--border);border-radius:50%;background:var(--sheet);color:var(--ink);box-shadow:0 4px 14px -6px var(--shadow-strong);cursor:pointer;transition:opacity .15s}
+.extension-gallery-nav:disabled{opacity:0;pointer-events:none}
+.extension-gallery-nav.is-prev{left:8px}
+.extension-gallery-nav.is-next{right:8px}
+.extension-gallery-nav .icon{width:16px;height:16px}
+.extension-lightbox{position:fixed;inset:0;width:100vw;height:100dvh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;color:#fff;overflow:hidden}
+.extension-lightbox[open]{display:grid;place-items:center}
+.extension-lightbox::backdrop{background:rgb(12 12 14 / .8)}
+.extension-lightbox-figure{display:grid;justify-items:center;gap:12px;margin:0;padding:56px 84px 24px}
+.extension-lightbox-figure img{display:block;max-width:calc(100vw - 168px);max-height:calc(100dvh - 120px);border-radius:10px;background:var(--sheet);box-shadow:0 20px 60px -20px rgb(0 0 0 / .6)}
+.extension-lightbox-count{min-height:16px;font:12px var(--mono);opacity:.75}
+.extension-lightbox-button{position:fixed;display:grid;place-items:center;width:40px;height:40px;padding:0;border:0;border-radius:50%;background:rgb(255 255 255 / .14);color:#fff;cursor:pointer;transition:background .15s}
+.extension-lightbox-button:hover{background:rgb(255 255 255 / .26)}
+.extension-lightbox-button .icon{width:20px;height:20px}
+.extension-lightbox-close{top:calc(var(--titlebar-height, 0px) + 16px);right:20px}
+.extension-lightbox-nav{top:50%;margin-top:-20px}
+.extension-lightbox-nav.is-prev{left:24px}
+.extension-lightbox-nav.is-next{right:24px}
+@media (prefers-reduced-motion: reduce){.extension-gallery-shot,.extension-gallery-nav,.extension-lightbox-button{transition:none}}

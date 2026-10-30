@@ -40,6 +40,7 @@
     "tests/web/extension-search.test.ts",
     "tests/web/extension-catalog.test.ts",
     "tests/web/feature-world-library.test.ts",
-    "tests/web/usage-money.test.ts"
+    "tests/web/usage-money.test.ts",
+    "tests/web/ui-hover-hint.test.ts"
   ]
 }
