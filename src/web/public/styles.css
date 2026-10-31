@@ -785,6 +785,7 @@
     color: var(--foreground);
     font-weight: 520;
   }
+  #rail .nav-reorder { position: relative; z-index: 1; }
   .navmodule-list {
     position: relative;
     display: flex;

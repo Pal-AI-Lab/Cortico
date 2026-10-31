@@ -1,4 +1,4 @@
-<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/webui-protocol.ts, src/web/client/main.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
+<!-- Owner: src/core/language.ts, src/web/server.ts, src/web/auth.ts, src/web/diagnostics.ts, src/web/shared/webui-protocol.ts, src/web/client/main.ts, src/web/client/core/world-nav.ts, src/web/client/features/worlds/index.ts, src/web/client/shell/index.ts, src/web/client/core/language.ts, src/web/client/features/live/onboarding.ts, src/web/client/features/settings/general.ts -->
 
 # WebUI
 
@@ -50,6 +50,9 @@ WebUI 不终结 TLS。经公网使用时放在终结 HTTPS 的反向代理后面
 `[blob …]` 行照常显示。字节经 `GET /api/blob?handle=<句柄>` 取,按 `Core.resolveBlob` 解析:`log:` 回应可长期缓存,
 `mem:` 回应 `no-store`,认不出或已不在回 404。回应带 `X-Content-Type-Options: nosniff` 与
 `Content-Security-Policy: sandbox`。
+
+侧栏 World 的顺序跟随「我的 World」，分组中的 World 在分组所在位置展开。顺序保存在浏览器 localStorage，
+尚未记录的 World 排在前面。侧栏重排保留滚动位置，并用滑动动画显示位置变化；减少动态效果时不播放。
 
 左栏三组:Core(框架自己的页)、Persona & Memory(Persona 页、Memory 页、系统提示词)、World(总览与各实例)。
 左栏顶上是框架字标,底部是这一台 bot 的头像与展示名(`displayName`),展示名下面写运行中或已暂停。
