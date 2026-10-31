@@ -167,7 +167,7 @@ const WIDTH = 1100;
 beforeEach(() => { calls = []; window.sessionStorage.clear(); window.history.replaceState(null, '', '#/extensions/world'); Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => WIDTH }); HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterEach(() => { lives.splice(0).forEach((life: Any) => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); });
 const marketCards = (root: Any) => $('.world-catalog-scroll > .extension-grid', root);
-const installedInfo = (root: Any, name: Any) => $$('.world-blade', root).find((row: Any) => $('.world-name', row)?.textContent === name).querySelector('.world-name-info');
+const installedInfo = (root: Any, name: Any) => $$('.world-blade', root).find((row: Any) => $('.world-name', row)?.textContent === name).querySelector('button.world-name');
 const switchTo = async (ctx: Any, kind: Any) => {
   ctx.lifecycle.dispose();
   ctx.root.replaceChildren();
@@ -311,7 +311,7 @@ describe('installation feedback', () => {
     $('.modalhead .btn', box)?.click();
     ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
     const row = $$('.world-blade', root).find((item: Any) => item.dataset.key === 'alpha-mod');
-    const badge = $('.world-name-info + .world-name-update', row);
+    const badge = $('button.world-name + .world-name-update', row);
     expect(badge.getAttribute('aria-label')).toContain('1.0.0 → 1.2.0');
     badge.click(); await flush();
     expect($('.modal .modaltitle')?.textContent).toBeTruthy();
@@ -882,11 +882,6 @@ describe('World library and catalog', () => {
     railItems.find((item: Any) => item.getAttribute('aria-label') === '甲扩展').click(); await flush();
     expect($('.world-workspace', root).dataset.view).toBe('market');
     expect($('.extension-detail')).not.toBeNull();
-    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
-    railItems.find((item: Any) => item.getAttribute('aria-label') === '甲扩展').click(); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
-    expect($('.world-workspace', root).dataset.view).toBe('mine');
-    expect((document.activeElement as Any).dataset.key).toBe('alpha-mod');
-    expect($('[aria-current=true]', rail).getAttribute('aria-label')).toBe('甲扩展');
   });
   it('keeps catalog metadata beside the title and links an installed package to its row', async () => {
     const hit = { ...HITS.hits[1], summary: { tools: 3, events: 2 } };
@@ -955,7 +950,7 @@ describe('World library and catalog', () => {
     expect(pending.dataset.state).toBe('pending');
     expect(pending.textContent).toContain('待生效');
     expect(buttons(pending).some((item: Any) => item.textContent === '激活 World')).toBe(false);
-    $('.world-blade [aria-label="扩展信息"]', root).click(); await flush();
+    $('.world-blade button.world-name', root).click(); await flush();
     expect($('.extension-detail').textContent).toContain('found-mod');
   });
   it('shows live readings and changes mode only after confirmation', async () => {
@@ -1118,7 +1113,7 @@ describe('World library and catalog', () => {
     ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
     const row = $$('.world-blade', root).find((item: Any) => item.dataset.key === 'alpha-mod');
     expect($$('.world-blade-actions button', row).map((item: Any) => item.getAttribute('aria-label'))).toEqual(['左栏隐藏', '删除扩展', '对 agent 隐藏', '停用 World']);
-    expect($('.world-blade-identity h3 [aria-label="扩展信息"]', row)).not.toBeNull();
+    expect($$('.world-blade-identity h3 button', row).map(item => item.className)).toEqual(['world-name']);
     // Rows with fewer controls pack them to the right, with no gap at the end.
     const slots = (item: Any) => $$('.world-blade-actions button', item).map((button: Any) => button.style.getPropertyValue('--slot'));
     expect(slots(row)).toEqual(['1', '2', '3', '4']);
@@ -1235,6 +1230,36 @@ describe('World library and catalog', () => {
     const problem = $$('.extension-problem').find((el: Any) => !el.classList.contains('hidden'));
     expect(problem.textContent).toContain('默认导出不是 WorldDefinition');
   });
+  it('opens extension info from an avatar and highlights a World without a package', async () => {
+    const { root, ctx } = await openWorlds();
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const avatar = (key: string) => $$('.world-library-item', root).find(item => item.dataset.key === key);
+    avatar('world:builtin').click(); await flush();
+    expect($('.extension-detail')).toBeNull();
+    expect(avatar('world:builtin').getAttribute('aria-current')).toBe('true');
+    avatar('alpha-mod').click(); await flush();
+    expect($('.extension-detail')).not.toBeNull();
+  });
+  it('drags a row by its avatar without opening details or dragging the image', async () => {
+    const { root, ctx } = await openWorlds({ list: { ...LIST, extensions: LIST.extensions.map(item => ({ ...item, icon: true })) } });
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const order = () => $$('.world-ready-list .world-library-entry', root).map(entry => entry.dataset.key);
+    const [first, ...rest] = order();
+    const pointer = (type: string, target: EventTarget, y: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: y });
+      Object.defineProperty(event, 'pointerId', { value: 1 }); target.dispatchEvent(event);
+    };
+    const avatar = $(`.world-ready-list .world-library-entry[data-key="${first}"] .world-library-item`, root);
+    expect($$('.world-avatar img', root).length).toBeGreaterThan(0);
+    for (const img of $$('.world-avatar img', root)) expect(img.draggable).toBe(false);
+    pointer('pointerdown', $('.world-avatar', avatar), 10);
+    pointer('pointermove', window, 400);
+    expect($(`.world-library-entry[data-key="${first}"]`, root).classList.contains('is-dragging')).toBe(true);
+    pointer('pointerup', window, 400);
+    avatar.click(); await flush();
+    expect($('.extension-detail')).toBeNull();
+    expect(order()).toEqual([...rest, first]);
+  });
   it("opens extension info from a World's name", async () => {
     const { root, ctx } = await openWorlds();
     ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
@@ -1287,5 +1312,69 @@ describe('World library and catalog', () => {
     $('[aria-label="激活 World"]', root).click(); await flush();
     expect(calls.find((call: Any) => call.url === '/api/worlds/activation').body).toEqual({ id: 'builtin', enabled: true });
     expect(calls.some((call: Any) => call.url.startsWith('/api/extensions'))).toBe(false);
+  });
+});
+
+describe('World sidebar order', () => {
+  it('records the displayed order with grouped Worlds flattened in place', async () => {
+    const key = 'cortico.world-groups.v1';
+    const saved = localStorage.getItem(key);
+    try {
+      localStorage.setItem(key, JSON.stringify({ top: ['group:g', 'world:builtin'], groups: { g: { name: 'G', collapsed: true, items: ['alpha-mod', 'delta-mod'] } } }));
+      stub({}); window.history.replaceState(null, '', '#/world');
+      const context = mkCtx({ worlds: true, extensions: true }); lives.push(context.lifecycle);
+      mountWorlds(context.ctx); await flush();
+      const shown = $$('.world-library-list .world-blade[data-world]', context.root).map(row => `world:${row.dataset.world}`);
+      expect(shown.length).toBeGreaterThan(1);
+      expect(JSON.parse(localStorage.getItem('cortico.world-nav-order.v1')!)).toEqual(shown);
+    } finally {
+      if (saved === null) localStorage.removeItem(key); else localStorage.setItem(key, saved);
+      localStorage.removeItem('cortico.world-nav-order.v1');
+    }
+  });
+  it('sorts unknown pages first and notifies only when the saved order changes', async () => {
+    const { inNavOrder, setNavOrder, NAV_HIDDEN_EVENT } = await import('../../src/web/client/core/world-nav.ts');
+    localStorage.removeItem('cortico.world-nav-order.v1');
+    let changes = 0;
+    const count = () => changes++;
+    window.addEventListener(NAV_HIDDEN_EVENT, count);
+    try {
+      expect(inNavOrder(window, ['b', 'a'], id => id)).toEqual(['b', 'a']);
+      setNavOrder(window, ['a', 'b']); setNavOrder(window, ['a', 'b']);
+      expect(changes).toBe(1);
+      expect(inNavOrder(window, ['b', 'new', 'a'], id => id)).toEqual(['new', 'a', 'b']);
+    } finally { window.removeEventListener(NAV_HIDDEN_EVENT, count); localStorage.removeItem('cortico.world-nav-order.v1'); }
+  });
+  it('slides the moved World above its neighbors and preserves scroll, with no slide for arrivals or reduced motion', async () => {
+    const { createShell } = await import('../../src/web/client/shell/index.ts');
+    const { setNavOrder } = await import('../../src/web/client/core/world-nav.ts');
+    stub({}); localStorage.removeItem('cortico.world-nav-order.v1'); localStorage.removeItem('cortico.world-nav-hidden.v1');
+    const context = mkCtx({}); lives.push(context.lifecycle);
+    const pages = ['a', 'b', 'c'].map(id => ({ id: `world:${id}`, kind: 'world', availability: 'active', label: id, lamps: [] }));
+    const shell = createShell({ doc: document, ui: context.ctx.ui, router: context.ctx.router, pages: pages as Any });
+    document.body.append(shell.el);
+    const slides = new Map();
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = this.matches('.navmodule-list > a') ? [...this.parentElement!.children].indexOf(this) * 40 : 0;
+      return { top, bottom: top + 36, left: 0, right: 200, width: 200, height: 36, x: 0, y: top, toJSON() {} };
+    });
+    (HTMLElement.prototype as Any).animate = function (frames: Any) { slides.set(this.textContent, frames[0].transform); return { finished: new Promise(() => {}) }; };
+    const nav = $('nav', shell.el); nav.scrollTop = 25;
+    try {
+      setNavOrder(window, ['world:c', 'world:a', 'world:b']);
+      expect($$('.navmodule-list > a', shell.el).map(el => el.textContent)).toEqual(['c', 'a', 'b']);
+      expect(Object.fromEntries(slides)).toEqual({ c: 'translateY(80px)', a: 'translateY(-40px)', b: 'translateY(-40px)' });
+      expect($$('.nav-reorder', shell.el).map(el => el.textContent)).toEqual(['c']);
+      expect(nav.scrollTop).toBe(25);
+      slides.clear();
+      shell.setPages([...pages, { ...pages[0], id: 'world:new', label: 'new' }] as Any);
+      expect(slides.size).toBe(0);
+      vi.stubGlobal('matchMedia', () => ({ matches: true }));
+      setNavOrder(window, ['world:b', 'world:a', 'world:c']);
+      expect(slides.size).toBe(0);
+    } finally {
+      shell.dispose(); rect.mockRestore(); delete (HTMLElement.prototype as Any).animate;
+      localStorage.removeItem('cortico.world-nav-order.v1');
+    }
   });
 });

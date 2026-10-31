@@ -3,7 +3,7 @@ import { pageIdFor } from '../../../shared/webui-protocol.ts';
 import type { WebUiBadge, WebUiLamp, WebUiLink } from '../../../shared/webui-protocol.ts';
 import { get, post } from '../../core/api.ts';
 import { PROVIDER_ROUTE } from '../../webui-pages/host.ts';
-import { markReturn, navHidden, setNavHidden } from '../../core/world-nav.ts';
+import { markReturn, navHidden, setNavHidden, setNavOrder } from '../../core/world-nav.ts';
 import { problemPopover } from '../../ui/problem.ts';
 import { brandMark, icon, type WebUiIconName } from '../../ui/icons.ts';
 import { lampRow, subscribeLamps } from '../../ui/lamp.ts';
@@ -38,8 +38,6 @@ function cubicBezier(x1: number, y1: number, x2: number, y2: number): (t: number
 }
 /** Row controls, left to right. */
 const ACTION_SLOTS = ['sidebar', 'remove', 'visibility', 'power'] as const;
-/** Controls outside the action columns. */
-type ControlSlot = typeof ACTION_SLOTS[number] | 'info';
 type ActionSlot = typeof ACTION_SLOTS[number];
 export interface WorldView {
   id: string;
@@ -269,7 +267,7 @@ export function mountWorlds(ctx: FeatureContext): void {
     if (drifted && !signal.aborted) await reloadPrefix(m.id);
   }
 
-  const slot = (name: ControlSlot, button: HTMLButtonElement) => { button.dataset.slot = name; return button; };
+  const slot = (name: ActionSlot, button: HTMLButtonElement) => { button.dataset.slot = name; return button; };
   function iconButton(
     name: WebUiIconName,
     label: string,
@@ -291,7 +289,7 @@ export function mountWorlds(ctx: FeatureContext): void {
     const box = ui.h('span', 'world-avatar');
     const fallback = () => { box.classList.add('is-default'); box.replaceChildren(brandMark(doc)); };
     if (item.extension?.icon) {
-      const img = ui.h('img'); img.alt = ''; img.src = iconUrl(item.extension.name, item.extension.installedVersion ?? item.extension.version);
+      const img = ui.h('img'); img.alt = ''; img.draggable = false; img.src = iconUrl(item.extension.name, item.extension.installedVersion ?? item.extension.version);
       img.addEventListener('error', fallback, { once: true, signal }); box.append(img);
     } else fallback();
     return box;
@@ -317,9 +315,9 @@ export function mountWorlds(ctx: FeatureContext): void {
     void flight.finished.then(finish, finish);
     lifecycle.add(() => ghost.remove());
   }
-  /** In the market view a rail avatar opens its package's install information; elsewhere it shows the World's row. */
+  /** An avatar opens its package's extension info, as the name beside it does; a World with no package shows its row. */
   function select(item: WorldLibraryItem) {
-    if (current === 'market' && item.extension && market) market.details(item.extension.name); else reveal(item);
+    if (item.extension && market) market.details(item.extension.name); else reveal(item);
   }
   function reveal(item: WorldLibraryItem) {
     selected = item.key; focusRequested = true;
@@ -389,6 +387,9 @@ export function mountWorlds(ctx: FeatureContext): void {
     const labels = new Map(ready.map(item => [item.key, item.label]));
     const arranged = arrangeLayout(layout, ready.map(item => item.key), key => labels.get(key) ?? key);
     layout = arranged.layout; writeLayout(win.localStorage, layout);
+    // The sidebar lists the World pages in this order, groups opened up in place.
+    const worldOf = new Map(ready.map(item => [item.key, item.world?.id]));
+    setNavOrder(win, arranged.entries.flatMap(entry => 'key' in entry ? [entry.key] : entry.keys).flatMap(key => { const id = worldOf.get(key); return id ? [worldPageId(id)] : []; }));
     const entryOf = (key: string) => railNodes.get(key)!.parentElement as HTMLElement;
     const live = new Set<string>();
     placeChildren(readyList, arranged.entries.map(entry => {
@@ -514,9 +515,9 @@ export function mountWorlds(ctx: FeatureContext): void {
   dragList(readyGroup, {
     pick(target) {
       if (!canMove()) return null;
-      // A group moves by its header (its name toggles it on a plain click); a row by anywhere but its controls.
+      // Group headers and row avatars can both start a drag; other controls keep their click behavior.
       const head = target.closest<HTMLElement>('.world-group-head');
-      if (head ? target.closest('.world-group-action, input') : target.closest('button, a, input, select, textarea')) return null;
+      if (head ? target.closest('.world-group-action, input') : target.closest('button:not(.world-library-item), a, input, select, textarea')) return null;
       return head ? head.parentElement : target.closest<HTMLElement>('.world-library-entry');
     },
     lifted(el) {
@@ -603,16 +604,12 @@ export function mountWorlds(ctx: FeatureContext): void {
     row.dataset.state = pending ? 'pending' : failed ? 'failed' : m?.status === 'active' ? m.visible === false ? 'running' : 'attached' : 'inactive';
     const identity = ui.h('div', 'world-blade-identity');
     const heading = ui.h('h3');
-    // The name opens the package's extension info, as the icon beside it does.
     if (pack && market) {
       const owner = market, details = ui.h('button', 'world-name', item.label) as HTMLButtonElement; details.type = 'button';
       details.addEventListener('click', () => owner.details(pack.name), { signal }); heading.append(details);
     } else heading.append(ui.h('span', 'world-name', item.label));
-    // Extension info sits beside the name; a row click opens the World's settings.
     if (pack && market) {
       const owner = market, update = updatable.get(pack.name);
-      heading.append(slot('info', iconButton('info', S.packageInfo, 'world-name-info', () => owner.details(pack.name))));
-      // An available update shows beside it and opens the same page, where the update is.
       if (update) heading.append(iconButton('update', S.updateAvailable(update.installedVersion, update.latestVersion), 'world-name-update', () => owner.details(pack.name)));
     }
     identity.append(heading, ui.h('code', '', m?.id ?? pack?.name ?? item.key));
