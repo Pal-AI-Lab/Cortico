@@ -167,7 +167,7 @@ const WIDTH = 1100;
 beforeEach(() => { calls = []; window.sessionStorage.clear(); window.history.replaceState(null, '', '#/extensions/world'); Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => WIDTH }); HTMLElement.prototype.scrollIntoView = vi.fn(); });
 afterEach(() => { lives.splice(0).forEach((life: Any) => life.dispose()); vi.unstubAllGlobals(); document.body.replaceChildren(); });
 const marketCards = (root: Any) => $('.world-catalog-scroll > .extension-grid', root);
-const installedInfo = (root: Any, name: Any) => $$('.world-blade', root).find((row: Any) => $('.world-name', row)?.textContent === name).querySelector('.world-name-info');
+const installedInfo = (root: Any, name: Any) => $$('.world-blade', root).find((row: Any) => $('.world-name', row)?.textContent === name).querySelector('button.world-name');
 const switchTo = async (ctx: Any, kind: Any) => {
   ctx.lifecycle.dispose();
   ctx.root.replaceChildren();
@@ -311,7 +311,7 @@ describe('installation feedback', () => {
     $('.modalhead .btn', box)?.click();
     ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
     const row = $$('.world-blade', root).find((item: Any) => item.dataset.key === 'alpha-mod');
-    const badge = $('.world-name-info + .world-name-update', row);
+    const badge = $('button.world-name + .world-name-update', row);
     expect(badge.getAttribute('aria-label')).toContain('1.0.0 → 1.2.0');
     badge.click(); await flush();
     expect($('.modal .modaltitle')?.textContent).toBeTruthy();
@@ -882,11 +882,6 @@ describe('World library and catalog', () => {
     railItems.find((item: Any) => item.getAttribute('aria-label') === '甲扩展').click(); await flush();
     expect($('.world-workspace', root).dataset.view).toBe('market');
     expect($('.extension-detail')).not.toBeNull();
-    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
-    railItems.find((item: Any) => item.getAttribute('aria-label') === '甲扩展').click(); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
-    expect($('.world-workspace', root).dataset.view).toBe('mine');
-    expect((document.activeElement as Any).dataset.key).toBe('alpha-mod');
-    expect($('[aria-current=true]', rail).getAttribute('aria-label')).toBe('甲扩展');
   });
   it('keeps catalog metadata beside the title and links an installed package to its row', async () => {
     const hit = { ...HITS.hits[1], summary: { tools: 3, events: 2 } };
@@ -955,7 +950,7 @@ describe('World library and catalog', () => {
     expect(pending.dataset.state).toBe('pending');
     expect(pending.textContent).toContain('待生效');
     expect(buttons(pending).some((item: Any) => item.textContent === '激活 World')).toBe(false);
-    $('.world-blade [aria-label="扩展信息"]', root).click(); await flush();
+    $('.world-blade button.world-name', root).click(); await flush();
     expect($('.extension-detail').textContent).toContain('found-mod');
   });
   it('shows live readings and changes mode only after confirmation', async () => {
@@ -1118,7 +1113,7 @@ describe('World library and catalog', () => {
     ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
     const row = $$('.world-blade', root).find((item: Any) => item.dataset.key === 'alpha-mod');
     expect($$('.world-blade-actions button', row).map((item: Any) => item.getAttribute('aria-label'))).toEqual(['左栏隐藏', '删除扩展', '对 agent 隐藏', '停用 World']);
-    expect($('.world-blade-identity h3 [aria-label="扩展信息"]', row)).not.toBeNull();
+    expect($$('.world-blade-identity h3 button', row).map(item => item.className)).toEqual(['world-name']);
     // Rows with fewer controls pack them to the right, with no gap at the end.
     const slots = (item: Any) => $$('.world-blade-actions button', item).map((button: Any) => button.style.getPropertyValue('--slot'));
     expect(slots(row)).toEqual(['1', '2', '3', '4']);
@@ -1234,6 +1229,36 @@ describe('World library and catalog', () => {
     $('.world-state-problem', row).click();
     const problem = $$('.extension-problem').find((el: Any) => !el.classList.contains('hidden'));
     expect(problem.textContent).toContain('默认导出不是 WorldDefinition');
+  });
+  it('opens extension info from an avatar and highlights a World without a package', async () => {
+    const { root, ctx } = await openWorlds();
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const avatar = (key: string) => $$('.world-library-item', root).find(item => item.dataset.key === key);
+    avatar('world:builtin').click(); await flush();
+    expect($('.extension-detail')).toBeNull();
+    expect(avatar('world:builtin').getAttribute('aria-current')).toBe('true');
+    avatar('alpha-mod').click(); await flush();
+    expect($('.extension-detail')).not.toBeNull();
+  });
+  it('drags a row by its avatar without opening details or dragging the image', async () => {
+    const { root, ctx } = await openWorlds({ list: { ...LIST, extensions: LIST.extensions.map(item => ({ ...item, icon: true })) } });
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const order = () => $$('.world-ready-list .world-library-entry', root).map(entry => entry.dataset.key);
+    const [first, ...rest] = order();
+    const pointer = (type: string, target: EventTarget, y: number) => {
+      const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 10, clientY: y });
+      Object.defineProperty(event, 'pointerId', { value: 1 }); target.dispatchEvent(event);
+    };
+    const avatar = $(`.world-ready-list .world-library-entry[data-key="${first}"] .world-library-item`, root);
+    expect($$('.world-avatar img', root).length).toBeGreaterThan(0);
+    for (const img of $$('.world-avatar img', root)) expect(img.draggable).toBe(false);
+    pointer('pointerdown', $('.world-avatar', avatar), 10);
+    pointer('pointermove', window, 400);
+    expect($(`.world-library-entry[data-key="${first}"]`, root).classList.contains('is-dragging')).toBe(true);
+    pointer('pointerup', window, 400);
+    avatar.click(); await flush();
+    expect($('.extension-detail')).toBeNull();
+    expect(order()).toEqual([...rest, first]);
   });
   it("opens extension info from a World's name", async () => {
     const { root, ctx } = await openWorlds();

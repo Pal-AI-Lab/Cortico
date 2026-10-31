@@ -12,7 +12,6 @@ export const S: Partial<typeof en> = {
   renameGroup: "Gruppe umbenennen",
   deleteGroup: "Gruppe löschen (Erweiterungen bleiben)",
   pendingNote: "Die obigen Erweiterungen wirken erst nach dem Neustart des Prozesses.",
-  packageInfo: "Erweiterungsinfo",
   updateAvailable: (from: string, to: string) => `Update verfügbar: ${from} → ${to}`,
   hideFromSidebar: "Aus der Seitenleiste ausblenden",
   showInSidebar: "In der Seitenleiste zeigen",
