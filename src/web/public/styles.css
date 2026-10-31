@@ -2024,7 +2024,7 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-dock-tip::before{content:"";position:absolute;left:-5px;top:50%;width:8px;height:8px;margin-top:-4px;background:inherit;border-left:1px solid var(--line-strong);border-bottom:1px solid var(--line-strong);transform:rotate(45deg)}
 @keyframes world-tip-in{from{opacity:0;transform:translateX(-4px)}}
 @media(hover:hover){
-  .world-workspace[data-view=market] .world-library-item:hover .world-avatar{transform:scale(1.06)}
+  .world-library-item:hover .world-avatar{transform:scale(1.06)}
   .world-workspace[data-view=market] .world-library-item:hover .world-library-label{color:var(--ink)}
 }
 .world-library-item:active .world-avatar{transform:scale(.94);transition-duration:60ms}
@@ -2060,12 +2060,9 @@ button.extension-stat:hover { background: color-mix(in srgb, var(--accent) 12%, 
 .world-blade-identity,.world-blade-signals{min-width:0}
 .world-blade-identity h3{display:flex;align-items:center;gap:2px;min-width:0;font:600 14px/1.4 var(--sans);margin:0;white-space:nowrap}
 .world-blade-identity h3>.world-name{min-width:0;overflow:hidden;text-overflow:ellipsis}
-.world-blade-identity h3>.world-name-info{flex:none;width:24px;height:24px;margin:-2px 0 -2px 2px;opacity:.7}
-.world-blade-identity h3>.world-name-info .icon{width:14px;height:14px}
-.world-blade-identity h3>.world-name-info:hover{opacity:1}
-/* An available update: an up arrow after the info button, in the update's colour. */
-.world-blade-identity h3>.world-name-update{flex:none;width:24px;height:24px;margin:-2px 0 -2px -2px;color:var(--accent)}
-/* The same 14px box as the info icon beside it, so both sit on the same pixels; the arrow is drawn a little larger about its centre. */
+/* An available update: an up arrow after the name, in the update's colour. */
+.world-blade-identity h3>.world-name-update{flex:none;width:24px;height:24px;margin:-2px 0 -2px 2px;color:var(--accent)}
+/* A 14px box, the arrow drawn a little larger about its centre. */
 .world-blade-identity h3>.world-name-update .icon{width:14px;height:14px;transform:scale(1.07)}
 .world-blade-identity h3>.world-name-update:hover{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
 .world-blade-identity code{display:block;color:var(--ink-dim);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px}

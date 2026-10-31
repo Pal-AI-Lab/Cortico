@@ -51,7 +51,6 @@ export type WebUiIconName =
   | 'chevron-right'
   | 'radio-on'
   | 'radio-off'
-  | 'info'
   | 'help';
 
 type Shape = readonly [tag: 'path' | 'circle' | 'rect' | 'line', attrs: Readonly<Record<string, string>>];
@@ -243,13 +242,7 @@ const SHAPES: Readonly<Record<WebUiIconName, readonly Shape[]>> = {
     ['path', { d: 'M9.6 9.3a2.5 2.5 0 0 1 4.9.7c0 1.7-2.5 2.1-2.5 3.6' }],
     ['path', { d: 'M12 16.8h.01' }],
   ],
-  info: [
-    ['circle', { cx: '12', cy: '12', r: '9' }],
-    ['path', { d: 'M12 11v5' }],
-    ['path', { d: 'M12 8h.01' }],
-  ],
-  // An available update: a solid up arrow with a straight stem, so it does not read as the circled info
-  // and alert marks it often sits beside.
+  // An available update: a solid up arrow with a straight stem, so it does not read as an alert mark.
   update: [
     ['path', { d: 'M12 3.5 18.5 10.5H13.9V19a1 1 0 0 1-1 1h-1.8a1 1 0 0 1-1-1V10.5H5.5Z', fill: 'currentColor', 'stroke-width': '1.2' }],
   ],
