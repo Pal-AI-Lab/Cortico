@@ -1289,3 +1289,67 @@ describe('World library and catalog', () => {
     expect(calls.some((call: Any) => call.url.startsWith('/api/extensions'))).toBe(false);
   });
 });
+
+describe('World sidebar order', () => {
+  it('records the displayed order with grouped Worlds flattened in place', async () => {
+    const key = 'cortico.world-groups.v1';
+    const saved = localStorage.getItem(key);
+    try {
+      localStorage.setItem(key, JSON.stringify({ top: ['group:g', 'world:builtin'], groups: { g: { name: 'G', collapsed: true, items: ['alpha-mod', 'delta-mod'] } } }));
+      stub({}); window.history.replaceState(null, '', '#/world');
+      const context = mkCtx({ worlds: true, extensions: true }); lives.push(context.lifecycle);
+      mountWorlds(context.ctx); await flush();
+      const shown = $$('.world-library-list .world-blade[data-world]', context.root).map(row => `world:${row.dataset.world}`);
+      expect(shown.length).toBeGreaterThan(1);
+      expect(JSON.parse(localStorage.getItem('cortico.world-nav-order.v1')!)).toEqual(shown);
+    } finally {
+      if (saved === null) localStorage.removeItem(key); else localStorage.setItem(key, saved);
+      localStorage.removeItem('cortico.world-nav-order.v1');
+    }
+  });
+  it('sorts unknown pages first and notifies only when the saved order changes', async () => {
+    const { inNavOrder, setNavOrder, NAV_HIDDEN_EVENT } = await import('../../src/web/client/core/world-nav.ts');
+    localStorage.removeItem('cortico.world-nav-order.v1');
+    let changes = 0;
+    const count = () => changes++;
+    window.addEventListener(NAV_HIDDEN_EVENT, count);
+    try {
+      expect(inNavOrder(window, ['b', 'a'], id => id)).toEqual(['b', 'a']);
+      setNavOrder(window, ['a', 'b']); setNavOrder(window, ['a', 'b']);
+      expect(changes).toBe(1);
+      expect(inNavOrder(window, ['b', 'new', 'a'], id => id)).toEqual(['new', 'a', 'b']);
+    } finally { window.removeEventListener(NAV_HIDDEN_EVENT, count); localStorage.removeItem('cortico.world-nav-order.v1'); }
+  });
+  it('slides the moved World above its neighbors and preserves scroll, with no slide for arrivals or reduced motion', async () => {
+    const { createShell } = await import('../../src/web/client/shell/index.ts');
+    const { setNavOrder } = await import('../../src/web/client/core/world-nav.ts');
+    stub({}); localStorage.removeItem('cortico.world-nav-order.v1'); localStorage.removeItem('cortico.world-nav-hidden.v1');
+    const context = mkCtx({}); lives.push(context.lifecycle);
+    const pages = ['a', 'b', 'c'].map(id => ({ id: `world:${id}`, kind: 'world', availability: 'active', label: id, lamps: [] }));
+    const shell = createShell({ doc: document, ui: context.ctx.ui, router: context.ctx.router, pages: pages as Any });
+    document.body.append(shell.el);
+    const slides = new Map();
+    const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const top = this.matches('.navmodule-list > a') ? [...this.parentElement!.children].indexOf(this) * 40 : 0;
+      return { top, bottom: top + 36, left: 0, right: 200, width: 200, height: 36, x: 0, y: top, toJSON() {} };
+    });
+    (HTMLElement.prototype as Any).animate = function (frames: Any) { slides.set(this.textContent, frames[0].transform); return { finished: new Promise(() => {}) }; };
+    const nav = $('nav', shell.el); nav.scrollTop = 25;
+    try {
+      setNavOrder(window, ['world:c', 'world:a', 'world:b']);
+      expect($$('.navmodule-list > a', shell.el).map(el => el.textContent)).toEqual(['c', 'a', 'b']);
+      expect(Object.fromEntries(slides)).toEqual({ c: 'translateY(80px)', a: 'translateY(-40px)', b: 'translateY(-40px)' });
+      expect($$('.nav-reorder', shell.el).map(el => el.textContent)).toEqual(['c']);
+      expect(nav.scrollTop).toBe(25);
+      slides.clear();
+      shell.setPages([...pages, { ...pages[0], id: 'world:new', label: 'new' }] as Any);
+      expect(slides.size).toBe(0);
+      vi.stubGlobal('matchMedia', () => ({ matches: true }));
+      setNavOrder(window, ['world:b', 'world:a', 'world:c']);
+      expect(slides.size).toBe(0);
+    } finally {
+      shell.dispose(); rect.mockRestore(); delete (HTMLElement.prototype as Any).animate;
+      localStorage.removeItem('cortico.world-nav-order.v1');
+    }
+  });
+});
