@@ -36,6 +36,7 @@ export const text: Partial<typeof en> = {
   manifestUnusable: "A declaração da extensão não pode ser usada.",
   installed: (spec) => `${spec} instalado. Será carregado quando o processo reiniciar.`,
   notInstalled: (name) => `Este pacote não está instalado: ${name}`,
+  inUse: "A extensão está em uso. Desative-a antes de desinstalar.",
   uninstalled: (name) => `${name} desinstalado. Vale depois que o processo reiniciar.`,
   badPathChars: "O caminho contém caracteres não aceitos.",
   dirMissing: (path) => `O diretório não existe: ${path}`,

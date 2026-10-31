@@ -36,6 +36,7 @@ export const text: Partial<typeof en> = {
   manifestUnusable: "擴充功能宣告無法使用。",
   installed: (spec) => `已安裝 ${spec}。重新啟動程序後載入。`,
   notInstalled: (name) => `沒有安裝這個套件: ${name}`,
+  inUse: "擴充正在使用，停用後才能解除安裝。",
   uninstalled: (name) => `已解除安裝 ${name}。重新啟動程序後生效。`,
   badPathChars: "路徑含有不接受的字元。",
   dirMissing: (path) => `目錄不存在: ${path}`,

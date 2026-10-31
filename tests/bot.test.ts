@@ -7,7 +7,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { builtinExtensions, createBot, deriveWorldFacts, extensionRuntimeState } from '../src/bot.ts';
+import { builtinExtensions, createBot, deriveWorldFacts, deriveWorldInfo, extensionRuntimeState } from '../src/bot.ts';
 import { CORE_DEFAULTS, type LoadedConfig } from '../src/core/config.ts';
 import { loadDeployment } from '../src/deploy.ts';
 import { WorldAssembly, worldDefaults, type WorldDefinition, type WorldSection } from '../src/world.ts';
@@ -77,6 +77,36 @@ it('removed entries are never enabled', () => {
   const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true);
   const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, webUiClient: false, loaded: true, state: 'removed' as const };
   expect(decorate(removed, 'en').enabled).toBe(false);
+});
+
+it('a failed package does not inherit another World’s running state, while a loaded bot update stays in use', () => {
+  const definitions = [probe('taken')];
+  const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(definitions, ['taken']) } as never) }, dir, dir);
+  const decorate = extensionRuntimeState(new WorldAssembly(loaded, definitions, []), () => true);
+  const failed = { name: 'fixture-world', worldId: 'taken', kind: 'world' as const, spec: '*', version: '1', loaded: false, webUiClient: false, state: 'failed' as const };
+  expect(decorate(failed, 'en').enabled).toBe(false);
+  expect(decorate({ ...failed, kind: 'bot', loaded: true, state: 'pending-restart' }, 'en').enabled).toBe(true);
+});
+
+it('a provider is in use only while a configured endpoint uses its module', () => {
+  const loaded = loadDeployment({ defaults: () => makeCfg() }, dir, dir);
+  const configured = new Set(['used']);
+  const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true, id => configured.has(id));
+  const item = { name: 'fixture-provider', worldId: 'used', kind: 'provider' as const, spec: '*', version: '1', loaded: true, webUiClient: false, state: 'loaded' as const };
+  expect(decorate(item, 'en').enabled).toBe(true);
+  configured.clear();
+  expect(decorate(item, 'en').enabled).toBe(false);
+});
+
+it('an unreadable environment template does not hide the other Worlds or change running state', async () => {
+  const definitions = [probe('broken', () => ({ id: 'broken', envPromptVars: () => { throw new Error('Environment file missing'); }, tools: () => [], start: async () => {}, stop: async () => {} })), probe('healthy')];
+  const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(definitions, ['broken', 'healthy']) } as never) }, dir, dir);
+  const assembly = new WorldAssembly(loaded, definitions, []);
+  const core = { worldVisibility: () => ({ visibility: {}, driftedWorlds: [] }) };
+  const info = await deriveWorldInfo(core, assembly, { deploymentDir: dir, packageDir: dir }, 'en');
+  expect(info.find(world => world.id === 'broken')).toMatchObject({ status: 'active', envPrompt: '', envPromptError: 'Environment file missing' });
+  expect(info.find(world => world.id === 'healthy')).toMatchObject({ status: 'active', envPrompt: '' });
+  expect(assembly.mounted).toHaveLength(2);
 });
 
 it('a World whose start() throws at boot is left inactive with its reason and the Persona hears start-failed; the bot and the other Worlds start, enabled stays, a later activation clears the reason', async () => {

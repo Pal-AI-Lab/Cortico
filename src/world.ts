@@ -207,8 +207,9 @@ export class WorldAssembly {
   /** 挂载表。与 core 共用同一个数组,激活/停用就地增删。 */
   readonly mounted: World[] = [];
   readonly slots: WorldSlot[] = [];
-  /** 装配拿到的全部定义,构造失败的也在内。 */
-  get definitions(): readonly WorldDefinition<WorldSection>[] { return this.worlds; }
+  private readonly removedDefinitions = new Set<string>();
+  /** 尚未卸载的全部定义，构造失败的也在内。 */
+  get definitions(): readonly WorldDefinition<WorldSection>[] { return this.worlds.filter((def) => !this.removedDefinitions.has(def.id)); }
   readonly missing: MissingWorld[] = [];
   private host: WorldMountHost | null = null;
   private readonly cfgPath: string;
@@ -415,6 +416,28 @@ export class WorldAssembly {
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
   sync(id: string): Promise<void> {
     return this.queued(id, () => this.syncNow(id));
+  }
+
+  /** Removes an inactive definition and its slot; reinstalling retains configuration but requires activation. */
+  removeDefinition(id: string, remove: () => Promise<string>, language: Language = 'zh'): Promise<string> {
+    return this.queued(id, async () => {
+      const slot = this.slots.find((entry) => entry.id === id);
+      if (slot?.mounted) throw new Error(text(language).alreadyRunning(this.labelIn(id, language)));
+      const def = this.definitions.find((entry) => entry.id === id);
+      const enabled = def ? this.section(def).enabled : undefined;
+      if (def) this.persist(id, { enabled: false });
+      let result: string;
+      try { result = await remove(); }
+      catch (error) {
+        if (def) this.persist(id, { enabled });
+        throw error;
+      }
+      this.removedDefinitions.add(id);
+      if (slot) this.slots.splice(this.slots.indexOf(slot), 1);
+      const missing = this.missing.findIndex((entry) => entry.id === id);
+      if (missing >= 0) this.missing.splice(missing, 1);
+      return result;
+    });
   }
 
   private queued<T>(id: string, op: () => Promise<T>): Promise<T> {

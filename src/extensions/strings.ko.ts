@@ -36,6 +36,7 @@ export const text: Partial<typeof en> = {
   manifestUnusable: "확장 선언을 사용할 수 없습니다.",
   installed: (spec) => `${spec}을(를) 설치했습니다. 프로세스를 다시 시작하면 불러옵니다.`,
   notInstalled: (name) => `설치되지 않은 패키지입니다: ${name}`,
+  inUse: "사용 중인 확장입니다. 비활성화한 후 제거하세요.",
   uninstalled: (name) => `${name}을(를) 제거했습니다. 프로세스를 다시 시작하면 적용됩니다.`,
   badPathChars: "경로에 허용되지 않는 문자가 있습니다.",
   dirMissing: (path) => `디렉터리가 없습니다: ${path}`,

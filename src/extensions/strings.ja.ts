@@ -36,6 +36,7 @@ export const text: Partial<typeof en> = {
   manifestUnusable: "拡張機能の宣言を利用できません。",
   installed: (spec) => `${spec} をインストールしました。プロセスの再起動後に読み込まれます。`,
   notInstalled: (name) => `このパッケージはインストールされていません: ${name}`,
+  inUse: "拡張は使用中です。無効にしてからアンインストールしてください。",
   uninstalled: (name) => `${name} をアンインストールしました。プロセスの再起動後に反映されます。`,
   badPathChars: "パスに使えない文字が含まれています。",
   dirMissing: (path) => `ディレクトリがありません: ${path}`,

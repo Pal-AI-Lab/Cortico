@@ -510,7 +510,7 @@ export function deriveWorldFacts(
   return [...slots, ...missing];
 }
 
-async function deriveWorldInfo(
+export async function deriveWorldInfo(
   core: WorldVisibilityFacts,
   assembly: WorldAssembly,
   dirs: EnvPromptDirs,
@@ -518,7 +518,11 @@ async function deriveWorldInfo(
 ): Promise<WebUiWorldInfo[]> {
   return Promise.all(deriveWorldFacts(core, assembly, language).map(async (facts) => {
     if (facts.status !== 'active') return facts;
-    return { ...facts, envPrompt: (await renderWorldEnvPrompt(assembly.slot(facts.id).instance, dirs)).text };
+    try {
+      return { ...facts, envPrompt: (await renderWorldEnvPrompt(assembly.slot(facts.id).instance, dirs)).text };
+    } catch (error) {
+      return { ...facts, envPrompt: '', envPromptError: error instanceof Error ? error.message : String(error) };
+    }
   }));
 }
 
@@ -564,9 +568,10 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
 export function extensionRuntimeState(
   assembly: WorldAssembly,
   isWorldVisible: (id: string) => boolean,
+  isProviderUsed?: (id: string) => boolean,
 ): (item: ExtensionInfo, language: Language) => ExtensionInfo {
   return (item, language) => {
-    if (item.state === 'removed') return { ...item, enabled: false };
+    if (item.state === 'removed' || !item.loaded) return { ...item, enabled: false };
     if (item.kind === 'world' && item.worldId) {
       const slot = assembly.slots.find((s) => s.id === item.worldId);
       const mounted = slot?.mounted ?? false;
@@ -577,7 +582,8 @@ export function extensionRuntimeState(
         ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}),
       };
     }
-    return { ...item, enabled: item.loaded && item.state === 'loaded' };
+    return { ...item, enabled: item.kind === 'provider' && item.worldId && isProviderUsed
+      ? isProviderUsed(item.worldId) : item.loaded };
   };
 }
 
@@ -1100,7 +1106,9 @@ export function createBot<C extends CoreConfig>(
       },
       ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
         builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
-        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id)),
+        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id),
+          (id) => Object.values(loaded.config.providers).some((entry) => entry.kind === id)),
+        removeWorld: (id, remove, language) => assembly.removeDefinition(id, remove, language),
       }), market: new ExtensionMarket({ dir: opts.extensions.dir, log: core.runlog.logger('market') }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,

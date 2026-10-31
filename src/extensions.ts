@@ -656,6 +656,8 @@ export interface ExtensionManagerOptions {
   builtins?: (language: Language) => ExtensionInfo[];
   /** 补上本进程的运行状态(`enabled`、`hidden`)与 `language` 下的 World 名;已装包与内建条目都经过它。 */
   decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
+  /** Serializes World package removal with its activation lifecycle. */
+  removeWorld?: (id: string, remove: () => Promise<string>, language: Language) => Promise<string>;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -666,8 +668,10 @@ export class ExtensionManager {
   private registryUrl: Promise<string> | null;
   private readonly fetchJson: (url: string) => Promise<unknown>;
   private busy = false;
+  private readonly uninstalled = new Set<string>();
   private readonly builtins?: (language: Language) => ExtensionInfo[];
   private readonly decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
+  private readonly removeWorld?: ExtensionManagerOptions['removeWorld'];
 
   constructor(
     private readonly repoRoot: string,
@@ -678,6 +682,7 @@ export class ExtensionManager {
     this.run = opts.run ?? runPnpm;
     this.builtins = opts.builtins;
     this.decorate = opts.decorate;
+    this.removeWorld = opts.removeWorld;
     this.registryUrl = opts.registry ? Promise.resolve(opts.registry.replace(/\/$/, '')) : null;
     this.fetchJson = opts.fetchJson ?? (async (url) => {
       let res: Response;
@@ -785,7 +790,7 @@ export class ExtensionManager {
       const pkg = spec === undefined ? null : packageAt(r.name);
       const installedVersion = spec === undefined ? undefined : pkg?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
-        : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
+        : this.uninstalled.has(r.name) || spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
       const author = pkg ? packageAuthor(pkg) : undefined;
       const pkgDir = join(this.dir, 'node_modules', ...r.name.split('/'));
@@ -1087,9 +1092,20 @@ export class ExtensionManager {
 
   async uninstall(name: string, language: Language = 'zh'): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
-    if (!readInstalled(this.dir).some((p) => p.name === name)) throw extensionError((t) => t.notInstalled(name));
     this.prepareDir();
-    const output = await this.exclusive(() => this.pnpm(['remove', name, LENIENT_BUILDS]));
+    const output = await this.exclusive(async () => {
+      const item = this.list(language).extensions.find((entry) => entry.name === name && !entry.builtin && entry.state !== 'removed');
+      if (!item) throw extensionError((t) => t.notInstalled(name));
+      if (item.enabled) throw extensionError((t) => t.inUse, 409);
+      const remove = () => {
+        const current = this.decorate?.(item, language) ?? item;
+        if (current.enabled) throw extensionError((t) => t.inUse, 409);
+        return this.pnpm(['remove', name, LENIENT_BUILDS]);
+      };
+      return item.loaded && item.kind === 'world' && item.worldId && this.removeWorld
+        ? this.removeWorld(item.worldId, remove, language) : remove();
+    });
+    this.uninstalled.add(name);
     return `${text(language).uninstalled(name)}\n${output}`;
   }
 

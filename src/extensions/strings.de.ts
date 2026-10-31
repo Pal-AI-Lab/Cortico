@@ -36,6 +36,7 @@ export const text: Partial<typeof en> = {
   manifestUnusable: "Die Deklaration der Erweiterung ist unbrauchbar.",
   installed: (spec) => `${spec} installiert. Wird nach dem Neustart des Prozesses geladen.`,
   notInstalled: (name) => `Dieses Paket ist nicht installiert: ${name}`,
+  inUse: "Die Erweiterung wird verwendet. Deaktivieren Sie sie vor der Deinstallation.",
   uninstalled: (name) => `${name} deinstalliert. Wirksam nach dem Neustart des Prozesses.`,
   badPathChars: "Der Pfad enthält nicht zulässige Zeichen.",
   dirMissing: (path) => `Verzeichnis existiert nicht: ${path}`,
