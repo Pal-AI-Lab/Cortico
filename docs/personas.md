@@ -17,7 +17,7 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 |---|---|
 | `systemSegments(ctx)` | system 前缀的有序命名段,Core 逐字拼接 |
 | `memoryDir` | Memory 目录绝对路径 |
-| `blobs` | `mem:` 句柄的后端 |
+| `blobs` | `mem:` 句柄的后端。句柄要能原样当工具参数传:可打印字符,用 `/` 分隔,不含 `..` 和空段;World 校验句柄时按这个形状放行 |
 | `attach(core)` | 拿到 `CoreApi`;在 `declareSessions` 之前调用 |
 | `declareSessions()` | session 声明,恰好一个 `receivesEvents` 且 `persistent`(见 [sessions.md](sessions.md)) |
 
