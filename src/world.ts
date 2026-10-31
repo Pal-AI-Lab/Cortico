@@ -12,7 +12,7 @@ import type { LoadedConfig } from './core/config.ts';
 import type { WorldFailure } from './core/core.ts';
 import type { BotDefinition } from './bot.ts';
 import { updateJsonObject, writeSecretFile } from './config-file.ts';
-import type { Language } from './core/language.ts';
+import { LocalizedError, type Language } from './core/language.ts';
 import { assemblyText as text } from './strings.ts';
 import { readTextFile } from './core/util.ts';
 
@@ -359,7 +359,7 @@ export class WorldAssembly {
     } catch {
       declared = undefined;
     }
-    const def = slot ? slot.definition : this.worlds.find((d) => d.id === id);
+    const def = slot ? slot.definition : this.definitions.find((d) => d.id === id);
     return declared ?? def?.label ?? slot?.label ?? this.missing.find((m) => m.id === id)?.label ?? id;
   }
 
@@ -419,10 +419,10 @@ export class WorldAssembly {
   }
 
   /** Removes an inactive definition and its slot; reinstalling retains configuration but requires activation. */
-  removeDefinition(id: string, remove: () => Promise<string>, language: Language = 'zh'): Promise<string> {
+  removeDefinition(id: string, remove: () => Promise<string>): Promise<string> {
     return this.queued(id, async () => {
       const slot = this.slots.find((entry) => entry.id === id);
-      if (slot?.mounted) throw new Error(text(language).alreadyRunning(this.labelIn(id, language)));
+      if (slot?.mounted) throw new LocalizedError((locale) => text(locale).alreadyRunning(this.labelIn(id, locale)), 409);
       const def = this.definitions.find((entry) => entry.id === id);
       const enabled = def ? this.section(def).enabled : undefined;
       if (def) this.persist(id, { enabled: false });

@@ -37,7 +37,7 @@ async function setup(enabled = false, failRemoval = false) {
   let gate: Promise<void> | undefined;
   const manager = new ExtensionManager(root, booted, {
     decorate: extensionRuntimeState(assembly, () => true),
-    removeWorld: (id, remove, language) => assembly.removeDefinition(id, remove, language),
+    removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
     run: async () => {
       if (gate) await gate;
       if (failRemoval) return { code: 1, output: 'filesystem busy' };
@@ -99,7 +99,7 @@ it('rechecks a World whose activation was queued before uninstall', async () => 
   const { assembly, manager, pkg } = await setup();
   const activating = assembly.activate('fixture');
   const removing = manager.uninstall('fixture-world');
-  const rejected = expect(removing).rejects.toThrow();
+  const rejected = expect(removing).rejects.toMatchObject({ status: 409 });
   await activating; await rejected;
   expect(existsSync(pkg)).toBe(true);
   expect(assembly.mounted.map(world => world.id)).toEqual(['fixture']);

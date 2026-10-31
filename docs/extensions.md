@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
+<!-- Owner: src/extensions.ts, src/bot.ts, src/world.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
 
 # 扩展
 
@@ -47,7 +47,7 @@ World 先在 World 页停用。
 
 当前进程正在运行的 World、仍被配置端点使用的 provider 和当前 bot 扩展不能卸载。先停用 World 或移除相关端点，再卸载；隐藏 World 不等于停用。World 的卸载与激活、停用、重启串行执行。
 
-卸载成功会从当前装配移除 World，并将当前部署的 `worlds.<id>.enabled` 写为 `false`；其他配置和 Memory 保留。包移除失败时恢复原启用配置。同版本重新安装也需要重启，再手动激活。共享扩展目录中的其他进程不受这把进程内锁保护，卸载前应先停止使用该包的其他进程。
+卸载成功会从当前装配移除 World，其配置组、配置候选项和页面贡献随之撤下，并将当前部署的 `worlds.<id>.enabled` 写为 `false`；其他配置和 Memory 保留。包移除失败时恢复原启用配置。同版本重新安装也需要重启，再手动激活。共享扩展目录中的其他进程不受这把进程内锁保护，卸载前应先停止使用该包的其他进程。
 
 ## 更新
 

@@ -562,7 +562,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
 }
 
 /**
- * 扩展条目在本进程的运行状态:World 看挂载与对 agent 是否可见,provider 与 bot 看启动时是否加载。
+ * 扩展条目在本进程的运行状态：World 看挂载与对 agent 是否可见，provider 看端点引用，bot 看加载状态。
  * 已卸载的条目不算生效。有实例的 World 名按 `language` 现取,外部扩展的名字因此也跟界面语言走。
  */
 export function extensionRuntimeState(
@@ -1047,7 +1047,7 @@ export function createBot<C extends CoreConfig>(
         options: (kind, language) => {
           const own = contribution.configOptions?.(kind, language);
           if (own?.length) return own;
-          for (const def of definition.worlds ?? []) {
+          for (const def of assembly.definitions) {
             const opts = def.configOptions?.(kind, language);
             if (opts?.length) return opts;
           }
@@ -1108,7 +1108,7 @@ export function createBot<C extends CoreConfig>(
         builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
         decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id),
           (id) => Object.values(loaded.config.providers).some((entry) => entry.kind === id)),
-        removeWorld: (id, remove, language) => assembly.removeDefinition(id, remove, language),
+        removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
       }), market: new ExtensionMarket({ dir: opts.extensions.dir, log: core.runlog.logger('market') }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,

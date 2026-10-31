@@ -657,7 +657,7 @@ export interface ExtensionManagerOptions {
   /** 补上本进程的运行状态(`enabled`、`hidden`)与 `language` 下的 World 名;已装包与内建条目都经过它。 */
   decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
   /** Serializes World package removal with its activation lifecycle. */
-  removeWorld?: (id: string, remove: () => Promise<string>, language: Language) => Promise<string>;
+  removeWorld?: (id: string, remove: () => Promise<string>) => Promise<string>;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -1103,7 +1103,7 @@ export class ExtensionManager {
         return this.pnpm(['remove', name, LENIENT_BUILDS]);
       };
       return item.loaded && item.kind === 'world' && item.worldId && this.removeWorld
-        ? this.removeWorld(item.worldId, remove, language) : remove();
+        ? this.removeWorld(item.worldId, remove) : remove();
     });
     this.uninstalled.add(name);
     return `${text(language).uninstalled(name)}\n${output}`;

@@ -109,6 +109,23 @@ it('an unreadable environment template does not hide the other Worlds or change 
   expect(assembly.mounted).toHaveLength(2);
 });
 
+it('removing an inactive World withdraws its config options and runtime entry', async () => {
+  const world = { ...probe('fixture'), configOptions: () => [{ value: 'fixture-value', label: 'Fixture value' }] };
+  const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults([world], []) } as never) }, dir, dir);
+  const app = createBot(loaded, {
+    id: 'fixture-bot', defaults: () => loaded.config, worlds: [world],
+    build: () => ({ persona: makeFakePersona([]), llm: new FakeLLM() }),
+  });
+  try {
+    const port = await app.webApp!.start(0);
+    const options = async () => (await fetch(`http://127.0.0.1:${port}/api/config/options/fixture`)).json();
+    expect(await options()).toEqual({ options: [{ value: 'fixture-value', label: 'Fixture value' }] });
+    await app.assembly.removeDefinition('fixture', async () => 'removed');
+    expect(await options()).toEqual({ options: [] });
+    expect(deriveWorldFacts(app.core, app.assembly, 'en')).toEqual([]);
+  } finally { await app.stop(); }
+});
+
 it('a World whose start() throws at boot is left inactive with its reason and the Persona hears start-failed; the bot and the other Worlds start, enabled stays, a later activation clears the reason', async () => {
   let boom = true;
   const lifecycle: WorldLifecycleEvent[] = [];
