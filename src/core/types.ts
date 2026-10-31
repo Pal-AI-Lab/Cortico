@@ -283,8 +283,8 @@ export interface ToolDef extends ToolSchema {
 export type ToolSpec = ToolSchema & { usage?: string; tags: readonly ToolTag[] };
 
 /**
- * Persona 提供的 Memory 二进制存储。句柄以 mem: 开头，其余格式由后端定义。
- * nameHint 仅供参考，最终句柄由后端决定。
+ * Persona 提供的 Memory 二进制存储。句柄以 mem: 开头，其余格式由后端定义，但要能原样当工具参数传：
+ * 可打印字符,用 / 分隔，不含 .. 和空段。nameHint 仅供参考，最终句柄由后端决定。
  */
 export interface BlobStore {
   put(nameHint: string, bytes: Uint8Array, mime: string): string;
