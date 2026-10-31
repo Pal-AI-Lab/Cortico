@@ -341,6 +341,7 @@ describe('激活 / 停用 / 重启经 HTTP(热生效)', () => {
     const restart = await postJ('/api/worlds/restart', { id: 'dormant' });
     expect(restart.status).toBe(400);
     expect(String(restart.body.error)).toContain('未激活');
+    expect(String(restart.body.error)).not.toMatch(/^Error: /);
   });
 
   it('未知 id 与只占位子的 World 都是 400', async () => {

@@ -1927,7 +1927,7 @@ export class WebApp {
         const result = src.set(id, body.visible, this.languageOf(req));
         res.json({ ok: true, result, ...src.state() });
       } catch (err) {
-        res.status(400).json({ error: String(err) });
+        res.status(400).json({ error: this.errorText(err, req) });
       }
     }));
 
@@ -1946,7 +1946,7 @@ export class WebApp {
         this.deps.log.warn('World 激活状态已改', { id, enabled: body.enabled });
         res.json({ ok: true, result });
       } catch (err) {
-        res.status(400).json({ error: String(err) });
+        res.status(400).json({ error: this.errorText(err, req) });
       }
     }));
 
@@ -1963,7 +1963,7 @@ export class WebApp {
         this.deps.log.warn('World 已重启', { id });
         res.json({ ok: true, result });
       } catch (err) {
-        res.status(400).json({ error: String(err) });
+        res.status(400).json({ error: this.errorText(err, req) });
       }
     }));
 
@@ -2220,7 +2220,7 @@ export class WebApp {
         this.deps.log.warn('固定提示词部署覆盖已移除', { key });
         res.json({ ok: true, result });
       } catch (err) {
-        res.status(400).json({ error: String(err) });
+        res.status(400).json({ error: this.errorText(err, req) });
       }
     });
 
