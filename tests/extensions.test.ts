@@ -16,6 +16,7 @@ import { EXTENSIONS_DIR_ENV, ExtensionManager, extensionsDir, loadExtensions, re
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
 import { PREVIOUS_CONTRACT_VERSIONS } from '../src/extensions/previous-contract.ts';
 import { repoRoot } from '../src/paths.ts';
+import type { Logger } from '../src/core/types.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extensions-')); });
@@ -91,8 +92,11 @@ describe('loadExtensions', () => {
     installFake('clash-builtin', { body: definitionSource('console-like') });
     installFake('first', { body: definitionSource('dup') });
     installFake('second', { body: definitionSource('dup') });
-    const set = await loadExtensions(root, { reserved: ['console-like'] });
+    const warns: string[] = [];
+    const log = { debug() {}, info() {}, warn: (msg: string) => { warns.push(msg); }, error() {} } as unknown as Logger;
+    const set = await loadExtensions(root, { reserved: ['console-like'], log });
     expect(set.worlds.map((m) => m.id)).toEqual(['dup']);
+    expect(warns).toEqual([expect.stringContaining('clash-builtin'), expect.stringContaining('second')]);
     const byName = Object.fromEntries(set.records.map((r) => [r.name, { ...r, reason: r.reason?.('zh') }]));
     expect(byName['clash-builtin']).toMatchObject({ loaded: false, worldId: 'console-like', reason: expect.stringContaining('占用') });
     expect(byName.first.loaded).toBe(true);

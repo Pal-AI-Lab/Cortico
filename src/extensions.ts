@@ -357,6 +357,7 @@ export async function loadExtensions(
       if (taken.world.has(exported.id)) {
         const { id } = exported;
         record.reason = (language) => text(language).worldIdTaken(id);
+        opts.log?.warn(`World id 已被占用,扩展未加载: ${name}`, { id });
         continue;
       }
       taken.world.add(exported.id);
@@ -372,6 +373,7 @@ export async function loadExtensions(
       if (taken.provider.has(exported.id)) {
         const { id } = exported;
         record.reason = (language) => text(language).providerIdTaken(id);
+        opts.log?.warn(`供应商 id 已被占用,扩展未加载: ${name}`, { id });
         continue;
       }
       taken.provider.add(exported.id);
