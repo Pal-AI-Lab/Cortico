@@ -72,14 +72,7 @@ function gitSha(repoRoot: string | undefined): string | null {
 function lastIndexedRun(runsDir: string): string | null {
   const file = join(runsDir, 'index.jsonl');
   if (!existsSync(file)) return null;
-  let text: string;
-  try {
-    text = readTextFile(file);
-  } catch {
-    // 被别的程序占着就退回按目录名找上一次 run
-    return null;
-  }
-  const lines = text.split('\n');
+  const lines = retryBusy(() => readTextFile(file)).split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i].trim()) continue;
     try {

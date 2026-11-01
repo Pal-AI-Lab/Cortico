@@ -1453,7 +1453,7 @@ export class MainLoop {
       toolMs = Date.now() - toolsStart;
       flight.phase = 'done';
 
-      // 收尾提醒设得不小于上限时，提前到上限前一轮，否则永远到不了。
+      // soft 大于 hard 时永远到不了，等于 hard 时提示只进最后一条回执、没有下一轮照着收尾;两种都提前到 hard 的前一轮。
       if (round === Math.min(caps.soft, caps.hard - 1) && results.length > 0) {
         const hint = caps.softHint?.();
         if (hint) results[results.length - 1] = withText(results[results.length - 1], `${textOf(results[results.length - 1])}\n${hint}`);
