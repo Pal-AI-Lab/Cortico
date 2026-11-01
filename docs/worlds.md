@@ -6,6 +6,8 @@ World 通过事件报告外部环境变化,通过工具提供外部操作,并向
 World 不直接访问 Memory 或调用 Persona 的工具。
 其他架构的 bot 挂载 World 需要的能力分级见 [world-compatibility.md](world-compatibility.md)。
 
+`WorldAssembly.removeDefinition` 与激活操作共用按 ID 排队的生命周期，拒绝移除已挂载的 World。调用方确认包的 ID 归属后，即使定义导入失败，也会将其启用配置清为 `false`；包移除失败则恢复原值。
+
 ## 契约
 
 `World`:

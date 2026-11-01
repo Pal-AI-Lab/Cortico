@@ -37,6 +37,7 @@ import { registerFrameworkResolver } from './extensions/runtime.ts';
 import { adaptBotDefinition, adaptProviderModule, adaptWorldDefinition, isPreviousContract } from './extensions/previous-contract.ts';
 import { text } from './extensions/strings.ts';
 import { repoRoot } from './paths.ts';
+import { readJsonObject, updateJsonObject } from './config-file.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -80,6 +81,8 @@ export interface ExtensionRecord {
 
 export interface ExtensionSet {
   dir: string;
+  /** World IDs accepted from each package, retained across import failures. */
+  worldOwners?: Readonly<Record<string, string>>;
   records: ExtensionRecord[];
   worlds: WorldDefinition<WorldSection>[];
   providers: ProviderModule[];
@@ -266,10 +269,13 @@ export async function loadExtensions(
     world: new Set(opts.reserved ?? []),
     provider: new Set(opts.reservedProviders ?? []),
   };
+  const reservedWorlds = new Set(taken.world);
   const records: ExtensionRecord[] = [];
   const worlds: WorldDefinition<WorldSection>[] = [];
   const providers: ProviderModule[] = [];
   const webUiAssets: ExtensionWebUiAsset[] = [];
+  const ownersFile = join(dir, 'world-owners.json');
+  const priorOwners = readJsonObject(ownersFile);
   for (const { name, spec } of readInstalled(dir)) {
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
     const pkg = readPackageJson(join(pkgDir, 'package.json'));
@@ -384,8 +390,23 @@ export async function loadExtensions(
     record.loaded = true;
     serveAsset(id);
   }
+  const worldOwners: Record<string, string> = Object.create(null);
+  const installed = new Set(records.map(record => record.name));
+  for (const [id, name] of Object.entries(priorOwners)) {
+    if (typeof name !== 'string') throw new Error(`Invalid World owner in ${ownersFile}: ${id}`);
+    if (installed.has(name) && !reservedWorlds.has(id)) worldOwners[id] = name;
+  }
+  for (const record of records) {
+    if (record.loaded && record.kind === 'world' && record.worldId) worldOwners[record.worldId] = record.name;
+  }
+  if (JSON.stringify(priorOwners) !== JSON.stringify(worldOwners)) {
+    updateJsonObject(ownersFile, raw => {
+      for (const id of Object.keys(raw)) delete raw[id];
+      Object.assign(raw, worldOwners);
+    });
+  }
   const bot = opts.activeBot && records.some((r) => r.loaded && r.kind === 'bot') ? opts.activeBot : undefined;
-  return { dir, records, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
+  return { dir, records, worldOwners, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
 }
 
 // 装卸与搜索(WebUI 那一面)
@@ -658,6 +679,8 @@ export interface ExtensionManagerOptions {
   decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
   /** Serializes World package removal with its activation lifecycle. */
   removeWorld?: (id: string, remove: () => Promise<string>) => Promise<string>;
+  /** Withdraws a provider module while excluding new endpoint creation. */
+  removeProvider?: (id: string, remove: () => Promise<string>) => Promise<string>;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -667,11 +690,13 @@ export class ExtensionManager {
   /** 首次查询 registry 时解析,解析成功后本进程内不再变。 */
   private registryUrl: Promise<string> | null;
   private readonly fetchJson: (url: string) => Promise<unknown>;
-  private busy = false;
+  private active: Promise<unknown> | null = null;
+  private closing = false;
   private readonly uninstalled = new Set<string>();
   private readonly builtins?: (language: Language) => ExtensionInfo[];
   private readonly decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
   private readonly removeWorld?: ExtensionManagerOptions['removeWorld'];
+  private readonly removeProvider?: ExtensionManagerOptions['removeProvider'];
 
   constructor(
     private readonly repoRoot: string,
@@ -683,6 +708,7 @@ export class ExtensionManager {
     this.builtins = opts.builtins;
     this.decorate = opts.decorate;
     this.removeWorld = opts.removeWorld;
+    this.removeProvider = opts.removeProvider;
     this.registryUrl = opts.registry ? Promise.resolve(opts.registry.replace(/\/$/, '')) : null;
     this.fetchJson = opts.fetchJson ?? (async (url) => {
       let res: Response;
@@ -1074,8 +1100,8 @@ export class ExtensionManager {
    */
   async install(target: ExtensionInstallTarget, language: Language = 'zh'): Promise<string> {
     const spec = this.installSpec(target);
-    this.prepareDir();
     return this.exclusive(async () => {
+      this.prepareDir();
       const output = [text(language).installed(spec), await this.pnpm(['add', spec, LENIENT_BUILDS])];
       const skipped = pendingBuilds(this.dir);
       const direct = new Set(readInstalled(this.dir).flatMap(({ name }) =>
@@ -1092,8 +1118,8 @@ export class ExtensionManager {
 
   async uninstall(name: string, language: Language = 'zh'): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
-    this.prepareDir();
-    const output = await this.exclusive(async () => {
+    return this.exclusive(async () => {
+      this.prepareDir();
       const item = this.list(language).extensions.find((entry) => entry.name === name && !entry.builtin && entry.state !== 'removed');
       if (!item) throw extensionError((t) => t.notInstalled(name));
       if (item.enabled) throw extensionError((t) => t.inUse, 409);
@@ -1102,11 +1128,16 @@ export class ExtensionManager {
         if (current.enabled) throw extensionError((t) => t.inUse, 409);
         return this.pnpm(['remove', name, LENIENT_BUILDS]);
       };
-      return item.loaded && item.kind === 'world' && item.worldId && this.removeWorld
-        ? this.removeWorld(item.worldId, remove) : remove();
+      const ids = this.booted.worldOwners
+        ? Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id)
+        : item.loaded && item.kind === 'world' && item.worldId ? [item.worldId] : [];
+      const output = await (item.loaded && item.kind === 'provider' && item.worldId && this.removeProvider
+        ? this.removeProvider(item.worldId, remove)
+        : ids.reduceRight<() => Promise<string>>((next, id) =>
+          this.removeWorld ? () => this.removeWorld!(id, next) : next, remove)());
+      this.uninstalled.add(name);
+      return `${text(language).uninstalled(name)}\n${output}`;
     });
-    this.uninstalled.add(name);
-    return `${text(language).uninstalled(name)}\n${output}`;
   }
 
   private installSpec(target: ExtensionInstallTarget): string {
@@ -1125,14 +1156,19 @@ export class ExtensionManager {
     return version ? `${name}@${version}` : name;
   }
 
+  /** Stops admitting mutations and waits for the complete active transaction, including rollback. */
+  async close(): Promise<void> {
+    this.closing = true;
+    await this.active?.catch(() => {});
+  }
+
   private async exclusive<T>(work: () => Promise<T>): Promise<T> {
-    if (this.busy) throw extensionError((t) => t.busy);
-    this.busy = true;
-    try {
-      return await work();
-    } finally {
-      this.busy = false;
-    }
+    if (this.closing) throw extensionError((t) => t.shuttingDown, 503);
+    if (this.active) throw extensionError((t) => t.busy, 409);
+    const active = Promise.resolve().then(work);
+    this.active = active;
+    try { return await active; }
+    finally { this.active = null; }
   }
 
   /** 在 extensions/ 里跑 pnpm,回输出的末 20 行;非零退出时抛出。 */

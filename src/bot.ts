@@ -22,7 +22,7 @@ import { resolveLanguage, type Language } from './core/language.ts';
 import { botText } from './strings.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
-import { isSupervised, requestRestart, startsPaused } from './boot.ts';
+import { announceShutdown, isSupervised, requestRestart, startsPaused } from './boot.ts';
 import { ExtensionManager, packageMetadata, type ExtensionSet } from './extensions.ts';
 import type { ExtensionPackageJson } from './extensions/manifest.ts';
 import { ExtensionMarket } from './extensions/market.ts';
@@ -954,6 +954,13 @@ export function createBot<C extends CoreConfig>(
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
   let webApp: WebApp | null = null;
+  const extensions = opts.extensions ? new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
+    builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
+    decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id),
+      (id) => Object.values(loaded.config.providers).some((entry) => entry.kind === id)),
+    removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
+    removeProvider: (id, remove) => providerHub.removeModule(id, remove),
+  }) : undefined;
 
   /** WebUI 与启动器共用一次关机操作，重复调用返回同一 Promise。 */
   let shutdownOnce: Promise<ShutdownReport> | null = null;
@@ -969,25 +976,27 @@ export function createBot<C extends CoreConfig>(
     reason: string,
     opts: { closeWeb: boolean; exit: boolean; language?: Language },
   ): Promise<ShutdownReport> => {
-    shutdownOnce ??= runShutdown({
-      reason,
-      core,
-      worlds: [...assembly.mounted],
-      stopCore,
-      llmManagers,
-
-      webApp: opts.closeWeb ? webApp : null,
-      log: core.runlog.logger('shutdown'),
-      language: opts.language ?? language,
-    }).then((report) => {
+    shutdownOnce ??= (async () => {
+      announceShutdown('waiting-extensions');
+      await extensions?.close();
+      announceShutdown('stopping');
+      return runShutdown({
+        reason,
+        core,
+        worlds: [...assembly.mounted],
+        stopCore,
+        llmManagers,
+        webApp: opts.closeWeb ? webApp : null,
+        log: core.runlog.logger('shutdown'),
+        language: opts.language ?? language,
+      });
+    })().then((report) => {
       instanceLock?.release();
       instanceLock = null;
       if (opts.exit) {
-      // 先发送关机结果，再关闭 WebUI 并退出进程。
-
+        // 先发送关机结果，再关闭 WebUI 并退出进程。
         setTimeout(() => {
           void Promise.resolve(webApp?.stop()).finally(() => {
-
             process.exit(report.complete ? 0 : 1);
           });
         }, 300);
@@ -1104,12 +1113,7 @@ export function createBot<C extends CoreConfig>(
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
       },
-      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
-        builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
-        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id),
-          (id) => Object.values(loaded.config.providers).some((entry) => entry.kind === id)),
-        removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
-      }), market: new ExtensionMarket({ dir: opts.extensions.dir, log: core.runlog.logger('market') }) } : {}),
+      ...(extensions ? { extensions, market: new ExtensionMarket({ dir: opts.extensions!.dir, log: core.runlog.logger('market') }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
@@ -1195,6 +1199,7 @@ export function createBot<C extends CoreConfig>(
       return { port };
     },
     async stop() {
+      await extensions?.close();
       await core.stop();
       await stopCore();
       await Promise.all([...llmManagers.values()].map((m) => m.stop()));

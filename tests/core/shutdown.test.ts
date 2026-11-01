@@ -3,7 +3,7 @@
  * 步骤失败或超时后继续后续步骤；整个关机过程只执行一次。
  */
 import { describe, it, expect, vi } from 'vitest';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -19,6 +19,7 @@ import type {
   ShutdownExternalCheck,
 } from '../../src/core/types.ts';
 import { FakeLLM, makeFakePersona } from './helpers.ts';
+import { ExtensionManager, loadExtensions, type PackageManagerRunner } from '../../src/extensions.ts';
 
 type TestConfig = CoreConfig & { loop: { softCap: number; hardCap: number } };
 
@@ -66,6 +67,53 @@ const checked = (status: ShutdownExternalCheck['status']): ShutdownExternalCheck
   status,
   detail: status === 'verified-ended' ? '平台已确认结束' : '平台没有确认结束',
   manualAction: '打开平台后台人工确认并下播。',
+});
+
+it('shutdown waits for an HTTP package transaction and rejects mutations from another request', async () => {
+  const env = makeEnv([]);
+  env.loaded.secret = () => '';
+  env.config.web.password = '';
+  const extensions = await loadExtensions(env.dir);
+  const app = createBot(env.loaded, {
+    id: 'fixture', defaults: () => env.config,
+    build: () => ({ persona: makeFakePersona([]), llm: new FakeLLM(), webUi: {} }),
+  }, { extensions });
+  const manager = (app.webApp as unknown as { deps: { extensions: ExtensionManager } }).deps.extensions;
+  let entered!: () => void, release!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const run: PackageManagerRunner = async () => {
+    entered(); await gate;
+    writeFileSync(join(extensions.dir, 'package.json'), JSON.stringify({ dependencies: { fixture: '1.0.0' } }));
+    return { code: 0, output: 'installed' };
+  };
+  Object.defineProperty(manager, 'run', { value: run });
+  const port = await app.webApp!.start(0);
+  const post = () => fetch(`http://127.0.0.1:${port}/api/extensions/install`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'fixture' }),
+  });
+  let shutdown: ReturnType<typeof app.shutdown> | undefined;
+  try {
+    const installation = post();
+    await Promise.race([started, installation.then(response => { throw new Error(`Package runner was not entered: HTTP ${response.status}`); })]);
+    let settled = false;
+    shutdown = app.shutdown('fixture').then(report => { settled = true; return report; });
+    const rejected = await post();
+    expect(rejected.status).toBe(503);
+    await rejected.text();
+    expect(settled).toBe(false);
+    release();
+    const installed = await installation;
+    expect(installed.ok).toBe(true);
+    await installed.text();
+    expect((await shutdown).complete).toBe(true);
+    expect(manager.list().extensions[0]).toMatchObject({ name: 'fixture', state: 'pending-restart' });
+  } finally {
+    release();
+    if (shutdown) await shutdown;
+    else await app.stop();
+    env.cleanup();
+  }
 });
 
 function makeEnv(worlds: World[]): {

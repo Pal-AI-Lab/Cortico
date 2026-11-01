@@ -423,13 +423,13 @@ export class WorldAssembly {
     return this.queued(id, async () => {
       const slot = this.slots.find((entry) => entry.id === id);
       if (slot?.mounted) throw new LocalizedError((locale) => text(locale).alreadyRunning(this.labelIn(id, locale)), 409);
-      const def = this.definitions.find((entry) => entry.id === id);
-      const enabled = def ? this.section(def).enabled : undefined;
-      if (def) this.persist(id, { enabled: false });
+      const worlds = (this.loaded.config as unknown as { worlds?: Record<string, WorldSection> }).worlds;
+      const enabled = worlds?.[id]?.enabled;
+      this.persist(id, { enabled: false });
       let result: string;
       try { result = await remove(); }
       catch (error) {
-        if (def) this.persist(id, { enabled });
+        this.persist(id, { enabled });
         throw error;
       }
       this.removedDefinitions.add(id);
@@ -553,8 +553,8 @@ export class WorldAssembly {
   }
 
   private persist(id: string, patch: Record<string, unknown>): void {
-    const worlds = (this.loaded.config as unknown as { worlds: Record<string, Record<string, unknown>> }).worlds;
-    assignDeep(worlds[id], patch);
+    const worlds = ((this.loaded.config as unknown as { worlds?: Record<string, Record<string, unknown>> }).worlds ??= {});
+    assignDeep(worlds[id] ??= {}, patch);
     updateJsonObject(this.cfgPath, (raw) => {
       const rawIo = (raw.worlds ??= {}) as Record<string, Record<string, unknown>>;
       const section = (rawIo[id] ??= {});

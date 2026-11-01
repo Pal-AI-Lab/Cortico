@@ -37,6 +37,12 @@ export function announceDataDir(dataDir: string, env = process.env): void {
   notifyLauncher({ type: READY_MESSAGE, dataDir }, env);
 }
 
+/** Supervisors start their shutdown deadline only after package mutations have settled. */
+export function announceShutdown(phase: 'waiting-extensions' | 'stopping'): void {
+  if (!isSupervised() || !process.connected) return;
+  process.send?.({ type: 'cortico:shutdown', phase }, () => {});
+}
+
 /** 请求重启后，由调用方执行关机。 */
 export function requestRestart(dataDir: string, env = process.env): void {
   writeFileSync(join(dataDir, RESTART_FLAG_FILE), new Date().toISOString() + '\n', 'utf8');

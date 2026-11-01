@@ -2104,7 +2104,7 @@ export class WebApp {
       } catch (err) {
         const error = this.errorText(err, req);
         this.deps.log.error('扩展安装失败', { target, error });
-        res.status(400).json({ error });
+        res.status(err instanceof LocalizedError ? err.status : 400).json({ error });
       }
     }));
 

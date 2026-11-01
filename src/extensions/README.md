@@ -96,6 +96,7 @@ undici 的 `cause` 错误码。
 `install()` 随后把构建待定(`ignoredBuilds` 或 `allowBuilds` 的待定值)、又是已装扩展直接依赖的包在 `allowBuilds` 里写 true
 并 `pnpm rebuild`,其余写成待定值并列进回执。
 `uninstall()` 在修改包目录前重新检查运行状态。`removeWorld` 把文件移除交给 World 生命周期队列执行，成功后清除启用状态和装配槽位；失败保留槽位并恢复配置。当前进程卸载过的包重新安装后仍标记待重启。
+`world-owners.json` 保留通过加载校验的 World ID 归属，导入失败时也可据此清理配置。`removeProvider` 在撤下注册期间阻止创建端点；`close()` 关闭装卸入口并等待当前事务结束。归属迁移、冲突处理和宿主关机协议见 [docs/extensions.md](../../docs/extensions.md)「卸载」与 [docs/deployment.md](../../docs/deployment.md)「关机」。
 规则见 [docs/extensions.md](../../docs/extensions.md)「安装」。装卸串行。面板 bundle 的 URL 由服务端分配:`/assets/extensions/<包>/<版本>/<文件>`,只发
 manifest 里声明的那两个文件。
 

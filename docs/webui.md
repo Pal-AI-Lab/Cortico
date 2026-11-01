@@ -138,6 +138,8 @@ WebUI 网页本身(页面、DOM、类名与 `src/web/client/` 下的模块)是�
 | `POST /api/run/shutdown` | 分步关机，完成后返回各步骤的结果 |
 | `POST /api/run/restart` | 写入 `data/.restart-request` 后关机；由启动器监管时（`CORTICO_SUPERVISED`）自动重新启动 |
 
+关机与重启先关闭扩展装卸入口，等待正在执行的包操作及其回滚结束，再停止服务；等待期间新的安装、卸载请求返回 HTTP 503。
+
 ## 诊断包
 
 `GET /api/diagnostics`(控制台页的「导出诊断」)把排查一场跑要看的记录收进一个
