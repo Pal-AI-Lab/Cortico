@@ -6,6 +6,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, writeFileSync } fro
 import { join, resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { nowIso, readTextFile } from './util.ts';
+import { retryBusy } from './fs-busy.ts';
 
 export interface RunInfo {
   id: string;
@@ -13,6 +14,8 @@ export interface RunInfo {
   runsDir: string;
   startedAt: string;
   previousRun: string | null;
+  /** 开机那行没写进 index.jsonl 的原因;index 只是索引，缺一行不影响运行。 */
+  indexError?: string;
 }
 
 export interface RunOpenMeta {
@@ -69,7 +72,14 @@ function gitSha(repoRoot: string | undefined): string | null {
 function lastIndexedRun(runsDir: string): string | null {
   const file = join(runsDir, 'index.jsonl');
   if (!existsSync(file)) return null;
-  const lines = readTextFile(file).split('\n');
+  let text: string;
+  try {
+    text = readTextFile(file);
+  } catch {
+    // 被别的程序占着就退回按目录名找上一次 run
+    return null;
+  }
+  const lines = text.split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     if (!lines[i].trim()) continue;
     try {
@@ -92,20 +102,30 @@ export function openRun(dataDir: string, meta: RunOpenMeta): RunInfo {
   const id = `r-${stamp.slice(0, 8)}-${stamp.slice(8, 14)}-${randomBytes(2).toString('hex')}`;
   const dir = join(runsDir, id);
   mkdirSync(dir, { recursive: true });
-  appendFileSync(join(runsDir, 'index.jsonl'), JSON.stringify({
+  const indexError = appendIndex(runsDir, {
     run: id,
     startedAt,
     bot: meta.bot,
     pid: process.pid,
     gitSha: gitSha(meta.repoRoot),
     previousRun,
-  }) + '\n', 'utf8');
-  return { id, dir, runsDir, startedAt, previousRun };
+  });
+  return { id, dir, runsDir, startedAt, previousRun, ...(indexError ? { indexError } : {}) };
 }
 
-/** 追加关机记录；进程异常结束时可能没有该行，查询方需从已有记录推算结束时间。 */
-export function closeRun(run: RunInfo, summary: RunCloseSummary): void {
-  appendFileSync(join(run.runsDir, 'index.jsonl'), JSON.stringify({ run: run.id, ...summary }) + '\n', 'utf8');
+/** 追加关机记录，写不进时返回原因；进程异常结束时可能没有该行，查询方需从已有记录推算结束时间。 */
+export function closeRun(run: RunInfo, summary: RunCloseSummary): string | undefined {
+  return appendIndex(run.runsDir, { run: run.id, ...summary });
+}
+
+/** 文件被别的程序占着时按 retryBusy 退避，仍写不进就返回原因，不抛出。 */
+function appendIndex(runsDir: string, line: Record<string, unknown>): string | undefined {
+  try {
+    retryBusy(() => appendFileSync(join(runsDir, 'index.jsonl'), JSON.stringify(line) + '\n', 'utf8'));
+    return undefined;
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
 }
 
 /** run.json 保存本次运行的 World 清单与配置指纹。 */
