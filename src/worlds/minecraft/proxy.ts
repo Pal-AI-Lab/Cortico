@@ -84,6 +84,7 @@ export class MinecraftWorldProxy implements World {
   private lastCaps: boolean | null = null;
   private configTimer: ReturnType<typeof setInterval> | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly retiring = new WeakMap<ChildProcess, Promise<void>>();
 
   constructor(private readonly opts: MinecraftWorldOptions) {}
 
@@ -227,32 +228,42 @@ export class MinecraftWorldProxy implements World {
     if (this.configTimer) clearInterval(this.configTimer);
     this.configTimer = null;
     const child = this.child;
-    if (child) {
-      try {
-        await this.rpc({ kind: 'shutdown' }, 15_000);
-      } catch {
-        /** shutdown RPC 超时后终止子进程。 */
-      }
-      await waitExit(child, 5000);
-      if (child.exitCode === null && !child.killed) child.kill();
-    }
-    this.teardownChild();
+    if (child) await this.retireChild(child);
     this.host = null;
   }
 
+  private retireChild(child: ChildProcess): Promise<void> {
+    const pending = this.retiring.get(child);
+    if (pending) return pending;
+    const work = Promise.resolve().then(async () => {
+      if (this.child === child && child.connected) {
+        try { await this.rpc({ kind: 'shutdown' }, 15_000); } catch { /* Wait for this same child below. */ }
+      }
+      await waitExit(child, 5000);
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill();
+        await waitExit(child, 5000);
+      }
+      if (child.exitCode === null && child.signalCode === null) throw new Error('Minecraft 旧引擎尚未退出，不能启动另一个引擎');
+      if (this.child === child) this.teardownChild();
+    });
+    this.retiring.set(child, work);
+    return work;
+  }
 
   private async spawn(): Promise<void> {
+    if (this.child) throw new Error('Minecraft 已有受管引擎，需等待它退出');
     const child = fork(CHILD_ENTRY, [], {
       execArgv: [...childExecArgv(), '--import', DEPENDENCY_PATCHES_URL],
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     this.child = child;
     if (this.host) logChildStdio(child, this.host.log);
-    child.on('message', (msg) => this.onMessage(msg as ChildToMain));
-    child.on('exit', (code) => this.onExit(code));
+    child.on('message', (msg) => { if (this.child === child) this.onMessage(msg as ChildToMain); });
+    child.on('exit', (code) => this.onExit(child, code));
     child.on('error', (err) => this.host?.log.error('Minecraft 引擎子进程出错', { err: String(err) }));
     this.lastConfigJson = JSON.stringify(this.opts.cfg);
-    await this.rpc(
+    try { await this.rpc(
       {
         kind: 'init',
         init: {
@@ -263,7 +274,11 @@ export class MinecraftWorldProxy implements World {
         },
       },
       INIT_TIMEOUT_MS,
-    );
+    ); } catch (err) {
+      if (this.child === child) await this.retireChild(child);
+      throw err;
+    }
+    if (this.child !== child || this.stopping) throw new Error('Minecraft 引擎初始化期间已停止');
     this.ready = true;
     this.lastCaps = null;
     this.pushCapsIfChanged();
@@ -283,10 +298,11 @@ export class MinecraftWorldProxy implements World {
     this.pending.clear();
   }
 
-  private onExit(code: number | null): void {
+  private onExit(child: ChildProcess, code: number | null): void {
+    if (this.child !== child) return;
     const wasStopping = this.stopping;
     this.teardownChild();
-    if (wasStopping) return;
+    if (wasStopping || this.retiring.has(child)) return;
     if (code === CONSOLE_KILL_EXIT_CODE) {
       this.host?.log.warn('Minecraft 引擎子进程收到 0xC000013A 退出状态，宿主退出');
       if (process.listenerCount('SIGINT') > 0) process.emit('SIGINT');
@@ -314,8 +330,7 @@ export class MinecraftWorldProxy implements World {
       if (this.stopping) return;
       void this.spawn().catch((err: unknown) => {
         this.host?.log.error('Minecraft 引擎子进程重启失败,继续重试', { err: String(err) });
-        this.teardownChild();
-        this.scheduleRestart();
+        if (!this.child) this.scheduleRestart();
       });
     }, RESTART_DELAY_MS);
     this.restartTimer.unref?.();
@@ -445,13 +460,11 @@ export class MinecraftWorldProxy implements World {
 }
 
 function waitExit(child: ChildProcess, timeoutMs: number): Promise<void> {
-  if (child.exitCode !== null) return Promise.resolve();
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
-    const timer = setTimeout(resolve, timeoutMs);
+    const done = (): void => { clearTimeout(timer); child.off('exit', done); resolve(); };
+    const timer = setTimeout(done, timeoutMs);
     timer.unref?.();
-    child.once('exit', () => {
-      clearTimeout(timer);
-      resolve();
-    });
+    child.once('exit', done);
   });
 }
