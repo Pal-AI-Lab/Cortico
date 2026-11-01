@@ -6,6 +6,8 @@ Provider 适配模型服务的通信协议。仓库内建 `openai-responses-comp
 `llamacpp`（本机 llama-server，支持下载和进程托管）；其他实现通过扩展包安装，如
 `cortico-provider-grok`。模型在端点配置中选择，Persona 不指定模型。
 
+供应商扩展卸载前在端点写锁内确认没有已保存的端点引用，并同步撤下模块注册。撤下期间新建、保存、预览和旧面板调用都无法取得该模块；包移除失败则恢复注册。已打开的编辑器也必须重新通过模块校验才能保存。
+
 ## 端点表
 
 `config.providers` 是一张以端点名为键的表,`config.activeProvider` 指其中一个。每条端点:

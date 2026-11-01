@@ -258,7 +258,7 @@ export class ProviderSettings {
   sources() {
     return this.modules.map((module) => ({
       id: `llm:${module.id}`,
-      contribute: (language) => this.contribute(module, language),
+      contribute: (language) => this.modules.includes(module) ? this.contribute(module, language) : null,
     })) satisfies WebUiPageSource[];
   }
 
@@ -349,6 +349,7 @@ export class ProviderSettings {
         ({ name, entry }) => module.config?.(name, entry, language) ?? [],
       ),
       invoke: async (panel, method, args) => {
+        this.module(module.id);
         if (panel !== 'settings') {
           if (!extra.invoke) throw new Error(S.unknownPanel);
           return extra.invoke(panel, method, args);
