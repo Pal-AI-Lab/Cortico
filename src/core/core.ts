@@ -145,6 +145,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       incidentsDir: join(this.run.dir, 'incidents'),
     });
     this.log = this.runlog.logger('core');
+    if (this.run.indexError) this.log.emit('error', '开机记录没写进 runs/index.jsonl', { event: 'run-index', data: { error: this.run.indexError } });
     this.store = new JsonlEventStore({ dataDir, run: this.run.id, log: this.log.child('store'), timezone: cfg.timezone });
     // WakeBus 持有只读配置引用，使 batching 热更新对后续 push 生效。
     this.bus = new WakeBus(cfg.batching, this.log.child('bus'));

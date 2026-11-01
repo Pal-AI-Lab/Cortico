@@ -1507,6 +1507,23 @@ describe('MainLoop user事件协议', () => {
     assertPairing(rig.session.messages);
   });
 
+  it('软上限不小于硬上限时，提醒提前到硬上限前一轮', async () => {
+    rig = makeRig({ cfgPatch: (cfg) => (cfg.loop = { softCap: 5, hardCap: 3 }) });
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+    rig.llm.fallback = () => toolReply([{ name: 'noop' }]);
+
+    const before = rig.session.messages.length;
+    rig.pushEvent('开始');
+    await until(() => rig.loop.getStatus().batchesHandled >= 2);
+    await until(() => rig.loop.getStatus().roundsLastBatch === 3);
+
+    const results = rig.session.messages.slice(before).filter(
+      (message) => message.role === 'tool' && !message.content.startsWith('[1 new event]'),
+    );
+    expect(results.map((r) => r.content.includes('acting for many rounds'))).toEqual([false, true, false]);
+  });
+
   it('工具异常、未知工具和坏JSON都成为配对结果', async () => {
     rig = makeRig({
       worlds: [makeFakeIO('qq', [
