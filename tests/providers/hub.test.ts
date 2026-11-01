@@ -159,6 +159,16 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
   } finally { vi.unstubAllGlobals(); }
 });
 
+it('lists models before a model is chosen, while the probe still requires one', async () => {
+  const { hub } = fixture();
+  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ data: [{ id: 'listed-model' }] })));
+  const draft = { entry: { ...entry, spec: { model: '', thinking: false } }, secretValue: 'typed-key' };
+  try {
+    expect(await hub.action('draft', 'models', 'en', draft)).toEqual({ models: [{ id: 'listed-model' }] });
+    await expect(hub.action('draft', 'test', 'en', draft)).rejects.toThrow('Model name cannot be empty');
+  } finally { vi.unstubAllGlobals(); }
+});
+
 it('module list carries the editor sections of each module in its declared order', () => {
   const { hub, settings } = fixture();
   const sections = Object.fromEntries(hub.moduleList('en').map(module => [module.id, module.sections.map(section => section.id)]));

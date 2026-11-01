@@ -280,6 +280,7 @@ export class ProviderHub {
   /**
    * Probe (`test`) or list models (`models`). With `draft`, the request goes through an instance
    * built from the browser's entry and typed key; nothing is written, and `name` may not exist yet.
+   * Listing models does not use `spec`: the list is how the operator picks the model.
    */
   async action(name: string, action: 'test' | 'models', language: Language, draft?: { entry: LLMProviderEntry; secretValue?: string }) {
     this.refresh();
@@ -294,7 +295,9 @@ export class ProviderHub {
     if (!draft.entry || typeof draft.entry !== 'object') throw hubError(S => S.bodyRequired);
     const module = this.modules.find(m => m.id === draft.entry.kind);
     if (!module) throw hubError(S => S.moduleMissing);
-    const entry = validateEntry(module, withTypedSecret(name, draft.entry, draft.secretValue), language);
+    const requested = withTypedSecret(name, draft.entry, draft.secretValue);
+    const { spec: _spec, ...withoutSpec } = requested;
+    const entry = validateEntry(module, action === 'models' ? withoutSpec : requested, language);
     const registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
     if (action === 'models') {
       const instance = registry.resolve(name);
