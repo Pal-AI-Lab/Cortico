@@ -11,7 +11,7 @@ import type {
 import type { LoadedConfig } from './core/config.ts';
 import type { WorldFailure } from './core/core.ts';
 import type { BotDefinition } from './bot.ts';
-import { updateJsonObject, writeSecretFile } from './config-file.ts';
+import { readJsonObject, updateJsonObject, writeSecretFile } from './config-file.ts';
 import { LocalizedError, type Language } from './core/language.ts';
 import { assemblyText as text } from './strings.ts';
 import { readTextFile } from './core/util.ts';
@@ -423,13 +423,12 @@ export class WorldAssembly {
     return this.queued(id, async () => {
       const slot = this.slots.find((entry) => entry.id === id);
       if (slot?.mounted) throw new LocalizedError((locale) => text(locale).alreadyRunning(this.labelIn(id, locale)), 409);
-      const worlds = (this.loaded.config as unknown as { worlds?: Record<string, WorldSection> }).worlds;
-      const enabled = worlds?.[id]?.enabled;
+      const restore = this.enabledRestorer(id);
       this.persist(id, { enabled: false });
       let result: string;
       try { result = await remove(); }
       catch (error) {
-        this.persist(id, { enabled });
+        try { restore(); } catch { /* 报包移除的错;配置停在 enabled: false,下次启动不激活 */ }
         throw error;
       }
       this.removedDefinitions.add(id);
@@ -550,6 +549,27 @@ export class WorldAssembly {
   private section(def: WorldDefinition<WorldSection>): WorldSection {
     const worlds = ((this.loaded.config as unknown as { worlds?: Record<string, WorldSection> }).worlds ??= {});
     return (worlds[def.id] ??= def.defaults());
+  }
+
+  /** 记下 `worlds.<id>.enabled` 在内存与 config.json 里的值;恢复时原来没有这个键就删掉。 */
+  private enabledRestorer(id: string): () => void {
+    type Root = { worlds?: Record<string, Record<string, unknown>> };
+    const capture = (root: Root) => {
+      const section = root.worlds?.[id];
+      return section && Object.hasOwn(section, 'enabled') ? { value: section.enabled } : null;
+    };
+    const put = (root: Root, saved: { value: unknown } | null) => {
+      const section = root.worlds?.[id];
+      if (!section) return;
+      if (saved) section.enabled = saved.value;
+      else delete section.enabled;
+    };
+    const memory = capture(this.loaded.config as unknown as Root);
+    const disk = capture(readJsonObject(this.cfgPath) as Root);
+    return () => {
+      put(this.loaded.config as unknown as Root, memory);
+      updateJsonObject(this.cfgPath, (raw) => put(raw as Root, disk));
+    };
   }
 
   private persist(id: string, patch: Record<string, unknown>): void {

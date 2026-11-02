@@ -180,6 +180,13 @@ it('transfers ownership only to an accepted World, so removing an old package ca
   expect(JSON.parse(readFileSync(join(root, 'config.json'), 'utf8')).worlds.fixture.enabled).toBe(true);
 });
 
+it('restores a missing enabled key by deleting it again when removal fails', async () => {
+  const { manager, saved } = await setup(false, true, true);
+  writeFileSync(join(root, 'config.json'), JSON.stringify({ worlds: { fixture: { port: 4321 } } }));
+  await expect(manager.uninstall('fixture-world')).rejects.toThrow('filesystem busy');
+  expect(saved().worlds.fixture).toEqual({ port: 4321 });
+});
+
 it('boots when the World owners file is corrupt, holds a non-string owner, or cannot be read or written', { timeout: 15_000 }, async () => {
   await setup(true);
   const file = join(root, 'extensions', 'world-owners.json');
