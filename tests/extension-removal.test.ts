@@ -44,7 +44,7 @@ async function setup(enabled = false, failRemoval = false, importFailure = false
   } });
   let gate: Promise<void> | undefined;
   const manager = new ExtensionManager(root, booted, {
-    decorate: extensionRuntimeState(assembly, () => true),
+    decorate: extensionRuntimeState(assembly, () => true, () => false),
     removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
     run: async () => {
       if (gate) await gate;
@@ -167,7 +167,7 @@ it('transfers ownership only to an accepted World, so removing an old package ca
   const loaded = loadDeployment({ defaults: () => ({ ...structuredClone(CORE_DEFAULTS), worlds: worldDefaults(booted.worlds, []) }) }, root, root);
   const assembly = new WorldAssembly(loaded, booted.worlds, []);
   const manager = new ExtensionManager(root, booted, {
-    decorate: extensionRuntimeState(assembly, () => true),
+    decorate: extensionRuntimeState(assembly, () => true, () => false),
     removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
     run: async () => { writeFileSync(join(dir, 'package.json'), JSON.stringify({ dependencies: { replacement: '1.0.0' } })); return { code: 0, output: '' }; },
   });

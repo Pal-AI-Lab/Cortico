@@ -81,8 +81,8 @@ export interface ExtensionRecord {
 
 export interface ExtensionSet {
   dir: string;
-  /** World IDs accepted from each package, retained across import failures. */
-  worldOwners?: Readonly<Record<string, string>>;
+  /** World ID → 取得它的包名;包后来导入失败也保留,卸载据此清掉那个 World 的启用配置。 */
+  worldOwners: Readonly<Record<string, string>>;
   records: ExtensionRecord[];
   worlds: WorldDefinition<WorldSection>[];
   providers: ProviderModule[];
@@ -1128,9 +1128,7 @@ export class ExtensionManager {
         if (current.enabled) throw extensionError((t) => t.inUse, 409);
         return this.pnpm(['remove', name, LENIENT_BUILDS]);
       };
-      const ids = this.booted.worldOwners
-        ? Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id)
-        : item.loaded && item.kind === 'world' && item.worldId ? [item.worldId] : [];
+      const ids = Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id);
       const output = await (item.loaded && item.kind === 'provider' && item.worldId && this.removeProvider
         ? this.removeProvider(item.worldId, remove)
         : ids.reduceRight<() => Promise<string>>((next, id) =>

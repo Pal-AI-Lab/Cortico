@@ -129,7 +129,7 @@ describe('ExtensionManager', () => {
     let release: (() => void) | null = null;
     const urls: string[] = [];
     const set: ExtensionSet = {
-      dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], ...booted,
+      dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], ...booted, worldOwners: booted.worldOwners ?? {},
     };
     const mgr = new ExtensionManager(root, set, {
       run: (args, cwd) => {
@@ -361,7 +361,7 @@ describe('ExtensionManager', () => {
       })),
     };
     const urls: string[] = [];
-    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} };
     const mgr = new ExtensionManager(root, set, {
       run: async () => ({ code: 0, output: '' }),
       registry: 'https://registry.example.invalid',
@@ -381,7 +381,7 @@ describe('ExtensionManager', () => {
     // UTC 3-1 当天没过完,区间止于闰日 2-29
     vi.setSystemTime(new Date('2028-03-01T00:05:00Z'));
     onTestFinished(() => { vi.useRealTimers(); });
-    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
+    const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} };
     // 每个包按时间倒序各段的下载量,没列出的段是 0;c-mod 统计里查不到
     const windows: Record<string, number[]> = { 'a-mod': [10, 5], '@s/b-mod': [4] };
     const asked: Record<string, number> = {};
@@ -425,7 +425,7 @@ describe('ExtensionManager', () => {
   it('search:下载统计迟迟不回,列表照样出,下载量缺席', async () => {
     vi.useFakeTimers();
     try {
-      const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] };
+      const set: ExtensionSet = { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} };
       const mgr = new ExtensionManager(root, set, {
         run: async () => ({ code: 0, output: '' }),
         registry: 'https://registry.example.invalid',
@@ -494,7 +494,7 @@ describe('ExtensionManager', () => {
   it('registry 取 pnpm 配置的那个:搜索与详情都用它,pnpm 只问一次', async () => {
     const runs: string[][] = [];
     const urls: string[] = [];
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, {
       run: async (args) => { runs.push(args); return { code: 0, output: 'WARN some notice\nhttps://mirror.example.invalid/npm/\n' }; },
       fetchJson: async (url) => {
         urls.push(url);
@@ -517,7 +517,7 @@ describe('ExtensionManager', () => {
     mkdirSync(dir, { recursive: true });
     writeFileSync(npmrc, '@acme:registry=https://scoped.example.invalid/\r\nregistry=https://old.example.invalid/\r\nstrict-ssl=false\r\n');
     const hosts: string[] = [];
-    const mgr = new ExtensionManager(root, { dir, records: [], worlds: [], providers: [], webUiAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir, records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, {
       // 与 pnpm 一样读 cwd 的 .npmrc,没有 registry 行时是官方源
       run: async (_args, cwd) => {
         const file = join(cwd, '.npmrc');
@@ -539,7 +539,7 @@ describe('ExtensionManager', () => {
 
   it('search:registry 不认 keywords: 写法(空列表)时按关键字文本搜,只留带关键字的包', async () => {
     const queries: string[] = [];
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, {
       registry: 'https://mirror.example.invalid',
       fetchJson: async (url) => {
         if (!url.includes('/-/v1/search')) return {};
@@ -558,7 +558,7 @@ describe('ExtensionManager', () => {
 
   it('pnpm 读不出 registry 时查询报 pnpm 的错误,下次再问', async () => {
     let calls = 0;
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, {
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, {
       run: async () => (++calls === 1 ? { code: 1, output: 'ERR_PNPM_SOMETHING broken config' } : { code: 0, output: 'https://mirror.example.invalid/' }),
       fetchJson: async () => ({ objects: [] }),
     });
@@ -573,7 +573,7 @@ describe('ExtensionManager', () => {
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const { port } = server.address() as AddressInfo;
     await new Promise((done) => server.close(done));
-    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+    const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, { registry: `http://127.0.0.1:${port}` });
     const { errors } = await mgr.updates();
     expect(errors).toHaveLength(1);
     expect(errors[0].error).toContain(`127.0.0.1:${port}: fetch failed`);
@@ -595,7 +595,7 @@ describe('ExtensionManager', () => {
     await new Promise<void>((done) => server.listen(0, '127.0.0.1', done));
     const { port } = server.address() as AddressInfo;
     try {
-      const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [] }, { registry: `http://127.0.0.1:${port}` });
+      const mgr = new ExtensionManager(root, { dir: join(root, 'extensions'), records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} }, { registry: `http://127.0.0.1:${port}` });
       const errors = new Map((await mgr.updates()).errors.map((e) => [e.name, e.error]));
       expect(errors.get('cut-mod')).toContain(`127.0.0.1:${port}: terminated`);
       expect(errors.get('cut-mod')).toContain('UND_ERR_SOCKET');

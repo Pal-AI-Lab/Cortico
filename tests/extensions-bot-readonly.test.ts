@@ -66,6 +66,7 @@ beforeAll(async () => {
       worlds: [],
       providers: [],
       webUiAssets: [],
+      worldOwners: {},
       bot: { name: 'cortico-bot-fixture', id: definition.id },
     },
   });

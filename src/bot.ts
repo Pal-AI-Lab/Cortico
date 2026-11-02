@@ -568,7 +568,7 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
 export function extensionRuntimeState(
   assembly: WorldAssembly,
   isWorldVisible: (id: string) => boolean,
-  isProviderUsed?: (id: string) => boolean,
+  isProviderUsed: (id: string) => boolean,
 ): (item: ExtensionInfo, language: Language) => ExtensionInfo {
   return (item, language) => {
     if (item.state === 'removed' || !item.loaded) return { ...item, enabled: false };
@@ -582,8 +582,7 @@ export function extensionRuntimeState(
         ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}),
       };
     }
-    return { ...item, enabled: item.kind === 'provider' && item.worldId && isProviderUsed
-      ? isProviderUsed(item.worldId) : item.loaded };
+    return { ...item, enabled: item.kind === 'provider' && item.worldId ? isProviderUsed(item.worldId) : item.loaded };
   };
 }
 

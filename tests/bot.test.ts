@@ -40,9 +40,10 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(defs, []) } as never) }, dir, dir);
   const assembly = new WorldAssembly(loaded, defs, []);
   assembly.bind({ mount: async (world: World) => { await world.start({} as WorldHost); }, unmount: async () => {} });
-  const set = { dir, records: [], worlds: [fromExtension], providers: [providerModules[0]], webUiAssets: [] };
+  const set = { dir, records: [], worlds: [fromExtension], providers: [providerModules[0]], webUiAssets: [], worldOwners: {} };
 
-  const decorate = extensionRuntimeState(assembly, (id) => id !== running);
+  const used = providerModules[1].id;
+  const decorate = extensionRuntimeState(assembly, (id) => id !== running, (id) => id === used);
   const entries = builtinExtensions(assembly, set, 'en').map((entry) => decorate(entry, 'en'));
   const worlds = entries.filter((entry) => entry.kind === 'world');
   expect(worlds.map((entry) => [entry.worldId, entry.state, entry.enabled, entry.hidden ?? false])).toEqual([
@@ -51,7 +52,7 @@ it('assembled Worlds not supplied by an extension are listed: enabled when mount
   expect(worlds.find((entry) => entry.worldId === broken)?.reason).toContain('probe construction failed');
   const providers = entries.filter((entry) => entry.kind === 'provider');
   expect(providers.map((entry) => entry.worldId)).toEqual(providerModules.slice(1).map((module) => module.id));
-  expect(providers.every((entry) => entry.enabled)).toBe(true);
+  expect(providers.map((entry) => entry.enabled)).toEqual(providers.map((entry) => entry.worldId === used));
   const version = (JSON.parse(readFileSync(join(repoRoot(), 'package.json'), 'utf8')) as { version: string }).version;
   for (const entry of entries) expect(entry).toMatchObject({ builtin: true, version, location: repoRoot(), name: `builtin:${entry.kind}:${entry.worldId}` });
 });
@@ -63,18 +64,18 @@ it('World names follow the request language: the console World, a definition who
   const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(defs, []) } as never) }, dir, dir);
   const assembly = new WorldAssembly(loaded, defs, []);
   current = 'name now';
-  const set = { dir, records: [], worlds: [], providers: [], webUiAssets: [] };
+  const set = { dir, records: [], worlds: [], providers: [], webUiAssets: [], worldOwners: {} };
   const labels = (language: Language) => Object.fromEntries(builtinExtensions(assembly, set, language)
     .filter((entry) => entry.kind === 'world').map((entry) => [entry.worldId, entry.label]));
   expect(labels('en')).toEqual({ console: consoleText('en').moduleLabel, live: 'name now' });
   expect(labels('pt-BR').console).toBe(consoleText('pt-BR').moduleLabel);
   const installed = { name: 'cortico-world-live', spec: '^1.0.0', version: '1.0.0', kind: 'world' as const, worldId: 'live', label: 'name at startup', webUiClient: false, loaded: true, state: 'loaded' as const };
-  expect(extensionRuntimeState(assembly, () => true)(installed, 'en').label).toBe('name now');
+  expect(extensionRuntimeState(assembly, () => true, () => false)(installed, 'en').label).toBe('name now');
 });
 
 it('removed entries are never enabled', () => {
   const loaded = loadDeployment({ defaults: () => makeCfg() }, dir, dir);
-  const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true);
+  const decorate = extensionRuntimeState(new WorldAssembly(loaded, [], []), () => true, () => false);
   const removed = { name: 'gone', spec: '^1.0.0', version: '1.0.0', kind: 'provider' as const, webUiClient: false, loaded: true, state: 'removed' as const };
   expect(decorate(removed, 'en').enabled).toBe(false);
 });
@@ -82,7 +83,7 @@ it('removed entries are never enabled', () => {
 it('a failed package does not inherit another World’s running state, while a loaded bot update stays in use', () => {
   const definitions = [probe('taken')];
   const loaded = loadDeployment({ defaults: () => makeCfg({ worlds: worldDefaults(definitions, ['taken']) } as never) }, dir, dir);
-  const decorate = extensionRuntimeState(new WorldAssembly(loaded, definitions, []), () => true);
+  const decorate = extensionRuntimeState(new WorldAssembly(loaded, definitions, []), () => true, () => false);
   const failed = { name: 'fixture-world', worldId: 'taken', kind: 'world' as const, spec: '*', version: '1', loaded: false, webUiClient: false, state: 'failed' as const };
   expect(decorate(failed, 'en').enabled).toBe(false);
   expect(decorate({ ...failed, kind: 'bot', loaded: true, state: 'pending-restart' }, 'en').enabled).toBe(true);
