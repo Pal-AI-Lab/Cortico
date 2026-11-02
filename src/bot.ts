@@ -171,15 +171,22 @@ export interface Bot<C extends CoreConfig = CoreConfig> {
   shutdown(reason?: string): Promise<ShutdownReport>;
 }
 
-/** 分步上限合计 33 秒；每一步超时只推进编排，不会取消外部 promise。 */
+/**
+ * 每一步超时只推进编排，不会取消外部 promise。等装卸至多 60 秒，超时后 pnpm 子进程留着跑完，
+ * 回滚不再执行；`extensions` 之后的步骤合计 31 秒。
+ */
 const SHUTDOWN_BUDGET_MS = {
   pause: 2_000,
+  extensions: 60_000,
   worlds: 22_000,
   core: 1_000,
   llm: 3_000,
   flush: 2_000,
   web: 3_000,
 } as const;
+
+/** 全部关机步骤的上限之和。 */
+export const SHUTDOWN_TOTAL_MS = Object.values(SHUTDOWN_BUDGET_MS).reduce((sum, ms) => sum + ms, 0);
 
 const fileSize = (dir: string, rel: string, noFile: string): string => {
   const p = join(dir, rel);
@@ -975,21 +982,17 @@ export function createBot<C extends CoreConfig>(
     reason: string,
     opts: { closeWeb: boolean; exit: boolean; language?: Language },
   ): Promise<ShutdownReport> => {
-    shutdownOnce ??= (async () => {
-      announceShutdown('waiting-extensions');
-      await extensions?.close();
-      announceShutdown('stopping');
-      return runShutdown({
-        reason,
-        core,
-        worlds: [...assembly.mounted],
-        stopCore,
-        llmManagers,
-        webApp: opts.closeWeb ? webApp : null,
-        log: core.runlog.logger('shutdown'),
-        language: opts.language ?? language,
-      });
-    })().then((report) => {
+    shutdownOnce ??= runShutdown({
+      reason,
+      core,
+      extensions,
+      worlds: () => [...assembly.mounted],
+      stopCore,
+      llmManagers,
+      webApp: opts.closeWeb ? webApp : null,
+      log: core.runlog.logger('shutdown'),
+      language: opts.language ?? language,
+    }).then((report) => {
       instanceLock?.release();
       instanceLock = null;
       if (opts.exit) {
@@ -1198,7 +1201,10 @@ export function createBot<C extends CoreConfig>(
       return { port };
     },
     async stop() {
-      await extensions?.close();
+      if (extensions) {
+        await withDeadline(extensions.close(), SHUTDOWN_BUDGET_MS.extensions, 'extensions')
+          .catch(() => core.runlog.logger('shutdown').warn('扩展装卸没在时限内结束，照常停止'));
+      }
       await core.stop();
       await stopCore();
       await Promise.all([...llmManagers.values()].map((m) => m.stop()));
@@ -1215,8 +1221,9 @@ export function createBot<C extends CoreConfig>(
 async function runShutdown<C extends CoreConfig>(ctx: {
   reason: string;
   core: Core<C>;
-  /** 开始关机那一刻的挂载表快照 */
-  worlds: readonly World[];
+  extensions?: ExtensionManager;
+  /** 停止 World 那一步开始时取的挂载表快照 */
+  worlds: () => readonly World[];
   stopCore: () => Promise<void>;
   llmManagers: Map<string, {stop():Promise<unknown>}>;
   webApp: WebApp | null;
@@ -1249,9 +1256,14 @@ async function runShutdown<C extends CoreConfig>(ctx: {
   };
 
   ctx.log.warn(`开始关机(${ctx.reason})`);
+  announceShutdown('waiting-extensions');
   await run('pause', t.pause, SHUTDOWN_BUDGET_MS.pause, () => {
     ctx.core.bus.setPaused(true);
   });
+  const extensions = ctx.extensions;
+  if (extensions) await run('extensions', t.extensions, SHUTDOWN_BUDGET_MS.extensions, () => extensions.close());
+  announceShutdown('stopping');
+  const worlds = ctx.worlds();
   await run('worlds', t.worlds, SHUTDOWN_BUDGET_MS.worlds, async () => {
     moduleFailures = await ctx.core.stop();
     modulesSettled = true;
@@ -1260,7 +1272,7 @@ async function runShutdown<C extends CoreConfig>(ctx: {
     }
   });
   await run('core', t.core, SHUTDOWN_BUDGET_MS.core, ctx.stopCore);
-  externalChecks = ctx.worlds.flatMap((module) => {
+  externalChecks = worlds.flatMap((module) => {
     if (!module.shutdownVerification) return [];
     const stopFailure = !modulesSettled
       ? t.modulesTimedOut

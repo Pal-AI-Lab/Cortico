@@ -1,4 +1,4 @@
-<!-- Owner: src/paths.ts, src/deploy.ts, src/launcher.ts, src/bot.ts, src/boot.ts, bin/cortico.mjs -->
+<!-- Owner: src/paths.ts, src/deploy.ts, src/launcher.ts, src/bot.ts (SHUTDOWN_BUDGET_MS, runShutdown), src/boot.ts, bin/cortico.mjs -->
 
 # 部署
 
@@ -96,8 +96,11 @@ pnpm start <部署名>
 
 ## 关机
 
-SIGINT / SIGTERM / SIGHUP（Windows 另加 SIGBREAK）和未捕获异常触发分步关机。先禁止新的扩展装卸，并等待正在执行的包操作及其回滚结束，再进入有逐步时限的服务关闭流程。
-受监管的子进程发送 `{ type: 'cortico:shutdown', phase: 'waiting-extensions' }` 和随后 `phase: 'stopping'`；宿主应在 `stopping` 后才开始强制退出倒计时，至少留出 35 秒供关机步骤完成。
+SIGINT / SIGTERM / SIGHUP（Windows 另加 SIGBREAK）和未捕获异常触发分步关机。先暂停事件投递，再等正在进行的扩展安装或卸载，
+至多 60 秒，期间新的装卸请求回 503；超时后不再等它，也不回滚它改过的配置，`extensions/` 可能停在装了一半的状态。
+之后停止 World、Persona 与供应实例、保存状态并关闭 WebUI，合计至多 31 秒。启动器给整个关机 95 秒，到时强制退出。
+受监管的子进程（`CORTICO_SUPERVISED`）在关机开始时发 `{ type: 'cortico:shutdown', phase: 'waiting-extensions' }`，
+装卸结束或超时后发 `phase: 'stopping'`；宿主在 `stopping` 之后至少留 35 秒再强制结束。
 Windows 关闭命令行窗口的处理时限通常为 5 秒，可能不足以完成关机；
 正常退出使用 WebUI 的「关机」。系统时限见 [Windows Console 文档](https://learn.microsoft.com/en-us/windows/console/handlerroutine)。
 

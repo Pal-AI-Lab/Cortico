@@ -116,6 +116,36 @@ it('shutdown waits for an HTTP package transaction and rejects mutations from an
   }
 });
 
+it('shutdown pauses delivery before waiting on a hung package transaction, gives up at its deadline and runs the remaining steps', async () => {
+  const env = makeEnv([]);
+  const extensions = await loadExtensions(env.dir);
+  const app = createBot(env.loaded, {
+    id: 'fixture', defaults: () => env.config,
+    build: () => ({ persona: makeFakePersona([]), llm: new FakeLLM(), webUi: {} }),
+  }, { extensions });
+  const manager = (app.webApp as unknown as { deps: { extensions: ExtensionManager } }).deps.extensions;
+  let entered!: () => void;
+  const started = new Promise<void>(resolve => { entered = resolve; });
+  const run: PackageManagerRunner = () => { entered(); return new Promise(() => {}); };
+  Object.defineProperty(manager, 'run', { value: run });
+  void manager.install({ name: 'fixture' }).catch(() => {});
+  await started;
+  vi.useFakeTimers();
+  try {
+    const stopping = app.shutdown('fixture');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(app.core.bus.isPaused()).toBe(true);
+    await vi.advanceTimersByTimeAsync(60_000);
+    const report = await stopping;
+    expect(report.steps.map(step => step.key).slice(0, 3)).toEqual(['pause', 'extensions', 'worlds']);
+    expect(report.steps.find(step => step.key === 'extensions')).toMatchObject({ ok: false });
+    expect(report.steps.filter(step => step.key !== 'extensions').every(step => step.ok)).toBe(true);
+  } finally {
+    vi.useRealTimers();
+    env.cleanup();
+  }
+});
+
 function makeEnv(worlds: World[]): {
   dir: string;
   config: TestConfig;

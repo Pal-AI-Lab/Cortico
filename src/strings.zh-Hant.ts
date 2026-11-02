@@ -85,6 +85,7 @@ export const botText: Partial<typeof botEn> = {
   },
   shutdown: {
     pause: '暫停事件投遞',
+    extensions: '等待擴充功能安裝或解除安裝結束',
     worlds: '停止 World',
     core: '停止 Persona',
     modulesTimedOut: 'World 停止逾時',

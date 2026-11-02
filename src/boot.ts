@@ -1,6 +1,6 @@
 /**
- * 向 bin/cortico.mjs 请求重启。先写标志文件，再发 IPC 消息，文件作为通知中断时的 fallback。
- * 仅在 CORTICO_SUPERVISED 启用时使用 IPC；其他宿主可能将同一通道用于自己的协议。
+ * 与监管进程的 IPC:上报 data 目录、请求重启、报告关机阶段。重启先写标志文件，再发 IPC 消息，
+ * 文件作为通知中断时的 fallback。仅在 CORTICO_SUPERVISED 启用时使用 IPC；其他宿主可能将同一通道用于自己的协议。
  */
 import { existsSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -15,6 +15,8 @@ export const SUPERVISED_ENV = 'CORTICO_SUPERVISED';
 export const RESTART_MESSAGE = 'cortico:restart';
 /** 上报 data 目录；与 bin/cortico.mjs 的 READY_MESSAGE 保持一致。 */
 export const READY_MESSAGE = 'cortico:ready';
+/** 关机阶段，`{ type, phase }`;宿主据此决定何时开始强制结束的倒计时。 */
+export const SHUTDOWN_MESSAGE = 'cortico:shutdown';
 
 export function isSupervised(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[SUPERVISED_ENV] === '1' || env[SUPERVISED_ENV] === 'true';
@@ -37,10 +39,13 @@ export function announceDataDir(dataDir: string, env = process.env): void {
   notifyLauncher({ type: READY_MESSAGE, dataDir }, env);
 }
 
-/** Supervisors start their shutdown deadline only after package mutations have settled. */
+/**
+ * `waiting-extensions`:关机开始，暂停事件投递并等正在进行的扩展装卸;`stopping`:停止 World、
+ * Persona 等其余步骤开始。各步时限见 bot.ts 的 SHUTDOWN_BUDGET_MS。
+ */
 export function announceShutdown(phase: 'waiting-extensions' | 'stopping'): void {
   if (!isSupervised() || !process.connected) return;
-  process.send?.({ type: 'cortico:shutdown', phase }, () => {});
+  process.send?.({ type: SHUTDOWN_MESSAGE, phase }, () => {});
 }
 
 /** 请求重启后，由调用方执行关机。 */

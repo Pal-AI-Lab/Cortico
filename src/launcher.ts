@@ -10,7 +10,7 @@ import { webAssetsProblem } from '../bin/web-assets.mjs';
 import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
 import { resolveLanguage } from './core/language.ts';
 import type { BotDefinition } from './bot.ts';
-import { createBot } from './bot.ts';
+import { createBot, SHUTDOWN_TOTAL_MS } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
@@ -268,6 +268,8 @@ async function main(): Promise<void> {
     process.argv.includes('--open');
   if (openBrowserFlag && webUiUrl !== null) openBrowser(webUiUrl);
 
+  // 此时限覆盖整个关机流程；各步骤的时限由 bot.shutdown() 管理。
+  const SHUTDOWN_GRACE_MS = SHUTDOWN_TOTAL_MS + 2_000;
   let shuttingDown = false;
   const shutdown = async (sig: string) => {
     if (shuttingDown) return;
@@ -275,19 +277,27 @@ async function main(): Promise<void> {
     console.log(`\n收到 ${sig}，正在关机…`);
     let code = 0;
     try {
-      const report = await bot.shutdown(sig);
-      for (const step of report.steps) {
-        console.log(`  ${step.ok ? '✓' : '✗'} ${step.label}${step.ok ? '' : ` — ${step.detail ?? '未完成'}`}`);
-      }
-      for (const check of report.externalChecks) {
-        if (check.status === 'verified-ended') {
-          console.log(`  ✓ ${check.label} — ${check.detail}`);
-          continue;
+      const report = await Promise.race([
+        bot.shutdown(sig),
+        new Promise<null>((r) => setTimeout(() => r(null), SHUTDOWN_GRACE_MS)),
+      ]);
+      if (!report) {
+        console.log(`  关机超过 ${SHUTDOWN_GRACE_MS / 1000} 秒，强制退出。`);
+        code = 1;
+      } else {
+        for (const step of report.steps) {
+          console.log(`  ${step.ok ? '✓' : '✗'} ${step.label}${step.ok ? '' : ` — ${step.detail ?? '未完成'}`}`);
         }
-        console.log(`  ⚠ [P0] ${check.label} — ${check.status}: ${check.detail}`);
-        console.log(`    人工动作: ${check.manualAction}`);
+        for (const check of report.externalChecks) {
+          if (check.status === 'verified-ended') {
+            console.log(`  ✓ ${check.label} — ${check.detail}`);
+            continue;
+          }
+          console.log(`  ⚠ [P0] ${check.label} — ${check.status}: ${check.detail}`);
+          console.log(`    人工动作: ${check.manualAction}`);
+        }
+        if (!report.complete) code = 1;
       }
-      if (!report.complete) code = 1;
     } catch (e) {
       console.error('关机失败:', e instanceof Error ? e.message : e);
       code = 1;

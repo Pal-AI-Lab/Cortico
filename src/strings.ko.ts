@@ -85,6 +85,7 @@ export const botText: Partial<typeof botEn> = {
   },
   shutdown: {
     pause: '이벤트 전달 일시 중지',
+    extensions: '확장 설치 또는 제거 완료 대기',
     worlds: 'World 중지',
     core: 'Persona 중지',
     modulesTimedOut: 'World 중지 시간 초과',
