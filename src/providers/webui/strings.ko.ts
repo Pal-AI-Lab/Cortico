@@ -55,4 +55,5 @@ export const text: Partial<typeof en> = {
   changedElsewhere: "다른 페이지나 bot에서 설정이 바뀌었습니다. 다시 불러온 뒤 저장하세요.",
   copySourceGone: "복사할 원본이 더 이상 없습니다.",
   inUse: (names: string) => `이 공급자 인스턴스를 사용하는 곳: ${names}`,
+  kindInUse: (names: string) => `이 공급자를 사용하는 공급자 인스턴스: ${names}. 삭제한 후 제거하세요.`,
 };

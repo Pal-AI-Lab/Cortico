@@ -55,4 +55,5 @@ export const text: Partial<typeof en> = {
   changedElsewhere: "別のページまたは bot で設定が変更されました。再読み込みしてから保存してください。",
   copySourceGone: "コピー元がもう存在しません。",
   inUse: (names: string) => `このプロバイダーインスタンスは次で使用中です: ${names}`,
+  kindInUse: (names: string) => `次のプロバイダーインスタンスがこのプロバイダーを使用中です: ${names}。削除してからアンインストールしてください。`,
 };

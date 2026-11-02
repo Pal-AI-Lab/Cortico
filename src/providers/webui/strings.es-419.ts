@@ -55,4 +55,5 @@ export const text: Partial<typeof en> = {
   changedElsewhere: "La configuración cambió en otra página u otro bot. Recarga antes de guardar.",
   copySourceGone: "La fuente de la copia ya no existe.",
   inUse: (names: string) => `La instancia de proveedor la usa: ${names}`,
+  kindInUse: (names: string) => `Instancias de proveedor que usan este proveedor: ${names}. Elimínalas antes de desinstalarlo.`,
 };

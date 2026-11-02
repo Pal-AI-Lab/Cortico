@@ -178,7 +178,7 @@ export class ProviderHub {
   removeModule(id: string, remove: () => Promise<string>): Promise<string> {
     return this.locked(() => {
       const users = Object.entries(this.config.providers).filter(([, entry]) => entry.kind === id).map(([name]) => name);
-      if (users.length) throw hubError(S => S.inUse(users.join(', ')), 409);
+      if (users.length) throw hubError(S => S.kindInUse(users.join(', ')), 409);
       return removeProviderModule(id, remove);
     });
   }

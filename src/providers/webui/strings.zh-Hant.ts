@@ -55,4 +55,5 @@ export const text: Partial<typeof en> = {
   changedElsewhere: "設定已在別的頁面或 bot 裡改過,重新載入後再儲存。",
   copySourceGone: "複製來源已不存在。",
   inUse: (names: string) => `供應實例正被這些部署使用:${names}`,
+  kindInUse: (names: string) => `這些供應實例在用此供應商:${names}。刪除它們後才能解除安裝。`,
 };

@@ -65,6 +65,7 @@ const zh = {
   changedElsewhere: "配置已在别的页面或 bot 里改过,重新载入后再保存。",
   copySourceGone: "复制来源已不存在。",
   inUse: (names: string) => `供应实例正被这些部署使用:${names}`,
+  kindInUse: (names: string) => `这些供应实例在用此供应商:${names}。删除它们后才能卸载。`,
 };
 export const en: typeof zh = {
   connectionDescription: 'Requests bind at start; changes apply from the next request.',
@@ -121,6 +122,7 @@ export const en: typeof zh = {
   changedElsewhere: "Configuration changed in another page or bot. Reload before saving.",
   copySourceGone: "Copy source no longer exists.",
   inUse: (names: string) => `Provider instance is used by: ${names}`,
+  kindInUse: (names: string) => `These provider instances use this provider: ${names}. Delete them before uninstalling.`,
 };
 export const text = (language: Language) => pick(language, {
   zh, en, 'zh-Hant': zhHant, ja, ko, fr, de, 'es-419': es419, 'pt-BR': ptBR, it, ru,
