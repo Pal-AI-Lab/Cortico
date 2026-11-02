@@ -6,8 +6,6 @@ World 通过事件报告外部环境变化,通过工具提供外部操作,并向
 World 不直接访问 Memory 或调用 Persona 的工具。
 其他架构的 bot 挂载 World 需要的能力分级见 [world-compatibility.md](world-compatibility.md)。
 
-`WorldAssembly.removeDefinition` 与激活操作共用按 ID 排队的生命周期，拒绝移除已挂载的 World。调用方确认包的 ID 归属后，即使定义导入失败，也会将其启用配置清为 `false`；包移除失败则恢复原值。
-
 ## 契约
 
 `World`:
@@ -111,7 +109,8 @@ bot 的 `index.ts` 在 `declares` 中列出默认启用的 World id。声明但�
 补充 World 默认段时,声明过的 `enabled` 置 true,其余置 false;bot 已提供的配置段保留原值,
 部署配置可继续覆盖。
 `WorldAssembly` 分别管理各 World:`create()` 抛错不影响其他 World 的构造;
-`activate` / `deactivate` 热生效并写回 `worlds.<id>.enabled`。定义实例在停用或重启时重新构造;
+`activate` / `deactivate` 热生效并写回 `worlds.<id>.enabled`。`removeDefinition` 与它们按 ID 排队,拒绝已挂载的 World,
+先把 `enabled` 写成 false 再删包,删包失败时恢复;定义导入失败的 World 也能这样移除。定义实例在停用或重启时重新构造;
 预建实例重启时复用现有对象,停用后不能通过 `activate` 重新挂载。
 生命周期事件(激活、停用、重启、可见性、启动期 `start()` 抛错、运行中读取 `envPromptVars()` 或 `tools()` 失败而卸载)转给
 `Persona.onWorldLifecycle`;启动期初始挂载与 `start()` 失败的激活不报。启动期 `start()` 抛错与运行中读取失败都不改 `enabled`,

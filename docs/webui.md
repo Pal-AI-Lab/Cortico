@@ -110,7 +110,7 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 | `GET /api/config`、`POST /api/config` | 配置组;POST 体 `{ group, values }`,按 schema 校验;`values` 里有组 schema 没声明的键时回 400、一项都不写，回执列出可写的键 |
 | `GET /api/config/options/:kind` | schema 里 `x-options` 为 `kind` 的配置项的当前候选值 |
 | `GET /api/blob?handle=` | 附件字节 |
-| `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;环境模板读取失败的运行中条目保留 `status: active`，返回空 `envPrompt` 和 `envPromptError`，不影响其他条目。激活或停用,体 `{ id, enabled }` |
+| `GET /api/worlds`、`POST /api/worlds/activation` | World 清单;运行中的 World 环境提示词渲染失败时仍是 `status: active`,`envPrompt` 为空,`envPromptError` 是原因,不影响其他条目。激活或停用,体 `{ id, enabled }` |
 | `POST /api/storage/clear?owner=&key=` | 清除一个存储部分;`owner` 与 `key` 取自各页 manifest 的 `storageParts`,Core 自己的对话历史是 `core` 的 `session`。省略 `owner` 时 `key` 须只有一个归属,有多个时回 409 |
 | `GET /api/theme`、`POST /api/theme` | 部署的配色;GET 回 `{ defaultScheme, theme }`,POST 体是 `StoredTheme`(`src/web/shared/theme.ts`),回 `{ ok, theme }` |
 | `GET /api/avatar`、`POST /api/avatar` | bot 头像 PNG,没有时 404;POST 体是 `image/png` 原始字节，不是 PNG 时回 400 |
@@ -144,7 +144,7 @@ WebUI 网页本身(页面、DOM、类名与 `src/web/client/` 下的模块)是�
 | `POST /api/run/shutdown` | 分步关机，完成后返回各步骤的结果 |
 | `POST /api/run/restart` | 写入 `data/.restart-request` 后关机；由启动器监管时（`CORTICO_SUPERVISED`）自动重新启动 |
 
-关机与重启先关闭扩展装卸入口，等待正在执行的包操作及其回滚结束，再停止服务；等待期间新的安装、卸载请求返回 HTTP 503。
+关机开始后,`/api/extensions/install` 与 `/api/extensions/uninstall` 回 503;关机步骤见 [deployment.md](deployment.md)「关机」。
 
 ## 诊断包
 

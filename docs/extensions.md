@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/bot.ts, src/world.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
+<!-- Owner: src/extensions.ts, src/bot.ts (extensionRuntimeState), src/world.ts (removeDefinition), src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
 
 # 扩展
 
@@ -38,22 +38,25 @@ true 或 false 的。其中是某个已装扩展直接依赖(`dependencies`)的�
 `corepack pnpm approve-builds <包名>` 批准并构建。
 
 `/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:
-World 已挂载,供应商被已配置的端点引用,bot 包是这份部署在用的那个。本进程正在使用的 World 与 bot 包不能删除,
-World 先在 World 页停用。
+World 已挂载,供应商被已配置的供应实例引用,bot 包是这份部署在用的那个。`enabled` 的条目不能删除,见「卸载」。
 清单还回 `platform`(服务端的 `process.platform`),包详情回 package.json 的 `os`:市场按 `os` 标出平台,本机不在其中时禁用安装并写明原因。
 `extensions/` 整个目录不进版本控制,是部署状态。
 
 ## 卸载
 
-当前进程正在运行的 World、仍被配置端点使用的 provider 和当前 bot 扩展不能卸载。先停用 World 或移除相关端点，再卸载；隐藏 World 不等于停用。World 的卸载与激活、停用、重启串行执行。
+`enabled` 的条目卸载时回 409,报错按类型说明怎么解除:World 先停用(隐藏不算停用),供应商先删除引用它的供应实例,
+这份部署在用的 bot 包不能卸载。World 的卸载与它的激活、停用、重启按 ID 排队。装卸只在本进程内排队,
+同一个 `extensions/` 还被其他进程使用时,先停掉那些进程再卸载。
 
-卸载成功会从当前装配移除 World，其配置组、配置候选项和页面贡献随之撤下，并将当前部署的 `worlds.<id>.enabled` 写为 `false`；其他配置和 Memory 保留。包移除失败时恢复原启用配置。同版本重新安装也需要重启，再手动激活。共享扩展目录中的其他进程不受这把进程内锁保护，卸载前应先停止使用该包的其他进程。
+World 卸载成功后从本进程的装配里撤下,配置组、配置候选值和页面一起消失,这份部署的 `worlds.<id>.enabled`
+写成 `false`,其他配置和 Memory 保留。包没删掉时 `enabled` 恢复原样,原来没有这个键就删掉。
+本进程卸载过的包重新装回后标为待重启,重启后手动激活。供应商在删包之前就从本进程撤下,见 [providers.md](providers.md)。
 
-加载器将通过 ID 冲突校验的 World 归属写入 `extensions/world-owners.json`。之后即使包导入失败或文件缺失，卸载仍能清除它在当前部署的启用配置。内建 World 保留的 ID 不沿用旧归属；另一扩展成功取得该 ID 时归属随之更新。首次升级自动记录能成功加载的包；升级前就已导入失败且没有归属记录的包无法恢复历史 ID，卸载不会猜测或修改未知归属的配置。
+`extensions/world-owners.json` 记录每个 World ID 由哪个包取得:加载成功且通过 ID 冲突检查时写入,包后来导入失败也保留,
+卸载据此清掉那个 World 的 `enabled`。内建 World 的 ID 不记;另一个包取得同一 ID 时改记它。没有记录的包,
+卸载不改任何 `worlds.<id>`。文件读不出时按空表处理并重写,写不进只记警告。
 
-供应商卸载在端点写锁内重新读取配置，确认没有端点引用后立即撤下模块；新建端点、保存旧编辑器和旧面板调用均无法再取得该模块。卸载失败恢复原注册，成功后重新安装仍需重启。
-
-进程关闭时停止接受新的安装、卸载请求（HTTP 503），等待正在执行的包操作及其配置回滚结束后才停止服务。等待期间不计入关机步骤的超时。宿主强制结束进程或系统终止不受此协调保护。
+关机时新的安装、卸载请求回 503,正在进行的那一次等多久见 [deployment.md](deployment.md)「关机」。
 
 ## 更新
 
