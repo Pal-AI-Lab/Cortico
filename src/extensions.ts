@@ -1158,8 +1158,10 @@ export class ExtensionManager {
         return this.pnpm(['remove', name, LENIENT_BUILDS]);
       };
       const ids = Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id);
-      const output = await (item.loaded && item.kind === 'provider' && item.worldId && this.removeProvider
-        ? this.removeProvider(item.worldId, remove)
+      // 本进程卸过又装回的供应商,模块在第一次卸载时已撤下。
+      const providerId = item.loaded && item.kind === 'provider' && !this.uninstalled.has(name) ? item.worldId : undefined;
+      const output = await (providerId && this.removeProvider
+        ? this.removeProvider(providerId, remove)
         : ids.reduceRight<() => Promise<string>>((next, id) =>
           this.removeWorld ? () => this.removeWorld!(id, next) : next, remove)());
       this.uninstalled.add(name);

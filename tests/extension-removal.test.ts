@@ -11,6 +11,7 @@ import { CORE_DEFAULTS } from '../src/core/config.ts';
 import { WorldAssembly, worldDefaults } from '../src/world.ts';
 import type { WorldHost } from '../src/core/types.ts';
 import { nullLogger } from '../src/core/util.ts';
+import { providerModule, providerModules, registerProviderModules, removeProviderModule } from '../src/providers/registry.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extension-removal-')); });
@@ -193,4 +194,36 @@ it('boots when the World owners file is corrupt, holds a non-string owner, or ca
   mkdirSync(file);
   expect((await loadExtensions(root, { log })).worldOwners).toEqual({ fixture: 'fixture-world' });
   expect(warnings.filter(msg => msg.includes(file))).toHaveLength(3);
+});
+
+it('uninstalls a provider again after it was uninstalled and reinstalled in the same process', async () => {
+  const module = { ...providerModule('openai-responses-compat'), id: 'fixture-reinstalled', title: 'Fixture' };
+  registerProviderModules([module]);
+  const dir = join(root, 'extensions'), pkg = join(dir, 'node_modules', 'fixture-provider');
+  const install = () => {
+    mkdirSync(pkg, { recursive: true });
+    writeFileSync(join(pkg, 'package.json'), JSON.stringify({ name: 'fixture-provider', version: '1.0.0' }));
+    writeFileSync(join(dir, 'package.json'), JSON.stringify({ private: true, dependencies: { 'fixture-provider': '1.0.0' } }));
+  };
+  install();
+  const record = { name: 'fixture-provider', spec: '1.0.0', version: '1.0.0', kind: 'provider' as const, worldId: module.id, loaded: true, webUiClient: false };
+  const manager = new ExtensionManager(root, { dir, records: [record], worlds: [], providers: [module], webUiAssets: [], worldOwners: {} }, {
+    removeProvider: (id, remove) => removeProviderModule(id, remove),
+    run: async (args) => {
+      if (args[0] === 'remove') {
+        rmSync(pkg, { recursive: true });
+        writeFileSync(join(dir, 'package.json'), JSON.stringify({ private: true, dependencies: {} }));
+      } else install();
+      return { code: 0, output: args[0] };
+    },
+  });
+  try {
+    await manager.uninstall('fixture-provider', 'en');
+    expect(providerModules).not.toContain(module);
+    await manager.install({ name: 'fixture-provider' }, 'en');
+    await expect(manager.uninstall('fixture-provider', 'en')).resolves.toContain('remove');
+    expect(existsSync(pkg)).toBe(false);
+  } finally {
+    if (providerModules.includes(module)) await removeProviderModule(module.id, async () => 'cleanup');
+  }
 });
