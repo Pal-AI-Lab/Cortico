@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ExtensionManager, loadExtensions } from '../src/extensions.ts';
 import { EXTENSION_API_VERSIONS } from '../src/extensions/manifest.ts';
+import { text } from '../src/extensions/strings.ts';
 import { extensionRuntimeState } from '../src/bot.ts';
 import { loadDeployment } from '../src/deploy.ts';
 import { CORE_DEFAULTS } from '../src/core/config.ts';
@@ -61,7 +62,8 @@ async function setup(enabled = false, failRemoval = false, importFailure = false
 
 it('rejects a running World before removing its files or configuration', async () => {
   const { manager, pkg, saved } = await setup(true);
-  await expect(manager.uninstall('fixture-world', 'en')).rejects.toThrow('in use');
+  await expect(manager.uninstall('fixture-world', 'en')).rejects.toMatchObject({ status: 409 });
+  await expect(manager.uninstall('fixture-world', 'en')).rejects.toThrow(text('en').worldInUse);
   expect(existsSync(join(pkg, 'index.js'))).toBe(true);
   expect(saved().worlds.fixture).toEqual({ enabled: true, port: 4321 });
 });

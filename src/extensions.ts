@@ -182,6 +182,11 @@ function extensionError(message: (t: ReturnType<typeof text>) => string, status?
   return new LocalizedError((language) => message(text(language)), status);
 }
 
+/** 占用中的扩展不能卸载;解除占用的办法随类型不同。 */
+function inUse(kind: ExtensionKind | undefined): LocalizedError {
+  return extensionError((t) => kind === 'provider' ? t.providerInUse : kind === 'bot' ? t.botInUse : t.worldInUse, 409);
+}
+
 function errorText(err: unknown, language: Language): string {
   if (err instanceof LocalizedError) return err.describe(language);
   return err instanceof Error ? err.message : String(err);
@@ -1146,10 +1151,10 @@ export class ExtensionManager {
       this.prepareDir();
       const item = this.list(language).extensions.find((entry) => entry.name === name && !entry.builtin && entry.state !== 'removed');
       if (!item) throw extensionError((t) => t.notInstalled(name));
-      if (item.enabled) throw extensionError((t) => t.inUse, 409);
+      if (item.enabled) throw inUse(item.kind);
       const remove = () => {
         const current = this.decorate?.(item, language) ?? item;
-        if (current.enabled) throw extensionError((t) => t.inUse, 409);
+        if (current.enabled) throw inUse(item.kind);
         return this.pnpm(['remove', name, LENIENT_BUILDS]);
       };
       const ids = Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id);
