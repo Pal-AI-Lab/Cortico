@@ -12,7 +12,6 @@ export const S: Partial<typeof en> = {
   renameGroup: "Rinomina gruppo",
   deleteGroup: "Elimina gruppo (mantiene le estensioni)",
   pendingNote: "Le estensioni qui sopra hanno effetto dopo il riavvio del processo.",
-  packageInfo: "Info estensione",
   updateAvailable: (from: string, to: string) => `Aggiornamento disponibile: ${from} → ${to}`,
   hideFromSidebar: "Nascondi dalla barra laterale",
   showInSidebar: "Mostra nella barra laterale",

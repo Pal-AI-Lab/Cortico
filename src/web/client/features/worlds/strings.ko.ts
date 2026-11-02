@@ -12,7 +12,6 @@ export const S: Partial<typeof en> = {
   renameGroup: "그룹 이름 바꾸기",
   deleteGroup: "그룹 삭제(확장은 유지)",
   pendingNote: "위 확장은 프로세스를 재시작한 뒤 적용됩니다.",
-  packageInfo: "확장 정보",
   updateAvailable: (from: string, to: string) => `업데이트 있음: ${from} → ${to}`,
   hideFromSidebar: "사이드바에서 숨기기",
   showInSidebar: "사이드바에 표시",

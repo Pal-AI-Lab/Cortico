@@ -63,7 +63,8 @@ piggyback 只入队，随后续唤醒一起投递。
 ## 主循环
 
 每次唤醒处理一批事件，可进行多轮模型调用。`SessionDecl.rounds()` 提供
-`{ soft, hard, softHint? }`：到 soft 轮时将 `softHint` 追加到最后一条工具回执；到 hard 轮时
+`{ soft, hard, softHint? }`：到 soft 与 hard − 1 中较小的那一轮时将 `softHint` 追加到最后一条
+工具回执(soft 不小于 hard 时提前到 hard 的前一轮，留一轮照着收尾)；到 hard 轮时
 记录 warn 并结束本批。`endsTurn` 工具和自然结束共用结束处理；本批结束时尚未处理的事件
 退回总线，进入下一批。WebUI 的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。

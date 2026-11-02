@@ -14,7 +14,8 @@ import type { WebUi } from '../../shared/client-panel.ts';
 import type { WebUiLamp, WebUiPageManifest } from '../../shared/webui-protocol.ts';
 import { createAvatarControl } from './avatar.ts';
 import { S } from './strings.ts';
-import { navHidden, NAV_HIDDEN_EVENT } from '../core/world-nav.ts';
+import { prefersStill, steadiest } from '../core/motion.ts';
+import { inNavOrder, navHidden, NAV_HIDDEN_EVENT } from '../core/world-nav.ts';
 import { notice } from '../ui/index.ts';
 
 const DEFAULT_BRAND = 'bot';
@@ -349,6 +350,14 @@ export function createShell(deps: ShellDeps): WebUiShell {
   };
 
   const renderNav = (): void => {
+    const before = new Set(entries.flatMap(entry => entry.pageId ? [entry.pageId] : []));
+    const was = new Map<string, number>();
+    if (!prefersStill(doc.defaultView)) for (const { el, pageId } of entries) {
+      if (!pageId || !el.animate) continue;
+      const rect = el.getBoundingClientRect();
+      if (rect.height) was.set(pageId, rect.top);
+    }
+    const scroll = nav.scrollTop;
     navLife?.abort();
     if (signal.aborted) return;
     navLife = new AbortController();
@@ -411,7 +420,8 @@ export function createShell(deps: ShellDeps): WebUiShell {
 
     // 用户在 World 列表里设为不显示在侧栏的那些不列。
     const hidden = doc.defaultView ? navHidden(doc.defaultView) : new Set<string>();
-    const worlds = listed.filter((page) => page.kind === 'world' && !hidden.has(page.id));
+    const worldPages = listed.filter((page) => page.kind === 'world' && !hidden.has(page.id));
+    const worlds = doc.defaultView ? inNavOrder(doc.defaultView, worldPages, page => page.id) : worldPages;
     if (worldRoots.length || worlds.length) {
       const group = ui.h('div', 'navgroup navgroup-world-tree');
       group.setAttribute('role', 'group');
@@ -441,6 +451,27 @@ export function createShell(deps: ShellDeps): WebUiShell {
     }
 
     applyRoute();
+    nav.scrollTop = scroll;
+    const arriving = entries.some(entry => entry.pageId && !before.has(entry.pageId));
+    if (!arriving && was.size) slide(was);
+  };
+
+  const slide = (was: ReadonlyMap<string, number>): void => {
+    const order = new Map([...was.keys()].map((id, index) => [id, index]));
+    const now = entries.flatMap(({ el, pageId }) => {
+      const top = pageId ? was.get(pageId) : undefined;
+      if (top === undefined) return [];
+      const rect = el.getBoundingClientRect();
+      return rect.height ? [{ el, dy: top - rect.top, rank: order.get(pageId!)! }] : [];
+    });
+    const kept = new Set(steadiest(now.map(({ rank }) => rank)));
+    for (const { el, dy, rank } of now) {
+      if (Math.abs(dy) <= .5) continue;
+      const mover = !kept.has(rank);
+      if (mover) el.classList.add('nav-reorder');
+      const motion = el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.32, .72, 0, 1)' });
+      if (mover) void motion.finished.finally(() => el.classList.remove('nav-reorder')).catch(() => {});
+    }
   };
 
   const applyRoute = (): void => {

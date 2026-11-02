@@ -1320,12 +1320,13 @@ async function runShutdown<C extends CoreConfig>(ctx: {
       externalChecks: externalChecks.map((check) => `${check.label}=${check.status}`),
     },
   });
-  closeRun(ctx.core.run, {
+  const indexError = closeRun(ctx.core.run, {
     endedAt: nowIso(ctx.core.config.timezone),
     lastCursor: ctx.core.store.latestCursor(),
     complete,
     reason: ctx.reason,
   });
+  if (indexError) ctx.log.emit('error', '关机记录没写进 runs/index.jsonl', { event: 'run-index', data: { error: indexError } });
   return { reason: ctx.reason, localComplete, complete, steps, externalChecks };
 }
 
