@@ -9,6 +9,7 @@ import { loadDeployment } from '../src/deploy.ts';
 import { CORE_DEFAULTS } from '../src/core/config.ts';
 import { WorldAssembly, worldDefaults } from '../src/world.ts';
 import type { WorldHost } from '../src/core/types.ts';
+import { nullLogger } from '../src/core/util.ts';
 
 let root: string;
 beforeEach(() => { root = mkdtempSync(join(tmpdir(), 'extension-removal-')); });
@@ -174,4 +175,20 @@ it('transfers ownership only to an accepted World, so removing an old package ca
   await manager.uninstall('fixture-world');
   expect(assembly.mounted.map(world => world.id)).toEqual(['fixture']);
   expect(JSON.parse(readFileSync(join(root, 'config.json'), 'utf8')).worlds.fixture.enabled).toBe(true);
+});
+
+it('boots when the World owners file is corrupt, holds a non-string owner, or cannot be read or written', { timeout: 15_000 }, async () => {
+  await setup(true);
+  const file = join(root, 'extensions', 'world-owners.json');
+  const warnings: string[] = [];
+  const log = { ...nullLogger(), warn: (msg: string) => { warnings.push(msg); } };
+  writeFileSync(file, JSON.stringify({ fixture: 'fixture-world', ghost: 7 }));
+  expect((await loadExtensions(root, { log })).worldOwners).toEqual({ fixture: 'fixture-world' });
+  writeFileSync(file, '{"fixture": "fixture-wor');
+  expect((await loadExtensions(root, { log })).worldOwners).toEqual({ fixture: 'fixture-world' });
+  expect(JSON.parse(readFileSync(file, 'utf8'))).toEqual({ fixture: 'fixture-world' });
+  rmSync(file);
+  mkdirSync(file);
+  expect((await loadExtensions(root, { log })).worldOwners).toEqual({ fixture: 'fixture-world' });
+  expect(warnings.filter(msg => msg.includes(file))).toHaveLength(3);
 });

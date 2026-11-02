@@ -7,12 +7,13 @@
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
 import { LocalizedError, type Language } from './core/language.ts';
 import { readTextFile } from './core/util.ts';
+import { retryBusy } from './core/fs-busy.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -37,7 +38,7 @@ import { registerFrameworkResolver } from './extensions/runtime.ts';
 import { adaptBotDefinition, adaptProviderModule, adaptWorldDefinition, isPreviousContract } from './extensions/previous-contract.ts';
 import { text } from './extensions/strings.ts';
 import { repoRoot } from './paths.ts';
-import { readJsonObject, updateJsonObject } from './config-file.ts';
+import { readJsonObject } from './config-file.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -255,6 +256,35 @@ export async function importBotDefinition(
   return location.source === 'extension' && location.previousContract ? adaptBotDefinition(mod.default) : mod.default;
 }
 
+const WORLD_OWNERS_FILE = 'world-owners.json';
+
+/**
+ * 读 `extensions/world-owners.json`;文件坏了回 null,非字符串的值丢掉。这份记录只用于卸载时清配置,
+ * 读不出就按没有记录处理,不挡启动。
+ */
+function readWorldOwners(file: string, log?: Logger): Record<string, string> | null {
+  let raw: Record<string, unknown>;
+  try {
+    raw = readJsonObject(file);
+  } catch {
+    log?.warn(`World 归属记录读不出,按空表重写: ${file}`);
+    return null;
+  }
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+/** 整份替换,一次 rename;写不进只记警告,下次启动再写。 */
+function writeWorldOwners(file: string, owners: Record<string, string>, log?: Logger): void {
+  const tmp = `${file}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(owners, null, 2)}\n`, 'utf8');
+    retryBusy(() => renameSync(tmp, file));
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    log?.warn(`World 归属记录没写进 ${file}`, { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 /**
  * 加载扩展 World 与 provider；id 与内建冲突时拒绝，扩展间重名时保留先加载项。
  * 两个 kind 使用独立命名空间。activeBot 已由启动器导入，此处只标记 loaded，其他 bot 记 idle。
@@ -274,8 +304,8 @@ export async function loadExtensions(
   const worlds: WorldDefinition<WorldSection>[] = [];
   const providers: ProviderModule[] = [];
   const webUiAssets: ExtensionWebUiAsset[] = [];
-  const ownersFile = join(dir, 'world-owners.json');
-  const priorOwners = readJsonObject(ownersFile);
+  const ownersFile = join(dir, WORLD_OWNERS_FILE);
+  const priorOwners = readWorldOwners(ownersFile, opts.log);
   for (const { name, spec } of readInstalled(dir)) {
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
     const pkg = readPackageJson(join(pkgDir, 'package.json'));
@@ -392,19 +422,13 @@ export async function loadExtensions(
   }
   const worldOwners: Record<string, string> = Object.create(null);
   const installed = new Set(records.map(record => record.name));
-  for (const [id, name] of Object.entries(priorOwners)) {
-    if (typeof name !== 'string') throw new Error(`Invalid World owner in ${ownersFile}: ${id}`);
+  for (const [id, name] of Object.entries(priorOwners ?? {})) {
     if (installed.has(name) && !reservedWorlds.has(id)) worldOwners[id] = name;
   }
   for (const record of records) {
     if (record.loaded && record.kind === 'world' && record.worldId) worldOwners[record.worldId] = record.name;
   }
-  if (JSON.stringify(priorOwners) !== JSON.stringify(worldOwners)) {
-    updateJsonObject(ownersFile, raw => {
-      for (const id of Object.keys(raw)) delete raw[id];
-      Object.assign(raw, worldOwners);
-    });
-  }
+  if (!priorOwners || JSON.stringify(priorOwners) !== JSON.stringify(worldOwners)) writeWorldOwners(ownersFile, worldOwners, opts.log);
   const bot = opts.activeBot && records.some((r) => r.loaded && r.kind === 'bot') ? opts.activeBot : undefined;
   return { dir, records, worldOwners, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
 }
