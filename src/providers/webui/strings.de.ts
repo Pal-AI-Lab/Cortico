@@ -55,4 +55,5 @@ export const text: Partial<typeof en> = {
   changedElsewhere: "Die Konfiguration wurde auf einer anderen Seite oder in einem anderen Bot geändert. Lade neu, bevor du speicherst.",
   copySourceGone: "Die Kopierquelle existiert nicht mehr.",
   inUse: (names: string) => `Die Anbieter-Instanz wird verwendet von: ${names}`,
+  kindInUse: (names: string) => `Diese Anbieter-Instanzen verwenden diesen Anbieter: ${names}. Löschen Sie sie vor der Deinstallation.`,
 };

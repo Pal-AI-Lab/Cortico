@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
+<!-- Owner: src/extensions.ts, src/bot.ts (extensionRuntimeState), src/world.ts (removeDefinition), src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
 
 # 扩展
 
@@ -38,10 +38,25 @@ true 或 false 的。其中是某个已装扩展直接依赖(`dependencies`)的�
 `corepack pnpm approve-builds <包名>` 批准并构建。
 
 `/api/extensions` 也列出随框架提供的 World 与供应商(`builtin`),它们不能删除。`enabled` 表示在本进程生效:
-World 已挂载,供应商已注册,bot 包是这份部署在用的那个。本进程正在使用的 World 与 bot 包不能删除,
-World 先在 World 页停用。
+World 已挂载,供应商被已配置的供应实例引用,bot 包是这份部署在用的那个。`enabled` 的条目不能删除,见「卸载」。
 清单还回 `platform`(服务端的 `process.platform`),包详情回 package.json 的 `os`:市场按 `os` 标出平台,本机不在其中时禁用安装并写明原因。
 `extensions/` 整个目录不进版本控制,是部署状态。
+
+## 卸载
+
+`enabled` 的条目卸载时回 409,报错按类型说明怎么解除:World 先停用(隐藏不算停用),供应商先删除引用它的供应实例,
+这份部署在用的 bot 包不能卸载。World 的卸载与它的激活、停用、重启按 ID 排队。装卸只在本进程内排队,
+同一个 `extensions/` 还被其他进程使用时,先停掉那些进程再卸载。
+
+World 卸载成功后从本进程的装配里撤下,配置组、配置候选值和页面一起消失,这份部署的 `worlds.<id>.enabled`
+写成 `false`,其他配置和 Memory 保留。包没删掉时 `enabled` 恢复原样,原来没有这个键就删掉。
+本进程卸载过的包重新装回后标为待重启,重启后手动激活。供应商在删包之前就从本进程撤下,见 [providers.md](providers.md)。
+
+`extensions/world-owners.json` 记录每个 World ID 由哪个包取得:加载成功且通过 ID 冲突检查时写入,包后来导入失败也保留,
+卸载据此清掉那个 World 的 `enabled`。内建 World 的 ID 不记;另一个包取得同一 ID 时改记它。没有记录的包,
+卸载不改任何 `worlds.<id>`。文件读不出时按空表处理并重写,写不进只记警告。
+
+关机时新的安装、卸载请求回 503,正在进行的那一次等多久见 [deployment.md](deployment.md)「关机」。
 
 ## 更新
 

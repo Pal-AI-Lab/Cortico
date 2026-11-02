@@ -43,6 +43,20 @@ export function registerProviderModules(extra: readonly ProviderModule[]): void 
   }
 }
 
+/** Withdraws a module before asynchronous package removal; failed removal restores the same registration. */
+export async function removeProviderModule(id: string, remove: () => Promise<string>): Promise<string> {
+  const module = providerModule(id);
+  const index = providerModules.indexOf(module);
+  byId.delete(id);
+  providerModules.splice(index, 1);
+  try { return await remove(); }
+  catch (error) {
+    byId.set(id, module);
+    providerModules.splice(index, 0, module);
+    throw error;
+  }
+}
+
 export function providerModule(kind: string): ProviderModule {
   const module = byId.get(kind);
   if (!module) throw new Error(`Unknown provider module: ${kind}`);

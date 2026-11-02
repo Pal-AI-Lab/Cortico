@@ -113,6 +113,8 @@ export interface WorldInfo {
   prefixDrifted?: boolean;
   /** 人工撰写的环境提示词描述 */
   envPrompt: string;
+  /** Environment rendering failed; the World can still be running. */
+  envPromptError?: string;
   /** 相对persona/的工作区目录(如 worlds/<Worldid>) */
   workspace: string;
   /** World 工具名清单 */
@@ -2102,7 +2104,7 @@ export class WebApp {
       } catch (err) {
         const error = this.errorText(err, req);
         this.deps.log.error('扩展安装失败', { target, error });
-        res.status(400).json({ error });
+        res.status(err instanceof LocalizedError ? err.status : 400).json({ error });
       }
     }));
 
@@ -2119,7 +2121,7 @@ export class WebApp {
       } catch (err) {
         const error = this.errorText(err, req);
         this.deps.log.error('扩展卸载失败', { name, error });
-        res.status(400).json({ error });
+        res.status(err instanceof LocalizedError ? err.status : 400).json({ error });
       }
     }));
 

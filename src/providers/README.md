@@ -11,7 +11,7 @@
 | 文件 | 管什么 |
 |---|---|
 | `base.ts` | 三个接口与 `BaseProvider`(抽象 `respond`) |
-| `registry.ts` | 目录扫描发现内建模块、`registerProviderModules()` 收扩展、实例缓存与 `bind()` |
+| `registry.ts` | 目录扫描发现内建模块、`registerProviderModules()` 收扩展、`removeProviderModule()` 撤下扩展、实例缓存与 `bind()` |
 | `configuration.ts` | `validateSpec` / `validateEntry`:外部配置校验 |
 | `pricebook.ts` | 价目定义、快照、报价合并 |
 | `webui/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活) |
@@ -46,7 +46,9 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 ## 注册与解析
 
 内建模块由 `providers/<module>/index.ts` 的默认导出自动发现。扩展模块由启动器在 `createBot`
-之前通过 `registerProviderModules()` 注册,id 重复时抛错。
+之前通过 `registerProviderModules()` 注册,id 重复时抛错。卸载扩展时 `removeProviderModule(id, remove)` 先撤下注册
+再执行 `remove`,失败则放回原位;`ProviderHub.removeModule` 在端点表写锁内确认没有供应实例引用该模块后调用它。
+撤下后 `ProviderSettings.sources()` 里该模块的 `contribute()` 返回 null,已打开面板的 `invoke` 抛错。
 
 `ProviderRegistry.resolve(name)`:按 `entry.kind` 找模块,`normalize`,以去掉 `pricing` 与
 `spec` 的条目 JSON 加端点 `.env` 的内容指纹为缓存键(改模型或价格不重建实例,密钥文件变更后

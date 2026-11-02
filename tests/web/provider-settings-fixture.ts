@@ -86,7 +86,7 @@ export async function mountSettings(
   const contribution = settings
     .sources()
     .find((source) => source.id === `llm:${kind}`)!
-    .contribute('zh');
+    .contribute('zh')!;
   const mounted = await mountPanel((method, args) => contribution.invoke!('settings', method, args), 'zh',
     (groupId, values) => settings.setConfig(groupId, values));
   return {

@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'no
 import { join } from 'node:path';
 import { makeCfg, makeTmpDir } from '../core/helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
-import { ProviderRegistry } from '../../src/providers/registry.ts';
+import { ProviderRegistry, providerModule, providerModules, registerProviderModules, removeProviderModule } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import { ProviderHub } from '../../src/providers/webui/hub.ts';
 import { acquireInstanceLock } from '../../src/core/instance-lock.ts';
@@ -25,6 +25,40 @@ function fixture() {
   return { hub, cfg, root, file, temp, registry, settings };
 }
 const entry = { kind: 'openai-responses-compat', baseUrl: 'https://model.test', spec: { model: 'test-model', thinking: false } };
+
+it('withdraws a provider before package removal, rejects stale editors, and restores registration on failure', async () => {
+  const module = { ...providerModule(entry.kind), id: 'fixture-removable', title: 'Fixture' };
+  registerProviderModules([module]);
+  const { hub, settings, registry, cfg, root } = fixture();
+  const input = { ...entry, kind: module.id };
+  const source = settings.sources().find(source => source.id === `llm:${module.id}`)!;
+  const page = source.contribute('en')!;
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  try {
+    const removal = hub.removeModule(module.id, async () => { await gate; throw new Error('fixture remove failure'); });
+    const rejected = expect(removal).rejects.toThrow('fixture remove failure');
+    expect(hub.moduleList('en').some(module => module.id === input.kind)).toBe(false);
+    expect(source.contribute('en')).toBeNull();
+    expect(() => hub.save(null, { name: 'Late', entry: input }, 'en')).toThrow();
+    expect(() => settings.save('Late', input, 'en')).toThrow();
+    expect(() => registry.preview('Late', input)).toThrow();
+    await expect(page.invoke!('settings', 'create', [{ name: 'Late' }])).rejects.toThrow();
+    expect(existsSync(join(root, 'Late'))).toBe(false);
+    release(); await rejected;
+    expect(source.contribute('en')).not.toBeNull();
+    const saved = hub.save(null, { name: 'First', entry: input }, 'en');
+    await expect(Promise.resolve().then(() => hub.removeModule(module.id, async () => 'removed'))).rejects.toMatchObject({ status: 409 });
+    expect(cfg.providers.First.kind).toBe(module.id);
+    hub.delete('First', saved.revision);
+    await hub.removeModule(module.id, async () => 'removed');
+    expect(() => hub.save(null, { name: 'After', entry: input }, 'en')).toThrow();
+    expect(providerModules).not.toContain(module);
+  } finally {
+    release();
+    if (providerModules.includes(module)) await removeProviderModule(module.id, async () => 'cleanup');
+  }
+});
 
 it('new environments remain empty until a validated connection is saved', () => {
   const { hub, root } = fixture();
@@ -166,7 +200,7 @@ it('module list carries the editor sections of each module in its declared order
   expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
   expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
   for (const module of hub.moduleList('en')) {
-    const declared = settings.sources().find(source => source.id === `llm:${module.id}`)!.contribute('en').panels!.filter(panel => panel.id !== 'settings');
+    const declared = settings.sources().find(source => source.id === `llm:${module.id}`)!.contribute('en')!.panels!.filter(panel => panel.id !== 'settings');
     expect(module.sections.map(section => section.defaultOpen)).toEqual(declared.map(panel => panel.defaultOpen));
   }
 });

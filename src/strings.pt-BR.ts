@@ -87,6 +87,7 @@ export const botText: Partial<typeof botEn> = {
   },
   shutdown: {
     pause: 'Pausar a entrega de eventos',
+    extensions: 'Aguardar o fim da instalação ou desinstalação de extensões',
     worlds: 'Parar os Worlds',
     core: 'Parar a Persona',
     modulesTimedOut: 'Tempo esgotado ao parar os Worlds',

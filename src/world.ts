@@ -11,8 +11,8 @@ import type {
 import type { LoadedConfig } from './core/config.ts';
 import type { WorldFailure } from './core/core.ts';
 import type { BotDefinition } from './bot.ts';
-import { updateJsonObject, writeSecretFile } from './config-file.ts';
-import type { Language } from './core/language.ts';
+import { readJsonObject, updateJsonObject, writeSecretFile } from './config-file.ts';
+import { LocalizedError, type Language } from './core/language.ts';
 import { assemblyText as text } from './strings.ts';
 import { readTextFile } from './core/util.ts';
 
@@ -207,8 +207,9 @@ export class WorldAssembly {
   /** 挂载表。与 core 共用同一个数组,激活/停用就地增删。 */
   readonly mounted: World[] = [];
   readonly slots: WorldSlot[] = [];
-  /** 装配拿到的全部定义,构造失败的也在内。 */
-  get definitions(): readonly WorldDefinition<WorldSection>[] { return this.worlds; }
+  private readonly removedDefinitions = new Set<string>();
+  /** 尚未卸载的全部定义，构造失败的也在内。 */
+  get definitions(): readonly WorldDefinition<WorldSection>[] { return this.worlds.filter((def) => !this.removedDefinitions.has(def.id)); }
   readonly missing: MissingWorld[] = [];
   private host: WorldMountHost | null = null;
   private readonly cfgPath: string;
@@ -358,7 +359,7 @@ export class WorldAssembly {
     } catch {
       declared = undefined;
     }
-    const def = slot ? slot.definition : this.worlds.find((d) => d.id === id);
+    const def = slot ? slot.definition : this.definitions.find((d) => d.id === id);
     return declared ?? def?.label ?? slot?.label ?? this.missing.find((m) => m.id === id)?.label ?? id;
   }
 
@@ -415,6 +416,27 @@ export class WorldAssembly {
   /** 按 worlds.<id>.enabled 同步状态，供 WorldContext.restart 调用。 */
   sync(id: string): Promise<void> {
     return this.queued(id, () => this.syncNow(id));
+  }
+
+  /** Removes an inactive definition and its slot; reinstalling retains configuration but requires activation. */
+  removeDefinition(id: string, remove: () => Promise<string>): Promise<string> {
+    return this.queued(id, async () => {
+      const slot = this.slots.find((entry) => entry.id === id);
+      if (slot?.mounted) throw new LocalizedError((locale) => text(locale).alreadyRunning(this.labelIn(id, locale)), 409);
+      const restore = this.enabledRestorer(id);
+      this.persist(id, { enabled: false });
+      let result: string;
+      try { result = await remove(); }
+      catch (error) {
+        try { restore(); } catch { /* 报包移除的错;配置停在 enabled: false,下次启动不激活 */ }
+        throw error;
+      }
+      this.removedDefinitions.add(id);
+      if (slot) this.slots.splice(this.slots.indexOf(slot), 1);
+      const missing = this.missing.findIndex((entry) => entry.id === id);
+      if (missing >= 0) this.missing.splice(missing, 1);
+      return result;
+    });
   }
 
   private queued<T>(id: string, op: () => Promise<T>): Promise<T> {
@@ -529,9 +551,30 @@ export class WorldAssembly {
     return (worlds[def.id] ??= def.defaults());
   }
 
+  /** 记下 `worlds.<id>.enabled` 在内存与 config.json 里的值;恢复时原来没有这个键就删掉。 */
+  private enabledRestorer(id: string): () => void {
+    type Root = { worlds?: Record<string, Record<string, unknown>> };
+    const capture = (root: Root) => {
+      const section = root.worlds?.[id];
+      return section && Object.hasOwn(section, 'enabled') ? { value: section.enabled } : null;
+    };
+    const put = (root: Root, saved: { value: unknown } | null) => {
+      const section = root.worlds?.[id];
+      if (!section) return;
+      if (saved) section.enabled = saved.value;
+      else delete section.enabled;
+    };
+    const memory = capture(this.loaded.config as unknown as Root);
+    const disk = capture(readJsonObject(this.cfgPath) as Root);
+    return () => {
+      put(this.loaded.config as unknown as Root, memory);
+      updateJsonObject(this.cfgPath, (raw) => put(raw as Root, disk));
+    };
+  }
+
   private persist(id: string, patch: Record<string, unknown>): void {
-    const worlds = (this.loaded.config as unknown as { worlds: Record<string, Record<string, unknown>> }).worlds;
-    assignDeep(worlds[id], patch);
+    const worlds = ((this.loaded.config as unknown as { worlds?: Record<string, Record<string, unknown>> }).worlds ??= {});
+    assignDeep(worlds[id] ??= {}, patch);
     updateJsonObject(this.cfgPath, (raw) => {
       const rawIo = (raw.worlds ??= {}) as Record<string, Record<string, unknown>>;
       const section = (rawIo[id] ??= {});

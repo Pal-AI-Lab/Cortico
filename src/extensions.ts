@@ -7,12 +7,13 @@
  * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
 import { LocalizedError, type Language } from './core/language.ts';
 import { readTextFile } from './core/util.ts';
+import { retryBusy } from './core/fs-busy.ts';
 import type { BotDefinition } from './bot.ts';
 import type { WorldDefinition, WorldSection } from './world.ts';
 import type { ProviderModule } from './providers/base.ts';
@@ -37,6 +38,7 @@ import { registerFrameworkResolver } from './extensions/runtime.ts';
 import { adaptBotDefinition, adaptProviderModule, adaptWorldDefinition, isPreviousContract } from './extensions/previous-contract.ts';
 import { text } from './extensions/strings.ts';
 import { repoRoot } from './paths.ts';
+import { readJsonObject } from './config-file.ts';
 import { pageIdFor, type ContributingKind } from './web/shared/webui-protocol.ts';
 
 export const EXTENSIONS_DIRNAME = 'extensions';
@@ -80,6 +82,8 @@ export interface ExtensionRecord {
 
 export interface ExtensionSet {
   dir: string;
+  /** World ID → 取得它的包名;包后来导入失败也保留,卸载据此清掉那个 World 的启用配置。 */
+  worldOwners: Readonly<Record<string, string>>;
   records: ExtensionRecord[];
   worlds: WorldDefinition<WorldSection>[];
   providers: ProviderModule[];
@@ -178,6 +182,11 @@ function extensionError(message: (t: ReturnType<typeof text>) => string, status?
   return new LocalizedError((language) => message(text(language)), status);
 }
 
+/** 占用中的扩展不能卸载;解除占用的办法随类型不同。 */
+function inUse(kind: ExtensionKind | undefined): LocalizedError {
+  return extensionError((t) => kind === 'provider' ? t.providerInUse : kind === 'bot' ? t.botInUse : t.worldInUse, 409);
+}
+
 function errorText(err: unknown, language: Language): string {
   if (err instanceof LocalizedError) return err.describe(language);
   return err instanceof Error ? err.message : String(err);
@@ -252,6 +261,35 @@ export async function importBotDefinition(
   return location.source === 'extension' && location.previousContract ? adaptBotDefinition(mod.default) : mod.default;
 }
 
+const WORLD_OWNERS_FILE = 'world-owners.json';
+
+/**
+ * 读 `extensions/world-owners.json`;文件坏了回 null,非字符串的值丢掉。这份记录只用于卸载时清配置,
+ * 读不出就按没有记录处理,不挡启动。
+ */
+function readWorldOwners(file: string, log?: Logger): Record<string, string> | null {
+  let raw: Record<string, unknown>;
+  try {
+    raw = readJsonObject(file);
+  } catch {
+    log?.warn(`World 归属记录读不出,按空表重写: ${file}`);
+    return null;
+  }
+  return Object.fromEntries(Object.entries(raw).filter((entry): entry is [string, string] => typeof entry[1] === 'string'));
+}
+
+/** 整份替换,一次 rename;写不进只记警告,下次启动再写。 */
+function writeWorldOwners(file: string, owners: Record<string, string>, log?: Logger): void {
+  const tmp = `${file}.tmp-${process.pid}`;
+  try {
+    writeFileSync(tmp, `${JSON.stringify(owners, null, 2)}\n`, 'utf8');
+    retryBusy(() => renameSync(tmp, file));
+  } catch (error) {
+    rmSync(tmp, { force: true });
+    log?.warn(`World 归属记录没写进 ${file}`, { error: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 /**
  * 加载扩展 World 与 provider；id 与内建冲突时拒绝，扩展间重名时保留先加载项。
  * 两个 kind 使用独立命名空间。activeBot 已由启动器导入，此处只标记 loaded，其他 bot 记 idle。
@@ -266,10 +304,13 @@ export async function loadExtensions(
     world: new Set(opts.reserved ?? []),
     provider: new Set(opts.reservedProviders ?? []),
   };
+  const reservedWorlds = new Set(taken.world);
   const records: ExtensionRecord[] = [];
   const worlds: WorldDefinition<WorldSection>[] = [];
   const providers: ProviderModule[] = [];
   const webUiAssets: ExtensionWebUiAsset[] = [];
+  const ownersFile = join(dir, WORLD_OWNERS_FILE);
+  const priorOwners = readWorldOwners(ownersFile, opts.log);
   for (const { name, spec } of readInstalled(dir)) {
     const pkgDir = join(dir, 'node_modules', ...name.split('/'));
     const pkg = readPackageJson(join(pkgDir, 'package.json'));
@@ -384,8 +425,17 @@ export async function loadExtensions(
     record.loaded = true;
     serveAsset(id);
   }
+  const worldOwners: Record<string, string> = Object.create(null);
+  const installed = new Set(records.map(record => record.name));
+  for (const [id, name] of Object.entries(priorOwners ?? {})) {
+    if (installed.has(name) && !reservedWorlds.has(id)) worldOwners[id] = name;
+  }
+  for (const record of records) {
+    if (record.loaded && record.kind === 'world' && record.worldId) worldOwners[record.worldId] = record.name;
+  }
+  if (!priorOwners || JSON.stringify(priorOwners) !== JSON.stringify(worldOwners)) writeWorldOwners(ownersFile, worldOwners, opts.log);
   const bot = opts.activeBot && records.some((r) => r.loaded && r.kind === 'bot') ? opts.activeBot : undefined;
-  return { dir, records, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
+  return { dir, records, worldOwners, worlds, providers, webUiAssets, ...(bot ? { bot } : {}) };
 }
 
 // 装卸与搜索(WebUI 那一面)
@@ -656,6 +706,10 @@ export interface ExtensionManagerOptions {
   builtins?: (language: Language) => ExtensionInfo[];
   /** 补上本进程的运行状态(`enabled`、`hidden`)与 `language` 下的 World 名;已装包与内建条目都经过它。 */
   decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
+  /** Serializes World package removal with its activation lifecycle. */
+  removeWorld?: (id: string, remove: () => Promise<string>) => Promise<string>;
+  /** Withdraws a provider module while excluding new endpoint creation. */
+  removeProvider?: (id: string, remove: () => Promise<string>) => Promise<string>;
 }
 
 /** 扩展管理接口；安装与卸载串行执行，避免并发修改同一依赖目录。 */
@@ -665,9 +719,13 @@ export class ExtensionManager {
   /** 首次查询 registry 时解析,解析成功后本进程内不再变。 */
   private registryUrl: Promise<string> | null;
   private readonly fetchJson: (url: string) => Promise<unknown>;
-  private busy = false;
+  private active: Promise<unknown> | null = null;
+  private closing = false;
+  private readonly uninstalled = new Set<string>();
   private readonly builtins?: (language: Language) => ExtensionInfo[];
   private readonly decorate?: (item: ExtensionInfo, language: Language) => ExtensionInfo;
+  private readonly removeWorld?: ExtensionManagerOptions['removeWorld'];
+  private readonly removeProvider?: ExtensionManagerOptions['removeProvider'];
 
   constructor(
     private readonly repoRoot: string,
@@ -678,6 +736,8 @@ export class ExtensionManager {
     this.run = opts.run ?? runPnpm;
     this.builtins = opts.builtins;
     this.decorate = opts.decorate;
+    this.removeWorld = opts.removeWorld;
+    this.removeProvider = opts.removeProvider;
     this.registryUrl = opts.registry ? Promise.resolve(opts.registry.replace(/\/$/, '')) : null;
     this.fetchJson = opts.fetchJson ?? (async (url) => {
       let res: Response;
@@ -785,7 +845,7 @@ export class ExtensionManager {
       const pkg = spec === undefined ? null : packageAt(r.name);
       const installedVersion = spec === undefined ? undefined : pkg?.version ?? null;
       const state: ExtensionInfo['state'] = spec === undefined ? 'removed'
-        : spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
+        : this.uninstalled.has(r.name) || spec !== r.spec || installedVersion !== r.version ? 'pending-restart'
         : r.loaded ? 'loaded' : r.idle ? 'idle' : 'failed';
       const author = pkg ? packageAuthor(pkg) : undefined;
       const pkgDir = join(this.dir, 'node_modules', ...r.name.split('/'));
@@ -1069,8 +1129,8 @@ export class ExtensionManager {
    */
   async install(target: ExtensionInstallTarget, language: Language = 'zh'): Promise<string> {
     const spec = this.installSpec(target);
-    this.prepareDir();
     return this.exclusive(async () => {
+      this.prepareDir();
       const output = [text(language).installed(spec), await this.pnpm(['add', spec, LENIENT_BUILDS])];
       const skipped = pendingBuilds(this.dir);
       const direct = new Set(readInstalled(this.dir).flatMap(({ name }) =>
@@ -1087,10 +1147,26 @@ export class ExtensionManager {
 
   async uninstall(name: string, language: Language = 'zh'): Promise<string> {
     if (!PACKAGE_NAME.test(name)) throw extensionError((t) => t.badPackageName(name));
-    if (!readInstalled(this.dir).some((p) => p.name === name)) throw extensionError((t) => t.notInstalled(name));
-    this.prepareDir();
-    const output = await this.exclusive(() => this.pnpm(['remove', name, LENIENT_BUILDS]));
-    return `${text(language).uninstalled(name)}\n${output}`;
+    return this.exclusive(async () => {
+      this.prepareDir();
+      const item = this.list(language).extensions.find((entry) => entry.name === name && !entry.builtin && entry.state !== 'removed');
+      if (!item) throw extensionError((t) => t.notInstalled(name));
+      if (item.enabled) throw inUse(item.kind);
+      const remove = () => {
+        const current = this.decorate?.(item, language) ?? item;
+        if (current.enabled) throw inUse(item.kind);
+        return this.pnpm(['remove', name, LENIENT_BUILDS]);
+      };
+      const ids = Object.entries(this.booted.worldOwners).filter(([, owner]) => owner === name).map(([id]) => id);
+      // 本进程卸过又装回的供应商,模块在第一次卸载时已撤下。
+      const providerId = item.loaded && item.kind === 'provider' && !this.uninstalled.has(name) ? item.worldId : undefined;
+      const output = await (providerId && this.removeProvider
+        ? this.removeProvider(providerId, remove)
+        : ids.reduceRight<() => Promise<string>>((next, id) =>
+          this.removeWorld ? () => this.removeWorld!(id, next) : next, remove)());
+      this.uninstalled.add(name);
+      return `${text(language).uninstalled(name)}\n${output}`;
+    });
   }
 
   private installSpec(target: ExtensionInstallTarget): string {
@@ -1109,14 +1185,19 @@ export class ExtensionManager {
     return version ? `${name}@${version}` : name;
   }
 
+  /** Stops admitting mutations and waits for the complete active transaction, including rollback. */
+  async close(): Promise<void> {
+    this.closing = true;
+    await this.active?.catch(() => {});
+  }
+
   private async exclusive<T>(work: () => Promise<T>): Promise<T> {
-    if (this.busy) throw extensionError((t) => t.busy);
-    this.busy = true;
-    try {
-      return await work();
-    } finally {
-      this.busy = false;
-    }
+    if (this.closing) throw extensionError((t) => t.shuttingDown, 503);
+    if (this.active) throw extensionError((t) => t.busy, 409);
+    const active = Promise.resolve().then(work);
+    this.active = active;
+    try { return await active; }
+    finally { this.active = null; }
   }
 
   /** 在 extensions/ 里跑 pnpm,回输出的末 20 行;非零退出时抛出。 */

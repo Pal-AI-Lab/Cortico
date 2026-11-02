@@ -22,7 +22,7 @@ import { resolveLanguage, type Language } from './core/language.ts';
 import { botText } from './strings.ts';
 import { updateJsonObject } from './config-file.ts';
 import { ONBOARDING_FLAG_FILE } from './deploy.ts';
-import { isSupervised, requestRestart, startsPaused } from './boot.ts';
+import { announceShutdown, isSupervised, requestRestart, startsPaused } from './boot.ts';
 import { ExtensionManager, packageMetadata, type ExtensionSet } from './extensions.ts';
 import type { ExtensionPackageJson } from './extensions/manifest.ts';
 import { ExtensionMarket } from './extensions/market.ts';
@@ -171,15 +171,22 @@ export interface Bot<C extends CoreConfig = CoreConfig> {
   shutdown(reason?: string): Promise<ShutdownReport>;
 }
 
-/** 分步上限合计 33 秒；每一步超时只推进编排，不会取消外部 promise。 */
+/**
+ * 每一步超时只推进编排，不会取消外部 promise。等装卸至多 60 秒，超时后 pnpm 子进程留着跑完，
+ * 回滚不再执行；`extensions` 之后的步骤合计 31 秒。
+ */
 const SHUTDOWN_BUDGET_MS = {
   pause: 2_000,
+  extensions: 60_000,
   worlds: 22_000,
   core: 1_000,
   llm: 3_000,
   flush: 2_000,
   web: 3_000,
 } as const;
+
+/** 全部关机步骤的上限之和。 */
+export const SHUTDOWN_TOTAL_MS = Object.values(SHUTDOWN_BUDGET_MS).reduce((sum, ms) => sum + ms, 0);
 
 const fileSize = (dir: string, rel: string, noFile: string): string => {
   const p = join(dir, rel);
@@ -510,7 +517,7 @@ export function deriveWorldFacts(
   return [...slots, ...missing];
 }
 
-async function deriveWorldInfo(
+export async function deriveWorldInfo(
   core: WorldVisibilityFacts,
   assembly: WorldAssembly,
   dirs: EnvPromptDirs,
@@ -518,7 +525,11 @@ async function deriveWorldInfo(
 ): Promise<WebUiWorldInfo[]> {
   return Promise.all(deriveWorldFacts(core, assembly, language).map(async (facts) => {
     if (facts.status !== 'active') return facts;
-    return { ...facts, envPrompt: (await renderWorldEnvPrompt(assembly.slot(facts.id).instance, dirs)).text };
+    try {
+      return { ...facts, envPrompt: (await renderWorldEnvPrompt(assembly.slot(facts.id).instance, dirs)).text };
+    } catch (error) {
+      return { ...facts, envPrompt: '', envPromptError: error instanceof Error ? error.message : String(error) };
+    }
   }));
 }
 
@@ -558,15 +569,16 @@ export function builtinExtensions(assembly: WorldAssembly, set: ExtensionSet, la
 }
 
 /**
- * 扩展条目在本进程的运行状态:World 看挂载与对 agent 是否可见,provider 与 bot 看启动时是否加载。
+ * 扩展条目在本进程的运行状态：World 看挂载与对 agent 是否可见，provider 看端点引用，bot 看加载状态。
  * 已卸载的条目不算生效。有实例的 World 名按 `language` 现取,外部扩展的名字因此也跟界面语言走。
  */
 export function extensionRuntimeState(
   assembly: WorldAssembly,
   isWorldVisible: (id: string) => boolean,
+  isProviderUsed: (id: string) => boolean,
 ): (item: ExtensionInfo, language: Language) => ExtensionInfo {
   return (item, language) => {
-    if (item.state === 'removed') return { ...item, enabled: false };
+    if (item.state === 'removed' || !item.loaded) return { ...item, enabled: false };
     if (item.kind === 'world' && item.worldId) {
       const slot = assembly.slots.find((s) => s.id === item.worldId);
       const mounted = slot?.mounted ?? false;
@@ -577,7 +589,7 @@ export function extensionRuntimeState(
         ...(mounted && !isWorldVisible(item.worldId) ? { hidden: true } : {}),
       };
     }
-    return { ...item, enabled: item.loaded && item.state === 'loaded' };
+    return { ...item, enabled: item.kind === 'provider' && item.worldId ? isProviderUsed(item.worldId) : item.loaded };
   };
 }
 
@@ -948,6 +960,13 @@ export function createBot<C extends CoreConfig>(
   const llmManagers = new Map<string,{stop():Promise<unknown>}>([['providers',{stop:()=>core.providers.stopAll()}]]);
 
   let webApp: WebApp | null = null;
+  const extensions = opts.extensions ? new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
+    builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
+    decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id),
+      (id) => Object.values(loaded.config.providers).some((entry) => entry.kind === id)),
+    removeWorld: (id, remove) => assembly.removeDefinition(id, remove),
+    removeProvider: (id, remove) => providerHub.removeModule(id, remove),
+  }) : undefined;
 
   /** WebUI 与启动器共用一次关机操作，重复调用返回同一 Promise。 */
   let shutdownOnce: Promise<ShutdownReport> | null = null;
@@ -966,10 +985,10 @@ export function createBot<C extends CoreConfig>(
     shutdownOnce ??= runShutdown({
       reason,
       core,
-      worlds: [...assembly.mounted],
+      extensions,
+      worlds: () => [...assembly.mounted],
       stopCore,
       llmManagers,
-
       webApp: opts.closeWeb ? webApp : null,
       log: core.runlog.logger('shutdown'),
       language: opts.language ?? language,
@@ -977,11 +996,9 @@ export function createBot<C extends CoreConfig>(
       instanceLock?.release();
       instanceLock = null;
       if (opts.exit) {
-      // 先发送关机结果，再关闭 WebUI 并退出进程。
-
+        // 先发送关机结果，再关闭 WebUI 并退出进程。
         setTimeout(() => {
           void Promise.resolve(webApp?.stop()).finally(() => {
-
             process.exit(report.complete ? 0 : 1);
           });
         }, 300);
@@ -1041,7 +1058,7 @@ export function createBot<C extends CoreConfig>(
         options: (kind, language) => {
           const own = contribution.configOptions?.(kind, language);
           if (own?.length) return own;
-          for (const def of definition.worlds ?? []) {
+          for (const def of assembly.definitions) {
             const opts = def.configOptions?.(kind, language);
             if (opts?.length) return opts;
           }
@@ -1098,10 +1115,7 @@ export function createBot<C extends CoreConfig>(
       onboarding: {
         dismiss: () => { try { unlinkSync(join(loaded.rootDir, ONBOARDING_FLAG_FILE)); } catch { /* 已经删过 */ } },
       },
-      ...(opts.extensions ? { extensions: new ExtensionManager(loaded.repoRoot ?? loaded.rootDir, opts.extensions, {
-        builtins: (language) => builtinExtensions(assembly, opts.extensions!, language),
-        decorate: extensionRuntimeState(assembly, (id) => core.isWorldVisible(id)),
-      }), market: new ExtensionMarket({ dir: opts.extensions.dir, log: core.runlog.logger('market') }) } : {}),
+      ...(extensions ? { extensions, market: new ExtensionMarket({ dir: opts.extensions!.dir, log: core.runlog.logger('market') }) } : {}),
       debug: {
         sessionMessages: () => core.session.records,
         sessionHead: () => core.loop.sessionHead(),
@@ -1187,6 +1201,10 @@ export function createBot<C extends CoreConfig>(
       return { port };
     },
     async stop() {
+      if (extensions) {
+        await withDeadline(extensions.close(), SHUTDOWN_BUDGET_MS.extensions, 'extensions')
+          .catch(() => core.runlog.logger('shutdown').warn('扩展装卸没在时限内结束，照常停止'));
+      }
       await core.stop();
       await stopCore();
       await Promise.all([...llmManagers.values()].map((m) => m.stop()));
@@ -1203,8 +1221,9 @@ export function createBot<C extends CoreConfig>(
 async function runShutdown<C extends CoreConfig>(ctx: {
   reason: string;
   core: Core<C>;
-  /** 开始关机那一刻的挂载表快照 */
-  worlds: readonly World[];
+  extensions?: ExtensionManager;
+  /** 停止 World 那一步开始时取的挂载表快照 */
+  worlds: () => readonly World[];
   stopCore: () => Promise<void>;
   llmManagers: Map<string, {stop():Promise<unknown>}>;
   webApp: WebApp | null;
@@ -1237,9 +1256,14 @@ async function runShutdown<C extends CoreConfig>(ctx: {
   };
 
   ctx.log.warn(`开始关机(${ctx.reason})`);
+  announceShutdown('waiting-extensions');
   await run('pause', t.pause, SHUTDOWN_BUDGET_MS.pause, () => {
     ctx.core.bus.setPaused(true);
   });
+  const extensions = ctx.extensions;
+  if (extensions) await run('extensions', t.extensions, SHUTDOWN_BUDGET_MS.extensions, () => extensions.close());
+  announceShutdown('stopping');
+  const worlds = ctx.worlds();
   await run('worlds', t.worlds, SHUTDOWN_BUDGET_MS.worlds, async () => {
     moduleFailures = await ctx.core.stop();
     modulesSettled = true;
@@ -1248,7 +1272,7 @@ async function runShutdown<C extends CoreConfig>(ctx: {
     }
   });
   await run('core', t.core, SHUTDOWN_BUDGET_MS.core, ctx.stopCore);
-  externalChecks = ctx.worlds.flatMap((module) => {
+  externalChecks = worlds.flatMap((module) => {
     if (!module.shutdownVerification) return [];
     const stopFailure = !modulesSettled
       ? t.modulesTimedOut

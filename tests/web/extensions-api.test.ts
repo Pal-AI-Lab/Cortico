@@ -73,7 +73,10 @@ beforeAll(async () => {
         installed.push(target);
         return '已安装';
       },
-      uninstall: async (name) => { uninstalled.push(name); return '已卸载'; },
+      uninstall: async (name) => {
+        if (name === 'running') throw new LocalizedError(() => 'Extension in use', 409);
+        uninstalled.push(name); return '已卸载';
+      },
     },
     market: {
       merge: async (search) => ({ hits: (await search).map((h) => ({ ...h, tags: ['t'] })), index: { tags: { t: { label: 'T', hint: 'h' } } } }),
@@ -168,6 +171,8 @@ describe('/api/extensions', () => {
     expect((await post('/api/extensions/uninstall', { name: 'a' })).body).toMatchObject({ ok: true, restartRequired: true });
     expect(uninstalled).toEqual(['a']);
     expect((await post('/api/extensions/uninstall', {})).status).toBe(400);
+    expect((await post('/api/extensions/uninstall', { name: 'running' })).status).toBe(409);
+    expect(uninstalled).toEqual(['a']);
   });
 
   it('能力位 extensions 跟着依赖走;没挂时四个端点都 503', async () => {

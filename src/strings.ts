@@ -95,6 +95,7 @@ const botZh = {
   },
   shutdown: {
     pause: '暂停事件投递',
+    extensions: '等待扩展装卸结束',
     worlds: '停止 World',
     core: '停止 Persona',
     modulesTimedOut: 'World 停止超时',
@@ -199,6 +200,7 @@ export const botEn: typeof botZh = {
   },
   shutdown: {
     pause: 'Pause event delivery',
+    extensions: 'Wait for extension install or uninstall',
     worlds: 'Stop Worlds',
     core: 'Stop Persona',
     modulesTimedOut: 'World shutdown timed out',

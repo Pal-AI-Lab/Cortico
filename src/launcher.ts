@@ -10,7 +10,7 @@ import { webAssetsProblem } from '../bin/web-assets.mjs';
 import { LOG_LEVEL_RANK, type CoreConfig, type LogLevel } from './core/types.ts';
 import { resolveLanguage } from './core/language.ts';
 import type { BotDefinition } from './bot.ts';
-import { createBot } from './bot.ts';
+import { createBot, SHUTDOWN_TOTAL_MS } from './bot.ts';
 import { createDeployment, ensureDeployment, listBots, loadDeployment } from './deploy.ts';
 import { buildListing, type BotDefaults } from './deploy-listing.ts';
 import { secretReader } from './core/secrets.ts';
@@ -269,7 +269,7 @@ async function main(): Promise<void> {
   if (openBrowserFlag && webUiUrl !== null) openBrowser(webUiUrl);
 
   // 此时限覆盖整个关机流程；各步骤的时限由 bot.shutdown() 管理。
-  const SHUTDOWN_GRACE_MS = 35_000;
+  const SHUTDOWN_GRACE_MS = SHUTDOWN_TOTAL_MS + 2_000;
   let shuttingDown = false;
   const shutdown = async (sig: string) => {
     if (shuttingDown) return;

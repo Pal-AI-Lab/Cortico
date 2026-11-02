@@ -10,7 +10,7 @@ import { readTextFile } from '../../core/util.ts';
 import type { ProviderModule } from '../base.ts';
 import { validateEntry, withContextWindows } from '../configuration.ts';
 import { validateProviderName, defaultSecretName } from '../name.ts';
-import { providerModules, type ProviderRegistry } from '../registry.ts';
+import { providerModules, removeProviderModule, type ProviderRegistry } from '../registry.ts';
 import type { ProviderSettings } from './settings.ts';
 import { quotePrices } from '../pricebook.ts';
 import { connectionGroup } from './config.ts';
@@ -76,7 +76,7 @@ export class ProviderHub {
   }
   private sections(kind: string, language: Language) {
     const source = this.settings.sources().find(source => source.id === `llm:${kind}`);
-    return (source?.contribute(language).panels ?? []).filter(panel => panel.id !== 'settings')
+    return (source?.contribute(language)?.panels ?? []).filter(panel => panel.id !== 'settings')
       .map(({ id, title, description, builtin, defaultOpen }) => ({ id, title, ...(description ? { description } : {}), ...(builtin ? { builtin } : {}), ...(defaultOpen !== undefined ? { defaultOpen } : {}) }));
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
@@ -173,6 +173,14 @@ export class ProviderHub {
   private checkRevision(name: string, expected: unknown): void {
     if (typeof expected !== 'string' || expected !== this.revision(name))
       throw hubError(S => S.changedElsewhere, 409);
+  }
+  /** Checks persisted endpoints and withdraws the module before yielding to the package manager. */
+  removeModule(id: string, remove: () => Promise<string>): Promise<string> {
+    return this.locked(() => {
+      const users = Object.entries(this.config.providers).filter(([, entry]) => entry.kind === id).map(([name]) => name);
+      if (users.length) throw hubError(S => S.kindInUse(users.join(', ')), 409);
+      return removeProviderModule(id, remove);
+    });
   }
   save(original: string | null, input: ConnectionSave, language: Language) {
     return this.locked(() => {
@@ -288,7 +296,7 @@ export class ProviderHub {
       if (!entry) throw hubError(S => S.unknownInstance, 404);
       const source = this.settings.sources().find(source => source.id === `llm:${entry.kind}`);
       if (!source) throw hubError(S => S.moduleMissing);
-      return source.contribute(language).invoke!('settings', action === 'test' ? 'probe' : 'models', [{ name }]);
+      return source.contribute(language)!.invoke!('settings', action === 'test' ? 'probe' : 'models', [{ name }]);
     }
     this.path(name);
     if (!draft.entry || typeof draft.entry !== 'object') throw hubError(S => S.bodyRequired);

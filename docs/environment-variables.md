@@ -11,7 +11,7 @@
 | `CORTICO_LOG` | `src/launcher.ts` | 文件日志级别,次于 `--log-level=`,高于 `config.json` |
 | `CORTICO_START_PAUSED` | `src/launcher.ts` | `1` / `true`:启动即暂停 |
 | `CORTICO_OPEN_BROWSER` | `src/launcher.ts` | `1` / `true`:启动后打开 WebUI |
-| `CORTICO_SUPERVISED` | `src/boot.ts` | 由 `bin/cortico.mjs` 设置,表示由父进程处理重启;启用子进程的重启 IPC 通知和 WebUI 重启功能 |
+| `CORTICO_SUPERVISED` | `src/boot.ts` | 由 `bin/cortico.mjs` 设置,表示由父进程处理重启;启用子进程的重启与关机阶段 IPC 通知和 WebUI 重启功能 |
 | `CORTICO_LANGUAGE` | `src/core/language.ts` | WebUI 默认语言,次于 `config.json` 的 `language` |
 | `CORTICO_WEB_PASSWORD` | `src/bot.ts` | WebUI 访问密码,按密钥读取(进程环境或 `<部署>/.env`);非空时优先于 `config.json` 的 `web.password` |
 | 任意密钥名 | `src/core/secrets.ts` | 进程环境里有就用它,否则读对应 `.env` |
