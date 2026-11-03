@@ -3,7 +3,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CortiV, shrinkNote } from '../../bots/cortiv/persona/persona.ts';
@@ -334,5 +334,27 @@ describe('write_file 写入频次事实', () => {
     const out = await run(write, { path: '地图.md', content: '# 地图\n\n没了\n' });
     expect(out).toContain('[写入频次]');
     expect(out).toContain('[缩水提示]');
+  });
+});
+
+describe('点开头的路径', () => {
+  let dir: string;
+  beforeEach(() => (dir = mkdtempSync(join(tmpdir(), 'cortiv-dot-'))));
+  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+
+  it('写 .git/hooks/post-commit、.git/config、.gitattributes 都被拒绝,不落盘也不提交', async () => {
+    const p = new CortiV({ memoryDir: dir });
+    await call(writeTool(p), 'notes/a.md', '一\n');
+    const before = execFileSync('git', ['-C', dir, '-c', 'safe.directory=*', 'rev-parse', 'HEAD'], { encoding: 'utf8' });
+    const attrs = readFileSync(join(dir, '.gitattributes'), 'utf8');
+    for (const role of ['main', 'dream']) {
+      expect(await call(writeTool(p), '.git/hooks/post-commit', '#!/bin/sh\n', role)).toMatch(/^\[write failed\] /);
+      expect(await run(tool(p, 'append_file'), { path: '.git/config', content: '[core]\n' })).toMatch(/^\[append failed\] /);
+      expect(await call(writeTool(p), '.gitattributes', '* text\n', role)).toMatch(/^\[write failed\] /);
+      expect(await run(tool(p, 'move_file'), { from: 'notes/a.md', to: '.git/hooks/post-commit' })).toMatch(/^\[move failed\] /);
+    }
+    expect(existsSync(join(dir, '.git/hooks/post-commit'))).toBe(false);
+    expect(readFileSync(join(dir, '.gitattributes'), 'utf8')).toBe(attrs);
+    expect(execFileSync('git', ['-C', dir, '-c', 'safe.directory=*', 'rev-parse', 'HEAD'], { encoding: 'utf8' })).toBe(before);
   });
 });

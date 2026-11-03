@@ -1,11 +1,27 @@
 /** 验证文件工具回执与实际文件内容、路径、行区间及改动统计一致。 */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, utimesSync, writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { CORMINI_CONTEXT_DEFAULTS, Cormini } from '../../bots/cormini/persona/persona.ts';
-import { globToRegExp } from '../../bots/cormini/persona/memory.ts';
+import { GitWorkspaceMemory, globToRegExp, writeBlockReason } from '../../bots/cormini/persona/memory.ts';
+import { workspaceInvoke } from '../../bots/cormini/persona/webUiSurface.ts';
 import { nullLogger } from '../../src/core/util.ts';
+
+/** 临时目录所在的卷会不会给 .git 生成 8.3 短名 GIT~1(fsutil 8dot3name 可以关掉它)。 */
+const SHORT_NAMES = (() => {
+  const probe = mkdtempSync(join(tmpdir(), 'cormini-8dot3-'));
+  try {
+    mkdirSync(join(probe, '.git'));
+    return realpathSync.native(join(probe, 'GIT~1')) === realpathSync.native(join(probe, '.git'));
+  } catch {
+    return false;
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+})();
 
 
 let dir: string;
@@ -157,6 +173,14 @@ describe('delete_file', () => {
     expect(await run('delete_file', { path: '../x.md' })).toContain('[delete failed]');
     expect(await run('delete_file', { path: 'notes' })).toContain('是目录');
     expect(existsSync(join(dir, 'notes/a.md'))).toBe(true);
+  });
+
+  it.skipIf(process.platform !== 'win32')('Windows 上换了大小写的 constitution.md 同样拒删,文件仍在', async () => {
+    put('CONSTITUTION.md', '# 我\n');
+    const out = await run('delete_file', { path: 'constitution.md' });
+    expect(out).toMatch(/^\[delete failed\] /);
+    expect(out).toContain('CONSTITUTION.md');
+    expect(disk('CONSTITUTION.md')).toBe('# 我\n');
   });
 });
 
@@ -333,5 +357,97 @@ describe('grep_files:按内容搜', () => {
     expect(await run('grep_files', { pattern: '(' })).toContain('正则无效');
     expect(await run('grep_files', { pattern: 'x', path: 'nope' })).toContain('不存在');
     expect(await run('grep_files', { pattern: '' })).toContain('[grep failed]');
+  });
+});
+
+describe('点开头的路径只读:写、追加、改名、移动、删除一律拒绝', () => {
+  /** 正斜杠、反斜杠、大写、嵌在子目录里的写法都算点开头 */
+  const DOT_PATHS = [
+    '.git/config', '.gitattributes', '.git/hooks/post-commit',
+    '.git\\hooks\\post-commit', '.GIT/config', './.git/config', 'notes/.hidden.md',
+  ];
+  beforeEach(() => {
+    put('.gitattributes', '* -text\n');
+    put('.git/config', '[core]\n');
+    put('notes/a.md', 'a\n');
+  });
+
+  it('write_file、append_file、edit_file 拒绝,盘上原样', async () => {
+    for (const path of DOT_PATHS) {
+      expect(await run('write_file', { path, content: 'x\n' })).toMatch(/^\[write failed\] /);
+      expect(await run('append_file', { path, content: 'x\n' })).toMatch(/^\[append failed\] /);
+    }
+    expect(await run('edit_file', { path: '.gitattributes', old_string: '-text', new_string: 'filter=x' })).toMatch(/^\[edit failed\] /);
+    expect(disk('.gitattributes')).toBe('* -text\n');
+    expect(disk('.git/config')).toBe('[core]\n');
+    expect(existsSync(join(dir, '.git/hooks/post-commit'))).toBe(false);
+    expect(existsSync(join(dir, 'notes/.hidden.md'))).toBe(false);
+  });
+
+  it('delete_file 拒绝', async () => {
+    expect(await run('delete_file', { path: '.gitattributes' })).toMatch(/^\[delete failed\] /);
+    expect(await run('delete_file', { path: '.git\\config' })).toMatch(/^\[delete failed\] /);
+    expect(existsSync(join(dir, '.gitattributes'))).toBe(true);
+    expect(existsSync(join(dir, '.git/config'))).toBe(true);
+  });
+
+  it('move_file 的来源或目标点开头都拒绝,整份与按行都不动文件', async () => {
+    expect(await run('move_file', { from: '.gitattributes', to: 'notes/attrs.md' })).toMatch(/^\[move failed\] /);
+    expect(await run('move_file', { from: 'notes/a.md', to: '.git/hooks/post-commit' })).toMatch(/^\[move failed\] /);
+    expect(await run('move_file', { from: 'notes/a.md', to: '.gitattributes' })).toMatch(/^\[move failed\] /);
+    expect(await run('move_file', { from: 'notes', to: '.git/hooks/' })).toMatch(/^\[move failed\] /);
+    expect(await run('move_file', { from: '.git', to: 'notes/git' })).toMatch(/^\[move failed\] /);
+    expect(await run('move_file', { from: 'notes/a.md', to: '.git/config', offset: 1 })).toMatch(/^\[move failed\] /);
+    expect(disk('notes/a.md')).toBe('a\n');
+    expect(disk('.gitattributes')).toBe('* -text\n');
+    expect(disk('.git/config')).toBe('[core]\n');
+    expect(existsSync(join(dir, '.git/hooks'))).toBe(false);
+    expect(existsSync(join(dir, 'notes/git'))).toBe(false);
+  });
+
+  it('read_file 照旧读得到', async () => {
+    expect(await run('read_file', { path: '.gitattributes' })).toBe('* -text\n');
+  });
+
+  it('名字里带 ~数字 的普通文件照常写,工具和 WebUI 面板都一样', async () => {
+    expect(await run('write_file', { path: 'draft~1.md', content: '草稿\n' })).toBe('[written] draft~1.md');
+    expect(await run('write_file', { path: 'notes/a~2.md', content: 'a\n' })).toBe('[written] notes/a~2.md');
+    expect(disk('draft~1.md')).toBe('草稿\n');
+    const memory = new GitWorkspaceMemory({ memoryDir: dir, warn: () => {} });
+    const invoke = workspaceInvoke(memory, 'zh');
+    expect(await invoke('workspace', 'write', ['notes/b~3.md', '面板\n'])).toMatchObject({ ok: true });
+    expect(await invoke('workspace', 'rename', ['notes/b~3.md', 'notes/c~4.md'])).toMatchObject({ ok: true });
+    expect(disk('notes/c~4.md')).toBe('面板\n');
+  });
+
+  it.skipIf(!SHORT_NAMES)('GIT~1 按真实路径认出是 .git 而拒绝(卷上不生成 8.3 短名时跳过)', async () => {
+    mkdirSync(join(dir, '.git', 'hooks'), { recursive: true });
+    // 字符串检查放过 GIT~1,拒绝理由里的实际位置来自真实路径检查
+    expect(writeBlockReason(dir, 'GIT~1/config')).toContain('.git/config');
+    expect(writeBlockReason(dir, 'git~1\\hooks\\post-commit')).toContain('.git/hooks/post-commit');
+    expect(await run('append_file', { path: 'GIT~1/config', content: 'x\n' })).toMatch(/^\[append failed\] /);
+    expect(await run('write_file', { path: 'git~1\\hooks\\post-commit', content: 'x\n' })).toMatch(/^\[write failed\] /);
+    expect(await run('move_file', { from: 'notes/a.md', to: 'GIT~1/hooks/post-commit' })).toMatch(/^\[move failed\] /);
+    expect(existsSync(join(dir, '.git/hooks/post-commit'))).toBe(false);
+    expect(disk('.git/config')).toBe('[core]\n');
+  });
+
+  it('经指向 .git 或工作区外的 junction / 符号链接写入都拒绝', async () => {
+    const outside = mkdtempSync(join(tmpdir(), 'cormini-outside-'));
+    try {
+      symlinkSync(join(dir, '.git'), join(dir, 'link'), process.platform === 'win32' ? 'junction' : 'dir');
+      symlinkSync(outside, join(dir, 'out'), process.platform === 'win32' ? 'junction' : 'dir');
+      expect(writeBlockReason(dir, 'link/config')).toContain('.git/config');
+      expect(writeBlockReason(dir, 'out/x.md')).not.toBeNull();
+      expect(await run('append_file', { path: 'link/config', content: 'x\n' })).toMatch(/^\[append failed\] /);
+      expect(await run('write_file', { path: 'link/hooks/post-commit', content: 'x\n' })).toMatch(/^\[write failed\] /);
+      expect(await run('move_file', { from: 'notes/a.md', to: 'link/hooks/post-commit' })).toMatch(/^\[move failed\] /);
+      expect(await run('write_file', { path: 'out/x.md', content: 'x\n' })).toMatch(/^\[write failed\] /);
+      expect(disk('.git/config')).toBe('[core]\n');
+      expect(existsSync(join(dir, '.git/hooks'))).toBe(false);
+      expect(existsSync(join(outside, 'x.md'))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

@@ -1,9 +1,10 @@
 /** WorkspaceGit:init/commit/log/diff/fileAt/tag/checkout,真 git 跑在临时目录。 */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceGit, AUTHOR_SELF, AUTHOR_OPERATOR, gitInstalled } from '../../bots/cormini/persona/workspaceGit.ts';
+import { GitWorkspaceMemory, WorkspaceError } from '../../bots/cormini/persona/memory.ts';
 
 let dir: string;
 let g: WorkspaceGit;
@@ -160,5 +161,30 @@ describe.skipIf(!gitAvailable)('WorkspaceGit', () => {
     expect(s0.commitError).toBeNull();
     w('note/a.md', '改了\n');
     expect(g.status().dirty).toBe(true);
+  });
+});
+
+describe.skipIf(!gitAvailable)('模型写不进 Git 配置，自动提交不会执行它', () => {
+  let marks: string;
+  beforeEach(() => { marks = mkdtempSync(join(tmpdir(), 'wsgit-marks-')); });
+  afterEach(() => rmSync(marks, { recursive: true, force: true }));
+  /** payload 只建一个标记文件;路径给 sh 用正斜杠 */
+  const mark = (name: string): string => join(marks, name).replace(/\\/g, '/');
+  const hook = (name: string): string => `#!/bin/sh\ntouch '${mark(name)}'\n`;
+  const marked = (): string[] => readdirSync(marks);
+
+  it('经 GitWorkspaceMemory 写 filter、钩子和 fsmonitor 配置都被拒绝,commitAll 后没有标记文件', () => {
+    const memory = new GitWorkspaceMemory({ memoryDir: dir, warn: () => {} });
+    memory.git.ensureRepo();
+    const attempts: Array<() => void> = [
+      () => memory.appendFile('.git/config', `[filter "x"]\n\tclean = touch '${mark('filter')}'\n`),
+      () => memory.writeFileAtomic('.gitattributes', '* filter=x\n'),
+      () => memory.writeFileAtomic('.git/hooks/post-commit', hook('hook')),
+      () => memory.appendFile('.git/config', `[core]\n\tfsmonitor = touch '${mark('fsmonitor')}' #\n`),
+    ];
+    for (const attempt of attempts) expect(attempt).toThrow(WorkspaceError);
+    memory.writeFileAtomic('note/b.md', 'b\n');
+    expect(memory.git.commitAll('改动', AUTHOR_SELF)).not.toBeNull();
+    expect(marked()).toEqual([]);
   });
 });

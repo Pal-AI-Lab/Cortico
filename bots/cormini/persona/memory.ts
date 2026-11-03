@@ -3,10 +3,10 @@
  * Persona 提供权限、虚拟文件、前缀渲染及清除策略；工具定义在 workspaceTools.ts。
  */
 import {
-  appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync,
-  renameSync, rmdirSync, statSync, unlinkSync, writeFileSync,
+  appendFileSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync,
+  realpathSync, renameSync, rmdirSync, statSync, unlinkSync, writeFileSync,
 } from 'node:fs';
-import { dirname, isAbsolute, join, normalize as pathNormalize, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, normalize as pathNormalize, relative, resolve, sep } from 'node:path';
 import { MEM_SCHEME, mimeOfHandle } from 'cortico/core/blobs.ts';
 import type { BlobStore } from 'cortico/core/types.ts';
 import { SYSTEM_TIMEZONE, decodeText, isUtf16Le, nowIso, readTextFile } from 'cortico/core/util.ts';
@@ -36,6 +36,48 @@ export function normalizeWorkspacePath(relPath: string): string {
     .filter((segment) => segment !== '' && segment !== '.')
     .join('/');
   return rooted ? `/${normalized}` : normalized;
+}
+
+const hiddenPathReason = (p: string, real?: string): string =>
+  `点开头的路径(如 .git、.gitignore)由系统管理,不能写入、移动或删除:${p}${real ? `(实际位置 ${real})` : ''}`;
+
+/**
+ * 写入工作区前的路径准入，所有角色和写入口共用：返回拒绝理由，null 表示可写。
+ * 先按字符串拒绝 '..' 段和点开头的段（.git、.gitattributes、.gitignore 等），反斜杠视同正斜杠。
+ * 再按真实路径判断：取最近一个已存在的自身或上级，经 realpathSync.native 展开（8.3 短名、符号链接、
+ * junction），接上尚不存在的各段；越出工作区或含点开头的段同样拒绝。
+ * 真实路径与给定路径必须一致。
+ */
+export function writeBlockReason(root: string, relPath: string): string | null {
+  const p = normalizeWorkspacePath(relPath);
+  const segments = p.split('/');
+  if (segments.includes('..')) return `路径不能包含"..":${p}`;
+  if (segments.some((segment) => segment.startsWith('.'))) return hiddenPathReason(p);
+  let existing = resolve(root, p);
+  const missing: string[] = [];
+  for (;;) {
+    try {
+      lstatSync(existing);
+      break;
+    } catch {
+      const parent = dirname(existing);
+      if (parent === existing) break;
+      missing.unshift(basename(existing));
+      existing = parent;
+    }
+  }
+  let rel: string;
+  try {
+    rel = relative(realpathSync.native(root), realpathSync.native(existing));
+  } catch {
+    return `路径无法解析:${p}`;
+  }
+  const real = [...rel.split(sep).filter(Boolean), ...missing];
+  if (isAbsolute(rel) || real.includes('..')) return `路径解析后越出了工作区:${p}`;
+  if (real.some((segment) => segment.startsWith('.'))) return hiddenPathReason(p, real.join('/'));
+  // 盘上真实名字（8.3 短名、链接、大小写、流后缀）与给定路径不一致时拒绝，各层权限判断看到的就是实际改动的文件。
+  if (real.join('/') !== p) return `路径与盘上的真实名字不一致，请改用：${real.join('/')}`;
+  return null;
 }
 
 /**
@@ -139,9 +181,17 @@ function visibleEntry(name: string): boolean {
 export class WorkspaceBlobStore implements BlobStore {
   constructor(private readonly root: string, private readonly dir: string = BLOBS_DIR) {}
 
-  put(nameHint: string, bytes: Uint8Array, mime: string): string {
-    let rel = pathNormalize(nameHint).split(sep).join('/').replace(/^\.\//, '');
+  /** put 实际写入的工作区相对路径，不含目录时补上 dir；不可写时抛错。 */
+  resolvePath(nameHint: string): string {
+    let rel = normalizeWorkspacePath(nameHint);
     if (!rel.includes('/')) rel = `${this.dir}${rel}`;
+    const blocked = writeBlockReason(this.root, rel);
+    if (blocked) throw new WorkspaceError(blocked);
+    return rel;
+  }
+
+  put(nameHint: string, bytes: Uint8Array, mime: string): string {
+    const rel = this.resolvePath(nameHint);
     const abs = insideWorkspace(this.root, rel);
     if (existsSync(abs) && statSync(abs).isDirectory()) throw new Error(`${rel} 是目录`);
     mkdirSync(dirname(abs), { recursive: true });
@@ -266,6 +316,13 @@ export class GitWorkspaceMemory {
     return abs;
   }
 
+  /** 写、追加、移动和删除用的路径：先过 writeBlockReason，再按 resolveSafe 解析。 */
+  private resolveWritable(relPath: string): string {
+    const blocked = writeBlockReason(this.memoryDir, relPath);
+    if (blocked) throw new WorkspaceError(blocked);
+    return this.resolveSafe(relPath);
+  }
+
   /** 工具层那条较松的护栏(见 `insideWorkspace` 的注释);逃逸抛普通 Error。 */
   insideWorkspace(relPath: string): string {
     return insideWorkspace(this.memoryDir, relPath);
@@ -303,7 +360,7 @@ export class GitWorkspaceMemory {
 
   /** 同目录临时文件写完后 rename；失败时移除临时文件并保留原始错误。 */
   writeFileAtomic(relPath: string, content: string): void {
-    const abs = this.resolveSafe(relPath);
+    const abs = this.resolveWritable(relPath);
     if (existsSync(abs) && statSync(abs).isDirectory()) {
       throw new WorkspaceError(`${this.normalize(relPath)} 是目录,不能作为文件写入`);
     }
@@ -324,7 +381,7 @@ export class GitWorkspaceMemory {
 
   /** 追加内容前保证现有文件以换行结尾。UTF-16 LE 的文件整份改写成 UTF-8 再接上。 */
   appendFile(relPath: string, content: string): void {
-    const abs = this.resolveSafe(relPath);
+    const abs = this.resolveWritable(relPath);
     if (existsSync(abs) && statSync(abs).isDirectory()) {
       throw new WorkspaceError(`${this.normalize(relPath)} 是目录,不能追加`);
     }
@@ -343,8 +400,8 @@ export class GitWorkspaceMemory {
   }
 
   renameFile(fromRel: string, toRel: string): void {
-    const from = this.resolveSafe(fromRel);
-    const to = this.resolveSafe(toRel);
+    const from = this.resolveWritable(fromRel);
+    const to = this.resolveWritable(toRel);
     if (!existsSync(from)) throw new WorkspaceError(`文件不存在:${this.normalize(fromRel)}`);
     if (statSync(from).isDirectory()) {
       throw new WorkspaceError(`${this.normalize(fromRel)} 是目录,只能移动文件`);
@@ -357,7 +414,7 @@ export class GitWorkspaceMemory {
   }
 
   deleteFile(relPath: string): void {
-    const abs = this.resolveSafe(relPath);
+    const abs = this.resolveWritable(relPath);
     if (!existsSync(abs)) throw new WorkspaceError(`文件不存在:${this.normalize(relPath)}`);
     if (statSync(abs).isDirectory()) {
       throw new WorkspaceError(`${this.normalize(relPath)} 是目录,只能删除文件`);

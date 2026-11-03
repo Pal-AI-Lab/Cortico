@@ -3,10 +3,11 @@
  * + CORE.md 只读),加 move_file 与 schedule_wake。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CortiSoulmate } from '../../bots/corti-soulmate/persona/index.ts';
-import { makeCfg } from '../core/helpers.ts';
+import { makeCfg, makeFakeHarnessApi } from '../core/helpers.ts';
 import { tmpPersona, cleanup, ctxFor, pick } from './helpers.ts';
 import type { ToolDef } from '../../src/core/types.ts';
 
@@ -163,5 +164,92 @@ describe('工具集(按认知路径)', () => {
     const r = await pick(dream, 'write_file').handler({ path: 'WORLDVIEW.md', content: 'x' }, ctxFor('main'));
     expect(r).toContain('dream');
     expect(existsSync(join(dir, 'WORLDVIEW.md'))).toBe(false);
+  });
+});
+
+describe('点开头的路径与 save_blob 的落点', () => {
+  const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4]);
+  let dir: string;
+  let core: CortiSoulmate;
+  let tools: Record<'main' | 'dream', ToolDef[]>;
+
+  beforeEach(() => {
+    dir = tmpPersona();
+    core = new CortiSoulmate({ memoryDir: dir, cfg: makeCfg() });
+    core.attach(makeFakeHarnessApi({ blob: (h) => (h.startsWith('log:abcdef01') ? { bytes: PNG, mime: 'image/png' } : null) }));
+    const decls = core.declareSessions();
+    tools = {
+      main: decls.find((d) => d.id === 'main')!.tools(),
+      dream: decls.find((d) => d.id === 'dream')!.tools(),
+    };
+  });
+  afterEach(() => cleanup(dir));
+
+  for (const role of ['main', 'dream'] as const) {
+    it(`${role} 写 .git/config、.gitattributes、.git/hooks/post-commit 都被拒绝`, async () => {
+      for (const path of ['.git/config', '.gitattributes', '.git/hooks/post-commit']) {
+        expect(await pick(tools[role], 'write_file').handler({ path, content: 'x\n' }, ctxFor(role))).toMatch(/^\[write failed\] /);
+        expect(await pick(tools[role], 'append_file').handler({ path, content: 'x\n' }, ctxFor(role))).toMatch(/^\[append failed\] /);
+        expect(await pick(tools[role], 'save_blob').handler({ handle: 'log:abcdef01', path }, ctxFor(role))).toMatch(/^\[save failed\] /);
+      }
+      expect(existsSync(join(dir, '.git/config'))).toBe(false);
+      expect(existsSync(join(dir, '.gitattributes'))).toBe(false);
+      expect(existsSync(join(dir, '.git/hooks/post-commit'))).toBe(false);
+    });
+
+    it(`${role} 的 move_file 来源或目标点开头都拒绝`, async () => {
+      await pick(tools[role], 'write_file').handler({ path: 'note/a.md', content: 'a\n' }, ctxFor(role));
+      expect(await pick(tools[role], 'move_file').handler({ from: 'note/a.md', to: '.git/hooks/post-commit' }, ctxFor(role))).toMatch(/^\[move failed\] /);
+      expect(await pick(tools[role], 'move_file').handler({ from: 'note/a.md', to: '.gitattributes' }, ctxFor(role))).toMatch(/^\[move failed\] /);
+      expect(readFileSync(join(dir, 'note/a.md'), 'utf8')).toBe('a\n');
+      expect(existsSync(join(dir, '.git/hooks/post-commit'))).toBe(false);
+    });
+  }
+
+});
+
+/** 临时目录所在的卷会不会给普通文件生成 8.3 短名(CONSTITUTION.md 即 CONSTI~1.MD)。 */
+const FILE_SHORT_NAMES = process.platform === 'win32' && (() => {
+  const probe = mkdtempSync(join(tmpdir(), 'soulmate-8dot3-'));
+  try {
+    writeFileSync(join(probe, 'CONSTITUTION.md'), '');
+    return realpathSync.native(join(probe, 'CONSTI~1.MD')) === realpathSync.native(join(probe, 'CONSTITUTION.md'));
+  } catch {
+    return false;
+  } finally {
+    rmSync(probe, { recursive: true, force: true });
+  }
+})();
+
+describe.skipIf(process.platform !== 'win32')('Windows 上同一文件的别名按盘上的真实名字过权限', () => {
+  let dir: string;
+  let main: ToolDef[];
+
+  beforeEach(() => {
+    dir = tmpPersona();
+    main = new CortiSoulmate({ memoryDir: dir, cfg: makeCfg() }).declareSessions().find((d) => d.id === 'main')!.tools();
+    writeFileSync(join(dir, 'CONSTITUTION.md'), '第一条:诚实。\n', 'utf8');
+  });
+  afterEach(() => cleanup(dir));
+
+  it.skipIf(!FILE_SHORT_NAMES)('main 的 write_file CONSTI~1.MD 被拒,宪法原样(卷上不生成 8.3 短名时跳过)', async () => {
+    const out = await pick(main, 'write_file').handler({ path: 'CONSTI~1.MD', content: '改掉\n' }, ctxFor('main'));
+    expect(out).toMatch(/^\[write failed\] /);
+    expect(out).toContain('CONSTITUTION.md');
+    expect(readFileSync(join(dir, 'CONSTITUTION.md'), 'utf8')).toBe('第一条:诚实。\n');
+  });
+
+  it('main 的 append_file CONSTITUTION.md::$DATA 被拒,宪法原样', async () => {
+    const out = await pick(main, 'append_file').handler({ path: 'CONSTITUTION.md::$DATA', content: '追加\n' }, ctxFor('main'));
+    expect(out).toMatch(/^\[append failed\] /);
+    expect(readFileSync(join(dir, 'CONSTITUTION.md'), 'utf8')).toBe('第一条:诚实。\n');
+  });
+
+  it('大小写一致的普通写入和 draft~1.md 这类新文件照常成功', async () => {
+    expect(await pick(main, 'write_file').handler({ path: 'note/今天.md', content: 'a\n' }, ctxFor('main'))).toBe('[written] note/今天.md');
+    expect(await pick(main, 'write_file').handler({ path: 'note/今天.md', content: 'b\n' }, ctxFor('main'))).toBe('[written] note/今天.md');
+    expect(await pick(main, 'write_file').handler({ path: 'note/draft~1.md', content: 'c\n' }, ctxFor('main'))).toBe('[written] note/draft~1.md');
+    expect(readFileSync(join(dir, 'note', '今天.md'), 'utf8')).toBe('b\n');
+    expect(readFileSync(join(dir, 'note', 'draft~1.md'), 'utf8')).toBe('c\n');
   });
 });

@@ -21,7 +21,8 @@ export const SAVE_BLOB_DECL: Omit<ToolDef, 'handler'> = {
 
 /** 将 log: 附件复制到工作区并返回 mem: 句柄；成功回执以 [saved] 开头，供写后提交钩子识别。 */
 export function saveBlobTool(deps: {
-  blobs: BlobStore;
+  /** resolvePath 返回 put 实际写入的路径;不可写时抛错。 */
+  blobs: BlobStore & { resolvePath(nameHint: string): string };
   core: () => CoreApi | null;
   /** 写准入(同Persona的 writeGuard):返回理由就拒绝 */
   guard?: (path: string, role: string) => string | null;
@@ -35,13 +36,20 @@ export function saveBlobTool(deps: {
       // 只给了哈希时按 log: 句柄解析
       const handle = blobScheme(given) ? given : `${LOG_SCHEME}${given}`;
       if (!path) return '[save failed] path 不能为空';
-      const denied = deps.guard?.(path, ctx.role) ?? null;
+      // 检查和写入用同一条规范化后的路径。
+      let target: string;
+      try {
+        target = deps.blobs.resolvePath(path);
+      } catch (e) {
+        return `[save failed] ${e instanceof Error ? e.message : String(e)}`;
+      }
+      const denied = deps.guard?.(target, ctx.role) ?? null;
       if (denied) return `[save failed] ${denied}`;
       const core = deps.core();
       const got = core?.blob(handle) ?? null;
       if (!got) return `[save failed] 没有 ${handle} 这份二进制;句柄来自你看到过的 [blob ...] 行`;
       try {
-        const saved = deps.blobs.put(path, got.bytes, got.mime);
+        const saved = deps.blobs.put(target, got.bytes, got.mime);
         return `[saved] ${saved} ${got.mime} ${got.bytes.byteLength} 字节`;
       } catch (e) {
         return `[save failed] ${e instanceof Error ? e.message : String(e)}`;
