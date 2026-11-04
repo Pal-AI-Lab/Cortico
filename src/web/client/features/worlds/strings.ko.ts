@@ -13,6 +13,7 @@ export const S: Partial<typeof en> = {
   deleteGroup: "그룹 삭제(확장은 유지)",
   pendingNote: "위 확장은 프로세스를 재시작한 뒤 적용됩니다.",
   updateAvailable: (from: string, to: string) => `업데이트 있음: ${from} → ${to}`,
+  updatePendingRestart: (from: string, to: string) => `프로세스 재시작 후 적용 ${from} → ${to}`,
   hideFromSidebar: "사이드바에서 숨기기",
   showInSidebar: "사이드바에 표시",
   builtinAlwaysOn: "내장 World는 항상 켜져 있습니다.",
