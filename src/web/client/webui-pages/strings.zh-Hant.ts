@@ -40,6 +40,6 @@ export const S: Partial<typeof en> = {
     `「${pageId}」的面板產物中沒有「${panelId}」。可用面板：${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `「${pageId}」的面板「${panelId}」缺少 mount 方法`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `內建面板「${name}」不存在。可用面板：${known}`,
+  noBuiltinPanel: (name: string) =>
+    `內建面板「${name}」不存在。`,
 };

@@ -4,8 +4,7 @@ import { Lifecycle } from '../../core/lifecycle.ts';
 import { configField, type ConfigGroup } from '../config/view.ts';
 import { validateProviderName } from '../../../../providers/name.ts';
 import { connectionPath, type Detail, type Editing, type ListedModel, type Module } from './types.ts';
-import { LANGUAGE } from '../../core/language.ts';
-import { pricingEditor } from '../../webui-pages/builtins/llm-settings/pricing-panel.ts';
+import { pricingEditor } from './pricing.ts';
 import type { Disposable } from '../../../shared/client-panel.ts';
 import { S } from './strings.ts';
 import { notice } from '../../ui/index.ts';
@@ -223,7 +222,7 @@ export async function mountDetail(options: Options): Promise<DetailController> {
     const body = block(box, section, true);
     const prices = pricingEditor(ui, editing.entry.pricing ?? [], saved?.quotes ?? [], value => {
       editing.entry.pricing = value as Detail['entry']['pricing']; change();
-    }, LANGUAGE, { raw: editing.raw.pricing, onRaw: value => { editing.raw.pricing = value; change(); } });
+    }, { raw: editing.raw.pricing, onRaw: value => { editing.raw.pricing = value; change(); } });
     body.append(prices.body);
     errors.set('pricing', prices.validate);
   }

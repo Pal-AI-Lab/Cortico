@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `Le bundle de panneaux de « ${pageId} » n'a pas de panneau « ${panelId} ». Panneaux disponibles : ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `Le panneau « ${panelId} » de « ${pageId} » n'a pas de méthode mount`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `Panneau intégré « ${name} » introuvable. Panneaux disponibles : ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `Panneau intégré « ${name} » introuvable.`,
 };

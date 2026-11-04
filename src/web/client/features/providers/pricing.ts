@@ -1,7 +1,6 @@
-import type { WebUi } from '../../../../shared/client-panel.ts';
-import { pick, type Language } from '../../../../../core/language.ts';
-import { panel } from './strings.ts';
-import { currencyName } from '../../../ui/format.ts';
+import type { WebUi } from '../../../shared/client-panel.ts';
+import { currencyName } from '../../ui/format.ts';
+import { S } from './strings.ts';
 
 interface Rule {
   meter: string;
@@ -70,10 +69,8 @@ export function pricingEditor(
   saved: unknown[],
   quotes: ModelQuote[],
   commit: (pricing: unknown[]) => void,
-  language: Language,
   draft?: { raw?: string; onRaw(value: string): void },
 ) {
-  const S = pick(language, panel);
   const card = ui.sheet({
     title: S.pricingTitle,
     desc: S.pricingDescription,

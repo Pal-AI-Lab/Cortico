@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: 'Obbligatorio.', jsonObject: 'Inserisci un oggetto JSON valido.', jsonArray: 'Inserisci un array JSON valido.',
   unsaved: 'Conservato come bozza; scritto al salvataggio.',
   deleteConfirm: 'Eliminare questa connessione e tutti i file nella sua directory?', referenced: 'Questa connessione è usata da questi bot e non può essere eliminata: ', reload: 'Ricarica',
+  pricingTitle: 'Prezzi',
+  pricingDescription:
+    'I record storici mantengono la tariffa in vigore al momento della richiesta. Le tariffe personalizzate sostituiscono i valori predefiniti del modulo per modello e base di costo.',
+  pricingUnset: 'Nessun prezzo personalizzato: si applicano i prezzi del modulo se disponibili; altrimenti si registrano solo i token.',
+  meters: {
+    input: 'Ingresso',
+    cachedInput: 'Hit della cache',
+    uncachedInput: 'Ingresso non in cache',
+    output: 'Uscita',
+    reasoning: 'Ragionamento',
+    total: 'Totale',
+  },
+  marginal: 'Costo marginale',
+  equivalent: 'Costo equivalente API',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/Mln`,
+  free: 'Esplicitamente gratuito',
+  bandsNote: "Include fasce di input o livelli di servizio; fatturato in base all'uso effettivo e al livello di servizio di ogni richiesta.",
+  rateCached: 'Hit della cache / Mln token',
+  rateUncached: 'Ingresso non in cache / Mln token',
+  rateOutput: 'Uscita / Mln token',
+  currencyField: 'Valuta',
+  currencyRequired: 'Inserisci una valuta per salvare questa tariffa.',
+  costFormNote:
+    'Le tariffe base valgono per tutti i modelli; fasce di input e livelli di servizio vanno nelle regole complete qui sotto.',
+  costFormOverridden:
+    'I prezzi salvati hanno una forma che il form a tre tariffe non può esprimere; valgono le regole complete qui sotto. Modificare il form le sostituisce.',
+  editFull: 'Regole di prezzo avanzate (JSON)',
+  fullNote:
+    'Un array vuoto ripristina la tariffa predefinita del modulo; un array rules vuoto significa esplicitamente gratuito. Le regole complete supportano fasce di input, livelli di servizio e metriche aggiuntive.',
+  viewSnapshot: "Visualizza l'istantanea dei prezzi attiva",
 };

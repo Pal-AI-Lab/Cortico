@@ -4,7 +4,7 @@
 
 import { WEBUI_PROTOCOL_VERSION } from '../../shared/webui-protocol.ts';
 import type { WebUiManifest, WebUiPageManifest, WebUiStorageRef, WebUiPanelManifest } from '../../shared/webui-protocol.ts';
-import type { WebUiMemo, WebUiPanel, WebUiPanelContext, Disposable } from '../../shared/client-panel.ts';
+import type { WebUiMemo, WebUiPanelContext, Disposable } from '../../shared/client-panel.ts';
 import { get, post } from '../core/api.ts';
 import { Lifecycle } from '../core/lifecycle.ts';
 import type { Router } from '../core/router.ts';
@@ -20,7 +20,6 @@ import { createStorageView } from '../features/storage/view.ts';
 import { S as TOOLS } from './tools/strings.ts';
 import { createToolsView } from './tools/view.ts';
 import { resolveWebUiLinkHref } from '../theme/handoff.ts';
-import type { BuiltinPanels } from './builtins.ts';
 import { createPanelContext, namespacedMemo } from './context.ts';
 import { WebUiPageLoader } from './loader.ts';
 import { S } from './strings.ts';
@@ -53,8 +52,6 @@ export interface WebUiPageHostDeps {
   /** 浮层宿主，页面级容器；绝不能是 `root`。 */
   overlayHost: HTMLElement;
   loader: WebUiPageLoader;
-  /** 内核自带的面板实现，键即 `panel.builtin`。 */
-  builtins: BuiltinPanels;
   router: Router;
   fetchManifest(): Promise<WebUiManifest>;
   memo: WebUiMemo;
@@ -137,7 +134,8 @@ export class WebUiPageHost {
     const panel = asArray(page?.panels).find(candidate => candidate.id === panelId);
     try {
       if (!panel) throw new Error(S.noSuchPanel(page?.label ?? pageId, panelId));
-      const impl = panel.builtin ? this.builtinPanel(panel.builtin) : await this.deps.loader.resolvePanel(pageId, panel.id, page?.client);
+      if (panel.builtin !== undefined) throw new Error(S.noBuiltinPanel(panel.builtin));
+      const impl = await this.deps.loader.resolvePanel(pageId, panel.id, page?.client);
       if (!lifecycle.disposed) {
         const result = await impl.mount(adapt(this.panelContext(pageId, panel.id, root, lifecycle, this.generation, scope)));
         if (result) lifecycle.own(result);
@@ -286,9 +284,8 @@ export class WebUiPageHost {
     this.mounted = { pageId, panelId: panel.id, lifecycle };
 
     try {
-      const impl = panel.builtin !== undefined
-        ? this.builtinPanel(panel.builtin)
-        : await this.deps.loader.resolvePanel(pageId, panel.id, page.client);
+      if (panel.builtin !== undefined) throw new Error(S.noBuiltinPanel(panel.builtin));
+      const impl = await this.deps.loader.resolvePanel(pageId, panel.id, page.client);
       if (gen !== this.generation) return; // 等 import 的工夫用户已经走了
 
       const out = await impl.mount(
@@ -359,9 +356,8 @@ export class WebUiPageHost {
       const box = this.deps.doc.createElement('div');
       host.appendChild(box);
       try {
-        const impl = decl.builtin !== undefined
-          ? this.builtinPanel(decl.builtin)
-          : await this.deps.loader.resolvePanel(pageId, decl.id, page?.client);
+        if (decl.builtin !== undefined) throw new Error(S.noBuiltinPanel(decl.builtin));
+        const impl = await this.deps.loader.resolvePanel(pageId, decl.id, page?.client);
         if (gen !== this.generation || lifecycle.disposed) break;
         const out = await impl.mount(
           this.panelContext(pageId, decl.id, box, lifecycle, gen, scope),
@@ -381,19 +377,6 @@ export class WebUiPageHost {
       }
     }
     return lifecycle;
-  }
-
-  /**
-   * 取一块内核自带的面板。声明了一个内核不认识的名字 → 明确报错,由 `showInner`
-   * 的 catch 收成这一格的错误卡:同一页的其他面板与整个框架不受影响。
-   *
-   * 内置面板整条路不碰 loader,所以一页的面板全是内置时,它没有浏览器产物也正常。
-   */
-  private builtinPanel(name: string): WebUiPanel {
-    const builtins = this.deps.builtins;
-    const impl = builtins[name];
-    if (!impl) throw new Error(S.noBuiltinPanel(name, Object.keys(builtins).join(' / ') || S.none));
-    return impl;
   }
 
   /** 仅返回当前页认领且部署支持 config 能力的配置组。 */

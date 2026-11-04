@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `「${pageId}」のパネル成果物に「${panelId}」がありません。利用できるパネル：${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `「${pageId}」のパネル「${panelId}」に mount メソッドがありません`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `組み込みパネル「${name}」が見つかりません。利用できるパネル：${known}`,
+  noBuiltinPanel: (name: string) =>
+    `組み込みパネル「${name}」が見つかりません。`,
 };

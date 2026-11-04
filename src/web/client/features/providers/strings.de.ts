@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: 'Pflichtfeld.', jsonObject: 'Gib ein gültiges JSON-Objekt ein.', jsonArray: 'Gib ein gültiges JSON-Array ein.',
   unsaved: 'Als Entwurf behalten; wird beim Speichern geschrieben.',
   deleteConfirm: 'Diese Verbindung und alle Dateien in ihrem Verzeichnis löschen?', referenced: 'Diese Verbindung wird von diesen Bots verwendet und kann nicht gelöscht werden: ', reload: 'Neu laden',
+  pricingTitle: 'Preise',
+  pricingDescription:
+    'Historische Einträge behalten die Preisangabe, die zum Anfragezeitpunkt galt. Eigene Preisangaben überschreiben die Modulstandards je Modell und Kostenbasis.',
+  pricingUnset: 'Keine eigenen Preise: Modulpreise gelten, wenn vorhanden; sonst werden nur Tokens erfasst.',
+  meters: {
+    input: 'Eingabe',
+    cachedInput: 'Cache-Treffer',
+    uncachedInput: 'Nicht gecachte Eingabe',
+    output: 'Ausgabe',
+    reasoning: 'Denkprozess',
+    total: 'Gesamt',
+  },
+  marginal: 'Grenzkosten',
+  equivalent: 'API-äquivalente Kosten',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/Mio.`,
+  free: 'Ausdrücklich kostenlos',
+  bandsNote: 'Enthält Eingabestufen oder Servicestufen; abgerechnet nach tatsächlichem Verbrauch und Servicestufe pro Anfrage.',
+  rateCached: 'Cache-Treffer / Mio. Tokens',
+  rateUncached: 'Nicht gecachte Eingabe / Mio. Tokens',
+  rateOutput: 'Ausgabe / Mio. Tokens',
+  currencyField: 'Währung',
+  currencyRequired: 'Gib eine Währung an, um diese Preisangabe zu speichern.',
+  costFormNote:
+    'Grundpreise gelten für alle Modelle; Eingabestufen und Servicestufen gehören in die vollständigen Regeln unten.',
+  costFormOverridden:
+    'Die gespeicherten Preise haben eine Form, die das Formular mit drei Preisen nicht abbilden kann; es gelten die vollständigen Regeln unten. Eine Änderung im Formular ersetzt sie.',
+  editFull: 'Erweiterte Preisregeln (JSON)',
+  fullNote:
+    'Ein leeres Array stellt die Standard-Preisangabe des Moduls wieder her; ein leeres rules-Array bedeutet ausdrücklich kostenlos. Vollständige Regeln unterstützen Eingabestufen, Servicestufen und zusätzliche Messgrößen.',
+  viewSnapshot: 'Aktiven Preis-Snapshot anzeigen',
 };

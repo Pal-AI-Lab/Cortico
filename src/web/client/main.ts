@@ -7,7 +7,6 @@ import { Lifecycle } from './core/lifecycle.ts';
 import { Router, type Route } from './core/router.ts';
 import type { SocketLike } from './core/stream.ts';
 import { wsUrlOf } from './core/websocket.ts';
-import { BUILTIN_PANELS } from './webui-pages/builtins.ts';
 import { WebUiPageHost, PROVIDER_ROUTE } from './webui-pages/host.ts';
 import { WebUiPageLoader } from './webui-pages/loader.ts';
 import { createWebUi } from './ui/index.ts';
@@ -86,7 +85,6 @@ export function boot(doc: Document = document): { dispose(): void } {
     doc,
     overlayHost: doc.body,
     loader,
-    builtins: BUILTIN_PANELS,
     router,
     fetchManifest: () => fetchManifest(),
     memo,

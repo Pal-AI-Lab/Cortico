@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: 'Obligatorio.', jsonObject: 'Ingresa un objeto JSON válido.', jsonArray: 'Ingresa un arreglo JSON válido.',
   unsaved: 'Guardado como borrador; se escribe al guardar.',
   deleteConfirm: '¿Eliminar esta conexión y todos los archivos de su directorio?', referenced: 'Estos bots usan esta conexión, así que no se puede eliminar: ', reload: 'Recargar',
+  pricingTitle: 'Precios',
+  pricingDescription:
+    'Los registros históricos conservan la cotización vigente al momento de la solicitud. Las cotizaciones personalizadas reemplazan los valores predeterminados del módulo por modelo y base de costo.',
+  pricingUnset: 'Sin precios personalizados: se aplican los precios del módulo si existen; de lo contrario, solo se registran los tokens.',
+  meters: {
+    input: 'Entrada',
+    cachedInput: 'Acierto de caché',
+    uncachedInput: 'Entrada sin caché',
+    output: 'Salida',
+    reasoning: 'Razonamiento',
+    total: 'Total',
+  },
+  marginal: 'Costo marginal',
+  equivalent: 'Costo equivalente de API',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/M`,
+  free: 'Gratis explícitamente',
+  bandsNote: 'Incluye tramos de entrada o niveles de servicio; se factura por el uso real y el nivel de servicio de cada solicitud.',
+  rateCached: 'Acierto de caché / M tokens',
+  rateUncached: 'Entrada sin caché / M tokens',
+  rateOutput: 'Salida / M tokens',
+  currencyField: 'Moneda',
+  currencyRequired: 'Ingresa una moneda para guardar esta cotización.',
+  costFormNote:
+    'Las tarifas base se aplican a todos los modelos; los tramos de entrada y los niveles de servicio van en las reglas completas de abajo.',
+  costFormOverridden:
+    'Los precios guardados tienen una forma que el formulario de tres tarifas no puede expresar; se aplican las reglas completas de abajo. Editar el formulario las reemplaza.',
+  editFull: 'Reglas de precios avanzadas (JSON)',
+  fullNote:
+    'Un arreglo vacío restaura la cotización predeterminada del módulo; un arreglo rules vacío significa gratis explícitamente. Las reglas completas admiten tramos de entrada, niveles de servicio y medidores adicionales.',
+  viewSnapshot: 'Ver la instantánea de precios activa',
 };

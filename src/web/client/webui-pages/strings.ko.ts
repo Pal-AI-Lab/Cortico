@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `"${pageId}"의 패널 결과물에 "${panelId}"이(가) 없습니다. 사용 가능한 패널: ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `"${pageId}"의 "${panelId}" 패널에 mount 메서드가 없습니다`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `기본 제공 패널 "${name}"을(를) 찾을 수 없습니다. 사용 가능한 패널: ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `기본 제공 패널 "${name}"을(를) 찾을 수 없습니다.`,
 };

@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: '필수 항목입니다.', jsonObject: '올바른 JSON 객체를 입력하세요.', jsonArray: '올바른 JSON 배열을 입력하세요.',
   unsaved: '초안으로 보관 중이며 저장할 때 기록됩니다.',
   deleteConfirm: '이 연결과 디렉터리 안의 모든 파일을 삭제하시겠습니까?', referenced: '이 연결은 다음 봇에서 사용 중이라 삭제할 수 없습니다: ', reload: '다시 불러오기',
+  pricingTitle: '가격',
+  pricingDescription:
+    '과거 기록은 요청 시점의 가격을 계속 사용합니다. 사용자 지정 가격은 모델과 비용 기준별로 모듈 기본값을 덮어씁니다.',
+  pricingUnset: '사용자 지정 가격 없음: 모듈 가격표가 있으면 그것을 쓰고, 없으면 token만 기록하고 금액은 계산하지 않습니다.',
+  meters: {
+    input: '입력',
+    cachedInput: '캐시 적중',
+    uncachedInput: '캐시되지 않은 입력',
+    output: '출력',
+    reasoning: '추론',
+    total: '합계',
+  },
+  marginal: '한계 비용',
+  equivalent: 'API 환산 비용',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/100만`,
+  free: '명시적 무료',
+  bandsNote: '입력 구간 요금이나 서비스 등급이 포함되어 있습니다. 요청마다 실제 사용량과 서비스 등급으로 과금됩니다.',
+  rateCached: '캐시 적중 / 100만 token',
+  rateUncached: '캐시되지 않은 입력 / 100만 token',
+  rateOutput: '출력 / 100만 token',
+  currencyField: '통화',
+  currencyRequired: '통화를 입력해야 이 가격을 저장합니다.',
+  costFormNote:
+    '기본 요금은 모든 모델에 적용됩니다. 구간 요금이나 서비스 등급은 아래 전체 규칙에서 설정하세요.',
+  costFormOverridden:
+    '저장된 가격은 세 칸 양식으로 표현할 수 없는 형태라 아래 전체 규칙이 적용됩니다. 양식을 편집하면 규칙이 대체됩니다.',
+  editFull: '고급 가격 규칙(JSON)',
+  fullNote:
+    '빈 배열이면 모듈 기본 가격으로 돌아가고, rules가 빈 배열이면 명시적 무료입니다. 전체 규칙은 입력 구간 요금, 서비스 등급, 추가 계량 단위를 지원합니다.',
+  viewSnapshot: '현재 적용 중인 가격 스냅숏 보기',
 };

@@ -205,10 +205,8 @@ export interface WebUiPanelDecl {
   /** 允许经 HTTP GET 调用的方法，省略时只接受 POST；该声明只留在服务端，不进入 manifest。 */
   getMethods?: readonly string[];
   /**
-   * 这块面板的实现由 WebUI 核心提供，值是它在内核那张内置表里的名字。
-   *
-   * 一页的面板全是内置时，这一页不需要浏览器产物。装在仓库外的贡献方（外部
-   * npm 包）拿不到框架的浏览器代码，通用面板只能走这条路。
+   * 这块面板由端点编辑页自己画，值是 `CONNECTION_EDITOR_BLOCKS` 里的一个名字。名字不在其中，
+   * 或声明在 `llm:*` 以外的页上，WebUI 在这一块的位置显示错误卡。
    */
   builtin?: string;
   /**
@@ -358,7 +356,7 @@ export interface WebUiPanelManifest {
   id: string;
   title: string;
   description?: string;
-  /** 由内核那张内置表提供实现；缺省则去取这一页自己的扩展。 */
+  /** 由 WebUI 自己画的端点编辑页段落；缺省则去取这一页自己的扩展。 */
   builtin?: string;
   /** 挂进同页某块面板的插槽，没有自己的页签。 */
   slot?: string;

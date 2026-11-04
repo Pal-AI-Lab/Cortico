@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: '必須項目です。', jsonObject: '有効な JSON オブジェクトを入力してください。', jsonArray: '有効な JSON 配列を入力してください。',
   unsaved: '下書きとして保持中です。保存時に書き込まれます。',
   deleteConfirm: 'この接続と、そのディレクトリ内のすべてのファイルを削除しますか？', referenced: 'この接続は次のボットで使用中のため削除できません：', reload: '再読み込み',
+  pricingTitle: '料金',
+  pricingDescription:
+    '過去の記録はリクエスト時点の料金を使い続けます。カスタム料金は、モデルと費用の基準ごとにモジュールの既定値を上書きします。',
+  pricingUnset: 'カスタム料金は未設定です。モジュールの料金表があればそれを使い、なければ token のみを記録して金額は計算しません。',
+  meters: {
+    input: '入力',
+    cachedInput: 'キャッシュヒット',
+    uncachedInput: 'キャッシュ外の入力',
+    output: '出力',
+    reasoning: '推論',
+    total: '合計',
+  },
+  marginal: '限界費用',
+  equivalent: 'API 換算費用',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/100万`,
+  free: '無料と明示',
+  bandsNote: '入力の段階料金またはサービス階層を含みます。リクエストごとの実際の使用量とサービス階層で課金されます。',
+  rateCached: 'キャッシュヒット / 100万 token',
+  rateUncached: 'キャッシュ外の入力 / 100万 token',
+  rateOutput: '出力 / 100万 token',
+  currencyField: '通貨',
+  currencyRequired: '通貨を入力するとこの料金を保存できます。',
+  costFormNote:
+    '基本料金はすべてのモデルに適用されます。段階料金やサービス階層は下の完全なルールで設定してください。',
+  costFormOverridden:
+    '保存済みの料金は 3 項目のフォームでは表現できない形のため、下の完全なルールが適用されています。フォームを編集するとルールが置き換わります。',
+  editFull: '高度な料金ルール（JSON）',
+  fullNote:
+    '空の配列にするとモジュールの既定料金に戻ります。rules を空の配列にすると無料と明示したことになります。完全なルールでは入力の段階料金、サービス階層、追加の計量単位を扱えます。',
+  viewSnapshot: '現在有効な料金のスナップショットを表示',
 };

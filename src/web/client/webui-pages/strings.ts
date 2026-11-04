@@ -49,8 +49,8 @@ const zh = {
     `「${pageId}」的面板产物中没有「${panelId}」。可用面板：${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `「${pageId}」的面板「${panelId}」缺少 mount 方法`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `内置面板「${name}」不存在。可用面板：${known}`,
+  noBuiltinPanel: (name: string) =>
+    `内置面板「${name}」不存在。`,
 };
 
 export const en: typeof zh = {
@@ -94,8 +94,8 @@ export const en: typeof zh = {
     `Panel bundle of "${pageId}" has no panel "${panelId}". Available panels: ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `Panel "${panelId}" of "${pageId}" is missing the mount method`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `Built-in panel "${name}" not found. Available panels: ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `Built-in panel "${name}" not found.`,
 };
 
 export const S = pick({

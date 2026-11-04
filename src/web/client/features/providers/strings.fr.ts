@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: 'Obligatoire.', jsonObject: 'Saisissez un objet JSON valide.', jsonArray: 'Saisissez un tableau JSON valide.',
   unsaved: "Conservé comme brouillon ; écrit à l'enregistrement.",
   deleteConfirm: 'Supprimer cette connexion et tous les fichiers de son répertoire ?', referenced: 'Cette connexion est utilisée par ces bots et ne peut pas être supprimée : ', reload: 'Recharger',
+  pricingTitle: 'Tarification',
+  pricingDescription:
+    'Les enregistrements historiques gardent le tarif en vigueur au moment de la requête. Les tarifs personnalisés remplacent les valeurs par défaut du module par modèle et par base de coût.',
+  pricingUnset: "Pas de tarification personnalisée : les prix du module s'appliquent s'ils existent ; sinon seuls les tokens sont enregistrés.",
+  meters: {
+    input: 'Entrée',
+    cachedInput: 'Succès de cache',
+    uncachedInput: 'Entrée hors cache',
+    output: 'Sortie',
+    reasoning: 'Raisonnement',
+    total: 'Total',
+  },
+  marginal: 'Coût marginal',
+  equivalent: 'Coût équivalent API',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/M`,
+  free: 'Explicitement gratuit',
+  bandsNote: "Inclut des paliers d'entrée ou des niveaux de service ; facturé selon l'utilisation réelle et le niveau de service de chaque requête.",
+  rateCached: 'Succès de cache / M tokens',
+  rateUncached: 'Entrée hors cache / M tokens',
+  rateOutput: 'Sortie / M tokens',
+  currencyField: 'Devise',
+  currencyRequired: 'Saisissez une devise pour enregistrer ce tarif.',
+  costFormNote:
+    "Les tarifs de base s'appliquent à tous les modèles ; les paliers d'entrée et les niveaux de service se configurent dans les règles complètes ci-dessous.",
+  costFormOverridden:
+    "La tarification enregistrée a une forme que le formulaire à trois tarifs ne peut pas exprimer ; les règles complètes ci-dessous s'appliquent. Modifier le formulaire les remplace.",
+  editFull: 'Règles de tarification avancées (JSON)',
+  fullNote:
+    "Un tableau vide rétablit le tarif par défaut du module ; un tableau rules vide signifie explicitement gratuit. Les règles complètes prennent en charge les paliers d'entrée, les niveaux de service et des métriques supplémentaires.",
+  viewSnapshot: "Voir l'instantané de tarification actif",
 };
