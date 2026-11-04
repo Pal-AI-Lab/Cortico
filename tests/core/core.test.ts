@@ -339,6 +339,53 @@ describe('Core · session 声明与 fork 原语', () => {
       await core.stop();
     }
   });
+
+  it('pushCandidate 的原始事件与投影事件的附件同 pushEvent:落库换句柄，句柄行接在正文后', async () => {
+    tmp = makeTmpDir();
+    const loaded = loadedFor(tmp.dir);
+    let host: WorldHost | null = null;
+    const probe: World = {
+      id: 'probe',
+      envPromptVars: () => ({}),
+      tools: () => [],
+      start: async (h) => { host = h; },
+      stop: async () => {},
+    };
+    const persona = makeFakePersona([], { cfg: loaded.config, worlds: [probe], silent: true });
+    const core = new Core(loaded, { persona, worlds: [probe], llm: new FakeLLM() });
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 9]);
+    try {
+      await core.start();
+      const [source] = await host!.pushCandidate!({
+        sourceEvents: [{
+          type: 'probe.sticker',
+          ts: '2026-08-27T21:00:00+08:00',
+          text: '[表情]',
+          blobs: [{ bytes: png, mime: 'image/png', fallbackText: '猫猫表情' }],
+        }],
+        gateText: '[表情]',
+        value: {},
+        project: (candidates) => [{
+          candidateIndexes: [0],
+          event: { type: 'probe.sticker', text: '[选中的表情]', blobs: candidates[0].sourceEvents[0].blobs },
+        }],
+      }, { trigger: 'flush' });
+      const ref = source.blobs![0];
+      expect(ref).toMatchObject({ mime: 'image/png', fallbackText: '猫猫表情' });
+      expect(source.text).toBe(`[表情]\n[blob ${ref.handle} image/png] 猫猫表情`);
+      expect(core.resolveBlob(ref.handle)?.bytes).toEqual(Buffer.from(png));
+
+      let receipt = core.session.messages.find((m) => m.content.includes('[选中的表情]'));
+      for (let i = 0; i < 100 && !receipt; i++) {
+        await sleep(20);
+        receipt = core.session.messages.find((m) => m.content.includes('[选中的表情]'));
+      }
+      expect(receipt!.content).toContain(`[选中的表情]\n[blob ${ref.handle} image/png`);
+      expect(receipt!.blobs).toEqual([expect.objectContaining({ handle: ref.handle, mime: 'image/png', fallbackText: '猫猫表情' })]);
+    } finally {
+      await core.stop();
+    }
+  });
 });
 
 describe('Core · 启动期 World 隔离', () => {
