@@ -49,6 +49,20 @@ describe('LogBlobStore', () => {
     expect(store.read('log:deadbeefdeadbeefdead.jpg')).toBeNull(); // 合形状但不存在
   });
 
+  it('音频与视频按类型落对应扩展名,带参数的 mime 也认;read 从扩展名还原出类型', () => {
+    dir = mkdtempSync(join(tmpdir(), 'blob-store-'));
+    const store = new LogBlobStore(dir);
+    const cases: Array<[string, string]> = [
+      ['audio/ogg', 'audio/ogg'], ['audio/webm;codecs=opus', 'audio/webm'], ['audio/flac', 'audio/flac'],
+      ['audio/mp4', 'audio/mp4'], ['video/mp4', 'video/mp4'], ['video/webm', 'video/webm'],
+    ];
+    cases.forEach(([mime, type], i) => {
+      const handle = store.put(Buffer.from([i, 1, 2, 3]), mime);
+      expect(handle, mime).not.toMatch(/\.bin$/);
+      expect(store.read(handle)?.mime, mime).toBe(type);
+    });
+  });
+
   it('stat 报现存份数与占用;目录还没建时是 0', () => {
     dir = mkdtempSync(join(tmpdir(), 'blob-store-'));
     const store = new LogBlobStore(dir);
