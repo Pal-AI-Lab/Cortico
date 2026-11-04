@@ -73,9 +73,8 @@ upgrade 断开;登录态是 HttpOnly Cookie 里的无状态签名令牌(见 [web
 ## 浏览器
 
 `features/providers` 一次编辑一条端点,改动只进浏览器暂存,保存时整条提交。模块面板挂在所选端点
-的作用域里,面板的 `setConfig` 同样进暂存;`llm-settings` 的服务接口保留,旧的 `llm:<kind>` 路由
-转到这一页。`features/providers/drafts.ts` 的暂存按部署分 scope 存进 localStorage,不含 API Key;
-这一页自己拦切换端点,并向路由登记离开保护。端点保存、删除或设为当前之后推送状态帧,控制台页顶部
+的作用域里,面板的 `setConfig` 同样进暂存;旧的 `provider/llm:<kind>` 路由转到这一页。
+`features/providers/drafts.ts` 的暂存按部署分 scope 存进 localStorage,不含 API Key;这一页自己拦切换端点,并向路由登记离开保护。端点保存、删除或设为当前之后推送状态帧,控制台页顶部
 的统计行显示当前端点的名称与模型,点开进该端点。
 
 `main.ts` 的 `FEATURES` 包含 `live`、`core`、`usage`、`provider`、`world`、`extensions`、`prompts`、

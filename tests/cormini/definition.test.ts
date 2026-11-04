@@ -173,24 +173,30 @@ describe('统一入口:框架派生的 WebUI', () => {
   });
 
   it('模型与报价由 Provider 模块提供，旧全局端点不存在', async () => {
-    const { status, body } = await postJ('/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/state', { args: [] });
+    const list = await getJ('/api/providers');
+    expect(list.status).toBe(200);
+    expect(list.body.active).toBe('fixture');
+    const { status, body } = await getJ('/api/providers/fixture');
     expect(status).toBe(200);
     // 角色矩阵没了:一个端点一份档
     expect(body.roles).toBeUndefined();
-    expect(body.active).toBe('fixture');
-    expect((body.instances as any[])[0].quotes.length).toBeGreaterThan(0);
+    expect((body.quotes as any[]).length).toBeGreaterThan(0);
     for (const path of ['/api/models', '/api/pricing']) expect((await fetch(`http://127.0.0.1:${port}${path}`)).status).toBe(404);
   });
 
-  it('模块保存模型档位后热生效，非法档位不改变配置', async () => {
-    const save = (spec: Record<string, unknown>) => postJ('/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/save', { args: [{ name: 'fixture', spec, pricing: [] }] });
+  it('保存模型档位后热生效，非法档位不改变配置', async () => {
+    const save = async (spec: Record<string, unknown>) => {
+      const { body } = await getJ('/api/providers/fixture');
+      const entry = { ...(body.entry as Record<string, unknown>), spec, pricing: [] };
+      return postJ('/api/providers/fixture/save', { name: 'fixture', entry, expectedRevision: body.revision });
+    };
     const effective = () => bot.core.activeSpec();
     expect((await save({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' })).status).toBe(200);
     expect(effective()).toMatchObject({ model: 'test-reasoner', thinking: true, reasoningEffort: 'max' });
     expect((await save({ model: 'test-model', thinking: false })).status).toBe(200);
     expect('reasoningEffort' in effective()).toBe(false);
     const invalid = await save({ model: 'x', thinking: false, reasoningEffort: 'high' });
-    expect(invalid.status).toBe(500);
+    expect(invalid.status).toBe(400);
     expect(invalid.body.error).toContain('推理强度');
     expect(effective().model).toBe('test-model');
   });
