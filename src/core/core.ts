@@ -226,9 +226,9 @@ export class Core<C extends CoreConfig = CoreConfig> {
 
   private makeApi(): CoreApi {
     return {
-      injectInternal: (text, kind) => this.loop.injectInternal(text, kind),
+      injectInternal: (text, kind, blobs) => this.loop.injectInternal(text, kind, blobs),
       injectDeferred: (kind, render) => this.loop.injectDeferred(kind, render),
-      injectExternal: (text, kind) => this.loop.injectExternal(text, kind),
+      injectExternal: (text, kind, blobs) => this.loop.injectExternal(text, kind, blobs),
       requestContextHandoff: () => this.loop.requestContextHandoff(),
       spawnFork: (opts) => this.spawnFork(opts),
       sessionInfo: (id) => this.sessionInfo(id),

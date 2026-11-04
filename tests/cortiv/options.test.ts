@@ -89,7 +89,7 @@ describe('CortiV 实时参数化', () => {
     });
     p.attach(makeFakeHarnessApi({
       injectDeferred: (_kind, render) => {
-        void Promise.resolve(render()).then((t) => { if (t !== null) rendered.push(t); });
+        void Promise.resolve(render()).then((t) => { if (t !== null) rendered.push(typeof t === 'string' ? t : t.text); });
       },
     }));
     p.startRhythm();
