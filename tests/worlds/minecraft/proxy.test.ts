@@ -4,7 +4,9 @@
  * (进程内);这里只验证跨进程语义。不连接 Minecraft 服务器，工具与面板按未连接
  * 状态的既定契约响应。
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { spawn, type ChildProcess } from 'node:child_process';
+import { once } from 'node:events';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -359,6 +361,79 @@ describe('MinecraftWorldProxy(子进程未起时的存储面)', () => {
       expect(cold.envPromptVars()['minecraft.policy']).not.toContain('不主动动手');
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('MinecraftWorldProxy(子进程归属)', () => {
+  type Internals = {
+    child: ChildProcess | null;
+    ready: boolean;
+    restartTimer: ReturnType<typeof setTimeout> | null;
+    rpc(req: { kind: string }, timeoutMs: number): Promise<unknown>;
+    onExit(child: ChildProcess, code: number | null): void;
+    spawn(): Promise<void>;
+  };
+
+  function idleProxy(): { proxy: MinecraftWorldProxy; internals: Internals } {
+    const cfg = structuredClone(MINECRAFT_DEFAULTS) as unknown as MinecraftConfigSection;
+    cfg.enabled = false;
+    cfg.client.enabled = false;
+    const proxy = new MinecraftWorldProxy({ cfg });
+    return { proxy, internals: proxy as unknown as Internals };
+  }
+
+  async function close(child: ChildProcess): Promise<void> {
+    if (child.exitCode !== null || child.signalCode !== null) return;
+    const exited = once(child, 'exit');
+    child.kill();
+    await exited;
+  }
+
+  it('init 失败时先等这次 fork 的子进程退出再返回，且不排重启', async () => {
+    const { proxy, internals } = idleProxy();
+    let owned: ChildProcess | undefined;
+    const rpc = internals.rpc.bind(proxy);
+    const intercepted = vi.spyOn(internals, 'rpc').mockImplementation((req, timeoutMs) => {
+      if (req.kind !== 'init') return rpc(req, timeoutMs);
+      owned = internals.child ?? undefined;
+      return Promise.reject(new Error('initialization timeout'));
+    });
+    try {
+      await expect(proxy.start(new FakeHost())).rejects.toThrow('initialization timeout');
+      expect(owned).toBeDefined();
+      expect(owned!.exitCode !== null || owned!.signalCode !== null).toBe(true);
+      expect(internals.child).toBeNull();
+      expect(internals.restartTimer).toBeNull();
+    } finally {
+      intercepted.mockRestore();
+      await proxy.stop();
+      if (owned) await close(owned);
+    }
+  }, 30_000);
+
+  it('旧子进程退出不清接替者的状态;已有子进程时不再 fork', async () => {
+    const { proxy, internals } = idleProxy();
+    const idle = (): ChildProcess =>
+      spawn(process.execPath, ['-e', 'process.on("message", () => {}); setInterval(() => {}, 1000)'], {
+        stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+      });
+    const old = idle();
+    const current = idle();
+    try {
+      await close(old);
+      internals.child = current;
+      internals.ready = true;
+      internals.onExit(old, 1);
+      expect(internals.child).toBe(current);
+      expect(internals.ready).toBe(true);
+      await expect(internals.spawn()).rejects.toThrow('受管引擎');
+      expect(internals.child).toBe(current);
+      expect(current.exitCode).toBeNull();
+    } finally {
+      await close(old);
+      await close(current);
+      await proxy.stop();
     }
   });
 });
