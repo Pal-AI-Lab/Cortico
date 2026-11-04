@@ -13,6 +13,7 @@ export const S: Partial<typeof en> = {
   deleteGroup: "Excluir grupo (mantém as extensões)",
   pendingNote: "As extensões acima têm efeito após reiniciar o processo.",
   updateAvailable: (from: string, to: string) => `Atualização disponível: ${from} → ${to}`,
+  updatePendingRestart: (from: string, to: string) => `Vale após reiniciar o processo ${from} → ${to}`,
   hideFromSidebar: "Ocultar da barra lateral",
   showInSidebar: "Mostrar na barra lateral",
   builtinAlwaysOn: "Os World integrados ficam sempre ativos.",
