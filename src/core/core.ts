@@ -354,6 +354,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         maxRounds: decl.rounds().hard,
         softRounds: decl.rounds().soft,
         log: this.log.child(`fork.${decl.id}`),
+        blobs: { intern: (inputs) => this.internBlobs(inputs) },
         stopWhen: opts.stopWhen,
         wrapUpHint: opts.wrapUpHint,
         capNote: opts.capNote,
