@@ -65,6 +65,7 @@ import {
   TOOL_FAILED_BAD_ARGS,
   UNKNOWN_TOOL,
   eventFrameHeader,
+  streamedPastBarrier,
   toolFailed,
   toolFailedBadReturn,
 } from './markers.ts';
@@ -1395,6 +1396,9 @@ export class MainLoop {
       this.enterPhase('tools', { round });
       const results: ContextRecord[] = [];
       let barrierHit = false;
+      // 屏障跳过的回执位置，与越过屏障执行过的 streamsOutput 工具名；循环后前者末尾补注后者。
+      const barrierSkipped: number[] = [];
+      const streamedNames: string[] = [];
       // endsTurn 工具真正执行过(没被屏障跳过、参数合法)才算数
       let turnEnded = false;
       const toolsStart = Date.now();
@@ -1407,7 +1411,10 @@ export class MainLoop {
           barrierHit = true;
           continue;
         }
-        if (barrierHit) {
+        const def = this.toolDefs.find((t) => t.name === call.name);
+        const pastBarrier = barrierHit;
+        if (pastBarrier && !def?.streamsOutput) {
+          barrierSkipped.push(results.length);
           results.push(functionResult(call.call_id, NOT_EXECUTED_BARRIER));
           continue;
         }
@@ -1417,7 +1424,6 @@ export class MainLoop {
         }
 
         let out: ToolOutcome;
-        const def = this.toolDefs.find((t) => t.name === call.name);
         if (!def) {
           out = { text: UNKNOWN_TOOL };
           withAnchors({ call: call.call_id }, () => recordToolCall(this.d.toolLog, decl.id, call.name, null, Date.now(), out));
@@ -1442,6 +1448,7 @@ export class MainLoop {
             );
             if (!this.active(generation)) return;
           }
+          if (pastBarrier && !streamedNames.includes(def.name)) streamedNames.push(def.name);
           if (def.barrierAfter) barrierHit = true;
           if (def.endsTurn) turnEnded = true;
         }
@@ -1449,6 +1456,10 @@ export class MainLoop {
           log.warn('工具回执过长,体积归 World 管', { tool: call.name, chars: out.text.length, limit: LARGE_RESULT_WARN_CHARS });
         }
         results.push(this.toolResult(call.call_id, out));
+      }
+      if (streamedNames.length > 0) {
+        const note = streamedPastBarrier(streamedNames);
+        for (const index of barrierSkipped) results[index] = withText(results[index], `${textOf(results[index])}\n${note}`);
       }
       toolMs = Date.now() - toolsStart;
       flight.phase = 'done';
@@ -2164,7 +2175,7 @@ ${INTERRUPTED_WHILE_RUNNING}` }
 
 /**
  * 工具调用在流中闭合后可提前执行，闭合顺序由协议层保证。
- * barrierAfter 阻止后续调用提前执行；其后调用在响应结束时记为未执行。
+ * barrierAfter 阻止后续调用提前执行；其后调用留到响应结束时按顺序处理：streamsOutput 的照常执行，其余记为未执行。
  * 结果按 call id 暂存，rounds() 按消息顺序取回配对；无效 JSON 留待常规路径生成错误回执。
  */
 class EagerDispatch {

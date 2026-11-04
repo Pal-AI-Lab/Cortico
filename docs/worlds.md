@@ -63,7 +63,10 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 工具回执 `ToolOutcome { text, blobs?, failed? }`;handler 抛错,或返回值既不是字符串也不是带字符串 text 的对象,Core 都转成失败回执。
 `interruptible` 的工具在 `interrupt` 到达时停止并返回已完成部分的回执,Core 等它返回;
 未声明的工具执行到结束。
-`endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下。
+`endsTurn` 让一个工具结束本轮,`barrierAfter` 让流式提前派发在它之后停下,同一条输出里排在它后面的调用不执行、
+得到未执行回执。`streamsOutput` 标的是输出接收器在模型输出时就对外执行的工具,主循环的屏障不跳过它:
+它在屏障工具之后照常按顺序执行,同一条输出里被跳过的调用回执末尾列出这些工具名。只给说话、字幕这类
+不必先看前面结果的输出标,会改外部状态的操作不标。
 工具名在一个 bot 内全局唯一:模型按名字调用,Core 按名字归属与隐藏。用自家短名做前缀
 (`mc_`、`qq_`);工具名与已挂载 World、Persona 工具或 Core 保留帧名冲突时,装配层拒绝挂载并报告原因。
 工具声明放在导出的 `<PREFIX>_TOOL_DECLS`(不含 handler),`tools()` 在其上加 handler;自描述的 `describe.tools` 由

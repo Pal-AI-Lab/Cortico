@@ -20,7 +20,8 @@
 - `pushEvent` 保存事件并投递进上下文;没有用户发言时,外部事件也能唤醒一轮模型调用。
 - 正文 `text` 原样进入上下文,宿主不改写、不补写语义内容。
 - 区分 `origin`:`internal` 只给来源可验证的内部通知,其余一律按 `external` 处理。
-- `barrierAfter`:同一条 assistant 输出中排在该工具后面的调用不执行,得到未执行回执。
+- `barrierAfter`:同一条 assistant 输出中排在该工具后面的调用不执行,得到未执行回执;`streamsOutput` 的调用除外,
+  照常按顺序执行。
   `endsTurn`:该工具完成后结束本次唤醒,期间到达的事件留待下一次投递。
 - 一轮结束(assistant 自然结束、模型调用失败或轮数达到硬上限)时调用 `onTurnEnded()`。
 - 宿主放弃一次工具调用时触发 `ToolCallContext.signal`。
