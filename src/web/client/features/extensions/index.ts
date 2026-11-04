@@ -450,6 +450,8 @@ export interface ExtensionController {
   /** Opens the package's install information: installed version, location and releases. */
   details(name: string): void;
   remove(name: string, anchor: Anchor): Promise<void>;
+  /** Restarts the process, as the restart control does: asks first, then reloads the page once it is back. */
+  restart(): Promise<void>;
 }
 
 export function mountExtensionContent(ctx: FeatureContext, kind: Category, workspace?: ExtensionWorkspace): ExtensionController {
@@ -1909,5 +1911,5 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
     if (own) void own.then(over, over);
     restoreScroll(); renderInView(until);
   };
-  return { details, remove, activate };
+  return { details, remove, activate, restart };
 }
