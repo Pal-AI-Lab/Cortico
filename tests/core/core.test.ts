@@ -256,6 +256,17 @@ describe('Core · session 声明与 fork 原语', () => {
     expect(api!.toolsTagged('read').has('看一眼')).toBe(true);
   });
 
+  it('CoreApi 声明 onDelivery 丢弃能力', () => {
+    let api: CoreApi | null = null;
+    tmp = makeTmpDir();
+    const loaded = loadedFor(tmp.dir);
+    const persona = makeFakePersona([], { cfg: loaded.config });
+    const attach = persona.attach.bind(persona);
+    persona.attach = (h) => { api = h; attach(h); };
+    new Core(loaded, { persona, worlds: [makeFakeIO('web')], llm: new FakeLLM() });
+    expect(api!.deliveryDrop).toBe(true);
+  });
+
   it("Persona 状态经 CoreApi 读写并保存到 core-state.json", () => {
     let api: CoreApi | null = null;
     tmp = makeTmpDir();

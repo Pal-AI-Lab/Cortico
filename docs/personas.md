@@ -22,7 +22,9 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 | `declareSessions()` | session 声明,恰好一个 `receivesEvents` 且 `persistent`(见 [sessions.md](sessions.md)) |
 
 可选时机钩子:`onOpening({ reason })`(session 开场)、`onDelivery({ events })`(一批唤醒项投递刻;
-可返回 Promise,Core 等它完成再投递，完成前 `injectInternal` 的项加入本批)、`onBatchEnd()`(一批处理结束,可执行上下文容量策略)、
+可返回 Promise,Core 等它完成再投递，完成前 `injectInternal` 的项加入本批;`CoreApi.deliveryDrop`
+为 true 时可返回 `{ action: 'drop', reason }` 丢弃整批,不写 session、不调模型,来源 World 收到
+`onEventsSettled(..., 'dropped')`)、`onBatchEnd()`(一批处理结束,可执行上下文容量策略)、
 `onTurnEnded()`、`onIdle()`、`onStallsRecovered()`(回一句措辞或 null)、
 `onWorldLifecycle(event)`、`sessionHead()`(合成开头:置于 system 之后、持久历史之前的 item 列表,每次请求现取,不落盘)、
 `onHandoff(snapshot, { hardTokens })`(回 `{ tail, trim? }`)、`promptVarValues(ctx)`、
@@ -39,7 +41,7 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声
 `BotDefinition.describe.tools` 用 `describeTools(decls, summaries)` 从同一份声明拼成。
 
 `CoreApi` 是 Persona 唯一的 Core 入口:`injectInternal` / `injectDeferred` / `injectExternal`、
-`requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、
+`requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、`deliveryDrop`、
 `personaState` / `savePersonaState`(不透明状态,Core 只负责原子持久化)、`toolsTagged`、
 `blob`、`log`。
 

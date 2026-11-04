@@ -3891,6 +3891,75 @@ describe('MainLoop 异步 onDelivery', () => {
   });
 });
 
+describe('MainLoop onDelivery drop', () => {
+  let rig: ReturnType<typeof makeRig>;
+  afterEach(async () => {
+    if (rig) await rig.cleanup();
+  });
+
+  function settlementWorld(settled: string[]): World {
+    return {
+      ...makeFakeIO('qq', [makeTool('send', '已发送')]),
+      onEventsSettled: (events, outcome) => {
+        settled.push(...events.map((e) => `${outcome}:${e.text}`));
+      },
+    };
+  }
+
+  it('drop 不写 session、不调模型，水位推进且 World 收到 dropped', async () => {
+    const settled: string[] = [];
+    rig = makeRig({
+      worlds: [settlementWorld(settled)],
+      silent: true,
+      hooks: {
+        onDelivery: async () => {
+          await Promise.resolve();
+          return { action: 'drop' as const, reason: 'silence' };
+        },
+      },
+    });
+    rig.start();
+    const event = rig.pushEvent('[10:05] 阿明: 嗯');
+    await until(() => rig.state.data.lastDeliveredCursor === event.cursor);
+    await sleep(30);
+    expect(rig.session.messages.filter((m) => m.role !== 'system')).toEqual([]);
+    expect(rig.llm.calls).toHaveLength(0);
+    expect(settled).toEqual(['dropped:[10:05] 阿明: 嗯']);
+  });
+
+  it('drop 时钩子注入的内部项一并丢弃，水位越过它们', async () => {
+    rig = makeRig({
+      silent: true,
+      hooks: {
+        onDelivery: () => {
+          rig.loop.injectInternal('[内心] 这次不说', 'notice');
+          return { action: 'drop' as const, reason: 'silence' };
+        },
+      },
+    });
+    rig.start();
+    const event = rig.pushEvent('[10:05] 阿明: 在忙吗');
+    await until(() => rig.state.data.lastDeliveredCursor === rig.store.latestCursor());
+    expect(rig.state.data.lastDeliveredCursor).toBeGreaterThan(event.cursor);
+    expect(rig.session.messages.filter((m) => m.role !== 'system')).toEqual([]);
+    expect(rig.llm.calls).toHaveLength(0);
+  });
+
+  it('action=deliver 照常投递并结算为 delivered', async () => {
+    const settled: string[] = [];
+    rig = makeRig({
+      worlds: [settlementWorld(settled)],
+      silent: true,
+      hooks: { onDelivery: () => ({ action: 'deliver' as const }) },
+    });
+    rig.start();
+    rig.pushEvent('[10:05] 阿明: 在吗');
+    await until(() => rig.llm.calls.length > 0);
+    expect(rig.session.messages.some((m) => m.content.includes('在吗'))).toBe(true);
+    await until(() => settled.includes('delivered:[10:05] 阿明: 在吗'));
+  });
+});
+
 /**
  * 构建前缀或工具表时读不出一个 World 的 `tools()`:只有它经 onWorldFailed 移出,其余 World 与主循环照常。
  */

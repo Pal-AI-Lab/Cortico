@@ -39,7 +39,7 @@ Core 管理 session、事件流与模型调用的生命周期，包括事件投�
 返回 false,`activeProvider` 指向不存在的端点时抛错。
 
 Persona 通过 `CoreApi` 访问：`injectInternal` / `injectDeferred` / `injectExternal`、
-`requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、
+`requestContextHandoff`、`spawnFork`、`sessionInfo`、`llm`、`timers`、`deliveryGate`、`deliveryDrop`、
 `personaState` / `savePersonaState`、`toolsTagged`、`blob`、`log`。
 
 ## 总线与唤醒
@@ -75,6 +75,10 @@ piggyback 只入队，随后续唤醒一起投递。
 
 一批正文归档后，Core 调用 `Persona.onDelivery` 并等待它返回的 Promise,不设期限。完成前
 `injectInternal` 的内容排在这批的内部行末尾、外部正文之前;完成后的注入进入总线。
+`CoreApi.deliveryDrop` 为 true 时，钩子可返回 `{ action: 'drop', reason }`：该批不写 session、
+不调模型、不运行 `onBatchEnd`，钩子期间的内部注入一并丢弃，游标照常推进，来源 World 的
+`onEventsSettled` 收到 `dropped`。需要批末记账的 Persona 应在返回前自行完成；`onIdle`
+仍照常运行。返回其他值或旧 Core 时照常投递。
 
 状态 0、429 或 5xx 的模型调用失败，可保留已记录的输出和工具回执，按 `ResubmitPolicy` 重试。
 默认允许连续重试 2 次、每批最多 4 次，退避为 2 秒、10 秒；上下文超限、抢占、关机或轮数

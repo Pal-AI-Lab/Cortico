@@ -688,14 +688,30 @@ export class MainLoop {
       // 捕获钩子完成前的即时注入；钩子完成后恢复总线投递。
       const injected: EventEnvelope[] = [];
       this.deliveryCollector = injected;
+      let dropReason: string | null = null;
       try {
         // 同步钩子不经过 await，收集范围仍只是钩子本身的执行期。
         const pending = persona.onDelivery?.({ events: [...delivered] });
-        if (pending) await pending;
+        const result = pending ? await pending : undefined;
+        if (result && result.action === 'drop') {
+          dropReason = typeof result.reason === 'string' ? result.reason.trim() : '';
+        }
       } catch (e) {
         log.warn('onDelivery钩子异常', { err: e });
       } finally {
         this.deliveryCollector = null;
+      }
+      if (dropReason !== null) {
+        if (!this.active(generation)) return false;
+        // 丢弃也是结算：事件不写 session、不调模型，但游标照常推进，来源 World 得到 dropped。
+        log.info('onDelivery丢弃事件批', {
+          reason: dropReason || '(empty)',
+          events: delivered.length,
+          sources: [...new Set(delivered.map((event) => event.source))],
+        });
+        this.noteHandled(delivered, generation);
+        this.notifySettled(delivered, 'dropped');
+        return false;
       }
       delivered.push(...injected);
     }
@@ -1553,7 +1569,7 @@ export class MainLoop {
   }
 
   /** 按事件来源通知产生它们的 World;钩子异常记 warn。 */
-  notifySettled(events: readonly EventEnvelope[], outcome: 'delivered' | 'discarded'): void {
+  notifySettled(events: readonly EventEnvelope[], outcome: 'delivered' | 'dropped' | 'discarded'): void {
     if (!this.activeNow() || events.length === 0) return;
     for (const world of this.d.worlds.all()) {
       if (!world.onEventsSettled) continue;

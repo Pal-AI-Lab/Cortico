@@ -533,6 +533,11 @@ export interface CoreApi {
   /** 按 FIFO 顺序扣留和放行唤醒项；安装、解除与到期策略由 Persona 定义。 */
   deliveryGate: DeliveryGateApi;
   /**
+   * true 表示 Core 识别 Persona.onDelivery 返回的丢弃决定：该批不写 session、不调模型，
+   * 来源 World 收到 outcome='dropped'。未声明时为旧行为，返回值被忽略。
+   */
+  readonly deliveryDrop?: boolean;
+  /**
    * 返回共享的 Persona 状态对象；修改后须调用 savePersonaState 原子保存。
    * Core 不解释其内容。
    */
@@ -934,11 +939,11 @@ export interface World {
    */
   onTurnEnded?(): void;
   /**
-   * 本 World 产生的事件离开队列时调用：delivered 表示已写入主 session，discarded 表示被操作者
-   * 清空队列丢弃。经 withdrawPending 撤回的事件不通知；drainPendingEvents 取走的事件只在
-   * 之后经 queueExternalEvents 写入 session 时通知。
+   * 本 World 产生的事件离开队列时调用：delivered 表示已写入主 session，dropped 表示
+   * Persona.onDelivery 决定丢弃该批，discarded 表示被操作者清空队列丢弃。经 withdrawPending
+   * 撤回的事件不通知；drainPendingEvents 取走的事件只在之后经 queueExternalEvents 写入 session 时通知。
    */
-  onEventsSettled?(events: readonly EventEnvelope[], outcome: 'delivered' | 'discarded'): void;
+  onEventsSettled?(events: readonly EventEnvelope[], outcome: 'delivered' | 'dropped' | 'discarded'): void;
   /**
    * 主循环的 RunPhase 变化时同步调用:state 或 round 改变、工具开始或结束。在主循环的调用栈上执行,
    * 只记录状态,不做耗时操作。隐藏 World 不接收通知。
@@ -992,6 +997,11 @@ export type WorldLifecycleEvent =
   | { kind: 'visibility'; id: string; label: string; visible: boolean }
   | { kind: 'start-failed' | 'failed'; id: string; label: string; reason: string };
 
+/** onDelivery 对当前批的处理决定；drop 只在 CoreApi.deliveryDrop 为 true 时生效。 */
+export type DeliveryDecision =
+  | { action: 'deliver' }
+  | { action: 'drop'; reason: string };
+
 /**
  * Persona 定义上下文内容、session 和 Memory 操作。Core 在生命周期边界调用可选钩子。
  * 文本通过 CoreApi 的注入方法或有文本返回值的钩子提供；Core 不生成语义内容。
@@ -1010,8 +1020,10 @@ export interface Persona {
    * 返回 Promise 时 Core 等它完成再投递，不设期限：钩子不完成，主循环不前进，钩子自己发起的
    * 外部调用由 Persona 负责超时。完成前 Persona 的所有 injectInternal 都加入当前批，排在已有
    * 内部行之后、外部正文之前。钩子抛错或拒绝时 Core 记录 warn，带着已注入的内容照常投递。
+   * 返回 `{ action: 'drop', reason }` 时丢弃整批：不写 session、不调模型，来源 World 收到
+   * outcome='dropped'；需要 CoreApi.deliveryDrop 为 true，旧 Core 会忽略返回值照常投递。
    */
-  onDelivery?(ctx: { events: EventEnvelope[] }): void | Promise<void>;
+  onDelivery?(ctx: { events: EventEnvelope[] }): void | DeliveryDecision | Promise<void | DeliveryDecision>;
   /**
    * 一批事件处理结束时调用；Persona 可查询 sessionInfo 并决定是否请求交接。
    * Core 在超过 hardTokens 时强制交接。

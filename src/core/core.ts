@@ -239,6 +239,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         clear: (id, deliverQueued) => this.bus.clearDeliveryGate(id, deliverQueued),
         isBlocked: () => this.bus.isDeliveryBlocked(),
       },
+      deliveryDrop: true,
       personaState: () => this.state.data.persona,
       savePersonaState: () => this.state.save(),
       toolsTagged: (tag) =>
