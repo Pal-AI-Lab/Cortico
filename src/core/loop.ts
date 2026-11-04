@@ -653,14 +653,18 @@ export class MainLoop {
     }
     for (let index = 0; index < batch.length; index++) {
       for (const projection of projections.get(index) ?? []) {
+        const { blobs: inputs, ...event } = projection.event;
+        const blobs = this.d.blobs.intern(inputs);
         delivered.push(store.append({
-          ...projection.event,
+          ...event,
+          text: withBlobLines(event.text, blobs),
+          ...(blobs ? { blobs } : {}),
           ts: nowIso(cfg.timezone),
           source: projection.source,
           origin: projection.origin,
           contextDelivery: 'deliver',
           meta: {
-            ...projection.event.meta,
+            ...event.meta,
             sourceCursors: projection.sourceCursors,
           },
         }));

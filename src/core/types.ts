@@ -83,13 +83,16 @@ export interface DeferredEventSpec {
 
 export type DeferredRendered = string | { text: string; blobs?: BlobInput[] };
 
-/** 候选的原始事件；宿主补全来源、游标并以 archive-only 保存。 */
+/**
+ * 候选的原始事件；宿主补全来源、游标并以 archive-only 保存。
+ * 附件与 pushEvent 同规则：保存时落库，fallbackText 附在正文后。
+ */
 export type CandidateSourceEvent = Omit<
   EventEnvelope,
-  'cursor' | 'source' | 'origin' | 'contextDelivery'
->;
+  'cursor' | 'source' | 'origin' | 'contextDelivery' | 'blobs'
+> & { blobs?: BlobInput[] };
 
-/** 候选处理生成的事件；时间戳和游标在投递时分配。 */
+/** 候选处理生成的事件；时间戳和游标在投递时分配，附件在投递时落库，可直接引用原始事件的 BlobRef。 */
 export type CandidateProjectionEvent = Omit<CandidateSourceEvent, 'ts'>;
 
 /** 一次候选处理的输出；candidateIndexes 指向输入候选数组中被此事件引用的项。 */
