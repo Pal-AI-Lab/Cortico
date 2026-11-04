@@ -331,8 +331,9 @@ export class MinecraftWorldProxy implements World {
       this.restartTimer = null;
       if (this.stopping) return;
       void this.spawn().catch((err: unknown) => {
-        this.host?.log.error('Minecraft 引擎子进程重启失败,继续重试', { err: String(err) });
-        if (!this.child) this.scheduleRestart();
+        const retry = !this.child;
+        this.host?.log.error(`Minecraft 引擎子进程重启失败,${retry ? '继续重试' : '旧引擎没有退出,不再重启'}`, { err: String(err) });
+        if (retry) this.scheduleRestart();
       });
     }, RESTART_DELAY_MS);
     this.restartTimer.unref?.();
