@@ -93,3 +93,20 @@ Persona 工具,Core 只认 `ToolDef.endsTurn`。仓内 bot 的 Persona 工具声
 
 修改 `index.ts` 中的 `id` 与 `web.port`,再在部署根下创建引用此包的部署。
 框架提供通用 WebUI 页,专有面板通过 `webUi()` 声明。
+
+## 换 Memory 后端
+
+Memory 存在哪、怎么读写由 Persona 决定，Core 没有记忆后端的接口。换后端就写一个 `kind: "bot"` 的
+扩展包(见 [extensions.md](extensions.md)「写一个 bot 扩展」),在它的 Persona 里接自己的存储;
+`templates/extension/bot/` 可作起点，把其中的 `memory_write` 与 `persona/blobs.ts` 换成自己的实现。
+
+| 成员 | 接自己的存储时 |
+|---|---|
+| `memoryDir` | 仍须是绝对路径;Core 不读它,`check:extension` 只校验它是字符串。存储不在本机时给 `build()` 收到的 `loaded.memoryDir`(部署的 `paths.memory`),放缓存或本地状态 |
+| `blobs` | 实现 `BlobStore` 的 `put`、`get`、`list`,字节存进自己的后端。Core 只调 `get`,用于把 `mem:` 附件发给模型、在 WebUI 显示，以及 `WorldHost.blob()` 与 `CoreApi.blob()`;`put` 与 `list` 由 Persona 自己调 |
+| 记忆工具 | 读、写、检索记忆的工具放进自己 session 的 `SessionDecl.tools()`,名字列进 `BotDefinition.describe.tools` |
+| 上下文里的记忆 | 由 `systemSegments()`、`sessionHead()` 或 `injectInternal` 给出;Core 不从 Memory 取文本 |
+| `memory` | 可选，放后端实例;Core 不读它的内容 |
+
+权限、版本冲突、幂等与超时都在 Persona 里处理。`onDelivery` 返回的 Promise,Core 等它完成再投递，不设期限，
+钩子发起的外部调用由 Persona 自己设超时。
