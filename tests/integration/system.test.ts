@@ -50,6 +50,11 @@ describe('全系统集成(控制台对话链路)', () => {
     cfg.worlds.qq.enabled = false;
     cfg.worlds.console.enabled = true;
     cfg.web.port = 0;
+    // WebUI 的端点接口读写部署根下的 providers/。
+    for (const [name, entry] of Object.entries(cfg.providers)) {
+      mkdirSync(join(tmp.dir, 'providers', name), { recursive: true });
+      writeFileSync(join(tmp.dir, 'providers', name, 'config.json'), JSON.stringify(entry));
+    }
 
     const loaded = makeLoaded({
       config: cfg,
@@ -159,16 +164,16 @@ describe('全系统集成(控制台对话链路)', () => {
     await waitFor(() => existsSync(join(tmp.dir, 'persona', 'note', '第一次对话.md')));
   });
 
-  it('Provider 面板保存端点模型配置', async () => {
-    const originalLocal = structuredClone(bot.core.config.providers.local);
-    const setModel = (spec: Record<string, unknown>) => fetch(
-      `http://127.0.0.1:${port}/api/webui/providers/llm%3Aopenai-responses-compat/panels/settings/save`,
-      {
+  it('端点接口保存模型配置', async () => {
+    const originalLocal = entryOnDisk('local');
+    const setModel = async (spec: Record<string, unknown>) => {
+      const detail = await (await fetch(`http://127.0.0.1:${port}/api/providers/fixture`)).json() as { entry: Record<string, unknown>; revision: string };
+      return fetch(`http://127.0.0.1:${port}/api/providers/fixture/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ args: [{ name: 'fixture', spec, pricing: [] }] }),
-      },
-    );
+        body: JSON.stringify({ name: 'fixture', entry: { ...detail.entry, spec, pricing: [] }, expectedRevision: detail.revision }),
+      });
+    };
 
     let r = await setModel({ model: 'test-reasoner', thinking: false });
     expect(r.status).toBe(200);
@@ -183,8 +188,7 @@ describe('全系统集成(控制台对话链路)', () => {
 
     expect(onDisk.profiles).toBeUndefined();
 
-    expect(bot.core.config.providers.local).toEqual(originalLocal);
-    expect(JSON.parse(readFileSync(join(tmp.dir, 'config.json'), 'utf8')).models).toBeUndefined();
+    expect(entryOnDisk('local')).toEqual(originalLocal);
   });
 
   it('配置项热改:声明驱动的路径读写,数组/nullable/热生效,落盘只动被改的路径', async () => {

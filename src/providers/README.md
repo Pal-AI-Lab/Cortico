@@ -14,7 +14,7 @@
 | `registry.ts` | 目录扫描发现内建模块、`registerProviderModules()` 收扩展、`removeProviderModule()` 撤下扩展、实例缓存与 `bind()` |
 | `configuration.ts` | `validateSpec` / `validateEntry`:外部配置校验 |
 | `pricebook.ts` | 价目定义、快照、报价合并 |
-| `webui/` | provider 页的服务端:`ProviderSettings`(落盘、密钥、探活) |
+| `webui/` | provider 页的服务端:`ProviderSettings`(落盘、密钥状态、探活) |
 | `openai-responses-compat/` | 内建模块:Responses 协议客户端与模型目录 |
 | `llamacpp/` | 内建模块:llama-server 的 Chat 客户端、router 目录、官方 release 的下载安装与进程托管 |
 | `transport/` | HTTP/SSE 引擎、Chat 与 Responses 请求转换、事件装配、计量、错误 |

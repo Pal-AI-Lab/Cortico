@@ -9,6 +9,8 @@ import { ProviderHub } from '../../src/providers/webui/hub.ts';
 import { acquireInstanceLock } from '../../src/core/instance-lock.ts';
 import { validateProviderName } from '../../src/providers/name.ts';
 import { FixtureStream } from '../core/fixture-protocol.ts';
+import { PROBE_MAX_OUTPUT_TOKENS } from '../../src/providers/webui/types.ts';
+import { text } from '../../src/providers/webui/strings.ts';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => cleanups.splice(0).forEach(fn => fn()));
@@ -43,7 +45,7 @@ it('withdraws a provider before package removal, rejects stale editors, and rest
     expect(() => hub.save(null, { name: 'Late', entry: input }, 'en')).toThrow();
     expect(() => settings.save('Late', input, 'en')).toThrow();
     expect(() => registry.preview('Late', input)).toThrow();
-    await expect(page.invoke!('settings', 'create', [{ name: 'Late' }])).rejects.toThrow();
+    await expect(page.invoke!('reasoning', 'state', [{ name: 'Late' }])).rejects.toThrow('Unknown provider module');
     expect(existsSync(join(root, 'Late'))).toBe(false);
     release(); await rejected;
     expect(source.contribute('en')).not.toBeNull();
@@ -194,6 +196,46 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
   } finally { vi.unstubAllGlobals(); }
 });
 
+it('lists models and probes a saved endpoint without a draft; a 404 probe points at the URL and path', async () => {
+  const { hub } = fixture();
+  hub.save(null, { name: 'cloud', entry: {
+    ...entry, spec: { model: 'test-model', thinking: true, reasoningEffort: 'low', maxTokens: 4096 },
+    pricing: [{ models: ['*'], currency: 'USD', basis: 'marginal', source: 'webui', rules: [{ meter: 'input', perMillion: 1 }, { meter: 'output', perMillion: 2 }] }],
+  } }, 'en');
+  let status = 200;
+  const bodies: Array<Record<string, unknown>> = [];
+  vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/models')) return new Response(JSON.stringify({ data: [{ id: 'test-model' }] }));
+    bodies.push(JSON.parse(String(init?.body)));
+    if (status !== 200) return new Response('no route', { status });
+    const response = {
+      id: 'r', model: 'test-model', status: 'completed', service_tier: null,
+      output: [{ type: 'reasoning', id: 'rs', summary: [], content: [], encrypted_content: 'sig' }, { type: 'message', id: 'm', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'pong', annotations: [] }] }],
+      usage: { input_tokens: 10, output_tokens: 5, input_tokens_details: { cached_tokens: 4 } },
+    };
+    const events = [
+      { type: 'response.created', response: { ...response, status: 'in_progress', output: [], usage: null } },
+      ...response.output.flatMap((item, output_index) => [
+        { type: 'response.output_item.added', output_index, item },
+        { type: 'response.output_item.done', output_index, item },
+      ]),
+      { type: 'response.completed', response },
+    ];
+    return new Response(events.map((event, sequence_number) => `data: ${JSON.stringify({ ...event, sequence_number })}\n\n`).join(''),
+      { headers: { 'content-type': 'text/event-stream' } });
+  });
+  try {
+    expect(await hub.action('cloud', 'models', 'en')).toEqual({ models: [{ id: 'test-model' }] });
+    const ok = await hub.action('cloud', 'test', 'en') as Record<string, unknown>;
+    expect(ok).toMatchObject({ ok: true, status: 200, model: 'test-model', encryptedReasoning: true, usage: { input: 10, cachedInput: 4, output: 5, reasoning: null } });
+    expect(ok.charges).toEqual([{ currency: 'USD', amount: 20 / 1e6 }]);
+    expect(bodies[0]).toMatchObject({ max_output_tokens: PROBE_MAX_OUTPUT_TOKENS, reasoning: { effort: 'low' }, store: false });
+    status = 404;
+    expect(await hub.action('cloud', 'test', 'en')).toMatchObject({ ok: false, status: 404, hint: text('en').probeNoResponses });
+    expect(bodies).toHaveLength(2);
+  } finally { vi.unstubAllGlobals(); }
+});
+
 it('module list carries the editor sections of each module in its declared order', () => {
   const { hub, settings } = fixture();
   const sections = Object.fromEntries(hub.moduleList('en').map(module => [module.id, module.sections.map(section => section.id)]));
@@ -201,7 +243,7 @@ it('module list carries the editor sections of each module in its declared order
   expect(sections['openai-responses-compat']).toEqual(['endpoint', 'model', 'reasoning', 'pricing', 'protocol']);
   expect(hub.moduleList('en').find(module => module.id === 'llamacpp')!.sections[0]).toMatchObject({ builtin: 'connection-endpoint', title: 'Server address' });
   for (const module of hub.moduleList('en')) {
-    const declared = settings.sources().find(source => source.id === `llm:${module.id}`)!.contribute('en')!.panels!.filter(panel => panel.id !== 'settings');
+    const declared = settings.sources().find(source => source.id === `llm:${module.id}`)!.contribute('en')!.panels!;
     expect(module.sections.map(section => section.defaultOpen)).toEqual(declared.map(panel => panel.defaultOpen));
   }
 });

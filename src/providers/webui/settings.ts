@@ -11,16 +11,15 @@ import {
   readGroupValues,
   setByPath,
 } from '../../core/config-schema.ts';
-import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { updateJsonObject, writeSecretFile } from '../../config-file.ts';
+import { updateJsonObject } from '../../config-file.ts';
 import type { Language } from '../../core/language.ts';
 import { isConnectionEditorBlock, type WebUiLamp, type WebUiPageContribution } from '../../web/shared/webui-protocol.ts';
 import type { WebUiPageSource } from '../../web/webui-pages.ts';
 import { providerModules, type ProviderRegistry } from '../registry.ts';
 import type { ProviderAvailability, ProviderModule } from '../base.ts';
-import { endpointAvailability, validateEntry, withContextWindows } from '../configuration.ts';
-import { quotePrices, validatePrices } from '../pricebook.ts';
+import { endpointAvailability, validateEntry } from '../configuration.ts';
 import { GenerationError, type ResponseClient } from '../../core/generation.ts';
 import { readTextFile } from '../../core/util.ts';
 import { responseRequest } from '../../protocol/open-responses/context-helpers.ts';
@@ -105,15 +104,15 @@ export class ProviderSettings {
       if (!path.startsWith(prefix)) throw new Error(S.groupOutOfScope);
       setByPath(next as unknown as Record<string, unknown>, path.slice(prefix.length), value);
     }
-    this.persist(name, validateEntry(this.module(next.kind), next, language), this.config.activeProvider);
+    this.persist(name, validateEntry(this.module(next.kind), next, language));
     return S.saved;
   }
 
   /** 端点配置写入共享目录；activeProvider 写入当前部署的 config.json。 */
-  private persist(name: string, entry: LLMProviderEntry, activeProvider: string): void {
+  private persist(name: string, entry: LLMProviderEntry): void {
     const next = structuredClone(entry);
     updateJsonObject(this.file, (raw) => {
-      raw.activeProvider = activeProvider;
+      raw.activeProvider = this.config.activeProvider;
       raw.providerSchemaVersion = 3;
     });
     const dir = join(this.providersDir, name);
@@ -123,7 +122,6 @@ export class ProviderSettings {
       for (const [key, value] of Object.entries(next)) raw[key] = value;
     });
     this.config.providers = { ...this.config.providers, [name]: next };
-    this.config.activeProvider = activeProvider;
     this.config.providerSchemaVersion = 3;
     // 端点 .env 的内容按 provider 实例缓存。
     this.registry.invalidate(name);
@@ -134,29 +132,7 @@ export class ProviderSettings {
     const prior = this.config.providers[name];
     if (prior && prior.kind !== entry.kind && this.modules.some((m) => m.id === prior.kind))
       throw new Error(text(language).kindChange);
-    this.persist(name, validateEntry(module, entry, language), this.config.activeProvider);
-  }
-
-  /** 设为当前端点前，要求端点具有有效的模型配置。 */
-  activate(name: string, spec?: ModelSpec, language: Language = 'zh'): void {
-    const S = text(language);
-    const entry = this.config.providers[name];
-    if (!entry) throw new Error(S.unknownInstance);
-    const requested = { ...entry, ...(spec ? { spec } : {}) };
-    if (!requested.spec) throw new Error(S.specRequired);
-    const next = validateEntry(this.module(entry.kind), requested, language);
-    this.persist(name, next, name);
-  }
-
-  /** 删除端点及其整个目录；当前活跃端点不能删除。 */
-  delete(name: string, language: Language = 'zh'): void {
-    const S = text(language);
-    if (!this.config.providers[name]) throw new Error(S.unknownInstance);
-    if (name === this.config.activeProvider) throw new Error(S.deleteActive);
-    this.registry.invalidate(name);
-    const { [name]: _dropped, ...rest } = this.config.providers;
-    this.config.providers = rest;
-    rmSync(join(this.providersDir, name), { recursive: true, force: true });
+    this.persist(name, validateEntry(module, entry, language));
   }
 
   /** 密钥值优先来自进程环境，其次为端点 .env；未配置变量名时没有来源。 */
@@ -166,49 +142,6 @@ export class ProviderSettings {
     const file = join(this.providersDir, name, '.env');
     if (!existsSync(file)) return 'none';
     return new RegExp(`^[ \\t]*${escapeRegExp(entry.secret)}[ \\t]*=[ \\t]*\\S+`, 'm').test(readTextFile(file)) ? 'file' : 'none';
-  }
-
-  /** 把密钥值写进端点目录的 `.env`(同名行覆盖),并让实例重建以读到它。 */
-  setSecret(name: string, value: string, language: Language = 'zh'): SecretStatus {
-    const S = text(language);
-    const entry = this.config.providers[name];
-    if (!entry) throw new Error(S.unknownInstance);
-    if (!entry.secret) throw new Error(S.secretNameRequired);
-    if (!value.trim() || /\s/.test(value)) throw new Error(S.secretValueInvalid);
-    const dir = join(this.providersDir, name);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const file = join(dir, '.env');
-    const line = `${entry.secret}=${value.trim()}`;
-    const current = existsSync(file) ? readTextFile(file) : '';
-    const pattern = new RegExp(`^[ \\t]*${escapeRegExp(entry.secret)}[ \\t]*=.*$`, 'm');
-    const next = pattern.test(current)
-      ? current.replace(pattern, line)
-      : current + (current && !current.endsWith('\n') ? '\n' : '') + line + '\n';
-    writeSecretFile(file, next);
-    this.registry.invalidate(name);
-    return this.secretStatus(name, entry);
-  }
-
-  private assertNewName(name: string, language: Language): void {
-    if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/.test(name)) throw new Error(text(language).nameFormat);
-    const existing = this.config.providers[name];
-    // kind 未注册的条目可被同名新端点覆盖，沿用现有目录和密钥。
-    if (existing && this.modules.some((module) => module.id === existing.kind)) throw new Error(text(language).nameTaken);
-  }
-
-  /** 端点目录里除 `config.json` 外还有什么(密钥、授权状态),删前给操作者看。 */
-  private directoryExtras(name: string): string[] {
-    const dir = join(this.providersDir, name);
-    if (!existsSync(dir)) return [];
-    return readdirSync(dir).filter((file) => file !== 'config.json');
-  }
-
-  private probe(name: string, language: Language) {
-    const S = text(language);
-    const entry = this.config.providers[name];
-    if (!entry) throw new Error(S.unknownInstance);
-    if (!entry.spec) throw new Error(S.specRequired);
-    return this.probeClient(this.registry.bind(name), entry.spec, language);
   }
 
   /** One streaming diagnostic request through `client`; the receipt carries status, latency, usage and charges, or the failure and a hint. */
@@ -334,123 +267,14 @@ export class ProviderSettings {
       availability: 'active',
       lamps: [],
       badges: [{ label: S.instancesBadge, value: String(entries.length) }, ...(extra.badges ?? [])],
-      panels: [
-        {
-          id: 'settings',
-          title: S.settingsPanel,
-          description: S.settingsPanelDescription,
-          getMethods: ['state'],
-          // 使用 WebUI 内建端点面板，操作由下方 invoke 提供。
-          builtin: 'llm-settings',
-        },
-        ...sections,
-      ],
+      panels: sections,
       config: extra.config ?? entries.flatMap(
         ({ name, entry }) => module.config?.(name, entry, language) ?? [],
       ),
       invoke: async (panel, method, args) => {
         this.module(module.id);
-        if (panel !== 'settings') {
-          if (!extra.invoke) throw new Error(S.unknownPanel);
-          return extra.invoke(panel, method, args);
-        }
-        const at = {
-          startedAt: new Date().toISOString(),
-          requestedServiceTier: null as string | null,
-        };
-        if (method === 'state') {
-          const localized = module.localize?.(language) ?? {};
-          return {
-            active: this.config.activeProvider,
-            reasoningTiers: localized.reasoningTiers ?? module.reasoningTiers,
-            serviceTiers: localized.serviceTiers ?? module.serviceTiers,
-            temperatureNote: localized.temperatureNote ?? module.temperatureNote,
-            baseUrlSuggestions: module.baseUrlSuggestions ?? [],
-            effortSuggestions: module.reasoningTiers.length ? [] : module.effortSuggestions ?? [],
-            instances: this.entries(module).map(({ name, entry }) => ({
-              name,
-              entry,
-              config: this.declaredGroups(language).filter((item) => item.name === name)
-                .map(({ group }) => ({ group, values: this.values(group.id, language) })),
-              secretConfigured: this.secretStatus(name, entry),
-              quotes: (entry.spec ? [entry.spec] : []).map((spec) => ({
-                model: spec.model,
-                quotes: quotePrices(
-                  entry,
-                  { model: spec.model },
-                  { ...at, requestedServiceTier: entry.serviceTier ?? null },
-                  module.prices?.(
-                    entry,
-                    { model: spec.model },
-                    { ...at, requestedServiceTier: entry.serviceTier ?? null },
-                  ) ?? [],
-                ),
-              })),
-            })),
-          };
-        }
-        const [raw] = args;
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw))
-          throw new Error(S.bodyRequired);
-        const body = raw as Record<string, unknown>;
-        if (typeof body.name !== 'string') throw new Error(S.nameRequired);
-        const name = body.name;
-        if (method === 'create') {
-          this.assertNewName(name, language);
-          // 报价留空:不覆盖模块价目;模块也没给价目时,这条端点的调用只记 token,不记金额。
-          this.save(name, {
-            kind: module.id,
-            baseUrl: String(body.baseUrl || module.defaultBaseUrl || ''),
-            pricing: [],
-          }, language);
-          return { ok: true };
-        }
-        const entry = this.config.providers[name];
-        if (!entry || entry.kind !== module.id) throw new Error(S.foreignInstance);
-        if (method === 'activate') this.activate(name, body.spec as ModelSpec | undefined, language);
-        else if (method === 'save') {
-          // 面板一格一存,所以给到哪几个键就只并哪几个。
-          const next: LLMProviderEntry = { ...entry };
-          if (body.spec !== undefined) {
-            if (!body.spec || typeof body.spec !== 'object' || Array.isArray(body.spec))
-              throw new Error(S.specRequired);
-            next.spec = body.spec as ModelSpec;
-          }
-          if (body.pricing !== undefined) next.pricing = validatePrices(body.pricing, language);
-          if (typeof body.serviceTier === 'string') next.serviceTier = body.serviceTier;
-          if (typeof body.baseUrl === 'string') next.baseUrl = body.baseUrl.trim();
-          if (typeof body.secret === 'string') {
-            if (body.secret.trim()) next.secret = body.secret.trim();
-            else delete next.secret;
-          }
-          if (typeof body.multimodal === 'boolean') next.multimodal = body.multimodal;
-          if (body.options !== undefined) {
-            if (!body.options || typeof body.options !== 'object' || Array.isArray(body.options))
-              throw new Error(S.optionsObject);
-            next.options = body.options as Record<string, unknown>;
-          }
-          this.save(name, next, language);
-        } else if (method === 'delete') {
-          this.delete(name, language);
-        } else if (method === 'duplicate') {
-          if (typeof body.as !== 'string') throw new Error(S.nameRequired);
-          this.assertNewName(body.as, language);
-          this.save(body.as, structuredClone(entry), language);
-        } else if (method === 'setSecret') {
-          if (typeof body.value !== 'string') throw new Error(S.secretValueInvalid);
-          return { secretConfigured: this.setSecret(name, body.value, language) };
-        } else if (method === 'models') {
-          const instance = this.registry.resolve(name);
-          if (!instance.listModels) throw new Error(S.modelsUnsupported);
-          const models = await instance.listModels();
-          // llamacpp 的 contextWindow(id) 按模型向服务发 /props 探测;它的列表已带探测过的窗口。
-          return { models: entry.kind === 'llamacpp' ? models : withContextWindows(instance, models) };
-        } else if (method === 'probe') {
-          return this.probe(name, language);
-        } else if (method === 'extras') {
-          return { files: this.directoryExtras(name) };
-        } else throw new Error(S.unknownMethod);
-        return { ok: true };
+        if (!extra.invoke) throw new Error(S.unknownPanel);
+        return extra.invoke(panel, method, args);
       },
     };
   }

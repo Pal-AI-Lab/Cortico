@@ -87,7 +87,7 @@ export default {id:'fixture',title:'Fixture',reasoningTiers:[{id:'off',label:'Of
       const manifest = (await (await fetch(base + '/api/webui/manifest')).json()) as any;
       const provider = manifest.providers.find((p: any) => p.id === 'llm:fixture');
       // An extension that places none of the editor's blocks gets the default order, its own sections between model and pricing.
-      expect(provider.panels.map((p: any) => p.id)).toEqual(['settings', 'endpoint', 'model', 'counter', 'pricing', 'protocol']);
+      expect(provider.panels.map((p: any) => p.id)).toEqual(['endpoint', 'model', 'counter', 'pricing', 'protocol']);
       expect((await fetch(base + assets.providers['llm:fixture'].js)).status).toBe(200);
       async function invoke(method: string) {
         return (

@@ -69,14 +69,14 @@ export class ProviderHub {
       sections: this.sections(module.id, language),
     }));
   }
-  /** The editor's sections for one module, in order: the page's panels minus the endpoint table. */
   private moduleTitle(kind: string, language: Language): string {
     const module = this.modules.find(m => m.id === kind);
     return module ? module.localize?.(language)?.title ?? module.title : kind;
   }
+  /** The editor's sections for one module: the panels of its `llm:<id>` page, in declared order. */
   private sections(kind: string, language: Language) {
     const source = this.settings.sources().find(source => source.id === `llm:${kind}`);
-    return (source?.contribute(language)?.panels ?? []).filter(panel => panel.id !== 'settings')
+    return (source?.contribute(language)?.panels ?? [])
       .map(({ id, title, description, builtin, defaultOpen }) => ({ id, title, ...(description ? { description } : {}), ...(builtin ? { builtin } : {}), ...(defaultOpen !== undefined ? { defaultOpen } : {}) }));
   }
   private readiness(name: string, entry: LLMProviderEntry, language: Language) {
@@ -286,27 +286,31 @@ export class ProviderHub {
     });
   }
   /**
-   * Probe (`test`) or list models (`models`). With `draft`, the request goes through an instance
-   * built from the browser's entry and typed key; nothing is written, and `name` may not exist yet.
+   * Probe (`test`) or list models (`models`). Without `draft`, the saved endpoint's instance answers.
+   * With `draft`, the request goes through an instance built from the browser's entry and typed key;
+   * nothing is written, and `name` may not exist yet.
    * Listing models does not use `spec`: the list is how the operator picks the model.
    */
   async action(name: string, action: 'test' | 'models', language: Language, draft?: { entry: LLMProviderEntry; secretValue?: string }) {
     this.refresh();
-    if (!draft) {
-      const entry = this.config.providers[name];
-      if (!entry) throw hubError(S => S.unknownInstance, 404);
-      const source = this.settings.sources().find(source => source.id === `llm:${entry.kind}`);
-      if (!source) throw hubError(S => S.moduleMissing);
-      return source.contribute(language)!.invoke!('settings', action === 'test' ? 'probe' : 'models', [{ name }]);
+    let entry: LLMProviderEntry;
+    let registry: ProviderRegistry;
+    if (draft) {
+      this.path(name);
+      if (!draft.entry || typeof draft.entry !== 'object') throw hubError(S => S.bodyRequired);
+      const module = this.modules.find(m => m.id === draft.entry.kind);
+      if (!module) throw hubError(S => S.moduleMissing);
+      const requested = withTypedSecret(name, draft.entry, draft.secretValue);
+      const { spec: _spec, ...withoutSpec } = requested;
+      entry = validateEntry(module, action === 'models' ? withoutSpec : requested, language);
+      registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
+    } else {
+      const saved = this.config.providers[name];
+      if (!saved) throw hubError(S => S.unknownInstance, 404);
+      if (!this.modules.some(m => m.id === saved.kind)) throw hubError(S => S.moduleMissing);
+      entry = saved;
+      registry = this.registry;
     }
-    this.path(name);
-    if (!draft.entry || typeof draft.entry !== 'object') throw hubError(S => S.bodyRequired);
-    const module = this.modules.find(m => m.id === draft.entry.kind);
-    if (!module) throw hubError(S => S.moduleMissing);
-    const requested = withTypedSecret(name, draft.entry, draft.secretValue);
-    const { spec: _spec, ...withoutSpec } = requested;
-    const entry = validateEntry(module, action === 'models' ? withoutSpec : requested, language);
-    const registry = this.registry.previewRegistry(name, entry, entry.secret && draft.secretValue ? { [entry.secret]: draft.secretValue } : {});
     if (action === 'models') {
       const instance = registry.resolve(name);
       if (!instance.listModels) throw hubError(S => S.modelsUnsupported);
