@@ -2,6 +2,7 @@ import { FixtureClient } from './fixture-protocol.ts';
 /** runForkLoop 的软提醒与硬轮数上限。 */
 import { describe, expect, it } from 'vitest';
 import { runForkLoop } from "./fixture-fork.ts";
+import { fakeBlobIntern } from './helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { ChatMessage, LLMChatOptions, LLMResult } from './fixture-types.ts';
 import type { ModelSpec, ToolDef, ToolSchema } from '../../src/core/types.ts';
@@ -141,5 +142,29 @@ describe('runForkLoop 回合契约', () => {
       log: nullLogger(),
     });
     expect(calls).toEqual(['1', '2', '3']);
+  });
+
+  it('工具回执的附件与主循环同规则:落库换句柄，句柄行接在正文后，回执记录带引用', async () => {
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const blobs = fakeBlobIntern();
+    const llm = new ScriptedLLM(1);
+    await runForkLoop({
+      id: 'dream',
+      llm,
+      spec: SPEC,
+      messages: [{ role: 'user', content: '开始' }],
+      tools: [{ ...touch, handler: async () => ({
+        text: '地图读数',
+        blobs: [{ bytes: png, mime: 'image/png', name: 'map.png', fallbackText: '[地图画面]' }],
+      }) }],
+      maxRounds: 3,
+      log: nullLogger(),
+      blobs,
+    });
+    const receipt = llm.seen[1].find((m) => m.role === 'tool')!;
+    const [handle] = [...blobs.bytes.keys()];
+    expect(blobs.bytes.get(handle)).toEqual(png);
+    expect(receipt.content).toBe(`地图读数\n[blob ${handle} image/png map.png] [地图画面]`);
+    expect(receipt.blobs).toEqual([{ handle, mime: 'image/png', name: 'map.png', fallbackText: '[地图画面]' }]);
   });
 });
