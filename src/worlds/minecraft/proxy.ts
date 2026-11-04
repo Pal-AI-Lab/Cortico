@@ -236,8 +236,10 @@ export class MinecraftWorldProxy implements World {
     const pending = this.retiring.get(child);
     if (pending) return pending;
     const work = Promise.resolve().then(async () => {
-      if (this.child === child && child.connected) {
-        try { await this.rpc({ kind: 'shutdown' }, 15_000); } catch { /* Wait for this same child below. */ }
+      try {
+        await this.rpc({ kind: 'shutdown' }, 15_000);
+      } catch {
+        /** shutdown RPC 超时后终止子进程。 */
       }
       await waitExit(child, 5000);
       if (child.exitCode === null && child.signalCode === null) {
@@ -263,7 +265,7 @@ export class MinecraftWorldProxy implements World {
     child.on('exit', (code) => this.onExit(child, code));
     child.on('error', (err) => this.host?.log.error('Minecraft 引擎子进程出错', { err: String(err) }));
     this.lastConfigJson = JSON.stringify(this.opts.cfg);
-    try { await this.rpc(
+    await this.rpc(
       {
         kind: 'init',
         init: {
@@ -274,10 +276,10 @@ export class MinecraftWorldProxy implements World {
         },
       },
       INIT_TIMEOUT_MS,
-    ); } catch (err) {
+    ).catch(async (err: unknown) => {
       if (this.child === child) await this.retireChild(child);
       throw err;
-    }
+    });
     if (this.child !== child || this.stopping) throw new Error('Minecraft 引擎初始化期间已停止');
     this.ready = true;
     this.lastCaps = null;
@@ -462,9 +464,11 @@ export class MinecraftWorldProxy implements World {
 function waitExit(child: ChildProcess, timeoutMs: number): Promise<void> {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve) => {
-    const done = (): void => { clearTimeout(timer); child.off('exit', done); resolve(); };
-    const timer = setTimeout(done, timeoutMs);
+    const timer = setTimeout(resolve, timeoutMs);
     timer.unref?.();
-    child.once('exit', done);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
   });
 }
