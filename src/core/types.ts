@@ -520,15 +520,15 @@ export interface ContextHandoffResult {
 
 /** Persona 访问 Core 的接口。 */
 export interface CoreApi {
-  /** 向接收事件的 session 注入内部事件；立即落库，正文由 Persona 提供。 */
-  injectInternal(text: string, kind?: string): void;
+  /** 向接收事件的 session 注入内部事件；立即落库，正文由 Persona 提供，blobs 同 WorldHost.pushEvent 落库。 */
+  injectInternal(text: string, kind?: string, blobs?: BlobInput[]): void;
   /** 注入内部事件，在投递时调用 render；渲染与持久化规则见 DeferredEventSpec。 */
-  injectDeferred(kind: string, render: () => string | null | Promise<string | null>): void;
+  injectDeferred(kind: string, render: DeferredEventSpec['render']): void;
   /**
    * 将 Persona 提供的正文作为外部事件投递，source=persona、origin=external。
-   * 正文位置由 SessionDecl.eventDelivery 决定。
+   * 正文位置由 SessionDecl.eventDelivery 决定;blobs 同 injectInternal。
    */
-  injectExternal(text: string, kind?: string): void;
+  injectExternal(text: string, kind?: string, blobs?: BlobInput[]): void;
   /** 在安全轮次边界请求上下文交接；已有请求待处理时返回 false。 */
   requestContextHandoff(): boolean;
   /** 运行临时 session 的工具循环，返回最后一段正文。 */

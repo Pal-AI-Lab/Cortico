@@ -1079,6 +1079,27 @@ describe('MainLoop user事件协议', () => {
     expect(rig.session.messages.find((m) => m.role === 'tool' && m.content.includes('纯文字'))!.blobs).toBeUndefined();
   });
 
+  it('Persona 注入的附件同 World 事件：落库换句柄，内部注入并进 user 消息，外部注入并进事件帧回执', async () => {
+    rig = makeRig();
+    rig.start();
+    const idle = () => rig.session.messages.at(-1)?.role === 'assistant';
+    await until(() => rig.llm.calls.length >= 1 && idle());
+
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 7]);
+    rig.loop.injectInternal('[system] 记起一张旧照片', 'recall', [{ bytes: png, mime: 'image/png', fallbackText: '旧照片' }]);
+    await until(() => rig.session.messages.some((m) => m.role === 'user' && m.content.includes('记起一张旧照片')) && idle());
+    const user = rig.session.messages.find((m) => m.role === 'user' && m.content.includes('记起一张旧照片'))!;
+    const [shot] = user.blobs!;
+    expect(shot).toMatchObject({ handle: expect.stringMatching(/^log:/), mime: 'image/png', fallbackText: '旧照片' });
+    expect(user.content).toContain(`[system] 记起一张旧照片\n[blob ${shot.handle} image/png] 旧照片`);
+
+    rig.loop.injectExternal('# 交接笔记', 'handoff-note', [{ handle: shot.handle, fallbackText: '旧照片' }]);
+    await until(() => rig.session.messages.some((m) => m.role === 'tool' && m.content.includes('# 交接笔记')) && idle());
+    const receipt = rig.session.messages.find((m) => m.role === 'tool' && m.content.includes('# 交接笔记'))!;
+    expect(receipt.blobs).toEqual([expect.objectContaining({ handle: shot.handle, fallbackText: '旧照片' })]);
+    expect(receipt.content).toContain(`# 交接笔记\n[blob ${shot.handle}`);
+  });
+
   it('外部正文落在伪造的external_event_frame回执里，user消息只留到达通知', async () => {
     rig = makeRig();
     rig.start();
