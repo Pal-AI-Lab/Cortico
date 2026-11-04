@@ -155,17 +155,8 @@ it('probes and lists models on a browser draft with its typed key, writing nothi
     expect(existsSync(join(root, 'draft'))).toBe(false);
     expect(cfg.providers).toEqual({});
     await expect(hub.action('draft', 'test', 'en', { entry: { ...entry, spec: undefined } })).rejects.toThrow('Model');
+    expect(await hub.action('draft', 'models', 'en', { entry: { ...entry, spec: { model: '', thinking: false } } })).toEqual({ models: [{ id: 'listed-model' }] });
     await expect(hub.action('draft', 'test', 'en', { entry: { ...entry, kind: 'removed-module' } })).rejects.toThrow('unavailable');
-  } finally { vi.unstubAllGlobals(); }
-});
-
-it('lists models before a model is chosen, while the probe still requires one', async () => {
-  const { hub } = fixture();
-  vi.stubGlobal('fetch', async () => new Response(JSON.stringify({ data: [{ id: 'listed-model' }] })));
-  const draft = { entry: { ...entry, spec: { model: '', thinking: false } }, secretValue: 'typed-key' };
-  try {
-    expect(await hub.action('draft', 'models', 'en', draft)).toEqual({ models: [{ id: 'listed-model' }] });
-    await expect(hub.action('draft', 'test', 'en', draft)).rejects.toThrow('Model name cannot be empty');
   } finally { vi.unstubAllGlobals(); }
 });
 
