@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `O pacote de painéis de “${pageId}” não tem o painel “${panelId}”. Painéis disponíveis: ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `O painel “${panelId}” de “${pageId}” não tem o método mount`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `Painel integrado “${name}” não encontrado. Painéis disponíveis: ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `Painel integrado “${name}” não encontrado.`,
 };

@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `Panel-Bundle von „${pageId}“ enthält kein Panel „${panelId}“. Verfügbare Panels: ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `Dem Panel „${panelId}“ von „${pageId}“ fehlt die mount-Methode`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `Integriertes Panel „${name}“ nicht gefunden. Verfügbare Panels: ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `Integriertes Panel „${name}“ nicht gefunden.`,
 };

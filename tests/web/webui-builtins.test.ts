@@ -1,16 +1,14 @@
-/** 内置面板通过 registry 解析，不要求贡献方提供浏览器产物。 */
+/** 页面面板由这一页的扩展提供；声明了 `builtin` 的面板只换成错误卡，不去加载扩展。 */
 import { describe, expect, it, vi } from 'vitest';
 
 const HOST = '../../src/web/client/webui-pages/host.ts';
 const LOADER = '../../src/web/client/webui-pages/loader.ts';
-const BUILTINS = '../../src/web/client/webui-pages/builtins.ts';
 const JSDOM_MODULE = 'jsdom';
 
 type Any = any;
 
 const { WebUiPageHost } = (await import(HOST)) as Any;
 const { WebUiPageLoader } = (await import(LOADER)) as Any;
-const { BUILTIN_PANELS } = (await import(BUILTINS)) as Any;
 const { JSDOM } = (await import(JSDOM_MODULE)) as Any;
 
 const dom = new JSDOM('<!doctype html><body></body>');
@@ -19,32 +17,13 @@ vi.stubGlobal('AbortController', dom.window.AbortController);
 /** 插槽里的面板被结束时记一笔,供断言宿主确实收了场。 */
 const slotDisposals: string[] = [];
 
-const FAKE_BUILTINS = {
-  'demo-settings': {
-    mount: (ctx: Any) => { ctx.root.appendChild(ctx.ui.msgline('内置面板挂上了')); },
-  },
-  'slot-host': {
-    mount: async (ctx: Any) => {
-      const box = ctx.ui.h('div');
-      ctx.root.append(ctx.ui.msgline('宿主面板挂上了'), box);
-      const handle = await ctx.mountSlot('instance', box, { instance: 'primary' });
-      ctx.root.appendChild(ctx.ui.button('收起段落', { onClick: () => handle.dispose() }));
-    },
-  },
-};
-
 const BUNDLE_JS = '/assets/providers/llm-beta-A1B2.js';
 
-/** 全是内置面板,**没有** client:这一页压根没构建出浏览器产物。 */
-const ALL_BUILTIN = {
-  id: 'llm:alpha', kind: 'llm', label: '甲端点', availability: 'active',
-  panels: [{ id: 'settings', title: '实例与模型', builtin: 'demo-settings' }],
-};
-/** 内置 + 自有各一块,两条路在同一页上并存。 */
+/** 声明了 builtin 的一块与自有的一块并存。 */
 const MIXED = {
   id: 'llm:beta', kind: 'llm', label: '乙端点', availability: 'active',
   panels: [
-    { id: 'settings', title: '实例与模型', builtin: 'demo-settings' },
+    { id: 'settings', title: '实例与模型', builtin: 'nope' },
     { id: 'own', title: '自有面板' },
   ],
   client: { js: BUNDLE_JS },
@@ -53,17 +32,11 @@ const MIXED = {
 const SLOTTED = {
   id: 'llm:delta', kind: 'llm', label: '丁端点', availability: 'active',
   panels: [
-    { id: 'settings', title: '实例与模型', builtin: 'slot-host' },
+    { id: 'host', title: '实例与模型' },
     { id: 'runtime', title: '运行时', slot: 'instance' },
   ],
   client: { js: BUNDLE_JS },
 };
-/** 内核不认识的名字。 */
-const UNKNOWN_BUILTIN = {
-  id: 'llm:gamma', kind: 'llm', label: '丙端点', availability: 'active',
-  panels: [{ id: 'settings', title: '实例与模型', builtin: 'nope' }],
-};
-
 function stage(pages: unknown[]) {
   const doc = dom.window.document as Any;
   doc.body.replaceChildren();
@@ -79,6 +52,14 @@ function stage(pages: unknown[]) {
         default: {
           panels: {
             own: { mount: (ctx: Any) => { ctx.root.appendChild(ctx.ui.msgline('自有面板挂上了')); } },
+            host: {
+              mount: async (ctx: Any) => {
+                const box = ctx.ui.h('div');
+                ctx.root.append(ctx.ui.msgline('宿主面板挂上了'), box);
+                const handle = await ctx.mountSlot('instance', box, { instance: 'primary' });
+                ctx.root.appendChild(ctx.ui.button('收起段落', { onClick: () => handle.dispose() }));
+              },
+            },
             runtime: {
               mount: (ctx: Any) => {
                 ctx.root.appendChild(ctx.ui.msgline(`段落挂上了:${ctx.scope.instance}`));
@@ -97,7 +78,6 @@ function stage(pages: unknown[]) {
     root,
     overlayHost,
     loader,
-    builtins: FAKE_BUILTINS,
     router: { addLeaveGuard: () => ({ dispose: () => {} }), navigate: () => {} },
     fetchManifest: async () => ({
       protocolVersion: 1, providers: pages, framework: { capabilities: {} },
@@ -110,40 +90,19 @@ function stage(pages: unknown[]) {
   return { host, imported, errors, root, text: (): string => root.textContent };
 }
 
-describe('内置面板的挂载', () => {
-  it('全是内置面板的页没有 client 也照常挂上,加载器一次都没被调到', async () => {
-    const s = stage([ALL_BUILTIN]);
-    await s.host.load();
-    await s.host.show('llm:alpha', 'settings');
-    expect(s.text()).toContain('内置面板挂上了');
-    expect(s.imported).toEqual([]);
-    expect(s.errors).toEqual([]);
-  });
-
-  it('同一页里内置与自有面板各走各的路', async () => {
+describe('声明了 builtin 的面板', () => {
+  it('换成写明名字的错误卡,不加载扩展;同页自有面板照常挂上', async () => {
     const s = stage([MIXED]);
     await s.host.load();
-    await s.host.show('llm:beta', 'settings');
-    expect(s.text()).toContain('内置面板挂上了');
+    await expect(s.host.show('llm:beta', 'settings')).resolves.toBeUndefined();
+    expect(s.text()).toContain('内置面板「nope」不存在');
+    expect(s.errors).toHaveLength(1);
     expect(s.imported).toEqual([]);
 
     await s.host.show('llm:beta', 'own');
     expect(s.text()).toContain('自有面板挂上了');
-    expect(s.imported).toEqual([BUNDLE_JS]);
-  });
-
-  it('未知内置面板显示可用面板列表，其他页面仍可挂载', async () => {
-    const s = stage([UNKNOWN_BUILTIN, MIXED]);
-    await s.host.load();
-    await expect(s.host.show('llm:gamma', 'settings')).resolves.toBeUndefined();
-    expect(s.text()).toContain('内置面板「nope」不存在');
-    expect(s.text()).toContain('demo-settings');
-    expect(s.errors).toHaveLength(1);
-    expect(s.imported).toEqual([]);
-
-    await s.host.show('llm:beta', 'settings');
-    expect(s.text()).toContain('内置面板挂上了');
     expect(s.text()).not.toContain('nope');
+    expect(s.imported).toEqual([BUNDLE_JS]);
   });
 });
 
@@ -170,14 +129,7 @@ describe('面板插槽', () => {
 
     await s.host.show('llm:delta');
     expect(s.text()).toContain('段落挂上了:primary');
-    await s.host.show('llm:beta', 'settings');
+    await s.host.show('llm:beta', 'own');
     expect(slotDisposals).toEqual(['runtime', 'runtime']);
-  });
-});
-
-describe('内核自带的那张表', () => {
-  it('端点表面板在表里,键就是服务端声明的那个名字', () => {
-    expect(Object.keys(BUILTIN_PANELS)).toContain('llm-settings');
-    expect(typeof BUILTIN_PANELS['llm-settings'].mount).toBe('function');
   });
 });

@@ -86,9 +86,11 @@ bot 的展示名。面板、配置组与提示词文档由贡献方声明;
 同一插槽的多块按声明顺序排,作用域进子面板的 `ctx.scope`;返回的句柄结束这一批。`llm:*` 页的面板
 不走插槽:端点编辑页按声明顺序把它们挂成段落,作用域 `instance` 是端点名(见 [providers.md](providers.md))。
 
-自定义面板需要客户端 bundle,内建面板由框架提供。`src/worlds/<id>/webui/client.ts`(Persona 是
+面板的实现来自贡献方的客户端 bundle。`src/worlds/<id>/webui/client.ts`(Persona 是
 `bots/<名>/webui/client.ts`)默认导出 `{ panels: { <id>: { mount(ctx) } } }`,
-`pnpm build:web` 自动发现并打包;扩展包自己 build,manifest 里声明产物路径。
+`pnpm build:web` 自动发现并打包;扩展包自己 build,manifest 里声明产物路径。面板声明的 `builtin`
+只用来摆放端点编辑页自带的段落(见 [providers.md](providers.md));名字不认识或声明在 `llm:*` 以外的页上,
+这一块显示错误卡。
 
 面板通过 `ctx`(`src/web/shared/client-panel.ts`)访问宿主:`invoke` /
 `invokeBinary` 调用本面板的数据接口,`stream` 订阅推送。通过 `interval` / `timeout` / `frame` / `own`

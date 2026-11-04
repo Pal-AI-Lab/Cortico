@@ -554,8 +554,8 @@ describe('内置面板声明', () => {
     }));
 
   it('合法名字原样投影,与 id / title 并列', () => {
-    expect(withBuiltin('llm-settings').panels).toEqual([
-      { id: 'settings', title: '设置', builtin: 'llm-settings' },
+    expect(withBuiltin('connection-endpoint').panels).toEqual([
+      { id: 'settings', title: '设置', builtin: 'connection-endpoint' },
     ]);
   });
 
@@ -574,7 +574,7 @@ describe('内置面板声明', () => {
   });
 
   it('名字不合法的那块面板整块丢掉,同页其余面板照常上线', () => {
-    for (const bad of ['', '9lives', 'LLM-Settings', 'llm settings', 'llm/settings', '-x', 42, null, {}]) {
+    for (const bad of ['', '9lives', 'Connection-Endpoint', 'connection endpoint', 'connection/endpoint', '-x', 42, null, {}]) {
       const m = toPageManifest(provider({
         panels: [
           { id: 'settings', title: '设置', builtin: bad as string },

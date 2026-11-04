@@ -1,4 +1,4 @@
-<!-- Owner: src/web/server.ts, src/web/framework-release.ts, src/web/auth.ts, src/web/shared/webui-protocol.ts, src/web/shared/client-panel.ts, src/web/client/webui-pages/host.ts, src/web/client/webui-pages/builtins/llm-settings/panel.ts, src/web/client/webui-pages/builtins/llm-settings/pricing-panel.ts, src/web/client/features/providers/index.ts, src/web/client/features/live/index.ts -->
+<!-- Owner: src/web/server.ts, src/web/framework-release.ts, src/web/auth.ts, src/web/shared/webui-protocol.ts, src/web/shared/client-panel.ts, src/web/client/webui-pages/host.ts, src/web/client/features/providers/index.ts, src/web/client/features/providers/pricing.ts, src/web/client/features/live/index.ts -->
 
 # src/web
 
@@ -15,7 +15,7 @@ WebUI 服务端、共享协议和浏览器代码。框架页面由 WebUI 实现�
 | `shared/webui-protocol.ts` | 页面 id、manifest、路由常量与校验规则，供服务端和浏览器共用。 |
 | `shared/client-panel.ts` | 浏览器面板接口：`WebUiPanelContext`、`WebUi`、`WebUiPanel`。 |
 | `client/core/` | API、路由、生命周期、流连接、WebSocket 与语言设置。 |
-| `client/webui-pages/` | 页面宿主、面板加载器、上下文与内置面板，如 `llm-settings`。 |
+| `client/webui-pages/` | 页面宿主、面板加载器与上下文。 |
 | `client/features/` | 框架页面，每页实现 `FrameworkFeature`。 |
 | `client/ui/` | `WebUi` 组件与图标。 |
 | `client/shell/`、`client/theme/` | 页面框架与主题。 |

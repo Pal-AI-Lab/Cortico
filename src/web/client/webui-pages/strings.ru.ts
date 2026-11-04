@@ -41,6 +41,6 @@ export const S: Partial<typeof en> = {
     `В сборке панелей «${pageId}» нет панели «${panelId}». Доступные панели: ${known}`,
   badPanelImpl: (pageId: string, panelId: string) =>
     `У панели «${panelId}» страницы «${pageId}» нет метода mount`,
-  noBuiltinPanel: (name: string, known: string) =>
-    `Встроенная панель «${name}» не найдена. Доступные панели: ${known}`,
+  noBuiltinPanel: (name: string) =>
+    `Встроенная панель «${name}» не найдена.`,
 };

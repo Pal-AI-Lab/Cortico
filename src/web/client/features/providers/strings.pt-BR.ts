@@ -28,4 +28,34 @@ export const S: Partial<typeof en> = {
   required: 'Obrigatório.', jsonObject: 'Digite um objeto JSON válido.', jsonArray: 'Digite um array JSON válido.',
   unsaved: 'Guardado como rascunho; gravado ao salvar.',
   deleteConfirm: 'Excluir esta conexão e todos os arquivos do diretório dela?', referenced: 'Esta conexão é usada por estes bots e não pode ser excluída: ', reload: 'Recarregar',
+  pricingTitle: 'Preços',
+  pricingDescription:
+    'Os registros históricos mantêm a cotação vigente no momento da requisição. Cotações personalizadas substituem os padrões do módulo por modelo e base de custo.',
+  pricingUnset: 'Sem preços personalizados: os preços do módulo valem quando existem; caso contrário, só os tokens são registrados.',
+  meters: {
+    input: 'Entrada',
+    cachedInput: 'Acerto de cache',
+    uncachedInput: 'Entrada sem cache',
+    output: 'Saída',
+    reasoning: 'Raciocínio',
+    total: 'Total',
+  },
+  marginal: 'Custo marginal',
+  equivalent: 'Custo equivalente de API',
+  perMillion: (label: string, rate: number) => `${label} ${rate}/M`,
+  free: 'Explicitamente gratuito',
+  bandsNote: 'Inclui faixas de entrada ou níveis de serviço; cobrado pelo uso real e pelo nível de serviço de cada requisição.',
+  rateCached: 'Acerto de cache / M tokens',
+  rateUncached: 'Entrada sem cache / M tokens',
+  rateOutput: 'Saída / M tokens',
+  currencyField: 'Moeda',
+  currencyRequired: 'Informe uma moeda para salvar esta cotação.',
+  costFormNote:
+    'As tarifas base valem para todos os modelos; faixas de entrada e níveis de serviço ficam nas regras completas abaixo.',
+  costFormOverridden:
+    'Os preços salvos têm um formato que o formulário de três tarifas não consegue expressar; valem as regras completas abaixo. Editar o formulário as substitui.',
+  editFull: 'Regras de preço avançadas (JSON)',
+  fullNote:
+    'Um array vazio restaura a cotação padrão do módulo; um array rules vazio significa explicitamente gratuito. As regras completas aceitam faixas de entrada, níveis de serviço e medidores extras.',
+  viewSnapshot: 'Ver o snapshot de preços ativo',
 };
