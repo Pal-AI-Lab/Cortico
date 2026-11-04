@@ -19,7 +19,7 @@ import { ToolCallLog } from '../../src/core/tool-log.ts';
 import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
-import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED } from '../../src/core/markers.ts';
+import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_BARRIER, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED, streamedPastBarrier } from '../../src/core/markers.ts';
 import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import { functionCall, functionResult, type ContextRecord } from '../../src/protocol/open-responses/context.ts';
@@ -2587,7 +2587,7 @@ describe('MainLoop 输出旁路(outputTap)', () => {
     assertPairing(rig.session.messages);
   });
 
-  it('流式下屏障语义照常:屏障工具之后闭合的调用不提前派发也不执行', async () => {
+  it('流式下屏障语义照常:屏障工具之后闭合、没标 streamsOutput 的调用不提前派发也不执行,带 speak 标签也一样', async () => {
     let ran = 0;
     const stage: ToolDef = {
       name: 'stage',
@@ -2600,7 +2600,8 @@ describe('MainLoop 输出旁路(outputTap)', () => {
     const after: ToolDef = {
       name: 'after',
       description: 'after',
-      tags: [],
+      // speak 标签不代表流式输出，屏障照样跳过
+      tags: ['speak'],
       parameters: { type: 'object', properties: {} },
       handler: async () => {
         ran++;
@@ -2622,6 +2623,38 @@ describe('MainLoop 输出旁路(outputTap)', () => {
     expect(rig.session.messages.find((m) => m.tool_call_id === 'b1')?.content).toBe('已暂存');
     expect(rig.session.messages.find((m) => m.tool_call_id === 'b2')?.content)
       .toBe('[not executed: review the preceding tool result first]');
+    assertPairing(rig.session.messages);
+  });
+
+  it('streamsOutput 的调用不受屏障:在屏障工具之后照常执行,同一回复里被跳过的调用回执列出它', async () => {
+    const executed: string[] = [];
+    const tool = (name: string, extra: Partial<ToolDef>): ToolDef => ({
+      name,
+      description: name,
+      tags: [],
+      parameters: { type: 'object', properties: {} },
+      handler: async () => {
+        executed.push(name);
+        return `${name} done`;
+      },
+      ...extra,
+    });
+    rig = makeRig({
+      outputTap: { onDelta: () => {} },
+      worlds: [makeFakeIO('qq', [tool('stage', { barrierAfter: true }), tool('after', {}), tool('say', { streamsOutput: true })])],
+    });
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+
+    // say 排在被跳过的 after 后面：after 的回执要等 say 执行完才补上说明
+    rig.llm.script(toolReply([{ name: 'stage', id: 'b1' }, { name: 'after', id: 'b2' }, { name: 'say', id: 'b3' }]), textReply(''));
+    rig.pushEvent('[10:05] 阿明: 起草');
+    await until(() => rig.session.messages.some((m) => m.tool_call_id === 'b3'));
+
+    expect(executed).toEqual(['stage', 'say']);
+    expect(rig.session.messages.find((m) => m.tool_call_id === 'b3')?.content).toBe('say done');
+    expect(rig.session.messages.find((m) => m.tool_call_id === 'b2')?.content)
+      .toBe(`${NOT_EXECUTED_BARRIER}\n${streamedPastBarrier(['say'])}`);
     assertPairing(rig.session.messages);
   });
 

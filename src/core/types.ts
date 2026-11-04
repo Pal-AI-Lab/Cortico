@@ -263,9 +263,14 @@ export interface ToolDef extends ToolSchema {
   tags: readonly ToolTag[];
   /**
    * 模型读取本工具结果后才可继续执行动作。
-   * 同一条 assistant 输出中排在它后面的工具调用会被跳过。
+   * 同一条 assistant 输出中排在它后面的工具调用会被跳过，streamsOutput 的工具除外。
    */
   barrierAfter?: boolean;
+  /**
+   * 输出接收器在模型还在输出时就对外执行本工具；主循环的屏障不跳过它，照常按顺序执行。
+   * 只标说话、字幕这类不必先看前面结果的输出，会改外部状态的操作不能标。
+   */
+  streamsOutput?: boolean;
   /**
    * 工具完成后结束本次唤醒，不再调用下一轮模型；期间到达的事件退回总线。
    * 通常同时设置 barrierAfter，使同一条输出中的后续调用得到未执行回执。

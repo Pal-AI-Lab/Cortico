@@ -88,7 +88,9 @@ piggyback 只入队，随后续唤醒一起投递。
 
 参数不是合法 JSON 时返回 `TOOL_FAILED_BAD_ARGS`，不执行工具；未知工具返回 `UNKNOWN_TOOL`；
 handler 抛错，或返回值既不是字符串也不是带字符串 text 的对象，都转为失败回执。有 `outputTap` 时 `EagerDispatch` 可提前执行完整的工具调用，遵守
-`barrierAfter` 顺序，并按 call id 配对结果。回执超过 8000 字符时记录 warn。
+`barrierAfter` 顺序，并按 call id 配对结果。`barrierAfter` 工具之后同一条输出里的调用得到
+`NOT_EXECUTED_BARRIER`；`streamsOutput` 的调用除外，在屏障工具之后照常按顺序执行，被跳过的回执末尾
+用 `streamedPastBarrier` 列出这些工具名。回执超过 8000 字符时记录 warn。
 
 ## 上下文
 

@@ -27,6 +27,9 @@ export const forkUnknownTool = (name: string): string =>
 export const NOT_EXECUTED_INCOMPLETE = '[not executed: function call incomplete]';
 /** 屏障工具(barrierAfter)之后同一条消息里的调用 */
 export const NOT_EXECUTED_BARRIER = '[not executed: review the preceding tool result first]';
+/** 接在屏障跳过的回执之后，列出同一条消息里越过屏障照常执行的 streamsOutput 工具 */
+export const streamedPastBarrier = (names: readonly string[]): string =>
+  `[streaming tools in this response ran as usual: ${names.join(', ')}]`;
 /** fork 已结束，同一条消息中后续的调用不执行。 */
 export const NOT_EXECUTED_THREAD_ENDED = '[not executed: this thread already ended]';
 /** 流在响应中途断了,提前派发的调用没跑完 */
