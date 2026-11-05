@@ -419,7 +419,7 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   }
   if (prebuilt.length) ok.push(`Prebuilt Worlds: ${[...ids].join(', ')} (a restart reuses these instances).`);
 
-  for (const group of parts.webUi?.configGroups ?? []) {
+  for (const group of parts.webUi?.configGroups?.('en') ?? []) {
     if (group.owner !== 'persona') warnings.push(`Config group "${group.id}" has owner "${group.owner}"; a Persona's config group owner must be persona.`);
     failures.push(...configPathProblems(group, '', config));
   }

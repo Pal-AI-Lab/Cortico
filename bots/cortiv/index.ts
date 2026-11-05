@@ -108,7 +108,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
       persona.stopRhythm();
     },
     webUi: {
-      configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
+      configGroups: () => [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
       // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },

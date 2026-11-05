@@ -161,7 +161,7 @@ function webUiContribution(loaded: LoadedConfig<BotConfig>, p: WebUiParts): WebU
   };
 
   return {
-    configGroups: [PERSONA_CONFIG_GROUP],
+    configGroups: () => [PERSONA_CONFIG_GROUP],
     promptDocs,
     // 梦 session 的工具 schema。
     extraToolSchemas: () => dream().getBaseToolSchemas(),

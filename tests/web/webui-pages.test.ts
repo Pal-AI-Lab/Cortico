@@ -217,7 +217,7 @@ describe('manifest 组装', () => {
     const sources = deriveWebUiPageSources(
       facts(),
       { assembly: WorldAssembly.ofInstances([]) },
-      { id: 'demo', label: '示例人格', configGroups: [group] },
+      { id: 'demo', label: '示例人格', configGroups: () => [group] },
     );
     await withApp({ webUiPageSources: sources }, async (base) => {
       const p = byId(await manifestOf(base), 'persona:demo');

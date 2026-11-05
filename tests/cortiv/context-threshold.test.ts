@@ -46,7 +46,7 @@ describe('上下文交接阈值', () => {
     try {
       writeFileSync(join(dir, 'config.json'), JSON.stringify({ context: { maxTokens: 96000 } }), 'utf8');
       const built = definition.build(loadDeployment(definition, dir, REPO_ROOT), []);
-      const ids = (built.webUi?.configGroups ?? []).map((g) => g.id);
+      const ids = (built.webUi?.configGroups?.('zh') ?? []).map((g) => g.id);
       expect(ids).toContain(CORTIV_CONTEXT_CONFIG_GROUP.id);
     } finally {
       rmSync(dir, { recursive: true, force: true });
