@@ -1,6 +1,7 @@
 /** 扩展管理页。扩展信息与运行状态由服务端提供；安装、卸载后需重启进程才能生效。World 与供应商页面共用内容。 */
 
 import { get, post, pickPath } from '../../core/api.ts';
+import { waitForRestart, type Boot } from '../../core/restart.ts';
 import { icon, brandMark } from '../../ui/icons.ts';
 import { notice } from '../../ui/index.ts';
 import { renderMarkdown } from './markdown.ts';
@@ -386,12 +387,7 @@ export function osText(os: readonly string[]): string {
 }
 
 type Target = { name: string; version?: string } | { path: string };
-interface Life { deployment: string; bootId: string; ready: boolean }
 interface PowerReport { result?: string; error?: string; steps?: Array<{ label: string; ok: boolean; elapsedMs: number; detail?: string }> }
-/** 重启后轮询到的进程:同一部署、换了 bootId 且就绪才算回来了。 */
-export function restartOutcome(before: Life, next: Life): 'waiting' | 'ready' | 'wrong-deployment' {
-  return next.deployment !== before.deployment ? 'wrong-deployment' : next.bootId !== before.bootId && next.ready ? 'ready' : 'waiting';
-}
 /** 每个类别页签各自记住的筛选、分页与滚动位置。操作结果不跨刷新保存。 */
 interface CategoryState {
   marketSize: number;
@@ -1722,7 +1718,7 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
     if (!canRestart) return;
     if (!await ui.confirm({ title: supervised ? S.restartConfirmTitle : S.restartNoLoopTitle, body: supervised ? S.restartConfirmBody : S.restartNoLoopBody, danger: !supervised })) return;
     try {
-      const before = await get<Life>('/api/run/lifecycle', { signal });
+      const before = await get<Boot>('/api/run/lifecycle', { signal });
       save(); win.sessionStorage.setItem(storageKey + ':restart', JSON.stringify(before));
       showRestarting(true);
       if (!supervised) message(kind, 'management', S.restartManual);
@@ -1746,16 +1742,13 @@ export function mountExtensionContent(ctx: FeatureContext, kind: Category, works
     restartRoot.classList.toggle('is-restarting', on);
     renderRestart();
   }
-  function watchRestart(before: Life) {
-    const check = async () => {
-      if (signal.aborted) return;
-      try {
-        const next = await get<Life>('/api/run/lifecycle', { signal });
-        if (restartOutcome(before, next) === 'wrong-deployment') { win.sessionStorage.removeItem(storageKey + ':restart'); showRestarting(false); message(kind, 'management', S.otherBot, true); return; }
-        if (restartOutcome(before, next) === 'ready') { win.sessionStorage.removeItem(storageKey + ':restart'); save(); workspace?.beforeReload(); win.location.reload(); return; }
-      } catch { /* Wait while the listener is unavailable. */ }
-      lifecycle.timeout(() => void check(), 1000);
-    }; void check();
+  function watchRestart(before: Boot) {
+    waitForRestart({
+      before,
+      signal,
+      onWrongDeployment: () => { win.sessionStorage.removeItem(storageKey + ':restart'); showRestarting(false); message(kind, 'management', S.otherBot, true); },
+      onReady: () => { win.sessionStorage.removeItem(storageKey + ':restart'); save(); workspace?.beforeReload(); win.location.reload(); },
+    });
   }
   /** The extension catalog's manual install fold, kept open across re-renders. */
   let manualOpen = false;

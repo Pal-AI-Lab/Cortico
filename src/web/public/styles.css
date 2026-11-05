@@ -856,6 +856,7 @@
   .rail-avatar-edit .icon { width: 15px; height: 15px; }
   .rail-avatar:hover .rail-avatar-edit { opacity: 1; }
   .rail-actions { display: flex; flex: none; gap: 2px; }
+  .rail-power { position: relative; display: flex; }
   .rail-name { color: var(--foreground); font: 600 13.5px/1.35 var(--sans); }
   .rail-name:hover { background: var(--hover); }
   .rail-action {
@@ -873,9 +874,43 @@
   }
   .rail-action:hover { background: var(--hover); color: var(--foreground); }
 
-  .rail-shutdown:hover:not(:disabled) {
+  .rail-power-button:hover:not(:disabled) {
     background: color-mix(in srgb, var(--danger) 12%, transparent);
     color: var(--danger);
+  }
+  /* 电源菜单:贴着键的上方展开,右缘与键对齐;窄屏的底栏在顶上,改朝下。 */
+  .rail-menu {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 8px);
+    z-index: 110;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 112px;
+    padding: 4px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--sheet);
+    box-shadow: 0 12px 30px -14px var(--shadow-strong);
+  }
+  .rail-menu[hidden] { display: none; }
+  .rail-menu-item {
+    padding: 8px 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--foreground);
+    font: 500 13px/1.3 var(--sans);
+    text-align: left;
+    cursor: pointer;
+  }
+  .rail-menu-item:hover { background: var(--hover); }
+  .rail-menu-item:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent); outline-offset: -2px; }
+  .rail-menu-danger { color: var(--danger); }
+  .rail-menu-danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+  @media (max-width: 720px) {
+    .rail-menu { top: calc(100% + 6px); bottom: auto; }
   }
   .rail-action.active { background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground); }
   .rail-action:disabled { opacity: .35; cursor: default; }

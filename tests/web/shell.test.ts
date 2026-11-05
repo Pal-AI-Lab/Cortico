@@ -1,4 +1,4 @@
-/** 验证外壳随 capabilities 与 manifest 更新导航，保留浏览器链接行为；关机需两次确认。DOM 与动态 import 方式见 feature-generic.test.ts。 */
+/** 验证外壳随 capabilities 与 manifest 更新导航，保留浏览器链接行为；电源键开菜单，关机需两次确认。DOM 与动态 import 方式见 feature-generic.test.ts。 */
 
 import { describe, expect, it, vi, afterEach } from 'vitest';
 
@@ -130,6 +130,10 @@ class FakeEl {
     while (node) { node.listeners.fire(ev.type, ev); node = node.parent; }
   }
   countListeners(type: string): number { return this.listeners.count(type); }
+  contains(node: FakeEl | null | undefined): boolean {
+    for (let n = node ?? null; n; n = n.parent) if (n === this) return true;
+    return false;
+  }
 
   find(cls: string): FakeEl | null {
     for (const c of this.children) {
@@ -565,9 +569,13 @@ describe('底部运行控制', () => {
     expect(gear.className).not.toContain('active');
   });
 
-  // 关机等待装配层返回各步骤结果。
+  // 电源菜单:关机与重启共用一颗键,各自等装配层返回各步骤结果。
 
-  const shutdownBtn = (el: FakeEl): FakeEl => el.find('rail-shutdown') as FakeEl;
+  const powerWrap = (el: FakeEl): FakeEl => el.find('rail-power') as FakeEl;
+  const powerBtn = (el: FakeEl): FakeEl => el.find('rail-power-button') as FakeEl;
+  const powerMenu = (el: FakeEl): FakeEl => el.find('rail-menu') as FakeEl;
+  const menuItem = (el: FakeEl, label: string): FakeEl =>
+    el.findAll('rail-menu-item').find((item) => item.textContent === label) as FakeEl;
 
   /** 查找 danger 模式的继续按钮。 */
   const proceed = async (doc: FakeDoc): Promise<void> => {
@@ -576,13 +584,39 @@ describe('底部运行控制', () => {
     await flush();
   };
 
-  it('关机接口没挂就整个不画;capabilities 晚到再补出来', async () => {
+  it('关机与重启接口都没挂就整个不画;capabilities 晚到再补出来', async () => {
     stubStatus({});
     const { shell, el } = await mkShell({ capabilities: { run: true } });
-    expect(shutdownBtn(el).hidden).toBe(true);
+    expect(powerWrap(el).hidden).toBe(true);
     shell.setCapabilities({ run: true, shutdown: true });
-    expect(shutdownBtn(el).hidden).toBe(false);
-    expect(shutdownBtn(el).getAttribute('aria-label')).toBe('关机');
+    expect(powerWrap(el).hidden).toBe(false);
+    // 只有关机时名字只说关机;两项都在才说"关机或重启"。
+    expect(powerBtn(el).getAttribute('aria-label')).toBe('关机');
+    shell.setCapabilities({ run: true, shutdown: true, restart: true });
+    expect(powerBtn(el).getAttribute('aria-label')).toBe('关机或重启');
+  });
+
+  it('点电源键开菜单,两项各按自己的能力出现', async () => {
+    stubStatus({});
+    const { el } = await mkShell({ capabilities: { shutdown: true } });
+    expect(powerMenu(el).hidden).toBe(true);
+    click(powerBtn(el));
+    expect(powerMenu(el).hidden).toBe(false);
+    expect(powerBtn(el).getAttribute('aria-expanded')).toBe('true');
+    expect(powerMenu(el).findAll('rail-menu-item').map((item) => [item.textContent, item.hidden]))
+      .toEqual([['关机', false], ['重启', true]]);
+  });
+
+  it('点菜单外面或按 Esc 收起', async () => {
+    stubStatus({});
+    const { doc, el } = await mkShell({ capabilities: { shutdown: true, restart: true } });
+    click(powerBtn(el));
+    doc.listeners.fire('pointerdown', { target: doc.body });
+    expect(powerMenu(el).hidden).toBe(true);
+
+    click(powerBtn(el));
+    doc.listeners.fire('keydown', { key: 'Escape' });
+    expect(powerMenu(el).hidden).toBe(true);
   });
 
   it('要过两道确认才发 POST,逐步结果摊在最后一屏的对话框里', async () => {
@@ -607,7 +641,8 @@ describe('底部运行控制', () => {
     await flush();
     const sent = (): boolean => seen.some((c) => c.url === '/api/run/shutdown');
 
-    click(shutdownBtn(el));
+    click(powerBtn(el));
+    click(menuItem(el, '关机'));
     await flush();
     // 一道确认还不够:这一步之后不该已经发出去
     expect(sent()).toBe(false);
@@ -640,7 +675,8 @@ describe('底部运行控制', () => {
     });
     const { doc, el } = await mkShell({ capabilities: { run: true, shutdown: true } });
     await flush();
-    click(shutdownBtn(el));
+    click(powerBtn(el));
+    click(menuItem(el, '关机'));
     await flush();
     await proceed(doc);
     await proceed(doc);
@@ -659,12 +695,55 @@ describe('底部运行控制', () => {
     });
     const { doc, el } = await mkShell({ capabilities: { run: true, shutdown: true } });
     await flush();
-    click(shutdownBtn(el));
+    click(powerBtn(el));
+    click(menuItem(el, '关机'));
     await flush();
     const cancel = doc.body.findAll('btn').find((b) => b.textContent === '取消') as FakeEl;
     cancel.dispatchEvent({ type: 'click' });
     await flush();
     expect(seen.some((u) => u === '/api/run/shutdown')).toBe(false);
+  });
+
+  it('重启:选重启后发 POST,等新进程就绪期间键上写着正在重启', async () => {
+    const seen: Array<{ url: string; method?: string }> = [];
+    let boots = 0;
+    vi.stubGlobal('fetch', (url: unknown, init?: { method?: string }) => {
+      const path = String(url);
+      seen.push({ url: path, ...(init?.method ? { method: init.method } : {}) });
+      const payload = path === '/api/run/lifecycle'
+        ? { deployment: 'dep', bootId: `b${boots++}`, ready: true }
+        : path === '/api/run/restart' ? { ok: true, steps: [] } : {};
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
+    });
+    const { el } = await mkShell({ capabilities: { shutdown: true, restart: true, supervised: true } });
+    await flush();
+    click(powerBtn(el));
+    click(menuItem(el, '重启'));
+    await flush();
+
+    expect(seen.find((c) => c.url === '/api/run/restart')?.method).toBe('POST');
+    expect(powerBtn(el).getAttribute('aria-label')).toBe('正在重启…');
+  });
+
+  it('没有启动器循环时先问一句,确认后才发重启', async () => {
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const path = String(url);
+      seen.push(path);
+      const payload = path === '/api/run/lifecycle'
+        ? { deployment: 'dep', bootId: 'b1', ready: true }
+        : { ok: true, result: '进程即将退出;没有检测到启动器循环,需要手动重新启动' };
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
+    });
+    const { doc, el } = await mkShell({ capabilities: { shutdown: true, restart: true } });
+    await flush();
+    click(powerBtn(el));
+    click(menuItem(el, '重启'));
+    await flush();
+    expect(seen.some((u) => u === '/api/run/restart')).toBe(false);
+
+    await proceed(doc);
+    expect(seen).toContain('/api/run/restart');
   });
 });
 
