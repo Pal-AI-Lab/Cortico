@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 
 import { loadDeployment } from '../../src/deploy.ts';
 import { readGroupValues } from '../../src/core/config-schema.ts';
-import definition, { CORTIV_CONTEXT_CONFIG_GROUP, type CortiVConfig } from '../../bots/cortiv/index.ts';
+import definition, { cortivContextConfigGroup, type CortiVConfig } from '../../bots/cortiv/index.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
@@ -34,20 +34,20 @@ describe('上下文交接阈值', () => {
   });
 
   it('WebUI 有位置改它:CortiV 声明了这一组,且 96000 落在声明的取值区间里', () => {
-    const prop = CORTIV_CONTEXT_CONFIG_GROUP.schema.properties['context.maxTokens'];
+    const prop = cortivContextConfigGroup('zh').schema.properties['context.maxTokens'];
     expect(prop).toBeTruthy();
     expect(prop.type).toBe('integer');
     expect(prop.minimum!).toBeLessThanOrEqual(96000);
     expect(prop.maximum!).toBeGreaterThanOrEqual(96000);
     // 归Persona(容量归它);core 那组只管历史思维链与首轮对话两条策略
-    expect(CORTIV_CONTEXT_CONFIG_GROUP.owner).toBe('persona');
+    expect(cortivContextConfigGroup('zh').owner).toBe('persona');
 
     const dir = mkdtempSync(join(tmpdir(), 'cortiv-ctx-'));
     try {
       writeFileSync(join(dir, 'config.json'), JSON.stringify({ context: { maxTokens: 96000 } }), 'utf8');
       const built = definition.build(loadDeployment(definition, dir, REPO_ROOT), []);
-      const ids = (built.webUi?.configGroups ?? []).map((g) => g.id);
-      expect(ids).toContain(CORTIV_CONTEXT_CONFIG_GROUP.id);
+      const ids = (built.webUi?.configGroups?.('zh') ?? []).map((g) => g.id);
+      expect(ids).toContain(cortivContextConfigGroup('zh').id);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
@@ -55,7 +55,7 @@ describe('上下文交接阈值', () => {
 
   it('声明的读取路径指向真配置:readGroupValues 报的就是生效值', () => {
     const cfg = loadFrom({ context: { maxTokens: 96000 } });
-    const values = readGroupValues(cfg, CORTIV_CONTEXT_CONFIG_GROUP);
+    const values = readGroupValues(cfg, cortivContextConfigGroup('zh'));
     expect(values['context.maxTokens']).toBe(96000);
     expect(values['context.softRatio']).toBe(cfg.context.softRatio);
   });

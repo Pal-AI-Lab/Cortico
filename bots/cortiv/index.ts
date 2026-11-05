@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 import type { BotDefinition, BotParts } from 'cortico/bot.ts';
 import type { ConfigGroup, CoreConfig, World } from 'cortico/core/types.ts';
 import type { LoadedConfig } from 'cortico/deploy.ts';
+import type { Language } from 'cortico/core/language.ts';
 import { CORE_DEFAULTS } from 'cortico/core/config.ts';
 import { describeTools, type WorldDeclaration, type WorldSection } from 'cortico/world.ts';
 import type { ConsoleConfigSection } from 'cortico/worlds/console/config.ts';
@@ -26,7 +27,9 @@ const DECLARES: readonly WorldDeclaration[] = ['console', 'vtuber', 'bilibili', 
 /**
  * 上下文与交接容量配置归Persona，WebUI 表单与 bots/cormini/persona/config.ts 共用。
  */
-export const CORTIV_CONTEXT_CONFIG_GROUP: ConfigGroup = contextStageConfigGroup('cortiv');
+export function cortivContextConfigGroup(language: Language): ConfigGroup {
+  return contextStageConfigGroup('cortiv', language);
+}
 
 /** 关闭后台构思时，World 的 cognition 句柄不可用。 */
 export const CORTIV_COGNITION_CONFIG_GROUP: ConfigGroup = {
@@ -108,7 +111,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
       persona.stopRhythm();
     },
     webUi: {
-      configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
+      configGroups: (language) => [cortivContextConfigGroup(language), CORTIV_COGNITION_CONFIG_GROUP],
       // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },
