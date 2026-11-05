@@ -161,13 +161,13 @@ export function busy(env: OverlayEnv, title: string, text?: string): Disposable 
   el.setAttribute('aria-modal', 'true');
   el.setAttribute('aria-busy', 'true');
   const layer = openLayer(env, el);
-  const card = h(doc, 'div', 'modalcard');
-  card.setAttribute('style', 'width:min(460px,92vw)');
-  const head = h(doc, 'div', 'modalhead');
-  head.appendChild(h(doc, 'span', 'modaltitle', title));
-  const body = h(doc, 'div', 'modalbody');
+  const card = h(doc, 'div', 'modalcard busycard');
+  const body = h(doc, 'div', 'modalbody busybody');
+  const spin = h(doc, 'div', 'busyspin');
+  spin.setAttribute('aria-hidden', 'true');
+  body.append(spin, h(doc, 'div', 'busytitle', title));
   if (text) body.appendChild(h(doc, 'div', 'busytext', text));
-  card.append(head, body);
+  card.appendChild(body);
   el.appendChild(card);
   return layer;
 }

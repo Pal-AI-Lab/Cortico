@@ -6,7 +6,8 @@ const EXTENSIONS = '../../src/web/client/features/extensions/index.ts';
 
 type Any = any;
 
-const { parseInstallInput, arrangeHits, restartOutcome, osAllowed } = (await import(EXTENSIONS)) as Any;
+const { parseInstallInput, arrangeHits, osAllowed } = (await import(EXTENSIONS)) as Any;
+const { restartOutcome } = (await import('../../src/web/client/core/restart.ts')) as Any;
 
 describe('npm input', () => {
   it('accepts names, scoped names and exact versions or tags only', () => {

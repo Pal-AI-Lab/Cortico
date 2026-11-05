@@ -5,6 +5,7 @@
  */
 
 import { get, post, setConfig } from '../core/api.ts';
+import { waitForRestart, type Boot } from '../core/restart.ts';
 import { buildHash, type Route, type Router } from '../core/router.ts';
 import { featureAvailable, type FrameworkFeature } from '../features/feature.ts';
 import { PROVIDER_ROUTE } from '../webui-pages/host.ts';
@@ -40,6 +41,23 @@ export interface ShellDeps {
   /** 外壳的生命周期。abort 等同于 `dispose()`。 */
   signal?: AbortSignal;
   onError?(err: unknown): void;
+}
+
+/** 关机与重启共用的回执:逐步结果与总结行。 */
+interface PowerStep {
+  label: string;
+  ok: boolean;
+  elapsedMs: number;
+  detail?: string;
+}
+
+interface PowerReport {
+  ok?: boolean;
+  localComplete?: boolean;
+  result?: string;
+  error?: string;
+  steps?: PowerStep[];
+  externalChecks?: Array<{ status: 'verified-ended' | 'still-live' | 'unknown' }>;
 }
 
 export interface WebUiShell {
@@ -151,15 +169,32 @@ export function createShell(deps: ShellDeps): WebUiShell {
   const footActions = ui.h('div', 'rail-actions');
   const runButton = ui.h('button', 'rail-action rail-run');
   runButton.type = 'button';
-  const shutdownButton = ui.h('button', 'rail-action rail-shutdown');
-  shutdownButton.type = 'button';
-  shutdownButton.appendChild(icon(doc, 'power'));
+  // 电源键开一个两项的菜单:关机与重启。菜单贴着键的上方展开。
+  const power = ui.h('div', 'rail-power');
+  const powerButton = ui.h('button', 'rail-action rail-power-button');
+  powerButton.type = 'button';
+  powerButton.setAttribute('aria-haspopup', 'menu');
+  powerButton.setAttribute('aria-expanded', 'false');
+  powerButton.appendChild(icon(doc, 'power'));
+  const powerMenu = ui.h('div', 'rail-menu');
+  powerMenu.hidden = true;
+  powerMenu.setAttribute('role', 'menu');
+  const shutdownItem = ui.h('button', 'rail-menu-item rail-menu-danger');
+  shutdownItem.type = 'button';
+  shutdownItem.setAttribute('role', 'menuitem');
+  shutdownItem.textContent = S.shutdownTitle;
+  const restartItem = ui.h('button', 'rail-menu-item');
+  restartItem.type = 'button';
+  restartItem.setAttribute('role', 'menuitem');
+  restartItem.textContent = S.restartTitle;
+  powerMenu.append(shutdownItem, restartItem);
+  power.append(powerButton, powerMenu);
   const settingsButton = ui.h('button', 'rail-action');
   settingsButton.type = 'button';
   settingsButton.setAttribute('aria-label', S.settingsAria);
   settingsButton.title = S.settingsTitle;
   settingsButton.appendChild(icon(doc, 'settings'));
-  footActions.append(runButton, settingsButton, shutdownButton);
+  footActions.append(runButton, settingsButton, power);
   foot.append(who, footActions);
 
   let paused = false;
@@ -179,17 +214,55 @@ export function createShell(deps: ShellDeps): WebUiShell {
 
   /** 关机请求的锁，等待请求完成后释放。 */
   let shuttingDown = false;
+  /** 重启请求的锁；新进程就绪后页面刷新,在此之前一直按着。 */
+  let restarting = false;
+
+  /** 菜单里此刻能选的项；能力缺席的那一项不画。 */
+  const menuItems = (): HTMLButtonElement[] =>
+    [shutdownItem, restartItem].filter((item) => !item.hidden);
+
+  const closeMenu = (refocus = false): void => {
+    if (powerMenu.hidden) return;
+    powerMenu.hidden = true;
+    powerButton.setAttribute('aria-expanded', 'false');
+    if (refocus) powerButton.focus({ preventScroll: true });
+  };
+
+  const openMenu = (last = false): void => {
+    const items = menuItems();
+    if (!items.length || powerButton.disabled) return;
+    powerMenu.hidden = false;
+    powerButton.setAttribute('aria-expanded', 'true');
+    (last ? items[items.length - 1] : items[0]).focus({ preventScroll: true });
+  };
+
   const renderPower = (): void => {
     const canShutdown = capabilities.shutdown === true;
-    shutdownButton.hidden = !canShutdown;
-    shutdownButton.disabled = !canShutdown || shuttingDown;
-    shutdownButton.setAttribute('aria-label', S.shutdownAria);
-    shutdownButton.title = shuttingDown ? S.finishing : S.shutdownTitle;
+    const canRestart = capabilities.restart === true;
+    const busy = shuttingDown || restarting;
+    power.hidden = !canShutdown && !canRestart;
+    powerButton.disabled = busy;
+    // 只挂了一项时名字就说那一项,不承诺菜单里没有的动作。
+    const label = canShutdown
+      ? (canRestart ? S.powerAria : S.shutdownTitle)
+      : canRestart ? S.restartTitle : S.powerTitle;
+    const status = restarting && capabilities.supervised === true ? S.restarting : S.finishing;
+    powerButton.setAttribute('aria-label', busy ? status : label);
+    powerButton.title = busy ? status : label;
+    powerMenu.setAttribute('aria-label', label);
+    shutdownItem.hidden = !canShutdown;
+    restartItem.hidden = !canRestart;
+    if (busy || power.hidden) closeMenu();
   };
   renderPower();
 
-  const powerAction = async (): Promise<void> => {
-    if (shuttingDown) return;
+  /** 逐步结果一行一条。关机与重启的回执同一形状。 */
+  const stepLines = (steps: readonly PowerStep[]): string[] =>
+    steps.map((s) =>
+      `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.elapsedMs / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
+
+  const shutdownAction = async (): Promise<void> => {
+    if (shuttingDown || restarting) return;
     if (capabilities.shutdown !== true) return;
     const first = await ui.confirm({
       title: S.confirmShutdownTitle,
@@ -207,25 +280,19 @@ export function createShell(deps: ShellDeps): WebUiShell {
     renderPower();
     const hold = ui.toast(S.finishingToast);
     try {
-      const out = await post<{
-        ok?: boolean; localComplete?: boolean; result?: string; error?: string;
-        steps?: Array<{ label: string; ok: boolean; elapsedMs: number; detail?: string }>;
-        externalChecks?: Array<{ status: 'verified-ended' | 'still-live' | 'unknown' }>;
-      }>('/api/run/shutdown', undefined, { signal });
+      const out = await post<PowerReport>('/api/run/shutdown', undefined, { signal });
       if (out?.error) throw new Error(out.error);
       const steps = out?.steps ?? [];
       const localComplete = out?.localComplete ?? steps.every((step) => step.ok);
       const externalUnverified = (out?.externalChecks ?? [])
         .some((check) => check.status !== 'verified-ended');
-      const lines = steps.map((s) =>
-        `${s.ok ? '✓' : '✗'} ${s.label} · ${(s.elapsedMs / 1000).toFixed(1)}s${s.ok ? '' : ` — ${s.detail ?? S.stepIncomplete}`}`);
       void notice(ui, {
         title: !localComplete
           ? S.resultLocalIncomplete
           : externalUnverified
             ? S.resultExternalUnverified
             : out?.ok === false ? S.resultUnverified : S.doneShutdown,
-        body: [out?.result ?? S.resultDefault, '', ...lines].join('\n'),
+        body: [out?.result ?? S.resultDefault, '', ...stepLines(steps)].join('\n'),
       });
     } catch (err) {
       if ((err as { name?: string } | null)?.name === 'AbortError') return;
@@ -239,7 +306,105 @@ export function createShell(deps: ShellDeps): WebUiShell {
       renderPower();
     }
   };
-  shutdownButton.addEventListener('click', () => { void powerAction(); }, { signal });
+
+  /**
+   * 重启 = 落标志 + 规范关机,启动器循环再把新进程拉起来。旧进程退出后连接会断,
+   * 所以回执没到也算预期;页面等新进程就绪后刷新,好让 bot 与 World 的更新生效。
+   * 没有启动器循环时这就是一次关机,先问一句。
+   */
+  const restartAction = async (): Promise<void> => {
+    if (restarting || shuttingDown) return;
+    if (capabilities.restart !== true) return;
+    if (capabilities.supervised !== true) {
+      const go = await ui.confirm({ title: S.restartNoLoopTitle, body: S.restartNoLoopBody, danger: true });
+      if (!go || signal.aborted) return;
+    }
+    restarting = true;
+    renderPower();
+    // 监管中的重启会回来:整页罩住,免得操作落到正在退出的进程上。没有监管时只退出,走回执。
+    const supervised = capabilities.supervised === true;
+    const curtain = supervised ? ui.busy(S.restarting) : ui.toast(S.finishingToast);
+    let waiting = false;
+    try {
+      const before = await get<Boot>('/api/run/lifecycle', { signal });
+      let out: PowerReport | null = null;
+      try {
+        out = await post<PowerReport>('/api/run/restart', undefined, { signal });
+      } catch (err) {
+        // 进程退得比回执快时连接会断:这是预期之一,重启照样在发生。
+        if ((err as { status?: number } | null)?.status) throw err;
+      }
+      if (out?.error) throw new Error(out.error);
+      if (signal.aborted) return;
+      const steps = out?.steps ?? [];
+      if (steps.some((step) => !step.ok)) {
+        void notice(ui, {
+          title: S.restartIncomplete,
+          body: [out?.result ?? S.resultDefault, '', ...stepLines(steps)].join('\n'),
+        });
+      }
+      if (!supervised) {
+        void notice(ui, { title: S.restartNoLoopTitle, body: out?.result ?? S.restartManual });
+        return;
+      }
+      waiting = true;
+      waitForRestart({
+        before,
+        signal,
+        onReady: () => { doc.defaultView?.location.reload(); },
+        onWrongDeployment: () => {
+          curtain.dispose();
+          restarting = false;
+          renderPower();
+          ui.toast(S.restartOtherDeployment, 'bad');
+        },
+      });
+    } catch (err) {
+      if ((err as { name?: string } | null)?.name === 'AbortError') return;
+      onError(err);
+      ui.toast(String((err as Error)?.message ?? err), 'bad');
+    } finally {
+      if (!waiting) {
+        curtain.dispose();
+        restarting = false;
+        renderPower();
+      }
+    }
+  };
+
+  powerButton.addEventListener('click', () => {
+    if (powerMenu.hidden) openMenu();
+    else closeMenu();
+  }, { signal });
+  powerButton.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+    event.preventDefault();
+    openMenu(event.key === 'ArrowUp');
+  }, { signal });
+  powerMenu.addEventListener('keydown', (event) => {
+    const items = menuItems();
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      const at = items.indexOf(doc.activeElement as HTMLButtonElement);
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      items[(at + step + items.length) % items.length]?.focus();
+    } else if (event.key === 'Home' || event.key === 'End') {
+      event.preventDefault();
+      items[event.key === 'Home' ? 0 : items.length - 1]?.focus();
+    }
+  }, { signal });
+  // 焦点离开电源键与菜单就收起(Tab 出界);点外面也收起,Esc 收起并把焦点还给键。
+  power.addEventListener('focusout', (event) => {
+    if (!power.contains(event.relatedTarget as Node | null)) closeMenu();
+  }, { signal });
+  doc.addEventListener('pointerdown', (event) => {
+    if (!powerMenu.hidden && !power.contains(event.target as Node)) closeMenu();
+  }, { signal });
+  doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !powerMenu.hidden) closeMenu(true);
+  }, { signal });
+  shutdownItem.addEventListener('click', () => { closeMenu(); void shutdownAction(); }, { signal });
+  restartItem.addEventListener('click', () => { closeMenu(); void restartAction(); }, { signal });
 
   runButton.addEventListener('click', () => {
     if (runPending || capabilities.run !== true) return;
