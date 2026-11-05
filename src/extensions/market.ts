@@ -7,7 +7,7 @@
 
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { baseLanguage, LocalizedError, type Language } from '../core/language.ts';
+import { LocalizedError, pick, type Language, type LanguageTable } from '../core/language.ts';
 import type { Logger, ToolTag } from '../core/types.ts';
 import { fetchFailure, PACKAGE_NAME } from '../extensions.ts';
 import type { ProviderAuth, ProviderDescribe } from '../providers/base.ts';
@@ -59,17 +59,18 @@ const COMMENTS_PAGE_SIZE = 5;
 /** GitHub GraphQL 一页最多 100 条:每条评论的回复只取前 100 条,评分的评论数只数前 100 条评论下的回复。 */
 const GRAPHQL_PAGE_MAX = 100;
 
-type Bilingual = { zh: string; en: string };
+/** 索引里官方写的文字:zh、en 必有,其余界面语言可缺,缺的按 `pick` 回退。 */
+type IndexText = LanguageTable<string>;
 
 /** `index.json`:官方维护的词表、官方账号、认证、拉黑与覆盖。 */
 interface IndexFile {
   schema: number;
   official: { maintainers: string[]; githubOwners: string[] };
-  tags: Record<string, { style?: MarketTag['style']; label: Bilingual; hint: Bilingual }>;
+  tags: Record<string, { style?: MarketTag['style']; label: IndexText; hint: IndexText }>;
   certified?: string[];
   newDays?: number;
-  blocked?: { packages?: Record<string, Bilingual>; publishers?: Record<string, Bilingual> };
-  overrides?: Record<string, { addTags?: string[]; removeTags?: string[]; note?: Bilingual; supersededBy?: string }>;
+  blocked?: { packages?: Record<string, IndexText>; publishers?: Record<string, IndexText> };
+  overrides?: Record<string, { addTags?: string[]; removeTags?: string[]; note?: IndexText; supersededBy?: string }>;
 }
 
 type Locale = { displayName?: string; description?: string };
@@ -140,7 +141,6 @@ function marketError(message: (t: ReturnType<typeof text>) => string, status: nu
   return new LocalizedError((language) => message(text(language)), status);
 }
 
-const pickText = (value: Bilingual, language: Language) => baseLanguage(language) === 'zh' ? value.zh : value.en;
 const discussionUrl = (num: number) => `https://github.com/${REPO_OWNER}/${REPO_NAME}/discussions/${num}`;
 /** 包名当文件名,作用域包的 `/` 换成 `__`。 */
 const fileName = (name: string) => name.replace('/', '__');
@@ -165,7 +165,7 @@ const strings = <T extends string = string>(value: unknown): T[] => Array.isArra
 function localizeDescribe(raw: unknown, language: Language): ExtensionDescribe | undefined {
   if (!isItem(raw)) return undefined;
   const say = (value: unknown): string | undefined => typeof value === 'string' ? value
-    : isItem(value) && typeof value.zh === 'string' && typeof value.en === 'string' ? (value as Bilingual)[authorLanguage(language)] : undefined;
+    : isItem(value) && typeof value.zh === 'string' && typeof value.en === 'string' ? (value as { zh: string; en: string })[authorLanguage(language)] : undefined;
   const out: ExtensionDescribe = {};
   const tools = items(raw.tools).flatMap((t) => {
     const summary = say(t.summary);
@@ -308,7 +308,7 @@ export class ExtensionMarket {
         ...(listed?.summary ? { summary: listed.summary } : {}),
         ...(listed?.changelog ? { changelog: listed.changelog } : {}),
         ...(tags.length ? { tags } : {}),
-        ...(override?.note ? { note: pickText(override.note, language) } : {}),
+        ...(override?.note ? { note: pick(language, override.note) } : {}),
         ...(index.certified?.includes(hit.name) ? { certified: true } : {}),
         ...(official ? { official: true } : {}),
         ...(isNew ? { isNew: true } : {}),
@@ -317,7 +317,7 @@ export class ExtensionMarket {
       };
     });
     const tags = Object.fromEntries(Object.entries(vocab).map(([id, tag]) => [id, {
-      label: pickText(tag.label, language), hint: pickText(tag.hint, language), ...(tag.style ? { style: tag.style } : {}),
+      label: pick(language, tag.label), hint: pick(language, tag.hint), ...(tag.style ? { style: tag.style } : {}),
     }]));
     return { hits: merged, index: { tags, ...(index.newDays !== undefined ? { newDays: index.newDays } : {}), ...(stale ? { stale } : {}) } };
   }
@@ -346,7 +346,7 @@ export class ExtensionMarket {
   blocked(name: string, language: Language): string | undefined {
     const index = this.index ??= this.readJsonFile<IndexFile>(INDEX_CACHE_FILE);
     const reason = index && this.blockedEntry(index, name);
-    return reason ? pickText(reason, language) : undefined;
+    return reason ? pick(language, reason) : undefined;
   }
 
   /** 读索引用的源:`configured` 是扩展页配的,没配时 null;`base` 是先问的那一处。 */
@@ -481,7 +481,7 @@ export class ExtensionMarket {
     if (!PACKAGE_NAME.test(name)) throw marketError((t) => t.badPackageName(name), 400);
   }
 
-  private blockedEntry(index: IndexFile, name: string, publisher?: string): Bilingual | undefined {
+  private blockedEntry(index: IndexFile, name: string, publisher?: string): IndexText | undefined {
     return index.blocked?.packages?.[name] ?? (publisher ? index.blocked?.publishers?.[publisher] : undefined);
   }
 
