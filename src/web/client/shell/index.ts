@@ -321,7 +321,9 @@ export function createShell(deps: ShellDeps): WebUiShell {
     }
     restarting = true;
     renderPower();
-    const hold = ui.toast(S.restarting);
+    // 监管中的重启会回来:整页罩住,免得操作落到正在退出的进程上。没有监管时只退出,走回执。
+    const supervised = capabilities.supervised === true;
+    const curtain = supervised ? ui.busy(S.restarting) : ui.toast(S.finishingToast);
     let waiting = false;
     try {
       const before = await get<Boot>('/api/run/lifecycle', { signal });
@@ -341,7 +343,7 @@ export function createShell(deps: ShellDeps): WebUiShell {
           body: [out?.result ?? S.resultDefault, '', ...stepLines(steps)].join('\n'),
         });
       }
-      if (capabilities.supervised !== true) {
+      if (!supervised) {
         void notice(ui, { title: S.restartNoLoopTitle, body: out?.result ?? S.restartManual });
         return;
       }
@@ -351,6 +353,7 @@ export function createShell(deps: ShellDeps): WebUiShell {
         signal,
         onReady: () => { doc.defaultView?.location.reload(); },
         onWrongDeployment: () => {
+          curtain.dispose();
           restarting = false;
           renderPower();
           ui.toast(S.restartOtherDeployment, 'bad');
@@ -361,8 +364,8 @@ export function createShell(deps: ShellDeps): WebUiShell {
       onError(err);
       ui.toast(String((err as Error)?.message ?? err), 'bad');
     } finally {
-      hold.dispose();
       if (!waiting) {
+        curtain.dispose();
         restarting = false;
         renderPower();
       }

@@ -725,6 +725,49 @@ describe('底部运行控制', () => {
     expect(powerBtn(el).getAttribute('aria-label')).toBe('正在重启…');
   });
 
+  it('重启期间整页罩一层遮罩,新进程回来前一直挡着', async () => {
+    let boots = 0;
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const path = String(url);
+      const payload = path === '/api/run/lifecycle'
+        ? { deployment: 'dep', bootId: `b${boots++}`, ready: true }
+        : { ok: true, steps: [] };
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
+    });
+    const { doc, el } = await mkShell({ capabilities: { shutdown: true, restart: true, supervised: true } });
+    await flush();
+    expect(doc.body.find('busy')).toBe(null);
+
+    click(powerBtn(el));
+    click(menuItem(el, '重启'));
+    await flush();
+
+    const busy = doc.body.find('busy');
+    expect(busy).not.toBe(null);
+    expect(busy!.find('busytitle')!.textContent).toBe('正在重启…');
+  });
+
+  it('重启后应答的是另一个部署:撤掉遮罩并说明', async () => {
+    let reads = 0;
+    vi.stubGlobal('fetch', (url: unknown) => {
+      const path = String(url);
+      const payload = path === '/api/run/lifecycle'
+        ? (reads++ === 0
+          ? { deployment: 'dep', bootId: 'b1', ready: true }
+          : { deployment: 'other', bootId: 'b2', ready: true })
+        : { ok: true, steps: [] };
+      return Promise.resolve({ ok: true, status: 200, text: () => Promise.resolve(JSON.stringify(payload)) });
+    });
+    const { doc, el } = await mkShell({ capabilities: { shutdown: true, restart: true, supervised: true } });
+    await flush();
+    click(powerBtn(el));
+    click(menuItem(el, '重启'));
+    await flush(20);
+
+    expect(doc.body.find('busy')).toBe(null);
+    expect(doc.body.textContent).toContain('端口上应答的是另一个部署');
+  });
+
   it('没有启动器循环时先问一句,确认后才发重启', async () => {
     const seen: string[] = [];
     vi.stubGlobal('fetch', (url: unknown) => {

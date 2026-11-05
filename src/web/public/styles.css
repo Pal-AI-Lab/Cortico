@@ -680,7 +680,22 @@
 
 
   .modal.busy { cursor: progress; }
+  .busycard { width: min(320px, 92vw); }
+  .busybody {
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+    padding: 30px 18px; text-align: center;
+  }
+  .busyspin {
+    width: 26px; height: 26px; flex: none;
+    border: 2.5px solid color-mix(in srgb, var(--accent) 22%, transparent);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: busyspin .9s linear infinite;
+  }
+  .busytitle { font: 600 14px var(--sans); color: var(--ink); }
   .busytext { font-size: 13px; color: var(--ink-soft); white-space: pre-wrap; }
+  @keyframes busyspin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .busyspin { animation-duration: 2.6s; } }
 
 
   .logview { border: 1px solid var(--line); border-radius: 11px; background: var(--sheet); overflow: auto; padding: 4px 0; }
