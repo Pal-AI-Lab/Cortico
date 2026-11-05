@@ -1209,14 +1209,15 @@ describe('drawer', () => {
 // ---------------------------------------------------------------------------
 
 describe('busy', () => {
-  it('结构是 .modal.busy + .modalcard，文本进 .busytext，且标着 aria-busy', async () => {
+  it('结构是 .modal.busy + .modalcard，标题与加载动画在卡里，文本进 .busytext，且标着 aria-busy', async () => {
     const { ui, host } = await mkUi();
     ui.busy('关闭中', '正在重启……\n回来后这一页会自动刷新。');
     const modal = host.children[0] as FakeEl;
     expect(modal.className).toBe('modal busy');
     expect(modal.getAttribute('aria-busy')).toBe('true');
     expect(modal.getAttribute('aria-modal')).toBe('true');
-    expect((modal.find('modaltitle') as FakeEl).textContent).toBe('关闭中');
+    expect((modal.find('busytitle') as FakeEl).textContent).toBe('关闭中');
+    expect(modal.find('busyspin')).not.toBeNull();
     const text = modal.find('busytext') as FakeEl;
     expect(text.textContent).toBe('正在重启……\n回来后这一页会自动刷新。');
     // 不给正文就不建空节点
