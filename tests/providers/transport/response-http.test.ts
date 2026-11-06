@@ -128,3 +128,23 @@ data: ${JSON.stringify(event)}
     } finally { server.close(); }
   });
 });
+
+
+describe('terminal generation failure', () => {
+  it.each([true, false])('returns failed response evidence after one physical attempt (stream=%s)', async streaming => {
+    const response = { id: 'failed-response', model: 'test', status: 'failed', output: [],
+      error: { code: 'server_error', message: 'Generated tool arguments violate the declared schema.' }, usage: null };
+    const fetcher = vi.fn(async () => new Response(streaming
+      ? 'data: ' + JSON.stringify({ type: 'response.created', sequence_number: 0, response: { ...response, status: 'in_progress', error: null } }) + '\n\n'
+        + 'data: ' + JSON.stringify({ type: 'response.failed', sequence_number: 1, response }) + '\n\n'
+      : JSON.stringify(response), { status: 200, headers: { 'content-type': streaming ? 'text/event-stream' : 'application/json' } }));
+    vi.stubGlobal('fetch', fetcher);
+    const provider = new ResponsesProvider({ baseUrl: 'https://fixture.test/v1', apiKey: 'key' });
+    const error = await provider.respond({ model: 'test', input: 'hi' }, streaming ? { onEvent: () => {} } : {}).catch(e => e);
+    expect(error).toBeInstanceOf(GenerationError);
+    expect(error.partial).toMatchObject({ id: response.id, status: 'failed', error: response.error });
+    expect(error.attempts).toHaveLength(1);
+    expect(error.attempts[0]).toMatchObject({ status: 200, outcome: 'failed', meters: { input: null, output: null } });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+});
