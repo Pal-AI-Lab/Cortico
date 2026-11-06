@@ -46,6 +46,12 @@ Core 重建 system 前缀、按容量截断保留内容并重置 session。
 阶段预算(`context.maxTokens`、`softRatio`、`keepRatio`)是 Persona 自己的配置,不在 Core 里。
 Cormini 一系的默认:64000 / 0.85 / 1/3;控制台页上下文圈的分母与黄线读的是这几个数。
 
+会修改出站输入的 `ResponseClient` 可在发请求前调用 `GenerateOptions.onInputEstimate(tokens)`，
+报告最终输入及工具/格式 schema 的本地估算，不含预留输出。Core 用它与随后新增的条目判断容量，
+请求失败时也保留这个估算；成功返回的实际用量会替换它。估算不写入供应商 usage，
+`countedTokens` 在仅有估算时为 0。请求结束、取消或 session 重置后的旧回调无效；
+供应商报告的真实超限仍触发交接。不提供此回调的客户端沿用原有计数。
+
 ## fork
 
 `ForkOptions { id, messages, tools?, stopWhen?, wrapUpHint?, capNote?, nudge? }` 创建临时 session，

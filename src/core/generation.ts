@@ -70,6 +70,12 @@ export interface GenerateOptions {
    * pass it; the comparison request a transport sends while diagnosing a failure omits it.
    */
   onEvent?: (event: StreamEvent) => void;
+  /**
+   * A request-transforming client may report the prepared input's local token
+   * estimate before dispatch. This is not provider usage and must not populate meters.
+   * Include the final input and tool/format schemas, excluding output reservation.
+   */
+  onInputEstimate?: (tokens: number) => void;
   role?: string;
   sessionId?: string;
   /** Local context retains output reasoning and media references alongside the request Items. */

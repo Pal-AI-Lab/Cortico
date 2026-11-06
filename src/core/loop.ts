@@ -329,10 +329,11 @@ export class MainLoop {
   /** 同一次停滞已报次数(首报计 1) */
   private watermarkStallReports = 0;
   /**
-   * 最近成功请求的输入与输出 token 总数，覆盖前 records 条（含响应）。
-   * 新增条目使用本地估算，下次成功后更新计数；上下文整体重写后失效。
+   * 最近准备的输入估算，或成功请求的输入与输出计数，覆盖前 records 条。
+   * 新增条目另行估算；真实用量替换估算，上下文重写后失效。
    */
-  private anchor: { records: number; tokens: number; reasoningTokens: number } | null = null;
+  private anchor: { records: number; tokens: number; reasoningTokens: number; estimated?: boolean } | null = null;
+  private contextRevision = 0;
   /** 当前 system 前缀和工具表采用的可见 World 集合。 */
   private appliedVisibleWorlds: Set<string> | null = null;
   /** 当前前缀中各可见 World 的工具签名，用于检测工具表漂移。 */
@@ -365,7 +366,7 @@ export class MainLoop {
   constructor(deps: MainLoopDeps) {
     this.d = deps;
     this.phase = { state: 'idle', running: [], enteredAt: nowIso(deps.cfg.timezone) };
-    deps.session.onReset(() => { this.anchor = null; });
+    deps.session.onReset(() => { this.anchor = null; this.contextRevision++; });
   }
 
   /** WebUI 订阅 RunPhase 变化;与 World.onRunPhase 同时、同步调用。 */
@@ -1247,18 +1248,28 @@ export class MainLoop {
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
       const prefixHash = prefixFingerprint(outbound);
+      const requestRecords = session.records.length;
+      const requestRevision = this.contextRevision;
       try {
         // role 仅用于故障分类，不写入请求体。
         const llmStart = Date.now();
         let res: Awaited<ReturnType<typeof llm.respond>>;
+        let acceptingEstimate = true;
         try {
           res = await llm.respond(responseRequest(spec, outbound, schemas), {
             context: outbound, nativeSpec: spec, onEvent,
+            onInputEstimate: tokens => {
+              if (!acceptingEstimate || !this.active(generation) || this.currentRound !== flight
+                || flight.controller.signal.aborted || this.contextRevision !== requestRevision
+                || !Number.isSafeInteger(tokens) || tokens < 0) return;
+              this.anchor = { records: requestRecords, tokens, reasoningTokens: 0, estimated: true };
+            },
             role: decl.id,
             sessionId: this.mainTrack?.id,
             signal: flight.controller.signal,
           });
         } finally {
+          acceptingEstimate = false;
           llmMs = Date.now() - llmStart;
         }
         assistant = responseRecords(res.response, res.origin);
@@ -1585,8 +1596,8 @@ export class MainLoop {
   }
 
   /**
-   * 使用上次成功请求的 token 计数，加上此后新增条目的本地估算。
-   * 禁用历史推理时扣除上次输出中的推理量；无上游计数时估算完整请求，含合成首轮对话。
+   * 使用最近准备输入的估算或上游计数，加上此后新增条目的本地估算。
+   * 禁用历史推理时扣除上次输出中的推理量；无锚点时估算完整请求，含合成首轮对话。
    */
   estTokens(): number {
     const { anchor } = this;
@@ -1601,7 +1612,7 @@ export class MainLoop {
   /** 上游已计数的部分；全部由本地估算时为 0。 */
   private countedTokens(): number {
     const { anchor } = this;
-    if (!anchor || this.d.session.records.length < anchor.records) return 0;
+    if (!anchor || anchor.estimated || this.d.session.records.length < anchor.records) return 0;
     return anchor.tokens - (this.d.cfg.context.keepPastThinking ? 0 : anchor.reasoningTokens);
   }
 
