@@ -1850,6 +1850,108 @@ describe('MainLoop user事件协议', () => {
     }
   });
 
+  it('uses prepared input after a failed projected request without counting the retained archive as context', async () => {
+    const native = new FakeLLM();
+    native.throwNext = new LLMError('Invalid tool output', 0, 'Undeclared tool');
+    let attempts = 0;
+    let handoffs = 0;
+    const archive = 'Retained archive outside the request. '.repeat(3000);
+    rig = makeRig({
+      preSession: [{ role: 'user', content: archive }],
+      context: { hardTokens: () => 3000 },
+      onHandoff: async () => { handoffs++; return { tail: [] }; },
+      llm: { respond: async (request, options) => {
+        options?.onInputEstimate?.(100);
+        attempts++;
+        return native.respond(request, options);
+      } },
+    });
+    try {
+      rig.start();
+      await until(() => native.calls.length >= 2 || handoffs > 0);
+      expect(handoffs).toBe(0);
+      await until(() => rig.loop.getStatus().phase.state === 'idle');
+      expect(attempts).toBe(2);
+      expect(rig.session.messages.some(m => m.content === archive)).toBe(true);
+      expect(rig.loop.getStatus().context.countedTokens).toBe(0);
+      expect(rig.loop.estTokens()).toBeLessThan(3000);
+      const before = rig.loop.estTokens();
+      rig.session.append({ role: 'user', content: 'An actually new message. '.repeat(20) });
+      expect(rig.loop.estTokens()).toBeGreaterThan(before);
+      native.usage = { promptTokens: 800, completionTokens: 100, cacheHitTokens: 0, cacheMissTokens: 800 };
+      rig.pushEvent('Continue from the confirmed result.');
+      await until(() => rig.loop.getStatus().context.countedTokens === 900);
+      expect(rig.loop.estTokens()).toBe(900);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('ignores input estimates after the request finishes or the session is reset', async () => {
+    const native = new FakeLLM();
+    let report: ((tokens: number) => void) | undefined;
+    rig = makeRig({ llm: { respond: async (request, options) => {
+      report = options?.onInputEstimate;
+      report?.(100);
+      return native.respond(request, options);
+    } } });
+    try {
+      rig.start();
+      await until(() => native.calls.length === 1);
+      await until(() => rig.loop.getStatus().phase.state === 'idle');
+      const estimate = rig.loop.estTokens();
+      const oldReport = report;
+      oldReport?.(1000000);
+      expect(rig.loop.estTokens()).toBe(estimate);
+      await rig.loop.handoffContext();
+      const reset = rig.loop.estTokens();
+      oldReport?.(2000000);
+      expect(rig.loop.estTokens()).toBe(reset);
+      expect(rig.loop.getStatus().context.countedTokens).toBe(0);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('retains genuine provider overflow handling after a prepared input estimate', async () => {
+    let handoffs = 0;
+    const native = new FakeLLM();
+    native.throwNext = new LLMError('Input exceeds context length', 400, 'context length exceeded');
+    rig = makeRig({
+      context: { contextOverflow: error => error.status === 400 && /context length/.test(error.body) },
+      onHandoff: async () => { handoffs++; return { tail: [] }; },
+      llm: { respond: async (request, options) => {
+        options?.onInputEstimate?.(100);
+        return native.respond(request, options);
+      } },
+    });
+    try {
+      rig.start();
+      await until(() => handoffs === 1);
+      expect(handoffs).toBe(1);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('rejects invalid estimates and cannot restore an anchor reset during dispatch', async () => {
+    const native = new FakeLLM();
+    let report: ((tokens: number) => void) | undefined;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    rig = makeRig({ llm: { respond: async (request, options) => {
+      report = options?.onInputEstimate;
+      report?.(100);
+      for (const invalid of [-1, 1.5, NaN, Infinity]) report?.(invalid);
+      await gate;
+      return native.respond(request, options);
+    } } });
+    try {
+      rig.start();
+      await until(() => report !== undefined);
+      expect(rig.loop.estTokens()).toBe(100);
+      rig.session.reset([{ role: 'user', content: 'New context after reset.' }]);
+      const reset = rig.loop.estTokens();
+      report?.(1000000);
+      expect(rig.loop.estTokens()).toBe(reset);
+      expect(rig.loop.getStatus().context.countedTokens).toBe(0);
+    } finally { release(); await rig.cleanup(); }
+  });
+
   it('丢弃历史思维链时,锚点那一发的推理量从下一发输入里扣掉', async () => {
     rig = makeRig({ cfgPatch: (cfg) => { cfg.context = { ...cfg.context, keepPastThinking: false }; } });
     try {
