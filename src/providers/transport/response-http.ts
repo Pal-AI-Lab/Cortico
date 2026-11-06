@@ -215,6 +215,9 @@ export async function generate(request: Request, options: GenerateOptions, origi
         break;
       }
       lastError = error;
+      // A terminal resource is a completed provider attempt, even when generation failed.
+      // Return its evidence to the caller instead of retrying the same request.
+      if (partial?.status === 'failed') break;
       if (!sent || committed || runaway || error instanceof StreamErrorEvent || (!streaming && error instanceof ResponseProtocolError)) break;
       const status = error instanceof LLMError ? error.status : 0;
       if (status !== 0 && status !== 408 && status !== 429 && status < 500) break;
