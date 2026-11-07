@@ -8,7 +8,7 @@ import { nullLogger } from '../../../src/core/util.ts';
 import { ProviderSettings } from '../../../src/providers/webui/settings.ts';
 import { ProviderRegistry } from '../../../src/providers/registry.ts';
 import module from '../../../src/providers/llamacpp/index.ts';
-import { LAUNCH_DEFAULTS } from '../../../src/providers/llamacpp/options.ts';
+import { defaultBackend, LAUNCH_DEFAULTS } from '../../../src/providers/llamacpp/options.ts';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -21,7 +21,7 @@ it('declared runtime fields validate and persist only the selected endpoint', ()
   const cfg: CoreConfig = structuredClone(CORE_DEFAULTS);
   const entry = module.normalize({
     kind: module.id, baseUrl: 'http://127.0.0.1:8090/v1',
-    options: { runtime: { backend: 'cpu' } },
+    options: { runtime: { backend: defaultBackend() } },
   });
   cfg.providers = { 'local.one': entry, other: structuredClone(entry) };
   cfg.activeProvider = 'local.one';

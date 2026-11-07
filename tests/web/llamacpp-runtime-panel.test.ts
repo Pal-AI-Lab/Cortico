@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { LAUNCH_DEFAULTS } from '../../src/providers/llamacpp/options.ts';
+import { defaultBackend, LAUNCH_DEFAULTS } from '../../src/providers/llamacpp/options.ts';
 import { ProviderRegistry } from '../../src/providers/registry.ts';
 import { ProviderSettings } from '../../src/providers/webui/settings.ts';
 import { nullLogger } from '../../src/core/util.ts';
@@ -85,7 +85,7 @@ async function mountRuntimePanel(
 }
 
 it('runtime schema fields save through the configuration transaction and retain rejected values', async () => {
-  const panel = await mountRuntimePanel({ options: { runtime: { backend: 'cpu' } } });
+  const panel = await mountRuntimePanel({ options: { runtime: { backend: defaultBackend() } } });
   try {
     change(panel.field('GPU 层数(-ngl)'), '0');
     await flush();
