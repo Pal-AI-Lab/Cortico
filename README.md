@@ -187,4 +187,5 @@ pnpm build:web
 Building something cool with Cortico? Submit a pull request to share it here!
 
 * [@可缇Corti](https://space.bilibili.com/3707044056009191) — An AI VTuber from the future
+* [Cortico Multi-Role Manager](https://github.com/lkon2112/cortico-multi-role-manager) — A standalone dashboard for unified login, role switching, cloning and scheduled operation.
 * ...and more!
