@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/llamacpp/native.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/transport/image-fallback.ts, src/providers/llamacpp/native.ts -->
 
 # src/providers
 
@@ -90,6 +90,11 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 `response-assembly.ts` 把两种流归一成 Open Responses 的 Item 流,
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
+
+`image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落，两个内建模块的 client 都套着它:请求带图、上游回 413,或回 400 / 422
+且模块的 `contextOverflow` 不认，就去掉这次请求的图片重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
+的请求都不带，每条失去图片的记录在正文后补一行 `imageLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
+`attached` 交回 client 实际附图的那些记录，不给就按全部记录算。`isContextOverflow` 把任何 413 算作超限，所以去掉图片后仍 413 时由 Core 交接。
 
 线协议类型在 `src/protocol/open-responses/`(规范 2026-04-24 生成),`ResponseAccumulator`
 逐事件强校验:序号递增、终态自洽、已关闭的 Item 不得再变。
