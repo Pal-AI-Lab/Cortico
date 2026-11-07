@@ -185,4 +185,5 @@ pnpm build:web
 如果你使用 Cortico 构建了有趣的 Bot，欢迎提交 PR 收录到这里！
 
 * [@可缇Corti](https://space.bilibili.com/3707044056009191) — 来自未来的 AI VTuber。
+* [Cortico Multi-Role Manager](https://github.com/lkon2112/cortico-multi-role-manager) — 独立的多角色管理面板，支持统一登录、角色切换、复制与定时运行。
 * ...持续更新中！
