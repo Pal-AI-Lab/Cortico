@@ -29,13 +29,14 @@ export function upstreamText(body: string): string {
 }
 
 /**
- * Whether an upstream rejection says the input exceeded the model's context. Status 0 is an
- * in-stream failure event; 400/413 are the request-rejection codes. The body patterns cover
- * the OpenAI `context_length_exceeded` code, DeepSeek's "maximum context length" message
- * and llama-server's "exceeds the available context size".
+ * Whether an upstream rejection says the input is too large for the model. A 413 always is: the
+ * request body exceeds the service's size limit, whatever the body says. Status 0 (an in-stream
+ * failure event) and 400 count when the body matches: the OpenAI `context_length_exceeded` code,
+ * DeepSeek's "maximum context length" message and llama-server's "exceeds the available context size".
  */
 export function isContextOverflow(error: { status: number; body: string }): boolean {
-  if (error.status !== 0 && error.status !== 400 && error.status !== 413) return false;
+  if (error.status === 413) return true;
+  if (error.status !== 0 && error.status !== 400) return false;
   return /context_length_exceeded|context length|context size|context window|maximum context|prompt is too long|input is too long|too many tokens/i.test(error.body);
 }
 

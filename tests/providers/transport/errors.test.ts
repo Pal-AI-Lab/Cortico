@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseRetryAfter } from '../../../src/providers/transport/errors.ts';
+import { isContextOverflow, parseRetryAfter } from '../../../src/providers/transport/errors.ts';
 
 afterEach(() => vi.useRealTimers());
+
+describe('isContextOverflow', () => {
+  it('counts every 413, whatever its body says', () => {
+    expect(isContextOverflow({ status: 413, body: '<html><head><title>413 Request Entity Too Large</title></head></html>' })).toBe(true);
+    expect(isContextOverflow({ status: 413, body: '{"code":41301,"message":"request body over the size limit"}' })).toBe(true);
+  });
+  it('counts a 400 only when its body says the context is exceeded', () => {
+    expect(isContextOverflow({ status: 400, body: '{"error":{"code":"context_length_exceeded"}}' })).toBe(true);
+    expect(isContextOverflow({ status: 400, body: '{"error":{"message":"unsupported image"}}' })).toBe(false);
+  });
+});
 
 describe('parseRetryAfter', () => {
   it('数字按秒,HTTP 日期按距今,缺失与不成形为 null', () => {
