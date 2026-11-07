@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import module, { compatOptions } from '../../src/providers/openai-responses-compat/index.ts';
 import { ResponsesProvider, buildResponsesBody } from '../../src/providers/openai-responses-compat/native.ts';
 import { validateEntry, validateSpec } from '../../src/providers/configuration.ts';
+import { ImageFallback } from '../../src/providers/transport/image-fallback.ts';
 import { responseRequest } from '../../src/protocol/open-responses/context-helpers.ts';
 import { message, record } from '../../src/protocol/open-responses/context.ts';
 import { GenerationError } from '../../src/core/generation.ts';
@@ -167,7 +168,7 @@ describe('模块声明与条目校验', () => {
       stateDir: 'unused', secret: (name) => (name === 'K' ? 'sk' : ''), readBlob: () => null, keepThinking: () => true,
       log: { info() {}, warn() {}, error() {}, debug() {}, child() { return this; } } as never,
     });
-    expect(instance.client).toBeInstanceOf(ResponsesProvider);
+    expect(instance.client).toBeInstanceOf(ImageFallback);
     expect(typeof instance.listModels).toBe('function');
     expect(instance.contextWindow!('anything')).toBeUndefined();
     expect(instance.compatibilityKey!()).toEqual(['/x', 'cloud']);

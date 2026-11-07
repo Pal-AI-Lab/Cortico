@@ -2,6 +2,7 @@ import type { ProviderModule } from '../base.ts';
 import type { ReasoningTier } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import { isContextOverflow } from '../transport/errors.ts';
+import { ImageFallback } from '../transport/image-fallback.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
 import { runtimeConfig } from './config.ts';
@@ -76,6 +77,7 @@ export default {
         roots: { runtimes: runtimesRoot(), models: modelsRoot() },
       });
     const runtime = host.resource?.('runtime', createRuntime) ?? createRuntime();
+    const media = { enabled: () => entry.multimodal === true, read: host.readBlob };
     return {
       control: { runtime, catalog },
       listModels: () => catalog.listModels(),
@@ -86,13 +88,13 @@ export default {
         catalog.stop();
         await runtime.stop();
       },
-      client: new LlamaCppProvider({
+      client: new ImageFallback(new LlamaCppProvider({
         baseUrl: entry.baseUrl,
         apiKey,
         log: host.log,
-        media: { enabled: () => entry.multimodal === true, read: host.readBlob },
+        media,
         keepThinking: host.keepThinking,
-      }),
+      }), { media, contextOverflow: isContextOverflow, log: host.log }),
     };
   },
 } satisfies ProviderModule;
