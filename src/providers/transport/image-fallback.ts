@@ -91,11 +91,14 @@ export function withoutImages(context: readonly ContextRecord[], handles: Readon
   });
 }
 
-/** The item with `line` after its text; content parts other than text stay in place. */
+/**
+ * The item with `line` on its own line after its text; content parts other than text stay in place.
+ * An appended part starts with a newline because Chat joins text parts without a separator.
+ */
 function withLine(item: Item, line: string): Item {
   if (item.type === 'message')
-    return { ...item, content: typeof item.content === 'string' ? `${item.content}\n${line}` : [...item.content, { type: 'input_text', text: line }] } as Item;
+    return { ...item, content: typeof item.content === 'string' ? `${item.content}\n${line}` : [...item.content, { type: 'input_text', text: `\n${line}` }] } as Item;
   if (item.type === 'function_call_output')
-    return { ...item, output: typeof item.output === 'string' ? `${item.output}\n${line}` : [...item.output, { type: 'input_text', text: line }] } as Item;
+    return { ...item, output: typeof item.output === 'string' ? `${item.output}\n${line}` : [...item.output, { type: 'input_text', text: `\n${line}` }] } as Item;
   return item;
 }
