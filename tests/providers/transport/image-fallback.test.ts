@@ -77,6 +77,12 @@ describe('a request the model service refuses for its images', () => {
     }
   });
 
+  it('puts the left-out line on its own line on Chat, which joins text parts without a separator', async () => {
+    const { url, bodies } = await service(carriesImage);
+    await ask(client(LLAMACPP, url));
+    expect(JSON.parse(bodies[1]!).messages.at(-1).content).toBe(`look\n${blobLine(picture)}\n${imageLeftOut(picture.handle)}`);
+  });
+
   it('is sent again without them on a 413, which otherwise counts as a context overflow', async () => {
     const { url, bodies } = await service(carriesImage, 413, OPENRESTY_413);
     const first = await ask(client(COMPAT, url));
