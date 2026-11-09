@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 const pluralRules = new Intl.PluralRules('ru');
 const plural = (n: number, one: string, few: string, many: string) => {
@@ -45,4 +45,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Файл с таким именем уже существует',
   unknownMethod: (panel: string, method: string) => `Неизвестный метод панели: ${panel}.${method}`,
   unknownPanel: (panel: string) => `Неизвестная панель: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Контекст и передача',
+  description: 'Окно модели и предел вывода за один ответ настраиваются на странице «Подключения к моделям». Когда контекст достигает жёсткого предела модели, Core принудительно выполняет передачу.',
+  maxTokens: 'Бюджет этапа контекста',
+  maxTokensDesc: 'Когда контекст превышает бюджет этапа × долю мягкого порога, сначала приходит предупреждение; если к концу следующего пакета он всё ещё превышен, выполняется передача.',
+  keepRatio: 'Доля для передачи',
+  keepRatioDesc: 'Бюджет токенов заметки о передаче = бюджет этапа × эта доля. Заметка сохраняет самое свежее содержимое; более ранние части остаются только в виде счётчиков.',
+  softRatio: 'Доля мягкого порога',
+  softRatioDesc: 'Порог предупреждения контекста = бюджет этапа × эта доля.',
+  firstTurn: 'Синтетический первый ход',
+  firstTurnDesc: 'Отправляет с каждым запросом первый ход из prompts/ развёртывания (FIRST_TURN_USER / THINKING / REPLY) как синтетическое начало, не записывая его в сессию; если он пуст, ничего не отправляется.',
 };

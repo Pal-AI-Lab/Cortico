@@ -850,6 +850,26 @@ describe('World library and catalog', () => {
     const context = mkCtx(caps); lives.push(context.lifecycle);
     mountWorlds(context.ctx); await flush(); return context;
   }
+  it('keeps an updated World that still runs in its place, with an icon that names the versions and offers the restart', async () => {
+    const updated = { ...LIST.extensions[0], installedVersion: '1.1.0', state: 'pending-restart' };
+    const { root, ctx } = await openWorlds({ list: { ...LIST, extensions: [updated] } });
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    const row = $('.world-ready-list .world-blade[data-key="alpha-mod"]', root);
+    expect(row.dataset.state).toBe('attached');
+    const pending = $('h3 .world-name-pending', row);
+    expect(pending.getAttribute('aria-label')).toBe('重启进程后生效 1.0.0 → 1.1.0');
+    pending.click(); await flush();
+    expect($('.modal')).not.toBeNull();
+    answer(false); await flush();
+    expect($('.world-pending-group', root).hidden).toBe(true);
+    expect(calls.some((call: Any) => call.url === '/api/run/restart')).toBe(false);
+  });
+  it('waits in the pending group only when newly installed, not when updated over a loaded version', async () => {
+    const updated = { ...LIST.extensions[0], installedVersion: '1.1.0', state: 'pending-restart' };
+    const { root, ctx } = await openWorlds({ list: { ...LIST, extensions: [updated, { name: 'new-mod', spec: '^1.0.0', version: '1.0.0', kind: 'world', loaded: false, state: 'pending-restart' }] } });
+    ctx.router.navigate(['world']); window.dispatchEvent(new HashChangeEvent('hashchange')); await flush();
+    expect($$('.world-pending-list .world-library-entry', root).map((entry: Any) => entry.dataset.key)).toEqual(['new-mod']);
+  });
   it('merges runtime Worlds with packages and puts recent pending downloads first', () => {
     const worlds = [{ id: 'alpha', status: 'active' }, { id: 'builtin', status: 'inactive' }];
     const old = { name: 'older', state: 'pending-restart', kind: 'world' };

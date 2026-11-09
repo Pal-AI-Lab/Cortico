@@ -9,6 +9,8 @@ import { join, resolve } from 'node:path';
 import { loadDeployment } from '../../src/deploy.ts';
 import { readGroupValues } from '../../src/core/config-schema.ts';
 import definition, { CORTIV_CONTEXT_CONFIG_GROUP, type CortiVConfig } from '../../bots/cortiv/index.ts';
+import { contextStageConfigGroup } from '../../bots/cormini/persona/config.ts';
+import { LANGUAGES } from '../../src/core/language.ts';
 
 const REPO_ROOT = resolve(import.meta.dirname, '../..');
 
@@ -46,11 +48,25 @@ describe('上下文交接阈值', () => {
     try {
       writeFileSync(join(dir, 'config.json'), JSON.stringify({ context: { maxTokens: 96000 } }), 'utf8');
       const built = definition.build(loadDeployment(definition, dir, REPO_ROOT), []);
-      const ids = (built.webUi?.configGroups ?? []).map((g) => g.id);
+      const groups = built.webUi?.configGroups;
+      const ids = (typeof groups === 'function' ? groups('zh') : groups ?? []).map((g) => g.id);
       expect(ids).toContain(CORTIV_CONTEXT_CONFIG_GROUP.id);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('上下文阶段配置组按请求语言给出标题与说明,各语言的 id 与键相同', () => {
+    const zh = contextStageConfigGroup('cortiv', 'zh');
+    for (const language of LANGUAGES) {
+      const group = contextStageConfigGroup('cortiv', language);
+      expect(group.id).toBe(zh.id);
+      expect(Object.keys(group.schema.properties)).toEqual(Object.keys(zh.schema.properties));
+      if (language === 'zh' || language === 'zh-Hant' || language === 'ja') continue;
+      const text = [group.schema.title, group.schema.description, ...Object.values(group.schema.properties).flatMap((p) => [p.title, p.description])].join(' ');
+      expect(text, language).not.toMatch(/\p{Script=Han}/u);
+    }
+    expect(contextStageConfigGroup('cortiv', 'en').schema.title).toBe('Context and handoff');
   });
 
   it('声明的读取路径指向真配置:readGroupValues 报的就是生效值', () => {

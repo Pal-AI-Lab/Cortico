@@ -53,7 +53,7 @@ function build(loaded: LoadedConfig<CorminiConfig>, worlds: World[]): BotParts<C
       persona.stopRhythm();
     },
     webUi: {
-      configGroups: [contextStageConfigGroup('cormini')],
+      configGroups: (language) => [contextStageConfigGroup('cormini', language)],
       // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },
