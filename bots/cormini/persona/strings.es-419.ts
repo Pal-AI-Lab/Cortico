@@ -43,7 +43,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'Contexto y traspaso',
-  description: 'La ventana del modelo y el límite de salida por respuesta se configuran en la página Modelo de lenguaje. Cuando el contexto alcanza el límite estricto del modelo, Core fuerza el traspaso.',
+  description: 'La ventana del modelo y el límite de salida por respuesta se configuran en la página Conexiones de modelo. Cuando el contexto alcanza el límite estricto del modelo, Core fuerza el traspaso.',
   maxTokens: 'Presupuesto de la etapa de contexto',
   maxTokensDesc: 'Cuando el contexto supera presupuesto de la etapa × proporción del umbral suave, primero se avisa; si al terminar el siguiente lote aún lo supera, se hace el traspaso.',
   keepRatio: 'Proporción conservada en el traspaso',

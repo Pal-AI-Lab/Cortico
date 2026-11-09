@@ -43,7 +43,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'Kontext und Übergabe',
-  description: 'Das Modellfenster und die Ausgabegrenze pro Antwort werden auf der Seite „Sprachmodell“ festgelegt. Erreicht der Kontext die harte Grenze des Modells, erzwingt Core eine Übergabe.',
+  description: 'Das Modellfenster und die Ausgabegrenze pro Antwort werden auf der Seite „Modellverbindungen“ festgelegt. Erreicht der Kontext die harte Grenze des Modells, erzwingt Core eine Übergabe.',
   maxTokens: 'Budget der Kontextphase',
   maxTokensDesc: 'Überschreitet der Kontext Phasenbudget × Anteil der weichen Schwelle, folgt zuerst ein Hinweis; liegt er am Ende des nächsten Stapels noch darüber, folgt die Übergabe.',
   keepRatio: 'Anteil für die Übergabe',

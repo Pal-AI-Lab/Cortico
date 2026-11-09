@@ -44,7 +44,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: '컨텍스트와 인계',
-  description: '모델 창과 1회 출력 상한은 「언어 모델」 페이지에서 설정합니다. 컨텍스트가 모델의 하드 한도에 도달하면 Core가 인계를 강제합니다.',
+  description: '모델 창과 1회 출력 상한은 「모델 연결」 페이지에서 설정합니다. 컨텍스트가 모델의 하드 한도에 도달하면 Core가 인계를 강제합니다.',
   maxTokens: '컨텍스트 단계 예산',
   maxTokensDesc: '컨텍스트가 단계 예산 × 소프트 임계값 비율을 넘으면 먼저 알립니다. 다음 배치가 끝날 때도 넘으면 인계합니다.',
   keepRatio: '인계 보존 비율',

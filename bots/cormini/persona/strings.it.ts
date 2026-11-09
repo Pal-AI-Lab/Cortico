@@ -43,7 +43,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'Contesto e passaggio di consegne',
-  description: 'La finestra del modello e il limite di output per risposta si impostano nella pagina Modello linguistico. Quando il contesto raggiunge il limite rigido del modello, Core forza il passaggio di consegne.',
+  description: 'La finestra del modello e il limite di output per risposta si impostano nella pagina Connessioni ai modelli. Quando il contesto raggiunge il limite rigido del modello, Core forza il passaggio di consegne.',
   maxTokens: 'Budget della fase di contesto',
   maxTokensDesc: 'Quando il contesto supera budget della fase × rapporto della soglia morbida, prima arriva un avviso; se alla fine del lotto successivo la supera ancora, avviene il passaggio di consegne.',
   keepRatio: 'Rapporto conservato nel passaggio',

@@ -49,7 +49,7 @@ export const webUiText = (language: Language) => pick(language, {
 /** config.ts 上下文阶段配置组的标题与说明。 */
 const configZh = {
   title: '上下文与交接',
-  description: '模型窗口与单次输出上限在「语言模型」页配置。上下文达到模型硬限制时由 Core 强制交接。',
+  description: '模型窗口与单次输出上限在「模型供应商」页配置。上下文达到模型硬限制时由 Core 强制交接。',
   maxTokens: '上下文阶段预算',
   maxTokensDesc: '上下文超过阶段预算 × 软阈值比例时先提示；下一批结束时仍超出则交接。',
   keepRatio: '交接保留比例',
@@ -61,7 +61,7 @@ const configZh = {
 };
 export const configEn: typeof configZh = {
   title: 'Context and handoff',
-  description: 'The model window and the output limit per response are set on the Language model page. When the context reaches the model\'s hard limit, Core forces a handoff.',
+  description: 'The model window and the output limit per response are set on the Model connections page. When the context reaches the model\'s hard limit, Core forces a handoff.',
   maxTokens: 'Context stage budget',
   maxTokensDesc: 'When the context exceeds stage budget × soft threshold ratio, a warning comes first; if it still exceeds it when the next batch ends, the handoff follows.',
   keepRatio: 'Handoff keep ratio',

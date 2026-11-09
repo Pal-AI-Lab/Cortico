@@ -44,7 +44,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: '上下文與交接',
-  description: '模型視窗與單次輸出上限在「語言模型」頁設定。上下文達到模型硬限制時由 Core 強制交接。',
+  description: '模型視窗與單次輸出上限在「模型供應商」頁設定。上下文達到模型硬限制時由 Core 強制交接。',
   maxTokens: '上下文階段預算',
   maxTokensDesc: '上下文超過階段預算 × 軟閾值比例時先提示；下一批結束時仍超出則交接。',
   keepRatio: '交接保留比例',

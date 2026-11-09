@@ -43,7 +43,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'Contexte et passation',
-  description: 'La fenêtre du modèle et la limite de sortie par réponse se règlent sur la page Modèle de langage. Quand le contexte atteint la limite stricte du modèle, Core force la passation.',
+  description: 'La fenêtre du modèle et la limite de sortie par réponse se règlent sur la page Connexions de modèles. Quand le contexte atteint la limite stricte du modèle, Core force la passation.',
   maxTokens: 'Budget de l’étape de contexte',
   maxTokensDesc: 'Quand le contexte dépasse budget de l’étape × ratio du seuil souple, un avertissement vient d’abord ; s’il le dépasse encore à la fin du lot suivant, la passation a lieu.',
   keepRatio: 'Ratio conservé à la passation',

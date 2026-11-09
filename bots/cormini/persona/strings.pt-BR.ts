@@ -43,7 +43,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'Contexto e passagem',
-  description: 'A janela do modelo e o limite de saída por resposta são configurados na página Modelo de linguagem. Quando o contexto atinge o limite rígido do modelo, o Core força a passagem.',
+  description: 'A janela do modelo e o limite de saída por resposta são configurados na página Conexões de modelo. Quando o contexto atinge o limite rígido do modelo, o Core força a passagem.',
   maxTokens: 'Orçamento da etapa de contexto',
   maxTokensDesc: 'Quando o contexto passa de orçamento da etapa × proporção do limiar suave, primeiro vem um aviso; se ainda passar ao fim do próximo lote, ocorre a passagem.',
   keepRatio: 'Proporção mantida na passagem',
