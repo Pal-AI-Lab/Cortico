@@ -466,7 +466,6 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
       slot.appendChild(foldedPre(text || S.empty));
       const thumbs = blobThumbs(entry);
       if (thumbs) slot.appendChild(thumbs);
-      stick();
       return null;
     }
     const card = tag(ui.h('div', live ? 'tcard standalone anim-in' : 'tcard standalone'), entry);
@@ -529,6 +528,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     return next;
   };
 
+  /** 只建节点。滚动留给 append 和 rebuild:读 scrollHeight 要同步排版整条时间线,重画时逐条滚动的耗时随记录数平方增长。 */
   const renderOne = (entry: ContextRecord, index: Ordinal, live: boolean): void => {
     const item = entry.item;
     if (isAssistantSide(item)) {
@@ -543,7 +543,6 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
       else t.body.append(...renderMonolog(entry));
       // 一段里全是空 Item(空 reasoning、空正文)时组头孤零零一行,标个「空」
       toggleClass(t.grp, 'empty', t.body.children.length === 0);
-      stick();
       return;
     }
     turn = null;
@@ -554,7 +553,6 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     else if (item.type === 'function_call_output') node = renderToolResult(entry, index, live);
     else node = renderOther(entry, index, live);
     if (node) inner.appendChild(node);
-    stick();
   };
 
   const renderHead = (entries: readonly ContextRecord[]): void => {
@@ -601,6 +599,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     },
     append(entry, index, live) {
       renderOne(entry, index, live);
+      stick();
     },
     setActivity(text) {
       activityText.textContent = text ?? '';
