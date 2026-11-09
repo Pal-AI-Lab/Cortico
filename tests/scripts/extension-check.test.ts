@@ -1,7 +1,4 @@
-/**
- * check:extension 用 WebUI 页 id 的同一条规则校验扩展 id:页 id 不合法时 WebUI 丢掉整页,
- * 扩展本身照常加载,所以只有检查能在发布前报出来。
- */
+/** check:extension 用 WebUI 页 id 的同一条规则校验扩展 id。 */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
