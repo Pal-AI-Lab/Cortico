@@ -13,6 +13,7 @@ export const S: Partial<typeof en> = {
   deleteGroup: "Удалить группу (расширения останутся)",
   pendingNote: "Расширения выше вступят в силу после перезапуска процесса.",
   updateAvailable: (from: string, to: string) => `Доступно обновление: ${from} → ${to}`,
+  updatePendingRestart: (from: string, to: string) => `Заработает после перезапуска процесса ${from} → ${to}`,
   hideFromSidebar: "Скрыть из боковой панели",
   showInSidebar: "Показывать в боковой панели",
   builtinAlwaysOn: "Встроенные World всегда включены.",

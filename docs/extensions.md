@@ -80,6 +80,7 @@ pnpm 读不出地址时这三处都报 pnpm 的错误。
 以及按 365 天一段往前累加的累计,某段为 0 即停,所以中间有整年无下载的包少计更早的下载。
 单次请求 3 秒没回或失败就缺那一项,卡片显示「—」;近 30 天缺的包按下载量排序时排在最后,设了最低下载量时不列出。
 磁盘版本与本进程加载版本不同，即使依赖范围没变，扩展仍标为「待重启」。
+WebUI 面板的 js、css 在加载扩展时读进内存，待重启期间页面拿到的仍是本进程加载的那个版本。
 
 ## 市场的官方索引
 
@@ -197,6 +198,9 @@ import type { WorldDefinition } from 'cortico/world.ts';
 export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), create: (ctx) => new DiscordWorld(ctx) } satisfies WorldDefinition<DiscordSection>;
 ```
 
+`id` 只用小写字母、数字和连字符，首尾是字母或数字。它也是配置段 `worlds.<id>` 与 WebUI 页 id `world:<id>` 的一段;
+不合这条规则的 World 照常加载，但 WebUI 丢掉它的页面,`check:extension` 报失败。
+
 框架以 `cortico/<src 下的路径>` import:`cortico/world.ts`、`cortico/core/types.ts`、
 `cortico/core/util.ts`。运行时由 `src/extensions/runtime.ts` 的模块钩子解析到框架源码本身,
 早于 `node_modules`;开发期装 `cortico` 这个开发依赖,编辑器、`tsc` 与 vitest 按包的 `exports`
@@ -288,7 +292,7 @@ package.json 有 `files` 时要让它包含这个文件。官方索引与扩展�
 pnpm check:extension <包目录>
 ```
 
-检查会读取 manifest、导入入口、按 kind 核对默认导出结构并确认面板产物存在,随后验证构造与声明接口:
+检查会读取 manifest、导入入口、按 kind 核对默认导出结构与 id 能否组成合法的 WebUI 页 id、确认面板产物存在,随后验证构造与声明接口:
 World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`envPromptVars()`、
 `webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。

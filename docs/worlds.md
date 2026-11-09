@@ -29,7 +29,7 @@ Core 通过 `WorldHost` 向 World 提供以下能力:
 |---|---|
 | `pushEvent(e, opts?)` | 落库分配游标,按 `opts.trigger` 投递;不填 `origin` 即 `external` |
 | `pushDeferred(e, { trigger })` | 投递时生成正文;`render` 返回 null、抛错或超时时不存储、不投递 |
-| `pushCandidate?(spec, { trigger })` | 先归档原始事件,在投递时选择内容并生成正文 |
+| `pushCandidate?(spec, { trigger })` | 先归档原始事件,在投递时选择内容并生成正文;原始事件与投影事件的 `blobs` 同 `pushEvent` 落库 |
 | `store`、`drainPendingEvents(filter)` | 读事件库;消费待投递事件(一次性) |
 | `withdrawPending?(cursor)` | 撤回本 World 一条未投递的事件;事件库追加撤回记录,重启不补投 |
 | `promotePending?(cursor, trigger)` | 让本 World 一条未投递的事件按 `flush`、`preempt` 或 `interrupt` 立即触发;暂停或闸门挡着时,放行后随整批投递,不打断 |

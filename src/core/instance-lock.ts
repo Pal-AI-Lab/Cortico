@@ -70,7 +70,9 @@ function imageName(pid: number): string | null {
       return null;
     }
   }
-  const out = spawnSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf8' }).stdout?.trim();
+  // macOS comm follows process.title; ucomm keeps the kernel's executable name.
+  const field = process.platform === 'darwin' ? 'ucomm=' : 'comm=';
+  const out = spawnSync('ps', ['-p', String(pid), '-o', field], { encoding: 'utf8' }).stdout?.trim();
   return out ? basename(out).toLowerCase() : null;
 }
 
@@ -84,7 +86,10 @@ function ownerStillRunning(p: LockPayload): boolean {
   if (!Number.isNaN(startedAt) && startedAt < Date.now() - uptime() * 1000) return false;
   if (p.execPath === undefined) return true;
   const image = imageName(p.pid);
-  return image === null || image === basename(p.execPath).toLowerCase();
+  const name = basename(p.execPath);
+  // Darwin's accounting name keeps at most MAXCOMLEN (16) bytes of the basename.
+  const expected = process.platform === 'darwin' ? Buffer.from(name).subarray(0, 16).toString() : name;
+  return image === null || image === expected.toLowerCase();
 }
 
 function readPayload(file: string): LockPayload | null {

@@ -653,14 +653,18 @@ export class MainLoop {
     }
     for (let index = 0; index < batch.length; index++) {
       for (const projection of projections.get(index) ?? []) {
+        const { blobs: inputs, ...event } = projection.event;
+        const blobs = this.d.blobs.intern(inputs);
         delivered.push(store.append({
-          ...projection.event,
+          ...event,
+          text: withBlobLines(event.text, blobs),
+          ...(blobs ? { blobs } : {}),
           ts: nowIso(cfg.timezone),
           source: projection.source,
           origin: projection.origin,
           contextDelivery: 'deliver',
           meta: {
-            ...projection.event.meta,
+            ...event.meta,
             sourceCursors: projection.sourceCursors,
           },
         }));
@@ -1997,9 +2001,9 @@ export class MainLoop {
   }
 
   /** 注入 Persona 提供的内部文本。onDelivery 完成前加入当前批，其余时刻进入总线。 */
-  injectInternal(text: string, kind = 'notice'): void {
+  injectInternal(text: string, kind = 'notice', blobs?: BlobInput[]): void {
     if (!this.activeNow()) return;
-    const item = this.internalItem('persona', kind, text);
+    const item = this.internalItem('persona', kind, text, blobs);
     if (this.deliveryCollector) {
       this.deliveryCollector.push(item.event);
       return;
@@ -2008,22 +2012,24 @@ export class MainLoop {
   }
 
   /** 注入 Persona 提供的外部正文；source=persona、origin=external，按 eventDelivery 投递。 */
-  injectExternal(text: string, kind = 'note'): void {
+  injectExternal(text: string, kind = 'note', inputs?: BlobInput[]): void {
     if (!this.activeNow()) return;
     const { store, cfg } = this.d;
+    const blobs = this.d.blobs.intern(inputs);
     const event = store.append({
       type: kind,
       ts: nowIso(cfg.timezone),
       source: 'persona',
       origin: 'external',
       contextDelivery: 'deliver',
-      text,
+      text: withBlobLines(text, blobs),
+      ...(blobs ? { blobs } : {}),
     });
     this.d.bus.push({ event });
   }
 
   /** 内部项在投递时渲染并归档；投递正文与归档正文一致。 */
-  injectDeferred(kind: string, render: () => string | null | Promise<string | null>): void {
+  injectDeferred(kind: string, render: DeferredEventSpec['render']): void {
     if (!this.activeNow()) return;
     this.d.bus.push({ deferred: { type: kind, source: 'persona', origin: 'internal', render } });
   }
@@ -2032,14 +2038,16 @@ export class MainLoop {
    * 内部项与外部事件共用事件库和游标，origin 标记为 internal；调用方决定投递时机。
    * source 记录生产方。
    */
-  private internalItem(source: string, type: string, text: string): WakeItem & { event: EventEnvelope } {
+  private internalItem(source: string, type: string, text: string, inputs?: BlobInput[]): WakeItem & { event: EventEnvelope } {
     const { store, cfg } = this.d;
+    const blobs = this.d.blobs.intern(inputs);
     const event = store.append({
       type,
       ts: nowIso(cfg.timezone),
       source,
       origin: 'internal',
-      text,
+      text: withBlobLines(text, blobs),
+      ...(blobs ? { blobs } : {}),
     });
     return { event };
   }

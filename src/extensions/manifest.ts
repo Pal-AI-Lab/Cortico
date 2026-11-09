@@ -199,14 +199,18 @@ export function parseExtensionManifest(pkg: ExtensionPackageJson, language: Lang
 
 /**
  * pageId 是 WebUI 产物键，格式为 world:<id>、llm:<id> 或 persona:<id>。
- * 版本写入 URL，使新版本使用新的 ESM 模块地址。服务端仅提供所列绝对文件路径。
+ * 版本写入 URL，使新版本使用新的 ESM 模块地址。URL 的文件名取 jsFile、cssFile 的 basename;
+ * 服务端发的是加载扩展时读进内存的 jsBytes、cssBytes,进程重启前与已加载的版本一致。
  */
 export interface ExtensionWebUiAsset {
   pageId: string;
   packageName: string;
   version: string;
   jsFile: string;
+  jsBytes: Buffer;
   cssFile?: string;
+  /** 与 cssFile 同时出现。 */
+  cssBytes?: Buffer;
 }
 
 /** 进 URL 的一段:只留 `isSafeAssetUrl` 放行的字符,其余(`@` `/` `+` `~`…)换成 `-` / `__`。 */

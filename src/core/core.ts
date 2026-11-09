@@ -226,9 +226,9 @@ export class Core<C extends CoreConfig = CoreConfig> {
 
   private makeApi(): CoreApi {
     return {
-      injectInternal: (text, kind) => this.loop.injectInternal(text, kind),
+      injectInternal: (text, kind, blobs) => this.loop.injectInternal(text, kind, blobs),
       injectDeferred: (kind, render) => this.loop.injectDeferred(kind, render),
-      injectExternal: (text, kind) => this.loop.injectExternal(text, kind),
+      injectExternal: (text, kind, blobs) => this.loop.injectExternal(text, kind, blobs),
       requestContextHandoff: () => this.loop.requestContextHandoff(),
       spawnFork: (opts) => this.spawnFork(opts),
       sessionInfo: (id) => this.sessionInfo(id),
@@ -354,6 +354,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         maxRounds: decl.rounds().hard,
         softRounds: decl.rounds().soft,
         log: this.log.child(`fork.${decl.id}`),
+        blobs: { intern: (inputs) => this.internBlobs(inputs) },
         stopWhen: opts.stopWhen,
         wrapUpHint: opts.wrapUpHint,
         capNote: opts.capNote,
@@ -542,12 +543,17 @@ export class Core<C extends CoreConfig = CoreConfig> {
         if (spec.sourceEvents.length === 0) throw new Error('候选票据至少需要一条原始事件');
         for (const event of spec.sourceEvents) this.onWorldPush(mod.id, event.type);
         const origin = spec.origin ?? 'external';
-        const sourceEvents = spec.sourceEvents.map((event) => this.store.append({
-          ...event,
-          source: mod.id,
-          origin,
-          contextDelivery: 'archive-only',
-        }));
+        const sourceEvents = spec.sourceEvents.map(({ blobs: inputs, ...event }) => {
+          const blobs = this.internBlobs(inputs);
+          return this.store.append({
+            ...event,
+            text: withBlobLines(event.text, blobs),
+            ...(blobs ? { blobs } : {}),
+            source: mod.id,
+            origin,
+            contextDelivery: 'archive-only',
+          });
+        });
         if (this.isWorldVisible(mod.id)) {
           this.bus.push({
             candidate: {

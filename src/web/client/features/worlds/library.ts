@@ -8,8 +8,14 @@ export interface WorldLibraryItem {
   extension?: ExtensionView;
 }
 
+/** Installed or removed since the process started, and not running as it is: it waits in its own group. */
 export function needsRestart(item: WorldLibraryItem): boolean {
-  return item.extension?.state === 'pending-restart' || item.extension?.state === 'removed';
+  return item.extension?.state === 'removed' || (item.extension?.state === 'pending-restart' && !updatePending(item));
+}
+
+/** A new version installed over one the process loaded: the loaded one goes on as it was until the process restarts. */
+export function updatePending(item: WorldLibraryItem): boolean {
+  return item.extension?.state === 'pending-restart' && item.extension.loaded;
 }
 
 /** Pending downloads lead the list; every other item retains the server's assembly order. */

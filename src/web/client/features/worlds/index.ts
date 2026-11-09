@@ -12,7 +12,7 @@ import { pageTabs } from '../../ui/page-tabs.ts';
 import type { FeatureContext, FrameworkFeature } from '../feature.ts';
 import { mountExtensionContent, iconUrl, type ExtensionView, type ExtensionController } from '../extensions/index.ts';
 import { S as E } from '../extensions/strings.ts';
-import { worldLibrary, needsRestart, type WorldLibraryItem } from './library.ts';
+import { worldLibrary, needsRestart, updatePending, type WorldLibraryItem } from './library.ts';
 import { addGroup, arrangeLayout, groupToken, moveGroup, moveItem, readLayout, removeGroup, writeLayout, type WorldGroup, type WorldLayout } from './groups.ts';
 import { S } from './strings.ts';
 import { S as UI } from '../../ui/strings.ts';
@@ -599,7 +599,7 @@ export function mountWorlds(ctx: FeatureContext): void {
   function worldRow(item: WorldLibraryItem): HTMLElement {
     const row = ui.h('article', 'world-blade'); row.dataset.key = item.key; row.tabIndex = -1;
     const { world: m, extension: pack } = item;
-    const pending = pack?.state === 'pending-restart' || pack?.state === 'removed';
+    const pending = needsRestart(item);
     const failed = pack?.state === 'failed' || m?.status === 'missing';
     row.dataset.state = pending ? 'pending' : failed ? 'failed' : m?.status === 'active' ? m.visible === false ? 'running' : 'attached' : 'inactive';
     const identity = ui.h('div', 'world-blade-identity');
@@ -608,7 +608,10 @@ export function mountWorlds(ctx: FeatureContext): void {
       const owner = market, details = ui.h('button', 'world-name', item.label) as HTMLButtonElement; details.type = 'button';
       details.addEventListener('click', () => owner.details(pack.name), { signal }); heading.append(details);
     } else heading.append(ui.h('span', 'world-name', item.label));
-    if (pack && market) {
+    if (pack && market && updatePending(item)) {
+      const owner = market;
+      heading.append(iconButton('refresh', S.updatePendingRestart(pack.version ?? '?', pack.installedVersion ?? '?'), 'world-name-update world-name-pending', () => void owner.restart()));
+    } else if (pack && market) {
       const owner = market, update = updatable.get(pack.name);
       if (update) heading.append(iconButton('update', S.updateAvailable(update.installedVersion, update.latestVersion), 'world-name-update', () => owner.details(pack.name)));
     }
