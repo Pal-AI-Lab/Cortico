@@ -3,7 +3,7 @@
  * 测试包从 tests/fixtures/extensions 复制到临时依赖目录后导入。
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ExtensionManager, importBotDefinition, loadExtensions, locateBotPackage, packageMetadata } from '../../src/extensions.ts';
@@ -276,19 +276,23 @@ describe('浏览器端产物', () => {
     installFixture(root, 'world-with-webui');
     installFixture(root, 'provider-with-webui');
     const { set } = await byName();
+    const file = (path: string) => join(root, 'extensions/node_modules', path);
     expect(set.webUiAssets).toEqual([
       {
         pageId: 'world:with-webui',
         packageName: 'world-with-webui',
         version: '3.1.0',
-        jsFile: join(root, 'extensions/node_modules/world-with-webui/dist/webui.js'),
-        cssFile: join(root, 'extensions/node_modules/world-with-webui/dist/webui.css'),
+        jsFile: file('world-with-webui/dist/webui.js'),
+        jsBytes: readFileSync(file('world-with-webui/dist/webui.js')),
+        cssFile: file('world-with-webui/dist/webui.css'),
+        cssBytes: readFileSync(file('world-with-webui/dist/webui.css')),
       },
       {
         pageId: 'llm:panelled',
         packageName: 'provider-with-webui',
         version: '0.4.2',
-        jsFile: join(root, 'extensions/node_modules/provider-with-webui/dist/panel.js'),
+        jsFile: file('provider-with-webui/dist/panel.js'),
+        jsBytes: readFileSync(file('provider-with-webui/dist/panel.js')),
       },
     ]);
     const asset = set.webUiAssets[0];

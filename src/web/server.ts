@@ -2429,22 +2429,22 @@ export class WebApp {
      * 定位一条已加载的记录,文件名必须与那条记录里的 basename 相等——路径不由 URL
      * 拼出来,所以 `..` 与别的文件名都只是查不到。要排在 `/assets` 静态之前。
      *
-     * 版本在 URL 里,换版本即换 URL,于是可以按 immutable 缓存。
+     * 发的是加载时读进内存的字节,不读磁盘:进程运行期间更新或卸载包,面板仍是已加载的
+     * 那个版本。版本在 URL 里,换版本即换 URL,于是可以按 immutable 缓存。
      */
     app.get(`${EXTENSION_ASSET_PREFIX}:pkg/:version/:file`, wrap((req, res) => {
       const { pkg, version, file } = req.params;
       const hit = this.extensionAssets.find(
         (a) => extensionAssetSegment(a.packageName) === pkg && extensionAssetSegment(a.version) === version,
       );
-      const path = hit
-        ? [hit.jsFile, hit.cssFile].find((f): f is string => !!f && extensionAssetSegment(basename(f)) === file)
-        : undefined;
-      if (!path) { res.status(404).end(); return; }
-      res.type(extname(path) === '.css' ? 'css' : 'js');
-      // 卸载扩展只改磁盘,本进程的产物表还留着那一条:文件没了就是 404,不是 500。
-      res.sendFile(path, { maxAge: '1y', immutable: true }, (err) => {
-        if (err && !res.headersSent) res.status(404).end();
-      });
+      const files = hit
+        ? [{ path: hit.jsFile, bytes: hit.jsBytes }, ...(hit.cssFile && hit.cssBytes ? [{ path: hit.cssFile, bytes: hit.cssBytes }] : [])]
+        : [];
+      const served = files.find((f) => extensionAssetSegment(basename(f.path)) === file);
+      if (!served) { res.status(404).end(); return; }
+      res.type(extname(served.path) === '.css' ? 'css' : 'js');
+      res.set('Cache-Control', 'public, max-age=31536000, immutable');
+      res.send(served.bytes);
     }));
 
     // 构建产物。只有这一条把 dist/web 露出去,且 URL 前缀与 asset-manifest 里
