@@ -1,4 +1,4 @@
-<!-- Owner: src/extensions.ts, src/bot.ts (extensionRuntimeState), src/world.ts (removeDefinition), src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, src/extensions/author-guide.ts -->
+<!-- Owner: src/extensions.ts, src/bot.ts (extensionRuntimeState), src/world.ts (removeDefinition), src/extensions/manifest.ts, src/extensions/market.ts, src/extensions/describe.ts, src/extensions/describe-export.ts, scripts/extension-describe.ts, scripts/extension-check.ts, src/extensions/author-guide.ts -->
 
 # 扩展
 
