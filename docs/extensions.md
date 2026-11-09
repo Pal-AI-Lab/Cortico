@@ -198,6 +198,9 @@ import type { WorldDefinition } from 'cortico/world.ts';
 export default { id: 'discord', label: 'Discord', defaults: () => ({ ... }), create: (ctx) => new DiscordWorld(ctx) } satisfies WorldDefinition<DiscordSection>;
 ```
 
+`id` 只用小写字母、数字和连字符，首尾是字母或数字。它也是配置段 `worlds.<id>` 与 WebUI 页 id `world:<id>` 的一段;
+不合这条规则的 World 照常加载，但 WebUI 丢掉它的页面,`check:extension` 报失败。
+
 框架以 `cortico/<src 下的路径>` import:`cortico/world.ts`、`cortico/core/types.ts`、
 `cortico/core/util.ts`。运行时由 `src/extensions/runtime.ts` 的模块钩子解析到框架源码本身,
 早于 `node_modules`;开发期装 `cortico` 这个开发依赖,编辑器、`tsc` 与 vitest 按包的 `exports`
@@ -289,7 +292,7 @@ package.json 有 `files` 时要让它包含这个文件。官方索引与扩展�
 pnpm check:extension <包目录>
 ```
 
-检查会读取 manifest、导入入口、按 kind 核对默认导出结构并确认面板产物存在,随后验证构造与声明接口:
+检查会读取 manifest、导入入口、按 kind 核对默认导出结构与 id 能否组成合法的 WebUI 页 id、确认面板产物存在,随后验证构造与声明接口:
 World 在假部署(默认配置、无密钥)下调用 `create()`、`tools()`、`envPromptVars()`、
 `webUi(language)`,检查工具名与 Core 保留名及内建 World 的冲突;provider 按假端点调用
 `create()`;bot 按假部署调用 `build()`。检查不调用 `start()`,不验证真实服务运行。输出只有英文。
