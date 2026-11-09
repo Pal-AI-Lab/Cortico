@@ -1,13 +1,13 @@
 import { pick, type Language } from 'cortico/core/language.ts';
-import { webUiText as webUiZhHant, panelText as panelZhHant } from './strings.zh-Hant.ts';
-import { webUiText as webUiJa, panelText as panelJa } from './strings.ja.ts';
-import { webUiText as webUiKo, panelText as panelKo } from './strings.ko.ts';
-import { webUiText as webUiFr, panelText as panelFr } from './strings.fr.ts';
-import { webUiText as webUiDe, panelText as panelDe } from './strings.de.ts';
-import { webUiText as webUiEs419, panelText as panelEs419 } from './strings.es-419.ts';
-import { webUiText as webUiPtBR, panelText as panelPtBR } from './strings.pt-BR.ts';
-import { webUiText as webUiIt, panelText as panelIt } from './strings.it.ts';
-import { webUiText as webUiRu, panelText as panelRu } from './strings.ru.ts';
+import { webUiText as webUiZhHant, panelText as panelZhHant, configText as configZhHant } from './strings.zh-Hant.ts';
+import { webUiText as webUiJa, panelText as panelJa, configText as configJa } from './strings.ja.ts';
+import { webUiText as webUiKo, panelText as panelKo, configText as configKo } from './strings.ko.ts';
+import { webUiText as webUiFr, panelText as panelFr, configText as configFr } from './strings.fr.ts';
+import { webUiText as webUiDe, panelText as panelDe, configText as configDe } from './strings.de.ts';
+import { webUiText as webUiEs419, panelText as panelEs419, configText as configEs419 } from './strings.es-419.ts';
+import { webUiText as webUiPtBR, panelText as panelPtBR, configText as configPtBR } from './strings.pt-BR.ts';
+import { webUiText as webUiIt, panelText as panelIt, configText as configIt } from './strings.it.ts';
+import { webUiText as webUiRu, panelText as panelRu, configText as configRu } from './strings.ru.ts';
 
 /** persona.ts 给 WebUI 的文案。 */
 const webUiZh = {
@@ -44,6 +44,37 @@ export const webUiText = (language: Language) => pick(language, {
   zh: webUiZh, en: webUiEn, 'zh-Hant': webUiZhHant, ja: webUiJa, ko: webUiKo,
   fr: webUiFr, de: webUiDe, 'es-419': webUiEs419, 'pt-BR': webUiPtBR, it: webUiIt,
   ru: webUiRu,
+});
+
+/** config.ts 上下文阶段配置组的标题与说明。 */
+const configZh = {
+  title: '上下文与交接',
+  description: '模型窗口与单次输出上限在「模型供应商」页配置。上下文达到模型硬限制时由 Core 强制交接。',
+  maxTokens: '上下文阶段预算',
+  maxTokensDesc: '上下文超过阶段预算 × 软阈值比例时先提示；下一批结束时仍超出则交接。',
+  keepRatio: '交接保留比例',
+  keepRatioDesc: '交接笔记的 token 预算 = 阶段预算 × 此比例。笔记保留最近内容，更早的部分只留计数。',
+  softRatio: '软阈值比例',
+  softRatioDesc: '上下文预警阈值 = 阶段预算 × 此比例。',
+  firstTurn: '合成首轮对话',
+  firstTurnDesc: '把部署 prompts/ 里的首轮对话(FIRST_TURN_USER / THINKING / REPLY)作为合成开头送进每次请求,不写入 session;内容为空时不送。',
+};
+export const configEn: typeof configZh = {
+  title: 'Context and handoff',
+  description: 'The model window and the output limit per response are set on the Model connections page. When the context reaches the model\'s hard limit, Core forces a handoff.',
+  maxTokens: 'Context stage budget',
+  maxTokensDesc: 'When the context exceeds stage budget × soft threshold ratio, a warning comes first; if it still exceeds it when the next batch ends, the handoff follows.',
+  keepRatio: 'Handoff keep ratio',
+  keepRatioDesc: 'Token budget of the handoff note = stage budget × this ratio. The note keeps the most recent content; earlier parts are kept only as counts.',
+  softRatio: 'Soft threshold ratio',
+  softRatioDesc: 'Context warning threshold = stage budget × this ratio.',
+  firstTurn: 'Synthesized first turn',
+  firstTurnDesc: 'Sends the first turn from the deployment\'s prompts/ (FIRST_TURN_USER / THINKING / REPLY) with every request as a synthesized opening, without writing it to the session; nothing is sent while it is empty.',
+};
+export const configText = (language: Language) => pick(language, {
+  zh: configZh, en: configEn, 'zh-Hant': configZhHant, ja: configJa, ko: configKo,
+  fr: configFr, de: configDe, 'es-419': configEs419, 'pt-BR': configPtBR, it: configIt,
+  ru: configRu,
 });
 
 /** webUiSurface.ts 的面板标题、说明、读写回执与报错。 */

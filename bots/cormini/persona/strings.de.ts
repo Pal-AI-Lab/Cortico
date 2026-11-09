@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Wie die Persona existiert, und Hinweise zu ihrer Metakognition.',
@@ -39,4 +39,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Eine Datei mit diesem Namen existiert bereits',
   unknownMethod: (panel: string, method: string) => `Unbekannte Panel-Methode: ${panel}.${method}`,
   unknownPanel: (panel: string) => `Unbekanntes Panel: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Kontext und Übergabe',
+  description: 'Das Modellfenster und die Ausgabegrenze pro Antwort werden auf der Seite „Modellverbindungen“ festgelegt. Erreicht der Kontext die harte Grenze des Modells, erzwingt Core eine Übergabe.',
+  maxTokens: 'Budget der Kontextphase',
+  maxTokensDesc: 'Überschreitet der Kontext Phasenbudget × Anteil der weichen Schwelle, folgt zuerst ein Hinweis; liegt er am Ende des nächsten Stapels noch darüber, folgt die Übergabe.',
+  keepRatio: 'Anteil für die Übergabe',
+  keepRatioDesc: 'Token-Budget der Übergabenotiz = Phasenbudget × dieser Anteil. Die Notiz behält die neuesten Inhalte; ältere Teile bleiben nur als Anzahl erhalten.',
+  softRatio: 'Anteil der weichen Schwelle',
+  softRatioDesc: 'Warnschwelle des Kontexts = Phasenbudget × dieser Anteil.',
+  firstTurn: 'Synthetische erste Runde',
+  firstTurnDesc: 'Sendet die erste Runde aus prompts/ der Bereitstellung (FIRST_TURN_USER / THINKING / REPLY) als synthetischen Anfang mit jeder Anfrage, ohne sie in die Sitzung zu schreiben; ist sie leer, wird nichts gesendet.',
 };

@@ -13,6 +13,7 @@ export const S: Partial<typeof en> = {
   deleteGroup: "グループを削除（拡張は残ります）",
   pendingNote: "上の拡張はプロセスの再起動後に反映されます。",
   updateAvailable: (from: string, to: string) => `更新があります：${from} → ${to}`,
+  updatePendingRestart: (from: string, to: string) => `プロセス再起動後に有効 ${from} → ${to}`,
   hideFromSidebar: "サイドバーに表示しない",
   showInSidebar: "サイドバーに表示",
   builtinAlwaysOn: "内蔵の World は常にオンです。",

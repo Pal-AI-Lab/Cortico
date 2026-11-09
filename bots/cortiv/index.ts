@@ -25,8 +25,9 @@ const DECLARES: readonly WorldDeclaration[] = ['console', 'vtuber', 'bilibili', 
 
 /**
  * 上下文与交接容量配置归Persona，WebUI 表单与 bots/cormini/persona/config.ts 共用。
+ * 这里取 id 与取值范围;页面上的文案按请求语言另行生成(见 configGroups)。
  */
-export const CORTIV_CONTEXT_CONFIG_GROUP: ConfigGroup = contextStageConfigGroup('cortiv');
+export const CORTIV_CONTEXT_CONFIG_GROUP: ConfigGroup = contextStageConfigGroup('cortiv', 'zh');
 
 /** 关闭后台构思时，World 的 cognition 句柄不可用。 */
 export const CORTIV_COGNITION_CONFIG_GROUP: ConfigGroup = {
@@ -108,7 +109,7 @@ function build(loaded: LoadedConfig<CortiVConfig>, worlds: World[]): BotParts<Co
       persona.stopRhythm();
     },
     webUi: {
-      configGroups: [CORTIV_CONTEXT_CONFIG_GROUP, CORTIV_COGNITION_CONFIG_GROUP],
+      configGroups: (language) => [contextStageConfigGroup('cortiv', language), CORTIV_COGNITION_CONFIG_GROUP],
       // 阶段预算与软预警线(控制台页上下文圈的分母与黄线);计数与物理上限由 core 报
       status: () => ({ context: { maxTokens: cfg.context.maxTokens, softRatio: cfg.context.softRatio } }),
     },

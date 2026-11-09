@@ -25,7 +25,7 @@ const INDEX = {
     plain: { label: bi('普通', 'Plain'), hint: bi('普通说明', 'Plain hint'), when: '' },
     other: { label: bi('其他', 'Other'), hint: bi('其他说明', 'Other hint'), when: '' },
     yellow: { style: 'notice', label: bi('黄', 'Yellow'), hint: bi('黄说明', 'Yellow hint'), when: '' },
-    red: { style: 'warning', label: bi('红', 'Red'), hint: bi('红说明', 'Red hint'), when: '' },
+    red: { style: 'warning', label: { ...bi('红', 'Red'), ja: '赤' }, hint: { ...bi('红说明', 'Red hint'), ja: '赤の説明' }, when: '' },
   },
   certified: ['cortico-world-a'],
   newDays: 14,
@@ -165,6 +165,16 @@ describe('merge', () => {
     expect(index.tags.red).toEqual({ label: 'Red', hint: 'Red hint', style: 'warning' });
     expect(index.newDays).toBe(INDEX.newDays);
     expect(market.blocked('cortico-world-bad', 'zh')).toBe('恶意代码');
+  });
+
+  it('标签文字按请求语言取:索引写了就用,缺的 zh-Hant 读 zh、其余读 en', async () => {
+    const github = fakeGithub();
+    github.raw.set('index.json', INDEX);
+    const market = new ExtensionMarket({ dir, log: nullLogger(), fetch: github.fetch });
+    const tagsIn = async (language: 'ja' | 'de' | 'zh-Hant') => (await market.merge(Promise.resolve([]), language)).index.tags;
+    expect((await tagsIn('ja')).red).toEqual({ label: '赤', hint: '赤の説明', style: 'warning' });
+    expect((await tagsIn('de')).red).toEqual({ label: 'Red', hint: 'Red hint', style: 'warning' });
+    expect((await tagsIn('zh-Hant')).red).toEqual({ label: '红', hint: '红说明', style: 'warning' });
   });
 
   it('索引格式版本不认识时当作读不到:结果原样返回并给出原因', async () => {

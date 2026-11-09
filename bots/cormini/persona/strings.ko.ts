@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Persona의 존재 방식과 메타인지에 대한 설명.',
@@ -40,4 +40,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: '같은 이름의 파일이 이미 있습니다',
   unknownMethod: (panel: string, method: string) => `알 수 없는 패널 메서드: ${panel}.${method}`,
   unknownPanel: (panel: string) => `알 수 없는 패널: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: '컨텍스트와 인계',
+  description: '모델 창과 1회 출력 상한은 「모델 연결」 페이지에서 설정합니다. 컨텍스트가 모델의 하드 한도에 도달하면 Core가 인계를 강제합니다.',
+  maxTokens: '컨텍스트 단계 예산',
+  maxTokensDesc: '컨텍스트가 단계 예산 × 소프트 임계값 비율을 넘으면 먼저 알립니다. 다음 배치가 끝날 때도 넘으면 인계합니다.',
+  keepRatio: '인계 보존 비율',
+  keepRatioDesc: '인계 노트의 토큰 예산 = 단계 예산 × 이 비율. 노트는 최근 내용을 남기고, 그 이전 부분은 개수만 남깁니다.',
+  softRatio: '소프트 임계값 비율',
+  softRatioDesc: '컨텍스트 경고 임계값 = 단계 예산 × 이 비율.',
+  firstTurn: '합성 첫 턴',
+  firstTurnDesc: '배포의 prompts/에 있는 첫 턴(FIRST_TURN_USER / THINKING / REPLY)을 합성된 시작으로 매 요청에 보냅니다. 세션에는 기록하지 않으며, 내용이 비어 있으면 보내지 않습니다.',
 };
