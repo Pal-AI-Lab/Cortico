@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Come esiste la Persona e note sulla sua metacognizione.',
@@ -39,4 +39,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Esiste già un file con questo nome',
   unknownMethod: (panel: string, method: string) => `Metodo del pannello sconosciuto: ${panel}.${method}`,
   unknownPanel: (panel: string) => `Pannello sconosciuto: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Contesto e passaggio di consegne',
+  description: 'La finestra del modello e il limite di output per risposta si impostano nella pagina Connessioni ai modelli. Quando il contesto raggiunge il limite rigido del modello, Core forza il passaggio di consegne.',
+  maxTokens: 'Budget della fase di contesto',
+  maxTokensDesc: 'Quando il contesto supera budget della fase × rapporto della soglia morbida, prima arriva un avviso; se alla fine del lotto successivo la supera ancora, avviene il passaggio di consegne.',
+  keepRatio: 'Rapporto conservato nel passaggio',
+  keepRatioDesc: 'Budget di token della nota di passaggio = budget della fase × questo rapporto. La nota conserva i contenuti più recenti; le parti precedenti restano solo come conteggi.',
+  softRatio: 'Rapporto della soglia morbida',
+  softRatioDesc: 'Soglia di avviso del contesto = budget della fase × questo rapporto.',
+  firstTurn: 'Primo turno sintetico',
+  firstTurnDesc: 'Invia con ogni richiesta, come apertura sintetica, il primo turno in prompts/ del deployment (FIRST_TURN_USER / THINKING / REPLY), senza scriverlo nella sessione; se è vuoto non viene inviato.',
 };

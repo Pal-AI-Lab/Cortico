@@ -11,10 +11,10 @@ import type { ConfigGroup, CoreConfig, World } from '../core/types.ts';
 import { MODULE_LAMP_MAX } from '../core/types.ts';
 import type { LoadedConfig } from '../core/config.ts';
 import { CORE_DEFAULTS } from '../core/config.ts';
-import { getByPath, isConfigGroup } from '../core/config-schema.ts';
+import { getByPath, isConfigGroup, personaConfigGroups } from '../core/config-schema.ts';
 import { RESERVED_FRAME_NAMES } from '../core/loop.ts';
 import { nullLogger } from '../core/util.ts';
-import type { Language } from '../core/language.ts';
+import { LANGUAGES, type Language } from '../core/language.ts';
 import type { BotDefinition } from '../bot.ts';
 import type { WorldContext, WorldDefinition, WorldSection } from '../world.ts';
 import type { ProviderModule } from '../providers/base.ts';
@@ -419,7 +419,12 @@ export function dryMountBot(def: BotDefinition<CoreConfig>, opts: BotDryMountOpt
   }
   if (prebuilt.length) ok.push(`Prebuilt Worlds: ${[...ids].join(', ')} (a restart reuses these instances).`);
 
-  for (const group of parts.webUi?.configGroups ?? []) {
+  const groupsOf = (language: Language) => personaConfigGroups(parts.webUi?.configGroups, language);
+  const groupIds = groupsOf('zh').map((group) => group.id).join(', ');
+  for (const language of LANGUAGES) {
+    if (groupsOf(language).map((group) => group.id).join(', ') !== groupIds) failures.push(`Persona config groups in ${language} are not the same groups as in zh.`);
+  }
+  for (const group of groupsOf('zh')) {
     if (group.owner !== 'persona') warnings.push(`Config group "${group.id}" has owner "${group.owner}"; a Persona's config group owner must be persona.`);
     failures.push(...configPathProblems(group, '', config));
   }
