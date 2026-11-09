@@ -44,7 +44,7 @@ export const panelText: Partial<typeof panelEn> = {
 
 export const configText: Partial<typeof configEn> = {
   title: 'コンテキストと引き継ぎ',
-  description: 'モデルのウィンドウと 1 回の出力上限は「言語モデル」ページで設定します。コンテキストがモデルのハード上限に達すると、Core が引き継ぎを強制します。',
+  description: 'モデルのウィンドウと 1 回の出力上限は「モデル接続」ページで設定します。コンテキストがモデルのハード上限に達すると、Core が引き継ぎを強制します。',
   maxTokens: 'コンテキスト段階予算',
   maxTokensDesc: 'コンテキストが段階予算 × ソフトしきい値比率を超えると、まず通知します。次のバッチの終了時にまだ超えていれば引き継ぎます。',
   keepRatio: '引き継ぎ保持比率',
