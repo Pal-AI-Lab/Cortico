@@ -4,10 +4,10 @@
  * 单包失败不阻止其他包加载；安装或卸载后需重启进程，ESM 模块不会在运行时替换。
  * 仅导入 deployment.json 选定的 bot；其他 bot 包记为 idle，仓内同名 bot 优先。
  * 扩展包目录只读，避免修改 pnpm store 的硬链接文件；模板写入规则见 src/bot.ts。
- * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件。
+ * 扩展提供包内相对产物路径，服务端校验后分配 URL，只提供已声明文件;文件内容在加载时读进内存。
  */
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { CoreConfig, Logger } from './core/types.ts';
@@ -362,7 +362,8 @@ export async function loadExtensions(
         packageName: name,
         version: pkg.version ?? '0',
         jsFile,
-        ...(cssFile ? { cssFile } : {}),
+        jsBytes: readFileSync(jsFile),
+        ...(cssFile ? { cssFile, cssBytes: readFileSync(cssFile) } : {}),
       });
     };
 
