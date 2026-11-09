@@ -608,8 +608,6 @@ export function mountWorlds(ctx: FeatureContext): void {
       const owner = market, details = ui.h('button', 'world-name', item.label) as HTMLButtonElement; details.type = 'button';
       details.addEventListener('click', () => owner.details(pack.name), { signal }); heading.append(details);
     } else heading.append(ui.h('span', 'world-name', item.label));
-    // An installed update waits for the restart, which its icon offers; an available one opens the
-    // package's page, where the update is.
     if (pack && market && updatePending(item)) {
       const owner = market;
       heading.append(iconButton('refresh', S.updatePendingRestart(pack.version ?? '?', pack.installedVersion ?? '?'), 'world-name-update world-name-pending', () => void owner.restart()));
