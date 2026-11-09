@@ -1,12 +1,13 @@
 /**
  * 扩展的浏览器端产物:URL 由服务端分配,文件逐个发。
  *
- * 用真的临时目录放真的 js/css,验证三件事:manifest 里那一页拿到的是
+ * 用真的临时目录放真的 js/css,验证四件事:manifest 里那一页拿到的是
  * `/assets/extensions/…`;那条 URL 能取到字节且按 immutable 缓存;URL 里的三段只是
- * 查表用的键,拿它拼不出别的文件。dist 与扩展撞 key 时仓库内的页赢。
+ * 查表用的键,拿它拼不出别的文件;发的是加载时读到的字节,磁盘上换了文件也不变。
+ * dist 与扩展撞 key 时仓库内的页赢。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type WebAppDeps, type WebAppExtensionDeps } from '../../src/web/server.ts';
@@ -14,6 +15,8 @@ import { WebUiAssets, type WebUiPageSource } from '../../src/web/webui-pages.ts'
 import type { Logger } from '../../src/core/types.ts';
 import type { WebUiManifest } from '../../src/web/shared/webui-protocol.ts';
 import { extensionAssetUrl, type ExtensionWebUiAsset } from '../../src/extensions/manifest.ts';
+import { loadExtensions } from '../../src/extensions.ts';
+import { installFixture } from '../fixtures/extensions/install.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
 
@@ -50,7 +53,9 @@ const asset = (): ExtensionWebUiAsset => ({
   packageName: PKG,
   version: VERSION,
   jsFile: join(pkgDist, 'webui.js'),
+  jsBytes: Buffer.from(JS_BODY),
   cssFile: join(pkgDist, 'webui.css'),
+  cssBytes: Buffer.from(CSS_BODY),
 });
 
 const extensionDeps = (assets: readonly ExtensionWebUiAsset[]): WebAppExtensionDeps => ({
@@ -134,6 +139,20 @@ describe('扩展产物的 URL 分配', () => {
     });
   });
 
+  /** 进程运行期间更新包只换磁盘上的文件,运行中的仍是已加载的定义。 */
+  it('包的文件在磁盘上换掉后,URL 发的仍是加载时读到的字节', async () => {
+    const root = join(dir, 'loaded-root');
+    const pkgDir = installFixture(root, 'world-with-webui');
+    const loaded = readFileSync(join(pkgDir, 'dist/webui.js'), 'utf8');
+    const set = await loadExtensions(root);
+    writeFileSync(join(pkgDir, 'dist/webui.js'), 'export default function register() { return "next"; }\n', 'utf8');
+    await withApp({ extensions: extensionDeps(set.webUiAssets) }, async (base) => {
+      const js = await fetch(`${base}${extensionAssetUrl('world-with-webui', '3.1.0', 'webui.js')}`);
+      expect(js.status).toBe(200);
+      expect(await js.text()).toBe(loaded);
+    });
+  });
+
   it('没有扩展产物时那一页照常在 manifest 里,只是没有 client', async () => {
     await withApp({ extensions: extensionDeps([]) }, async (base) => {
       expect(await clientOf(base)).toBeUndefined();
@@ -149,9 +168,9 @@ describe('扩展产物的 URL 分配', () => {
     const errors: string[] = [];
     const log = { error: (msg: string) => { errors.push(msg); } } as unknown as Logger;
     const assets = new WebUiAssets(emptyDist, log, [
-      { pageId: 'world:noname', packageName: '@', version: VERSION, jsFile: join(pkgDist, 'webui.js') },
-      { pageId: 'world:nover', packageName: PKG, version: '', jsFile: join(pkgDist, 'webui.js') },
-      { pageId: 'world:ok', packageName: PKG, version: VERSION, jsFile: join(pkgDist, 'webui.js') },
+      { pageId: 'world:noname', packageName: '@', version: VERSION, jsFile: join(pkgDist, 'webui.js'), jsBytes: Buffer.from(JS_BODY) },
+      { pageId: 'world:nover', packageName: PKG, version: '', jsFile: join(pkgDist, 'webui.js'), jsBytes: Buffer.from(JS_BODY) },
+      { pageId: 'world:ok', packageName: PKG, version: VERSION, jsFile: join(pkgDist, 'webui.js'), jsBytes: Buffer.from(JS_BODY) },
     ]);
     expect(assets.forPage('world:noname')).toBeUndefined();
     expect(assets.forPage('world:nover')).toBeUndefined();

@@ -41,8 +41,9 @@ used; the operating system's one is 命令行, and English "terminal" means only
 
 Conventions that hold across the repository:
 
-- **One prefix per World**, the id in PascalCase (`Minecraft`, `Pvz`, `QQ`, `WebSearch`), on its
-  contract exports: `<PREFIX>` definition, `<Prefix>ConfigSection`, `<PREFIX>_DEFAULTS`,
+- **One prefix per World** on its contract exports: the id written in PascalCase (`Minecraft`,
+  `Pvz`, `QQ`, `WebSearch`); the id itself is lowercase (`minecraft`, `qq`, `websearch`).
+  The exports: `<PREFIX>` definition, `<Prefix>ConfigSection`, `<PREFIX>_DEFAULTS`,
   `<PREFIX>_TOOL_DECLS`, the `<Prefix>World` class and its `<Prefix>WorldProxy`. Exports that
   carry display text take the request language: `<prefix>ConfigGroup(language)`,
   `<prefix>PanelDecls(language)`. Internal helpers carry no prefix; engine-ipc types

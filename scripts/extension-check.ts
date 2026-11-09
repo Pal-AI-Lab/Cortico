@@ -32,7 +32,7 @@ import {
   extensionShapeMismatch,
   resolveExtensionEntry,
 } from '../src/extensions.ts';
-import { pageIdFor } from '../src/web/shared/webui-protocol.ts';
+import { pageIdFor, parsePageId } from '../src/web/shared/webui-protocol.ts';
 import { authorGuide } from '../src/extensions/author-guide.ts';
 import { readTextFile } from '../src/core/util.ts';
 
@@ -123,6 +123,10 @@ async function main(): Promise<void> {
   const noun = { world: 'World', provider: 'provider', bot: 'bot' }[manifest.kind];
   const id = (exported as { id: string }).id;
   ok(`Default export has the ${manifest.kind} shape; id = ${id}`);
+  const pageId = pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id);
+  if (!parsePageId(pageId)) {
+    fail(`${noun} id "${id}" cannot form a WebUI page id: use only lowercase letters, digits and hyphens, with a letter or digit at each end. The ${noun} still loads, but the WebUI drops its page "${pageId}".`);
+  }
   if (manifest.kind === 'bot') {
     console.log('    The bot id must not match a directory under bots/ in the repository. To use the bot, set the bot field of deployment.json to the package name.');
     console.log('    The package directory is read-only: a promptDocs template without deploymentPath shows in the WebUI but cannot be saved.');
@@ -140,7 +144,7 @@ async function main(): Promise<void> {
       fail(`cortico.webUiClient points to ${manifest.webUiClient}, which is not in the package: build it, then check that files / .npmignore include it. The ${noun} still loads, without this WebUI panel.`);
     } else {
       ok(`Browser bundle: ${manifest.webUiClient}`);
-      console.log(`    WebUI page id: ${pageIdFor(EXTENSION_PAGE_KIND[manifest.kind], id)}`);
+      console.log(`    WebUI page id: ${pageId}`);
       console.log(`    Published URL: ${extensionAssetUrl(pkg.name ?? '', pkg.version ?? '0', basename(manifest.webUiClient))}`);
     }
     if (manifest.webUiStyle !== undefined) {

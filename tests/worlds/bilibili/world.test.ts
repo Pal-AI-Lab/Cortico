@@ -39,7 +39,8 @@ class FakeHost implements WorldHost {
     return full;
   }
   async pushCandidate(spec: CandidatePushSpec, opts?: { trigger?: TriggerMode }): Promise<readonly EventEnvelope[]> {
-    const archived = spec.sourceEvents.map((source, index) => ({
+    // 直播间不带附件，假宿主不做附件落库。
+    const archived = spec.sourceEvents.map(({ blobs: _blobs, ...source }, index) => ({
       ...source,
       cursor: this.archivedEvents.length + index + 1,
       source: 'bilibili',
@@ -56,15 +57,16 @@ class FakeHost implements WorldHost {
       project: spec.project,
     }]);
     for (const projection of projections) {
+      const { blobs: _blobs, ...projected } = projection.event;
       const full: EventEnvelope = {
-        ...projection.event,
+        ...projected,
         cursor: 100_000 + this.events.length + 1,
         ts: archived[0].ts,
         source: 'bilibili',
         origin: spec.origin ?? 'external',
         contextDelivery: 'deliver',
         meta: {
-          ...projection.event.meta,
+          ...projected.meta,
           sourceCursors: projection.candidateIndexes.flatMap((index) =>
             index === 0 ? archived.map((event) => event.cursor) : []),
         },
@@ -138,7 +140,7 @@ class BatchCandidateHost extends FakeHost {
     spec: CandidatePushSpec,
     opts?: { trigger?: TriggerMode },
   ): Promise<readonly EventEnvelope[]> {
-    const archived = spec.sourceEvents.map((source, index) => ({
+    const archived = spec.sourceEvents.map(({ blobs: _blobs, ...source }, index) => ({
       ...source,
       cursor: this.archivedEvents.length + index + 1,
       source: 'bilibili',
@@ -164,14 +166,15 @@ class BatchCandidateHost extends FakeHost {
     }));
     for (const projection of project(sourceCandidates)) {
       const sources = projection.candidateIndexes.flatMap((index) => this.pending[index].archived);
+      const { blobs: _blobs, ...projected } = projection.event;
       const full: EventEnvelope = {
-        ...projection.event,
+        ...projected,
         cursor: 100_000 + this.events.length + 1,
         ts: sources[0].ts,
         source: 'bilibili',
         origin: 'external',
         contextDelivery: 'deliver',
-        meta: { ...projection.event.meta, sourceCursors: sources.map((event) => event.cursor) },
+        meta: { ...projected.meta, sourceCursors: sources.map((event) => event.cursor) },
       };
       this.events.push(full);
       this.pushOpts.push(this.pending[projection.candidateIndexes[0]].opts);
