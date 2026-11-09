@@ -63,6 +63,13 @@ export interface ConfigGroup {
   schema: ConfigGroupSchema;
 }
 
+/** Persona 的配置组:固定的一组,或按请求语言生成的一组(各语言的 id 与取值范围相同)。 */
+export type PersonaConfigGroups = readonly ConfigGroup[] | ((language: Language) => readonly ConfigGroup[]);
+
+export function personaConfigGroups(groups: PersonaConfigGroups | undefined, language: Language): readonly ConfigGroup[] {
+  return typeof groups === 'function' ? groups(language) : groups ?? [];
+}
+
 /** 扩展交来的配置组只在编译期受类型约束,运行期由这里判定形状。 */
 export function isConfigGroup(value: unknown): value is ConfigGroup {
   if (!value || typeof value !== 'object') return false;

@@ -1,4 +1,6 @@
 import type { ConfigGroup } from 'cortico/core/types.ts';
+import type { Language } from 'cortico/core/language.ts';
+import { configText } from './strings.ts';
 
 /**
  * 上下文阶段三个裁量与首轮对话开关(`ContextStagePolicy`)的 WebUI 配置组。归属 `persona`:
@@ -6,54 +8,53 @@ import type { ConfigGroup } from 'cortico/core/types.ts';
  * Persona 页的配置页签。
  *
  * 每个以 Cormini 为骨架的 bot 各声明一次,`id` 按 bot 取;没有这一组的 bot,这三个数在
- * WebUI 上没有位置,只能改 config.json。
+ * WebUI 上没有位置,只能改 config.json。标题与说明按请求语言给出。
  */
-export function contextStageConfigGroup(id: string): ConfigGroup {
+export function contextStageConfigGroup(id: string, language: Language): ConfigGroup {
+  const t = configText(language);
   return {
     id,
     owner: 'persona',
     schema: {
       type: 'object',
-      title: '上下文与交接',
-      description:
-        '模型窗口与单次输出上限在「语言模型」页配置。上下文达到模型硬限制时由 Core 强制交接。',
+      title: t.title,
+      description: t.description,
       properties: {
         'context.maxTokens': {
           type: 'integer',
-          title: '上下文阶段预算',
+          title: t.maxTokens,
           minimum: 8000,
           maximum: 2_000_000,
           multipleOf: 1000,
           'x-suffix': 'tok',
           'x-hot': true,
-          description:
-            '上下文超过阶段预算 × 软阈值比例时先提示；下一批结束时仍超出则交接。',
+          description: t.maxTokensDesc,
         },
         'context.keepRatio': {
           type: 'number',
-          title: '交接保留比例',
+          title: t.keepRatio,
           minimum: 0.05,
           maximum: 0.9,
           multipleOf: 0.01,
           'x-suffix': '×',
           'x-hot': true,
-          description: '交接笔记的 token 预算 = 阶段预算 × 此比例。笔记保留最近内容，更早的部分只留计数。',
+          description: t.keepRatioDesc,
         },
         'context.softRatio': {
           type: 'number',
-          title: '软阈值比例',
+          title: t.softRatio,
           minimum: 0.1,
           maximum: 1,
           multipleOf: 0.01,
           'x-suffix': '×',
           'x-hot': true,
-          description: '上下文预警阈值 = 阶段预算 × 此比例。',
+          description: t.softRatioDesc,
         },
         'context.firstTurn': {
           type: 'boolean',
-          title: '合成首轮对话',
+          title: t.firstTurn,
           'x-hot': true,
-          description: '把部署 prompts/ 里的首轮对话(FIRST_TURN_USER / THINKING / REPLY)作为合成开头送进每次请求,不写入 session;内容为空时不送。',
+          description: t.firstTurnDesc,
         },
       },
     },

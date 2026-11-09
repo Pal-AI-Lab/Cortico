@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Persona の在り方とメタ認知についての説明。',
@@ -40,4 +40,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: '同じ名前のファイルがすでにあります',
   unknownMethod: (panel: string, method: string) => `不明なパネルメソッド：${panel}.${method}`,
   unknownPanel: (panel: string) => `不明なパネル：${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'コンテキストと引き継ぎ',
+  description: 'モデルのウィンドウと 1 回の出力上限は「モデル接続」ページで設定します。コンテキストがモデルのハード上限に達すると、Core が引き継ぎを強制します。',
+  maxTokens: 'コンテキスト段階予算',
+  maxTokensDesc: 'コンテキストが段階予算 × ソフトしきい値比率を超えると、まず通知します。次のバッチの終了時にまだ超えていれば引き継ぎます。',
+  keepRatio: '引き継ぎ保持比率',
+  keepRatioDesc: '引き継ぎノートのトークン予算 = 段階予算 × この比率。ノートは最近の内容を残し、それより前の部分は件数だけを残します。',
+  softRatio: 'ソフトしきい値比率',
+  softRatioDesc: 'コンテキスト警告しきい値 = 段階予算 × この比率。',
+  firstTurn: '合成の最初のターン',
+  firstTurnDesc: 'デプロイの prompts/ にある最初のターン（FIRST_TURN_USER / THINKING / REPLY）を、合成の冒頭として毎回のリクエストに送ります。セッションには書き込みません。内容が空なら送りません。',
 };

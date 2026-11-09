@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Persona的存在方式與後設認知說明。',
@@ -40,4 +40,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: '已有同名檔案',
   unknownMethod: (panel: string, method: string) => `未知的面板方法: ${panel}.${method}`,
   unknownPanel: (panel: string) => `未知的面板: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: '上下文與交接',
+  description: '模型視窗與單次輸出上限在「模型供應商」頁設定。上下文達到模型硬限制時由 Core 強制交接。',
+  maxTokens: '上下文階段預算',
+  maxTokensDesc: '上下文超過階段預算 × 軟閾值比例時先提示；下一批結束時仍超出則交接。',
+  keepRatio: '交接保留比例',
+  keepRatioDesc: '交接筆記的 token 預算 = 階段預算 × 此比例。筆記保留最近內容，更早的部分只留計數。',
+  softRatio: '軟閾值比例',
+  softRatioDesc: '上下文預警閾值 = 階段預算 × 此比例。',
+  firstTurn: '合成首輪對話',
+  firstTurnDesc: '把部署 prompts/ 裡的首輪對話（FIRST_TURN_USER / THINKING / REPLY）作為合成開頭送進每次請求，不寫入 session；內容為空時不送。',
 };
