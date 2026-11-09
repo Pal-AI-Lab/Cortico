@@ -1,5 +1,6 @@
-import type { Logger, ModelSpec, ToolCallContext, ToolDef } from './types.ts';
+import type { BlobInput, BlobRef, Logger, ModelSpec, ToolCallContext, ToolDef } from './types.ts';
 import type { SessionHandle } from './sessions.ts';
+import { withBlobLines } from './blobs.ts';
 import { message, functionResult, responseRecords, type ContextRecord } from '../protocol/open-responses/context.ts';
 import { responseRequest, textOf } from '../protocol/open-responses/context-helpers.ts';
 import { ResponseAccumulator } from '../protocol/open-responses/stream.ts';
@@ -21,6 +22,8 @@ export interface ForkLoopOptions {
   maxRounds: number;
   softRounds?: number;
   log: Logger;
+  /** 工具回执的附件内部化(新字节进日志附件库、已有句柄补 mime),与主循环同一个实现。 */
+  blobs: { intern(inputs: readonly (BlobInput | BlobRef)[] | undefined): BlobRef[] | undefined };
   stopWhen?: () => boolean;
   wrapUpHint?: string;
   capNote?: string;
@@ -72,6 +75,7 @@ export async function runForkLoop(opts: ForkLoopOptions): Promise<string> {
     for (const [index, call] of calls.entries()) {
       const def = tools.find(tool => tool.name === call.name);
       let out: string;
+      let blobs: BlobRef[] | undefined;
       let ended = false;
       if (barrier) out = NOT_EXECUTED_BARRIER;
       else if (call.status !== 'completed') { out = NOT_EXECUTED_INCOMPLETE; barrier = true; }
@@ -80,13 +84,17 @@ export async function runForkLoop(opts: ForkLoopOptions): Promise<string> {
         try {
           const args = JSON.parse(call.arguments || '{}') as Record<string, unknown>;
           const result = await def.handler(args, { ...ctx, callId: call.call_id });
-          out = typeof result === 'string' ? result : result.text;
+          if (typeof result === 'string') out = result;
+          else {
+            blobs = opts.blobs.intern(result.blobs);
+            out = withBlobLines(result.text, blobs);
+          }
           ended = def.endsTurn === true;
         } catch (error) { out = toolFailed(error instanceof Error ? error.message : String(error)); }
         if (def.barrierAfter) barrier = true;
       }
       if (round === wrapUpAt) out += `\n[system] ${wrapUpHint}`;
-      const receipt = functionResult(call.call_id, out);
+      const receipt = functionResult(call.call_id, out, blobs ? { blobs } : {});
       messages.push(receipt); observed.push(receipt);
       if (ended || opts.stopWhen?.()) {
         for (const skipped of calls.slice(index + 1)) {

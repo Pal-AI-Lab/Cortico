@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Cómo existe la Persona y notas sobre su metacognición.',
@@ -39,4 +39,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Ya existe un archivo con ese nombre',
   unknownMethod: (panel: string, method: string) => `Método de panel desconocido: ${panel}.${method}`,
   unknownPanel: (panel: string) => `Panel desconocido: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Contexto y traspaso',
+  description: 'La ventana del modelo y el límite de salida por respuesta se configuran en la página Conexiones de modelo. Cuando el contexto alcanza el límite estricto del modelo, Core fuerza el traspaso.',
+  maxTokens: 'Presupuesto de la etapa de contexto',
+  maxTokensDesc: 'Cuando el contexto supera presupuesto de la etapa × proporción del umbral suave, primero se avisa; si al terminar el siguiente lote aún lo supera, se hace el traspaso.',
+  keepRatio: 'Proporción conservada en el traspaso',
+  keepRatioDesc: 'Presupuesto de tokens de la nota de traspaso = presupuesto de la etapa × esta proporción. La nota conserva el contenido más reciente; las partes anteriores solo quedan como recuentos.',
+  softRatio: 'Proporción del umbral suave',
+  softRatioDesc: 'Umbral de aviso del contexto = presupuesto de la etapa × esta proporción.',
+  firstTurn: 'Primer turno sintético',
+  firstTurnDesc: 'Envía en cada solicitud, como inicio sintético, el primer turno de prompts/ del despliegue (FIRST_TURN_USER / THINKING / REPLY), sin escribirlo en la sesión; si está vacío, no se envía.',
 };

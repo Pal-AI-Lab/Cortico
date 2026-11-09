@@ -83,13 +83,16 @@ export interface DeferredEventSpec {
 
 export type DeferredRendered = string | { text: string; blobs?: BlobInput[] };
 
-/** 候选的原始事件；宿主补全来源、游标并以 archive-only 保存。 */
+/**
+ * 候选的原始事件；宿主补全来源、游标并以 archive-only 保存。
+ * 附件与 pushEvent 同规则：保存时落库，fallbackText 附在正文后。
+ */
 export type CandidateSourceEvent = Omit<
   EventEnvelope,
-  'cursor' | 'source' | 'origin' | 'contextDelivery'
->;
+  'cursor' | 'source' | 'origin' | 'contextDelivery' | 'blobs'
+> & { blobs?: BlobInput[] };
 
-/** 候选处理生成的事件；时间戳和游标在投递时分配。 */
+/** 候选处理生成的事件；时间戳和游标在投递时分配，附件在投递时落库，可直接引用原始事件的 BlobRef。 */
 export type CandidateProjectionEvent = Omit<CandidateSourceEvent, 'ts'>;
 
 /** 一次候选处理的输出；candidateIndexes 指向输入候选数组中被此事件引用的项。 */
@@ -517,15 +520,15 @@ export interface ContextHandoffResult {
 
 /** Persona 访问 Core 的接口。 */
 export interface CoreApi {
-  /** 向接收事件的 session 注入内部事件；立即落库，正文由 Persona 提供。 */
-  injectInternal(text: string, kind?: string): void;
+  /** 向接收事件的 session 注入内部事件；立即落库，正文由 Persona 提供，blobs 同 WorldHost.pushEvent 落库。 */
+  injectInternal(text: string, kind?: string, blobs?: BlobInput[]): void;
   /** 注入内部事件，在投递时调用 render；渲染与持久化规则见 DeferredEventSpec。 */
-  injectDeferred(kind: string, render: () => string | null | Promise<string | null>): void;
+  injectDeferred(kind: string, render: DeferredEventSpec['render']): void;
   /**
    * 将 Persona 提供的正文作为外部事件投递，source=persona、origin=external。
-   * 正文位置由 SessionDecl.eventDelivery 决定。
+   * 正文位置由 SessionDecl.eventDelivery 决定;blobs 同 injectInternal。
    */
-  injectExternal(text: string, kind?: string): void;
+  injectExternal(text: string, kind?: string, blobs?: BlobInput[]): void;
   /** 在安全轮次边界请求上下文交接；已有请求待处理时返回 false。 */
   requestContextHandoff(): boolean;
   /** 运行临时 session 的工具循环，返回最后一段正文。 */

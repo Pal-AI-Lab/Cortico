@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: 'Como a Persona existe e notas sobre sua metacognição.',
@@ -39,4 +39,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Já existe um arquivo com esse nome',
   unknownMethod: (panel: string, method: string) => `Método de painel desconhecido: ${panel}.${method}`,
   unknownPanel: (panel: string) => `Painel desconhecido: ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Contexto e passagem',
+  description: 'A janela do modelo e o limite de saída por resposta são configurados na página Conexões de modelo. Quando o contexto atinge o limite rígido do modelo, o Core força a passagem.',
+  maxTokens: 'Orçamento da etapa de contexto',
+  maxTokensDesc: 'Quando o contexto passa de orçamento da etapa × proporção do limiar suave, primeiro vem um aviso; se ainda passar ao fim do próximo lote, ocorre a passagem.',
+  keepRatio: 'Proporção mantida na passagem',
+  keepRatioDesc: 'Orçamento de tokens da nota de passagem = orçamento da etapa × esta proporção. A nota mantém o conteúdo mais recente; partes anteriores ficam só como contagens.',
+  softRatio: 'Proporção do limiar suave',
+  softRatioDesc: 'Limiar de aviso do contexto = orçamento da etapa × esta proporção.',
+  firstTurn: 'Primeiro turno sintético',
+  firstTurnDesc: 'Envia em cada requisição, como abertura sintética, o primeiro turno de prompts/ da implantação (FIRST_TURN_USER / THINKING / REPLY), sem gravá-lo na sessão; se estiver vazio, nada é enviado.',
 };

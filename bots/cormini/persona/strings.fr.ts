@@ -1,4 +1,4 @@
-import type { webUiEn, panelEn } from './strings.ts';
+import type { webUiEn, panelEn, configEn } from './strings.ts';
 
 export const webUiText: Partial<typeof webUiEn> = {
   orientation: "Mode d'existence de la Persona et notes de métacognition.",
@@ -39,4 +39,17 @@ export const panelText: Partial<typeof panelEn> = {
   nameTaken: 'Un fichier portant ce nom existe déjà',
   unknownMethod: (panel: string, method: string) => `Méthode de panneau inconnue : ${panel}.${method}`,
   unknownPanel: (panel: string) => `Panneau inconnu : ${panel}`,
+};
+
+export const configText: Partial<typeof configEn> = {
+  title: 'Contexte et passation',
+  description: 'La fenêtre du modèle et la limite de sortie par réponse se règlent sur la page Connexions de modèles. Quand le contexte atteint la limite stricte du modèle, Core force la passation.',
+  maxTokens: 'Budget de l’étape de contexte',
+  maxTokensDesc: 'Quand le contexte dépasse budget de l’étape × ratio du seuil souple, un avertissement vient d’abord ; s’il le dépasse encore à la fin du lot suivant, la passation a lieu.',
+  keepRatio: 'Ratio conservé à la passation',
+  keepRatioDesc: 'Budget en tokens de la note de passation = budget de l’étape × ce ratio. La note garde le contenu le plus récent ; les parties plus anciennes ne sont conservées que sous forme de décomptes.',
+  softRatio: 'Ratio du seuil souple',
+  softRatioDesc: 'Seuil d’avertissement du contexte = budget de l’étape × ce ratio.',
+  firstTurn: 'Premier tour synthétique',
+  firstTurnDesc: 'Envoie avec chaque requête, comme ouverture synthétique, le premier tour défini dans prompts/ du déploiement (FIRST_TURN_USER / THINKING / REPLY), sans l’écrire dans la session ; rien n’est envoyé s’il est vide.',
 };

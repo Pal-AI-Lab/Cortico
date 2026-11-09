@@ -41,8 +41,8 @@ import { ProviderHub } from './providers/webui/hub.ts';
 import { ProviderSettings } from './providers/webui/settings.ts';
 import { providerModules } from './providers/registry.ts';
 import { repoRoot } from './paths.ts';
-import { isConfigGroup, readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
-import type { ConfigValues } from './core/config-schema.ts';
+import { isConfigGroup, personaConfigGroups, readGroupValues, setByPath as setConfigPath } from './core/config-schema.ts';
+import type { ConfigValues, PersonaConfigGroups } from './core/config-schema.ts';
 import {
   PromptRevisionConflict,
   WebApp,
@@ -113,8 +113,11 @@ export interface BotParts<C extends CoreConfig = CoreConfig> {
 export interface WebUiContribution {
   /** false = 完全不起 WebUI(无头运行) */
   enabled?: boolean;
-  /** 追加的可调配置组(Persona那组;core 与各 World 的由框架收拢) */
-  configGroups?: ConfigGroup[];
+  /**
+   * 追加的可调配置组(Persona那组;core 与各 World 的由框架收拢)。给函数时按请求语言生成标题与说明;
+   * 各语言的 id 与取值范围须相同。
+   */
+  configGroups?: PersonaConfigGroups;
   /** 动态下拉选项；固定选项的文案使用请求语言。 */
   configOptions?(kind: string, language: Language): Array<{ value: string; label: string }>;
   /** 合并进状态快照的实现特有字段(框架给的基础字段在前,这里覆盖) */
@@ -796,7 +799,7 @@ export function deriveWebUiPageSources(
    * bot 标识、展示名、Memory 名与配置组;配置组归入 Persona 页面。
    * 展示名是这一台 bot 的名字(底栏头像旁边那个),Persona 页的标题另取 Persona 的类名。
    */
-  bot?: { id: string; label: string; memoryName?: string; configGroups?: readonly ConfigGroup[] },
+  bot?: { id: string; label: string; memoryName?: string; configGroups?: PersonaConfigGroups },
 
   extra?: (language: Language) => WebUiPageContribution[],
 ): () => WebUiPageSource[] {
@@ -842,10 +845,10 @@ export function deriveWebUiPageSources(
     if (bot && selfId) {
       // Persona 页写 Persona 的名字:一台 bot 的展示名是部署给的,类名才是这一层的身份。
       const personaLabel = (persona && personaClassName(persona)) || bot.label;
-      const claimedGroups = [...(bot.configGroups ?? [])];
-      const botConfig: WebUiPageContribution[] = claimedGroups.length
-        ? [{ id: selfId, kind: 'persona', label: personaLabel, config: claimedGroups }]
-        : [];
+      const botConfig = (language: Language): WebUiPageContribution[] => {
+        const claimedGroups = [...personaConfigGroups(bot.configGroups, language)];
+        return claimedGroups.length ? [{ id: selfId, kind: 'persona', label: personaLabel, config: claimedGroups }] : [];
+      };
       sources.push({
         id: selfId,
         contribute: (language) => {
@@ -853,7 +856,7 @@ export function deriveWebUiPageSources(
             selfId,
             personaLabel,
             persona ? personaPageContribution(bot.id, personaLabel, persona, language) : null,
-            [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig],
+            [...extrasOf(language).filter((c) => c.id === selfId), ...botConfig(language)],
             language,
           );
           const undeclared = parts.undeclared?.of('persona');
@@ -949,7 +952,7 @@ export function createBot<C extends CoreConfig>(
 
   const configGroups = (language: Language): ConfigGroup[] => [
     coreConfigGroup(language),
-    ...wellFormedGroups('persona', contribution.configGroups ?? []),
+    ...wellFormedGroups('persona', personaConfigGroups(contribution.configGroups, language)),
     ...assembly.instances().flatMap((m) => wellFormedGroups(`worlds.${m.id}`, m.webUi?.(language)?.config ?? [])),
   ];
 
@@ -1075,7 +1078,7 @@ export function createBot<C extends CoreConfig>(
           label: cfg.displayName || definition.id,
           ...(definition.memoryName ? { memoryName: definition.memoryName } : {}),
 
-          ...(contribution.configGroups?.length ? { configGroups: contribution.configGroups } : {}),
+          ...(contribution.configGroups ? { configGroups: contribution.configGroups } : {}),
         },
         contribution.webUiPages
           ? (language) => contribution.webUiPages!({ storage: webUiStorage(language), language })
