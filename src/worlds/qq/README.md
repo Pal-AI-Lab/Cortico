@@ -7,22 +7,13 @@ QQ 群聊与私聊接入。World 作为客户端连接一个 OneBot v11 协议�
 
 ## 协议端
 
-任何 OneBot v11 实现都可以接,推荐 [SnowLuma](https://github.com/SnowLuma/SnowLuma),
-[NapCat](https://github.com/NapNeko/NapCatQQ) 同样可用。换协议端只改 WebUI「接入门」里的
-WS 地址与 token,保存后进程重启。
+任何 OneBot v11 实现都可以接,推荐 [NapCat](https://github.com/NapNeko/NapCatQQ)。
+SnowLuma 的仓库已于 2026-11 下架,不再推荐;已经装好的仍按 OneBot v11 照常连接。换协议端只改
+WebUI「接入门」里的 WS 地址与 token,保存后进程重启。
 
-SnowLuma:
-
-- 注入本机已安装并在运行的 QQNT 客户端:先在 QQ 窗口里登录,登录完成后在 SnowLuma WebUI
-  对这个 QQ 点「加载」。在登录界面就注入,QQ 服务器端会登录失败,SnowLuma 却仍显示在线。
-  注入后它才开始监听 OneBot 端口,这之前 World 按退避重连。
-- QQ 或电脑重启后,SnowLuma 不会自己接上新的 QQ 进程:等 QQ 登录完成,再点一次「加载」。
-  不建议打开 `hookAutoLoad`,它在 QQ 进程启动时就注入,那时还在登录界面。QQ World 断线期间
-  一直退避重连,不用重启 Cortico。
-- 正向 WS 默认 `ws://127.0.0.1:3001`,与 `worlds.qq.wsUrl` 的默认值相同。token 在首次运行时
-  按账号随机生成,写在 SnowLuma 目录的 `config/onebot_<QQ号>.json`。
-- 它的状态命令默认开启:群里有人发 `#sl`,账号会自动回一条状态消息,这条消息不经过起草-确认门。
-  接入前在 SnowLuma 配置里关掉 `statusCommand`。
+协议端要保持运行、登录 QQ,并开着正向 WebSocket 服务端。正向 WS 的默认地址
+`ws://127.0.0.1:3001` 与 `worlds.qq.wsUrl` 的默认值相同;协议端没起来或 QQ 没登录时,World 按退避重连,
+不用重启 Cortico。
 
 ## 依赖的动作与事件
 
@@ -59,7 +50,7 @@ JSON 分享卡片的来源名、内容标题和目标链接写入消息正文。
 
 | 协议端 | 动作 |
 |---|---|
-| SnowLuma、NapCat | `fetch_ptt_text({ message_id })` → `{ text }` |
+| NapCat、SnowLuma | `fetch_ptt_text({ message_id })` → `{ text }` |
 | LLOneBot | `voice_msg_to_text({ message_id })` → `{ text }` |
 
 先试 `fetch_ptt_text`,协议端回 retcode 1404(动作不存在)才换 `voice_msg_to_text`;探明可用的

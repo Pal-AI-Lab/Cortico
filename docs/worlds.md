@@ -176,7 +176,7 @@ Minecraft 的 `PwsrTables` 管理目标、路标及蓝图的 realm 视图,空间
 | id | 是什么 |
 |---|---|
 | `console` | WebUI 里的对话通道,与 QQ 同层级的外部平台 |
-| `qq` | 连接 OneBot v11 协议端(推荐 SnowLuma),只监听名单里的群与私聊;起草-确认门 |
+| `qq` | 连接 OneBot v11 协议端(推荐 NapCat),只监听名单里的群与私聊;起草-确认门 |
 | `bilibili` | B 站直播间只读接入与本机 Overlay |
 | `minecraft` | mineflayer 客户端,观察 = 结构化文本、动作 = 异步执行器;子进程 |
 | `websearch` | 只有请求 / 响应工具,不产事件 |

@@ -31,8 +31,8 @@ const zh = {
   rosterHint: '监听名单在「监听名单」面板里热改(无需重启)。',
   endpointTitle: 'OneBot 协议端',
   endpointEn: '正向 WS + token',
-  endpointDesc: '推荐 SnowLuma,NapCat 等 OneBot v11 实现同样可用。协议端需保持运行、登录 QQ 并开启正向 WebSocket;'
-    + 'SnowLuma 的 token 在它的 config/onebot_<QQ号>.json 里。保存连接配置后重启进程。',
+  endpointDesc: '推荐 NapCat,其他 OneBot v11 实现同样可用。协议端需保持运行、登录 QQ 并开启正向 WebSocket,'
+    + 'token 与协议端里设的一致。保存连接配置后重启进程。',
   tokenSet: '已配置(留空＝不改动)',
   tokenUnset: '(未配置)',
   saveRestart: '保存并重启',
@@ -140,8 +140,8 @@ export const en: typeof zh = {
   rosterHint: 'Edit the watch list in the "Watch list" panel; changes apply without a restart.',
   endpointTitle: 'OneBot endpoint',
   endpointEn: 'Forward WS + token',
-  endpointDesc: 'SnowLuma is recommended; NapCat and other OneBot v11 implementations also work. The endpoint must be running, logged in to QQ, with forward WebSocket enabled. '
-    + 'SnowLuma\'s token is in its config/onebot_<QQ number>.json. Saving the connection restarts the process.',
+  endpointDesc: 'NapCat is recommended; other OneBot v11 implementations also work. The endpoint must be running, logged in to QQ, with forward WebSocket enabled, '
+    + 'and the token must match the one set in the endpoint. Saving the connection restarts the process.',
   tokenSet: 'Set (leave empty to keep)',
   tokenUnset: '(not set)',
   saveRestart: 'Save and restart',
