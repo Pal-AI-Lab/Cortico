@@ -44,7 +44,8 @@ Persona 通过 `CoreApi` 访问：`injectInternal` / `injectDeferred` / `injectE
 
 ## 总线与唤醒
 
-`WakeBus` 提供 `preempt`、`interrupt`、`flush`、`debounce`、`piggyback` 五种触发模式。
+`WakeBus` 提供 `preempt`(抢占)、`interrupt`(打断)、`flush`(清出)、`debounce`(分批)、
+`piggyback`(搭车)五种触发模式。
 `preempt` 与 `interrupt` 投递后通知主循环,取消范围由主循环裁决;`promote` 把排队项改为立即触发。
 debounce 的计划投递时刻为 `min(首件时刻 + maxBatchAgeMs, max(首件时刻 + minBatchAgeMs,
 末件时刻 + quietGapMs))`；计数达到 `maxBatchSize` 时立即投递。
