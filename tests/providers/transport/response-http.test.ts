@@ -13,6 +13,23 @@ import { ResponsesProvider } from '../../../src/providers/openai-responses-compa
 
 afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
+it.each([true, false])('preserves a wrapped rejection without rewriting HTTP metering (stream=%s)', async streaming => {
+  const response = { id: 'rejection', model: 'test', status: 'failed', output: [],
+    error: { code: 'server_error', message: '<400> InternalError.Algo.DataInspectionFailed: Input text data may contain inappropriate content.' }, usage: null };
+  const fetcher = vi.fn(async () => new Response(streaming
+    ? 'data: ' + JSON.stringify({ type: 'response.created', sequence_number: 0, response: { ...response, status: 'in_progress', error: null } }) + '\n\n'
+      + 'data: ' + JSON.stringify({ type: 'response.failed', sequence_number: 1, response }) + '\n\n'
+    : JSON.stringify(response), { status: 200, headers: { 'content-type': streaming ? 'text/event-stream' : 'application/json' } }));
+  vi.stubGlobal('fetch', fetcher);
+  const provider = new ResponsesProvider({ baseUrl: 'https://fixture.test/v1', apiKey: 'fixture' });
+  const error = await provider.respond({ model: 'test', input: 'hi' }, streaming ? { onEvent: () => {} } : {}).catch(e => e);
+  expect(error).toBeInstanceOf(GenerationError);
+  expect(error).toMatchObject({ status: 400, body: JSON.stringify(response.error), partial: response });
+  expect(error.attempts).toHaveLength(1);
+  expect(error.attempts[0]).toMatchObject({ status: 200, outcome: 'failed', meters: { input: null, output: null } });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
 class Fixture extends OpenAIHttpClient {
   constructor(log: Logger = nullLogger()) { super('https://fixture.test', log); }
   protected buildBody(spec: ModelSpec, messages: NativeChatMessage[], tools?: ToolSchema[]): Record<string, unknown> {
@@ -122,7 +139,7 @@ data: ${JSON.stringify(event)}
     try {
       const failure = await stream(await server.port);
       expect(failure).toBeInstanceOf(GenerationError);
-      expect(failure).toMatchObject({ status: 0, body: JSON.stringify(event) });
+      expect(failure).toMatchObject({ status: 400, body: JSON.stringify(event) });
       expect((failure as Error).message).toContain(said);
       expect(server.requests()).toBe(1);
     } finally { server.close(); }

@@ -12,9 +12,33 @@ export class LLMError extends Error {
 /** An `error` event in a stream: the upstream's own failure report, which the transport does not retry. */
 export class StreamErrorEvent extends LLMError {
   constructor(body: string) {
-    super(`Stream error event: ${upstreamText(body)}`, 0, body);
+    super(`Stream error event: ${upstreamText(body)}`, upstreamStatus(body), body);
     this.name = 'StreamErrorEvent';
   }
+}
+
+/** A stream can carry a request rejection after its HTTP 200 headers were sent. */
+export function upstreamStatus(body: string): number {
+  try {
+    const parsed: unknown = JSON.parse(body);
+    if (!parsed || typeof parsed !== 'object') return 0;
+    const error: unknown = 'error' in parsed ? parsed.error : parsed;
+    if (!error || typeof error !== 'object') return 0;
+    for (const key of ['status', 'status_code'] as const) {
+      const value = (error as Record<string, unknown>)[key];
+      if (typeof value === 'number' && Number.isInteger(value) && value >= 400 && value <= 599) return value;
+    }
+    // Compatibility gateways sometimes wrap the upstream status in a message prefix.
+    const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+    const status = /^<([45]\d{2})>\s/.exec(message);
+    if (status) return Number(status[1]);
+    const code = 'code' in error ? error.code : null;
+    const type = 'type' in error ? error.type : null;
+    if (['invalid_request_error', 'context_length_exceeded', 'content_filter', 'data_inspection_failed', 'DataInspectionFailed'].includes(String(code))
+      || type === 'invalid_request_error') return 400;
+    if (code === 'rate_limit_exceeded' || type === 'rate_limit_error') return 429;
+  } catch { /* Unstructured failures keep the unknown status. */ }
+  return 0;
 }
 
 /** The upstream's error text: `error.message` or `message` of a JSON body, else the body, on one line. */

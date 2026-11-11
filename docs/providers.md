@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/transport/response-http.ts, src/providers/transport/errors.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
 
 # Provider
 
@@ -123,6 +123,7 @@ router 自动加载。
 一次生成可包含多次请求尝试,重试间隔为 1s / 4s / 10s;状态 0、408、429 与 5xx 重试,401/403 先刷新一次凭证。
 流里的 `error` 事件是上游自己报的失败,不重试。非 2xx 的错误消息是 `LLM API <状态码>: <上游的错误说明>`,
 说明取 JSON 正文的 `error.message` 或 `message`,没有就取正文，压成一行;完整正文在 `GenerationError.body`。
+HTTP 200 内的失败终态仍可能是请求拒绝。`GenerationError.status` 保留错误对象的 4xx/5xx 状态、已知请求拒绝/限流代码，或兼容网关的 `<400>` 等消息前缀；未知错误保持 0。`ProviderAttempt.status` 始终保留真实 HTTP 状态。明确的 400 拒绝因此不会被主循环当作网络失败在本批重提，原错误正文、失败输出及用量仍可审计。
 响应带 `Retry-After` 时按它退避,等待与生成中的其他等待一样可被调用方中断。
 已提交不可逆增量之后不再重试。终态只接受 `completed` 与 `incomplete`:截断落成
 `incomplete_details.reason`,被截断的工具调用由 Core 标成未执行。输出字符数超过

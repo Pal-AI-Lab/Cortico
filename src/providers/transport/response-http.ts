@@ -3,7 +3,7 @@ import type { Request, Response, StreamEvent } from '../../protocol/open-respons
 import type { ItemOrigin } from '../../protocol/open-responses/context.ts';
 import { GenerationError, priceUsage, unknownMeters, type GenerateOptions, type Generation, type ProviderAttempt, type PriceSnapshot, type TokenMeters } from '../../core/generation.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
-import { LLMError, StreamErrorEvent, abortError, parseRetryAfter, retryDelay, reqIdSuffix, upstreamText } from './errors.ts';
+import { LLMError, StreamErrorEvent, abortError, parseRetryAfter, retryDelay, reqIdSuffix, upstreamText, upstreamStatus } from './errors.ts';
 import type { ResponseAssembly } from './response-assembly.ts';
 
 export interface ResponseTransport {
@@ -197,7 +197,10 @@ export async function generate(request: Request, options: GenerateOptions, origi
         attempt.serviceTier = parsed.serviceTier;
       }
       attempt.responseId = partial.id;
-      if (partial.status === 'failed') throw new LLMError(partial.error?.message ?? partial.error?.code ?? 'Response failed', 0, JSON.stringify(partial.error));
+      if (partial.status === 'failed') {
+        const body = JSON.stringify(partial.error);
+        throw new LLMError(partial.error?.message ?? partial.error?.code ?? 'Response failed', upstreamStatus(body), body);
+      }
       if (partial.status !== 'completed' && partial.status !== 'incomplete') throw new LLMError(`Response has no terminal status: ${partial.status}`, 0, '');
       attempt.outcome = options.signal?.aborted ? 'discarded' : partial.status;
       transport.succeeded();

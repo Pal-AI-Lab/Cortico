@@ -1,7 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseRetryAfter } from '../../../src/providers/transport/errors.ts';
+import { parseRetryAfter, upstreamStatus } from '../../../src/providers/transport/errors.ts';
 
 afterEach(() => vi.useRealTimers());
+
+it('uses explicit upstream statuses while leaving ambiguous failures unknown', () => {
+  expect(upstreamStatus(JSON.stringify({ error: { status: 422, message: 'bad input' } }))).toBe(422);
+  expect(upstreamStatus(JSON.stringify({ code: 'server_error', message: '<429> overloaded' }))).toBe(429);
+  expect(upstreamStatus(JSON.stringify({ code: 'server_error', message: '<503> unavailable' }))).toBe(503);
+  expect(upstreamStatus(JSON.stringify({ code: 'invalid_request_error', message: 'invalid argument' }))).toBe(400);
+  expect(upstreamStatus(JSON.stringify({ code: 'rate_limit_exceeded' }))).toBe(429);
+  expect(upstreamStatus(JSON.stringify({ code: 'server_error', message: '400 characters received' }))).toBe(0);
+  expect(upstreamStatus(JSON.stringify({ status: 200, message: 'unknown failure' }))).toBe(0);
+  expect(upstreamStatus('network failure')).toBe(0);
+});
 
 describe('parseRetryAfter', () => {
   it('数字按秒,HTTP 日期按距今,缺失与不成形为 null', () => {

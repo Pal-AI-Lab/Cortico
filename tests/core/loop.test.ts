@@ -3657,6 +3657,27 @@ describe("MainLoop 重新请求、轮次边界与统计", () => {
     assertPairing(rig.session.messages);
   });
 
+  it('does not resubmit a terminal provider rejection carried by HTTP 200', async () => {
+    let requests = 0;
+    const response = { id: 'rejected-request', model: 'test', status: 'failed', output: [],
+      error: { code: 'server_error', message: '<400> InternalError.Algo.DataInspectionFailed: Input text data may contain inappropriate content.' }, usage: null };
+    vi.stubGlobal('fetch', async () => {
+      requests++;
+      return new Response('data: ' + JSON.stringify({ type: 'response.created', sequence_number: 0, response: { ...response, status: 'in_progress', error: null } }) + '\n\n'
+        + 'data: ' + JSON.stringify({ type: 'response.failed', sequence_number: 1, response }) + '\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    });
+    try {
+      let ended = false;
+      const provider = new ResponsesProvider({ baseUrl: 'https://fixture.test/v1', apiKey: 'fixture' });
+      rig = makeRig({ llm: { respond: (request, options) => provider.respond(request, { ...options, diagnostic: true }) },
+        hooks: { onTurnEnded: () => { ended = true; } } });
+      rig.start();
+      await until(() => ended);
+      expect(requests).toBe(1);
+      expect(rig.session.messages.some(m => m.role === 'tool')).toBe(false);
+    } finally { vi.unstubAllGlobals(); }
+  });
+
   it("重新请求前投递退避期间已就绪的事件", async () => {
     rig = makeRig({ resubmit: { maxConsecutive: 2, maxPerBatch: 4, backoffMs: [120] } });
     rig.start();
