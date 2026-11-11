@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, isAbsolute, join, normalize as pathNormalize, relative, resolve, sep } from 'node:path';
 import { MEM_SCHEME, mimeOfHandle } from 'cortico/core/blobs.ts';
+import { retryBusy } from 'cortico/core/fs-busy.ts';
 import type { BlobStore } from 'cortico/core/types.ts';
 import { SYSTEM_TIMEZONE, decodeText, isUtf16Le, nowIso, readTextFile } from 'cortico/core/util.ts';
 import { WorkspaceGit } from './workspaceGit.ts';
@@ -368,7 +369,7 @@ export class GitWorkspaceMemory {
     const tmp = `${abs}.tmp-${Math.random().toString(36).slice(2, 8)}`;
     try {
       writeFileSync(tmp, content, 'utf8');
-      renameSync(tmp, abs);
+      retryBusy(() => renameSync(tmp, abs));
     } catch (error) {
       try {
         if (existsSync(tmp)) unlinkSync(tmp);
