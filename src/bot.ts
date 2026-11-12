@@ -33,7 +33,6 @@ import { RESERVED_FRAME_NAMES } from './core/loop.ts';
 import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
-import { aggregateUsage } from './core/cost.ts';
 import { createUsageRates } from './core/usage-rates.ts';
 import { DeadlineError, nowIso, withDeadline, readTextFile } from './core/util.ts';
 import { closeRun } from './core/run.ts';
@@ -250,7 +249,7 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
       kind: 'disk',
       location: 'data/usage.jsonl',
       note: s.usage.note,
-      stat: () => s.usage.stat(core.usageLog.count(), size(dataDir, 'usage.jsonl')),
+      stat: () => size(dataDir, 'usage.jsonl'),
       clear: () => s.usage.cleared(core.usageLog.clear()),
     },
     {
@@ -1043,7 +1042,7 @@ export function createBot<C extends CoreConfig>(
       usage: {
         aggregate: async (opts) => {
           const { rates, sources } = await liveRates.resolve();
-          return { ...aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
+          return { ...await core.usageLog.aggregate({ ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
         },
         status: () => core.usageLog.status(),
       },

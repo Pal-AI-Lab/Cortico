@@ -765,6 +765,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     failures.push(...moduleFailures);
     // 运行中卸载的 World 各自的 stop() 有期限,结果已记日志
     await Promise.all(this.failedStops);
+    this.usageLog.stopQueries();
     this.usageLog.flush();
     const ledger = this.usageLog.status();
     if (ledger.pending) failures.push({ worldId: 'core.usage', detail: `${ledger.pending} usage records remain unwritten: ${ledger.error}` });

@@ -2,6 +2,8 @@
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { UsageRecord } from './types.ts';
+import type { UsageAggregate, UsageAggregateOptions } from './cost.ts';
+import { queryUsage } from './usage-query.ts';
 
 /** The ledger is read in chunks so its size is not bounded by V8's maximum string length. */
 const READ_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -31,6 +33,9 @@ export class UsageLog {
   private pending: UsageRecord[] = [];
   private error: string | null = null;
   private reconcile = false;
+  private queryAbort = new AbortController();
+  private queryQueue: Promise<unknown> = Promise.resolve();
+  private queries = new Map<string, Promise<UsageAggregate>>();
   constructor(private readonly file: string, private readonly report: (message: string) => void = console.error) {}
 
   append(rec: UsageRecord): void {
@@ -83,14 +88,41 @@ export class UsageLog {
     return out;
   }
 
-  readAll(): UsageRecord[] {
+  readAll(options: { strict?: boolean } = {}): UsageRecord[] {
     let records: UsageRecord[] = [];
-    try { records = this.readDisk(); } catch (error) { this.note(error); }
+    try { records = this.readDisk(); } catch (error) {
+      this.note(error);
+      if (options.strict) throw error;
+    }
     const ids = new Set(records.map(record => record.recordId ?? record.attempt?.id));
     return [...records, ...this.pending.filter(record => !ids.has(record.recordId))];
   }
 
   count(): number { return this.readAll().length; }
+
+  /** Concurrent identical queries share one scan; different queries scan serially. */
+  aggregate(options: UsageAggregateOptions): Promise<UsageAggregate> {
+    const key = JSON.stringify(options);
+    const existing = this.queries.get(key);
+    if (existing) return existing;
+    const query = this.queryQueue.then(async () => {
+      const result = await queryUsage({ file: this.file, pending: structuredClone(this.pending), options }, this.queryAbort.signal);
+      if (result.error) {
+        if (result.error !== this.error) this.report(result.error);
+        this.error = result.error;
+      }
+      return result.aggregate;
+    }).catch(error => {
+      if (!this.queryAbort.signal.aborted) this.note(error);
+      throw error;
+    });
+    this.queries.set(key, query);
+    this.queryQueue = query.then(() => { this.queries.delete(key); }, () => { this.queries.delete(key); });
+    return query;
+  }
+
+  /** Pending WebUI scans must not delay engine shutdown. The ledger remains intact. */
+  stopQueries(): void { this.queryAbort.abort(new Error('Usage queries stopped')); }
 
   clear(): number {
     const count = this.count();
