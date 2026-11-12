@@ -1,6 +1,6 @@
 /**
  * Fallback for a request whose images the model service refuses. A request that carries images and
- * is refused with 413, or with 400 or 422 that is not a context overflow, is sent once more without
+ * is refused with 413, or with a 400 that is not a context overflow, is sent once more without
  * them. When that one is accepted, the images were the cause: their handles are remembered, every
  * later request through this client leaves them out, and each record that lost one gets the
  * `imageLeftOut` line after its text. The handles live in memory only, so after a restart the first
@@ -18,7 +18,7 @@ import type { Logger } from '../../core/types.ts';
 import { imageBlobs, type CompatMediaOptions } from './history.ts';
 
 /** Statuses of a request the service will not take as written. */
-const REFUSED: ReadonlySet<number> = new Set([400, 413, 422]);
+const REFUSED: ReadonlySet<number> = new Set([400, 413]);
 
 export interface ImageFallbackOptions {
   media: CompatMediaOptions;

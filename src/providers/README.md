@@ -93,7 +93,7 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
 
-`image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落:请求带图、上游回 413,或回 400 / 422
+`image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落:请求带图、上游回 413,或回 400
 且模块的 `contextOverflow` 不认，就去掉这次请求的图片重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
 的请求都不带，每条失去图片的记录在正文后补一行 `imageLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
 `attached` 交回 client 实际附图的那些记录，不给就按全部记录算。`isContextOverflow` 把任何 413 算作超限，所以去掉图片后仍 413 时由 Core 交接。
