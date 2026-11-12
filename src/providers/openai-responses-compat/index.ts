@@ -115,6 +115,7 @@ export default {
       compatibilityKey: () => [options.endpointPath ?? '/responses', name],
       control: { probeClient: (replay) => new ResponsesProvider({ ...clientOptions(replay), sendSyntheticReasoning: true }) } satisfies CompatControl,
       client: new ImageFallback(new ResponsesProvider(clientOptions(options.reasoningReplay)), { media, contextOverflow: isContextOverflow, log: host.log }),
+      handlesRefusedImages: true,
     };
   },
 } satisfies ProviderModule;

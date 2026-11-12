@@ -36,7 +36,8 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 声明仍参与服务端校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
-`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`。`listModels()` 返回 `ListedModel[]`:
+`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`、`handlesRefusedImages?`(client 自己已经做了带图请求被拒时的回落,
+见下文 `image-fallback.ts`)。`listModels()` 返回 `ListedModel[]`:
 `id` 必有,`displayName`、`contextWindow`、`maxOutputTokens`、`inputImages` 只在上游给出时才有。
 
 `ProviderHost` 给实例:`stateDir`(`<部署根>/providers/<端点名>/`,归实例独占)、`repoRoot`、
@@ -54,7 +55,8 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 `spec` 的条目 JSON 加端点 `.env` 的内容指纹为缓存键(改模型或价格不重建实例,密钥文件变更后
 下一次解析重建),填 `stateDir` 与 `secret`。
 `bind(name)` 在实例外包一层:注入 `quote`(报价快照)与 `origin`(实例、模块、模型、
-`compatibilityDomain` = sha256(kind + baseUrl + `compatibilityKey()`))。Responses 历史推理仅在实例、
+`compatibilityDomain` = sha256(kind + baseUrl + `compatibilityKey()`));实例没有声明 `handlesRefusedImages` 时,
+client 外再套一层 `ImageFallback`,每个实例一份,随实例重建。Responses 历史推理仅在实例、
 模块、兼容域与模型均匹配时回传。`invalidate()` 清除缓存,WebUI 保存端点后调用;`.env` 变更经缓存键在下一次解析生效。
 
 ## 配置形状
@@ -91,10 +93,12 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
 
-`image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落，两个内建模块的 client 都套着它:请求带图、上游回 413,或回 400 / 422
+`image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落:请求带图、上游回 413,或回 400 / 422
 且模块的 `contextOverflow` 不认，就去掉这次请求的图片重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
 的请求都不带，每条失去图片的记录在正文后补一行 `imageLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
 `attached` 交回 client 实际附图的那些记录，不给就按全部记录算。`isContextOverflow` 把任何 413 算作超限，所以去掉图片后仍 413 时由 Core 交接。
+两个内建模块的 client 自己套着它，实例声明 `handlesRefusedImages`;其余实例由 `ProviderRegistry.bind` 套，图像开关取端点的 `multimodal`,
+`contextOverflow` 取模块的，不给 `attached`。只给一部分记录附图的 client 自己套并声明 `handlesRefusedImages`。
 
 线协议类型在 `src/protocol/open-responses/`(规范 2026-04-24 生成),`ResponseAccumulator`
 逐事件强校验:序号递增、终态自洽、已关闭的 Item 不得再变。

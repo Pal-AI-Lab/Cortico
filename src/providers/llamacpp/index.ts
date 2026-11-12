@@ -95,6 +95,7 @@ export default {
         media,
         keepThinking: host.keepThinking,
       }), { media, contextOverflow: isContextOverflow, log: host.log }),
+      handlesRefusedImages: true,
     };
   },
 } satisfies ProviderModule;
