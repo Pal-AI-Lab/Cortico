@@ -27,6 +27,12 @@ export const SYNTHETIC_REASONING_TEXT = '-';
 /** Item types whose `id` is optional on input; the id is the issuing server's resource id. */
 const OPTIONAL_ID_TYPES: ReadonlySet<unknown> = new Set(['message', 'function_call', 'function_call_output']);
 
+/**
+ * Characters outside the set a Responses endpoint accepts in a function call's `name`. The hosted
+ * service states the set in its rejection: `string does not match pattern '^[a-zA-Z0-9_.-]+$'`.
+ */
+const INVALID_NAME_CHARS = /[^a-zA-Z0-9_.-]/g;
+
 export interface ResponsesInputOptions {
   media?: CompatMediaOptions;
   /** Whether past reasoning re-enters the context; the first synthetic turn is exempt. */
@@ -48,6 +54,9 @@ export interface ResponsesInputOptions {
  * An item recorded from another instance, module or compatibility domain goes out without its
  * optional `id`, since another server rejects ids it did not issue; `call_id` stays, and items
  * without a recorded origin keep theirs.
+ * A function call's `name` is whatever string the model wrote, and one character the endpoint does not
+ * accept fails the whole request; each such character goes out as `_`. The call still pairs with its
+ * output through `call_id`.
  */
 export function responsesInput(
   request: Request,
@@ -92,6 +101,7 @@ export function responsesInput(
       });
     const wire = inputItem(entry) as Item;
     if (owner && current && !sameService && OPTIONAL_ID_TYPES.has(item.type)) delete wire.id;
+    if (item.type === 'function_call') wire.name = item.name.replace(INVALID_NAME_CHARS, '_');
     const images = imageBlobs(entry.context.blobs);
     if (opts.media?.enabled() && images.length && (item.type === 'message' || item.type === 'function_call_output')) {
       const field = item.type === 'message' ? 'content' : 'output';

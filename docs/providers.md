@@ -80,7 +80,9 @@ WebUI 保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 `include` 取回,所以只有 `encrypted` 形态的请求带 `include: ['reasoning.encrypted_content']`;
 不认 `include` 的端点因此只在这一形态上会拒收整条请求。项的 `id` 是签发它的服务端的资源 id:来源实例、
 模块或兼容域与本次请求不同的 message、function_call、function_call_output 出线时不带 `id`,
-`call_id` 照带;同一来源和没有记录来源的项(Core 合成的 `msg_` / `fc_` / `fco_`)保留 `id`。模块的 `detect`
+`call_id` 照带;同一来源和没有记录来源的项(Core 合成的 `msg_` / `fc_` / `fco_`)保留 `id`。function_call 的 `name`
+是模型写出的字符串，其中 `[a-zA-Z0-9_.-]` 以外的字符出线时换成 `_`(端点遇到一个不收的字符就拒收整条请求);
+session 记录不改，调用和回执仍按 `call_id` 配对。模块的 `detect`
 探测发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种写回 `reasoningReplay`。
 `options.endpointPath`、
 `options.extraHeaders`、`options.extraBody` 分别改路径、加头、并进请求体(`extraBody` 最后

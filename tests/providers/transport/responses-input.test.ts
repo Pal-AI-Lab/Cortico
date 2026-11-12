@@ -1,7 +1,7 @@
 /**
  * Responses 无状态重放的思维链形态。加密形态的规则由 tests/core/session-head.test.ts 覆盖;
  * 这里是明文形态:推理项以 reasoning_text 出线,当前轮不受 keepThinking 约束,本地合成的调用前补一项;
- * 另有别的端点记下的项出线时 id 的去留。
+ * 另有别的端点记下的项出线时 id 的去留，以及调用名里端点不收的字符。
  */
 import { describe, expect, it } from 'vitest';
 import { REASONING_REPLAYS, SYNTHETIC_REASONING_TEXT, responsesInput } from '../../../src/providers/transport/responses-input.ts';
@@ -132,5 +132,22 @@ describe('responsesInput 跨端点的项 id', () => {
     expect(input[1].call_id).toBe('call_a');
     expect(input[2].id).toBe(context[2].item.id);
     expect(input[3].id).toBe(context[3].item.id);
+  });
+});
+
+describe('responsesInput 历史调用的名字', () => {
+  it('名字里端点不收的字符换成下划线出线;call_id 和回执不变，记录不改', () => {
+    const context = [
+      message('user', 'hi'),
+      functionCall('call_a', 'app::pet_say', '{"text":"hi"}', { origin: { ...origin, instance: 'other' } }),
+      functionResult('call_a', '[unknown tool]'),
+      functionCall('call_b', 'pet.say-2', '{}', { origin }),
+      functionResult('call_b', 'ok'),
+    ];
+    const input = replay(context, true, 'encrypted');
+    expect(input[1]).toMatchObject({ type: 'function_call', name: 'app__pet_say', call_id: 'call_a', arguments: '{"text":"hi"}' });
+    expect(input[2]).toMatchObject({ type: 'function_call_output', call_id: 'call_a', output: '[unknown tool]' });
+    expect(input[3]).toMatchObject({ name: 'pet.say-2', call_id: 'call_b' });
+    expect(context[1].item).toMatchObject({ name: 'app::pet_say' });
   });
 });
