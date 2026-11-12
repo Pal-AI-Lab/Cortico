@@ -23,7 +23,7 @@ const REFUSED: ReadonlySet<number> = new Set([400, 413, 422]);
 export interface ImageFallbackOptions {
   media: CompatMediaOptions;
   /** The module's `contextOverflow`. A refusal it matches is not retried, except a 413. */
-  contextOverflow(error: { status: number; body: string }): boolean;
+  contextOverflow(error: GenerationError): boolean;
   /** The records whose images the client attaches to a request; every record when absent. */
   attached?(context: readonly ContextRecord[]): readonly ContextRecord[];
   log: Logger;
