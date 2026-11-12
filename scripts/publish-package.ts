@@ -27,6 +27,7 @@ export const PUBLISHED_DEPENDENCIES = [
   'react-dom',
   'react-textarea-autosize',
   'tar-stream',
+  'tsx',
   'ws',
 ] as const;
 
