@@ -1,10 +1,11 @@
 /**
  * Fallback for a request whose images the model service refuses. A request that carries images and
- * is refused with 413, or with a 400 that is not a context overflow, is sent once more without
- * them. When that one is accepted, the images were the cause: their handles are remembered, every
- * later request through this client leaves them out, and each record that lost one gets the
- * `imageLeftOut` line after its text. The handles live in memory only, so after a restart the first
- * request carrying one of them is refused once more.
+ * is refused with 413, or with a 400 that is not a context overflow, is sent once more: its JPEGs
+ * are resized to `FALLBACK_SIDE` first (see `image-fit.ts`), and when that is refused too, the
+ * request goes out again without any image. When the one without images is accepted, the images
+ * were the cause: their handles are remembered, every later request through this client leaves them
+ * out, and each record that lost one gets the `imageLeftOut` line after its text. The handles live
+ * in memory only, so after a restart the first request carrying one of them is refused once more.
  *
  * A 413 is retried without images even though `isContextOverflow` counts it: attachment bytes reach a
  * service's body size limit long before they move the token count. A 413 that survives the retry
@@ -16,6 +17,7 @@ import type { ContextRecord, Item } from '../../protocol/open-responses/context.
 import type { Request } from '../../protocol/open-responses/index.ts';
 import type { Logger } from '../../core/types.ts';
 import { imageBlobs, type CompatMediaOptions } from './history.ts';
+import { shrinkJpeg } from './image-fit.ts';
 
 /** Statuses of a request the service will not take as written. */
 const REFUSED: ReadonlySet<number> = new Set([400, 413]);
@@ -49,17 +51,48 @@ export class ImageFallback extends BaseProvider {
       if (!context || options.diagnostic || options.signal?.aborted || !(error instanceof GenerationError) || !this.retried(error)) throw error;
       const sent = this.sentImages(context);
       if (!sent.size) throw error;
+      let attempts = [...error.attempts];
+      const resized = this.resize(sent);
+      if (resized.length) {
+        try {
+          const generation = await this.inner.respond(request, { ...options, context });
+          this.options.log.warn('Model service rejected a request with images; sent again with them resized', { status: error.status, images: resized });
+          return { ...generation, attempts: [...attempts, ...generation.attempts] };
+        } catch (retry) {
+          for (const handle of resized) this.options.media.restore?.(handle);
+          if (!(retry instanceof GenerationError)) throw retry;
+          attempts = [...attempts, ...retry.attempts];
+          // Another status means the images are not the cause; dropping them would hide it.
+          if (!this.retried(retry))
+            throw new GenerationError(retry.message, attempts, retry.partial, retry.origin, retry.status, retry.body, { cause: retry.cause });
+        }
+      }
       let generation: Generation;
       try {
         generation = await this.inner.respond(request, { ...options, context: withoutImages(context, sent) });
       } catch (retry) {
         if (!(retry instanceof GenerationError)) throw retry;
-        throw new GenerationError(retry.message, [...error.attempts, ...retry.attempts], retry.partial, retry.origin, retry.status, retry.body, { cause: retry.cause });
+        throw new GenerationError(retry.message, [...attempts, ...retry.attempts], retry.partial, retry.origin, retry.status, retry.body, { cause: retry.cause });
       }
       for (const handle of sent) this.refused.add(handle);
       this.options.log.warn('Model service rejected a request with images; sent again without them', { status: error.status, images: [...sent] });
-      return { ...generation, attempts: [...error.attempts, ...generation.attempts] };
+      return { ...generation, attempts: [...attempts, ...generation.attempts] };
     }
+  }
+
+  /** The handles whose bytes the retry serves resized; empty when the media cannot serve bytes or no image shrinks. */
+  private resize(sent: ReadonlySet<string>): string[] {
+    const { media } = this.options;
+    if (!media.serve) return [];
+    const handles: string[] = [];
+    for (const handle of sent) {
+      const bytes = media.read(handle);
+      const resized = bytes ? shrinkJpeg(bytes) : null;
+      if (!resized) continue;
+      media.serve(handle, resized);
+      handles.push(handle);
+    }
+    return handles;
   }
 
   private retried(error: GenerationError): boolean {

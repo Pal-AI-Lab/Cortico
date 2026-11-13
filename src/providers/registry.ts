@@ -4,6 +4,8 @@ import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 import type { LLMProviderEntry } from '../core/types.ts';
 import type { BaseProvider, ProviderHostBase, ProviderInstance, ProviderModule } from './base.ts';
 import { ImageFallback } from './transport/image-fallback.ts';
+import { overridableMedia } from './transport/image-fit.ts';
+import type { CompatMediaOptions } from './transport/history.ts';
 import { quotePrices } from './pricebook.ts';
 import { createHash } from 'node:crypto';
 import { secretReader } from '../core/secrets.ts';
@@ -69,6 +71,8 @@ export class ProviderRegistry {
   private readonly resources = new Map<string, unknown>();
   /** One per instance: `bind` runs on every request, and the fallback holds the handles the service refused. */
   private readonly imageFallbacks = new WeakMap<ProviderInstance, BaseProvider>();
+  /** One per instance: the media the fallback resizes through, and the bytes this registry serves as the instance's `readBlob`. */
+  private readonly media = new WeakMap<ProviderInstance, CompatMediaOptions>();
   constructor(
     private readonly entries: () => Record<string, LLMProviderEntry>,
     private readonly host: ProviderHostBase,
@@ -111,8 +115,11 @@ export class ProviderRegistry {
     // 按端点名分岔的两样在这里填:模块自己的目录,与只读那个目录的密钥链。
     const { stateRoot: _stateRoot, ...base } = this.host;
     const stored = secretReader(envFile);
+    // 缩图后的字节从这里出去:fallback 写同一份 media,模块读 host.readBlob 时拿到的就是它。
+    const media = overridableMedia(() => entry.multimodal === true, base.readBlob);
     const value = module.create(name, entry, {
       ...base,
+      readBlob: (handle) => media.read(handle),
       stateDir,
       secret: (key) => this.secretOverrides[key] ?? stored(key),
       currentEntry: () =>
@@ -123,6 +130,7 @@ export class ProviderRegistry {
         return this.resources.get(id) as T;
       },
     });
+    this.media.set(value, media);
     this.instances.set(name, { key, value });
     return value;
   }
@@ -161,7 +169,8 @@ export class ProviderRegistry {
     let fallback = this.imageFallbacks.get(instance);
     if (!fallback) {
       fallback = new ImageFallback(instance.client, {
-        media: { enabled: () => entry.multimodal === true, read: this.host.readBlob },
+        // 与 resolve 交给模块的是同一份:缩过的图要经 host.readBlob 到扩展 provider 的请求里。
+        media: this.media.get(instance)!,
         contextOverflow: (error) => module.contextOverflow?.(error) ?? false,
         log: this.host.log,
       });

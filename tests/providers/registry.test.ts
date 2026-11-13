@@ -11,6 +11,8 @@ import { ProviderRegistry } from '../../src/providers/registry.ts';
 import { BaseProvider, type ProviderModule } from '../../src/providers/base.ts';
 import { GenerationError, type GenerateOptions, type Generation } from '../../src/core/generation.ts';
 import type { BlobRef } from '../../src/core/types.ts';
+import { decode, encode } from 'jpeg-js';
+import { FALLBACK_SIDE } from '../../src/providers/transport/image-fit.ts';
 import { createResponse, type Request } from '../../src/protocol/open-responses/index.ts';
 import { message } from '../../src/protocol/open-responses/context.ts';
 
@@ -94,4 +96,69 @@ it('adds no fallback around an instance that declares handlesRefusedImages: one 
   const { client, ask } = imageFixture(true);
   await expect(ask()).rejects.toMatchObject({ status: 400 });
   expect(client.carried).toEqual([true]);
+});
+
+/** A JPEG wider than `FALLBACK_SIDE`, so the fallback has to decode and re-encode it. */
+const WIDE_WIDTH = FALLBACK_SIDE + 400;
+const WIDE_BYTES = Buffer.from(encode({ width: WIDE_WIDTH, height: 32, data: pixels(WIDE_WIDTH, 32) }, 80).data);
+const widePicture: BlobRef = { handle: 'log:fedcba9876543210fedc.jpg', mime: 'image/jpeg', name: 'wide.jpg', fallbackText: 'Image' };
+
+function pixels(width: number, height: number): Uint8Array {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = x % 256; data[i + 1] = y % 256; data[i + 2] = (x + y) % 256; data[i + 3] = 255;
+    }
+  return data;
+}
+
+/** Sends the bytes its host serves, and refuses while one of them is the original wide JPEG. */
+class ReadsBlobs extends BaseProvider {
+  /** One entry per request: the bytes the client would have attached. */
+  readonly requests: Buffer[][] = [];
+  constructor(private readonly readBlob: (handle: string) => Buffer | null) { super(); }
+  async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
+    const bytes = (options.context ?? []).flatMap((entry) => (entry.context.blobs ?? [])
+      .map((blob) => this.readBlob(blob.handle))
+      .filter((value): value is Buffer => value !== null));
+    this.requests.push(bytes);
+    if (bytes.some((value) => value.equals(WIDE_BYTES)))
+      throw new GenerationError('refused', [], null, options.origin!, 400, 'unsupported image');
+    return { response: createResponse('r1', request), origin: options.origin!, attempts: [] };
+  }
+}
+
+function wideImageFixture() {
+  const temp = makeTmpDir(); cleanups.push(temp.cleanup);
+  let client: ReadsBlobs | undefined;
+  const module: ProviderModule = {
+    id: 'stub', title: 'Stub', reasoningTiers: [], serviceTiers: [],
+    create: (_name, _entry, host) => {
+      client = new ReadsBlobs(host.readBlob);
+      return { client };
+    },
+  };
+  const cfg = makeCfg({ providers: { Alpha: { kind: 'stub', baseUrl: 'https://model.test', multimodal: true } }, activeProvider: 'Alpha' });
+  const registry = new ProviderRegistry(() => cfg.providers, {
+    stateRoot: temp.dir,
+    readBlob: (handle) => (handle === widePicture.handle ? WIDE_BYTES : null),
+    keepThinking: () => true,
+    log: nullLogger(),
+  }, [module]);
+  const ask = () => registry.bind('Alpha').respond({ model: 'm', input: [] }, { context: [message('user', 'look', { blobs: [widePicture] })] });
+  registry.resolve('Alpha');
+  return { client: client!, ask };
+}
+
+it("serves the fallback's resized JPEG through the instance's readBlob, and later requests reuse those bytes", async () => {
+  const { client, ask } = wideImageFixture();
+  await ask();
+  expect(client.requests).toHaveLength(2);
+  expect(client.requests[1]![0]!.equals(WIDE_BYTES)).toBe(false);
+  const shrunk = decode(client.requests[1]![0]!, { useTArray: true });
+  expect(Math.max(shrunk.width, shrunk.height)).toBe(FALLBACK_SIDE);
+  await ask();
+  expect(client.requests).toHaveLength(3);
+  expect(client.requests[2]![0]!.equals(client.requests[1]![0]!)).toBe(true);
 });

@@ -16,6 +16,8 @@ import type { Request } from '../../../src/protocol/open-responses/index.ts';
 import { message } from '../../../src/protocol/open-responses/context.ts';
 import { isContextOverflow } from '../../../src/providers/transport/errors.ts';
 import { imageLeftOut } from '../../../src/providers/transport/image-fallback.ts';
+import { FALLBACK_SIDE } from '../../../src/providers/transport/image-fit.ts';
+import { encode } from 'jpeg-js';
 import COMPAT from '../../../src/providers/openai-responses-compat/index.ts';
 import LLAMACPP from '../../../src/providers/llamacpp/index.ts';
 
@@ -24,6 +26,29 @@ const IMAGE_DATA = IMAGE.toString('base64');
 const picture: BlobRef = { handle: 'log:0123456789abcdef0123.png', mime: 'image/png', name: 'big.png', fallbackText: 'Image' };
 const context = [message('user', `look\n${blobLine(picture)}`, { blobs: [picture] })];
 const OPENRESTY_413 = '<html><head><title>413 Request Entity Too Large</title></head><body><center>openresty</center></body></html>';
+
+/** A JPEG wider than `FALLBACK_SIDE`, so the fallback has something to re-encode. */
+const WIDE_WIDTH = FALLBACK_SIDE + 400;
+const WIDE_BYTES = Buffer.from(encode({ width: WIDE_WIDTH, height: 64, data: gradient(WIDE_WIDTH, 64) }, 90).data);
+const WIDE_DATA = WIDE_BYTES.toString('base64');
+const wide: BlobRef = { handle: 'log:fedcba9876543210fedc.jpg', mime: 'image/jpeg', name: 'wide.jpg', fallbackText: 'Image' };
+const wideContext = [message('user', `look\n${blobLine(wide)}`, { blobs: [wide] })];
+const JPEG_DATA_URL = 'data:image/jpeg;base64,';
+
+/** Opaque pixels of one hue the JPEG encoder keeps, so the fixture stays small. */
+function gradient(width: number, height: number): Uint8Array {
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      data[i] = x % 256;
+      data[i + 1] = y % 256;
+      data[i + 2] = (x + y) % 256;
+      data[i + 3] = 255;
+    }
+  }
+  return data;
+}
 
 const REPLIES: Record<string, object> = {
   '/responses': { id: 'r1', object: 'response', model: 'm', status: 'completed', created_at: 1, usage: { input_tokens: 1, output_tokens: 1, total_tokens: 2 },
@@ -59,7 +84,15 @@ function client(module: ProviderModule, url: string, patch: Partial<LLMProviderE
   }).client;
 }
 
-const ask = (target: ReturnType<typeof client>) => target.respond({ model: 'm', input: [] } as unknown as Request, { context });
+/** The same client, reading the wide JPEG fixture. */
+const wideClient = (module: ProviderModule, url: string) => module.create('x',
+  { kind: module.id, baseUrl: url, multimodal: true, spec: { model: 'm', thinking: false } },
+  {
+    stateDir: mkdtempSync(join(tmpdir(), 'image-fallback-')), secret: () => '', keepThinking: () => true, log: nullLogger(),
+    readBlob: (handle: string) => (handle === wide.handle ? WIDE_BYTES : null),
+  }).client;
+
+const ask = (target: ReturnType<typeof client>, ctx = context) => target.respond({ model: 'm', input: [] } as unknown as Request, { context: ctx });
 
 describe('a request the model service refuses for its images', () => {
   it('is sent once more without them on both modules, and later requests leave them out: one request each', async () => {
@@ -111,5 +144,27 @@ describe('a request the model service refuses for its images', () => {
     const { url, bodies } = await service(() => true);
     await expect(ask(client(COMPAT, url, { multimodal: false }))).rejects.toMatchObject({ status: 400 });
     expect(bodies).toHaveLength(1);
+  });
+
+  it('sends a refused JPEG once more with its longest side at FALLBACK_SIDE, and later requests reuse those bytes', async () => {
+    const { url, bodies } = await service((body) => body.includes(WIDE_DATA));
+    const target = wideClient(COMPAT, url);
+    const first = await ask(target, wideContext);
+    expect(first.attempts.map((a) => a.status)).toEqual([400, 200]);
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toContain(JPEG_DATA_URL);
+    expect(bodies[1]).not.toContain(WIDE_DATA);
+    await ask(target, wideContext);
+    expect(bodies).toHaveLength(3);
+    expect(bodies[2]).toBe(bodies[1]);
+  });
+
+  it('drops the image when the resized request is refused too, and names it in the left-out line', async () => {
+    const { url, bodies } = await service((body) => body.includes(JPEG_DATA_URL), 413, OPENRESTY_413);
+    const first = await ask(wideClient(COMPAT, url), wideContext);
+    expect(first.attempts.map((a) => a.status)).toEqual([413, 413, 200]);
+    expect(bodies).toHaveLength(3);
+    expect(bodies[2]).toContain(imageLeftOut(wide.handle));
+    expect(bodies[2]).not.toContain(JPEG_DATA_URL);
   });
 });

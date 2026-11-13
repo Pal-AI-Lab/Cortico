@@ -94,8 +94,11 @@ function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
 
 `image-fallback.ts` 的 `ImageFallback` 是带图请求被拒时的回落:请求带图、上游回 413,或回 400
-且模块的 `contextOverflow` 不认，就去掉这次请求的图片重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
-的请求都不带，每条失去图片的记录在正文后补一行 `imageLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
+且模块的 `contextOverflow` 不认，就先把这次请求的 JPEG 缩到长边 `FALLBACK_SIDE`(`image-fit.ts`)重发一次;
+缩图重发被接受，这批缩小后的字节按句柄留在 media 里，之后经这个 client 的请求继续用它们。
+缩小后仍被拒，或不是 JPEG、本来就够小、解不开，就去掉这次请求的图片再重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
+的请求都不带，每条失去图片的记录在正文后补一行 `imageLeftOut`;重发也被拒，错误带上每次尝试，什么都不记。
+`media` 带 `serve` / `restore` 时才缩图，两个内建模块与 `ProviderRegistry.bind` 都用 `overridableMedia()` 建它，别的 media 直接走去图。
 `attached` 交回 client 实际附图的那些记录，不给就按全部记录算。`isContextOverflow` 把任何 413 算作超限，所以去掉图片后仍 413 时由 Core 交接。
 两个内建模块的 client 自己套着它，实例声明 `handlesRefusedImages`;其余实例由 `ProviderRegistry.bind` 套，图像开关取端点的 `multimodal`,
 `contextOverflow` 取模块的，不给 `attached`。只给一部分记录附图的 client 自己套并声明 `handlesRefusedImages`。

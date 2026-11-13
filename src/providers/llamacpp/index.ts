@@ -3,6 +3,7 @@ import type { ReasoningTier } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import { isContextOverflow } from '../transport/errors.ts';
 import { ImageFallback } from '../transport/image-fallback.ts';
+import { overridableMedia } from '../transport/image-fit.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
 import { runtimeConfig } from './config.ts';
@@ -77,7 +78,7 @@ export default {
         roots: { runtimes: runtimesRoot(), models: modelsRoot() },
       });
     const runtime = host.resource?.('runtime', createRuntime) ?? createRuntime();
-    const media = { enabled: () => entry.multimodal === true, read: host.readBlob };
+    const media = overridableMedia(() => entry.multimodal === true, host.readBlob);
     return {
       control: { runtime, catalog },
       listModels: () => catalog.listModels(),
