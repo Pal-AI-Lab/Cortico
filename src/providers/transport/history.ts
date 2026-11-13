@@ -25,6 +25,10 @@ export function dropHeadMark(m: NativeChatMessage): NativeChatMessage {
 export interface CompatMediaOptions {
   enabled: () => boolean;
   read: (ref: string) => Buffer | null;
+  /** The bytes to serve for `ref` from now on, in place of the stored ones. */
+  serve?: (ref: string, bytes: Buffer) => void;
+  /** Drops the bytes `serve` recorded for `ref`; `read` returns the stored bytes again. */
+  restore?: (ref: string) => void;
 }
 
 /** 升格出去的分片只有图片一种;别的附件只留正文里那行 [blob ...]。 */

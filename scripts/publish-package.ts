@@ -23,6 +23,7 @@ export const PUBLISHED_DEPENDENCIES = [
   '@types/ws',
   'express',
   'fflate',
+  'jpeg-js',
   'react',
   'react-dom',
   'react-textarea-autosize',

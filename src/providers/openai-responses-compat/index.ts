@@ -3,6 +3,7 @@ import type { LLMProviderEntry } from '../../core/types.ts';
 import type { ResponseClient } from '../../core/generation.ts';
 import { isContextOverflow } from '../transport/errors.ts';
 import { ImageFallback } from '../transport/image-fallback.ts';
+import { overridableMedia } from '../transport/image-fit.ts';
 import { REASONING_REPLAYS, type ReasoningReplay } from '../transport/responses-input.ts';
 import { ModelCatalog, ResponsesProvider, type ResponsesProviderOptions } from './native.ts';
 import { text } from './strings.ts';
@@ -95,7 +96,7 @@ export default {
       ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
     });
     const catalog = new ModelCatalog(() => ({ baseUrl: entry.baseUrl, headers: headers() }));
-    const media = { enabled: () => entry.multimodal === true, read: host.readBlob };
+    const media = overridableMedia(() => entry.multimodal === true, host.readBlob);
     const clientOptions = (reasoningReplay: ReasoningReplay | undefined): ResponsesProviderOptions => ({
       baseUrl: entry.baseUrl,
       apiKey,
