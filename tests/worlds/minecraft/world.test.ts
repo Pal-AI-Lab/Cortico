@@ -944,6 +944,52 @@ describe('MinecraftWorld 外部服务器连接', () => {
     }
   });
 
+  it('外部服务器:重连没成的事件从第 2 次起不触发投递;断开与连接跨 World 重启保留', async () => {
+    vi.useFakeTimers();
+    const { targets, bots } = fakeBots();
+    vi.spyOn(MinecraftServerManager.prototype, 'probe').mockResolvedValue(true);
+    const dir = mkdtempSync(join(tmpdir(), 'mc-link-'));
+    const boot = async (): Promise<{ m: MinecraftWorld; host: FakeHost }> => {
+      const m = new MinecraftWorld({ cfg: cfg({ serverMode: 'external', host: '127.0.0.1', port: 25570 }), dataDir: dir });
+      const host = new FakeHost();
+      await m.start(host as never);
+      await vi.advanceTimersByTimeAsync(0);
+      return { m, host };
+    };
+    try {
+      mkdirSync(join(dir, 'diag'), { recursive: true });
+      const first = await boot();
+      expect(targets).toHaveLength(1);
+      bots[0].emit('end', 'socketClosed');
+      await vi.advanceTimersByTimeAsync(3_000);
+      bots[1].emit('end', 'socketClosed');
+      const lost = first.host.events.map((e, i) => ({ text: e.text, trigger: first.host.pushOpts[i]?.trigger }))
+        .filter((e) => e.text.includes('socketClosed'));
+      expect(lost).toEqual([
+        { text: expect.stringContaining('与服务器断开'), trigger: 'flush' },
+        { text: expect.stringContaining('还是没连上'), trigger: 'piggyback' },
+      ]);
+      await first.m.serverWebUi().stop();
+      await first.m.stop();
+
+      const linked = targets.length;
+      const second = await boot();
+      expect(targets).toHaveLength(linked);
+      expect(await second.m.serverWebUi().state()).toMatchObject({ wanted: false, link: { phase: 'stopped' } });
+      await second.m.serverWebUi().start();
+      expect(targets).toHaveLength(linked + 1);
+      await second.m.stop();
+
+      const third = await boot();
+      expect(targets).toHaveLength(linked + 2);
+      await third.m.stop();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+      vi.restoreAllMocks();
+      vi.useRealTimers();
+    }
+  });
+
   it('改了用户名还没重连时,游戏里的名字仍是连接用的那个:传送指令点的是它', async () => {
     vi.useFakeTimers();
     const { chats } = fakeBots();

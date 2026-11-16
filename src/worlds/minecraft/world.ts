@@ -2505,6 +2505,8 @@ export class MinecraftWorld implements World {
   private cameraDown = false;
   /** 上次进服的世界身份落盘处;进服时对账,换了世界必须当场说 */
   private readonly worldFile: string | null;
+  /** 外部服务器模式下操作员最近一次选的连接或断开;World 启动时读回。 */
+  private readonly linkFile: string | null;
   /** host 挂载前也能用的日志转发器(WebUI 先于 start 用到管理器) */
   private readonly fallbackLog: import('../../core/types.ts').Logger;
   /** 任务号:排进队列的每一件事领一个,回报时认它 */
@@ -2550,6 +2552,7 @@ export class MinecraftWorld implements World {
     this.works = new WorksBook(ledger('minecraft-works.json'));
     this.policy = new PolicyBook(ledger('minecraft-policy.json'));
     this.worldFile = ledger('minecraft-world.json');
+    this.linkFile = ledger('minecraft-link.json');
     // host 挂载在 start();管理器可能在此之前被 WebUI 使用,日志经转发器现取
     const fwd: import('../../core/types.ts').Logger = {
       child: () => fwd,
@@ -2717,6 +2720,7 @@ export class MinecraftWorld implements World {
       start: async () => {
         reconcile();
         this.serverWanted = true;
+        this.saveExternalWanted();
         if (this.serverLifecycleActive) {
           await this.syncManagedServerLifecycle(true);
           return report();
@@ -2729,6 +2733,7 @@ export class MinecraftWorld implements World {
       stop: async () => {
         reconcile();
         this.serverWanted = false;
+        this.saveExternalWanted();
         if (this.serverLifecycleActive) {
           await this.syncManagedServerLifecycle(true);
           return report();
@@ -2739,10 +2744,33 @@ export class MinecraftWorld implements World {
         reconcile();
         if (this.serverMode() !== 'external') throw new Error(text(language).reconnectLocal);
         this.serverWanted = true;
+        this.saveExternalWanted();
         if (this.serverLifecycleActive) await this.relink();
         return report();
       },
     };
+  }
+
+  /** 外部服务器模式下把操作员刚选的连接或断开落盘;本地托管的启动状态由 local.startWithWorld 决定,不记。 */
+  private saveExternalWanted(): void {
+    if (!this.linkFile || this.serverMode() !== 'external') return;
+    try {
+      writeFileSync(this.linkFile, `${JSON.stringify({ externalWanted: this.serverWanted })}
+`, 'utf8');
+    } catch (e) {
+      this.fallbackLog.warn('连接选择落盘失败,重启后按启动即连接', { err: String(e) });
+    }
+  }
+
+  /** 外部服务器模式启动时是否连接:没有记录时连接;文件读不出时记 warn 并连接。 */
+  private loadExternalWanted(): boolean {
+    if (!this.linkFile || !existsSync(this.linkFile)) return true;
+    try {
+      return (JSON.parse(readTextFile(this.linkFile)) as { externalWanted?: boolean }).externalWanted !== false;
+    } catch (e) {
+      this.fallbackLog.warn('连接选择读不出,按启动即连接', { file: this.linkFile, err: String(e) });
+      return true;
+    }
   }
 
   private serverWebUiState(state: MinecraftServerState): MinecraftServerWebUiState {
@@ -3829,8 +3857,8 @@ export class MinecraftWorld implements World {
       showTempo: () => this.showTempo(),
       onSpawn: () => this.onSpawn(),
       onRespawn: () => this.onRespawn(),
-      // 第一次掉线值得叫醒她(手上的事全废了);之后每一次重连没成只是同一件事的
-      // 复述,压成不唤醒的一条,免得连不上的那半小时里每隔几十秒炸一次
+      // 第一次掉线立即投递:排着的任务已随连接结束。之后每次重连没成用 piggyback,
+      // 不单独触发投递,随下一批带上。
       onDisconnect: (reason, willReconnect, attempt) => {
         this.bodyLease.invalidate('disconnect', Date.now());
         this.resetBodyOwners();
@@ -3849,6 +3877,7 @@ export class MinecraftWorld implements World {
             ? `[Minecraft] 与服务器断开(${reason})。${willReconnect ? '正在自动重连。' : ''}`
             : `[Minecraft] 还是没连上(这是第 ${attempt + 1} 次:${reason})。${willReconnect ? '继续重连。' : ''}`,
           attempt === 0,
+          attempt === 0 ? undefined : { trigger: 'piggyback' },
         );
       },
       onAlarm: (text) => this.emit('minecraft.event', `[Minecraft] ${text}`, true),
@@ -3857,7 +3886,7 @@ export class MinecraftWorld implements World {
     this.serverLifecycleActive = true;
     this.serverLifecycleTarget = null;
     this.lifecycleMode = this.serverMode();
-    this.serverWanted = this.lifecycleMode === 'local' ? this.cfg.local.startWithWorld : true;
+    this.serverWanted = this.lifecycleMode === 'local' ? this.cfg.local.startWithWorld : this.loadExternalWanted();
     void this.syncManagedServerLifecycle(true);
     this.reflexes.start();
     this.combat.start();

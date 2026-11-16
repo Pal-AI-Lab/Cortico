@@ -197,7 +197,7 @@ WebUI 隔着代理看到的表面必须与直连时一模一样。
 
 - **连接方式**：`worlds.minecraft.serverMode` 取 `local`、`external` 或 `auto`（默认，填写了 `local.serverDir` 按 `local`，否则按 `external`；受管进程运行中按它锁定的目录推定）。面板顶部的「连接方式」写入这个键。连接方式一变，bot 断开当前连接、旧连接上的任务结束、托管着的服务器停止，`wanted` 置假，等操作员重新启动或连接。
 - **游戏服务器（本地托管）**：`worlds.minecraft.local.serverDir` 指定含 `server.jar` 的目录，`local.javaPath` 指定 Java。启动与停止同时决定 bot 是否连接这台服务器：启动后起服并连接，停止后断开 bot、取消重连并关服。`local.startWithWorld=true` 时 World 启动即起服；默认关。停止时通过 stdin 发送 `stop` 保存存档，15 秒后仍未退出则强制终止。本地托管时 bot 同样连接 `host:port`；`host` 不是本机地址时，「启动」在本机启动服务器，bot 却连接那个远程地址，需要把 `host` 修改为 `127.0.0.1`。
-- **外部服务器**：`start`/`stop`/`reconnect` 只开关 bot 的连接，不启停对方的服务器，也不读本地服务器目录。World 启动即连接；断开后不再自动重连，直到再次连接。`reconnect` 结束当前连接上的任务后按配置里的目标重新连接。
+- **外部服务器**：`start`/`stop`/`reconnect` 只开关 bot 的连接，不启停对方的服务器，也不读本地服务器目录。断开后不再自动重连，直到再次连接。最近一次点的连接或断开记在 `data/minecraft-link.json`，World 启动时照它连接或保持断开；没有记录时启动即连接。`reconnect` 结束当前连接上的任务后按配置里的目标重新连接。
 - **连接目标**：host、port、username、version 在连接开启时锁定，自动重连沿用同一目标；配置改动在下一次连接（断开后连接、`reconnect`，或本地托管停止后重新启动）时采用，之前 `server.state` 的 `pending` 给出待采用的目标。观察者与玩家客户端连同一个目标。
 - **状态**：`server.state` 里 `reachable` 只表示端口能建立 TCP 连接；bot 是否进入世界看 `link.phase`（`stopped`/`connecting`/`online`/`retrying`），`online` 只在 spawn 之后出现。`link.failure` 转述最近一次失败：服务器的断开理由原文（JSON 文本或 NBT 组件取出的文字、翻译键），能从翻译键或原版英文措辞认出时标出白名单、认证、版本、封禁、同名在线类别；或网络错误原文。
 - **观察者客户端**：窗口出现表示客户端进程已就绪，进服和附身另按玩家列表确认。`client.enabled=false` 时仍可手动启停；World 启动及一键挂载不自动启动它。
