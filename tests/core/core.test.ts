@@ -340,6 +340,38 @@ describe('Core · session 声明与 fork 原语', () => {
     }
   });
 
+  it('World 给的 ts 落库时换成部署时区的写法:时刻不变,解析不了的原样保留', async () => {
+    tmp = makeTmpDir();
+    const loaded = loadedFor(tmp.dir);
+    loaded.config.timezone = 'Asia/Tokyo';
+    let host: WorldHost | null = null;
+    const probe: World = {
+      id: 'probe',
+      envPromptVars: () => ({}),
+      tools: () => [],
+      start: async (h) => { host = h; },
+      stop: async () => {},
+    };
+    const persona = makeFakePersona([], { cfg: loaded.config, worlds: [probe], silent: true });
+    const core = new Core(loaded, { persona, worlds: [probe], llm: new FakeLLM() });
+    try {
+      await core.start();
+      core.bus.setPaused(true);
+      const push = (ts: string) => host!.pushEvent({ type: 'probe.msg', ts, source: 'probe', text: 'x' });
+      expect((await push('2026-11-15T16:58:12.775Z')).ts).toBe('2026-11-16T01:58:12.775+09:00');
+      expect((await push('昨天')).ts).toBe('昨天');
+      const [source] = await host!.pushCandidate!({
+        sourceEvents: [{ type: 'probe.msg', ts: '2026-11-15T16:58:12.775Z', text: 'x' }],
+        gateText: 'x',
+        value: {},
+        project: () => [],
+      }, { trigger: 'flush' });
+      expect(source.ts).toBe('2026-11-16T01:58:12.775+09:00');
+    } finally {
+      await core.stop();
+    }
+  });
+
   it('pushCandidate 的原始事件与投影事件的附件同 pushEvent:落库换句柄，句柄行接在正文后', async () => {
     tmp = makeTmpDir();
     const loaded = loadedFor(tmp.dir);

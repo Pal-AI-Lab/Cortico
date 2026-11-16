@@ -57,6 +57,8 @@ World 应通过事件报告服务器起停、存档切换、连接变化等状�
 
 事件是 `EventEnvelope`:`cursor`、`run`、`type`、`ts`、`source`(World id)、`origin`、`tags`、
 `text`(由生产方提供,Core 不添加语义内容)、`senderKey`、`meta`、`blobs`、`ephemeral`。
+`ts` 用 `nowIso(timezone)` 生成;`Date.parse` 能解析的其他写法(如 `Z` 结尾的 UTC 串)落库时由 Core 换成部署时区的墙上时间加偏移,
+时刻不变,解析不了的原样落库。
 系统生成的判断只陈述可确认的事实。`origin: 'internal'` 只用于来源可验证的内部通知;
 外部消息使用 `origin: 'external'`。
 
