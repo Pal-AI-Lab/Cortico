@@ -493,6 +493,15 @@ export class Core<C extends CoreConfig = CoreConfig> {
     };
   }
 
+  /**
+   * World 给的 ts 换成部署时区的写法,时刻不变。读者按字符位置取日期和时分,
+   * 所以落库的串必须是部署时区的墙上时间;Date.parse 不认的串原样落库。
+   */
+  private deploymentTs(ts: string): string {
+    const atMs = Date.parse(ts);
+    return Number.isNaN(atMs) ? ts : nowIso(this.loaded.config.timezone, new Date(atMs));
+  }
+
   /** World 宿主接口;每个 World 使用以自身 id 命名的子 logger。 */
   private makeHost(mod: World): WorldHost {
     const previous = this.moduleHostLeases.get(mod);
@@ -513,6 +522,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         const blobs = this.internBlobs(e.blobs);
         const envelope = this.store.append({
           ...e,
+          ts: this.deploymentTs(e.ts),
           text: withBlobLines(e.text, blobs),
           ...(blobs ? { blobs } : {}),
           origin: e.origin ?? 'external',
@@ -547,6 +557,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
           const blobs = this.internBlobs(inputs);
           return this.store.append({
             ...event,
+            ts: this.deploymentTs(event.ts),
             text: withBlobLines(event.text, blobs),
             ...(blobs ? { blobs } : {}),
             source: mod.id,
