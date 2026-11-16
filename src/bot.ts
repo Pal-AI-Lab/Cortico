@@ -250,8 +250,12 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
       kind: 'disk',
       location: 'data/usage.jsonl',
       note: s.usage.note,
-      stat: () => s.usage.stat(core.usageLog.count(), size(dataDir, 'usage.jsonl')),
-      clear: () => s.usage.cleared(core.usageLog.clear()),
+      stat: () => {
+        const count = core.usageLog.count();
+        const bytes = size(dataDir, 'usage.jsonl');
+        return count === null ? bytes : s.usage.stat(count, bytes);
+      },
+      clear: async () => s.usage.cleared(await core.usageLog.clear()),
     },
     {
       key: 'toolcalls',
@@ -1043,7 +1047,7 @@ export function createBot<C extends CoreConfig>(
       usage: {
         aggregate: async (opts) => {
           const { rates, sources } = await liveRates.resolve();
-          return { ...aggregateUsage(core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
+          return { ...aggregateUsage(await core.usageLog.readAll(), { ...opts, timezone: core.config.timezone, rates }), rateSources: sources };
         },
         status: () => core.usageLog.status(),
       },

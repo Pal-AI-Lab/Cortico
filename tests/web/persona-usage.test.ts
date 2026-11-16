@@ -54,7 +54,7 @@ beforeAll(async () => {
     memoryDir,
     dataDir,
     getStatus: () => ({}),
-    usage: { aggregate: (opts) => aggregateUsage(usage.readAll(), opts) },
+    usage: { aggregate: async (opts) => aggregateUsage(await usage.readAll(), opts) },
     config: {
       groups: () => configGroups.map((group) => ({ group, values: readGroupValues(cfg, group) })),
       set: (groupId, values) => {
