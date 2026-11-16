@@ -18,6 +18,7 @@
     "start": "node bin/cortico.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "bench:usage": "tsx scripts/usage-benchmark.ts",
     "typecheck": "tsc --noEmit",
     "typecheck:web": "tsc -p tsconfig.web.json --noEmit",
     "build:web": "tsx scripts/build-web.ts && tailwindcss -i src/web/public/styles.css -o dist/web/styles.css --minify",
