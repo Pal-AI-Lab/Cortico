@@ -20,6 +20,16 @@ const EXT_BY_MIME: Record<string, string> = {
   'application/pdf': '.pdf',
   'audio/wav': '.wav',
   'audio/mpeg': '.mp3',
+  'audio/ogg': '.ogg',
+  'audio/webm': '.weba',
+  'audio/flac': '.flac',
+  'audio/aac': '.aac',
+  'audio/mp4': '.m4a',
+  'audio/aiff': '.aiff',
+  'video/mp4': '.mp4',
+  'video/webm': '.webm',
+  'video/quicktime': '.mov',
+  'video/mpeg': '.mpeg',
   'text/plain': '.txt',
   'application/json': '.json',
   'application/zip': '.zip',
@@ -71,7 +81,8 @@ export class LogBlobStore {
   /** 落盘并返回 `log:` 句柄。 */
   put(bytes: Uint8Array, mime: string): string {
     const hash = createHash('sha256').update(bytes).digest('hex').slice(0, LOG_HASH_CHARS);
-    const ext = EXT_BY_MIME[mime] ?? '.bin';
+    // 扩展名只看类型本身,`audio/webm;codecs=opus` 的参数不参与
+    const ext = EXT_BY_MIME[mime.split(';')[0].trim().toLowerCase()] ?? '.bin';
     const name = `${hash}${ext}`;
     const path = join(this.dir, name);
     if (!existsSync(path)) {
