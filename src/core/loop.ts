@@ -18,6 +18,7 @@ import type {
   ContextHandoffResult,
   DeferredEventSpec,
   EventEnvelope,
+  IncompleteTurnContext,
   FrameEventRef,
   EventStore,
   BlobInput,
@@ -607,17 +608,17 @@ export class MainLoop {
   }
 
   /** 一轮结束时先通知 Persona，再通知可见 World。 */
-  private finishTurn(): void {
+  private finishTurn(context?: IncompleteTurnContext): void {
     if (!this.activeNow()) return;
     const { persona, worlds, log } = this.d;
     try {
-      persona.onTurnEnded?.();
+      persona.onTurnEnded?.(context);
     } catch (e) {
       log.warn('onTurnEnded钩子异常', { err: e });
     }
     for (const m of worlds.visible()) {
       try {
-        m.onTurnEnded?.();
+        m.onTurnEnded?.(context);
       } catch (e) {
         log.warn('World 回合收束钩子异常', { id: m.id, err: e });
       }
@@ -1248,6 +1249,7 @@ export class MainLoop {
         try { tap.onEvent(event); } catch (error) { log.warn('outputTap.onEvent异常', { err: error }); }
       };
       let assistant: ContextRecord[];
+      let incomplete: IncompleteTurnContext | undefined;
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
       const prefixHash = prefixFingerprint(outbound);
@@ -1266,6 +1268,10 @@ export class MainLoop {
           llmMs = Date.now() - llmStart;
         }
         assistant = responseRecords(res.response, res.origin);
+        if (res.response.status === 'incomplete' && !res.response.output.some(item => item.type === 'function_call')) {
+          incomplete = { reason: 'response-incomplete', responseId: res.response.id,
+            incompleteReason: res.response.incomplete_details?.reason ?? null };
+        }
         setAnchors({ resp: res.response.id });
         if (!this.active(generation) || flight.controller.signal.aborted) {
           if (this.active(generation) && flight.abortReason === 'interrupt') {
@@ -1392,6 +1398,11 @@ export class MainLoop {
       }
 
       if (calls.length === 0) {
+        if (incomplete) {
+          noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
+          this.finishTurn(incomplete);
+          return;
+        }
         noteRound('completed');
         this.finishTurn();
         return;

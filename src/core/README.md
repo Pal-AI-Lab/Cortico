@@ -63,6 +63,12 @@ piggyback 只入队，随后续唤醒一起投递。
 
 ## 主循环
 
+前台请求以 `response.incomplete` 收束且没有函数调用时，Persona 和可见 World 的
+`onTurnEnded` 会收到 `reason: 'response-incomplete'`、原 `responseId` 和
+`incompleteReason`。后者沿用供应商的原因，缺失时为 `null`。引擎结束这个唤醒批次。
+已有输出项的 `context.responseStatus` 与 `context.incompleteReason` 保留在记录中。
+如已有完整函数调用，仍沿用原工具执行与回配流程。
+
 每次唤醒处理一批事件，可进行多轮模型调用。`SessionDecl.rounds()` 提供
 `{ soft, hard, softHint? }`：到 soft 与 hard − 1 中较小的那一轮时将 `softHint` 追加到最后一条
 工具回执(soft 不小于 hard 时提前到 hard 的前一轮，留一轮照着收尾)；到 hard 轮时
