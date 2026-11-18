@@ -18,6 +18,8 @@ export interface ContextMeta {
   blobs?: BlobRef[];
   responseId?: string;
   responseStatus?: string;
+  /** Present on incomplete responses. A provider may omit its reason. */
+  incompleteReason?: string | null;
   origin?: ItemOrigin;
 }
 export interface ContextRecord {
@@ -71,6 +73,7 @@ export function withText(entry: ContextRecord, text: string): ContextRecord {
 export function responseRecords(response: Response, origin: ItemOrigin, context: ContextMeta = {}): ContextRecord[] {
   return response.output.map(item => record(structuredClone(item), {
     ...context, responseId: response.id, responseStatus: response.status, origin,
+    ...(response.status === 'incomplete' ? { incompleteReason: response.incomplete_details?.reason ?? null } : {}),
   }));
 }
 

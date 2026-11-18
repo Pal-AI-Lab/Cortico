@@ -246,6 +246,68 @@ describe('MainLoop standard Response execution', () => {
     meters: { ...unknownMeters(), input: 10, output: 2, total: 12 },
   });
 
+  it.each([
+    ['incomplete', 'max_output_tokens', true],
+    ['incomplete', null, false],
+    ['completed', null, false],
+  ] as const)('reports a no-tool %s response (%s) without resubmitting it', async (status, reason, partial) => {
+    const ended = vi.fn<NonNullable<Persona['onTurnEnded']>>();
+    const worldEnded = vi.fn();
+    const world = { ...makeFakeIO('test', []), onTurnEnded: worldEnded };
+    const emitted = vi.fn<Logger['emit']>();
+    const rig = makeRig({ silent: true, hooks: { onTurnEnded: ended }, worlds: [world], log: { ...nullLogger(), emit: emitted } });
+    const respond = vi.spyOn(rig.llm, 'respond').mockImplementation(async request => {
+      const response = createResponse('r_without_calls', request);
+      response.status = status;
+      response.incomplete_details = reason === null ? null : { reason };
+      if (partial) response.output = [{ type: 'message', id: 'partial', role: 'assistant', status: 'incomplete',
+        content: [{ type: 'output_text', text: 'Partial', annotations: [] }] }];
+      return { response, origin, attempts: [{ ...attempt(response.id), outcome: status }] };
+    });
+    try {
+      rig.start(); rig.pushEvent('go');
+      await until(() => ended.mock.calls.length === 1);
+      expect(worldEnded.mock.calls).toEqual(ended.mock.calls);
+      const context = ended.mock.calls[0][0];
+      const rounds = emitted.mock.calls.map(([, , event]) => event).filter(event => event?.event === 'round');
+      expect(rounds).toHaveLength(1);
+      expect(rounds[0]?.data).toMatchObject({ outcome: status });
+      if (status === 'incomplete') {
+        expect(context).toMatchObject({ reason: 'response-incomplete', responseId: 'r_without_calls', incompleteReason: reason });
+      } else {
+        expect(context?.reason).not.toBe('response-incomplete');
+      }
+      if (partial) expect(rig.session.records.find(entry => entry.context.responseId === 'r_without_calls')?.context)
+        .toMatchObject({ responseStatus: status, incompleteReason: reason });
+      expect(respond).toHaveBeenCalledTimes(1);
+    } finally { await rig.cleanup(); }
+  });
+
+  it('preserves and executes a complete tool from an incomplete response exactly once', async () => {
+    const act = vi.fn(() => 'received');
+    const ended = vi.fn<NonNullable<Persona['onTurnEnded']>>();
+    const rig = makeRig({ silent: true, hooks: { onTurnEnded: ended }, worlds: [makeFakeIO('test', [makeTool('act', act)])] });
+    let requests = 0;
+    rig.llm.respond = async request => {
+      const first = ++requests === 1;
+      const response = createResponse(first ? 'r_with_call' : 'r_done', request);
+      response.status = first ? 'incomplete' : 'completed';
+      response.incomplete_details = first ? { reason: 'max_output_tokens' } : null;
+      if (first) response.output = [{ type: 'function_call', id: 'item_done', call_id: 'one_call', name: 'act',
+        arguments: '{}', status: 'completed' }];
+      return { response, origin, attempts: [{ ...attempt(response.id), outcome: first ? 'incomplete' : 'completed' }] };
+    };
+    try {
+      rig.start(); rig.pushEvent('go');
+      await until(() => ended.mock.calls.length === 1);
+      expect(requests).toBe(2);
+      expect(act).toHaveBeenCalledTimes(1);
+      expect(rig.session.records.find(entry => entry.item.type === 'function_call_output' && entry.item.call_id === 'one_call')).toBeDefined();
+      expect(rig.session.records.find(entry => entry.context.responseId === 'r_with_call')?.context.incompleteReason).toBe('max_output_tokens');
+      expect(ended.mock.calls[0][0]?.reason).not.toBe('response-incomplete');
+    } finally { await rig.cleanup(); }
+  });
+
   it('waits for preceding Items when done events arrive out of order and honors a barrier', async () => {
     const executed: string[] = [];
     const first = { ...makeTool('first', () => { executed.push('first'); return 'inspect before continuing'; }), barrierAfter: true };
