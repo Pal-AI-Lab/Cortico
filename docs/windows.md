@@ -37,6 +37,8 @@ Windows 把 WebUI 事件发给前台进程组里的每一个进程。`bin/cortic
 
 - 外部程序可能受到 Smart App Control 限制;诊断与运行时目录设置见 [runtimes.md](runtimes.md)。
 - Minecraft 的 Java 版本约定与客户端兼容限制见 [Minecraft README](../src/worlds/minecraft/README.md)。
+- Windows on Arm(arm64 的 Node)上 `canvas` 没有预编译包。它是可选依赖,`pnpm install` 时本机编译不成就跳过;
+  Minecraft World 的 prismarine-viewer 画面因此起不来,日志里有一条警告。
 
 ## 文本文件编码
 
