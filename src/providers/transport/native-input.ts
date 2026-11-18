@@ -4,6 +4,7 @@ import type { Request } from '../../protocol/open-responses/index.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { itemText, record, type ContextRecord } from '../../protocol/open-responses/context.ts';
 import type { GenerateOptions } from '../../core/generation.ts';
+import { NOT_EXECUTED_INCOMPLETE, NOT_EXECUTED_INTERRUPTED, NOT_EXECUTED_STREAM_ABORTED } from '../../core/markers.ts';
 
 export function requestSpec(request: Request, options: GenerateOptions): ModelSpec {
   return { ...options.nativeSpec, model: request.model ?? options.nativeSpec?.model ?? '',
@@ -20,9 +21,34 @@ export function requestTools(request: Request): ToolSchema[] | undefined {
 }
 
 export function requestContext(request: Request, options: GenerateOptions): readonly ContextRecord[] {
-  if (options.context) return options.context;
-  if (typeof request.input === 'string') return [record({ type: 'message', role: 'user', content: request.input })];
-  return (request.input ?? []).map(item => record(item));
+  const entries = options.context ?? (typeof request.input === 'string'
+    ? [record({ type: 'message', role: 'user', content: request.input })]
+    : (request.input ?? []).map(item => record(item)));
+  const pending = new Map<string, number>();
+  let projected: ContextRecord[] | undefined;
+  for (const [index, entry] of entries.entries()) {
+    const item = entry.item;
+    if (item.type === 'function_call') {
+      pending.set(item.call_id, pending.has(item.call_id) ? -1 : index);
+    } else if (item.type === 'function_call_output') {
+      const at = pending.get(item.call_id);
+      pending.delete(item.call_id);
+      if (at === undefined || at < 0) continue;
+      const output = item.output;
+      const marker = typeof output === 'string' ? output :
+        output.length === 1 && output[0].type === 'input_text' ? output[0].text : undefined;
+      if (marker !== NOT_EXECUTED_STREAM_ABORTED && marker !== NOT_EXECUTED_INCOMPLETE && marker !== NOT_EXECUTED_INTERRUPTED) continue;
+      const original = entries[at], call = original.item;
+      if (call.type !== 'function_call') continue;
+      try { JSON.parse(call.arguments); } catch {
+        // Providers validate historical arguments too. Keep the pairing and the
+        // actual non-execution receipt; do not invent a runnable partial call.
+        projected ??= [...entries];
+        projected[at] = { ...original, item: { ...call, arguments: '{"_cortico_replay":"unexecuted_invalid_json"}' } };
+      }
+    }
+  }
+  return projected ?? entries;
 }
 
 function nativeParts(entry: ContextRecord): Array<Record<string, unknown>> | undefined {
