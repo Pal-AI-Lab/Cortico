@@ -7,6 +7,10 @@
 export const FOLD_PLACEHOLDER = '[result folded]';
 /** 调用入参被折叠 */
 export const FOLD_ARGS_PLACEHOLDER = '[arguments folded]';
+/** 出线时代替历史调用里的 FOLD_ARGS_PLACEHOLDER,arguments 须是合法 JSON */
+export const REPLAY_ARGS_FOLDED = JSON.stringify({ _cortico_replay: 'arguments_folded' });
+/** 出线时代替历史调用里其余不是合法 JSON 的 arguments(如流断在调用中途) */
+export const REPLAY_ARGS_INVALID = JSON.stringify({ _cortico_replay: 'invalid_historical_arguments' });
 /** 单条越过整份预算,整条换成记号 */
 export const OVERSIZE_PLACEHOLDER = '[turn too long, omitted]';
 

@@ -4,7 +4,7 @@ import type { Request } from '../../protocol/open-responses/index.ts';
 import { ResponseProtocolError } from '../../protocol/open-responses/stream.ts';
 import { itemText, record, type ContextRecord } from '../../protocol/open-responses/context.ts';
 import type { GenerateOptions } from '../../core/generation.ts';
-import { FOLD_ARGS_PLACEHOLDER } from '../../core/markers.ts';
+import { FOLD_ARGS_PLACEHOLDER, REPLAY_ARGS_FOLDED, REPLAY_ARGS_INVALID } from '../../core/markers.ts';
 
 export function requestSpec(request: Request, options: GenerateOptions): ModelSpec {
   return { ...options.nativeSpec, model: request.model ?? options.nativeSpec?.model ?? '',
@@ -20,26 +20,30 @@ export function requestTools(request: Request): ToolSchema[] | undefined {
   return request.tools?.map(tool => ({ name: tool.name, description: tool.description ?? '', parameters: tool.parameters ?? {} }));
 }
 
+/**
+ * The context a native request replays. A function call whose `arguments` is not valid JSON (folded
+ * at handoff, or left unfinished when the response stopped) goes out with `REPLAY_ARGS_FOLDED` or
+ * `REPLAY_ARGS_INVALID` in its place, since an endpoint that parses historical arguments rejects the
+ * whole request on one that fails. The record is not changed, and the call's output still says
+ * whether it ran.
+ */
 export function requestContext(request: Request, options: GenerateOptions): readonly ContextRecord[] {
   const entries = options.context ?? (typeof request.input === 'string'
     ? [record({ type: 'message', role: 'user', content: request.input })]
     : (request.input ?? []).map(item => record(item)));
-  let projected: ContextRecord[] | undefined;
+  let replayed: ContextRecord[] | undefined;
   for (const [index, entry] of entries.entries()) {
     const item = entry.item;
     if (item.type !== 'function_call') continue;
     try {
       JSON.parse(item.arguments);
     } catch {
-      // A Persona can index or annotate the original receipt. Describe only
-      // the historical arguments here; the actual output still determines
-      // what happened. This path has no access to the tool dispatcher.
-      const reason = item.arguments === FOLD_ARGS_PLACEHOLDER ? 'arguments_folded' : 'invalid_historical_arguments';
-      projected ??= [...entries];
-      projected[index] = { ...entry, item: { ...item, arguments: JSON.stringify({ _cortico_replay: reason }) } };
+      const args = item.arguments === FOLD_ARGS_PLACEHOLDER ? REPLAY_ARGS_FOLDED : REPLAY_ARGS_INVALID;
+      replayed ??= [...entries];
+      replayed[index] = { ...entry, item: { ...item, arguments: args } };
     }
   }
-  return projected ?? entries;
+  return replayed ?? entries;
 }
 
 function nativeParts(entry: ContextRecord): Array<Record<string, unknown>> | undefined {
