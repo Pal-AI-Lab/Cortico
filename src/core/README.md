@@ -63,18 +63,18 @@ piggyback 只入队，随后续唤醒一起投递。
 
 ## 主循环
 
-前台请求以 `response.incomplete` 收束且没有函数调用时，Persona 和可见 World 的
-`onTurnEnded` 会收到 `reason: 'response-incomplete'`、原 `responseId` 和
-`incompleteReason`。后者沿用供应商的原因，缺失时为 `null`。引擎结束这个唤醒批次。
-已有输出项的 `context.responseStatus` 与 `context.incompleteReason` 保留在记录中。
-如已有完整函数调用，仍沿用原工具执行与回配流程。
-
 每次唤醒处理一批事件，可进行多轮模型调用。`SessionDecl.rounds()` 提供
 `{ soft, hard, softHint? }`：到 soft 与 hard − 1 中较小的那一轮时将 `softHint` 追加到最后一条
 工具回执(soft 不小于 hard 时提前到 hard 的前一轮，留一轮照着收尾)；到 hard 轮时
 记录 warn 并结束本批。`endsTurn` 工具和自然结束共用结束处理；本批结束时尚未处理的事件
 退回总线，进入下一批。WebUI 的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。
+
+模型服务回的 Response 是 `incomplete`(撞输出上限、内容过滤等)且没有工具调用时，这一轮也结束本批:
+轮次记录的 `outcome` 是 `incomplete`,`onTurnEnded` 收到 `IncompleteTurnContext`
+(`kind: 'response-incomplete'`、`responseId`、模型服务给的原因 `incompleteReason`,没给时为 null),不重发。
+截断的回复里有完整的工具调用时照常执行并进入下一轮。incomplete 的 Response 落进 session 的每一项都在
+`context.incompleteReason` 记下同一个原因。
 
 `preempt` 取消尚未外化的模型轮,`interrupt` 取消模型轮(已外化的输出保留)或停止 `interruptible`
 工具、跳过本轮尚未开始的调用。两者取消后在同一批内接收新事件并开始下一轮,被取消的轮计入轮数,

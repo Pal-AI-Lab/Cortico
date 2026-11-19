@@ -18,7 +18,7 @@ export interface ContextMeta {
   blobs?: BlobRef[];
   responseId?: string;
   responseStatus?: string;
-  /** Present on incomplete responses. A provider may omit its reason. */
+  /** incomplete 的 Response 才有:`incomplete_details.reason`,模型服务没给时为 null。 */
   incompleteReason?: string | null;
   origin?: ItemOrigin;
 }
