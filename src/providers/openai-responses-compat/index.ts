@@ -2,7 +2,7 @@ import type { ProviderModule } from '../base.ts';
 import type { LLMProviderEntry } from '../../core/types.ts';
 import type { ResponseClient } from '../../core/generation.ts';
 import { isContextOverflow } from '../transport/errors.ts';
-import { ImageFallback } from '../transport/image-fallback.ts';
+import { AttachmentFallback } from '../transport/attachment-fallback.ts';
 import { REASONING_REPLAYS, type ReasoningReplay } from '../transport/responses-input.ts';
 import { ModelCatalog, ResponsesProvider, type ResponsesProviderOptions } from './native.ts';
 import { text } from './strings.ts';
@@ -114,8 +114,8 @@ export default {
       contextWindow: (model) => catalog.contextWindow(model),
       compatibilityKey: () => [options.endpointPath ?? '/responses', name],
       control: { probeClient: (replay) => new ResponsesProvider({ ...clientOptions(replay), sendSyntheticReasoning: true }) } satisfies CompatControl,
-      client: new ImageFallback(new ResponsesProvider(clientOptions(options.reasoningReplay)), { media, contextOverflow: isContextOverflow, log: host.log }),
-      handlesRefusedImages: true,
+      client: new AttachmentFallback(new ResponsesProvider(clientOptions(options.reasoningReplay)), { media, contextOverflow: isContextOverflow, log: host.log }),
+      handlesRefusedAttachments: true,
     };
   },
 } satisfies ProviderModule;

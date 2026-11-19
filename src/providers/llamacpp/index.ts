@@ -2,7 +2,7 @@ import type { ProviderModule } from '../base.ts';
 import type { ReasoningTier } from '../../core/types.ts';
 import type { Language } from '../../core/language.ts';
 import { isContextOverflow } from '../transport/errors.ts';
-import { ImageFallback } from '../transport/image-fallback.ts';
+import { AttachmentFallback } from '../transport/attachment-fallback.ts';
 import { modelsRoot, runtimesRoot } from '../../paths.ts';
 import { RouterCatalog } from './catalog.ts';
 import { runtimeConfig } from './config.ts';
@@ -88,14 +88,14 @@ export default {
         catalog.stop();
         await runtime.stop();
       },
-      client: new ImageFallback(new LlamaCppProvider({
+      client: new AttachmentFallback(new LlamaCppProvider({
         baseUrl: entry.baseUrl,
         apiKey,
         log: host.log,
         media,
         keepThinking: host.keepThinking,
       }), { media, contextOverflow: isContextOverflow, log: host.log }),
-      handlesRefusedImages: true,
+      handlesRefusedAttachments: true,
     };
   },
 } satisfies ProviderModule;
