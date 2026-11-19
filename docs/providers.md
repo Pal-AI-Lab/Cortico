@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/transport/image-fallback.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/transport/native-input.ts, src/providers/transport/image-fallback.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
 
 # Provider
 
@@ -82,7 +82,10 @@ WebUI 保存的 `secret` 遵循环境变量名格式 `[A-Za-z_][A-Za-z0-9_]*`。
 模块或兼容域与本次请求不同的 message、function_call、function_call_output 出线时不带 `id`,
 `call_id` 照带;同一来源和没有记录来源的项(Core 合成的 `msg_` / `fc_` / `fco_`)保留 `id`。function_call 的 `name`
 是模型写出的字符串，其中 `[a-zA-Z0-9_.-]` 以外的字符出线时换成 `_`(端点遇到一个不收的字符就拒收整条请求);
-session 记录不改，调用和回执仍按 `call_id` 配对。模块的 `detect`
+session 记录不改，调用和回执仍按 `call_id` 配对。function_call 的 `arguments` 不是合法 JSON 时(交接时折叠的入参、
+响应停在调用中途留下的半截),出线时换成只带 `_cortico_replay` 字段的对象(值为 `arguments_folded` 或
+`invalid_historical_arguments`),Chat Completions 出线也一样;端点按对象读历史参数时，一条解析不了就拒收整条请求。
+session 记录不改，调用执行没有仍由回执说明。模块的 `detect`
 探测发两条诊断请求(合成调用不带 / 带明文推理),按上游接受哪种写回 `reasoningReplay`。
 `options.endpointPath`、
 `options.extraHeaders`、`options.extraBody` 分别改路径、加头、并进请求体(`extraBody` 最后
