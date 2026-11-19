@@ -36,7 +36,7 @@ effort 收任意非空串)、`serviceTiers`、`create(name, entry, host)`。可�
 声明仍参与服务端校验。启停与模型操作这类动作走面板 invoke。
 
 `create()` 返回 `ProviderInstance`:`client`(实现 `respond`)、`listModels?`、`control?`、
-`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`、`handlesRefusedAttachments?`(client 自己已经做了带图请求被拒时的回落,
+`compatibilityKey?`、`start?` / `stop?`、`contextWindow?(model)`、`handlesRefusedAttachments?`(client 自己已经做了带附件请求被拒时的回落,
 见下文 `attachment-fallback.ts`)。`listModels()` 返回 `ListedModel[]`:
 `id` 必有,`displayName`、`contextWindow`、`maxOutputTokens`、`inputImages` 只在上游给出时才有。
 
@@ -94,12 +94,12 @@ function_call 出线时换成只带 `_cortico_replay` 字段的对象(`REPLAY_AR
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
 
-`attachment-fallback.ts` 的 `AttachmentFallback` 是带图请求被拒时的回落:请求带图、上游回 413,或回 400
-且模块的 `contextOverflow` 不认，就去掉这次请求的图片重发一次。重发被接受，按句柄记下这些图(只在内存里),之后经这个 client
-的请求都不带，每条失去图片的记录在正文后补一行 `attachmentLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
-`attached` 交回 client 实际附图的那些记录，不给就按全部记录算。`isContextOverflow` 把任何 413 算作超限，所以去掉图片后仍 413 时由 Core 交接。
-两个内建模块的 client 自己套着它，实例声明 `handlesRefusedAttachments`;其余实例由 `ProviderRegistry.bind` 套，图像开关取端点的 `multimodal`,
-`contextOverflow` 取模块的，不给 `attached`。只给一部分记录附图的 client 自己套并声明 `handlesRefusedAttachments`。
+`attachment-fallback.ts` 的 `AttachmentFallback` 是带附件请求被拒时的回落:请求带附件、上游回 413,或回 400
+且模块的 `contextOverflow` 不认，就去掉这次请求带上的附件重发一次。重发被接受，按句柄记下这些附件(只在内存里),之后经这个 client
+的请求都不带，每条失去附件的记录在正文后补一行 `attachmentLeftOut`;重发也被拒，错误带上两次尝试，什么都不记。
+`attached` 交回 client 实际带附件的那些记录，不给就按全部记录算;`accepts` 是 client 会发的附件类型，不给只算图片。`isContextOverflow` 把任何 413 算作超限，所以去掉附件后仍 413 时由 Core 交接。
+两个内建模块的 client 自己套着它，实例声明 `handlesRefusedAttachments`;其余实例由 `ProviderRegistry.bind` 套，附件开关取端点的 `multimodal`,
+`contextOverflow` 和 `accepts` 取模块的，不给 `attached`。只给一部分记录带附件的 client 自己套并声明 `handlesRefusedAttachments`。
 
 线协议类型在 `src/protocol/open-responses/`(规范 2026-04-24 生成),`ResponseAccumulator`
 逐事件强校验:序号递增、终态自洽、已关闭的 Item 不得再变。

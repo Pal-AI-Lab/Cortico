@@ -1,12 +1,12 @@
 /**
- * Fallback for a request whose images the model service refuses. A request that carries images and
- * is refused with 413, or with a 400 that is not a context overflow, is sent once more without
- * them. When that one is accepted, the images were the cause: their handles are remembered, every
- * later request through this client leaves them out, and each record that lost one gets the
- * `attachmentLeftOut` line after its text. The handles live in memory only, so after a restart the first
- * request carrying one of them is refused once more.
+ * Fallback for a request whose attachments the model service refuses. A request that carries
+ * attachments and is refused with 413, or with a 400 that is not a context overflow, is sent once
+ * more without them. When that one is accepted, the attachments were the cause: their handles are
+ * remembered, every later request through this client leaves them out, and each record that lost
+ * one gets the `attachmentLeftOut` line after its text. The handles live in memory only, so after a
+ * restart the first request carrying one of them is refused once more.
  *
- * A 413 is retried without images even though `isContextOverflow` counts it: attachment bytes reach a
+ * A 413 is retried without attachments even though `isContextOverflow` counts it: attachment bytes reach a
  * service's body size limit long before they move the token count. A 413 that survives the retry
  * reaches Core as a context overflow.
  */
@@ -15,7 +15,7 @@ import { GenerationError, type GenerateOptions, type Generation } from '../../co
 import type { ContextRecord, Item } from '../../protocol/open-responses/context.ts';
 import type { Request } from '../../protocol/open-responses/index.ts';
 import type { Logger } from '../../core/types.ts';
-import { imageBlobs, type CompatMediaOptions } from './history.ts';
+import type { CompatMediaOptions } from './history.ts';
 
 /** Statuses of a request the service will not take as written. */
 const REFUSED: ReadonlySet<number> = new Set([400, 413]);
@@ -24,17 +24,19 @@ export interface AttachmentFallbackOptions {
   media: CompatMediaOptions;
   /** The module's `contextOverflow`. A refusal it matches is not retried, except a 413. */
   contextOverflow(error: GenerationError): boolean;
-  /** The records whose images the client attaches to a request; every record when absent. */
+  /** The records whose attachments the client sends with a request; every record when absent. */
   attached?(context: readonly ContextRecord[]): readonly ContextRecord[];
+  /** The attachment types the client sends; images when absent. */
+  accepts?(mime: string): boolean;
   log: Logger;
 }
 
-/** Follows the `[blob …]` line of an image a request goes out without. */
+/** Follows the `[blob …]` line of an attachment a request goes out without. */
 export const attachmentLeftOut = (handle: string): string =>
-  `[${handle} left out: the model service rejected the request that carried this image]`;
+  `[${handle} left out: the model service rejected the request that carried this attachment]`;
 
 export class AttachmentFallback extends BaseProvider {
-  /** Images whose request was accepted only without them. */
+  /** Attachments whose request was accepted only without them. */
   private readonly refused = new Set<string>();
 
   constructor(private readonly inner: BaseProvider, private readonly options: AttachmentFallbackOptions) {
@@ -57,7 +59,7 @@ export class AttachmentFallback extends BaseProvider {
         throw new GenerationError(retry.message, [...error.attempts, ...retry.attempts], retry.partial, retry.origin, retry.status, retry.body, { cause: retry.cause });
       }
       for (const handle of sent) this.refused.add(handle);
-      this.options.log.warn('Model service rejected a request with images; sent again without them', { status: error.status, images: [...sent] });
+      this.options.log.warn('Model service rejected a request with attachments; sent again without them', { status: error.status, attachments: [...sent] });
       return { ...generation, attempts: [...error.attempts, ...generation.attempts] };
     }
   }
@@ -66,22 +68,22 @@ export class AttachmentFallback extends BaseProvider {
     return REFUSED.has(error.status) && (error.status === 413 || !this.options.contextOverflow(error));
   }
 
-  /** The images the client attaches to a request built from `context`. */
+  /** The attachments the client sends with a request built from `context`. */
   private sentAttachments(context: readonly ContextRecord[]): Set<string> {
-    const { media, attached } = this.options;
+    const { media, attached, accepts = (mime: string) => mime.startsWith('image/') } = this.options;
     if (!media.enabled()) return new Set();
-    return new Set((attached?.(context) ?? context).flatMap((entry) => imageBlobs(entry.context.blobs)
-      .filter((ref) => media.read(ref.handle))
+    return new Set((attached?.(context) ?? context).flatMap((entry) => (entry.context.blobs ?? [])
+      .filter((ref) => accepts(ref.mime) && media.read(ref.handle))
       .map((ref) => ref.handle)));
   }
 }
 
-/** The context without the images in `handles`; each record that lost one gets an `attachmentLeftOut` line per image. */
+/** The context without the attachments in `handles`; each record that lost one gets an `attachmentLeftOut` line per attachment. */
 export function withoutAttachments(context: readonly ContextRecord[], handles: ReadonlySet<string>): readonly ContextRecord[] {
   if (!handles.size) return context;
   return context.map((entry) => {
     const blobs = entry.context.blobs ?? [];
-    const out = imageBlobs(blobs).filter((ref) => handles.has(ref.handle));
+    const out = blobs.filter((ref) => handles.has(ref.handle));
     if (!out.length) return entry;
     return {
       ...entry,
