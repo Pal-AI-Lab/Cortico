@@ -5,6 +5,9 @@
 Node 22+,pnpm 11(版本由 `package.json` 的 `packageManager` 指定)。规则在 [AGENTS.md](../AGENTS.md),贡献流程在
 [CONTRIBUTING.md](../CONTRIBUTING.md)。
 
+`canvas` 是可选依赖。没有预编译包的平台(如 Windows on Arm)上,`pnpm install` 转去本机编译，编译不成就跳过它，
+安装照常完成。
+
 ## 命令
 
 | 命令 | 作用 |

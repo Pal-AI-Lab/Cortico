@@ -147,6 +147,8 @@ webui/         WebUI 面板两侧:服务器、存档、权限、客户端、皮�
 | 画质 | 没有光影/材质包/模组的画面 | 与观众同一幅画面，含 SpectatorPlus 补回的 HUD 与手臂 |
 | 代价 | 轻，无人值守 | 一份客户端进程 + 一块显卡 |
 
+prismarine-viewer 运行时要 `canvas`(Cortico 的可选依赖)。`canvas` 没装上时 viewer 起不来，日志记一条警告，游玩不受影响。
+
 客户端窗口出现后，World 将其标题设置为该客户端的账号名，供 OBS 按标题区分。直连进服后再次更新标题。
 
 `client-launch.ts` 读取 `versions/<id>/<id>.json` 生成 Java 命令行，支持 `inheritsFrom`。
