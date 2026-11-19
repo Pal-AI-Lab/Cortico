@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/history.ts, src/providers/transport/image-fallback.ts, src/providers/llamacpp/native.ts -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/transport/responses-input.ts, src/providers/transport/native-input.ts, src/providers/transport/history.ts, src/providers/transport/image-fallback.ts, src/providers/llamacpp/native.ts -->
 
 # src/providers
 
@@ -88,7 +88,8 @@ Core 侧:`activeProviderEntry()` / `activeSpec()` 每次现读;`contextWindowOf(
 function_call / function_call_output 出线时去掉可选的 `id`,`call_id` 不动,没有来源的项照带 `id`;function_call 的 `name` 里
 `[a-zA-Z0-9_.-]` 以外的字符换成 `_`);`chat.ts` + `native-input.ts` / `history.ts` 转换 Chat Completions 请求(历史
 思维链回不回传由模块定:`renderMessagesWithMedia` 的 `keepReasoning` 决定出不出线,`dropPastThinking`
-把合成开头之外的每条抹空);
+把合成开头之外的每条抹空);两种出线共用 `native-input.ts` 的 `requestContext`,历史里 `arguments` 不是合法 JSON 的
+function_call 出线时换成只带 `_cortico_replay` 字段的对象(`REPLAY_ARGS_FOLDED` / `REPLAY_ARGS_INVALID`),session 记录不改;
 `response-assembly.ts` 把两种流归一成 Open Responses 的 Item 流,
 `finish_reason` 的 `length` / `content_filter` 落成 `incomplete_details.reason`;
 `response-meters.ts` 把两种 usage 归一成 `TokenMeters`,缺项保持 null。
