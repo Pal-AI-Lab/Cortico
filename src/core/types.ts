@@ -907,10 +907,11 @@ export interface RunPhase {
   enteredAt: string;
 }
 
-/** Provider evidence available when a foreground response ends incomplete without a tool call. */
+/** 一轮因回复截断而结束：模型服务回的 Response 是 incomplete,且没有要执行的工具调用。 */
 export interface IncompleteTurnContext {
-  reason: 'response-incomplete';
+  kind: 'response-incomplete';
   responseId: string;
+  /** 模型服务给的 `incomplete_details.reason`(如 `max_output_tokens`),没给时为 null。 */
   incompleteReason: string | null;
 }
 
@@ -944,8 +945,8 @@ export interface World {
    */
   onHandoffEnded?(): void;
   /**
-   * assistant 自然结束、LLM 失败或轮数达到硬上限时调用，用于清理本轮暂态。
-   * 隐藏 World 不接收通知。
+   * assistant 自然结束、LLM 失败或轮数达到硬上限时调用，用于清理本轮暂态;因回复截断而结束时带
+   * `context`。隐藏 World 不接收通知。
    */
   onTurnEnded?(context?: IncompleteTurnContext): void;
   /**
@@ -1032,7 +1033,7 @@ export interface Persona {
    * Core 在超过 hardTokens 时强制交接。
    */
   onBatchEnd?(): void;
-  /** assistant 自然结束、LLM 失败或轮数达到硬上限时调用。 */
+  /** assistant 自然结束、LLM 失败或轮数达到硬上限时调用;因回复截断而结束时带 `context`。 */
   onTurnEnded?(context?: IncompleteTurnContext): void;
   /** 一批处理结束且总线没有非 piggyback 的即时事件或候选时调用。 */
   onIdle?(): void | Promise<void>;

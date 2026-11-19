@@ -1268,8 +1268,8 @@ export class MainLoop {
           llmMs = Date.now() - llmStart;
         }
         assistant = responseRecords(res.response, res.origin);
-        if (res.response.status === 'incomplete' && !res.response.output.some(item => item.type === 'function_call')) {
-          incomplete = { reason: 'response-incomplete', responseId: res.response.id,
+        if (res.response.status === 'incomplete') {
+          incomplete = { kind: 'response-incomplete', responseId: res.response.id,
             incompleteReason: res.response.incomplete_details?.reason ?? null };
         }
         setAnchors({ resp: res.response.id });
@@ -1398,13 +1398,9 @@ export class MainLoop {
       }
 
       if (calls.length === 0) {
-        if (incomplete) {
-          noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
-          this.finishTurn(incomplete);
-          return;
-        }
-        noteRound('completed');
-        this.finishTurn();
+        if (incomplete) noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
+        else noteRound('completed');
+        this.finishTurn(incomplete);
         return;
       }
 

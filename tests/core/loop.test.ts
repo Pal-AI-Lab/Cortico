@@ -273,9 +273,9 @@ describe('MainLoop standard Response execution', () => {
       expect(rounds).toHaveLength(1);
       expect(rounds[0]?.data).toMatchObject({ outcome: status });
       if (status === 'incomplete') {
-        expect(context).toMatchObject({ reason: 'response-incomplete', responseId: 'r_without_calls', incompleteReason: reason });
+        expect(context).toEqual({ kind: 'response-incomplete', responseId: 'r_without_calls', incompleteReason: reason });
       } else {
-        expect(context?.reason).not.toBe('response-incomplete');
+        expect(context).toBeUndefined();
       }
       if (partial) expect(rig.session.records.find(entry => entry.context.responseId === 'r_without_calls')?.context)
         .toMatchObject({ responseStatus: status, incompleteReason: reason });
@@ -304,7 +304,7 @@ describe('MainLoop standard Response execution', () => {
       expect(act).toHaveBeenCalledTimes(1);
       expect(rig.session.records.find(entry => entry.item.type === 'function_call_output' && entry.item.call_id === 'one_call')).toBeDefined();
       expect(rig.session.records.find(entry => entry.context.responseId === 'r_with_call')?.context.incompleteReason).toBe('max_output_tokens');
-      expect(ended.mock.calls[0][0]?.reason).not.toBe('response-incomplete');
+      expect(ended.mock.calls[0][0]).toBeUndefined();
     } finally { await rig.cleanup(); }
   });
 
