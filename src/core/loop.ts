@@ -38,6 +38,7 @@ import type {
   ToolOutcome,
   ToolSchema,
   ToolTag,
+  TurnEndedContext,
   WakeItem,
 } from './types.ts';
 import { defaultExternalizes } from './types.ts';
@@ -608,17 +609,20 @@ export class MainLoop {
   }
 
   /** 一轮结束时先通知 Persona，再通知可见 World。 */
-  private finishTurn(context?: IncompleteTurnContext): void {
+  private finishTurn(end: Exclude<TurnEndedContext['reason'], 'response-incomplete'> | IncompleteTurnContext): void {
     if (!this.activeNow()) return;
     const { persona, worlds, log } = this.d;
+    const context: TurnEndedContext = { sessionId: this.d.decl.id, round: this.roundSeq, rounds: this.roundsLastBatch,
+      ...(typeof end === 'string' ? { reason: end } : { reason: end.kind, responseId: end.responseId, incompleteReason: end.incompleteReason }) };
+    const incomplete = typeof end === 'string' ? undefined : end;
     try {
-      persona.onTurnEnded?.(context);
+      persona.onTurnEnded?.(incomplete, context);
     } catch (e) {
       log.warn('onTurnEnded钩子异常', { err: e });
     }
     for (const m of worlds.visible()) {
       try {
-        m.onTurnEnded?.(context);
+        m.onTurnEnded?.(incomplete, context);
       } catch (e) {
         log.warn('World 回合收束钩子异常', { id: m.id, err: e });
       }
@@ -1175,7 +1179,7 @@ export class MainLoop {
         const hard = this.exceededHardLimit();
         if (hard !== null) {
           log.warn('计数越过模型上下文上限,本批在轮边界收束,批末交接', { round, estTokens: this.estTokens(), hardTokens: hard });
-          this.finishTurn();
+          this.finishTurn('context-limit');
           return;
         }
       }
@@ -1221,7 +1225,7 @@ export class MainLoop {
         const arrived: WakeItem[] = [...arrivedEarly.map((event) => ({ event })), ...(ready ?? [])];
         if (!ready) {
           for (const item of arrived) bus.push(item, { trigger: 'flush' });
-          this.finishTurn();
+          this.finishTurn('interrupted');
           return false;
         }
         await this.deliverBatch(arrived, generation, round);
@@ -1294,7 +1298,7 @@ export class MainLoop {
           }
           this.tapAbort(tap, ABORT_SHUTDOWN);
           noteRound('discarded');
-          this.finishTurn();
+          this.finishTurn('shutdown');
           return;
         }
         meters = res.attempts[res.attempts.length - 1].meters;
@@ -1309,7 +1313,7 @@ export class MainLoop {
             this.tapAbort(tap, ABORT_SHUTDOWN);
             log.info('模型轮随关机终止');
             noteRound('shutdown');
-            this.finishTurn();
+            this.finishTurn('shutdown');
             return;
           }
           const interrupted = flight.abortReason === 'interrupt';
@@ -1344,7 +1348,7 @@ export class MainLoop {
           log.warn('上游拒绝:输入超过模型上下文,本批结束即交接', { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens() });
           this.handoffRequested = true;
           noteRound('overflow');
-          this.finishTurn();
+          this.finishTurn('context-limit');
           return;
         }
         consecutiveFailures++;
@@ -1376,7 +1380,7 @@ export class MainLoop {
         }
         log.error('LLM调用失败,本轮自然结束', detail);
         noteRound('failed', { resubmit: false });
-        this.finishTurn();
+        this.finishTurn('model-error');
         return;
       } finally {
         if (flight.phase === 'model') flight.phase = 'tools';
@@ -1398,9 +1402,13 @@ export class MainLoop {
       }
 
       if (calls.length === 0) {
-        if (incomplete) noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
-        else noteRound('completed');
-        this.finishTurn(incomplete);
+        if (incomplete) {
+          noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
+          this.finishTurn(incomplete);
+          return;
+        }
+        noteRound('completed');
+        this.finishTurn('completed');
         return;
       }
 
@@ -1502,13 +1510,13 @@ export class MainLoop {
       // endsTurn 与自然结束使用同一出口；事件已退回总线。
       if (turnEnded) {
         noteRound('ended', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn();
+        this.finishTurn('ended');
         return;
       }
       if (round >= caps.hard) {
         log.warn('硬上限强制结束本次唤醒', { round });
         noteRound('hard-cap', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn();
+        this.finishTurn('hard-cap');
         return;
       }
       noteRound('continue', { toolCalls: calls.length, arrived: arrived.length });
@@ -1802,7 +1810,7 @@ export class MainLoop {
     if (!this.active(generation)) return;
     session.reset([sysMsg]);
     this.d.transcript?.boundary('clear', {});
-    this.finishTurn();
+    this.finishTurn('cleared');
     this.pushOpening('cleared');
     log.emit('warn', 'session已清空重开', { event: 'session-cleared' });
   }

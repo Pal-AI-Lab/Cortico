@@ -948,7 +948,7 @@ export interface World {
    * assistant 自然结束、LLM 失败或轮数达到硬上限时调用，用于清理本轮暂态;因回复截断而结束时带
    * `context`。隐藏 World 不接收通知。
    */
-  onTurnEnded?(context?: IncompleteTurnContext): void;
+  onTurnEnded?(context?: IncompleteTurnContext, outcome?: TurnEndedContext): void;
   /**
    * 本 World 产生的事件离开队列时调用：delivered 表示已写入主 session，discarded 表示被操作者
    * 清空队列丢弃。经 withdrawPending 撤回的事件不通知；drainPendingEvents 取走的事件只在
@@ -993,6 +993,16 @@ export interface SystemPrefixContext {
 
 export type SessionOpeningReason = 'new' | 'restarted' | 'cleared';
 
+export type TurnEndedContext = {
+  sessionId: string;
+  /** Monotonic model round within this loop instance. */
+  round: number;
+  /** Model rounds charged to the current batch. */
+  rounds: number;
+} & ({ reason: 'response-incomplete'; responseId: string; incompleteReason: string | null } | {
+  reason: 'completed' | 'ended' | 'hard-cap' | 'context-limit' | 'model-error' | 'interrupted' | 'shutdown' | 'cleared';
+});
+
 export interface MemoryAssemblyContext {
   now: Date;
   timezone: string;
@@ -1034,7 +1044,7 @@ export interface Persona {
    */
   onBatchEnd?(): void;
   /** assistant 自然结束、LLM 失败或轮数达到硬上限时调用;因回复截断而结束时带 `context`。 */
-  onTurnEnded?(context?: IncompleteTurnContext): void;
+  onTurnEnded?(context?: IncompleteTurnContext, outcome?: TurnEndedContext): void;
   /** 一批处理结束且总线没有非 piggyback 的即时事件或候选时调用。 */
   onIdle?(): void | Promise<void>;
   /** 连续模型调用失败后恢复时调用；返回待注入文本，null 表示不注入。 */
