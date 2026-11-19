@@ -15,7 +15,7 @@ import type { ProviderModule } from '../../../src/providers/base.ts';
 import type { Request } from '../../../src/protocol/open-responses/index.ts';
 import { message } from '../../../src/protocol/open-responses/context.ts';
 import { isContextOverflow } from '../../../src/providers/transport/errors.ts';
-import { imageLeftOut } from '../../../src/providers/transport/image-fallback.ts';
+import { attachmentLeftOut } from '../../../src/providers/transport/attachment-fallback.ts';
 import COMPAT from '../../../src/providers/openai-responses-compat/index.ts';
 import LLAMACPP from '../../../src/providers/llamacpp/index.ts';
 
@@ -54,7 +54,7 @@ const carriesImage = (body: string) => body.includes(IMAGE_DATA);
 function client(module: ProviderModule, url: string, patch: Partial<LLMProviderEntry> = {}) {
   const entry: LLMProviderEntry = { kind: module.id, baseUrl: url, multimodal: true, spec: { model: 'm', thinking: false }, ...patch };
   return module.create('x', entry, {
-    stateDir: mkdtempSync(join(tmpdir(), 'image-fallback-')), secret: () => '', keepThinking: () => true, log: nullLogger(),
+    stateDir: mkdtempSync(join(tmpdir(), 'attachment-fallback-')), secret: () => '', keepThinking: () => true, log: nullLogger(),
     readBlob: (handle: string) => (handle === picture.handle ? IMAGE : null),
   }).client;
 }
@@ -70,7 +70,7 @@ describe('a request the model service refuses for its images', () => {
       const first = await ask(target);
       expect(first.attempts.map((a) => a.status), module.id).toEqual([400, 200]);
       expect(bodies.map(carriesImage), module.id).toEqual([true, false]);
-      expect(bodies[1], module.id).toContain(imageLeftOut(picture.handle));
+      expect(bodies[1], module.id).toContain(attachmentLeftOut(picture.handle));
       await ask(target);
       expect(bodies.map(carriesImage), module.id).toEqual([true, false, false]);
       expect(bodies[2], module.id).toBe(bodies[1]);
@@ -80,7 +80,7 @@ describe('a request the model service refuses for its images', () => {
   it('puts the left-out line on its own line on Chat, which joins text parts without a separator', async () => {
     const { url, bodies } = await service(carriesImage);
     await ask(client(LLAMACPP, url));
-    expect(JSON.parse(bodies[1]!).messages.at(-1).content).toBe(`look\n${blobLine(picture)}\n${imageLeftOut(picture.handle)}`);
+    expect(JSON.parse(bodies[1]!).messages.at(-1).content).toBe(`look\n${blobLine(picture)}\n${attachmentLeftOut(picture.handle)}`);
   });
 
   it('is sent again without them on a 413, which otherwise counts as a context overflow', async () => {

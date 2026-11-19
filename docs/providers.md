@@ -1,4 +1,4 @@
-<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/transport/native-input.ts, src/providers/transport/image-fallback.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
+<!-- Owner: src/providers/base.ts, src/providers/webui/hub.ts, src/providers/hub-api.ts, src/providers/name.ts, src/providers/registry.ts, src/providers/webui/settings.ts, src/providers/webui/config.ts, src/providers/openai-responses-compat/config.ts, src/providers/openai-responses-compat/native.ts, src/providers/llamacpp/config.ts, src/providers/llamacpp/options.ts, src/providers/llamacpp/native.ts, src/providers/llamacpp/huggingface.ts, src/providers/transport/responses-input.ts, src/providers/transport/native-input.ts, src/providers/transport/attachment-fallback.ts, src/providers/pricebook.ts, src/core/generation.ts (PriceSnapshot, priceUsage) -->
 
 # Provider
 
@@ -135,8 +135,8 @@ router 自动加载。
 
 带图的请求被上游以 413 拒收，或以 400 拒收且模块的 `contextOverflow` 不认时，去掉这次请求的图片重发一次。重发被接受:
 这些图之后不再发给这个端点(按句柄记在内存里，实例重建或进程重启后清空),每条失去图片的记录在正文后补一行说明。重发也被拒：错误带上两次尝试交给 Core,
-去掉图片后仍是 413 的按输入超限交接(见 [sessions.md](sessions.md))。每个端点都有这层回落(`ImageFallback`):内建模块的 client 自己套，
-扩展 provider 由 `ProviderRegistry.bind` 套。扩展的 client 自己套了的，在 `create()` 返回的实例上写 `handlesRefusedImages: true`,
+去掉图片后仍是 413 的按输入超限交接(见 [sessions.md](sessions.md))。每个端点都有这层回落(`AttachmentFallback`):内建模块的 client 自己套，
+扩展 provider 由 `ProviderRegistry.bind` 套。扩展的 client 自己套了的，在 `create()` 返回的实例上写 `handlesRefusedAttachments: true`,
 `bind` 就不再套;只给一部分记录附图的 client 要自己套，用 `attached` 交回附了图的记录。
 
 ## 计价

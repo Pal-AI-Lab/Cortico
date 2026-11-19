@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { URL, fileURLToPath, pathToFileURL } from 'node:url';
 import type { LLMProviderEntry } from '../core/types.ts';
 import type { BaseProvider, ProviderHostBase, ProviderInstance, ProviderModule } from './base.ts';
-import { ImageFallback } from './transport/image-fallback.ts';
+import { AttachmentFallback } from './transport/attachment-fallback.ts';
 import { quotePrices } from './pricebook.ts';
 import { createHash } from 'node:crypto';
 import { secretReader } from '../core/secrets.ts';
@@ -68,7 +68,7 @@ export class ProviderRegistry {
   private readonly instances = new Map<string, { key: string; value: ProviderInstance }>();
   private readonly resources = new Map<string, unknown>();
   /** One per instance: `bind` runs on every request, and the fallback holds the handles the service refused. */
-  private readonly imageFallbacks = new WeakMap<ProviderInstance, BaseProvider>();
+  private readonly attachmentFallbacks = new WeakMap<ProviderInstance, BaseProvider>();
   constructor(
     private readonly entries: () => Record<string, LLMProviderEntry>,
     private readonly host: ProviderHostBase,
@@ -133,7 +133,7 @@ export class ProviderRegistry {
     const module = this.module(raw.kind);
     const entry = module.normalize?.(structuredClone(raw)) ?? structuredClone(raw);
     const instance = this.resolve(name);
-    const target = this.imageFallback(instance, module, entry);
+    const target = this.attachmentFallback(instance, module, entry);
     const domain = () =>
       createHash('sha256')
         .update(JSON.stringify([entry.kind, entry.baseUrl, instance.compatibilityKey?.() ?? null]))
@@ -155,17 +155,17 @@ export class ProviderRegistry {
     return client;
   }
 
-  /** The instance's client behind an `ImageFallback`; the client itself when the instance declares `handlesRefusedImages`. */
-  private imageFallback(instance: ProviderInstance, module: ProviderModule, entry: LLMProviderEntry): BaseProvider {
-    if (instance.handlesRefusedImages) return instance.client;
-    let fallback = this.imageFallbacks.get(instance);
+  /** The instance's client behind an `AttachmentFallback`; the client itself when the instance declares `handlesRefusedAttachments`. */
+  private attachmentFallback(instance: ProviderInstance, module: ProviderModule, entry: LLMProviderEntry): BaseProvider {
+    if (instance.handlesRefusedAttachments) return instance.client;
+    let fallback = this.attachmentFallbacks.get(instance);
     if (!fallback) {
-      fallback = new ImageFallback(instance.client, {
+      fallback = new AttachmentFallback(instance.client, {
         media: { enabled: () => entry.multimodal === true, read: this.host.readBlob },
         contextOverflow: (error) => module.contextOverflow?.(error) ?? false,
         log: this.host.log,
       });
-      this.imageFallbacks.set(instance, fallback);
+      this.attachmentFallbacks.set(instance, fallback);
     }
     return fallback;
   }

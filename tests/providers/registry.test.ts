@@ -1,6 +1,6 @@
 /**
  * 实例缓存键感知端点 `.env` 的内容:文件变更后下一次解析重建实例。
- * `bind` 给没有声明 `handlesRefusedImages` 的实例套一层 `ImageFallback`,每个实例一份。
+ * `bind` 给没有声明 `handlesRefusedAttachments` 的实例套一层 `AttachmentFallback`,每个实例一份。
  */
 import { afterEach, expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -69,12 +69,12 @@ class RefusesImages extends BaseProvider {
   }
 }
 
-function imageFixture(handlesRefusedImages?: true) {
+function imageFixture(handlesRefusedAttachments?: true) {
   const temp = makeTmpDir(); cleanups.push(temp.cleanup);
   const client = new RefusesImages();
   const module: ProviderModule = {
     id: 'stub', title: 'Stub', reasoningTiers: [], serviceTiers: [],
-    create: () => ({ client, ...(handlesRefusedImages ? { handlesRefusedImages } : {}) }),
+    create: () => ({ client, ...(handlesRefusedAttachments ? { handlesRefusedAttachments } : {}) }),
   };
   const cfg = makeCfg({ providers: { Alpha: { kind: 'stub', baseUrl: 'https://model.test', multimodal: true } }, activeProvider: 'Alpha' });
   const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: temp.dir, readBlob: () => Buffer.from('image'), keepThinking: () => true, log: nullLogger() }, [module]);
@@ -90,7 +90,7 @@ it('sends a request refused for its images once more without them, and the next 
   expect(client.carried).toEqual([true, false, false]);
 });
 
-it('adds no fallback around an instance that declares handlesRefusedImages: one request, and the refusal reaches the caller', async () => {
+it('adds no fallback around an instance that declares handlesRefusedAttachments: one request, and the refusal reaches the caller', async () => {
   const { client, ask } = imageFixture(true);
   await expect(ask()).rejects.toMatchObject({ status: 400 });
   expect(client.carried).toEqual([true]);

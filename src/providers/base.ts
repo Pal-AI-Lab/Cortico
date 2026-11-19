@@ -59,9 +59,9 @@ export interface ProviderInstance {
   client: BaseProvider;
   /**
    * The client already sends a request refused for its images once more without them: it is an
-   * `ImageFallback`, or does the same itself. Absent: `ProviderRegistry.bind` puts one around the client.
+   * `AttachmentFallback`, or does the same itself. Absent: `ProviderRegistry.bind` puts one around the client.
    */
-  handlesRefusedImages?: boolean;
+  handlesRefusedAttachments?: boolean;
   /** Models the endpoint advertises (`GET /models`). */
   listModels?(): Promise<ListedModel[]>;
   /** Module-owned control object; interpreted by that module's WebUI contribution. */

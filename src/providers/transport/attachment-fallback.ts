@@ -3,7 +3,7 @@
  * is refused with 413, or with a 400 that is not a context overflow, is sent once more without
  * them. When that one is accepted, the images were the cause: their handles are remembered, every
  * later request through this client leaves them out, and each record that lost one gets the
- * `imageLeftOut` line after its text. The handles live in memory only, so after a restart the first
+ * `attachmentLeftOut` line after its text. The handles live in memory only, so after a restart the first
  * request carrying one of them is refused once more.
  *
  * A 413 is retried without images even though `isContextOverflow` counts it: attachment bytes reach a
@@ -20,7 +20,7 @@ import { imageBlobs, type CompatMediaOptions } from './history.ts';
 /** Statuses of a request the service will not take as written. */
 const REFUSED: ReadonlySet<number> = new Set([400, 413]);
 
-export interface ImageFallbackOptions {
+export interface AttachmentFallbackOptions {
   media: CompatMediaOptions;
   /** The module's `contextOverflow`. A refusal it matches is not retried, except a 413. */
   contextOverflow(error: GenerationError): boolean;
@@ -30,28 +30,28 @@ export interface ImageFallbackOptions {
 }
 
 /** Follows the `[blob …]` line of an image a request goes out without. */
-export const imageLeftOut = (handle: string): string =>
+export const attachmentLeftOut = (handle: string): string =>
   `[${handle} left out: the model service rejected the request that carried this image]`;
 
-export class ImageFallback extends BaseProvider {
+export class AttachmentFallback extends BaseProvider {
   /** Images whose request was accepted only without them. */
   private readonly refused = new Set<string>();
 
-  constructor(private readonly inner: BaseProvider, private readonly options: ImageFallbackOptions) {
+  constructor(private readonly inner: BaseProvider, private readonly options: AttachmentFallbackOptions) {
     super();
   }
 
   async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
-    const context = options.context && withoutImages(options.context, this.refused);
+    const context = options.context && withoutAttachments(options.context, this.refused);
     try {
       return await this.inner.respond(request, context ? { ...options, context } : options);
     } catch (error) {
       if (!context || options.diagnostic || options.signal?.aborted || !(error instanceof GenerationError) || !this.retried(error)) throw error;
-      const sent = this.sentImages(context);
+      const sent = this.sentAttachments(context);
       if (!sent.size) throw error;
       let generation: Generation;
       try {
-        generation = await this.inner.respond(request, { ...options, context: withoutImages(context, sent) });
+        generation = await this.inner.respond(request, { ...options, context: withoutAttachments(context, sent) });
       } catch (retry) {
         if (!(retry instanceof GenerationError)) throw retry;
         throw new GenerationError(retry.message, [...error.attempts, ...retry.attempts], retry.partial, retry.origin, retry.status, retry.body, { cause: retry.cause });
@@ -67,7 +67,7 @@ export class ImageFallback extends BaseProvider {
   }
 
   /** The images the client attaches to a request built from `context`. */
-  private sentImages(context: readonly ContextRecord[]): Set<string> {
+  private sentAttachments(context: readonly ContextRecord[]): Set<string> {
     const { media, attached } = this.options;
     if (!media.enabled()) return new Set();
     return new Set((attached?.(context) ?? context).flatMap((entry) => imageBlobs(entry.context.blobs)
@@ -76,8 +76,8 @@ export class ImageFallback extends BaseProvider {
   }
 }
 
-/** The context without the images in `handles`; each record that lost one gets an `imageLeftOut` line per image. */
-export function withoutImages(context: readonly ContextRecord[], handles: ReadonlySet<string>): readonly ContextRecord[] {
+/** The context without the images in `handles`; each record that lost one gets an `attachmentLeftOut` line per image. */
+export function withoutAttachments(context: readonly ContextRecord[], handles: ReadonlySet<string>): readonly ContextRecord[] {
   if (!handles.size) return context;
   return context.map((entry) => {
     const blobs = entry.context.blobs ?? [];
@@ -85,7 +85,7 @@ export function withoutImages(context: readonly ContextRecord[], handles: Readon
     if (!out.length) return entry;
     return {
       ...entry,
-      item: withLine(entry.item, out.map((ref) => imageLeftOut(ref.handle)).join('\n')),
+      item: withLine(entry.item, out.map((ref) => attachmentLeftOut(ref.handle)).join('\n')),
       context: { ...entry.context, blobs: blobs.filter((ref) => !out.includes(ref)) },
     };
   });
