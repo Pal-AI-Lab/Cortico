@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cacheHitRate, aggregateUsage, resolveBucket } from '../../src/core/cost.ts';
+import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, type UsageAggregateOptions } from '../../src/core/cost.ts';
 import type { UsageRecord } from '../../src/core/types.ts';
 import { priceUsage, unknownMeters } from '../../src/core/generation.ts';
 import { snapshotPrice } from '../../src/providers/pricebook.ts';
@@ -104,6 +104,24 @@ describe('分时段聚合 aggregateUsage', () => {
     // 范围比窗口长时从范围起点起
     expect(aggregateUsage(recs, { from: '2026-07-16', to: '2026-07-19', bucket: 'day', dailyTokenDays: 1, ...tz }).dailyTokens![0]!.day).toBe('2026-07-16');
     expect('dailyTokens' in aggregateUsage(recs, { days: 2, bucket: 'hour', ...tz })).toBe(false);
+  });
+
+  it('usageRecordFilter 只筛掉 aggregateUsage 用不到的记录：筛前筛后聚合相同，今天的查询不留两天前的记录', () => {
+    // 偏移取两端:+14:00 与 −12:00 的墙钟日期离 UTC 日期最远;T25:00 读不出时刻，汇总按 ts 前缀归到 07-18。
+    const rows = ['2026-07-15T12:00:00+08:00', '2026-07-17T00:30:00+14:00', '2026-07-17T23:30:00-12:00', '2026-07-18T00:10:00+08:00',
+      '2026-07-18T25:00:00Z', '2026-07-19T23:50:00-05:00', '2026-07-20T09:00:00+08:00', '2026-07-23T09:00:00+08:00']
+      .map((ts, i) => rec(ts, 'main', 'flash', 100 + i, 10));
+    const now = new Date('2026-07-20T03:00:00Z');
+    const cases: UsageAggregateOptions[] = [
+      { bucket: 'day', from: '2026-07-18', to: '2026-07-19', timezone: 'Pacific/Kiritimati', now },
+      { bucket: 'hour', from: '2026-07-16', to: '2026-07-17', timezone: 'Etc/GMT+12', now },
+      { bucket: 'day', days: 1, timezone: 'Asia/Shanghai', now },
+      { bucket: 'day', from: '2026-07-18', to: '2026-07-19', dailyTokenDays: 5, timezone: 'Asia/Shanghai', now },
+      { bucket: 'day', from: '2026-07-18', to: '2026-07-19' },
+    ];
+    for (const opts of cases) expect(aggregateUsage(rows.filter(usageRecordFilter(opts)), opts)).toEqual(aggregateUsage(rows, opts));
+    expect(rows.filter(usageRecordFilter(cases[2]!)).map((r) => r.ts))
+      .toEqual(['2026-07-18T25:00:00Z', '2026-07-19T23:50:00-05:00', '2026-07-20T09:00:00+08:00']);
   });
 
   it('空输入→空序列、总计为0', () => {

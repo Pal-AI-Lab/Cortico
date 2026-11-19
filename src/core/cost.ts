@@ -271,16 +271,55 @@ export interface UsageAggregateOptions {
   dailyTokenDays?: number;
 }
 
+/** 请求覆盖的墙钟日期(含端);给了 days 且有 timezone 时,days 覆盖 from/to。 */
+function requestedDays(opts: UsageAggregateOptions): { nowKeySource: string | null; today: string | null; from: string | null; to: string | null } {
+  const nowKeySource = opts.timezone ? nowIso(opts.timezone, opts.now) : null;
+  const today = nowKeySource?.slice(0, 10) ?? null;
+  const byDays = opts.days !== undefined && opts.days >= 1 && today !== null;
+  return {
+    nowKeySource, today,
+    from: byDays ? daysBefore(today, opts.days! - 1) : (opts.from ?? null),
+    to: byDays ? today : (opts.to ?? null),
+  };
+}
+
+/**
+ * 现行时区的 UTC 偏移在 −12:00 到 +14:00 之间，记录 ts 自带的偏移也在这个范围内，所以墙钟日期 D 的记录
+ * 都落在 D 的 UTC 零点前 14 小时到 D 次日 UTC 零点后 12 小时之间。
+ */
+const WALL_AHEAD_MS = 14 * 3_600_000;
+const WALL_BEHIND_MS = 12 * 3_600_000;
+const DAY_MS = 86_400_000;
+
+/** YYYY-MM-DD 的 UTC 零点;别的写法为 NaN,这一端不筛。 */
+function utcMidnight(day: string | null): number {
+  return day !== null && /^\d{4}-\d{2}-\d{2}$/.test(day) ? Date.parse(`${day}T00:00:00Z`) : NaN;
+}
+
+/**
+ * aggregateUsage(records, opts) 会用到的记录：时刻落在请求的日期范围内(含 dailyTokens 往前的窗口),
+ * 或 ts 读不出时刻。按时刻比较，两端按 UTC 偏移的极值放宽，多留的记录由 aggregateUsage 按墙钟再筛;
+ * 范围一端不限时这一端不筛。opts 要和交给 aggregateUsage 的是同一份(含 now)。
+ */
+export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRecord) => boolean {
+  const { today, from, to } = requestedDays(opts);
+  const end = to ?? today;
+  const back = opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1 && end !== null ? daysBefore(end, opts.dailyTokenDays - 1) : null;
+  const start = from !== null && back !== null && back < from ? back : from;
+  const lo = utcMidnight(start) - WALL_AHEAD_MS;
+  const hi = utcMidnight(to) + DAY_MS + WALL_BEHIND_MS;
+  return record => {
+    const ms = Date.parse(record.ts);
+    return !(ms < lo) && !(ms >= hi);
+  };
+}
+
 /**
  * 按包含端点的日期范围筛选，按时间、角色和模型聚合用量。
  * 费用从记录内的 charges 按币种和计价基础选择，再按 meter 归入四类成本。
  */
 export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
-  const nowKeySource = opts.timezone ? nowIso(opts.timezone, opts.now) : null;
-  const today = nowKeySource?.slice(0, 10) ?? null;
-  const byDays = opts.days !== undefined && opts.days >= 1 && today !== null;
-  const from = byDays ? daysBefore(today, opts.days! - 1) : (opts.from ?? null);
-  const to = byDays ? today : (opts.to ?? null);
+  const { nowKeySource, today, from, to } = requestedDays(opts);
   const unit: UsageBucketUnit = opts.bucket === 'auto' ? resolveBucket(from, to) : opts.bucket;
   const series = new Map<string, { total: UsageAccum; roles: Map<string, UsageAccum>; models: Map<string, UsageAccum>; roleModels: Map<string, Map<string, UsageAccum>> }>();
   const roles = new Map<string, UsageAccum>();
