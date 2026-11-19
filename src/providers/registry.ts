@@ -160,8 +160,10 @@ export class ProviderRegistry {
     if (instance.handlesRefusedAttachments) return instance.client;
     let fallback = this.attachmentFallbacks.get(instance);
     if (!fallback) {
+      const spec = entry.spec;
       fallback = new AttachmentFallback(instance.client, {
         media: { enabled: () => entry.multimodal === true, read: this.host.readBlob },
+        ...(module.accepts && spec ? { accepts: (mime: string) => module.accepts!(entry, spec, mime) } : {}),
         contextOverflow: (error) => module.contextOverflow?.(error) ?? false,
         log: this.host.log,
       });

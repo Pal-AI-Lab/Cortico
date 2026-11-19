@@ -58,7 +58,7 @@ export interface ListedModel {
 export interface ProviderInstance {
   client: BaseProvider;
   /**
-   * The client already sends a request refused for its images once more without them: it is an
+   * The client already sends a request refused for its attachments once more without them: it is an
    * `AttachmentFallback`, or does the same itself. Absent: `ProviderRegistry.bind` puts one around the client.
    */
   handlesRefusedAttachments?: boolean;

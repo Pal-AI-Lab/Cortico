@@ -57,28 +57,29 @@ it('keeps the cached instance while the .env content is unchanged', () => {
 });
 
 const picture: BlobRef = { handle: 'log:0123456789abcdef0123.png', mime: 'image/png', name: 'big.png', fallbackText: 'Image' };
+const recording: BlobRef = { handle: 'log:0123456789abcdef0124.wav', mime: 'audio/wav', name: 'heard.wav', fallbackText: 'Recording' };
 
-/** A client whose service refuses every request that carries an image; `carried` is one entry per request. */
-class RefusesImages extends BaseProvider {
+/** A client whose service refuses every request that carries an attachment; `carried` is one entry per request. */
+class RefusesAttachments extends BaseProvider {
   readonly carried: boolean[] = [];
   async respond(request: Request, options: GenerateOptions = {}): Promise<Generation> {
     const carries = (options.context ?? []).some((entry) => entry.context.blobs?.length);
     this.carried.push(carries);
-    if (carries) throw new GenerationError('refused', [], null, options.origin!, 400, 'unsupported image');
+    if (carries) throw new GenerationError('refused', [], null, options.origin!, 400, 'unsupported attachment');
     return { response: createResponse('r1', request), origin: options.origin!, attempts: [] };
   }
 }
 
-function imageFixture(handlesRefusedAttachments?: true) {
+function imageFixture(handlesRefusedAttachments?: true, blob = picture, accepts?: ProviderModule['accepts']) {
   const temp = makeTmpDir(); cleanups.push(temp.cleanup);
-  const client = new RefusesImages();
+  const client = new RefusesAttachments();
   const module: ProviderModule = {
-    id: 'stub', title: 'Stub', reasoningTiers: [], serviceTiers: [],
+    id: 'stub', title: 'Stub', reasoningTiers: [], serviceTiers: [], ...(accepts ? { accepts } : {}),
     create: () => ({ client, ...(handlesRefusedAttachments ? { handlesRefusedAttachments } : {}) }),
   };
-  const cfg = makeCfg({ providers: { Alpha: { kind: 'stub', baseUrl: 'https://model.test', multimodal: true } }, activeProvider: 'Alpha' });
-  const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: temp.dir, readBlob: () => Buffer.from('image'), keepThinking: () => true, log: nullLogger() }, [module]);
-  const ask = () => registry.bind('Alpha').respond({ model: 'm', input: [] }, { context: [message('user', 'look', { blobs: [picture] })] });
+  const cfg = makeCfg({ providers: { Alpha: { kind: 'stub', baseUrl: 'https://model.test', multimodal: true, spec: { model: 'm', thinking: false } } }, activeProvider: 'Alpha' });
+  const registry = new ProviderRegistry(() => cfg.providers, { stateRoot: temp.dir, readBlob: () => Buffer.from('bytes'), keepThinking: () => true, log: nullLogger() }, [module]);
+  const ask = () => registry.bind('Alpha').respond({ model: 'm', input: [] }, { context: [message('user', 'look', { blobs: [blob] })] });
   return { client, ask };
 }
 
@@ -92,6 +93,20 @@ it('sends a request refused for its images once more without them, and the next 
 
 it('adds no fallback around an instance that declares handlesRefusedAttachments: one request, and the refusal reaches the caller', async () => {
   const { client, ask } = imageFixture(true);
+  await expect(ask()).rejects.toMatchObject({ status: 400 });
+  expect(client.carried).toEqual([true]);
+});
+
+it('drops an attachment of another type the module accepts when its request is refused, and the next bind leaves it out', async () => {
+  const { client, ask } = imageFixture(undefined, recording, (_entry, _spec, mime) => mime.startsWith('image/') || mime === 'audio/wav');
+  await ask();
+  expect(client.carried).toEqual([true, false]);
+  await ask();
+  expect(client.carried).toEqual([true, false, false]);
+});
+
+it('does not retry for an attachment type the module does not accept: the client never sent it, and the refusal reaches the caller', async () => {
+  const { client, ask } = imageFixture(undefined, recording);
   await expect(ask()).rejects.toMatchObject({ status: 400 });
   expect(client.carried).toEqual([true]);
 });
