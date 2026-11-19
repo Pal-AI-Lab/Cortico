@@ -111,12 +111,13 @@ export class UsageLog {
     } catch (error) { this.note(error); return false; }
   }
 
-  async readAll(): Promise<UsageRecord[]> {
+  /** Records on disk and still pending; with `keep`, only those it accepts are held. */
+  async readAll(keep: (record: UsageRecord) => boolean = () => true): Promise<UsageRecord[]> {
     const records: UsageRecord[] = [];
-    if (!await this.scan(record => records.push(record))) records.length = 0;
+    if (!await this.scan(record => { if (keep(record)) records.push(record); })) records.length = 0;
     if (!this.pending.length) return records;
     const ids = new Set(records.map(record => record.recordId ?? record.attempt?.id));
-    return [...records, ...this.pending.filter(record => !ids.has(record.recordId))];
+    return [...records, ...this.pending.filter(record => keep(record) && !ids.has(record.recordId))];
   }
 
   /** Null until the first scan completes; asking starts that scan. */
