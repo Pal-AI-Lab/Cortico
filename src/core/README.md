@@ -70,6 +70,12 @@ piggyback 只入队，随后续唤醒一起投递。
 退回总线，进入下一批。WebUI 的前缀重载与清空 session 在批次边界执行：正在处理批次时等该批
 结束，空闲时立即；并发请求复用同一事务。
 
+可见 World 与 Persona 的 `onTurnEnded(context)` 收到同一个结束原因。自然结束为 `completed`，
+工具要求结束为 `ended`，达到工具轮数上限为 `hard-cap`（最后一轮已执行的工具回执已写入 session）。
+输入超出上下文上限为 `overflow`，模型调用重试耗尽或不再重试为 `failed`，清空 session 为 `cleared`。
+从 v0.2.17 迁移时，以 `context?.kind === 'response-incomplete'` 代替 `if (context)` 判断截断；
+显式标注参数类型的实现改用 `TurnEndedContext`，仅做清理的无参钩子可继续使用。
+
 模型服务回的 Response 是 `incomplete`(撞输出上限、内容过滤等)且没有工具调用时，这一轮也结束本批:
 轮次记录的 `outcome` 是 `incomplete`,`onTurnEnded` 收到 `IncompleteTurnContext`
 (`kind: 'response-incomplete'`、`responseId`、模型服务给的原因 `incompleteReason`,没给时为 null),不重发。
@@ -77,8 +83,8 @@ piggyback 只入队，随后续唤醒一起投递。
 `context.incompleteReason` 记下同一个原因。
 
 `preempt` 取消尚未外化的模型轮,`interrupt` 取消模型轮(已外化的输出保留)或停止 `interruptible`
-工具、跳过本轮尚未开始的调用。两者取消后在同一批内接收新事件并开始下一轮,被取消的轮计入轮数,
-不调用 `onTurnEnded`;到达时没有可取消的轮,事件在下一次模型请求前送入。
+工具、跳过本轮尚未开始的调用。被取消的轮计入轮数。能在同一批内接收新事件时继续下一轮；
+没有就绪事件或轮数已用尽时，本批结束，钩子收到 `preempted` 或 `interrupted`。到达时没有可取消的轮，事件在下一次模型请求前送入。
 
 一批正文归档后，Core 调用 `Persona.onDelivery` 并等待它返回的 Promise,不设期限。完成前
 `injectInternal` 的内容排在这批的内部行末尾、外部正文之前;完成后的注入进入总线。
