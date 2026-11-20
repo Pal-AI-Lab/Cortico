@@ -2141,6 +2141,38 @@ describe('MainLoop user事件协议', () => {
     assertPairing(rig.session.messages);
   });
 
+  it('reports a failed queued prefix change and processes the next event with the previous tool set', async () => {
+    const tools = [makeTool('before_reload', 'done')];
+    rig = makeRig({ worlds: [makeFakeIO('probe', tools, 'old prefix')] });
+    rig.start();
+    await until(() => rig.llm.calls.length > 0);
+    const old = rig.session.records[0];
+    let enter!: () => void;
+    let release!: () => void;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const originalChat = rig.llm.chat.bind(rig.llm);
+    rig.llm.chat = async (...args) => {
+      enter();
+      await gate;
+      return originalChat(...args);
+    };
+    rig.pushEvent('hold this boundary');
+    await entered;
+    tools.push(makeTool('after_reload', 'done'));
+    vi.spyOn(rig.session, 'replaceSystemPrefix').mockRejectedValueOnce(new Error('disk full'));
+    const failed = expect(rig.loop.reloadSystemPrefix()).rejects.toThrow('disk full');
+    release();
+    await failed;
+    expect(rig.session.records[0]).toBe(old);
+    expect(rig.loop.getToolSchemas().map(t => t.name)).not.toContain('after_reload');
+    const count = rig.llm.calls.length;
+    rig.pushEvent('new event after failure');
+    await until(() => rig.llm.calls.length > count);
+    await rig.loop.reloadSystemPrefix();
+    expect(rig.loop.getToolSchemas().map(t => t.name)).toContain('after_reload');
+  });
+
   it('推理中清空 session 会排队到自然回合边界,半轮的回答不会落进新 session', async () => {
     rig = makeRig();
     rig.start();
