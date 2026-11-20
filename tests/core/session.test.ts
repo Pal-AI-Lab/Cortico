@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { appendFileSync, readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SessionLog } from "./fixture-session.ts";
 import { makeTmpDir } from './helpers.ts';
 import type { ChatMessage } from './fixture-types.ts';
+import { SessionLog as StandardSession } from '../../src/core/session.ts';
+import { functionCall, functionResult, message } from '../../src/protocol/open-responses/context.ts';
 
 
 const sys: ChatMessage = { role: 'system', content: '前缀' };
@@ -88,6 +90,104 @@ describe('SessionLog', () => {
     const s = new SessionLog(tmp.dir);
     s.append(asst);
     expect(s.estTokens()).toBeGreaterThan(0);
+  });
+
+  it('replaces only leading system records, preserving the raw tail, identity and concurrent appends', async () => {
+    const s = new StandardSession(tmp.dir);
+    const file = join(tmp.dir, 'session-main.jsonl');
+    const call = functionCall('c1', 'lookup', '{}');
+    const originalTail = '  ' + JSON.stringify(call) + '\r\n';
+    writeFileSync(file, [' ', JSON.stringify(message('system', '旧'.repeat(360000))), '',
+      JSON.stringify(message('system', '二')), originalTail].join('\r\n'));
+    s.load();
+    const oldCall = s.records[2];
+    const replacement = message('system', 'new');
+    const fresh = functionResult('c1', 'done');
+    const update = s.replaceSystemPrefix(replacement);
+    s.append(fresh);
+    expect(await update).toBe(2);
+    expect(s.records[1]).toBe(oldCall);
+    expect(readFileSync(file, 'utf8')).toBe(JSON.stringify(replacement) + '\n' + originalTail + JSON.stringify(fresh) + '\n');
+    const reopened = new StandardSession(tmp.dir);
+    reopened.load();
+    expect(reopened.records).toEqual(s.records);
+    expect(readdirSync(tmp.dir)).toEqual(['session-main.jsonl']);
+  });
+
+  it('updates tools for an unchanged prefix while retaining its file, identity and ingestion time', async () => {
+    const s = new StandardSession(tmp.dir, 'session-main.jsonl', () => 'old-stamp');
+    const file = join(tmp.dir, 'session-main.jsonl');
+    s.append(message('system', 'same'));
+    s.append(message('user', 'tail'));
+    const records = s.records;
+    const inode = statSync(file, { bigint: true }).ino;
+    let schema = 'old';
+    let observed: unknown;
+    s.onReset((rows, prefix) => { observed = { count: rows.length, prefix, schema }; });
+    await s.replaceSystemPrefix(message('system', 'same'), () => true, () => { schema = 'new'; });
+    expect(s.records).toBe(records);
+    expect(statSync(file, { bigint: true }).ino).toBe(inode);
+    expect(observed).toEqual({ count: 2, prefix: { entry: records[0], removed: 1, previousLength: 2 }, schema: 'new' });
+  });
+
+  it('retains an append arriving after a copy has already written part of its snapshot', async () => {
+    const s = new StandardSession(tmp.dir);
+    s.append(message('system', 'before'));
+    s.append(message('user', 'x'.repeat(2 * 1024 * 1024)));
+    const receipt = functionResult('c1', 'arrived while copying');
+    let appended = false;
+    const kept = await s.replaceSystemPrefix(message('system', 'after'), () => {
+      const temp = readdirSync(tmp.dir).find(name => name.endsWith('.tmp'));
+      if (!appended && temp && statSync(join(tmp.dir, temp)).size > 1024 * 1024) {
+        appended = true;
+        s.append(receipt);
+      }
+      return true;
+    });
+    expect(appended).toBe(true);
+    expect(kept).toBe(2);
+    const reopened = new StandardSession(tmp.dir);
+    reopened.load();
+    expect(reopened.records).toEqual(s.records);
+    expect(reopened.records.at(-1)).toEqual(receipt);
+  });
+
+  it('abandons stale copies after a full reset or lifecycle cancellation', async () => {
+    const s = new StandardSession(tmp.dir);
+    s.append(message('user', 'before'));
+    const newer = message('user', 'after');
+    const stale = s.replaceSystemPrefix(message('system', 'stale'));
+    s.reset([newer]);
+    expect(await stale).toBeNull();
+    let active = true;
+    const cancelled = s.replaceSystemPrefix(message('system', 'cancelled'), () => active);
+    active = false;
+    expect(await cancelled).toBeNull();
+    const reopened = new StandardSession(tmp.dir);
+    reopened.load();
+    expect(reopened.records).toEqual([newer]);
+    expect(readdirSync(tmp.dir)).toEqual(['session-main.jsonl']);
+  });
+
+  it('keeps the previous generation and listeners intact on I/O failure and accepts a subsequent retry', async () => {
+    const s = new StandardSession(tmp.dir);
+    s.append(message('system', 'old'));
+    s.append(message('user', 'tail'));
+    const file = join(tmp.dir, 'session-main.jsonl');
+    const bytes = readFileSync(file);
+    const original = s.records;
+    const prefix = message('system', 'new');
+    let installed = 0;
+    let notifications = 0;
+    s.onReset(() => notifications++);
+    writeFileSync(file, '');
+    await expect(s.replaceSystemPrefix(prefix, () => true, () => installed++)).rejects.toThrow('size changed');
+    expect(s.records).toBe(original);
+    expect([installed, notifications]).toEqual([0, 0]);
+    writeFileSync(file, bytes);
+    expect(await s.replaceSystemPrefix(prefix, () => true, () => installed++)).toBe(1);
+    expect([installed, notifications]).toEqual([1, 1]);
+    expect(s.records[0]).toEqual(prefix);
   });
 
   it('追加结果保留原始调用与回执，生命周期重置只保留新上下文', () => {

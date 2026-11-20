@@ -35,7 +35,7 @@ import { S } from './strings.ts';
 import { createTimeline } from './timeline.ts';
 import type { UsageAggregate } from '../usage/types.ts';
 
-const DEBUG_WS_PATH = '/ws/debug';
+const DEBUG_WS_PATH = '/ws/debug?session=prefix';
 const SESSIONS_WS_PATH = '/ws/sessions';
 
 /** 测试注入点:不传就是真浏览器那一套。 */
@@ -397,6 +397,29 @@ function mountLive(ctx: FeatureContext, env: SocketEnv): Disposable | void {
         // 缺失、非法或跳跃的索引需要重新获取完整会话。
         socket?.dispose();
         reopenDebug();
+        break;
+      }
+      case 'session.prefix': {
+        const removed = f.removed;
+        const entry = f.entry as ContextRecord | undefined;
+        const isSystem = (row?: ContextRecord) => row?.item?.type === 'message' && row.item.role === 'system';
+        if (f.previousLength !== state.messages.length || typeof removed !== 'number' ||
+          !Number.isSafeInteger(removed) || removed < 0 || removed > state.messages.length ||
+          !isSystem(entry) || entry?.version !== 2 || !entry.context ||
+          !state.messages.slice(0, removed).every(isSystem) || isSystem(state.messages[removed])) {
+          socket?.dispose();
+          reopenDebug();
+          return;
+        }
+        const head = arr<ContextRecord>(f.head);
+        const sameHead = JSON.stringify(head) === JSON.stringify(state.head);
+        state.messages.splice(0, removed, entry);
+        state.head = head;
+        state.toolSchemas = arr<ToolSchemaDoc>(f.toolSchemas);
+        if (fork.isMain()) {
+          if (removed === 1 && sameHead) timeline.replaceSystem(entry);
+          else timeline.rebuild(state.messages, { head, keepScroll: true });
+        }
         break;
       }
       case 'session.reset':

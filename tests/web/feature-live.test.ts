@@ -563,7 +563,7 @@ describe('live feature 挂载', () => {
     expect(root.find('prompt-input-host')).not.toBe(null);
     expect(root.find('tlinner')).not.toBe(null);
     expect(sockets.map((socket) => socket.url)).toEqual([
-      'ws://test/ws/debug',
+      'ws://test/ws/debug?session=prefix',
       'ws://test/ws/providers/world%3Aconsole/panels/chat',
     ]);
   });
@@ -691,6 +691,28 @@ describe('live feature 挂载', () => {
     expect(sockets).toHaveLength(connections + 1);
     expect(sockets.at(-1)!.url).toBe(sockets[0].url);
     expect(root.find('tlinner')!.textContent).not.toContain('不能追加');
+  });
+
+  it('updates only the system card on a matching prefix delta and resyncs a missed frame', () => {
+    const { env, sockets } = fakeEnv();
+    const { ctx, root } = mkCtx({ debug: true });
+    live.createLiveFeature({ env }).mount(ctx);
+    const socket = sockets[0];
+    socket.up();
+    const sys = message('system', 'before');
+    const tail = functionResult('tail', 'preserved');
+    socket.emitRaw(JSON.stringify({ t: 'hello', session: [sys, tail], head: [] }));
+    const inner = root.find('tlinner')!;
+    const oldTailCard = inner.children.at(-1)!;
+    const change = { t: 'session.prefix', previousLength: 2, removed: 1, entry: message('system', 'after'), head: [], toolSchemas: [] };
+    socket.emitRaw(JSON.stringify(change));
+    expect(inner.children.at(-1)).toBe(oldTailCard);
+    expect(inner.textContent).toContain('after');
+    expect(inner.textContent).not.toContain('before');
+    expect(socket.closed).toBe(false);
+    socket.emitRaw(JSON.stringify({ ...change, previousLength: 7 }));
+    expect(socket.closed).toBe(true);
+    expect(sockets.at(-1)).not.toBe(socket);
   });
 
   it('已收到的追加索引不会重复渲染或触发重连', () => {

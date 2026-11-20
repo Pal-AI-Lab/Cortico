@@ -13,6 +13,7 @@ import { SessionLog } from "../core/fixture-session.ts";
 import { JsonlEventStore } from '../../src/core/event-store.ts';
 import { Runlog, nullLogger } from "../core/fixture-util.ts";
 import type { ChatMessage } from '../core/fixture-types.ts';
+import { message } from '../../src/protocol/open-responses/context.ts';
 
 
 class WSQueue {
@@ -43,8 +44,8 @@ class WSQueue {
   }
 }
 
-async function openDebug(port: number): Promise<{ ws: WebSocket; q: WSQueue }> {
-  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/debug`);
+async function openDebug(port: number, query = ''): Promise<{ ws: WebSocket; q: WSQueue }> {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/ws/debug${query}`);
   const q = new WSQueue(ws);
   await new Promise<void>((res, rej) => {
     ws.once('open', () => res());
@@ -127,6 +128,27 @@ describe('/ws/debug hello快照', () => {
 });
 
 describe('/ws/debug 实时推送', () => {
+  it('negotiates prefix deltas and status-only connections while preserving legacy snapshots', async () => {
+    const clients = await Promise.all(['', '?session=prefix', '?session=none'].map(query => openDebug(port, query)));
+    try {
+      const [legacy, live, dashboard] = clients;
+      const [, initial, status] = await Promise.all(clients.map(c => c.q.nextOfType('hello')));
+      expect(status.status).toBeDefined();
+      expect(status).not.toHaveProperty('session');
+      const before = initial.session as unknown[];
+      await session.replaceSystemPrefix(message('system', 'updated'), () => true);
+      const full = await legacy.q.nextOfType('session.reset');
+      const delta = await live.q.nextOfType('session.prefix');
+      expect(delta).not.toHaveProperty('messages');
+      expect(delta).toMatchObject({ removed: 1, previousLength: before.length, toolSchemas: schemas });
+      expect([delta.entry, ...before.slice(1)]).toEqual(full.messages);
+      session.append(asstMsg);
+      expect((await dashboard.q.next()).t).toBe('status');
+      expect((await live.q.next()).t).toBe('session.append');
+    } finally {
+      for (const client of clients) client.ws.close();
+    }
+  });
   it('session.append → 推session.append帧(带index)+顺带status帧', async () => {
     const { ws, q } = await openDebug(port);
     await q.nextOfType('hello');
