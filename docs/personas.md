@@ -30,6 +30,8 @@ Core 在生命周期节点调用 Persona 钩子。Persona 通过钩子返回值�
 不在其中的名字记一条 warn、在 Persona 页列出;未提供时仅告警并保留先注册的工具,也不做这项对照)、
 `cognition`(处理 World 的后台认知请求)、`webUi()`(Persona 页的声明;其中 `memory` 子声明是
 Memory 页的面板、模板与存储项)。
+遇到供应商报告工具生成被拒绝时，`onToolGenerationRejected(failure)` 可为下一次请求提供临时纠正文本。
+同一批内，相同的工具与拒绝类型只有一次纠正机会。纠正文本随该次请求发送，不进入会话历史。
 Persona 页的标题取 Persona 的类名;Memory 页的标题先取 `BotDefinition.memoryName`,
 没给就取 `Persona.memory` 的类名,两者都没有时是 `Memory`。
 钩子的异常处理方式见 [Core 文档](../src/core/README.md)。

@@ -12,6 +12,8 @@ export interface ItemOrigin {
 export interface ContextMeta {
   ts?: string;
   ephemeral?: true;
+  /** A Persona's one-request response to a rejected tool generation. */
+  toolGenerationRepair?: true;
   /** 合成开头的项:不写入 session,交接时不进保留内容。 */
   head?: true;
   frame?: { events: FrameEventRef[] };

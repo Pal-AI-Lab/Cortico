@@ -1,7 +1,7 @@
 import { message, record, functionCall, functionResult, responseRecords, withText, type ContextRecord, type Item } from '../protocol/open-responses/context.ts';
 import { hasRole, textOf, withoutPastReasoning, responseRequest, usageCounters } from '../protocol/open-responses/context-helpers.ts';
 import type { StreamEvent } from '../protocol/open-responses/index.ts';
-import { GenerationError, type ResponseClient, type TokenMeters } from './generation.ts';
+import { GenerationError, toolGenerationRejection, type ResponseClient, type TokenMeters } from './generation.ts';
 /**
  * MainLoop 执行 receivesEvents=true 的常驻 session。
  * 内部文本进入 user 消息；外部正文按 eventDelivery 进入合成工具回执（默认）
@@ -1143,7 +1143,7 @@ export class MainLoop {
   }
 
   private async roundsInScope(generation: number): Promise<void> {
-    const { llm, session, log, bus, decl } = this.d;
+    const { llm, session, log, bus, decl, persona } = this.d;
     const schemas = this.getToolSchemas();
     const caps = decl.rounds();
     this.roundsLastBatch = 0;
@@ -1152,6 +1152,8 @@ export class MainLoop {
     const resubmit = this.d.resubmit ?? DEFAULT_RESUBMIT;
     let consecutiveFailures = 0;
     let resubmits = 0;
+    let repairContext: ContextRecord | undefined;
+    const repairedTools = new Set<string>();
 
     for (let round = 1; ; round++) {
       if (!this.active(generation)) return;
@@ -1252,6 +1254,10 @@ export class MainLoop {
       let incomplete: IncompleteTurnContext | undefined;
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
+      if (repairContext) {
+        outbound.push(repairContext);
+        repairContext = undefined;
+      }
       const prefixHash = prefixFingerprint(outbound);
       try {
         // role 仅用于故障分类，不写入请求体。
@@ -1260,6 +1266,7 @@ export class MainLoop {
         try {
           res = await llm.respond(responseRequest(spec, outbound, schemas), {
             context: outbound, nativeSpec: spec, onEvent,
+            ...(persona.onToolGenerationRejected ? { toolGenerationRecovery: true } : {}),
             role: decl.id,
             sessionId: this.mainTrack?.id,
             signal: flight.controller.signal,
@@ -1339,8 +1346,9 @@ export class MainLoop {
         for (const event of queuedEvents) {
           bus.push({ event }, { trigger: 'flush' });
         }
+        const rejection = e instanceof GenerationError ? toolGenerationRejection(e) : null;
         // 上游报告输入超限时，不记入连续失败，结束本批后交接。
-        if (e instanceof GenerationError && this.d.context.contextOverflow(e)) {
+        if (!rejection && e instanceof GenerationError && this.d.context.contextOverflow(e)) {
           log.warn('上游拒绝:输入超过模型上下文,本批结束即交接', { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens() });
           this.handoffRequested = true;
           noteRound('overflow');
@@ -1353,12 +1361,34 @@ export class MainLoop {
           // 4xx 正文截断后记录；流内失败保留协议层提供的失败事件。
           ...(e instanceof GenerationError && e.body ? { body: e.body.slice(0, 500) } : {}),
           ...(e instanceof GenerationError ? { status: e.status } : {}),
+          ...(rejection ? { toolGenerationRejection: rejection } : {}),
           attempt: consecutiveFailures,
         };
         this.noteStalled(detail);
-        // 按 ResubmitPolicy 重试，沿用已保存的部分输出与工具回执。
-        const retryable = e instanceof GenerationError && (e.status === 0 || e.status === 429 || e.status >= 500);
-        if (retryable && consecutiveFailures <= resubmit.maxConsecutive && resubmits < resubmit.maxPerBatch && round < caps.hard) {
+        const canResubmit = consecutiveFailures <= resubmit.maxConsecutive && resubmits < resubmit.maxPerBatch && round < caps.hard;
+        if (rejection && canResubmit) {
+          const key = `${rejection.kind}:${rejection.toolName}`;
+          if (!repairedTools.has(key)) {
+            repairedTools.add(key);
+            try {
+              const hint = persona.onToolGenerationRejected?.(rejection)?.trim();
+              if (hint && hint.length <= 4096)
+                repairContext = message('developer', hint, { ephemeral: true, toolGenerationRepair: true });
+            } catch (error) {
+              log.warn('onToolGenerationRejected钩子异常', { err: error });
+            }
+          }
+          if (repairContext) {
+            resubmits++;
+            log.warn('生成工具被拒绝，携带纠正信息重试', { ...detail, resubmits });
+            noteRound('failed', { resubmit: true, repair: 'tool-generation' });
+            this.takeReadyBeforeRequest = true;
+            continue;
+          }
+        }
+        // 传输错误可退避重试；生成内容被拒绝只在本次请求带有纠正时重试。
+        const retryable = !rejection && e instanceof GenerationError && (e.status === 0 || e.status === 429 || e.status >= 500);
+        if (retryable && canResubmit) {
           resubmits++;
           const delayMs = resubmit.backoffMs[Math.min(consecutiveFailures, resubmit.backoffMs.length) - 1] ?? 0;
           log.warn('LLM 调用失败，退避后在本批内重试', { ...detail, resubmits, delayMs });

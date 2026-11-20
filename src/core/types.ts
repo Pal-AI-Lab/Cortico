@@ -1,7 +1,7 @@
 import type { PriceDefinition } from '../providers/pricebook.ts';
 import type { ContextRecord, Item } from '../protocol/open-responses/context.ts';
 import type { StreamEvent } from '../protocol/open-responses/index.ts';
-import type { ResponseClient, ProviderAttempt } from './generation.ts';
+import type { ResponseClient, ProviderAttempt, ToolGenerationRejection } from './generation.ts';
 import type { ConfigGroup } from './config-schema.ts';
 import type { Language } from './language.ts';
 
@@ -1039,6 +1039,8 @@ export interface Persona {
   onIdle?(): void | Promise<void>;
   /** 连续模型调用失败后恢复时调用；返回待注入文本，null 表示不注入。 */
   onStallsRecovered?(info: { count: number; quietMs: number }): string | null;
+  /** Supplies one request-only correction for a provider's generated tool rejection. */
+  onToolGenerationRejected?(failure: ToolGenerationRejection): string | null;
   /** World 被激活、停用、重启、可见性改变,启动期 `start()` 抛错或运行中被卸载时调用；启动期初始挂载不通知。 */
   onWorldLifecycle?(event: WorldLifecycleEvent): void;
   /**
