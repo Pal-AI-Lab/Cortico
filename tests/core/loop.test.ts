@@ -1,6 +1,6 @@
 import { FixtureHandoffResult as ContextHandoffResult } from './fixture-protocol.ts';
 import { createResponse, type StreamEvent, type FunctionCall } from '../../src/protocol/open-responses/index.ts';
-import { unknownMeters, type ProviderAttempt } from '../../src/core/generation.ts';
+import { GenerationError, unknownMeters, type GenerateOptions, type ProviderAttempt } from '../../src/core/generation.ts';
 import { FixtureStream, FixtureTap as OutputTap } from './fixture-protocol.ts';
 import type { ResponseClient } from '../../src/core/generation.ts';
 import type { Request } from '../../src/protocol/open-responses/index.ts';
@@ -57,7 +57,7 @@ interface RigOptions {
   /** 对模型隐藏但仍挂载运行的 World id。 */
   hiddenWorlds?: string[];
   /** 时机钩子,直接装到假Persona上 */
-  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery'>;
+  hooks?: Pick<Persona, 'onTurnEnded' | 'onIdle' | 'onStallsRecovered' | 'onDelivery' | 'onToolGenerationRejected'>;
   /** 记录 schedule_wake 对 timers 原语的调用。 */
   onTimerSet?: (atIso: string, payload: Record<string, unknown>) => void;
   /** fork 工具的执行函数。 */
@@ -244,6 +244,71 @@ describe('MainLoop standard Response execution', () => {
     startedAt: new Date().toISOString(), elapsedMs: 10, requestId: null, responseId,
     outcome: 'completed', status: 200, serviceTier: 'default', charges: [],
     meters: { ...unknownMeters(), input: 10, output: 2, total: 12 },
+  });
+
+  it('repairs a generated tool rejection once without replaying an earlier action or retaining the hint', async () => {
+    const act = vi.fn(() => 'original receipt');
+    const ended = vi.fn<NonNullable<Persona['onTurnEnded']>>();
+    const repair = vi.fn(() => 'Open the catalog entry for fixture_later.');
+    const requests: { input: Request['input']; context: GenerateOptions['context']; enabled: boolean }[] = [];
+    const rig = makeRig({ silent: true, worlds: [makeFakeIO('test', [makeTool('act', act)])],
+      hooks: { onTurnEnded: ended, onToolGenerationRejected: repair } });
+    rig.llm.respond = async (request, options) => {
+      const n = requests.push({ input: request.input, context: options?.context, enabled: options?.toolGenerationRecovery === true });
+      const response = createResponse(`response_${n}`, request);
+      if (n === 2 || n === 3) {
+        response.status = 'failed';
+        response.error = { code: 'server_error', message: 'Generated call was rejected. Tool diagnostics ' + JSON.stringify({
+          origin: 'generated_output', kind: 'undeclared', tool_name: 'fixture_later', request_id: 'upstream-only',
+        }) };
+        throw new GenerationError(response.error.message, [], response, origin);
+      }
+      response.status = 'completed';
+      if (n === 1) response.output = [{ type: 'function_call', id: 'item_act', call_id: 'call_act', name: 'act',
+        arguments: '{}', status: 'completed' }];
+      return { response, origin, attempts: [attempt(response.id)] };
+    };
+    try {
+      rig.start(); rig.pushEvent('carry out the request');
+      await until(() => ended.mock.calls.length === 1);
+      expect(requests).toHaveLength(3);
+      expect(act).toHaveBeenCalledTimes(1);
+      expect(repair.mock.calls).toEqual([[{ kind: 'undeclared', toolName: 'fixture_later' }]]);
+      expect(requests[2].context?.at(-1)).toMatchObject({
+        item: { role: 'developer' }, context: { ephemeral: true, toolGenerationRepair: true },
+      });
+      expect(JSON.stringify(requests[2].input)).toContain('Open the catalog entry');
+      expect(JSON.stringify(requests[2].input)).toContain('original receipt');
+      expect(JSON.stringify(requests[2].input)).not.toContain('upstream-only');
+      expect(requests.every(entry => entry.enabled)).toBe(true);
+      expect(JSON.stringify(rig.session.records)).not.toContain('Open the catalog entry');
+      rig.pushEvent('a different request');
+      await until(() => ended.mock.calls.length === 2);
+      expect(requests).toHaveLength(4);
+      expect(JSON.stringify(requests[3].input)).not.toContain('Open the catalog entry');
+    } finally { await rig.cleanup(); }
+  });
+
+  it.each(['generated_output', 'request_validation'])('resubmits an HTTP body only when recovery changes the request (%s)', async diagnosticOrigin => {
+    const ended = vi.fn<NonNullable<Persona['onTurnEnded']>>();
+    const rig = makeRig({ silent: true, hooks: { onTurnEnded: ended } });
+    let requests = 0;
+    rig.llm.respond = async request => {
+      const response = createResponse('fallback', request);
+      if (++requests === 1) {
+        const body = JSON.stringify({ error: { code: 'server_error', message: 'Tool diagnostics ' + JSON.stringify({
+          origin: diagnosticOrigin, kind: 'arguments_schema', tool_name: 'act',
+        }) } });
+        throw new GenerationError('rejected', [], null, origin, 500, body);
+      }
+      response.status = 'completed';
+      return { response, origin, attempts: [attempt(response.id)] };
+    };
+    try {
+      rig.start(); rig.pushEvent('go');
+      await until(() => ended.mock.calls.length === 1);
+      expect(requests).toBe(diagnosticOrigin === 'generated_output' ? 1 : 2);
+    } finally { await rig.cleanup(); }
   });
 
   it.each([
