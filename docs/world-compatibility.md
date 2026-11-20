@@ -23,10 +23,7 @@
 - `barrierAfter`:同一条 assistant 输出中排在该工具后面的调用不执行,得到未执行回执;`streamsOutput` 的调用除外,
   照常按顺序执行。
   `endsTurn`:该工具完成后结束本次唤醒,期间到达的事件留待下一次投递。
-- 一轮结束(assistant 自然结束、模型调用失败或轮数达到硬上限)时调用 `onTurnEnded()`;一轮因回复截断而结束时，带一个说明原因的参数
-  (`IncompleteTurnContext`)。
-
-`onTurnEnded(context?, outcome?)` 的第二个可选参数提供 session id、累计轮号、本批轮数和结束原因。达轮数上限时，最后一次执行的工具回执已经写入会话。
+- 主循环收束时调用 `onTurnEnded(context)`，结束原因与 v0.2.17 的迁移方式见[主循环](../src/core/README.md#主循环)。
 - 宿主放弃一次工具调用时触发 `ToolCallContext.signal`。
 - 提供 `modelFacts`(当前模型名、接受的 MIME、上下文窗口)、`blob(handle)` 与 `reportUsage()`。
 
