@@ -50,12 +50,14 @@ function frameMsg(
   ];
 }
 
+const NOTICE = deliveryNotice([{ ts: '2026-09-03T14:24:00+08:00' }]);
+
 /**
  * 一批只含一条外部事件的投递,按 Core 的两种写法:user 投递时通知行接在事件块之前,
  * 工具帧投递时通知独占一条 user 消息,紧跟帧调用。
  */
 function deliveryBatch(mode: 'user' | 'tool', id: string, text: string): ChatMessage[] {
-  const notice = deliveryNotice(1);
+  const notice = NOTICE;
   if (mode === 'tool') return [{ role: 'user', content: notice }, ...frameMsg(id, [{ text }])];
   const ref: FrameEventRef = {
     cursor: 1, ts: '2026-09-03T14:24:00+08:00', type: 'test.message', source: 'test', start: notice.length + 1, chars: text.length,
@@ -65,6 +67,17 @@ function deliveryBatch(mode: 'user' | 'tool', id: string, text: string): ChatMes
 
 const oneNote = (snapshot: ChatMessage[], opts: Partial<Parameters<typeof renderHandoffNote>[1]> = {}) =>
   renderHandoffNote(snapshot, { speechTools: speech, now, ...opts });
+
+describe('deliveryNotice', () => {
+  it('每批带日期,跨度取最早到最晚一条,不随投递顺序变', () => {
+    const at = (ts: string) => ({ ts });
+    expect(deliveryNotice([at('2026-11-09T21:30:05.000+08:00')])).toBe('[system] 1 条新事件,2026-11-09 周一 21:30。');
+    expect(deliveryNotice([at('2026-11-09T21:42:00.000+08:00'), at('2026-11-09T21:30:00.000+08:00')]))
+      .toBe('[system] 2 条新事件,2026-11-09 周一 21:30–21:42。');
+    expect(deliveryNotice([at('2026-11-10T00:03:00.000+08:00'), at('2026-11-09T23:58:00.000+08:00')]))
+      .toBe('[system] 2 条新事件,2026-11-09 周一 23:58 – 2026-11-10 周二 00:03。');
+  });
+});
 
 describe('renderHandoffNote', () => {
   it('台词结果按事件标签保留最近段，原调用已离开上下文时仍可独立收录', () => {
@@ -211,13 +224,13 @@ describe('renderHandoffNote', () => {
     const note = oneNote(snapshot);
     expect(note.entries).toBe(29);
     expect(note.text).not.toContain('同样的一条');
-    expect(note.text).not.toContain(deliveryNotice(1));
+    expect(note.text).not.toContain(NOTICE);
   });
 
   it.each(['user', 'tool'] as const)('%s 投递时与通知同文的外部事件照常收录', (mode) => {
-    const note = oneNote(deliveryBatch(mode, 'evf_1', deliveryNotice(1)));
+    const note = oneNote(deliveryBatch(mode, 'evf_1', NOTICE));
     expect(note.entries).toBe(1);
-    expect(note.text.split(deliveryNotice(1))).toHaveLength(2);
+    expect(note.text.split(NOTICE)).toHaveLength(2);
   });
 
   it('单条折叠随年龄衰减:最新的按 foldTokens,更早的越来越短', () => {
