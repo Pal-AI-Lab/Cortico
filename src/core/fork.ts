@@ -11,6 +11,7 @@ import {
   NOT_EXECUTED_THREAD_ENDED,
   forkUnknownTool,
   toolFailed,
+  toolOutcomeText,
 } from './markers.ts';
 
 export interface ForkLoopOptions {
@@ -87,7 +88,7 @@ export async function runForkLoop(opts: ForkLoopOptions): Promise<string> {
           if (typeof result === 'string') out = result;
           else {
             blobs = opts.blobs.intern(result.blobs);
-            out = withBlobLines(result.text, blobs);
+            out = withBlobLines(toolOutcomeText(result), blobs);
           }
           ended = def.endsTurn === true;
         } catch (error) { out = toolFailed(error instanceof Error ? error.message : String(error)); }

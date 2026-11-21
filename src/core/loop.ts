@@ -69,6 +69,7 @@ import {
   streamedPastBarrier,
   toolFailed,
   toolFailedBadReturn,
+  toolOutcomeText,
 } from './markers.ts';
 import { fixPairing, rebuildTail } from './truncate.ts';
 
@@ -604,7 +605,7 @@ export class MainLoop {
   /** 工具回执落库:附件内部化,每份的文本形态接在正文后。 */
   private toolResult(callId: string, out: ToolOutcome): ContextRecord {
     const blobs = this.d.blobs.intern(out.blobs);
-    return functionResult(callId, withBlobLines(out.text, blobs), blobs ? { blobs } : {});
+    return functionResult(callId, withBlobLines(toolOutcomeText(out), blobs), blobs ? { blobs } : {});
   }
 
   /** 一轮结束时先通知 Persona，再通知可见 World。 */

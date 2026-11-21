@@ -2,6 +2,7 @@
  * 模型上下文中的结构标记，用于缺失、截断、不可用或中断的内容。
  * 标记使用英文，不受 WebUI 语言设置影响；语义说明由 Persona 提供。
  */
+import type { ToolOutcome } from './types.ts';
 
 /** 工具回执被折叠(见 truncate.ts 的 FOLD_THRESHOLD) */
 export const FOLD_PLACEHOLDER = '[result folded]';
@@ -57,8 +58,12 @@ export const ABORT_SHUTDOWN = 'core is shutting down';
 /** World 停止或卸载后，旧宿主的 pushEvent / pushCandidate 抛错时带这段文本，认知请求以它作为 error。 */
 export const HOST_LIFECYCLE_ENDED = 'host lifecycle ended';
 
-/** 工具失败的模型可见标记；结构化失败状态使用 ToolOutcome.failed。 */
-export const toolFailed = (detail: string): string => `[tool failed] ${detail}`;
+const TOOL_FAILED_PREFIX = '[tool failed]';
+export const toolFailed = (detail: string): string => `${TOOL_FAILED_PREFIX} ${detail}`;
+/** 将结构化失败投影为模型回执的协议标记。 */
+export const toolOutcomeText = (outcome: Readonly<ToolOutcome>): string =>
+  outcome.failed === true && !outcome.text.startsWith(TOOL_FAILED_PREFIX)
+    ? toolFailed(outcome.text) : outcome.text;
 /** 参数不是合法 JSON:不进 handler,就地失败 */
 export const TOOL_FAILED_BAD_ARGS = toolFailed('arguments are not valid JSON');
 /** handler 的返回值既不是字符串也不是带字符串 text 的对象 */

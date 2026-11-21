@@ -1676,6 +1676,67 @@ describe('MainLoop user事件协议', () => {
     }
   });
 
+  it.each([
+    ['普通派发', false],
+    ['提前派发', true],
+  ] as const)('%s将结构化工具失败送入下一次请求，工具日志保留原回执', async (_name, eager) => {
+    const logTmp = makeTmpDir();
+    const toolFile = join(logTmp.dir, 'reported-failure-tools.jsonl');
+    const failure = '此次未完成';
+    const marked = '[tool failed] 缺少前提';
+    const ordinary = '已存档原文本：[tool failed]';
+    const tools: ToolDef[] = [
+      { ...makeTool('refused', ''), handler: async () => ({ text: failure, failed: true }) },
+      { ...makeTool('marked', ''), handler: async () => ({ text: marked, failed: true }) },
+      makeTool('archive', ordinary),
+    ];
+    const native = new FakeLLM();
+    const inputs: Request['input'][] = [];
+    rig = makeRig({
+      worlds: [makeFakeIO('ext', tools)],
+      toolLog: new ToolCallLog(toolFile),
+      llm: { respond: (request, options) => {
+        inputs.push(request.input);
+        return native.respond(request, options);
+      } },
+      ...(eager ? { outputTap: { onDelta: () => {} } } : {}),
+    });
+    try {
+      rig.start();
+      await until(() => native.calls.length >= 1);
+      const before = native.calls.length;
+      native.script(toolReply([
+        { name: 'refused', id: 'refused1' },
+        { name: 'marked', id: 'marked1' },
+        { name: 'archive', id: 'archive1' },
+      ]), textReply('收到回执'));
+      rig.pushEvent('触发');
+
+      await until(() => inputs.length >= before + 2);
+      const request = inputs[before + 1];
+      const expected = new Map([
+        ['refused1', '[tool failed] ' + failure],
+        ['marked1', marked],
+        ['archive1', ordinary],
+      ]);
+      for (const [callId, receipt] of expected) {
+        expect(request).toContainEqual(expect.objectContaining({
+          type: 'function_call_output', call_id: callId, output: receipt,
+        }));
+        expect(rig.session.messages.find((message) => message.tool_call_id === callId)?.content).toBe(receipt);
+      }
+      assertPairing(rig.session.messages);
+      const rows = readFileSync(toolFile, 'utf8').trim().split('\n').map((line) => JSON.parse(line));
+      expect(rows.map(({ call, receipt, failed }) => [call, receipt, failed])).toEqual([
+        ['refused1', failure, true],
+        ['marked1', marked, true],
+        ['archive1', ordinary, undefined],
+      ]);
+    } finally {
+      logTmp.cleanup();
+    }
+  });
+
   it('核心动作经Persona的handler接到core；schedule_wake支持绝对与相对时间', async () => {
     const forkCalls: Array<{ mode: string; task: string }> = [];
     const timerSets: Array<{ at: string; payload: Record<string, unknown> }> = [];

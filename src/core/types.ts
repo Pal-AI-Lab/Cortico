@@ -256,7 +256,7 @@ export interface ToolCallContext {
 export interface ToolOutcome {
   text: string;
   blobs?: BlobInput[];
-  /** 执行失败；工具调用记录据此标记 failed。 */
+  /** 执行失败。工具调用记录标记 failed，模型回执带 `[tool failed]`。 */
   failed?: true;
 }
 
