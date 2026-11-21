@@ -213,6 +213,11 @@ export class LiveClient {
       } else if (frame.kind === 'cmd') {
         try {
           this.opts.onCmd(frame.msg);
+          const cmd = String(frame.msg.cmd ?? '').split(':')[0];
+          if (cmd === 'LIVE' || cmd === 'PREPARING') {
+            const living = cmd === 'LIVE';
+            if (living !== this.status.living) this.patch({ living, liveStartedAt: null });
+          }
         } catch (e) {
           this.opts.log.warn('直播消息处理失败', { err: String(e) });
         }
