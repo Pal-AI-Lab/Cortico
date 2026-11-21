@@ -18,6 +18,7 @@ import { BilibiliWorld, type LiveHandlers } from '../../src/worlds/bilibili/worl
 import type { LiveStatus } from '../../src/worlds/bilibili/client.ts';
 import { panelStreamRoute } from '../../src/web/shared/webui-protocol.ts';
 import { FakeLLM, makeTmpDir, sleep, toolReply } from '../core/helpers.ts';
+import { ENTRY_INTERACTION_V2 } from '../worlds/bilibili/interaction-frames.ts';
 
 const builtinWorlds = await loadBuiltinWorlds();
 
@@ -134,8 +135,8 @@ describe.sequential('CortiV 集成测试', () => {
 
   it('把弹幕突发、人流读数和高价值礼物接进同一条真实投递链', async () => {
     const callsBefore = llm.calls.length;
-    feedBilibili({ cmd: 'INTERACT_WORD_V2', data: {} });
-    feedBilibili({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feedBilibili(ENTRY_INTERACTION_V2);
+    feedBilibili(ENTRY_INTERACTION_V2);
     feedBilibili({ cmd: 'WATCHED_CHANGE', data: { num: 288429 } });
     feedBilibili(danmaku(42, '阿明', '刷怪塔要记得照明外圈'));
     feedBilibili(danmaku(84, '小羽', '农场旁边留红石检修道'));

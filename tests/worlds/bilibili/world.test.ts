@@ -18,6 +18,7 @@ import {
 import type { LiveStatus } from '../../../src/worlds/bilibili/client.ts';
 import { cloneOverlayConfig } from '../../../src/worlds/bilibili/overlay/model.ts';
 import { PB_SMALL } from './gift-v2-frames.ts';
+import { ENTRY_INTERACTION_V2, interactionV2 } from './interaction-frames.ts';
 import { nullLogger } from '../../../src/core/util.ts';
 
 type DeferredPush = {
@@ -706,8 +707,11 @@ describe('BilibiliWorld', () => {
 
   it('人流读数不成事件:布置一条待成文的,发车刻才渲染,而且只布置一条', async () => {
     const { module, host, feed } = await mount();
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed({ cmd: 'INTERACT_WORD', data: { msg_type: 2 } });
+    feed(interactionV2(3));
+    expect(host.deferred).toHaveLength(0);
+    feed(ENTRY_INTERACTION_V2);
+    feed(ENTRY_INTERACTION_V2);
     feed({ cmd: 'WATCHED_CHANGE', data: { num: 288429 } });
     feed({ cmd: 'LIKE_INFO_V3_CLICK', data: {} });
 
@@ -724,7 +728,7 @@ describe('BilibiliWorld', () => {
     expect(await host.deferred[0].spec.render()).toBeNull();
 
     // 清空后新来的读数会重新布置一条
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     expect(host.deferred).toHaveLength(2);
     await module.stop();
   });
@@ -734,7 +738,7 @@ describe('BilibiliWorld', () => {
     vi.setSystemTime(new Date('2026-08-22T15:37:00+08:00'));
     const { module, host, feed } = await mount();
 
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     expect(host.deferred).toHaveLength(1);
 
     // WebUI「清空待投递」把挂单抽走了,render 一次都没跑 —— 复位点随之消失
@@ -742,7 +746,7 @@ describe('BilibiliWorld', () => {
 
     // 窗口内不重挂:安静期不该堆一叠陈旧观察
     vi.setSystemTime(Date.now() + 299_000);
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     expect(host.deferred).toHaveLength(0);
 
     // 过了陈旧窗口视为失踪,允许重挂 —— 这一条在布尔闩版本里永远拿不到
@@ -761,9 +765,9 @@ describe('BilibiliWorld', () => {
     vi.setSystemTime(new Date('2026-08-22T15:37:00+08:00'));
     const { module, host, feed } = await mount();
 
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     vi.setSystemTime(Date.now() + 301_000); // 一直没发车,窗口到期
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     expect(host.deferred).toHaveLength(2);
 
     // 第一条把攒下的读数整个带走,第二条渲染出空正文 → 整条蒸发
@@ -777,10 +781,10 @@ describe('BilibiliWorld', () => {
     vi.setSystemTime(new Date('2026-08-22T15:37:00+08:00'));
     const { module, host, feed } = await mount();
 
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     await host.deferred[0].spec.render();
 
-    feed({ cmd: 'INTERACT_WORD_V2', data: {} });
+    feed(ENTRY_INTERACTION_V2);
     expect(host.deferred).toHaveLength(2);
     await module.stop();
   });
