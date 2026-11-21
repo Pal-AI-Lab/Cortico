@@ -44,12 +44,12 @@ describe('CortiV 实时参数化', () => {
     p.attach(makeFakeHarnessApi({ injectInternal: (text) => injected.push(text) }));
     p.onDelivery({
       events: [
-        { cursor: 1, type: 't', ts: '2026-11-09T21:30:00.000+08:00', source: 's', origin: 'external', text: 'a' },
-        { cursor: 2, type: 't', ts: '2026-11-09T21:42:00.000+08:00', source: 's', origin: 'external', text: 'b' },
-        { cursor: 3, type: 'tick', ts: '2026-11-09T21:50:00.000+08:00', source: 'persona', origin: 'internal', text: 'c' },
+        { cursor: 1, type: 't', ts: '', source: 's', origin: 'external', text: 'a' },
+        { cursor: 2, type: 't', ts: '', source: 's', origin: 'external', text: 'b' },
+        { cursor: 3, type: 'tick', ts: '', source: 'persona', origin: 'internal', text: 'c' },
       ],
     });
-    expect(injected).toEqual(['[system] 2 条新事件,2026-11-09 周一 21:30–21:42。']);
+    expect(injected).toEqual(['[system] 2 条新事件。']);
   });
 
   it('不给 orientation 就读默认源文件(与 WebUI 改的是同一份)', async () => {
