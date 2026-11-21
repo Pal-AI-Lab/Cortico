@@ -1,4 +1,4 @@
-import { FixtureClient } from './fixture-protocol.ts';
+import { adaptClient, type FixtureClient } from './fixture-protocol.ts';
 /** runForkLoop 的软提醒与硬轮数上限。 */
 import { describe, expect, it } from 'vitest';
 import { runForkLoop } from "./fixture-fork.ts";
@@ -6,6 +6,7 @@ import { fakeBlobIntern } from './helpers.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { ChatMessage, LLMChatOptions, LLMResult } from './fixture-types.ts';
 import type { ModelSpec, ToolDef, ToolSchema } from '../../src/core/types.ts';
+import type { Request } from '../../src/protocol/open-responses/index.ts';
 
 const SPEC: ModelSpec = { model: 'test', thinking: false };
 
@@ -165,6 +166,38 @@ describe('runForkLoop 回合契约', () => {
     const [handle] = [...blobs.bytes.keys()];
     expect(blobs.bytes.get(handle)).toEqual(png);
     expect(receipt.content).toBe(`地图读数\n[blob ${handle} image/png map.png] [地图画面]`);
+    expect(receipt.blobs).toEqual([{ handle, mime: 'image/png', name: 'map.png', fallbackText: '[地图画面]' }]);
+  });
+
+  it('明确失败的工具回执在下一次 fork 请求中带失败标记和原附件', async () => {
+    const llm = new ScriptedLLM(1);
+    const native = adaptClient(llm);
+    const inputs: Request['input'][] = [];
+    const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
+    const blobs = fakeBlobIntern();
+    await runForkLoop({
+      id: 'dream',
+      llm: { respond: (request, options) => {
+        inputs.push(request.input);
+        return native.respond(request, options);
+      } },
+      spec: SPEC,
+      messages: [{ role: 'user', content: '开始' }],
+      tools: [{ ...touch, handler: async () => ({
+        text: '地图不可用',
+        failed: true,
+        blobs: [{ bytes: png, mime: 'image/png', name: 'map.png', fallbackText: '[地图画面]' }],
+      }) }],
+      maxRounds: 3,
+      log: nullLogger(),
+      blobs,
+    });
+    const receipt = llm.seen[1].find((m) => m.tool_call_id === 'c1')!;
+    const [handle] = [...blobs.bytes.keys()];
+    expect(inputs[1]).toContainEqual(expect.objectContaining({
+      type: 'function_call_output', call_id: 'c1',
+      output: `[tool failed] 地图不可用\n[blob ${handle} image/png map.png] [地图画面]`,
+    }));
     expect(receipt.blobs).toEqual([{ handle, mime: 'image/png', name: 'map.png', fallbackText: '[地图画面]' }]);
   });
 });
