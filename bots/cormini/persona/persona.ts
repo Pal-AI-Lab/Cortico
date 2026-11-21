@@ -633,7 +633,7 @@ export class Cormini implements Persona {
     if (externals.length === 0) return;
     // 外部事件投递复位静默时长。
     this.heartbeat.noteActivity();
-    this.core?.injectInternal(deliveryNotice(externals.length), 'notice');
+    this.core?.injectInternal(deliveryNotice(externals), 'notice');
   }
 
   /**

@@ -1,7 +1,7 @@
 /**
  * 将交接前的 session 消息渲染为纯文本笔记，不做 I/O；变体措辞由 handoffNoteLines 提供。
  * 收录 user 消息、事件帧、工具入参与回执；speak 类调用仅保留最近段，flow 类调用、
- * assistant 正文、思维链、投递计数通知和上一份交接笔记不收录。完成状态以回执和后续事件为准。
+ * assistant 正文、思维链、投递通知和上一份交接笔记不收录。完成状态以回执和后续事件为准。
  * snapshot 事件按 source/type、snapshot 工具按名称保留最后一次；相同条目合并并计数。
  * FrameEventRef 将帧拆为事件，时间取入库 ts 并按分钟分组；旧记录缺 ts 时不标时间，
  * 缺 sidecar 时整帧作为一条。
@@ -22,17 +22,33 @@ export const HANDOFF_NOTE_TOKENS = 4096;
 /** 最近那批条目的单条预算,更早的按年龄衰减 */
 export const HANDOFF_FOLD_TOKENS = 1024;
 
-/** 每批外部事件的投递计数通知:onDelivery 注入,交接笔记不收录 */
-export function deliveryNotice(count: number): string {
-  return `[system] ${count} 条新事件。`;
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+/** 事件 ts 自带时区偏移,按它的字面取「YYYY-MM-DD 周X」和「HH:MM」。 */
+function wallClock(ts: string): { day: string; time: string } {
+  const day = ts.slice(0, 10);
+  const [y, m, d] = day.split('-').map(Number);
+  return { day: `${day} ${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}`, time: ts.slice(11, 16) };
 }
 
-/** 去掉内部文本里的投递计数通知行。外部事件正文按 sidecar 位置切出,不经过这里。 */
+/**
+ * 每批外部事件的投递通知:条数,加上最早到最晚一条 ts 的日期与时间跨度(投递顺序不等于时间顺序),
+ * 跨日时两头都带日期。onDelivery 注入,交接笔记不收录。
+ */
+export function deliveryNotice(events: readonly { ts: string }[]): string {
+  const times = events.map((e) => e.ts).sort((x, y) => Date.parse(x) - Date.parse(y));
+  const first = wallClock(times[0]);
+  const last = wallClock(times[times.length - 1]);
+  const when = first.day !== last.day ? `${first.day} ${first.time} – ${last.day} ${last.time}`
+    : first.time === last.time ? `${first.day} ${first.time}` : `${first.day} ${first.time}–${last.time}`;
+  return `[system] ${events.length} 条新事件,${when}。`;
+}
+
+const DELIVERY_NOTICE_RE = /^\[system\] \d+ 条新事件,\d{4}-\d{2}-\d{2} .*。$/;
+
+/** 去掉内部文本里的投递通知行。外部事件正文按 sidecar 位置切出,不经过这里。 */
 function withoutDeliveryNotice(text: string): string {
-  return text.split('\n').filter((line) => {
-    const count = /\d+/.exec(line);
-    return count === null || line !== deliveryNotice(Number(count[0]));
-  }).join('\n');
+  return text.split('\n').filter((line) => !DELIVERY_NOTICE_RE.test(line)).join('\n');
 }
 
 export interface HandoffNoteOptions {
@@ -122,7 +138,7 @@ function renderEntry(e: Entry, cap: number): string {
 /**
  * 一条投递消息拆成条目:有 sidecar 就按位置切回逐条事件(帧的表头行不要),事件块之前
  * 的内部行算一条;没有 sidecar 整条算一条,internalOnly 表示整条都是内部文本。
- * 内部文本去掉投递计数通知,上一份交接笔记跳过。
+ * 内部文本去掉投递通知,上一份交接笔记跳过。
  */
 function deliveryEntries(m: ContextRecord, skipHeader: boolean, internalOnly: boolean): Entry[] {
   const refs = m.context.frame?.events;
