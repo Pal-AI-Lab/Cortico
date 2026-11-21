@@ -184,7 +184,8 @@ WebUI 提供直播间事件诊断和独立 Overlay 编辑器入口。样式、�
 已用接收帧核对的 cmd 包括 `DANMU_MSG`、`USER_TOAST_MSG_V2`、`INTERACT_WORD_V2`、`LIKE_INFO_V3_*`、`WATCHED_CHANGE`、
 `ONLINE_RANK_COUNT`、`ROOM_REAL_TIME_MESSAGE_UPDATE`、`STOP_LIVE_ROOM_LIST`。
 
-`INTERACT_WORD_V2` 使用 protobuf；当前解析未区分进场、关注和分享，均计为进场。
+`INTERACT_WORD` 的 JSON `msg_type` 和 `INTERACT_WORD_V2` 的 protobuf 字段 5 仅在值为 1 时计为进场。字段号见
+[blivedm 的 InteractWordV2](https://github.com/xfgryujk/blivedm/blob/master/blivedm/models/pb.py)。
 
 ## 接入限制
 

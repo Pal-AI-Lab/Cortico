@@ -1,6 +1,7 @@
 /** 将原始 cmd 转换为事件、累加计数或最新读数；不处理的命令返回 null。计数与读数由 World 聚合后随批次投递。 */
 import type { TriggerMode } from '../../core/types.ts';
 import { giftFrameData } from './gift-frame.ts';
+import { pbFromBase64, pbInt } from './protobuf.ts';
 
 export interface LiveEvent {
   kind: 'event';
@@ -240,9 +241,10 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
     }
 
     case 'INTERACT_WORD':
-    case 'INTERACT_WORD_V2':
-      // V2 是 protobuf,分不出进场/关注/分享,一律按进场计数
-      return { kind: 'count', field: 'enter', by: 1 };
+    case 'INTERACT_WORD_V2': {
+      const type = cmd === 'INTERACT_WORD_V2' ? pbInt(pbFromBase64(data.pb), 5) : data.msg_type;
+      return type === 1 ? { kind: 'count', field: 'enter', by: 1 } : null;
+    }
 
     case 'LIKE_INFO_V3_CLICK':
       return { kind: 'count', field: 'like', by: 1 };

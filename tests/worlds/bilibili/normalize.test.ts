@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalize } from '../../../src/worlds/bilibili/normalize.ts';
+import { ENTRY_INTERACTION_V2, interactionV2 } from './interaction-frames.ts';
 
 const OPTS = { giftFlushYuan: 1 };
 
@@ -202,7 +203,8 @@ describe('归一化', () => {
   });
 
   it('人流类只给计数与读数', () => {
-    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { msg_type: 1 } }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
+    expect(normalize(ENTRY_INTERACTION_V2, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
     expect(normalize({ cmd: 'LIKE_INFO_V3_CLICK', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'like', by: 1 });
     expect(normalize({ cmd: 'WATCHED_CHANGE', data: { num: 288429 } }, OPTS)).toEqual({
       kind: 'gauge',
@@ -214,6 +216,17 @@ describe('归一化', () => {
       field: 'online',
       value: 12,
     });
+  });
+
+  it.each([2, 3, 4])('互动类型 %i 无进场计数', (msgType) => {
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { msg_type: msgType } }, OPTS)).toBeNull();
+    expect(normalize(interactionV2(msgType), OPTS)).toBeNull();
+  });
+
+  it('缺少互动类型或字段截断时无进场计数', () => {
+    expect(normalize({ cmd: 'INTERACT_WORD', data: {} }, OPTS)).toBeNull();
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: {} }, OPTS)).toBeNull();
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: 'KA==' } }, OPTS)).toBeNull();
   });
 
   it('运营挂件与她自己的语音转写不推;没见过的 cmd 也不推', () => {
