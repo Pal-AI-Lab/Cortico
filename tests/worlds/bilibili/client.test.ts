@@ -305,6 +305,62 @@ describe('LiveClient 重连握手收口', () => {
     socket.emit('message', encodePacket(OP.AUTH_REPLY, JSON.stringify({ code: 0 })));
   }
 
+  it('keeps the WebSocket live state in status updates during a retry', async () => {
+    vi.useFakeTimers();
+    const { calls } = stubHandshakeFetch({ liveStatus: 0 });
+    const events: Array<string | LiveStatus> = [];
+    const live = new LiveClient({
+      roomId: 7734200,
+      sessdata: '',
+      onCmd: (message) => events.push(String(message.cmd)),
+      onStatus: (status) => events.push(status),
+      log: nullLogger(),
+    });
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      const initial = live.current();
+      expect(initial).toMatchObject({ phase: 'connected', living: false });
+      events.length = 0;
+      const fetched = calls.length;
+
+      socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'LIVE' })));
+      socket.drop(1006, 'remote gone');
+
+      expect(calls).toHaveLength(fetched);
+      expect(events).toEqual([
+        'LIVE',
+        { ...initial, living: true, liveStartedAt: null },
+        { ...initial, phase: 'retrying', lastError: '长连断开', living: true, liveStartedAt: null },
+      ]);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(calls.slice(fetched).some((url) => url.includes('Room/get_info'))).toBe(true);
+      expect(live.current()).toMatchObject({ living: false });
+    } finally {
+      await live.stop();
+    }
+  });
+
+  it('clears the live state and start time when WebSocket reports PREPARING', async () => {
+    vi.useFakeTimers();
+    stubHandshakeFetch({ liveStatus: 1 });
+    const live = client();
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      expect(live.current()).toMatchObject({ living: true, liveStartedAt: expect.any(Number) });
+
+      socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'PREPARING' })));
+
+      expect(live.current()).toMatchObject({ living: false, liveStartedAt: null });
+    } finally {
+      await live.stop();
+    }
+  });
+
   it('new WebSocket 带 handshakeTimeout;握手超时(error+close)走 fail() 退避重连', async () => {
     vi.useFakeTimers();
     stubHandshakeFetch();
