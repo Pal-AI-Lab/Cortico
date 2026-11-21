@@ -1,13 +1,14 @@
 /**
  * WebApp只读API测试:fake store + 临时persona/data目录fixture。
  */
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type ToolOwner } from '../../src/web/server.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import { FakeStore } from './fakes.ts';
+import { JsonlEventStore } from '../../src/core/event-store.ts';
 import type { ToolSchema } from '../../src/core/types.ts';
 import type { PathPickerOptions } from '../../src/web/shared/path-picker.ts';
 import { LogBlobStore, blobScheme } from '../../src/core/blobs.ts';
@@ -433,6 +434,60 @@ describe('/api/events', () => {
     const d = await getJson(base() + '/api/events?source=console');
     expect(d.events.length).toBe(5);
     for (const e of d.events) expect(e.source).toBe('console');
+  });
+});
+
+describe('/api/events on disk', () => {
+  it('keeps filtered archive reads off the synchronous store and aborts a closed request', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'webtest-event-history-'));
+    const old = new JsonlEventStore({ dataDir: dir, run: 'r-20260101-000000-aaaa' });
+    for (let cursor = 1; cursor <= 9; cursor++) {
+      old.append({ type: 'test.row', source: cursor === 7 ? 'other' : 'terminal',
+        ts: '2026-01-01T00:00:00Z', origin: 'external', text: String(cursor),
+        ...(cursor < 5 || cursor === 8 ? { contextDelivery: 'archive-only' as const } : {}),
+      });
+    }
+    const disk = new JsonlEventStore({ dataDir: dir, run: 'r-20260101-000100-bbbb' });
+    const sync = vi.spyOn(disk, 'range');
+    const web = new WebApp({ store: disk, dataDir: dir, memoryDir: dir, log: nullLogger(), getStatus: () => ({ run: 'ready' }) });
+    const controller = new AbortController();
+    try {
+      const address = `http://127.0.0.1:${await web.start(0)}`;
+      const head = await getJson(address + '/api/events?source=terminal&from=2&limit=2');
+      expect(head).toMatchObject({ latest: 9, hasMore: true });
+      expect(head.events.map((e: { cursor: number }) => e.cursor)).toEqual([5, 6]);
+      const archiveHead = await getJson(address + '/api/events?source=terminal&from=2&limit=2&archive=1');
+      expect(archiveHead).toMatchObject({ latest: 9, hasMore: true });
+      expect(archiveHead.events.map((e: { cursor: number }) => e.cursor)).toEqual([2, 3]);
+      const archiveTail = await getJson(address + '/api/events?source=terminal&from=2&to=8&limit=2&archive=1');
+      expect(archiveTail.events.map((e: { cursor: number }) => e.cursor)).toEqual([6, 8]);
+      expect(sync).not.toHaveBeenCalled();
+
+      let entered!: () => void, cancelled!: () => void;
+      const enteredScan = new Promise<void>(resolve => { entered = resolve; });
+      const cancelledScan = new Promise<void>(resolve => { cancelled = resolve; });
+      vi.spyOn(disk, 'rangeAsync').mockImplementationOnce(async (_query, signal) => {
+        entered();
+        return new Promise((_resolve, reject) => {
+          signal?.addEventListener('abort', () => {
+            cancelled();
+            reject(signal.reason);
+          }, { once: true });
+        });
+      });
+      const pending = fetch(address + '/api/events?source=terminal&archive=1&limit=2', { signal: controller.signal })
+        .catch(error => error);
+      await enteredScan;
+      expect(await getJson(address + '/api/status')).toMatchObject({ run: 'ready' });
+      controller.abort();
+      expect((await pending).name).toBe('AbortError');
+      await cancelledScan;
+      expect((await getJson(address + '/api/events?limit=1')).events[0].cursor).toBe(9);
+    } finally {
+      controller.abort();
+      await web.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

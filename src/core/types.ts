@@ -171,6 +171,13 @@ export interface EventStoreReader {
   get(cursor: number): EventEnvelope | undefined;
   latestCursor(): number;
   range(q: EventRangeQuery): EventEnvelope[];
+  /** 异步读取历史，保持 range 的排序与筛选；查询开始后的事件留给下一次查询。 */
+  rangeAsync?(q: EventRangeQuery, signal?: AbortSignal): Promise<EventEnvelope[]>;
+  /** 从区间开头读取有限条记录，供游标追新使用。 */
+  rangeFromStartAsync?(
+    q: EventRangeQuery & { limit: number },
+    options?: { signal?: AbortSignal; excludeArchiveOnly?: boolean },
+  ): Promise<EventEnvelope[]>;
   /** 返回前 before 条、自身及后 after 条事件。 */
   around(cursor: number, before: number, after: number): EventEnvelope[];
   grep(q: EventGrepQuery): EventGrepHit[];
