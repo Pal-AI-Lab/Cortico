@@ -67,6 +67,19 @@ describe('CortiV 观众档案唤起', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
+  it('投递通知带日期,跨度取最早到最晚一条,不随投递顺序变', () => {
+    const notice = (...stamps: string[]) => {
+      injected.length = 0;
+      p.onDelivery({ events: stamps.map((ts) => ev({ ts })) });
+      return injected[0];
+    };
+    expect(notice('2026-11-09T21:30:05.000+08:00')).toBe('[system] 1 条新事件,2026-11-09 周一 21:30。');
+    expect(notice('2026-11-09T21:42:00.000+08:00', '2026-11-09T21:30:00.000+08:00'))
+      .toBe('[system] 2 条新事件,2026-11-09 周一 21:30–21:42。');
+    expect(notice('2026-11-10T00:03:00.000+08:00', '2026-11-09T23:58:00.000+08:00'))
+      .toBe('[system] 2 条新事件,2026-11-09 周一 23:58 – 2026-11-10 周二 00:03。');
+  });
+
   it('首见注入档案首行;同 session 第二次出现不再注入', () => {
     p.onDelivery({ events: [ev({ senderKey: '314544096' })] });
     const recalls = injected.filter((t) => t.startsWith('[memory]'));

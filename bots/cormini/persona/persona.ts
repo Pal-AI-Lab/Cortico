@@ -633,7 +633,15 @@ export class Cormini implements Persona {
     if (externals.length === 0) return;
     // 外部事件投递复位静默时长。
     this.heartbeat.noteActivity();
-    this.core?.injectInternal(deliveryNotice(externals), 'notice');
+    this.core?.injectInternal(this.deliveryNotice(externals), 'notice');
+  }
+
+  /**
+   * 每批外部事件的投递计数通知。覆写时保留「[system] N 条新事件」的开头,补充接在逗号之后、以句号收尾,
+   * 交接笔记按这个形状剔除它。
+   */
+  protected deliveryNotice(externals: EventEnvelope[]): string {
+    return deliveryNotice(externals.length);
   }
 
   /**
