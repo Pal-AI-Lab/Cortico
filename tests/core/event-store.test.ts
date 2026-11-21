@@ -54,6 +54,53 @@ describe('JsonlEventStore', () => {
   beforeEach(() => (tmp = makeTmpDir(), fsHooks.reads.length = 0));
   afterEach(() => tmp.cleanup());
 
+  it('asynchronous ranges match synchronous filtering across cold and warm segments', async () => {
+    seed(open(RUN_A), 10);
+    seed(open(RUN_B), 10, 10);
+    const store = open(RUN_C);
+    seed(store, 5, 20);
+    for (const q of [
+      {}, { limit: 3 }, { source: 'qq', limit: 7 }, { senderKey: 'alice', limit: 4 },
+      { fromCursor: 4, toCursor: 19, limit: 5 }, { origin: 'internal' as const },
+      { fromTs: '2026-07-17T10:08:00', toTs: '2026-07-17T10:18:00', source: 'web', limit: 4 },
+    ]) {
+      const cold = open(RUN_C);
+      const result = await cold.rangeAsync(q);
+      expect(result).toEqual(store.range(q));
+      expect(await store.rangeAsync(q)).toEqual(result);
+    }
+    expect(await store.rangeAsync({ fromCursor: 1, limit: 0 })).toEqual([]);
+  });
+
+  it('large cold scans yield to other work, exclude later appends and do not sync-load history', async () => {
+    const rows = Array.from({ length: 20_000 }, (_, i) => ({ cursor: i + 1, ts: '2026-01-01T00:00:00Z',
+      type: 'test.event', source: i % 5000 === 0 ? 'console' : 'other', origin: 'external', text: `row ${i}` }));
+    mkdirSync(join(tmp.dir, 'runs', RUN_A), { recursive: true });
+    writeFileSync(fileOf(RUN_A), rows.map(e => JSON.stringify(e)).join('\n') + '\n');
+    const store = open(RUN_B);
+    fsHooks.reads.length = 0;
+    let settled = false, progressed = false;
+    const reading = store.rangeAsync({ source: 'console', limit: 3 }).then(result => { settled = true; return result; });
+    await new Promise<void>(resolve => setImmediate(() => {
+      progressed = !settled;
+      store.append({ type: 'test.event', source: 'console', origin: 'external', ts: '2026-01-01T00:01:00Z', text: 'new' });
+      resolve();
+    }));
+    expect((await reading).map(e => e.cursor)).toEqual([5001, 10001, 15001]);
+    expect(progressed).toBe(true);
+    expect(fsHooks.reads).toEqual([]);
+    expect(store.get(20001)?.text).toBe('new');
+  });
+
+  it('asynchronous history scans can be cancelled and a later query still completes', async () => {
+    seed(open(RUN_A), 8);
+    const store = open(RUN_B), controller = new AbortController();
+    const reading = store.rangeAsync({}, controller.signal);
+    controller.abort(new Error('reader closed'));
+    await expect(reading).rejects.toThrow('reader closed');
+    expect((await store.rangeAsync({ limit: 2 })).map(e => e.cursor)).toEqual([7, 8]);
+  });
+
   it('append游标从1递增,get/latestCursor一致,记录带 run', () => {
     const store = open();
     expect(store.latestCursor()).toBe(0);

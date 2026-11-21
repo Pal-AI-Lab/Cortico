@@ -1715,9 +1715,9 @@ export class WebApp {
       res.json({ capabilities: this.frameworkCapabilities() });
     }));
 
-    // 事件流按 store.range 的 from/to 游标区间查询，默认最近 100 条，to 用于向前翻页。
+    // 事件流按 from/to 游标区间查询，默认最近 100 条，to 用于向前翻页。
     // 默认隐藏 archive-only，避免原始归档与投影重复展示；不修改原始归档，archive=1 可查看全部记录。
-    app.get('/api/events', wrap((req, res) => {
+    app.get('/api/events', wrap(async (req, res) => {
       const q: EventRangeQuery = {};
       const from = intParam(req.query.from);
       if (from !== undefined) q.fromCursor = from;
@@ -1727,23 +1727,33 @@ export class WebApp {
       const source = strParam(req.query.source);
       if (source) q.source = source;
       const withArchive = strParam(req.query.archive) === '1';
-      // 只给 from 是追新:从区间头部取最早的 limit 条,hasMore 表示后面还有没返回的记录。
-      if (from !== undefined && to === undefined) {
-        const latest = this.deps.store.latestCursor();
-        const all = this.deps.store.range({ ...q, toCursor: latest });
-        const visible = withArchive ? all : dropArchiveOnly(all);
-        res.json({ latest, events: visible.slice(0, limit), hasMore: visible.length > limit });
-        return;
+      const store = this.deps.store;
+      const latest = store.latestCursor();
+      q.toCursor = Math.min(q.toCursor ?? latest, latest);
+      const controller = new AbortController();
+      const abort = () => controller.abort();
+      res.once('close', abort);
+      try {
+        // 只给 from 是追新:从区间头部取 limit+1 条，额外一条用于判断 hasMore。
+        if (from !== undefined && to === undefined) {
+          const visible = store.rangeFromStartAsync
+            ? await store.rangeFromStartAsync({ ...q, limit: limit + 1 },
+                { signal: controller.signal, excludeArchiveOnly: !withArchive })
+            : withArchive ? store.range(q) : dropArchiveOnly(store.range(q));
+          if (!controller.signal.aborted)
+            res.json({ latest, events: visible.slice(0, limit), hasMore: visible.length > limit });
+          return;
+        }
+        // 保持普通尾页多取一截再过滤的展示口径。
+        q.limit = withArchive ? limit : clamp(limit * 2, 1, 2000);
+        const rows = store.rangeAsync ? await store.rangeAsync(q, controller.signal) : store.range(q);
+        if (!controller.signal.aborted)
+          res.json({ latest, events: withArchive ? rows : dropArchiveOnly(rows).slice(-limit) });
+      } catch (error) {
+        if (!controller.signal.aborted) throw error;
+      } finally {
+        res.off('close', abort);
       }
-      if (withArchive) {
-        q.limit = limit;
-        res.json({ latest: this.deps.store.latestCursor(), events: this.deps.store.range(q) });
-        return;
-      }
-      // 过滤会吃掉配额,所以多取一截再截尾——否则"最近 100 条"实际只剩一半。
-      q.limit = clamp(limit * 2, 1, 2000);
-      const events = dropArchiveOnly(this.deps.store.range(q)).slice(-limit);
-      res.json({ latest: this.deps.store.latestCursor(), events });
     }));
 
     // 运行日志:服务端按级别/区域/小类/轮次/关键词过滤,从文件尾部向前扫到够数为止。
