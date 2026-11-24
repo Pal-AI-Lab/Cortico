@@ -253,6 +253,7 @@ export function makeFakePersona(extraTools: ToolDef[] = [], opts?: FakePersonaOp
           softHint: () => (opts?.softHint === undefined
             ? '[system] You have been acting for many rounds this turn. Call end_turn to end the turn when you are done.'
             : opts.softHint),
+          ...(opts?.hardHint ? { hardHint: () => opts.hardHint! } : {}),
         }),
         persistent: true,
         receivesEvents: true,
@@ -353,6 +354,8 @@ export interface FakePersonaOptions {
   pressureNotice?: string | null;
   /** 软轮数提醒文本；null 表示不添加，缺省使用英文提醒。 */
   softHint?: string | null;
+  /** 硬轮数提示；缺省不提供。 */
+  hardHint?: string;
   /** 合成开头；未提供时不注入。 */
   sessionHead?: () => Item[];
   /** 时机钩子不注入文本；超出软预算时直接请求交接。 */
