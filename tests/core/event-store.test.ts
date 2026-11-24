@@ -116,6 +116,22 @@ describe('JsonlEventStore', () => {
     expect(fsHooks.reads.some((f) => f.includes(RUN_A))).toBe(true);
   });
 
+  it('rangeAsync 与 range 结果相同,读完一个分片就让出事件循环', async () => {
+    seed(open(RUN_A), 6);
+    seed(open(RUN_B), 6, 6);
+    const store = open(RUN_C);
+    seed(store, 6, 12);
+    for (const q of [{ source: 'qq', limit: 100 }, { fromCursor: 3, toCursor: 15 }, { senderKey: 'alice' }]) {
+      const pending = open(RUN_C).rangeAsync(q);
+      let settled = false;
+      void pending.then(() => { settled = true; });
+      // 三个分片要让出三次;一次事件循环之后还没读完,说明读分片之间别的回调能跑。
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(settled).toBe(false);
+      expect(await pending).toEqual(store.range(q));
+    }
+  });
+
   it('历史分片只缓存最近一次查询读到的:同批分片上的连续查询各分片只读一次磁盘', () => {
     const a = open(RUN_A); seed(a, 6);      // 1..6
     const b = open(RUN_B); seed(b, 6, 6);   // 7..12
