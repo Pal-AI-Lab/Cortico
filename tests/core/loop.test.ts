@@ -87,6 +87,8 @@ interface RigOptions {
   resubmit?: ResubmitPolicy;
   /** 软轮数提醒；null 表示不提醒，缺省使用英文文本。 */
   softHint?: string | null;
+  /** 硬轮数提示；缺省不提供。 */
+  hardHint?: string;
   /** 模型客户端(缺省=按脚本答复的 FakeLLM) */
   llm?: ResponseClient;
 }
@@ -118,6 +120,7 @@ function makeRig(opts: RigOptions = {}) {
     pressureNotice: opts.silent ? null : opts.pressureNotice,
     silent: opts.silent,
     softHint: opts.softHint,
+    hardHint: opts.hardHint,
     mainPatch: {
       ...(opts.eventDelivery ? { eventDelivery: opts.eventDelivery } : {}),
       ...(opts.outputTap ? { outputTap: opts.outputTap } : {}),
@@ -1590,8 +1593,27 @@ describe('MainLoop user事件协议', () => {
     );
     expect(results).toHaveLength(5);
     expect(results[2].content).toContain('acting for many rounds');
+    // 没提供 hardHint:硬上限那一轮的回执原样
+    expect(results[4].content).toBe('ok');
     expect(rig.session.messages.at(-1)?.role).toBe('tool');
     assertPairing(rig.session.messages);
+  });
+
+  it('提供 hardHint 时，硬上限那一轮的最后一条回执末尾附上它', async () => {
+    rig = makeRig({ cfgPatch: (cfg) => (cfg.loop = { softCap: 1, hardCap: 2 }), softHint: null, hardHint: '[到上限了]' });
+    rig.start();
+    await until(() => rig.llm.calls.length >= 1);
+    rig.llm.fallback = () => toolReply([{ name: 'noop' }, { name: 'noop' }]);
+
+    const before = rig.session.messages.length;
+    rig.pushEvent('开始');
+    await until(() => rig.loop.getStatus().batchesHandled >= 2);
+    await until(() => rig.loop.getStatus().roundsLastBatch === 2);
+
+    const results = rig.session.messages.slice(before).filter(
+      (message) => message.role === 'tool' && !message.content.startsWith('[1 new event]'),
+    );
+    expect(results.map((r) => r.content)).toEqual(['ok', 'ok', 'ok', 'ok\n[到上限了]']);
   });
 
   it('软上限不小于硬上限时，提醒提前到硬上限前一轮', async () => {

@@ -1473,8 +1473,11 @@ export class MainLoop {
       flight.phase = 'done';
 
       // soft 大于 hard 时永远到不了，等于 hard 时提示只进最后一条回执、没有下一轮照着收尾;两种都提前到 hard 的前一轮。
-      if (round === Math.min(caps.soft, caps.hard - 1) && results.length > 0) {
-        const hint = caps.softHint?.();
+      // 所以 softHint 最晚在 hard − 1 轮，与硬上限那一轮的 hardHint 不会落在同一条回执。
+      if (results.length > 0) {
+        const hint = round === Math.min(caps.soft, caps.hard - 1) ? caps.softHint?.()
+          : round >= caps.hard && !turnEnded ? caps.hardHint?.()
+            : null;
         if (hint) results[results.length - 1] = withText(results[results.length - 1], `${textOf(results[results.length - 1])}\n${hint}`);
       }
       for (const result of results) session.append(result);
