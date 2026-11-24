@@ -47,6 +47,7 @@ const LIVE_STATUS: LiveStatus = {
   realRoomId: 7734200,
   title: 'CortiV 集成',
   living: true,
+  livingVia: 'room-info',
   liveStartedAt: null,
   selfUid: 1039523363,
   lastError: null,

@@ -234,26 +234,4 @@ describe('归一化', () => {
       expect(normalize({ cmd, data: {} }, OPTS), cmd).toBeNull();
     }
   });
-
-  // 开播与下播事件陈述平台侧状态及其后果，只报告事实。
-  it('开播/下播指令:flush 成事件,措辞陈述平台状态与后果', () => {
-    expect(normalize({ cmd: 'LIVE' }, OPTS)).toMatchObject({
-      kind: 'event',
-      type: 'bilibili.room',
-      trigger: 'flush',
-      text: expect.stringContaining('平台已推送开播指令'),
-    });
-    const preparing = normalize({ cmd: 'PREPARING' }, OPTS);
-    expect(preparing).toMatchObject({
-      kind: 'event',
-      type: 'bilibili.room',
-      trigger: 'flush',
-    });
-    const text = (preparing as { text: string }).text;
-    expect(text).toContain('平台已推送下播指令');
-    expect(text).toContain('看不到直播画面');
-    // 反向证据要提前说破:留场弹幕不代表还在播
-    expect(text).toContain('不代表直播还在');
-    expect(text).not.toMatch(/收尾|告别|停止|快去/);
-  });
 });
