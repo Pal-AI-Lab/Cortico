@@ -262,23 +262,6 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
     case 'ROOM_REAL_TIME_MESSAGE_UPDATE':
       return { kind: 'gauge', field: 'fans', value: num(data.fans) };
 
-    case 'LIVE':
-      return {
-        kind: 'event',
-        type: 'bilibili.room',
-        trigger: 'flush',
-        text: '[直播间] 平台已推送开播指令:直播画面已对观众可见',
-      };
-
-    case 'PREPARING':
-      return {
-        kind: 'event',
-        type: 'bilibili.room',
-        trigger: 'flush',
-        text: '[直播间] 平台已推送下播指令:直播已结束,观众已经看不到直播画面;'
-          + '此后的弹幕来自仍留在房间页的人,不代表直播还在进行',
-      };
-
     case 'ROOM_CHANGE':
       return {
         kind: 'event',

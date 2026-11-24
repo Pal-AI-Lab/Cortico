@@ -59,8 +59,10 @@ export interface LiveStatus {
   /** 换算出的真实房间号 */
   realRoomId: number | null;
   title: string;
-  /** 主播是否正在直播 */
+  /** 主播是否正在直播;弹幕服务器的开播、下播指令,连接时和轮询读到的 live_status 都写这里 */
   living: boolean;
+  /** 最近一次写入 `living` 的读数:`command` 是弹幕服务器指令,`room-info` 是 Room/get_info */
+  livingVia: 'command' | 'room-info';
   /** 平台报告的本场开播时刻 */
   liveStartedAt: number | null;
   /** 登录态的 uid;0 = 匿名 */
@@ -101,6 +103,7 @@ export class LiveClient {
       realRoomId: null,
       title: '',
       living: false,
+      livingVia: 'room-info',
       liveStartedAt: null,
       selfUid: 0,
       lastError: null,
@@ -213,16 +216,20 @@ export class LiveClient {
       } else if (frame.kind === 'cmd') {
         try {
           this.opts.onCmd(frame.msg);
-          const cmd = String(frame.msg.cmd ?? '').split(':')[0];
-          if (cmd === 'LIVE' || cmd === 'PREPARING') {
-            const living = cmd === 'LIVE';
-            if (living !== this.status.living) this.patch({ living, liveStartedAt: null });
-          }
         } catch (e) {
           this.opts.log.warn('直播消息处理失败', { err: String(e) });
         }
+        this.applyRoomCommand(frame.msg);
       }
     }
+  }
+
+  /** LIVE / PREPARING 改写 `living`,同值不 patch;开播时刻等下一次轮询补上。 */
+  private applyRoomCommand(msg: Record<string, unknown>): void {
+    const cmd = String(msg.cmd ?? '').split(':')[0];
+    if (cmd !== 'LIVE' && cmd !== 'PREPARING') return;
+    const living = cmd === 'LIVE';
+    if (living !== this.status.living) this.patch({ living, livingVia: 'command', liveStartedAt: null });
   }
 
   /**
@@ -298,7 +305,7 @@ export class LiveClient {
           const liveStartedAt = liveTimestamp(room.live_time);
           if (living !== this.status.living || liveStartedAt !== this.status.liveStartedAt) {
             this.opts.log.info('轮询读到 live_status 变化', { liveStatus: rawLiveStatus, living });
-            this.patch({ living, liveStartedAt });
+            this.patch({ living, livingVia: 'room-info', liveStartedAt });
           }
         } else {
           this.opts.log.warn('直播间状态轮询响应缺少有效 live_status');
@@ -359,6 +366,7 @@ export class LiveClient {
       realRoomId,
       title: str(room.title),
       living: numOf(room.live_status) === 1,
+      livingVia: 'room-info',
       liveStartedAt: liveTimestamp(room.live_time),
       selfUid,
     });
