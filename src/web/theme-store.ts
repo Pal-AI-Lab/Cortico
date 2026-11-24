@@ -2,9 +2,10 @@
  * 部署的 WebUI 配色记录：`<部署>/theme.json`。WebUI 读写，启动器只读。
  * 文件内容就是浏览器侧的主题记录形状，写入前逐个 token 规范化。
  */
-import { existsSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { normalizeStoredTheme, type StoredTheme } from './shared/theme.ts';
+import { replaceFile } from '../core/fs-busy.ts';
 import { readTextFile } from '../core/util.ts';
 
 export const THEME_FILE = 'theme.json';
@@ -29,10 +30,6 @@ export function readDeploymentTheme(botDir: string): DeploymentTheme {
 /** 规范化后整份替换，返回真正写进去的记录。 */
 export function writeDeploymentTheme(botDir: string, value: unknown): StoredTheme {
   const state = normalizeStoredTheme(value);
-  const file = join(botDir, THEME_FILE);
-  const temporary = join(botDir, `.${THEME_FILE}.${process.pid}.tmp`);
-  writeFileSync(temporary, JSON.stringify(state, null, 2) + '\n', 'utf8');
-  rmSync(file, { force: true });
-  renameSync(temporary, file);
+  replaceFile(join(botDir, THEME_FILE), JSON.stringify(state, null, 2) + '\n');
   return state;
 }
