@@ -287,6 +287,28 @@ export const CORTIV_TOOL_DECLS: ReadonlyArray<Omit<ToolDef, 'handler'>> = [
   RECALL_VIEWER_DECL,
 ];
 
+const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+/** 事件 ts 自带时区偏移,按它的字面取「YYYY-MM-DD 周X」和「HH:MM」。 */
+function wallClock(ts: string): { day: string; time: string } {
+  const day = ts.slice(0, 10);
+  const [y, m, d] = day.split('-').map(Number);
+  return { day: `${day} ${WEEKDAYS[new Date(Date.UTC(y, m - 1, d)).getUTCDay()]}`, time: ts.slice(11, 16) };
+}
+
+/**
+ * 带日期的投递通知:条数,加上最早到最晚一条 ts 的日期与时间跨度(投递顺序不等于时间顺序),
+ * 跨日时两头都带日期。
+ */
+function datedDeliveryNotice(events: readonly { ts: string }[]): string {
+  const times = events.map((e) => e.ts).sort((x, y) => Date.parse(x) - Date.parse(y));
+  const first = wallClock(times[0]);
+  const last = wallClock(times[times.length - 1]);
+  const when = first.day !== last.day ? `${first.day} ${first.time} – ${last.day} ${last.time}`
+    : first.time === last.time ? `${first.day} ${first.time}` : `${first.day} ${first.time}–${last.time}`;
+  return `[system] ${events.length} 条新事件,${when}。`;
+}
+
 export interface CortiVOptions extends CorminiOptions {
   /**
    * 认知外包的全局开关(「允许 World 请托后台思考」)。每次现读——WebUI 上
@@ -750,6 +772,10 @@ export class CortiV extends Cormini {
     };
     this.commitChain = this.commitChain.then(run, run);
     return this.commitChain;
+  }
+
+  protected override deliveryNotice(externals: EventEnvelope[]): string {
+    return datedDeliveryNotice(externals);
   }
 
   onDelivery(ctx: { events: EventEnvelope[] }): void {

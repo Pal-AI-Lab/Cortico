@@ -1,6 +1,7 @@
 /** 将原始 cmd 转换为事件、累加计数或最新读数；不处理的命令返回 null。计数与读数由 World 聚合后随批次投递。 */
 import type { TriggerMode } from '../../core/types.ts';
 import { giftFrameData } from './gift-frame.ts';
+import { pbFromBase64, pbInt } from './protobuf.ts';
 
 export interface LiveEvent {
   kind: 'event';
@@ -242,9 +243,10 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
     }
 
     case 'INTERACT_WORD':
-    case 'INTERACT_WORD_V2':
-      // V2 是 protobuf,分不出进场/关注/分享,一律按进场计数
-      return { kind: 'count', field: 'enter', by: 1 };
+    case 'INTERACT_WORD_V2': {
+      const type = cmd === 'INTERACT_WORD_V2' ? pbInt(pbFromBase64(data.pb), 5) : data.msg_type;
+      return type === 1 ? { kind: 'count', field: 'enter', by: 1 } : null;
+    }
 
     case 'LIKE_INFO_V3_CLICK':
       return { kind: 'count', field: 'like', by: 1 };
@@ -263,23 +265,6 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
 
     case 'ROOM_REAL_TIME_MESSAGE_UPDATE':
       return { kind: 'gauge', field: 'fans', value: num(data.fans) };
-
-    case 'LIVE':
-      return {
-        kind: 'event',
-        type: 'bilibili.room',
-        trigger: 'flush',
-        text: '[直播间] 平台已推送开播指令:直播画面已对观众可见',
-      };
-
-    case 'PREPARING':
-      return {
-        kind: 'event',
-        type: 'bilibili.room',
-        trigger: 'flush',
-        text: '[直播间] 平台已推送下播指令:直播已结束,观众已经看不到直播画面;'
-          + '此后的弹幕来自仍留在房间页的人,不代表直播还在进行',
-      };
 
     case 'ROOM_CHANGE':
       return {

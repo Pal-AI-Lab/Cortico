@@ -27,12 +27,12 @@ export function deliveryNotice(count: number): string {
   return `[system] ${count} 条新事件。`;
 }
 
+/** 投递计数通知的形状;子类可在条数之后、句号之前接一个逗号和补充。 */
+const DELIVERY_NOTICE_RE = /^\[system\] \d+ 条新事件(?:,.*)?。$/;
+
 /** 去掉内部文本里的投递计数通知行。外部事件正文按 sidecar 位置切出,不经过这里。 */
 function withoutDeliveryNotice(text: string): string {
-  return text.split('\n').filter((line) => {
-    const count = /\d+/.exec(line);
-    return count === null || line !== deliveryNotice(Number(count[0]));
-  }).join('\n');
+  return text.split('\n').filter((line) => !DELIVERY_NOTICE_RE.test(line)).join('\n');
 }
 
 export interface HandoffNoteOptions {

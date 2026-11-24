@@ -329,6 +329,8 @@ export class MainLoop {
   private watermarkStallBehind = 0;
   /** 同一次停滞已报次数(首报计 1) */
   private watermarkStallReports = 0;
+  /** 已记过 piggyback 等待的水位，-1 表示未记。 */
+  private piggybackWaitNotedAt = -1;
   /**
    * 最近成功请求的输入与输出 token 总数，覆盖前 records 条（含响应）。
    * 新增条目使用本地估算，下次成功后更新计数；上下文整体重写后失效。
@@ -1476,8 +1478,10 @@ export class MainLoop {
       flight.phase = 'done';
 
       // soft 大于 hard 时永远到不了，等于 hard 时提示只进最后一条回执、没有下一轮照着收尾;两种都提前到 hard 的前一轮。
-      if (round === Math.min(caps.soft, caps.hard - 1) && results.length > 0) {
-        const hint = caps.softHint?.();
+      if (results.length > 0) {
+        const hint = round === Math.min(caps.soft, caps.hard - 1) ? caps.softHint?.()
+          : round >= caps.hard && !turnEnded ? caps.hardHint?.()
+            : null;
         if (hint) results[results.length - 1] = withText(results[results.length - 1], `${textOf(results[results.length - 1])}\n${hint}`);
       }
       for (const result of results) session.append(result);
@@ -1924,25 +1928,32 @@ export class MainLoop {
     this.d.bus.push(this.internalItem('core', 'core.stall', text));
   }
 
-  /** 水位积压扫描:该进上下文却还没投递的外部事件计数与最老一条(巡查与状态面共用)。 */
-  private watermarkBacklog(): { behind: number; oldest: EventEnvelope | null } {
-    const { state, store } = this.d;
+  /**
+   * 水位积压扫描:该进上下文却还没投递的外部事件计数与最老一条(巡查与状态面共用)。
+   * onlyPiggyback 表示积压里每一条都还在总线里按 piggyback 等待。
+   */
+  private watermarkBacklog(): { behind: number; oldest: EventEnvelope | null; onlyPiggyback: boolean } {
+    const { bus, state, store } = this.d;
     const latest = store.latestCursor();
+    const waiting = bus.piggybackCursors();
     let behind = 0;
     let oldest: EventEnvelope | null = null;
+    let onlyPiggyback = true;
     for (let c = state.data.lastDeliveredCursor + 1; c <= latest; c++) {
       const e = store.get(c);
       if (!e) continue;
       if (e.origin !== 'external' || e.contextDelivery === 'archive-only') continue;
       behind++;
       if (!oldest) oldest = e;
+      if (!waiting.has(c)) onlyPiggyback = false;
     }
-    return { behind, oldest };
+    return { behind, oldest, onlyPiggyback };
   }
 
   /**
    * 最老的待投递外部事件等待超过 WATERMARK_STALL_MS 时报告 error，不自动修复。
    * 人工暂停或投递 gate 生效时不告警；仅含内部事件或 archive-only 原文的积压不触发该告警。等待 projector 的原文仍须由连续水位规则保护。
+   * 积压全部是总线里等待下一次唤醒的 piggyback 事件时，每个水位只记一条 info；有一条不在总线里或不是 piggyback 就报 error。
    * 公开入口供巡查、测试与 WebUI 调用。
    */
   auditDeliveryWatermark(): void {
@@ -1952,10 +1963,11 @@ export class MainLoop {
     if (bus.isPaused() || bus.isDeliveryBlocked()) return;
 
     const latest = store.latestCursor();
-    const { behind, oldest } = this.watermarkBacklog();
+    const { behind, oldest, onlyPiggyback } = this.watermarkBacklog();
     const stalledForMs = oldest ? Date.now() - Date.parse(oldest.ts) : 0;
+    const stalled = oldest !== null && stalledForMs > WATERMARK_STALL_MS;
 
-    if (oldest === null || !(stalledForMs > WATERMARK_STALL_MS)) {
+    if (!stalled || onlyPiggyback) {
       if (this.watermarkStallAt >= 0 && this.watermarkStallAt !== watermark) {
         log.warn('投递水位停滞已解除:水位又开始推进了', {
           stalledAtCursor: this.watermarkStallAt,
@@ -1963,6 +1975,16 @@ export class MainLoop {
           caughtUp: watermark - this.watermarkStallAt,
         });
         this.watermarkStallAt = -1;
+      }
+      if (stalled && this.piggybackWaitNotedAt !== watermark) {
+        this.piggybackWaitNotedAt = watermark;
+        log.info(`${behind} 条搭车事件在等下一次唤醒,最老的等了 ${Math.round(stalledForMs / 60_000)} 分钟`, {
+          behind,
+          stalledForMs,
+          lastDeliveredCursor: watermark,
+          oldestCursor: oldest.cursor,
+          oldestSource: oldest.source,
+        });
       }
       return;
     }
