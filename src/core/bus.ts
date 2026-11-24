@@ -219,6 +219,13 @@ export class WakeBus {
     return n;
   }
 
+  /** 排队中、仍按 piggyback 等待的已落库事件游标。 */
+  piggybackCursors(): Set<number> {
+    const cursors = new Set<number>();
+    for (const q of this.queue) if (q.piggyback && q.item.event) cursors.add(q.item.event.cursor);
+    return cursors;
+  }
+
   /** 按原序取出匹配项，消费后不再投递。同步完成，不触发消费者或改变投递许可和计时器。 */
   drainPending(pred: (item: WakeItem) => boolean): WakeItem[] {
     const drained: WakeItem[] = [];

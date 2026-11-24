@@ -3503,6 +3503,47 @@ describe('MainLoop 失败流入账', () => {
       }
     });
 
+    /** 落库并以 piggyback 入总线的外部事件，与 World 推送搭车事件的路径相同。 */
+    function pushPiggyback(target: ReturnType<typeof makeRig>, ageMs: number, text: string): void {
+      const event = target.store.append({
+        type: 'desktop.context', ts: new Date(Date.now() - ageMs).toISOString(),
+        source: 'desktop', origin: 'external', text,
+      });
+      target.bus.push({ event }, { trigger: 'piggyback' });
+    }
+
+    it('积压全是总线里等唤醒的 piggyback 事件:不报 error,同一水位只记一条 info', () => {
+      const lines: Array<{ level: string; msg: string; data?: unknown }> = [];
+      const mk = (level: string) => (msg: string, data?: unknown) => lines.push({ level, msg, data });
+      rig = makeRig({
+        silent: true,
+        log: { ...nullLogger(), info: mk('info'), error: mk('error'), child: () => nullLogger() },
+      });
+      rig.state.data.lastDeliveredCursor = 0;
+      pushPiggyback(rig, 20 * 60_000, '搭车一');
+      pushPiggyback(rig, 10 * 60_000, '搭车二');
+      rig.loop.auditDeliveryWatermark();
+      rig.loop.auditDeliveryWatermark();
+      expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+      const infos = lines.filter((l) => l.level === 'info');
+      expect(infos).toHaveLength(1);
+      expect(infos[0].data).toMatchObject({ behind: 2, oldestCursor: 1, lastDeliveredCursor: 0 });
+    });
+
+    // 游标错位漏投、主循环不取批时，积压里会有不在总线里等搭车的事件，水位越不过它。
+    it('积压里有一条不在总线里的事件:即使其余都在等搭车,照旧报 error', () => {
+      const errors: Array<{ msg: string; data?: unknown }> = [];
+      rig = makeRig({
+        silent: true,
+        log: { ...nullLogger(), error: (msg, data) => errors.push({ msg, data }), child: () => nullLogger() },
+      });
+      seedStale(rig, 1, 20 * 60_000);
+      pushPiggyback(rig, 15 * 60_000, '搭车');
+      rig.loop.auditDeliveryWatermark();
+      expect(errors).toHaveLength(1);
+      expect(errors[0].data).toMatchObject({ behind: 2, oldestCursor: 1, oldestText: '迟迟没进上下文的第1条' });
+    });
+
     it('人工暂停期间事件本来就该堆着,不当停滞报', () => {
       const errors: Array<{ msg: string }> = [];
       rig = makeRig({
