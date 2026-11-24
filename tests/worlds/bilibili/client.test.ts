@@ -305,6 +305,99 @@ describe('LiveClient 重连握手收口', () => {
     socket.emit('message', encodePacket(OP.AUTH_REPLY, JSON.stringify({ code: 0 })));
   }
 
+  it('keeps the WebSocket live state in status updates during a retry', async () => {
+    vi.useFakeTimers();
+    const { calls } = stubHandshakeFetch({ liveStatus: 0 });
+    const events: Array<string | LiveStatus> = [];
+    const live = new LiveClient({
+      roomId: 7734200,
+      sessdata: '',
+      onCmd: (message) => events.push(String(message.cmd)),
+      onStatus: (status) => events.push(status),
+      log: nullLogger(),
+    });
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      const initial = live.current();
+      expect(initial).toMatchObject({ phase: 'connected', living: false });
+      events.length = 0;
+      const fetched = calls.length;
+
+      socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'LIVE' })));
+      socket.drop(1006, 'remote gone');
+
+      expect(calls).toHaveLength(fetched);
+      expect(events).toEqual([
+        'LIVE',
+        { ...initial, living: true, livingVia: 'command', liveStartedAt: null },
+        { ...initial, phase: 'retrying', lastError: '长连断开', living: true, livingVia: 'command', liveStartedAt: null },
+      ]);
+
+      await vi.advanceTimersByTimeAsync(2_000);
+      expect(calls.slice(fetched).some((url) => url.includes('Room/get_info'))).toBe(true);
+      expect(live.current()).toMatchObject({ living: false });
+    } finally {
+      await live.stop();
+    }
+  });
+
+  it('clears the live state and start time when WebSocket reports PREPARING', async () => {
+    vi.useFakeTimers();
+    stubHandshakeFetch({ liveStatus: 1 });
+    const live = client();
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      expect(live.current()).toMatchObject({ living: true, liveStartedAt: expect.any(Number) });
+
+      socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'PREPARING' })));
+
+      expect(live.current()).toMatchObject({ living: false, liveStartedAt: null });
+    } finally {
+      await live.stop();
+    }
+  });
+
+  it.each([
+    { first: 'command', via: 'command' },
+    { first: 'poll', via: 'room-info' },
+  ] as const)('指令和轮询先后到达($first 先):living 只改一次,记下先到的读数', async ({ first, via }) => {
+    vi.useFakeTimers();
+    const room = { liveStatus: 1 };
+    stubHandshakeFetch(room);
+    const seen: LiveStatus[] = [];
+    const live = new LiveClient({
+      roomId: 7734200,
+      sessdata: '',
+      onCmd: () => {},
+      onStatus: (status) => seen.push(status),
+      log: nullLogger(),
+    });
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      expect(live.current()).toMatchObject({ living: true });
+      seen.length = 0;
+      room.liveStatus = 0;
+      const preparing = (): void => {
+        socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'PREPARING' })));
+      };
+      if (first === 'command') preparing();
+      await vi.advanceTimersByTimeAsync(ROOM_POLL_MS + 100);
+      if (first === 'poll') preparing();
+
+      const changes = seen.filter((status, i) => status.living !== (seen[i - 1]?.living ?? true));
+      expect(changes).toEqual([expect.objectContaining({ living: false, livingVia: via })]);
+      expect(live.current().living).toBe(false);
+    } finally {
+      await live.stop();
+    }
+  });
+
   it('new WebSocket 带 handshakeTimeout;握手超时(error+close)走 fail() 退避重连', async () => {
     vi.useFakeTimers();
     stubHandshakeFetch();

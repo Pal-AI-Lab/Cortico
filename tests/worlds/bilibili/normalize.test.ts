@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { normalize } from '../../../src/worlds/bilibili/normalize.ts';
+import { ENTRY_INTERACTION_V2, interactionV2 } from './interaction-frames.ts';
 
 const OPTS = { giftFlushYuan: 1 };
 
@@ -202,7 +203,8 @@ describe('归一化', () => {
   });
 
   it('人流类只给计数与读数', () => {
-    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { msg_type: 1 } }, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
+    expect(normalize(ENTRY_INTERACTION_V2, OPTS)).toEqual({ kind: 'count', field: 'enter', by: 1 });
     expect(normalize({ cmd: 'LIKE_INFO_V3_CLICK', data: {} }, OPTS)).toEqual({ kind: 'count', field: 'like', by: 1 });
     expect(normalize({ cmd: 'WATCHED_CHANGE', data: { num: 288429 } }, OPTS)).toEqual({
       kind: 'gauge',
@@ -216,31 +218,20 @@ describe('归一化', () => {
     });
   });
 
+  it.each([2, 3, 4])('互动类型 %i 无进场计数', (msgType) => {
+    expect(normalize({ cmd: 'INTERACT_WORD', data: { msg_type: msgType } }, OPTS)).toBeNull();
+    expect(normalize(interactionV2(msgType), OPTS)).toBeNull();
+  });
+
+  it('缺少互动类型或字段截断时无进场计数', () => {
+    expect(normalize({ cmd: 'INTERACT_WORD', data: {} }, OPTS)).toBeNull();
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: {} }, OPTS)).toBeNull();
+    expect(normalize({ cmd: 'INTERACT_WORD_V2', data: { pb: 'KA==' } }, OPTS)).toBeNull();
+  });
+
   it('运营挂件与她自己的语音转写不推;没见过的 cmd 也不推', () => {
     for (const cmd of ['NOTICE_MSG', 'UNIVERSAL_ASR_TEXT', 'WIDGET_BANNER', 'SOME_NEW_CMD_2030']) {
       expect(normalize({ cmd, data: {} }, OPTS), cmd).toBeNull();
     }
-  });
-
-  // 开播与下播事件陈述平台侧状态及其后果，只报告事实。
-  it('开播/下播指令:flush 成事件,措辞陈述平台状态与后果', () => {
-    expect(normalize({ cmd: 'LIVE' }, OPTS)).toMatchObject({
-      kind: 'event',
-      type: 'bilibili.room',
-      trigger: 'flush',
-      text: expect.stringContaining('平台已推送开播指令'),
-    });
-    const preparing = normalize({ cmd: 'PREPARING' }, OPTS);
-    expect(preparing).toMatchObject({
-      kind: 'event',
-      type: 'bilibili.room',
-      trigger: 'flush',
-    });
-    const text = (preparing as { text: string }).text;
-    expect(text).toContain('平台已推送下播指令');
-    expect(text).toContain('看不到直播画面');
-    // 反向证据要提前说破:留场弹幕不代表还在播
-    expect(text).toContain('不代表直播还在');
-    expect(text).not.toMatch(/收尾|告别|停止|快去/);
   });
 });
