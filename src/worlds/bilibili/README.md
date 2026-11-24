@@ -75,7 +75,8 @@ World 每 2 秒轮询登录状态，成功后取响应 `Set-Cookie` 里的 SESSD
 | `bilibili.gift` | flush / debounce | 金额 ≥ `worlds.bilibili.giftFlushYuan` 走 flush,低于它先过短窗归并再排常规合批 |
 | `bilibili.guard-renew` | debounce | 续费 |
 | `bilibili.danmaku` | debounce | 弹幕 |
-| `bilibili.enter-guard` | debounce | 舰长进场(普通进场只计数) |
+| `bilibili.enter-guard` | debounce | 大航海成员的进场特效,`meta.guardLevel` 1 总督、2 提督、3 舰长 |
+| `bilibili.entry` | debounce | 其他观众的进场特效;没有特效的进场只计数 |
 | `bilibili.block` | debounce | 观众被禁言 |
 | `bilibili.room` | flush / debounce | 开播、下播、全员禁言走 flush;标题变更 debounce |
 | `bilibili.feed` | flush / debounce | 弹幕接入中断超过 60 秒成文一次(flush),恢复时补一条带中断时长(debounce);60 秒内的抖动不推 |

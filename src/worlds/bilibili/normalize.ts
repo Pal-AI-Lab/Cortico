@@ -226,16 +226,18 @@ export function normalize(msg: Record<string, unknown>, opts: NormalizeOptions):
     }
 
     case 'ENTRY_EFFECT': {
-      // 舰长进场特效。copy_writing 形如 "欢迎舰长 <%昵称%> 进入直播间"
+      // 进场特效。privilege_type 是大航海等级(1 总督、2 提督、3 舰长,0 不是);copy_writing 形如 "<%昵称%> 来了"
       const line = str(data.copy_writing).replace(/<%|%>/g, '').trim();
       if (!line) return null;
+      const guardLevel = num(data.privilege_type);
+      const uid = audienceUid(data);
       return {
         kind: 'event',
-        type: 'bilibili.enter-guard',
+        type: guardLevel > 0 ? 'bilibili.enter-guard' : 'bilibili.entry',
         trigger: 'debounce',
         text: `[进场] ${line}`,
-        senderKey: senderKeyOf(audienceUid(data)),
-        meta: { uid: audienceUid(data) },
+        senderKey: senderKeyOf(uid),
+        meta: guardLevel > 0 ? { uid, guardLevel } : { uid },
       };
     }
 
