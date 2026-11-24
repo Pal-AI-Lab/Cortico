@@ -38,7 +38,6 @@ import type {
   ToolOutcome,
   ToolSchema,
   ToolTag,
-  TurnEndedContext,
   WakeItem,
 } from './types.ts';
 import { defaultExternalizes } from './types.ts';
@@ -609,7 +608,7 @@ export class MainLoop {
   }
 
   /** 一轮结束时先通知 Persona，再通知可见 World。 */
-  private finishTurn(context: TurnEndedContext): void {
+  private finishTurn(context?: IncompleteTurnContext): void {
     if (!this.activeNow()) return;
     const { persona, worlds, log } = this.d;
     try {
@@ -1176,7 +1175,7 @@ export class MainLoop {
         const hard = this.exceededHardLimit();
         if (hard !== null) {
           log.warn('计数越过模型上下文上限,本批在轮边界收束,批末交接', { round, estTokens: this.estTokens(), hardTokens: hard });
-          this.finishTurn({ kind: 'overflow' });
+          this.finishTurn();
           return;
         }
       }
@@ -1216,14 +1215,13 @@ export class MainLoop {
        * preempt 或 interrupt 取消模型轮后，在同一批内接收新事件并开始下一轮；被取消的轮计入轮数。
        * 没有就绪事件或已到硬上限时结束本次唤醒，就绪事件留给下一批。
        */
-      const resumeAfterCancel = async (kind: 'preempted' | 'interrupted', arrivedEarly: EventEnvelope[]): Promise<boolean> => {
-        noteRound(kind);
+      const resumeAfterCancel = async (arrivedEarly: EventEnvelope[]): Promise<boolean> => {
         flight.phase = 'done';
         const ready = round < caps.hard ? bus.takeIfReady() : null;
         const arrived: WakeItem[] = [...arrivedEarly.map((event) => ({ event })), ...(ready ?? [])];
         if (!ready) {
           for (const item of arrived) bus.push(item, { trigger: 'flush' });
-          this.finishTurn({ kind });
+          this.finishTurn();
           return false;
         }
         await this.deliverBatch(arrived, generation, round);
@@ -1282,18 +1280,21 @@ export class MainLoop {
             await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
             this.tapAbort(tap, ABORT_INTERRUPTED);
-            if (await resumeAfterCancel('interrupted', queuedEvents)) continue;
+            noteRound('interrupted');
+            if (await resumeAfterCancel(queuedEvents)) continue;
             return;
           }
           // 关机、换代或抢占丢弃已成功返回的结果时，仍记录这次调用的实际用量。
           this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
           if (this.active(generation) && flight.abortReason === 'preempt') {
             this.tapAbort(tap, ABORT_PREEMPTED);
-            if (await resumeAfterCancel('preempted', [])) continue;
+            noteRound('preempted');
+            if (await resumeAfterCancel([])) continue;
             return;
           }
           this.tapAbort(tap, ABORT_SHUTDOWN);
           noteRound('discarded');
+          this.finishTurn();
           return;
         }
         meters = res.attempts[res.attempts.length - 1].meters;
@@ -1308,6 +1309,7 @@ export class MainLoop {
             this.tapAbort(tap, ABORT_SHUTDOWN);
             log.info('模型轮随关机终止');
             noteRound('shutdown');
+            this.finishTurn();
             return;
           }
           const interrupted = flight.abortReason === 'interrupt';
@@ -1318,7 +1320,8 @@ export class MainLoop {
           }
           this.tapAbort(tap, interrupted ? ABORT_INTERRUPTED : ABORT_PREEMPTED);
           log.info(interrupted ? '模型轮被新事件打断,已外化的输出保留' : '尚未外化的模型轮已被新输入抢占');
-          if (await resumeAfterCancel(interrupted ? 'interrupted' : 'preempted', queuedEvents)) continue;
+          noteRound(interrupted ? 'interrupted' : 'preempted');
+          if (await resumeAfterCancel(queuedEvents)) continue;
           return;
         }
         this.recordFailedUsage(e, prefixHash);
@@ -1341,7 +1344,7 @@ export class MainLoop {
           log.warn('上游拒绝:输入超过模型上下文,本批结束即交接', { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens() });
           this.handoffRequested = true;
           noteRound('overflow');
-          this.finishTurn({ kind: 'overflow' });
+          this.finishTurn();
           return;
         }
         consecutiveFailures++;
@@ -1373,7 +1376,7 @@ export class MainLoop {
         }
         log.error('LLM调用失败,本轮自然结束', detail);
         noteRound('failed', { resubmit: false });
-        this.finishTurn({ kind: 'failed' });
+        this.finishTurn();
         return;
       } finally {
         if (flight.phase === 'model') flight.phase = 'tools';
@@ -1397,7 +1400,7 @@ export class MainLoop {
       if (calls.length === 0) {
         if (incomplete) noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
         else noteRound('completed');
-        this.finishTurn(incomplete ?? { kind: 'completed' });
+        this.finishTurn(incomplete);
         return;
       }
 
@@ -1499,13 +1502,13 @@ export class MainLoop {
       // endsTurn 与自然结束使用同一出口；事件已退回总线。
       if (turnEnded) {
         noteRound('ended', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn({ kind: 'ended' });
+        this.finishTurn();
         return;
       }
       if (round >= caps.hard) {
         log.warn('硬上限强制结束本次唤醒', { round });
         noteRound('hard-cap', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn({ kind: 'hard-cap' });
+        this.finishTurn();
         return;
       }
       noteRound('continue', { toolCalls: calls.length, arrived: arrived.length });
@@ -1799,7 +1802,7 @@ export class MainLoop {
     if (!this.active(generation)) return;
     session.reset([sysMsg]);
     this.d.transcript?.boundary('clear', {});
-    this.finishTurn({ kind: 'cleared' });
+    this.finishTurn();
     this.pushOpening('cleared');
     log.emit('warn', 'session已清空重开', { event: 'session-cleared' });
   }
