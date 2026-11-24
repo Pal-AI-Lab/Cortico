@@ -67,7 +67,7 @@ describe('浏览器确认登录', () => {
   it('登录拿到的凭证接入后仍是匿名时，照已配置凭证的规则报错', async () => {
     const passport = await fakePassport([{ code: 0, cookies: [`SESSDATA=${RAW_SESSDATA}`] }]);
     const anonymous: LiveStatus = {
-      phase: 'connected', roomId: 6, realRoomId: 6, title: '测试间', living: false, liveStartedAt: null, selfUid: 0, lastError: null,
+      phase: 'connected', roomId: 6, realRoomId: 6, title: '测试间', living: false, livingVia: 'room-info', liveStartedAt: null, selfUid: 0, lastError: null,
     };
     let report: ((status: LiveStatus) => void) | null = null;
     const errors: string[] = [];

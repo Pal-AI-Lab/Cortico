@@ -84,7 +84,15 @@ export const BILIBILI: WorldDefinition<BilibiliConfigSection> = {
       },
       {
         type: 'bilibili.enter-guard',
-        description: { zh: '舰长等大航海成员进入直播间。', en: 'A guard member entered the room.' },
+        description: {
+          zh: '大航海成员带进场特效进入直播间,meta.guardLevel 为 1 总督、2 提督、3 舰长。',
+          en: 'A guard member entered the room with an entry effect; meta.guardLevel is 1 governor, 2 admiral, 3 captain.',
+        },
+        trigger: 'debounce',
+      },
+      {
+        type: 'bilibili.entry',
+        description: { zh: '不是大航海成员的观众带进场特效进入直播间。', en: 'A viewer who is not a guard member entered the room with an entry effect.' },
         trigger: 'debounce',
       },
       {

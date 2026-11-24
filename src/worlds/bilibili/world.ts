@@ -86,9 +86,6 @@ const UNNAMED_GIFT_SAMPLE_CAP = 16;
 /** GUARD_BUY 始终投递；同 uid、等级不冲突的后续 TOAST 在窗口内去重。 */
 const GUARD_DEDUP_WINDOW_MS = 8_000;
 
-/** WS 与轮询共用状态变化去重窗口；窗口长于轮询间隔。 */
-const ROOM_EDGE_DEDUP_MS = 180_000;
-
 /** 中断超过此窗口才告警并投递事件；每段中断只报告一次，恢复时报告持续时长。 */
 const FEED_OUTAGE_MS = 60_000;
 
@@ -294,7 +291,6 @@ export class BilibiliWorld implements World {
 
   private readonly recentGuard = new Map<string, { at: number; guardLevel?: number }>();
 
-  private lastRoomEdge: { living: boolean; at: number } | null = null;
   /** null 表示尚未取得有效房间状态。 */
   private lastKnownLiving: boolean | null = null;
   /** 中断开始的时间戳；null 表示已连接或未启动。 */
@@ -509,7 +505,6 @@ export class BilibiliWorld implements World {
     this.seenGiftNames.clear();
     this.unnamedGiftSamples = 0;
     this.recentGuard.clear();
-    this.lastRoomEdge = null;
     this.lastKnownLiving = null;
     this.clearFeedOutage();
     this.feedOutageReported = false;
@@ -688,17 +683,6 @@ export class BilibiliWorld implements World {
     const host = this.host;
     if (!host) return;
     if (!item) return;
-
-    if (cmd === 'LIVE') {
-      this.admission.startStream({ roomId: this.status?.realRoomId ?? this.opts.roomId });
-      this.lastKnownLiving = true;
-
-      if (!this.markRoomEdge(true, '弹幕服务器 LIVE 指令')) return;
-    } else if (cmd === 'PREPARING') {
-      this.admission.endStream();
-      this.lastKnownLiving = false;
-      if (!this.markRoomEdge(false, '弹幕服务器 PREPARING 指令')) return;
-    }
 
     if (item.kind === 'count') {
       if (item.field === 'freeGift') this.coalescing.breakRun('bilibili.gift');
@@ -1220,10 +1204,7 @@ export class BilibiliWorld implements World {
     if (status.realRoomId !== null) {
       const prev = this.lastKnownLiving;
       this.lastKnownLiving = status.living;
-      if (prev !== null && prev !== status.living
-        && this.markRoomEdge(status.living, `接口 live_status=${status.living ? 1 : 0}`)) {
-        this.announceRoomEdge(status.living);
-      }
+      if (prev !== null && prev !== status.living) this.announceRoomEdge(status);
     }
     if (status.living) {
       this.admission.startStream({ roomId, liveStartedAt: status.liveStartedAt });
@@ -1232,47 +1213,23 @@ export class BilibiliWorld implements World {
     }
   }
 
-  /** 记录状态变化并去重；新变化写日志并返回 true。 */
-  private markRoomEdge(living: boolean, via: string): boolean {
-    const now = Date.now();
-    const last = this.lastRoomEdge;
-    this.lastRoomEdge = { living, at: now };
-    if (last && last.living === living && now - last.at <= ROOM_EDGE_DEDUP_MS) {
-      this.host?.log.info('已过滤重复的直播状态通知', {
-        living,
-        via,
-        sinceMs: now - last.at,
-      });
-      return false;
-    }
+  /** `living` 变化时写日志并投递一条 flush 事件，正文写明读数来自弹幕服务器指令还是房间接口。 */
+  private announceRoomEdge({ living, livingVia }: LiveStatus): void {
+    const via = livingVia === 'command'
+      ? `弹幕服务器 ${living ? 'LIVE' : 'PREPARING'} 指令`
+      : `接口 live_status=${living ? 1 : 0}`;
     const roomId = this.status?.realRoomId ?? this.opts.roomId;
-    if (living) {
-      this.host?.log.warn(`平台侧直播间已开播(${via})`, { roomId });
-    } else {
-      this.host?.log.error(
-        `平台侧直播间未开播(${via})`,
-        { roomId },
-      );
-    }
-    return true;
-  }
-
-  /** 投递轮询发现的状态变化；WS 状态事件由 normalize 生成。 */
-  private announceRoomEdge(living: boolean): void {
-    this.pushNotice(living
-      ? {
-          kind: 'event',
-          type: 'bilibili.room',
-          trigger: 'flush',
-          text: '[直播间] 平台确认已开播(接口 live_status=1):直播画面已对观众可见',
-        }
-      : {
-          kind: 'event',
-          type: 'bilibili.room',
-          trigger: 'flush',
-          text: '[直播间] 平台确认已下播(接口 live_status=0):观众已经看不到直播画面;'
-            + '此后的弹幕来自仍留在房间页的人,不代表直播还在进行',
-        });
+    if (living) this.host?.log.warn(`平台侧直播间已开播(${via})`, { roomId });
+    else this.host?.log.error(`平台侧直播间未开播(${via})`, { roomId });
+    const lingering = '此后的弹幕来自仍留在房间页的人,不代表直播还在进行';
+    const text = livingVia === 'command'
+      ? (living
+          ? '[直播间] 平台已推送开播指令:直播画面已对观众可见'
+          : `[直播间] 平台已推送下播指令:直播已结束,观众已经看不到直播画面;${lingering}`)
+      : (living
+          ? '[直播间] 平台确认已开播(接口 live_status=1):直播画面已对观众可见'
+          : `[直播间] 平台确认已下播(接口 live_status=0):观众已经看不到直播画面;${lingering}`);
+    this.pushNotice({ kind: 'event', type: 'bilibili.room', trigger: 'flush', text });
   }
 
   /** 投递本 World 生成的通知前，先输出归并缓冲中的事件。 */

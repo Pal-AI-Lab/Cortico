@@ -425,6 +425,8 @@ export interface RoundCaps {
   hard: number;
   /** 第 soft 轮最后一条工具回执末尾的提示，由 Persona 提供；缺省或返回 null 时不追加。 */
   softHint?: () => string | null;
+  /** 硬上限结束本批的那一轮，最后一条工具回执末尾的提示，由 Persona 提供；缺省或返回 null 时不追加。 */
+  hardHint?: () => string | null;
 }
 
 /**
