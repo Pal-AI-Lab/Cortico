@@ -2107,6 +2107,7 @@ describe('MainLoop user事件协议', () => {
     rig.llm.script(toolReply([{ name: 'finish', id: 'explicit-end' }])); rig.pushEvent('Decide whether to stop.');
     await until(() => ended.length === 2);
     expect(ended[1]).toEqual({ kind: 'ended' });
+    await sleep(100); expect(rig.llm.calls).toHaveLength(2);
   });
 
   it('reports a model error separately when it exhausts the last round', async () => {
