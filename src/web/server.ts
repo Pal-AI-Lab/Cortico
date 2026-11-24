@@ -644,8 +644,8 @@ export interface WebAppConfigDeps {
  * 框架级 WebUI 契约。bot 专用的控制面由 WebUI 页(WebUI Page)提供。
  */
 export interface WebUiSurface {
-  /** 事件流(只读) */
-  store: EventStoreReader;
+  /** 事件流(只读)。rangeAsync 与 range 结果相同，读历史时让出事件循环。 */
+  store: EventStoreReader & { rangeAsync(q: EventRangeQuery): Promise<EventEnvelope[]> };
   /** persona/工作区绝对路径(工作区浏览) */
   memoryDir: string;
   /** data/目录绝对路径(runlog.jsonl / session-main.jsonl所在) */
@@ -1717,7 +1717,7 @@ export class WebApp {
 
     // 事件流按 store.range 的 from/to 游标区间查询，默认最近 100 条，to 用于向前翻页。
     // 默认隐藏 archive-only，避免原始归档与投影重复展示；不修改原始归档，archive=1 可查看全部记录。
-    app.get('/api/events', wrap((req, res) => {
+    app.get('/api/events', wrap(async (req, res) => {
       const q: EventRangeQuery = {};
       const from = intParam(req.query.from);
       if (from !== undefined) q.fromCursor = from;
@@ -1730,19 +1730,20 @@ export class WebApp {
       // 只给 from 是追新:从区间头部取最早的 limit 条,hasMore 表示后面还有没返回的记录。
       if (from !== undefined && to === undefined) {
         const latest = this.deps.store.latestCursor();
-        const all = this.deps.store.range({ ...q, toCursor: latest });
+        const all = await this.deps.store.rangeAsync({ ...q, toCursor: latest });
         const visible = withArchive ? all : dropArchiveOnly(all);
         res.json({ latest, events: visible.slice(0, limit), hasMore: visible.length > limit });
         return;
       }
       if (withArchive) {
         q.limit = limit;
-        res.json({ latest: this.deps.store.latestCursor(), events: this.deps.store.range(q) });
+        const events = await this.deps.store.rangeAsync(q);
+        res.json({ latest: this.deps.store.latestCursor(), events });
         return;
       }
       // 过滤会吃掉配额,所以多取一截再截尾——否则"最近 100 条"实际只剩一半。
       q.limit = clamp(limit * 2, 1, 2000);
-      const events = dropArchiveOnly(this.deps.store.range(q)).slice(-limit);
+      const events = dropArchiveOnly(await this.deps.store.rangeAsync(q)).slice(-limit);
       res.json({ latest: this.deps.store.latestCursor(), events });
     }));
 
