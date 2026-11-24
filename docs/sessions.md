@@ -13,7 +13,7 @@ Persona 声明,Core 只把 `role` 当分类标签。
 | 字段 | 含义 |
 |---|---|
 | `id`、`label` | 不透明 id 与展示名 |
-| `rounds()` | 软 / 硬轮数上限,函数以便热改 |
+| `rounds()` | 软 / 硬轮数上限与 Persona 提供的 `softHint`、`hardHint`(追加时机见 `src/core/README.md`「主循环」),函数以便热改 |
 | `persistent` | 是否落盘;临时 fork 不落 |
 | `receivesEvents` | 是否接收事件投递 |
 | `eventDelivery` | 事件以 `tool` 回执还是 `user` 消息进入上下文 |
