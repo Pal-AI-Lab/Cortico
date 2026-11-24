@@ -38,6 +38,10 @@ export class FakeStore implements EventStore {
     return out;
   }
 
+  async rangeAsync(q: EventRangeQuery): Promise<EventEnvelope[]> {
+    return this.range(q);
+  }
+
   around(cursor: number, before: number, after: number): EventEnvelope[] {
     const idx = this.events.findIndex((e) => e.cursor === cursor);
     if (idx < 0) return [];
