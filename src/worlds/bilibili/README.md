@@ -83,6 +83,9 @@ World 每 2 秒轮询登录状态，成功后取响应 `Set-Cookie` 里的 SESSD
 | `bilibili.superchat-del` | piggyback | |
 | `bilibili.audience` | piggyback + **投递成文** | 人流读数 |
 
+开播、下播只看 `LiveStatus.living` 的变化：弹幕服务器的 `LIVE` / `PREPARING` 指令、连接时读到的房间信息和
+每 100 秒一次的 `Room/get_info` 轮询都写它，读数没变不成文;正文写明这次变化来自指令还是接口。启动后的第一份房间状态只作基线。
+
 进场、点赞和免费礼物累计次数；看过、在线、人气与粉丝数记录接收时的读数。它们在 World 内累积，经 `pushDeferred` 随下一批事件投递，并在渲染正文后清零。待投递期间不重复登记；超过 5 分钟未渲染时允许重新登记。
 
 `normalize.ts` 的 `IGNORED` 列出不投递的 cmd，包括运营挂件、连麦玩法、全站广播及自身语音转写。未识别的 cmd 仍按原名称计数，并显示在 WebUI。

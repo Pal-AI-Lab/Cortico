@@ -331,8 +331,8 @@ describe('LiveClient 重连握手收口', () => {
       expect(calls).toHaveLength(fetched);
       expect(events).toEqual([
         'LIVE',
-        { ...initial, living: true, liveStartedAt: null },
-        { ...initial, phase: 'retrying', lastError: '长连断开', living: true, liveStartedAt: null },
+        { ...initial, living: true, livingVia: 'command', liveStartedAt: null },
+        { ...initial, phase: 'retrying', lastError: '长连断开', living: true, livingVia: 'command', liveStartedAt: null },
       ]);
 
       await vi.advanceTimersByTimeAsync(2_000);
@@ -356,6 +356,43 @@ describe('LiveClient 重连握手收口', () => {
       socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'PREPARING' })));
 
       expect(live.current()).toMatchObject({ living: false, liveStartedAt: null });
+    } finally {
+      await live.stop();
+    }
+  });
+
+  it.each([
+    { first: 'command', via: 'command' },
+    { first: 'poll', via: 'room-info' },
+  ] as const)('指令和轮询先后到达($first 先):living 只改一次,记下先到的读数', async ({ first, via }) => {
+    vi.useFakeTimers();
+    const room = { liveStatus: 1 };
+    stubHandshakeFetch(room);
+    const seen: LiveStatus[] = [];
+    const live = new LiveClient({
+      roomId: 7734200,
+      sessdata: '',
+      onCmd: () => {},
+      onStatus: (status) => seen.push(status),
+      log: nullLogger(),
+    });
+    await live.start();
+    try {
+      const socket = wsFake.sockets[0];
+      authenticate(socket);
+      expect(live.current()).toMatchObject({ living: true });
+      seen.length = 0;
+      room.liveStatus = 0;
+      const preparing = (): void => {
+        socket.emit('message', encodePacket(OP.MESSAGE, JSON.stringify({ cmd: 'PREPARING' })));
+      };
+      if (first === 'command') preparing();
+      await vi.advanceTimersByTimeAsync(ROOM_POLL_MS + 100);
+      if (first === 'poll') preparing();
+
+      const changes = seen.filter((status, i) => status.living !== (seen[i - 1]?.living ?? true));
+      expect(changes).toEqual([expect.objectContaining({ living: false, livingVia: via })]);
+      expect(live.current().living).toBe(false);
     } finally {
       await live.stop();
     }

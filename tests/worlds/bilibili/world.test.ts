@@ -189,6 +189,7 @@ const STATUS: LiveStatus = {
   realRoomId: 7734200,
   title: '测试间',
   living: true,
+  livingVia: 'room-info',
   liveStartedAt: null,
   selfUid: 1039523363,
   lastError: null,
@@ -207,6 +208,7 @@ interface Mounted {
 async function mount(
   opts: Partial<BilibiliWorldOptions> = {},
   host: FakeHost = new FakeHost(),
+  initial: LiveStatus = STATUS,
 ): Promise<Mounted> {
   let handlers: LiveHandlers | null = null;
   const module = new BilibiliWorld({
@@ -215,9 +217,9 @@ async function mount(
     source: (h) => {
       handlers = h;
       return {
-        start: async () => h.onStatus(STATUS),
+        start: async () => h.onStatus(initial),
         stop: async () => {},
-        current: () => STATUS,
+        current: () => initial,
       };
     },
   });
@@ -1202,7 +1204,7 @@ describe('BilibiliWorld', () => {
     });
   });
 
-  describe('直播状态沿:转沿成文与双源去重', () => {
+  describe('直播状态沿:只按 LiveStatus.living 的变化成文', () => {
     it('轮询状态变为下播时投递事件并记录 error', async () => {
       const { module, host, setStatus } = await mount();
       setStatus({ ...STATUS, living: false });
@@ -1226,9 +1228,6 @@ describe('BilibiliWorld', () => {
     it('关播后轮询读到 living false→true:成文再开播事件,不再是 error', async () => {
       const { module, host, setStatus } = await mount();
       setStatus({ ...STATUS, living: false });
-      // 让去重窗过期,模拟真实的隔窗再开播
-      const edge = (module as unknown as { lastRoomEdge: { living: boolean; at: number } | null }).lastRoomEdge;
-      if (edge) edge.at -= 200_000;
       setStatus({ ...STATUS, living: true });
       await module.stop();
 
@@ -1241,33 +1240,38 @@ describe('BilibiliWorld', () => {
       expect(host.logs.some((log) => log.level === 'warn' && log.msg.includes('已开播'))).toBe(true);
     });
 
-    it('WS PREPARING 先到:轮询随后的同状态沿在短窗内不双报', async () => {
+    it('下播指令由状态带来:只成文一次,正文陈述指令与后果', async () => {
       const { module, host, feed, setStatus } = await mount();
       feed({ cmd: 'PREPARING' });
-      setStatus({ ...STATUS, living: false });
+      expect(host.events.filter((e) => e.type === 'bilibili.room')).toHaveLength(0);
+      setStatus({ ...STATUS, living: false, livingVia: 'command' });
+      setStatus({ ...STATUS, living: false, livingVia: 'room-info' });
       await module.stop();
 
       const room = host.events.filter((e) => e.type === 'bilibili.room');
       expect(room).toHaveLength(1);
-
       expect(room[0].text).toContain('平台已推送下播指令');
+      expect(room[0].text).toContain('看不到直播画面');
+      // 留场弹幕的反向证据要提前说破
       expect(room[0].text).toContain('不代表直播还在');
-
-      expect(host.logs.filter((log) => log.level === 'error' && log.msg.includes('直播间未开播'))).toHaveLength(1);
+      expect(room[0].text).not.toMatch(/收尾|告别|停止|快去/);
+      expect(host.logs.filter((log) => log.level === 'error' && log.msg.includes('弹幕服务器 PREPARING 指令'))).toHaveLength(1);
     });
 
-    it('轮询先发现:WS 迟到的 PREPARING 在短窗内同样被吞', async () => {
-      const { module, host, feed, setStatus } = await mount();
-      setStatus({ ...STATUS, living: false });
-      feed({ cmd: 'PREPARING' });
+    it('开播后马上重连:状态带来的开播只投一条,断线与重读房间不再成文', async () => {
+      const offline: LiveStatus = { ...STATUS, living: false };
+      const { module, host, feed, setStatus } = await mount({}, new FakeHost(), offline);
+      feed({ cmd: 'LIVE' });
+      setStatus({ ...offline, living: true, livingVia: 'command' });
+      setStatus({ ...offline, phase: 'retrying', lastError: '长连断开', living: true, livingVia: 'command' });
+      setStatus({ ...offline, phase: 'connecting', living: true, livingVia: 'command' });
+      setStatus({ ...offline, living: true, livingVia: 'room-info' });
       await module.stop();
 
-      const room = host.events.filter((e) => e.type === 'bilibili.room');
-      expect(room).toHaveLength(1);
-      expect(room[0].text).toContain('平台确认已下播');
-      expect(host.logs.filter((log) => log.level === 'error')).toHaveLength(1);
-
-      expect(host.logs.some((log) => log.msg.includes('已过滤重复的直播状态通知'))).toBe(true);
+      expect(host.events.filter((e) => e.type === 'bilibili.room').map((e) => e.text)).toEqual([
+        expect.stringContaining('平台已推送开播指令'),
+      ]);
+      expect(host.logs.filter((log) => log.level === 'error')).toHaveLength(0);
     });
 
     it('首个状态观察只定基线:开播中启动不冒充"刚开播"', async () => {
