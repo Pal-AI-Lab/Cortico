@@ -38,7 +38,6 @@ import type {
   ToolOutcome,
   ToolSchema,
   ToolTag,
-  TurnEndedContext,
   WakeItem,
 } from './types.ts';
 import { defaultExternalizes } from './types.ts';
@@ -330,6 +329,8 @@ export class MainLoop {
   private watermarkStallBehind = 0;
   /** 同一次停滞已报次数(首报计 1) */
   private watermarkStallReports = 0;
+  /** 已记过 piggyback 等待的水位，-1 表示未记。 */
+  private piggybackWaitNotedAt = -1;
   /**
    * 最近成功请求的输入与输出 token 总数，覆盖前 records 条（含响应）。
    * 新增条目使用本地估算，下次成功后更新计数；上下文整体重写后失效。
@@ -609,7 +610,7 @@ export class MainLoop {
   }
 
   /** 一轮结束时先通知 Persona，再通知可见 World。 */
-  private finishTurn(context: TurnEndedContext): void {
+  private finishTurn(context?: IncompleteTurnContext): void {
     if (!this.activeNow()) return;
     const { persona, worlds, log } = this.d;
     try {
@@ -1176,7 +1177,7 @@ export class MainLoop {
         const hard = this.exceededHardLimit();
         if (hard !== null) {
           log.warn('计数越过模型上下文上限,本批在轮边界收束,批末交接', { round, estTokens: this.estTokens(), hardTokens: hard });
-          this.finishTurn({ kind: 'overflow' });
+          this.finishTurn();
           return;
         }
       }
@@ -1216,14 +1217,13 @@ export class MainLoop {
        * preempt 或 interrupt 取消模型轮后，在同一批内接收新事件并开始下一轮；被取消的轮计入轮数。
        * 没有就绪事件或已到硬上限时结束本次唤醒，就绪事件留给下一批。
        */
-      const resumeAfterCancel = async (kind: 'preempted' | 'interrupted', arrivedEarly: EventEnvelope[]): Promise<boolean> => {
-        noteRound(kind);
+      const resumeAfterCancel = async (arrivedEarly: EventEnvelope[]): Promise<boolean> => {
         flight.phase = 'done';
         const ready = round < caps.hard ? bus.takeIfReady() : null;
         const arrived: WakeItem[] = [...arrivedEarly.map((event) => ({ event })), ...(ready ?? [])];
         if (!ready) {
           for (const item of arrived) bus.push(item, { trigger: 'flush' });
-          this.finishTurn({ kind });
+          this.finishTurn();
           return false;
         }
         await this.deliverBatch(arrived, generation, round);
@@ -1282,18 +1282,21 @@ export class MainLoop {
             await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
             this.tapAbort(tap, ABORT_INTERRUPTED);
-            if (await resumeAfterCancel('interrupted', queuedEvents)) continue;
+            noteRound('interrupted');
+            if (await resumeAfterCancel(queuedEvents)) continue;
             return;
           }
           // 关机、换代或抢占丢弃已成功返回的结果时，仍记录这次调用的实际用量。
           this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
           if (this.active(generation) && flight.abortReason === 'preempt') {
             this.tapAbort(tap, ABORT_PREEMPTED);
-            if (await resumeAfterCancel('preempted', [])) continue;
+            noteRound('preempted');
+            if (await resumeAfterCancel([])) continue;
             return;
           }
           this.tapAbort(tap, ABORT_SHUTDOWN);
           noteRound('discarded');
+          this.finishTurn();
           return;
         }
         meters = res.attempts[res.attempts.length - 1].meters;
@@ -1308,6 +1311,7 @@ export class MainLoop {
             this.tapAbort(tap, ABORT_SHUTDOWN);
             log.info('模型轮随关机终止');
             noteRound('shutdown');
+            this.finishTurn();
             return;
           }
           const interrupted = flight.abortReason === 'interrupt';
@@ -1318,7 +1322,8 @@ export class MainLoop {
           }
           this.tapAbort(tap, interrupted ? ABORT_INTERRUPTED : ABORT_PREEMPTED);
           log.info(interrupted ? '模型轮被新事件打断,已外化的输出保留' : '尚未外化的模型轮已被新输入抢占');
-          if (await resumeAfterCancel(interrupted ? 'interrupted' : 'preempted', queuedEvents)) continue;
+          noteRound(interrupted ? 'interrupted' : 'preempted');
+          if (await resumeAfterCancel(queuedEvents)) continue;
           return;
         }
         this.recordFailedUsage(e, prefixHash);
@@ -1341,7 +1346,7 @@ export class MainLoop {
           log.warn('上游拒绝:输入超过模型上下文,本批结束即交接', { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens() });
           this.handoffRequested = true;
           noteRound('overflow');
-          this.finishTurn({ kind: 'overflow' });
+          this.finishTurn();
           return;
         }
         consecutiveFailures++;
@@ -1373,7 +1378,7 @@ export class MainLoop {
         }
         log.error('LLM调用失败,本轮自然结束', detail);
         noteRound('failed', { resubmit: false });
-        this.finishTurn({ kind: 'failed' });
+        this.finishTurn();
         return;
       } finally {
         if (flight.phase === 'model') flight.phase = 'tools';
@@ -1397,7 +1402,7 @@ export class MainLoop {
       if (calls.length === 0) {
         if (incomplete) noteRound('incomplete', { responseId: incomplete.responseId, incompleteReason: incomplete.incompleteReason });
         else noteRound('completed');
-        this.finishTurn(incomplete ?? { kind: 'completed' });
+        this.finishTurn(incomplete);
         return;
       }
 
@@ -1501,13 +1506,13 @@ export class MainLoop {
       // endsTurn 与自然结束使用同一出口；事件已退回总线。
       if (turnEnded) {
         noteRound('ended', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn({ kind: 'ended' });
+        this.finishTurn();
         return;
       }
       if (round >= caps.hard) {
         log.warn('硬上限强制结束本次唤醒', { round });
         noteRound('hard-cap', { toolCalls: calls.length, arrived: arrived.length });
-        this.finishTurn({ kind: 'hard-cap' });
+        this.finishTurn();
         return;
       }
       noteRound('continue', { toolCalls: calls.length, arrived: arrived.length });
@@ -1801,7 +1806,7 @@ export class MainLoop {
     if (!this.active(generation)) return;
     session.reset([sysMsg]);
     this.d.transcript?.boundary('clear', {});
-    this.finishTurn({ kind: 'cleared' });
+    this.finishTurn();
     this.pushOpening('cleared');
     log.emit('warn', 'session已清空重开', { event: 'session-cleared' });
   }
@@ -1923,25 +1928,32 @@ export class MainLoop {
     this.d.bus.push(this.internalItem('core', 'core.stall', text));
   }
 
-  /** 水位积压扫描:该进上下文却还没投递的外部事件计数与最老一条(巡查与状态面共用)。 */
-  private watermarkBacklog(): { behind: number; oldest: EventEnvelope | null } {
-    const { state, store } = this.d;
+  /**
+   * 水位积压扫描:该进上下文却还没投递的外部事件计数与最老一条(巡查与状态面共用)。
+   * onlyPiggyback 表示积压里每一条都还在总线里按 piggyback 等待。
+   */
+  private watermarkBacklog(): { behind: number; oldest: EventEnvelope | null; onlyPiggyback: boolean } {
+    const { bus, state, store } = this.d;
     const latest = store.latestCursor();
+    const waiting = bus.piggybackCursors();
     let behind = 0;
     let oldest: EventEnvelope | null = null;
+    let onlyPiggyback = true;
     for (let c = state.data.lastDeliveredCursor + 1; c <= latest; c++) {
       const e = store.get(c);
       if (!e) continue;
       if (e.origin !== 'external' || e.contextDelivery === 'archive-only') continue;
       behind++;
       if (!oldest) oldest = e;
+      if (!waiting.has(c)) onlyPiggyback = false;
     }
-    return { behind, oldest };
+    return { behind, oldest, onlyPiggyback };
   }
 
   /**
    * 最老的待投递外部事件等待超过 WATERMARK_STALL_MS 时报告 error，不自动修复。
    * 人工暂停或投递 gate 生效时不告警；仅含内部事件或 archive-only 原文的积压不触发该告警。等待 projector 的原文仍须由连续水位规则保护。
+   * 积压全部是总线里等待下一次唤醒的 piggyback 事件时，每个水位只记一条 info；有一条不在总线里或不是 piggyback 就报 error。
    * 公开入口供巡查、测试与 WebUI 调用。
    */
   auditDeliveryWatermark(): void {
@@ -1951,10 +1963,11 @@ export class MainLoop {
     if (bus.isPaused() || bus.isDeliveryBlocked()) return;
 
     const latest = store.latestCursor();
-    const { behind, oldest } = this.watermarkBacklog();
+    const { behind, oldest, onlyPiggyback } = this.watermarkBacklog();
     const stalledForMs = oldest ? Date.now() - Date.parse(oldest.ts) : 0;
+    const stalled = oldest !== null && stalledForMs > WATERMARK_STALL_MS;
 
-    if (oldest === null || !(stalledForMs > WATERMARK_STALL_MS)) {
+    if (!stalled || onlyPiggyback) {
       if (this.watermarkStallAt >= 0 && this.watermarkStallAt !== watermark) {
         log.warn('投递水位停滞已解除:水位又开始推进了', {
           stalledAtCursor: this.watermarkStallAt,
@@ -1962,6 +1975,16 @@ export class MainLoop {
           caughtUp: watermark - this.watermarkStallAt,
         });
         this.watermarkStallAt = -1;
+      }
+      if (stalled && this.piggybackWaitNotedAt !== watermark) {
+        this.piggybackWaitNotedAt = watermark;
+        log.info(`${behind} 条搭车事件在等下一次唤醒,最老的等了 ${Math.round(stalledForMs / 60_000)} 分钟`, {
+          behind,
+          stalledForMs,
+          lastDeliveredCursor: watermark,
+          oldestCursor: oldest.cursor,
+          oldestSource: oldest.source,
+        });
       }
       return;
     }

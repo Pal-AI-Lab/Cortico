@@ -266,7 +266,7 @@ export class Cormini implements Persona {
   protected pressureSplitAt: number | null = null;
   /** 最近一份交接笔记的工作区路径;醒来那句话用它指路 */
   protected lastHandoffFile: string | null = null;
-  /** 交接之后还没过批末检查;下一次批末据此判断交接有没有把计数压回软阈值 */
+  /** 交接之后还没投递过;下一次投递据此判断交接有没有把计数压回软阈值 */
   private handedOff = false;
   /** 在这个软阈值下前缀清单只列顶层;计数回到软阈值内即恢复常规清单 */
   private compactListingAt: number | null = null;
@@ -573,7 +573,7 @@ export class Cormini implements Persona {
    * 其余目录直属文件超过 LIST_DIR_CAP 份的,同样折叠为一行计数(场次蒸馏一场几份,会越攒越多)。
    * Fallback:一棵子树逐行列出的路径总字符数超过 wholeReadFallbackChars() 时,整棵折成一行计数
    * (每层只有几份、总数上万的深树)。点名这个目录的 list_files 能看到全部,常驻前缀里的一棵子树
-   * 不比一次整份读取能交回的更大。onBatchEnd 判定交接没能把计数压回软阈值后,只列顶层各项与计数。
+   * 不比一次整份读取能交回的更大。交接后第一次投递判定交接没能把计数压回软阈值后,只列顶层各项与计数。
    */
   protected prefixWorkspaceListing(): string {
     const files = this.memory.walkFiles();
@@ -629,25 +629,34 @@ export class Cormini implements Persona {
   onDelivery(ctx: { events: EventEnvelope[] }): void {
     // 批内轮间的投递也走这里,只记第一次
     this.batchOpenedAt ??= Date.now();
+    if (this.handedOff) {
+      this.handedOff = false;
+      this.checkHandoffFloor();
+    }
     const externals = ctx.events.filter((e) => e.origin === 'external');
     if (externals.length === 0) return;
     // 外部事件投递复位静默时长。
     this.heartbeat.noteActivity();
-    this.core?.injectInternal(deliveryNotice(externals.length), 'notice');
+    this.core?.injectInternal(this.deliveryNotice(externals), 'notice');
+  }
+
+  /**
+   * 每批外部事件的投递计数通知。覆写时保留「[system] N 条新事件」的开头,补充接在逗号之后、以句号收尾,
+   * 交接笔记按这个形状剔除它。
+   */
+  protected deliveryNotice(externals: EventEnvelope[]): string {
+    return deliveryNotice(externals.length);
   }
 
   /**
    * 批末压力裁量:超软阈值先注入速记提醒(她拿到一轮落笔时间——提醒项挂 flush,
    * 下一批必含它),再超就请求交接。阶段预算是自己的裁量;越过模型物理上限的
    * 强制交接在 core。
-   * 交接后的第一次批末仍超软阈值时,前缀清单改为只列顶层再交接一次;还超就在这个软阈值下停止提醒
-   * 与交接,照常运行。交接笔记与提醒各自唤醒一批,交接压不回计数时不停下就会接连交接。
+   * 交接压不回计数时的处理见 checkHandoffFloor。
    */
   onBatchEnd(): void {
     const openedAt = this.batchOpenedAt;
     this.batchOpenedAt = null;
-    const afterHandoff = this.handedOff;
-    this.handedOff = false;
     const core = this.core;
     if (!core) return;
     const info = core.sessionInfo(MAIN);
@@ -659,10 +668,6 @@ export class Cormini implements Persona {
       return;
     }
     if (this.handoffUnreachableAt === soft) return;
-    if (afterHandoff) {
-      this.handoffFellShort(core, soft, info.estTokens);
-      return;
-    }
     if (!this.pressureWarned) {
       this.pressureWarned = true;
       // 越过软阈值的这一批是"当前语境"的起点:交接笔记按它把上一窗切成更早的历史与最近的一段。
@@ -681,10 +686,16 @@ export class Cormini implements Persona {
   }
 
   /**
-   * 交接后计数仍超软阈值:先改列最简清单再交接一次,并请 bot 整理记忆(每个软阈值一次);
-   * 已是最简清单就记下这个软阈值不可达。
+   * 交接后第一次投递时的计数是新 session 的下限:重建的前缀与空尾,这一批还没进上下文。它仍超软阈值时,
+   * 先改列最简清单再交接一次,并请 bot 整理记忆(每个软阈值一次);已是最简清单就记下这个软阈值不可达,
+   * 不再提醒与交接,照常运行。交接笔记与提醒各自唤醒一批,下限超阈值时不停下就会接连交接。
    */
-  private handoffFellShort(core: CoreApi, soft: number, estTokens: number): void {
+  private checkHandoffFloor(): void {
+    const core = this.core;
+    if (!core) return;
+    const estTokens = core.sessionInfo(MAIN).estTokens;
+    const soft = this.softThreshold();
+    if (estTokens === null || estTokens <= soft) return;
     const { maxTokens, softRatio } = this.context();
     if (this.compactListingAt !== soft) {
       this.compactListingAt = soft;

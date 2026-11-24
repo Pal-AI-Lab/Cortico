@@ -20,7 +20,7 @@ import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
 import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_BARRIER, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED, streamedPastBarrier } from '../../src/core/markers.ts';
-import type { UsageRecord, Persona, TurnEndedContext } from '../../src/core/types.ts';
+import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import { functionCall, functionResult, type ContextRecord } from '../../src/protocol/open-responses/context.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
@@ -271,15 +271,14 @@ describe('MainLoop standard Response execution', () => {
       rig.start(); rig.pushEvent('go');
       await until(() => ended.mock.calls.length === 1);
       expect(worldEnded.mock.calls).toEqual(ended.mock.calls);
-      expect(ended.mock.calls[0]).toHaveLength(1);
-      const [context] = ended.mock.calls[0];
+      const context = ended.mock.calls[0][0];
       const rounds = emitted.mock.calls.map(([, , event]) => event).filter(event => event?.event === 'round');
       expect(rounds).toHaveLength(1);
       expect(rounds[0]?.data).toMatchObject({ outcome: status });
       if (status === 'incomplete') {
         expect(context).toEqual({ kind: 'response-incomplete', responseId: 'r_without_calls', incompleteReason: reason });
       } else {
-        expect(context).toEqual({ kind: 'completed' });
+        expect(context).toBeUndefined();
       }
       if (partial) expect(rig.session.records.find(entry => entry.context.responseId === 'r_without_calls')?.context)
         .toMatchObject({ responseStatus: status, incompleteReason: reason });
@@ -308,7 +307,7 @@ describe('MainLoop standard Response execution', () => {
       expect(act).toHaveBeenCalledTimes(1);
       expect(rig.session.records.find(entry => entry.item.type === 'function_call_output' && entry.item.call_id === 'one_call')).toBeDefined();
       expect(rig.session.records.find(entry => entry.context.responseId === 'r_with_call')?.context.incompleteReason).toBe('max_output_tokens');
-      expect(ended.mock.calls[0]).toEqual([{ kind: 'completed' }]);
+      expect(ended.mock.calls[0][0]).toBeUndefined();
     } finally { await rig.cleanup(); }
   });
 
@@ -370,9 +369,7 @@ describe('MainLoop standard Response execution', () => {
   it('rejects late events and output after preempt while retaining the consumed attempt', async () => {
     const usage: UsageRecord[] = [];
     const seen: string[] = [];
-    const ended: TurnEndedContext[] = [];
-    const rig = makeRig({ silent: true, tracker: new SessionTracker('UTC', row => usage.push(row)),
-      outputTap: { onDelta: delta => seen.push(delta.type) }, hooks: { onTurnEnded: context => { ended.push(context); } } });
+    const rig = makeRig({ silent: true, tracker: new SessionTracker('UTC', row => usage.push(row)), outputTap: { onDelta: delta => seen.push(delta.type) } });
     let started = false;
     let release!: () => void;
     const gate = new Promise<void>(resolve => { release = resolve; });
@@ -396,7 +393,6 @@ describe('MainLoop standard Response execution', () => {
       expect(seen).toEqual([]);
       expect(rig.session.records.some(entry => entry.context.responseId === 'late')).toBe(false);
       expect(usage[0].attempt).toMatchObject({ outcome: 'discarded', meters: { input: 10, output: 2 } });
-      expect(ended).toEqual([{ kind: 'preempted' }]);
     } finally { release(); await rig.cleanup(); }
   });
 });
@@ -1973,9 +1969,7 @@ describe('MainLoop user事件协议', () => {
 
   it('上游拒绝"输入超过上下文":本批结束即交接,不等下一次计数', async () => {
     let handoffs = 0;
-    const ended: TurnEndedContext[] = [];
     rig = makeRig({
-      hooks: { onTurnEnded: context => { ended.push(context); } },
       context: { contextOverflow: (error) => error.status === 400 && /context length/.test(error.body) },
       onHandoff: async () => { handoffs++; return { tail: [] }; },
     });
@@ -1985,7 +1979,6 @@ describe('MainLoop user事件协议', () => {
       rig.llm.throwNext = new LLMError('LLM API 400', 400, "This model's maximum context length is 128000 tokens");
       rig.pushEvent('[10:05] 阿明: 在吗');
       await until(() => handoffs >= 1);
-      expect(ended.filter(context => context.kind === 'overflow')).toHaveLength(1);
       // 普通 400 不触发
       rig.llm.throwNext = new LLMError('LLM API 400', 400, 'Model Not Exist');
       rig.pushEvent('[10:06] 阿明: 还在吗');
@@ -2092,63 +2085,12 @@ describe('MainLoop user事件协议', () => {
     expect(ended).toBe(2);
   });
 
-  it('lets a Persona read the last receipt on hard-cap and wake once without replaying the tool', async () => {
-    const ended: TurnEndedContext[] = [];
-    const visible: TurnEndedContext[] = [];
-    const lookup = vi.fn(() => 'No matching entry');
-    const world = makeFakeIO('qq', [makeTool('lookup', lookup)]);
-    world.onTurnEnded = context => { visible.push(context); };
-    rig = makeRig({
-      silent: true, worlds: [world], cfgPatch: cfg => { cfg.loop.hardCap = 1; },
-      hooks: { onTurnEnded(context) {
-        ended.push(context);
-        if (context.kind === 'hard-cap') {
-          const receipt = rig.session.messages.at(-1);
-          if (receipt?.tool_call_id) rig.loop.injectInternal(`Review receipt ${receipt.tool_call_id}.`);
-        }
-      } },
-    });
-    rig.llm.script(toolReply([{ name: 'lookup', id: 'last-lookup' }]), textReply('Read the result.'));
-    rig.start(); rig.pushEvent('Look up the entry.');
-    await until(() => ended.length === 2);
-    expect(ended).toEqual([{ kind: 'hard-cap' }, { kind: 'completed' }]);
-    expect(visible).toEqual(ended);
-    const followUp = rig.llm.calls[1].messages;
-    expect(followUp).toContainEqual(expect.objectContaining({ tool_call_id: 'last-lookup', content: 'No matching entry' }));
-    expect(JSON.stringify(followUp)).toContain('Review receipt last-lookup.');
-    expect(lookup).toHaveBeenCalledTimes(1);
-    expect(rig.llm.calls).toHaveLength(2);
-  });
-
-  it('reports an explicit end-turn separately when it executes on the last budgeted round', async () => {
-    const ended: TurnEndedContext[] = [];
-    const endTool: ToolDef = { ...makeTool('finish', 'Done.'), endsTurn: true };
-    rig = makeRig({ worlds: [makeFakeIO('qq', [endTool])], cfgPatch: cfg => { cfg.loop.hardCap = 1; },
-      hooks: { onTurnEnded: context => { ended.push(context); } } });
-    rig.start(); await until(() => ended.length === 1);
-    rig.llm.script(toolReply([{ name: 'finish', id: 'explicit-end' }])); rig.pushEvent('Decide whether to stop.');
-    await until(() => ended.length === 2);
-    expect(ended[1]).toEqual({ kind: 'ended' });
-  });
-
-  it('reports a model error separately when it exhausts the last round', async () => {
-    const ended: TurnEndedContext[] = [];
-    rig = makeRig({ cfgPatch: cfg => { cfg.loop.hardCap = 1; },
-      hooks: { onTurnEnded: context => { ended.push(context); } } });
-    rig.start(); await until(() => ended.length === 1);
-    rig.llm.throwNext = new LLMError('fixture model failure', 503, 'Temporarily unavailable'); rig.pushEvent('New input.');
-    await until(() => ended.length === 2);
-    expect(ended[1]).toEqual({ kind: 'failed' });
-  });
-
   it('clearSession只保留system，随后boot以user消息重开且仍可继续', async () => {
-    const ended: TurnEndedContext[] = [];
-    rig = makeRig({ hooks: { onTurnEnded: context => { ended.push(context); } } });
+    rig = makeRig();
     rig.start();
     await until(() => rig.llm.calls.length >= 1);
     expect(JSON.stringify(rig.session.messages)).toContain('Session started.');
     await rig.loop.clearSession();
-    expect(ended.filter(context => context.kind === 'cleared')).toHaveLength(1);
     // 清空后的开场随即作为 user 消息投递,这里只断言旧内容一条不剩。
     expect(rig.session.messages[0].role).toBe('system');
     expect(JSON.stringify(rig.session.messages)).not.toContain('Session started.');
@@ -3581,6 +3523,47 @@ describe('MainLoop 失败流入账', () => {
       } finally {
         nowSpy.mockRestore();
       }
+    });
+
+    /** 落库并以 piggyback 入总线的外部事件，与 World 推送搭车事件的路径相同。 */
+    function pushPiggyback(target: ReturnType<typeof makeRig>, ageMs: number, text: string): void {
+      const event = target.store.append({
+        type: 'desktop.context', ts: new Date(Date.now() - ageMs).toISOString(),
+        source: 'desktop', origin: 'external', text,
+      });
+      target.bus.push({ event }, { trigger: 'piggyback' });
+    }
+
+    it('积压全是总线里等唤醒的 piggyback 事件:不报 error,同一水位只记一条 info', () => {
+      const lines: Array<{ level: string; msg: string; data?: unknown }> = [];
+      const mk = (level: string) => (msg: string, data?: unknown) => lines.push({ level, msg, data });
+      rig = makeRig({
+        silent: true,
+        log: { ...nullLogger(), info: mk('info'), error: mk('error'), child: () => nullLogger() },
+      });
+      rig.state.data.lastDeliveredCursor = 0;
+      pushPiggyback(rig, 20 * 60_000, '搭车一');
+      pushPiggyback(rig, 10 * 60_000, '搭车二');
+      rig.loop.auditDeliveryWatermark();
+      rig.loop.auditDeliveryWatermark();
+      expect(lines.filter((l) => l.level === 'error')).toHaveLength(0);
+      const infos = lines.filter((l) => l.level === 'info');
+      expect(infos).toHaveLength(1);
+      expect(infos[0].data).toMatchObject({ behind: 2, oldestCursor: 1, lastDeliveredCursor: 0 });
+    });
+
+    // 游标错位漏投、主循环不取批时，积压里会有不在总线里等搭车的事件，水位越不过它。
+    it('积压里有一条不在总线里的事件:即使其余都在等搭车,照旧报 error', () => {
+      const errors: Array<{ msg: string; data?: unknown }> = [];
+      rig = makeRig({
+        silent: true,
+        log: { ...nullLogger(), error: (msg, data) => errors.push({ msg, data }), child: () => nullLogger() },
+      });
+      seedStale(rig, 1, 20 * 60_000);
+      pushPiggyback(rig, 15 * 60_000, '搭车');
+      rig.loop.auditDeliveryWatermark();
+      expect(errors).toHaveLength(1);
+      expect(errors[0].data).toMatchObject({ behind: 2, oldestCursor: 1, oldestText: '迟迟没进上下文的第1条' });
     });
 
     it('人工暂停期间事件本来就该堆着,不当停滞报', () => {

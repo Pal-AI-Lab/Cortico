@@ -214,6 +214,13 @@ describe('renderHandoffNote', () => {
     expect(note.text).not.toContain(deliveryNotice(1));
   });
 
+  it('条数后接了补充的投递通知同样不进笔记', () => {
+    const notice = '[system] 1 条新事件,2026-09-03 周四 14:24。';
+    const note = oneNote([{ role: 'user', content: notice }, ...frameMsg('evf_1', [{ text: '外来事件。' }])]);
+    expect(note.entries).toBe(1);
+    expect(note.text).not.toContain(notice);
+  });
+
   it.each(['user', 'tool'] as const)('%s 投递时与通知同文的外部事件照常收录', (mode) => {
     const note = oneNote(deliveryBatch(mode, 'evf_1', deliveryNotice(1)));
     expect(note.entries).toBe(1);

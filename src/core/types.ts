@@ -917,11 +917,6 @@ export interface IncompleteTurnContext {
   incompleteReason: string | null;
 }
 
-/** 主循环结束当前唤醒或清空 session 时的通知。 */
-export type TurnEndedContext = IncompleteTurnContext | {
-  kind: 'completed' | 'ended' | 'hard-cap' | 'overflow' | 'failed' | 'preempted' | 'interrupted' | 'cleared';
-};
-
 /** World 的环境描述、事件和工具契约。 */
 export interface World {
   id: string;
@@ -951,8 +946,11 @@ export interface World {
    * 此时推送的事件进入新 session 的第一批；隐藏 World 不接收通知。
    */
   onHandoffEnded?(): void;
-  /** 一轮收束或 session 清空时通知可见 World，用于清理暂态。 */
-  onTurnEnded?(context: TurnEndedContext): void;
+  /**
+   * assistant 自然结束、LLM 失败或轮数达到硬上限时调用，用于清理本轮暂态;因回复截断而结束时带
+   * `context`。隐藏 World 不接收通知。
+   */
+  onTurnEnded?(context?: IncompleteTurnContext): void;
   /**
    * 本 World 产生的事件离开队列时调用：delivered 表示已写入主 session，discarded 表示被操作者
    * 清空队列丢弃。经 withdrawPending 撤回的事件不通知；drainPendingEvents 取走的事件只在
@@ -1037,8 +1035,8 @@ export interface Persona {
    * Core 在超过 hardTokens 时强制交接。
    */
   onBatchEnd?(): void;
-  /** 一轮收束或 session 清空时调用；达到轮数上限时，末轮的工具回执已写入 session。 */
-  onTurnEnded?(context: TurnEndedContext): void;
+  /** assistant 自然结束、LLM 失败或轮数达到硬上限时调用;因回复截断而结束时带 `context`。 */
+  onTurnEnded?(context?: IncompleteTurnContext): void;
   /** 一批处理结束且总线没有非 piggyback 的即时事件或候选时调用。 */
   onIdle?(): void | Promise<void>;
   /** 连续模型调用失败后恢复时调用；返回待注入文本，null 表示不注入。 */
