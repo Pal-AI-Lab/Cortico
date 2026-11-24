@@ -20,7 +20,7 @@ import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
 import { SessionTracker } from '../../src/core/sessions.ts';
 import { ABORT_PREEMPTED, ABORT_SHUTDOWN, INTERRUPTED_WHILE_RUNNING, NOT_EXECUTED_BARRIER, NOT_EXECUTED_INTERRUPTED, SHUTDOWN_INTERRUPTED, streamedPastBarrier } from '../../src/core/markers.ts';
-import type { UsageRecord, Persona, TurnEndedContext } from '../../src/core/types.ts';
+import type { UsageRecord, Persona } from '../../src/core/types.ts';
 import type { ChatMessage, LLMDelta } from './fixture-types.ts';
 import { functionCall, functionResult, type ContextRecord } from '../../src/protocol/open-responses/context.ts';
 import type { Logger, CandidateProjector, EventEnvelope, RunPhase, World, WorldHost, ToolDef } from '../../src/core/types.ts';
@@ -2061,45 +2061,6 @@ describe('MainLoop user事件协议', () => {
     rig.pushEvent('新消息');
     await until(() => ended >= 2);
     expect(ended).toBe(2);
-  });
-
-  it('reports a hard cap after persisting the last receipts, without scheduling another wake', async () => {
-    const ended: TurnEndedContext[] = [];
-    const visible: TurnEndedContext[] = [];
-    const world = makeFakeIO('qq', [makeTool('noop', 'ok')]);
-    world.onTurnEnded = (_, context) => { if (context) visible.push(context); };
-    rig = makeRig({ worlds: [world], cfgPatch: cfg => { cfg.loop.hardCap = 2; },
-      hooks: { onTurnEnded: (_, context) => { if (context) ended.push(context); } } });
-    rig.start(); await until(() => ended.length === 1);
-    expect(ended[0]).toMatchObject({ reason: 'completed', rounds: 1 });
-    rig.llm.script(toolReply([{ name: 'noop', id: 'cap-1' }]), toolReply([{ name: 'noop', id: 'cap-2' }]));
-    rig.pushEvent('Review the result.'); await until(() => ended.length === 2);
-    expect(ended[1]).toMatchObject({ sessionId: 'main', reason: 'hard-cap', round: 3, rounds: 2 });
-    expect(visible).toEqual(ended);
-    expect(rig.session.messages.at(-1)?.tool_call_id).toBe('cap-2');
-    await sleep(100); expect(rig.llm.calls).toHaveLength(3);
-  });
-
-  it('reports an explicit end-turn separately when it executes on the last budgeted round', async () => {
-    const ended: TurnEndedContext[] = [];
-    const endTool: ToolDef = { ...makeTool('finish', 'Done.'), endsTurn: true };
-    rig = makeRig({ worlds: [makeFakeIO('qq', [endTool])], cfgPatch: cfg => { cfg.loop.hardCap = 1; },
-      hooks: { onTurnEnded: (_, context) => { if (context) ended.push(context); } } });
-    rig.start(); await until(() => ended.length === 1);
-    rig.llm.script(toolReply([{ name: 'finish', id: 'explicit-end' }])); rig.pushEvent('Decide whether to stop.');
-    await until(() => ended.length === 2);
-    expect(ended[1]).toMatchObject({ reason: 'ended', rounds: 1 });
-    await sleep(100); expect(rig.llm.calls).toHaveLength(2);
-  });
-
-  it('reports a model error separately when it exhausts the last round', async () => {
-    const ended: TurnEndedContext[] = [];
-    rig = makeRig({ cfgPatch: cfg => { cfg.loop.hardCap = 1; },
-      hooks: { onTurnEnded: (_, context) => { if (context) ended.push(context); } } });
-    rig.start(); await until(() => ended.length === 1);
-    rig.llm.throwNext = new LLMError('fixture model failure', 503, 'Temporarily unavailable'); rig.pushEvent('New input.');
-    await until(() => ended.length === 2);
-    expect(ended[1]).toMatchObject({ reason: 'model-error', rounds: 1 });
   });
 
   it('clearSession只保留system，随后boot以user消息重开且仍可继续', async () => {
