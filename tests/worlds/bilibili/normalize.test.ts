@@ -188,10 +188,13 @@ describe('归一化', () => {
     }, OPTS)).toMatchObject({ senderKey: '18', meta: { uid: 18 } });
   });
 
-  it('舰长进场剥掉 copy_writing 的标记', () => {
+  it('进场特效按 privilege_type 分:大航海成员是 enter-guard 并带等级,其余是 entry', () => {
     expect(
-      normalize({ cmd: 'ENTRY_EFFECT', data: { copy_writing: '欢迎舰长 <%阿明%> 进入直播间', uid: 7 } }, OPTS),
-    ).toMatchObject({ type: 'bilibili.enter-guard', trigger: 'debounce', text: '[进场] 欢迎舰长 阿明 进入直播间' });
+      normalize({ cmd: 'ENTRY_EFFECT', data: { copy_writing: '<%阿明%> 来了', uid: 7, privilege_type: 3 } }, OPTS),
+    ).toMatchObject({ type: 'bilibili.enter-guard', trigger: 'debounce', text: '[进场] 阿明 来了', meta: { uid: 7, guardLevel: 3 } });
+    const plain = normalize({ cmd: 'ENTRY_EFFECT', data: { copy_writing: '<%阿乙%> 来了', uid: 8, privilege_type: 0 } }, OPTS);
+    expect(plain).toMatchObject({ type: 'bilibili.entry', trigger: 'debounce', text: '[进场] 阿乙 来了', meta: { uid: 8 } });
+    expect(plain).not.toHaveProperty('meta.guardLevel');
   });
 
   it('平台执法插队,但只成事件——收不收嘴是她自己的事', () => {
