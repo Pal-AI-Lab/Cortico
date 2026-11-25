@@ -1,8 +1,6 @@
 import { appendFileSync, closeSync, constants, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname } from 'node:path';
-
-/** The ledger is read in chunks so its size is not bounded by V8's maximum string length. */
-const READ_CHUNK_BYTES = 4 * 1024 * 1024;
+import { getDefaultHighWaterMark } from 'node:stream';
 
 /**
  * Lines split at the newline byte, which never occurs inside a UTF-8 multibyte sequence.
@@ -11,7 +9,7 @@ const READ_CHUNK_BYTES = 4 * 1024 * 1024;
 function* fileLines(file: string): Generator<string | null> {
   const fd = openSync(file, 'r');
   try {
-    const chunk = Buffer.alloc(READ_CHUNK_BYTES);
+    const chunk = Buffer.alloc(getDefaultHighWaterMark(false));
     let rest = Buffer.alloc(0);
     for (let n = readSync(fd, chunk); n > 0; n = readSync(fd, chunk)) {
       const buf = rest.length ? Buffer.concat([rest, chunk.subarray(0, n)]) : chunk.subarray(0, n);
