@@ -7,7 +7,7 @@
 import type { Bot } from 'mineflayer';
 import { zhDimension, zhEntity, zhName } from './names.ts';
 import { INVENTORY_SLOTS } from './inventory.ts';
-import { DIRECTION_ZH, narrateInventory, type ItemStack } from './terrain.ts';
+import { DIRECTION_ZH, GEAR_SLOT_ZH, narrateInventory, type ItemStack } from './terrain.ts';
 import { SkillBlocked } from './skill-context.ts';
 import { NEAR_DEFAULT, type Expectation, type SkillCall } from './skills.ts';
 import { FACE_ZH, SHAPE_ZH } from './cell-facts.ts';
@@ -143,6 +143,7 @@ export function describeSkill(c: SkillCall, heldItem?: string | null): string {
       return `砂轮:磨${zhName(c.item)}${c.with ? `+${zhName(c.with)}` : ''}`;
     case 'attack': return `攻击${zhEntity(c.target)}${c.mode && c.mode !== 'auto' ? `(${c.mode})` : ''}`;
     case 'equip': {
+      if (c.slot) return `脱下${GEAR_SLOT_ZH[c.slot]}部的装备`;
       if (!c.item) return c.hand === 'off' ? '把副手腾空' : '把主手腾空';
       if (c.hand === 'off') return `把${zhName(c.item)}挂上副手`;
       return c.hand === 'main' || equipDestOf(c.item) === 'hand' ? `拿出${zhName(c.item)}` : `穿上${zhName(c.item)}`;

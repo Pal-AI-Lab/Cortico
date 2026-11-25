@@ -80,6 +80,10 @@ interface PlaceOnFace { at: Anchor; face: BlockFace }
 
 export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
 
+/** equip 的 slot:身上的四个装备槽 */
+const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet'] as const;
+export type ArmorSlot = (typeof ARMOR_SLOTS)[number];
+
 /** 一步技能:动作参数,外加边界声明(StepBounds)。 */
 export type SkillCall = StepBounds & (
   | { skill: 'goto'; at: Anchor; dimension?: string; groundY?: true; dryRun?: boolean }
@@ -118,7 +122,8 @@ export type SkillCall = StepBounds & (
   | { skill: 'enchant'; at: Anchor; item: string; index?: number }
   | { skill: 'eat'; item: string }
   | { skill: 'attack'; target: string; mode?: AttackMode }
-  | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
+  | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off'; slot?: never }
+  | { skill: 'equip'; slot: ArmorSlot; item?: never; pick?: never; hand?: never }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; pick?: string }
   | { skill: 'stow'; item: string; count: number; pick?: string }
@@ -707,6 +712,14 @@ const EMPTY_HAND_NAMES = ['air', 'minecraft:air'];
 function parseEquip(c: Record<string, unknown>, at: string): ParseResult {
   const item = str(c.item);
   const pick = str(c.pick);
+  if (c.slot !== undefined) {
+    const slot = ARMOR_SLOTS.find((s) => s === c.slot);
+    if (!slot) return { error: `${at} equip 的 slot 只认 ${ARMOR_SLOTS.join('/')}` };
+    if (item || pick || c.hand !== undefined) {
+      return { error: `${at} equip 的 slot 是脱下那一格的装备,不和 item/pick/hand 一起给` };
+    }
+    return { step: { skill: 'equip', slot } };
+  }
   if (c.hand !== undefined && c.hand !== 'main' && c.hand !== 'off') {
     return { error: `${at} equip 的 hand 只认 main/off` };
   }
@@ -1429,12 +1442,17 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'equip',
     doc: `{"skill":"equip","item":"stone_sword"}           手持物品;盔甲、鞘翅、盾牌会自动穿进对应装备槽。
 {"skill":"equip","item":"filled_map","hand":"off"}  hand 指定哪只手:off = 副手,main = 主手;写了就不按物品自动分槽。
-                                                 不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)`,
+                                                 不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)
+{"skill":"equip","slot":"head"}                  把那个装备槽穿着的东西脱下放回包里;不和 item/pick/hand 一起写`,
     parse: parseEquip,
     fields: [
       { key: 'item', kind: 'string', hint: ITEM_ID_HINT, doc: '不写 = 把手腾空' },
       { key: 'pick', kind: 'string' },
       { key: 'hand', kind: 'enum', values: ['main', 'off'], error: 'equip 的 hand 只认 main/off', doc: '不写 = 按物品分槽' },
+      {
+        key: 'slot', kind: 'enum', values: ARMOR_SLOTS, error: `equip 的 slot 只认 ${ARMOR_SLOTS.join('/')}`,
+        doc: '脱下这一格的装备放回包里',
+      },
     ],
   },
   {

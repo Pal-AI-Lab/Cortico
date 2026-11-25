@@ -5,7 +5,7 @@
  */
 import type { Bot } from 'mineflayer';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
-import { type SkillCall } from './skills.ts';
+import { type ArmorSlot, type SkillCall } from './skills.ts';
 import { zhName } from './names.ts';
 import { gridText, zhErrorText } from './receipt.ts';
 import {
@@ -18,10 +18,11 @@ import {
   WINDOW_SETTLE_MS, openStationWindow, putIntoStation, stationItemFacts,
 } from './containers.ts';
 import { HANDHELD_SUFFIXES, equipDestOf, equippedAlready } from './tools.ts';
-import { DRINKABLES } from './item-facts.ts';
+import { DRINKABLES, readEnchants } from './item-facts.ts';
 import { noteAte } from './placed-ledger.ts';
 import { edibleInBag, notFoodText } from './precheck.ts';
 import { pickLabel, pickTargetOf } from './item-pick.ts';
+import { GEAR_SLOT_ZH } from './terrain.ts';
 
 /**
  * `bot.craft` 吃的配方数据面(见 mineflayer-fixes 的覆写版):
@@ -394,6 +395,12 @@ export async function emptyHand(bot: Bot): Promise<string> {
   return `主手腾空了(原来拿的是${zhName(held.name)})`;
 }
 
+/** 包里有空格,或有能并进这一件的同种未满一摞 */
+function bagHasRoomFor(bot: Bot, item: { type: number }): boolean {
+  const bag = bot.inventory.items();
+  return bag.length < INVENTORY_SLOTS || bag.some((i) => i.type === item.type && i.count < i.stackSize);
+}
+
 /**
  * 副手腾空:副手物品挪回背包。mineflayer 的 unequip 在包里既没空格、也没有能并进去的
  * 同种未满一摞时把它扔到地上,这种包况下不腾,受阻说明;并进去一部分后余下的被扔掉时照实报。
@@ -401,8 +408,7 @@ export async function emptyHand(bot: Bot): Promise<string> {
 async function emptyOffHand(bot: Bot): Promise<string> {
   const held = offHandItem(bot);
   if (!held) return '副手本来就是空的';
-  const bag = bot.inventory.items();
-  if (bag.length >= INVENTORY_SLOTS && !bag.some((i) => i.type === held.type && i.count < i.stackSize)) {
+  if (!bagHasRoomFor(bot, held)) {
     throw new SkillBlocked(
       `包里 ${INVENTORY_SLOTS} 格全满,副手的${pickLabel(pickTargetOf(held, bot.registry as never))}放不回包里;` +
       '没腾,它还挂在副手',
@@ -417,8 +423,31 @@ async function emptyOffHand(bot: Bot): Promise<string> {
   return `副手腾空了(原来挂的是${zhName(held.name)})`;
 }
 
-/** item 缺省时腾空 hand 指的那只手(默认主手)；air 别名由 parseEquip 归一化。 */
+/**
+ * 脱下一个装备槽的东西放回包里。包里放不下(unequip 会扔到地上,同 emptyOffHand)、或生存模式下
+ * 带绑定诅咒(游戏不让脱,服务端退回这次点击)时受阻,装备不动。
+ */
+async function emptyArmorSlot(bot: Bot, slot: ArmorSlot): Promise<string> {
+  // unequip 要求没有打开的窗口;clickWindow 以 bot.currentWindow 为目标
+  if (bot.currentWindow) bot.closeWindow(bot.currentWindow);
+  const dest = slot === 'chest' ? 'torso' : slot;
+  const worn = bot.inventory.slots[bot.getEquipmentDestSlot(dest)];
+  const where = `${GEAR_SLOT_ZH[slot]}部`;
+  if (!worn) return `${where}本来就没有装备`;
+  const name = zhName(worn.name);
+  if (bot.game.gameMode !== 'creative' && readEnchants(worn, bot.registry).some((e) => e.name === 'binding_curse')) {
+    throw new SkillBlocked(`${where}的${name}带绑定诅咒,生存模式下脱不下来`);
+  }
+  if (!bagHasRoomFor(bot, worn)) {
+    throw new SkillBlocked(`包里 ${INVENTORY_SLOTS} 格全满,${where}的${name}放不回包里;没脱,还穿在身上`);
+  }
+  await bot.unequip(dest);
+  return `脱下了${where}的${name},放回了包里`;
+}
+
+/** item 缺省时腾空 hand 指的那只手(默认主手)；air 别名由 parseEquip 归一化。给了 slot 就脱下那个装备槽。 */
 export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'equip' }>): Promise<string> {
+  if (call.slot) return emptyArmorSlot(bot, call.slot);
   const want = call.item;
   if (!want) return call.hand === 'off' ? emptyOffHand(bot) : emptyHand(bot);
   // 精确名优先;退而求其次才用后缀(iron→iron_pickaxe),`includes` 会让

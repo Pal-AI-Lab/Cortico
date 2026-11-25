@@ -308,6 +308,85 @@ describe('equip:盔甲穿身上,不是全塞主手', () => {
     expect(bot.equips).toEqual([]);
   });
 
+  /**
+   * 胸甲穿在玩家窗口的 6 号格(mineflayer 叫它 torso)。unequip 照 mineflayer 的 disrobe:
+   * 开着别的窗口就抛,脱下的东西进包。
+   */
+  function armorBot(opts: {
+    bag?: Array<{ name: string; type: number; count: number; stackSize: number }>;
+    gameMode?: string; windowOpen?: boolean; binding?: boolean;
+  } = {}) {
+    const bag: Array<unknown> = opts.bag ?? [];
+    const slots: Array<unknown> = [];
+    slots[6] = {
+      name: 'diamond_chestplate', type: 8, count: 1, stackSize: 1,
+      componentMap: opts.binding ? new Map([['enchantments', { data: { enchantments: [{ id: 10, level: 1 }] } }]]) : undefined,
+    };
+    const unequipped: string[] = [];
+    const bot = {
+      unequipped,
+      entity: { id: 9, position: new V(0.5, 64, 0.5) },
+      entities: {},
+      health: 20,
+      players: {},
+      heldItem: null,
+      game: { gameMode: opts.gameMode ?? 'survival' },
+      registry: { enchantments: { 10: { name: 'binding_curse' } } },
+      currentWindow: (opts.windowOpen ? { id: 3 } : null) as { id: number } | null,
+      closeWindow: (w: unknown) => { if (bot.currentWindow === w) bot.currentWindow = null; },
+      inventory: { items: () => bag, slots },
+      getEquipmentDestSlot: (dest: string) => ({ head: 5, torso: 6, legs: 7, feet: 8 })[dest],
+      unequip: async (dest: string) => {
+        if (bot.currentWindow) throw new Error('disrobe: bot.currentWindow 不是 null');
+        unequipped.push(dest);
+        const at = bot.getEquipmentDestSlot(dest)!;
+        bag.push(slots[at]);
+        slots[at] = null;
+      },
+      pathfinder: { stop() {}, setGoal() {}, goto: async () => {} },
+    };
+    return bot;
+  }
+
+  it('slot:chest 先关掉开着的窗口,再按 torso 脱下放回包里', async () => {
+    const bot = armorBot({ windowOpen: true });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', slot: 'chest' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(reports[0].kind).toBe('done');
+    expect(bot.unequipped).toEqual(['torso']);
+    expect(bot.inventory.slots[6]).toBeNull();
+    expect(reports[0].text).toContain('脱下了胸部的钻石胸甲,放回了包里');
+  });
+
+  it('slot 脱装备时包 36 格全满:不脱、不扔,受阻说明还穿在身上', async () => {
+    const bag = Array.from({ length: 36 }, () => ({ name: 'cobblestone', type: 100, count: 64, stackSize: 64 }));
+    const bot = armorBot({ bag });
+    const { exec, reports } = makeExecutorOn(bot);
+    exec.submit([{ skill: 'equip', slot: 'chest' }]);
+    await waitUntil(() => reports.length === 1);
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('没脱,还穿在身上');
+    expect(bot.unequipped).toEqual([]);
+  });
+
+  it('slot 遇到绑定诅咒:生存模式受阻不动,创造模式照脱', async () => {
+    const survival = armorBot({ binding: true });
+    const first = makeExecutorOn(survival);
+    first.exec.submit([{ skill: 'equip', slot: 'chest' }]);
+    await waitUntil(() => first.reports.length === 1);
+    expect(first.reports[0].kind).toBe('blocked');
+    expect(first.reports[0].text).toContain('胸部的钻石胸甲带绑定诅咒,生存模式下脱不下来');
+    expect(survival.unequipped).toEqual([]);
+
+    const creative = armorBot({ binding: true, gameMode: 'creative' });
+    const second = makeExecutorOn(creative);
+    second.exec.submit([{ skill: 'equip', slot: 'chest' }]);
+    await waitUntil(() => second.reports.length === 1);
+    expect(second.reports[0].kind).toBe('done');
+    expect(creative.unequipped).toEqual(['torso']);
+  });
+
   it('hand:"off" 把本来归主手的东西挂到副手', async () => {
     const bot = offHandBot({ bag: [{ name: 'filled_map', type: 5, count: 1 }] });
     const { exec, reports } = makeExecutorOn(bot);

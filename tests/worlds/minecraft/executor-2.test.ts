@@ -75,6 +75,14 @@ describe('parseSteps:mc_do 的入参校验', () => {
       .toEqual([{ skill: 'attack', target: 'zombie', mode: 'kite' }]);
   });
 
+  it('equip 的 slot 只认四个装备槽,不和 item/pick/hand 一起收', () => {
+    expect(ok([{ skill: 'equip', slot: 'chest' }])).toEqual([{ skill: 'equip', slot: 'chest' }]);
+    expect(err([{ skill: 'equip', slot: 'offhand' }])).toContain('head/chest/legs/feet');
+    for (const extra of [{ item: 'iron_helmet' }, { pick: '保护' }, { hand: 'off' }]) {
+      expect(err([{ skill: 'equip', slot: 'head', ...extra }])).toContain('不和 item/pick/hand 一起给');
+    }
+  });
+
   it('越界数值返回允许范围且不截断', () => {
     expect(err([{ skill: 'flee', distance: 150 }])).toContain('1-128');
     expect(err([{ skill: 'collect', block: 'stone', count: 999 }])).toContain('1-64');
