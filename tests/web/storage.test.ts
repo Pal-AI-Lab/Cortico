@@ -2,11 +2,18 @@
  * /api/storage 与 /api/storage/clear 测试:fake StoragePart清单。
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp, type OwnedStoragePart } from '../../src/web/server.ts';
-import { nullLogger } from '../../src/core/util.ts';
+import { nowIso, nullLogger } from '../../src/core/util.ts';
+import { createBot } from '../../src/bot.ts';
+import { LANGUAGES } from '../../src/core/language.ts';
+import type { WorldHost } from '../../src/core/types.ts';
+import { USAGE_LOG_FILE, WORLD_USAGE_ROLE_PREFIX } from '../../src/core/usage-log.ts';
+import { WORLD_ACTIVITY_LOG_FILE, WORLD_ACTIVITY_MINUTE_MS } from '../../src/core/world-activity-log.ts';
+import { WEBUI_LANGUAGE_HEADER } from '../../src/web/shared/webui-protocol.ts';
+import { FakeLLM, makeCfg, makeFakeIO, makeFakePersona, makeLoaded, makeTmpDir } from '../core/helpers.ts';
 import { FakeStore } from './fakes.ts';
 
 let app: WebApp;
@@ -115,6 +122,52 @@ describe('GET /api/storage', () => {
 });
 
 describe('POST /api/storage/clear', () => {
+  it('lists both usage ledgers in every language and clears both files and active counts together', async () => {
+    const tmp = makeTmpDir();
+    const config = makeCfg({ providers: {}, activeProvider: '' });
+    config.web.port = 0;
+    const dataDir = join(tmp.dir, 'data');
+    const loaded = makeLoaded({ config, rootDir: tmp.dir, memoryDir: join(tmp.dir, 'memory'), dataDir });
+    let host!: WorldHost;
+    const world = { ...makeFakeIO('sample'), start: async (value: WorldHost) => { host = value; } };
+    const bot = createBot(loaded, {
+      id: 'fixture',
+      defaults: () => config,
+      build: () => ({ persona: makeFakePersona([], { silent: true }), worlds: [world], llm: new FakeLLM() }),
+    });
+    try {
+      const { port } = await bot.start();
+      const url = `http://127.0.0.1:${port}/api/storage`;
+      const files = [USAGE_LOG_FILE, WORLD_ACTIVITY_LOG_FILE];
+      await Promise.all(LANGUAGES.map(async language => {
+        const response = await fetch(url, { headers: { [WEBUI_LANGUAGE_HEADER]: language } });
+        expect(response.status).toBe(200);
+        const { parts } = await response.json() as { parts: Array<Pick<OwnedStoragePart, 'key' | 'owner' | 'location' | 'note'>> };
+        const part = parts.find(part => part.key === 'usage' && part.owner === 'core');
+        expect(part?.location).toBe(files.map(file => `data/${file}`).join(', '));
+        for (const file of files) expect(part?.note).toContain(file);
+      }));
+
+      bot.core.worldActivityLog.record(world.id, 'events', Date.now() - WORLD_ACTIVITY_MINUTE_MS);
+      await host.pushEvent({ source: world.id, type: 'sample.note', ts: nowIso(config.timezone), text: 'archive' }, { deliver: false });
+      host.reportUsage({ promptTokens: 12, completionTokens: 3, cacheHitTokens: 0, cacheMissTokens: 12 }, { model: 'fixture-model' });
+      expect(await bot.core.usageLog.readAll()).toEqual([
+        expect.objectContaining({ role: WORLD_USAGE_ROLE_PREFIX + world.id }),
+      ]);
+      for (const file of files) expect(readFileSync(join(dataDir, file), 'utf8').trim()).toBeTruthy();
+
+      const response = await fetch(`${url}/clear?owner=core&key=usage`, { method: 'POST' });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ ok: true });
+      for (const file of files) expect(readFileSync(join(dataDir, file), 'utf8')).toBe('');
+      expect(await bot.core.usageLog.readAll()).toEqual([]);
+      expect(await bot.core.worldActivityLog.readAll()).toEqual([]);
+    } finally {
+      await bot.stop();
+      tmp.cleanup();
+    }
+  });
+
   it('同步与异步clear都执行并返回结果描述', async () => {
     cleared = [];
     const r1 = await req(`${base()}/api/storage/clear?key=events`, 'POST');

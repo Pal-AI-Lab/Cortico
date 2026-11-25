@@ -21,8 +21,8 @@ export const botText: Partial<typeof botEn> = {
       cleared: 'Log di esecuzione cancellato',
     },
     usage: {
-      label: 'Registro uso token (fonte della pagina costi)',
-      note: 'Cancella tutti i record di uso e costo dei modelli; i totali ripartono dai record scritti in seguito. Questi record non entrano nel contesto del modello',
+      label: 'Registri di utilizzo',
+      note: 'Cancella l’utilizzo e i costi dei modelli in usage.jsonl e i conteggi degli eventi inviati e dei turni attivati dai World in world-activity.jsonl',
       stat: (n: number, size: string) => `${n} record / ${size}`,
       cleared: (n: number) => `${n} record di uso ${n === 1 ? 'cancellato' : 'cancellati'}`,
     },

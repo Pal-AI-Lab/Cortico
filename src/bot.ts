@@ -34,7 +34,10 @@ import type { ResponseClient } from './core/generation.ts';
 import { acquireInstanceLock, type InstanceLock } from './core/instance-lock.ts';
 import { assembleSystemSegments, envPromptOverridePath, envPromptTemplateSource, renderWorldEnvPrompt, type EnvPromptDirs, type EnvPromptOrigin } from './core/prefix.ts';
 import { aggregateUsage, usageRecordFilter } from './core/cost.ts';
+import { JsonlLedger } from './core/jsonl-ledger.ts';
+import { USAGE_LOG_FILE } from './core/usage-log.ts';
 import { createUsageRates } from './core/usage-rates.ts';
+import { WORLD_ACTIVITY_LOG_FILE } from './core/world-activity-log.ts';
 import { DeadlineError, nowIso, withDeadline, readTextFile } from './core/util.ts';
 import { closeRun } from './core/run.ts';
 import { ProviderHub } from './providers/webui/hub.ts';
@@ -205,6 +208,7 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
   const t = botText(language);
   const size = (dir: string, rel: string): string => fileSize(dir, rel, t.noFile);
   const s = t.storage;
+  const usageFiles = [USAGE_LOG_FILE, WORLD_ACTIVITY_LOG_FILE];
   return [
     {
       key: 'events',
@@ -248,14 +252,15 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
       key: 'usage',
       label: s.usage.label,
       kind: 'disk',
-      location: 'data/usage.jsonl',
+      location: usageFiles.map(file => `data/${file}`).join(', '),
       note: s.usage.note,
       stat: () => {
-        const count = core.usageLog.count();
-        const bytes = size(dataDir, 'usage.jsonl');
-        return count === null ? bytes : s.usage.stat(count, bytes);
+        const usage = core.usageLog.count();
+        const activity = core.worldActivityLog.count();
+        const bytes = usageFiles.map(file => size(dataDir, file)).filter(value => value !== t.noFile).join(' + ') || t.noFile;
+        return usage === null || activity === null ? bytes : s.usage.stat(usage + activity, bytes);
       },
-      clear: async () => s.usage.cleared(await core.usageLog.clear()),
+      clear: async () => s.usage.cleared(await JsonlLedger.clearTogether([core.usageLog, core.worldActivityLog])),
     },
     {
       key: 'toolcalls',
@@ -1048,7 +1053,9 @@ export function createBot<C extends CoreConfig>(
         aggregate: async (opts) => {
           const { rates, sources } = await liveRates.resolve();
           const options = { ...opts, timezone: core.config.timezone, rates, now: new Date() };
-          return { ...aggregateUsage(await core.usageLog.readAll(usageRecordFilter(options)), options), rateSources: sources };
+          const keep = usageRecordFilter(options);
+          const [usage, activity] = await Promise.all([core.usageLog.readAll(keep), core.worldActivityLog.readAll(keep)]);
+          return { ...aggregateUsage(usage, options, activity), rateSources: sources };
         },
         status: () => core.usageLog.status(),
       },

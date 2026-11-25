@@ -21,8 +21,8 @@ export const botText: Partial<typeof botEn> = {
       cleared: 'Laufprotokoll geleert',
     },
     usage: {
-      label: 'Token-Verbrauchsjournal (Quelle der Kostenseite)',
-      note: 'Löscht alle Verbrauchs- und Kosteneinträge der Modelle; die Summen beginnen mit danach geschriebenen Einträgen neu. Diese Einträge gehören nicht zum Modellkontext',
+      label: 'Verbrauchsjournale',
+      note: 'Löscht Modellverbrauch und -kosten in usage.jsonl sowie die Anzahl der von Worlds gesendeten Ereignisse und ausgelösten Runden in world-activity.jsonl',
       stat: (n: number, size: string) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'} / ${size}`,
       cleared: (n: number) => `${n} ${n === 1 ? 'Verbrauchseintrag' : 'Verbrauchseinträge'} gelöscht`,
     },

@@ -615,13 +615,15 @@ export interface WebAppCheckpointDeps {
   remove(name: string): string;
 }
 
-/** 分时段/范围的用量聚合(用量·成本页数据源) */
-export type UsageReport = UsageAggregate & { rateSources?: Record<string, UsageRateSource> };
+/** 按请求范围聚合的用量，含按 World 汇总的 byWorld。 */
+export interface UsageReport extends UsageAggregate {
+  /** `rates` 里各币种汇率的出处。 */
+  rateSources?: Record<string, UsageRateSource>;
+}
 
 export interface WebAppUsageDeps {
   status?(): { pending: number; error: string | null };
   /** `days` 与补空桶的截止时刻按部署时区解释,由实现方给定时区。 */
-  /** `rateSources` 是 `rates` 里各币种汇率的出处。 */
   aggregate(opts: { from?: string; to?: string; days?: number; bucket: UsageBucketOption; currency?: string; basis?: 'marginal' | 'equivalent'; dailyTokenDays?: number }):
     UsageReport | Promise<UsageReport>;
 }
@@ -2348,7 +2350,7 @@ export class WebApp {
 
     app.get('/api/usage', wrap(async (req, res) => {
       const src = this.deps.usage;
-      if (!src) { res.json({ currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [] }); return; }
+      if (!src) { res.json({ currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [], byWorld: [] }); return; }
       const BUCKETS = ['auto', 'minute', 'hour', 'day', 'week', 'month'] as const;
       const raw = strParam(req.query.bucket);
       const bucket: UsageBucketOption = (BUCKETS as readonly string[]).includes(raw ?? '') ? (raw as UsageBucketOption) : 'auto';

@@ -31,8 +31,8 @@ const botZh = {
       cleared: '运行日志已清空',
     },
     usage: {
-      label: 'token用量流水(成本页数据源)',
-      note: '清除全部模型用量与成本记录，成本页从后续写入的记录重新累计。这些记录不进入模型上下文',
+      label: '用量账本',
+      note: '清除 usage.jsonl 的模型用量与成本，以及 world-activity.jsonl 的 World 推送事件数与触发轮次数',
       stat: (n: number, size: string) => `${n}条 / ${size}`,
       cleared: (n: number) => `已清除${n}条用量记录`,
     },
@@ -136,8 +136,8 @@ export const botEn: typeof botZh = {
       cleared: 'Run log cleared',
     },
     usage: {
-      label: 'Token usage ledger (source of the cost page)',
-      note: 'Clears all model usage and cost records; totals restart with subsequently written records. These records are not included in model context',
+      label: 'Usage ledgers',
+      note: 'Clears model usage and costs in usage.jsonl and World event and round counts in world-activity.jsonl',
       stat: (n: number, size: string) => `${n} records / ${size}`,
       cleared: (n: number) => `Cleared ${n} usage records`,
     },

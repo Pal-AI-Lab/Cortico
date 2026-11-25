@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readSync } from 'node:fs';
+import { appendFileSync, closeSync, constants, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 /** The ledger is read in chunks so its size is not bounded by V8's maximum string length. */
@@ -147,7 +147,7 @@ export class JsonlLedger<Row> {
     try {
       for (const ledger of ledgers) {
         mkdirSync(dirname(ledger.file), { recursive: true });
-        const fd = openSync(ledger.file, 'a');
+        const fd = openSync(ledger.file, constants.O_WRONLY | constants.O_CREAT);
         files.set(fd, ledger);
         if (!fstatSync(fd).isFile()) throw new Error(`Ledger ${ledger.file} is not a regular file`);
       }

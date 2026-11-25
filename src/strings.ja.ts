@@ -21,8 +21,8 @@ export const botText: Partial<typeof botEn> = {
       cleared: '実行ログを消去しました',
     },
     usage: {
-      label: 'token 使用量の記録（コストページのデータ元）',
-      note: 'モデルの使用量とコストの記録をすべて消去します。コストページは以降に書き込まれる記録から集計し直します。これらの記録はモデルのコンテキストに入りません',
+      label: '使用量の記録',
+      note: 'usage.jsonl のモデル使用量とコスト、および world-activity.jsonl の World が送信したイベント数と発生させたラウンド数を消去します',
       stat: (n: number, size: string) => `${n} 件 / ${size}`,
       cleared: (n: number) => `使用量の記録を ${n} 件消去しました`,
     },

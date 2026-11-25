@@ -21,8 +21,8 @@ export const botText: Partial<typeof botEn> = {
       cleared: '執行日誌已清空',
     },
     usage: {
-      label: 'token用量流水(成本頁資料來源)',
-      note: '清除全部模型用量與成本記錄，成本頁從後續寫入的記錄重新累計。這些記錄不進入模型上下文',
+      label: '用量帳本',
+      note: '清除 usage.jsonl 的模型用量與成本，以及 world-activity.jsonl 的 World 推送事件數與觸發輪次數',
       stat: (n: number, size: string) => `${n}條 / ${size}`,
       cleared: (n: number) => `已清除${n}條用量記錄`,
     },

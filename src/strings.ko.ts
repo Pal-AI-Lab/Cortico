@@ -21,8 +21,8 @@ export const botText: Partial<typeof botEn> = {
       cleared: '실행 로그를 비웠습니다',
     },
     usage: {
-      label: 'token 사용량 기록(비용 페이지 데이터 원본)',
-      note: '모든 모델 사용량과 비용 기록을 지웁니다. 비용 페이지는 이후 기록되는 항목부터 다시 집계합니다. 이 기록은 모델 컨텍스트에 들어가지 않습니다',
+      label: '사용량 기록',
+      note: 'usage.jsonl의 모델 사용량과 비용, world-activity.jsonl의 World가 보낸 이벤트 수와 시작한 라운드 수를 지웁니다',
       stat: (n: number, size: string) => `${n}건 / ${size}`,
       cleared: (n: number) => `사용량 기록 ${n}건을 지웠습니다`,
     },

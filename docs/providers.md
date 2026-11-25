@@ -146,6 +146,8 @@ router 自动加载。
 按成本基准覆盖。`pricing` 为空时仍使用模块价目;两者都没有适用价目时,调用只记用量,
 不记金额。缺少所需计量的费用项记为未知。
 
+World 推送和触发轮次数保存在 `data/world-activity.jsonl`，由 `/api/usage` 与模型用量一起按 World 聚合。
+
 一份价目按三个维度依次选档:时段、服务档、输入阶梯。`timeWindows` 里的每个窗口自带一张完整
 价目表(`rules`,可再带 `inputBands` 与 `serviceTiers`),`from`、`to` 是 `timezone` 这个时区的
 `HH:MM`,左闭右开,`to` 不晚于 `from` 表示跨零点。`weekdays`(ISO 星期,1 为周一、7 为周日)限定
