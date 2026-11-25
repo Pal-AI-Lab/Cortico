@@ -1,4 +1,4 @@
-<!-- Owner: src/core/sessions.ts, src/core/types.ts (SessionDecl, Persona.onHandoff), src/core/loop.ts -->
+<!-- Owner: src/core/sessions.ts, src/core/types.ts (SessionDecl, Persona.onHandoff, UsageSources), src/core/loop.ts, src/core/cost.ts (usageShares) -->
 
 # Session
 
@@ -61,3 +61,26 @@ Core 记录并发数，WebUI「运行诊断 → 会话统计」显示各 session
 `[result missing (process restart)]`。
 统计(调用次数、prompt / completion / 缓存命中 / 推理 token)只在内存,重启清零;已结束的
 临时 session 保留最近 8 个供查看。
+
+## 用量归属
+
+每次模型请求的各次尝试写进 `data/usage.jsonl`(`UsageRecord`)。主循环的记录带 `round` 和 `sources`
+(`UsageSources`);`/api/usage` 的 `byWorld` 与 `unattributed` 据此把每次请求的 token 和费用分给各 World。
+
+`sources` 由主循环记下(`src/core/loop.ts` 的 `noteInput`、`outputSources`),数值是估算 token,口径与上下文
+计数相同:Provider 模块给了 `estimateTokens` 就用它，否则按字数比例估。
+
+- 输入：上次模型输出写进 session 之后新写进去的记录。投递的事件记给来源 World,一次投递写进的记录按各事件正文
+  的估算 token 比例分;工具回执记给工具所属的 World,一轮几条回执各算各的;Persona 加的内容(内部事件、轮数提示)、
+  来源不是 World 的事件和 Persona 工具的回执记作未归属。模型输出写进 session 时清零，失败后重试的请求仍带着它。
+- 输出：拿到响应后记下推理以外的输出的估算，和其中调用各 World 工具(工具名加参数)的部分。
+
+分摊在 `src/core/cost.ts` 的 `usageShares`:
+
+- 输入份额是各来源占新内容估算的比例，没有新内容时全归未归属。输入、缓存命中、缓存未命中与推理的 token 和费用
+  按输入份额分。
+- 调用 World 工具的输出按「推理以外的实际输出 token ÷ 它的估算」折成实际 token,记给那个 World;其余输出(文字、
+  推理、Persona 工具的调用)按输入份额分。输出 token 和输出费用按这样得到的输出份额分。
+- 按输入加输出总量(`total`)计价的费用，按这次请求的输入、输出 token 比例混合两种份额。
+- 一次请求分给各 World 与未归属的 token 和各项费用，加起来等于这次请求的实付;`byWorld` 的 token 按份额累计后取整。
+- World 自己调模型的记录(`role` 为 `worlds.<id>`)全额归它;没有 `sources` 的记录(fork 等)归未归属。

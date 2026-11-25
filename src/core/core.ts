@@ -24,6 +24,7 @@ import type {
   SessionDecl,
   SessionInfo,
 } from './types.ts';
+import { WORLD_USAGE_ROLE_PREFIX } from './types.ts';
 import type { LoadedConfig } from './config.ts';
 import { Runlog, estimateMessagesTokens, nowIso, withDeadline } from './util.ts';
 import { JsonlEventStore } from './event-store.ts';
@@ -624,7 +625,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     usage: LLMUsage,
     opts?: { model?: string; label?: string; charges?: import('./generation.ts').Charge[] },
   ): void {
-    const id = `worlds.${worldId}`;
+    const id = `${WORLD_USAGE_ROLE_PREFIX}${worldId}`;
     let track = this.moduleUsageTracks.get(id);
     if (!track) {
       track = this.sessions.open(id, opts?.label ?? worldId, { id });

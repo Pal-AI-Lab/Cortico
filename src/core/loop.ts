@@ -38,13 +38,14 @@ import type {
   ToolOutcome,
   ToolSchema,
   ToolTag,
+  UsageSources,
   WakeItem,
 } from './types.ts';
 import { defaultExternalizes } from './types.ts';
 import type { WakeBus } from './bus.ts';
 import type { SessionLog } from './session.ts';
 import type { CoreState } from './state.ts';
-import type { SessionHandle, SessionTracker } from './sessions.ts';
+import type { AttemptRecordOptions, SessionHandle, SessionTracker } from './sessions.ts';
 import { collectWorldContexts, joinSegments, type EnvPromptDirs } from './prefix.ts';
 import { recordToolCall, type ToolCallLog } from './tool-log.ts';
 import type { Transcript } from './transcript.ts';
@@ -72,7 +73,7 @@ import {
 } from './markers.ts';
 import { fixPairing, rebuildTail } from './truncate.ts';
 
-import { nowIso, prefixFingerprint, renderEventLines } from './util.ts';
+import { estimateTokens, nowIso, prefixFingerprint, renderEventLines } from './util.ts';
 
 
 /**
@@ -306,6 +307,11 @@ export class MainLoop {
    * 未处理的归档项阻止水位越过；该集合不持久化，重启时根据已生成事件的来源引用恢复。
    */
   private readonly settledArchives = new Set<number>();
+  /**
+   * 上次模型输出写进 session 之后新进上下文的估算 token,按来源分：键是 World id,null 是不属于任何 World 的部分。
+   * 每次模型请求的用量记录带上它(UsageSources),模型输出写进 session 时清空;不持久化。
+   */
+  private readonly newInput = new Map<string | null, number>();
   /**
    * 窗口内的 LLM 失败时刻，单位为毫秒。保存在 state.data.llmStall，
    * 跨重启保留；恢复时通知 Persona，World 可按时间窗口查询。
@@ -724,6 +730,7 @@ export class MainLoop {
     const ephemeral = ephemeralCount > 0 && ephemeralCount === internals.length && events.length === 0;
     if (!this.active(generation)) return false;
     this.dropEphemeral();
+    const appendedFrom = session.records.length;
     if (lines.length > 0) {
       const msg: ContextRecord = message('user', lines.join('\n'));
       if (ephemeral) msg.context.ephemeral = true;
@@ -737,6 +744,8 @@ export class MainLoop {
       session.append(msg);
     }
     if (events.length > 0 && !inUser) this.appendEventFrame(events);
+    const worldIds = new Set(this.d.worlds.all().map((world) => world.id));
+    this.noteInput(session.records.slice(appendedFrom), delivered.map((e) => ({ source: worldIds.has(e.source) ? e.source : null, text: e.text })));
     this.noteHandled(delivered, generation);
     this.notifySettled(delivered, 'delivered');
     const changed = lines.length > 0 || events.length > 0;
@@ -1254,7 +1263,8 @@ export class MainLoop {
       let incomplete: IncompleteTurnContext | undefined;
       let meters: TokenMeters | null = null;
       const outbound = this.outboundMessages();
-      const prefixHash = prefixFingerprint(outbound);
+      const sources = this.inputSources();
+      const usage = { prefixHash: prefixFingerprint(outbound), sources };
       try {
         // role 仅用于故障分类，不写入请求体。
         const llmStart = Date.now();
@@ -1270,6 +1280,7 @@ export class MainLoop {
           llmMs = Date.now() - llmStart;
         }
         assistant = responseRecords(res.response, res.origin);
+        sources.output = this.outputSources(assistant);
         if (res.response.status === 'incomplete') {
           incomplete = { kind: 'response-incomplete', responseId: res.response.id,
             incompleteReason: res.response.incomplete_details?.reason ?? null };
@@ -1278,7 +1289,7 @@ export class MainLoop {
         if (!this.active(generation) || flight.controller.signal.aborted) {
           if (this.active(generation) && flight.abortReason === 'interrupt') {
             // 打断与响应完成同时到达：完整响应作为已外化的输出保存，尚未执行的调用不执行。
-            this.mainTrack?.recordAttempts(res.attempts, undefined, { prefixHash });
+            this.mainTrack?.recordAttempts(res.attempts, undefined, usage);
             await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
             this.tapAbort(tap, ABORT_INTERRUPTED);
@@ -1287,7 +1298,7 @@ export class MainLoop {
             return;
           }
           // 关机、换代或抢占丢弃已成功返回的结果时，仍记录这次调用的实际用量。
-          this.mainTrack?.recordAttempts(res.attempts, undefined, { outcome: 'discarded', prefixHash });
+          this.mainTrack?.recordAttempts(res.attempts, undefined, { ...usage, outcome: 'discarded' });
           if (this.active(generation) && flight.abortReason === 'preempt') {
             this.tapAbort(tap, ABORT_PREEMPTED);
             noteRound('preempted');
@@ -1301,12 +1312,12 @@ export class MainLoop {
         }
         meters = res.attempts[res.attempts.length - 1].meters;
         this.lastUsage = usageCounters(meters);
-        this.mainTrack?.recordAttempts(res.attempts, undefined, { prefixHash });
+        this.mainTrack?.recordAttempts(res.attempts, undefined, usage);
         this.noteStallsRecovered();
         consecutiveFailures = 0;
       } catch (e) {
         if (flight.controller.signal.aborted) {
-          this.recordFailedUsage(e, prefixHash);
+          this.recordFailedUsage(e, usage);
           if (!this.active(generation) || flight.abortReason === 'shutdown') {
             this.tapAbort(tap, ABORT_SHUTDOWN);
             log.info('模型轮随关机终止');
@@ -1326,7 +1337,7 @@ export class MainLoop {
           if (await resumeAfterCancel(queuedEvents)) continue;
           return;
         }
-        this.recordFailedUsage(e, prefixHash);
+        this.recordFailedUsage(e, usage);
         if (tap && e instanceof GenerationError && e.partial) {
           // 已向外发送的部分输出必须保存；已执行的工具调用使用真实结果配对。
           await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation);
@@ -1388,6 +1399,7 @@ export class MainLoop {
       const calls = assistant.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
       this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
       for (const entry of assistant) session.append(entry);
+      this.newInput.clear();
       if (meters && meters.input !== null && meters.output !== null) {
         this.anchor = { records: session.records.length, tokens: meters.input + meters.output, reasoningTokens: meters.reasoning ?? 0 };
       }
@@ -1478,6 +1490,7 @@ export class MainLoop {
       flight.phase = 'done';
 
       // soft 大于 hard 时永远到不了，等于 hard 时提示只进最后一条回执、没有下一轮照着收尾;两种都提前到 hard 的前一轮。
+      const receiptTexts = results.map(textOf);
       if (results.length > 0) {
         const hint = round === Math.min(caps.soft, caps.hard - 1) ? caps.softHint?.()
           : round >= caps.hard && !turnEnded ? caps.hardHint?.()
@@ -1485,6 +1498,11 @@ export class MainLoop {
         if (hint) results[results.length - 1] = withText(results[results.length - 1], `${textOf(results[results.length - 1])}\n${hint}`);
       }
       for (const result of results) session.append(result);
+      // 轮数提示是 Persona 的文字，接在最后一条回执末尾，单独记成未归属。
+      calls.forEach((call, index) => this.noteInput([results[index]], [
+        { source: this.worldToolOwners.get(call.name) ?? null, text: receiptTexts[index] },
+        { source: null, text: textOf(results[index]).slice(receiptTexts[index].length) },
+      ]));
       this.pendingToolCalls.clear();
 
       // 工具执行期间消费或达到投递标准的事件接在本轮工具结果之后。
@@ -1545,12 +1563,15 @@ export class MainLoop {
     const calls = partial.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
     this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
     for (const entry of partial) session.append(entry);
+    if (partial.length > 0) this.newInput.clear();
     if (calls.some((call) => eager?.has(call.call_id))) this.enterPhase('tools', { round: this.phase.round });
     for (const call of calls) {
       const ran = eager?.take(call.call_id);
       const out = ran !== undefined ? await ran : { text: notExecuted };
       if (!this.active(generation)) return;
-      session.append(this.toolResult(call.call_id, out));
+      const result = this.toolResult(call.call_id, out);
+      session.append(result);
+      this.noteInput([result], [{ source: this.worldToolOwners.get(call.name) ?? null, text: textOf(result) }]);
       this.pendingToolCalls.delete(call.call_id);
     }
     this.pendingToolCalls.clear();
@@ -1861,8 +1882,43 @@ export class MainLoop {
   }
 
   /** 每次已发出的 HTTP 尝试均记账；未报告的 token 维度保留为未知。 */
-  private recordFailedUsage(error: unknown, prefixHash?: string): void {
-    if (error instanceof GenerationError) this.mainTrack?.recordAttempts(error.attempts, undefined, { prefixHash });
+  private recordFailedUsage(error: unknown, usage: AttemptRecordOptions): void {
+    if (error instanceof GenerationError) this.mainTrack?.recordAttempts(error.attempts, undefined, usage);
+  }
+
+  /**
+   * records 刚写进 session:把它们的估算 token(口径同上下文计数)记给 parts 的来源。几段时按各段正文的估算 token
+   * 比例分，各段都为空时全记给第一段;来源 null 是不属于任何 World 的部分。
+   */
+  private noteInput(records: readonly ContextRecord[], parts: ReadonlyArray<{ source: string | null; text: string }>): void {
+    const tokens = this.d.context.estimateTokens(records);
+    const sizes = parts.map((part) => estimateTokens(part.text));
+    const sum = sizes.reduce((total, size) => total + size, 0);
+    parts.forEach((part, index) => {
+      const share = sum > 0 ? sizes[index] / sum : index === 0 ? 1 : 0;
+      if (share > 0) this.newInput.set(part.source, (this.newInput.get(part.source) ?? 0) + tokens * share);
+    });
+  }
+
+  /** 这次请求新进上下文的来源，估算 token 取整。 */
+  private inputSources(): UsageSources {
+    const worlds: Record<string, number> = {};
+    for (const [source, tokens] of this.newInput) if (source !== null) worlds[source] = Math.round(tokens);
+    return { worlds, other: Math.round(this.newInput.get(null) ?? 0) };
+  }
+
+  /** 响应里推理以外的输出的估算 token,及其中调用各 World 工具的部分。 */
+  private outputSources(records: readonly ContextRecord[]): NonNullable<UsageSources['output']> {
+    const worldTools: Record<string, number> = {};
+    let total = 0;
+    for (const entry of records) {
+      if (entry.item.type === 'reasoning') continue;
+      const tokens = this.d.context.estimateTokens([entry]);
+      total += tokens;
+      const owner = entry.item.type === 'function_call' ? this.worldToolOwners.get(entry.item.name) : undefined;
+      if (owner !== undefined) worldTools[owner] = (worldTools[owner] ?? 0) + tokens;
+    }
+    return { total, worldTools };
   }
 
   /** 记录失败时刻与连续失败起点，并持久化。告警带上触发它的那次失败。 */

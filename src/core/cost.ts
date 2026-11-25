@@ -1,5 +1,5 @@
 /** Aggregate observed consumption and immutable Provider charges. */
-import type { UsageRecord } from './types.ts';
+import { WORLD_USAGE_ROLE_PREFIX, type UsageRecord, type UsageSources } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
 import type { Charge } from './generation.ts';
 import { getTimezoneOffsetMinutes, nowIso } from './util.ts';
@@ -76,6 +76,13 @@ export interface UsageAggregate {
   byRole: UsageGroupStat[];
   /** 按模型分组(cost 降序) */
   byModel: UsageGroupStat[];
+  /**
+   * 按 World 分组(cost 降序)。World 自报用量全额归它，主循环请求按 usageShares 分;调用次数是分到份额的请求数，
+   * token 按份额累计后取整。
+   */
+  byWorld: UsageGroupStat[];
+  /** 不归任何 World 的部分：主循环请求里分给未归属的份额，以及没有来源记录的调用(fork 等)。 */
+  unattributed: UsageGroupStat;
   /** Failed, aborted and discarded attempts are also included in totals. */
   failed: UsageAccum;
   /**
@@ -100,7 +107,8 @@ function zero(): UsageAccum {
   };
 }
 
-type MeasuredCost = { cacheHit: number; cacheMiss: number; output: number; total: number; priced: boolean };
+/** 一条记录在所选币种下的费用;totalMeter 是按 total(输入加输出)计价的那部分。 */
+type MeasuredCost = { cacheHit: number; cacheMiss: number; output: number; totalMeter: number; total: number; priced: boolean };
 
 /** 1 USD 合多少 code;USD 恒为 1,没有正数汇率的币种为 null。 */
 function usdRate(code: string, rates: Readonly<Record<string, number>>): number | null {
@@ -123,27 +131,78 @@ function chargeIn(charges: readonly Charge[], currency: string, basis: string, r
   return null;
 }
 
-function add(a: UsageAccum, r: UsageRecord, c: MeasuredCost): void {
+/** 一条记录分到的份额:input 乘输入、缓存与推理的 token 和费用,output 乘输出的。 */
+interface UsageShare { input: number; output: number }
+
+const WHOLE: UsageShare = { input: 1, output: 1 };
+
+/** 按份额累计一条记录，调用次数照记一次。按 total 计价的费用按这条记录的输入、输出 token 混合两种份额。 */
+function add(a: UsageAccum, r: UsageRecord, c: MeasuredCost, share: UsageShare = WHOLE): void {
   a.calls += 1;
   if (c.priced) a.pricedCalls++; else a.unpricedCalls++;
   if (r.attempt && (r.attempt.meters.input === null || r.attempt.meters.output === null || r.attempt.meters.cachedInput === null)) a.unknownUsageCalls++;
-  a.promptTokens += r.promptTokens;
-  a.completionTokens += r.completionTokens;
-  a.cacheHitTokens += r.cacheHitTokens;
-  a.cacheMissTokens += r.cacheMissTokens;
-  a.reasoningTokens += r.reasoningTokens;
-  a.cost += c.total;
-  a.costCacheHit += c.cacheHit;
-  a.costCacheMiss += c.cacheMiss;
-  a.costOutput += c.output;
-  a.costOther += c.total - c.cacheHit - c.cacheMiss - c.output;
-  a.unclassifiedInputTokens += Math.max(0, r.promptTokens - r.cacheHitTokens - r.cacheMissTokens);
+  const io = r.promptTokens + r.completionTokens;
+  const mixed = io > 0 ? (r.promptTokens * share.input + r.completionTokens * share.output) / io : share.input;
+  a.promptTokens += r.promptTokens * share.input;
+  a.completionTokens += r.completionTokens * share.output;
+  a.cacheHitTokens += r.cacheHitTokens * share.input;
+  a.cacheMissTokens += r.cacheMissTokens * share.input;
+  a.reasoningTokens += r.reasoningTokens * share.input;
+  a.cost += c.total * share.input + c.output * (share.output - share.input) + c.totalMeter * (mixed - share.input);
+  a.costCacheHit += c.cacheHit * share.input;
+  a.costCacheMiss += c.cacheMiss * share.input;
+  a.costOutput += c.output * share.output;
+  a.costOther += (c.total - c.cacheHit - c.cacheMiss - c.output) * share.input + c.totalMeter * (mixed - share.input);
+  a.unclassifiedInputTokens += Math.max(0, r.promptTokens - r.cacheHitTokens - r.cacheMissTokens) * share.input;
 }
 
-function upsert(m: Map<string, UsageAccum>, key: string, r: UsageRecord, c: MeasuredCost): void {
+function upsert(m: Map<string, UsageAccum>, key: string, r: UsageRecord, c: MeasuredCost, share: UsageShare = WHOLE): void {
   let a = m.get(key);
   if (!a) { a = zero(); m.set(key, a); }
-  add(a, r, c);
+  add(a, r, c, share);
+}
+
+/**
+ * 一次主循环请求的 token 与费用分给各来源的份额，键是 World id,null 是未归属;各来源的 input 之和、output
+ * 之和都是 1,份额为 0 的来源不出现。
+ * - input:按 sources 里新进上下文的估算 token 的比例;没有新内容时全归未归属。
+ * - output:调用 World 工具的部分按它在推理以外输出估算里的比例，折成实际输出 token 记给那个 World;
+ *   其余输出(文字、推理、Persona 工具的调用)按 input 的比例分。
+ */
+function usageShares(sources: UsageSources, outputTokens: number, reasoningTokens: number): Map<string | null, UsageShare> {
+  const shares = new Map<string | null, UsageShare>();
+  const of = (key: string | null): UsageShare => {
+    let share = shares.get(key);
+    if (!share) { share = { input: 0, output: 0 }; shares.set(key, share); }
+    return share;
+  };
+  const inputs: Array<[string | null, number]> = [...Object.entries(sources.worlds), [null, sources.other]];
+  const inputTotal = inputs.reduce((sum, [, tokens]) => sum + tokens, 0);
+  if (inputTotal <= 0) of(null).input = 1;
+  for (const [key, tokens] of inputs) if (tokens > 0) of(key).input = tokens / inputTotal;
+  const estimate = sources.output;
+  const perEstimated = estimate && estimate.total > 0 ? Math.max(0, outputTokens - reasoningTokens) / estimate.total : 0;
+  let toolTokens = 0;
+  for (const [world, estimated] of Object.entries(estimate?.worldTools ?? {})) {
+    const tokens = estimated * perEstimated;
+    if (tokens > 0) { of(world).output = tokens / outputTokens; toolTokens += tokens; }
+  }
+  const rest = outputTokens > 0 ? (outputTokens - toolTokens) / outputTokens : 1;
+  for (const share of shares.values()) share.output += share.input * rest;
+  return shares;
+}
+
+/** 按份额累计的 token 取整，费用保留小数。 */
+function wholeTokens(a: UsageAccum): UsageAccum {
+  return {
+    ...a,
+    promptTokens: Math.round(a.promptTokens),
+    completionTokens: Math.round(a.completionTokens),
+    cacheHitTokens: Math.round(a.cacheHitTokens),
+    cacheMissTokens: Math.round(a.cacheMissTokens),
+    reasoningTokens: Math.round(a.reasoningTokens),
+    unclassifiedInputTokens: Math.round(a.unclassifiedInputTokens),
+  };
 }
 
 function mapToObj(m: Map<string, UsageAccum>): Record<string, UsageAccum> {
@@ -315,7 +374,7 @@ export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRe
 }
 
 /**
- * 按包含端点的日期范围筛选，按时间、角色和模型聚合用量。
+ * 按包含端点的日期范围筛选，按时间、角色、模型和 World 聚合用量。
  * 费用从记录内的 charges 按币种和计价基础选择，再按 meter 归入四类成本。
  */
 export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
@@ -326,6 +385,8 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   /** 同一 role 的 label 使用最后一条记录提供的值。 */
   const roleLabels = new Map<string, string>();
   const models = new Map<string, UsageAccum>();
+  const worlds = new Map<string, UsageAccum>();
+  const unattributed = zero();
   const totals = zero();
   const failed = zero();
   const successful = zero();
@@ -350,11 +411,12 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     const found = chargeIn(recordCharges(r), currency, basis, rates);
     const charge = found?.charge;
     const factor = found?.factor ?? 1;
-    const cost: MeasuredCost = { cacheHit: 0, cacheMiss: 0, output: 0, total: (charge?.knownAmount ?? 0) * factor, priced: charge?.amount != null };
+    const cost: MeasuredCost = { cacheHit: 0, cacheMiss: 0, output: 0, totalMeter: 0, total: (charge?.knownAmount ?? 0) * factor, priced: charge?.amount != null };
     for (const line of charge?.lines ?? []) {
       if (line.meter === 'cachedInput') cost.cacheHit += (line.amount ?? 0) * factor;
       if (line.meter === 'uncachedInput' || line.meter === 'input') cost.cacheMiss += (line.amount ?? 0) * factor;
       if (line.meter === 'output') cost.output += (line.amount ?? 0) * factor;
+      if (line.meter === 'total') cost.totalMeter += (line.amount ?? 0) * factor;
     }
     const outcome = r.attempt?.outcome;
     if (r.outcome !== undefined || (outcome !== undefined && outcome !== 'completed' && outcome !== 'incomplete')) add(failed, r, cost);
@@ -374,6 +436,12 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     upsert(roles, role, r, cost);
     if (r.label) roleLabels.set(role, r.label);
     upsert(models, model, r, cost);
+    if (role.startsWith(WORLD_USAGE_ROLE_PREFIX)) upsert(worlds, role.slice(WORLD_USAGE_ROLE_PREFIX.length), r, cost);
+    else if (!r.sources) add(unattributed, r, cost);
+    else for (const [key, share] of usageShares(r.sources, r.completionTokens, r.reasoningTokens)) {
+      if (key === null) add(unattributed, r, cost, share);
+      else upsert(worlds, key, r, cost, share);
+    }
     add(totals, r, cost);
   }
 
@@ -408,6 +476,8 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     totals: statOf('total', totals),
     byRole: groupOut(roles, roleLabels),
     byModel: groupOut(models),
+    byWorld: [...worlds.entries()].map(([world, a]) => statOf(world, wholeTokens(a))).sort((x, y) => y.cost - x.cost),
+    unattributed: statOf('unattributed', wholeTokens(unattributed)),
     failed,
   };
   if (opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1) {
