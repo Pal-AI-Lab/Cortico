@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'Registro uso token (fonte della pagina costi)',
-      note: 'Cancella tutti i record di uso e costo dei modelli; i totali ripartono dai record scritti in seguito. Questi record non entrano nel contesto del modello',
+      note: 'Cancella tutti i record di uso, costo e attività World (usage.jsonl e world-activity.jsonl); i totali ripartono dai record scritti in seguito. Questi record non entrano nel contesto del modello',
       stat: (n: number, size: string) => `${n} record / ${size}`,
       cleared: (n: number) => `${n} record di uso ${n === 1 ? 'cancellato' : 'cancellati'}`,
     },

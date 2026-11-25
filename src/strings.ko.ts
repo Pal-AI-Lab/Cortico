@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'token 사용량 기록(비용 페이지 데이터 원본)',
-      note: '모든 모델 사용량과 비용 기록을 지웁니다. 비용 페이지는 이후 기록되는 항목부터 다시 집계합니다. 이 기록은 모델 컨텍스트에 들어가지 않습니다',
+      note: '모든 모델 사용량·비용 및 World 활동 기록(usage.jsonl 및 world-activity.jsonl)을 지웁니다. 비용 페이지는 이후 기록되는 항목부터 다시 집계합니다. 이 기록은 모델 컨텍스트에 들어가지 않습니다',
       stat: (n: number, size: string) => `${n}건 / ${size}`,
       cleared: (n: number) => `사용량 기록 ${n}건을 지웠습니다`,
     },

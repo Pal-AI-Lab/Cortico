@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'Token-Verbrauchsjournal (Quelle der Kostenseite)',
-      note: 'Löscht alle Verbrauchs- und Kosteneinträge der Modelle; die Summen beginnen mit danach geschriebenen Einträgen neu. Diese Einträge gehören nicht zum Modellkontext',
+      note: 'Löscht alle Verbrauchs-, Kosten- und World-Aktivitätseinträge (usage.jsonl und world-activity.jsonl); die Summen beginnen mit danach geschriebenen Einträgen neu. Diese Einträge gehören nicht zum Modellkontext',
       stat: (n: number, size: string) => `${n} ${n === 1 ? 'Eintrag' : 'Einträge'} / ${size}`,
       cleared: (n: number) => `${n} ${n === 1 ? 'Verbrauchseintrag' : 'Verbrauchseinträge'} gelöscht`,
     },

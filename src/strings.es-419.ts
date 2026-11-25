@@ -24,7 +24,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'Libro de uso de tokens (fuente de la página de costos)',
-      note: 'Borra todos los registros de uso y costo de los modelos; los totales se reinician con los registros que se escriban después. Estos registros no se incluyen en el contexto del modelo',
+      note: 'Borra todos los registros de uso, costo y actividad de World (usage.jsonl y world-activity.jsonl); los totales se reinician con los registros que se escriban después. Estos registros no se incluyen en el contexto del modelo',
       stat: (n: number, size: string) => `${n} ${s(n, 'registro', 'registros')} / ${size}`,
       cleared: (n: number) => (n === 1 ? 'Se borró 1 registro de uso' : `Se borraron ${n} registros de uso`),
     },

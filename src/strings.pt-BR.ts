@@ -24,7 +24,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'Registro de uso de tokens (fonte da página de custos)',
-      note: 'Limpa todos os registros de uso e custo dos modelos; os totais recomeçam com os registros gravados depois. Esses registros não entram no contexto do modelo',
+      note: 'Limpa todos os registros de uso, custo e atividade de World (usage.jsonl e world-activity.jsonl); os totais recomeçam com os registros gravados depois. Esses registros não entram no contexto do modelo',
       stat: (n: number, size: string) => `${n} ${s(n, 'registro', 'registros')} / ${size}`,
       cleared: (n: number) => (n === 1 ? '1 registro de uso foi limpo' : `${n} registros de uso foram limpos`),
     },

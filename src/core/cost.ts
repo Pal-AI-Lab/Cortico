@@ -3,6 +3,9 @@ import type { UsageRecord } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
 import type { Charge } from './generation.ts';
 import { getTimezoneOffsetMinutes, nowIso } from './util.ts';
+import { WORLD_USAGE_ROLE_PREFIX, type WorldActivityRecord } from './world-activity-log.ts';
+
+export { WORLD_USAGE_ROLE_PREFIX };
 
 /** 已解析的具体时间粒度(桶宽) */
 export type UsageBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
@@ -52,6 +55,17 @@ export interface UsageGroupStat extends UsageAccum {
   cacheHitRate: number | null;
 }
 
+/**
+ * 按 World 分组的合计。
+ * events 为 World 推送事件数，rounds 为送入该 World 事件的主循环轮数；
+ * 其余字段（含 calls、token 与费用）来自 role 为 `worlds.<id>` 的模型调用。
+ */
+export interface WorldUsageStat extends UsageGroupStat {
+  key: string;
+  events: number;
+  rounds: number;
+}
+
 export interface UsageAggregate {
   currency: string;
   /** 这个计价基础下能显示的币种：有原价的，加上能从它们换算到的。 */
@@ -76,6 +90,8 @@ export interface UsageAggregate {
   byRole: UsageGroupStat[];
   /** 按模型分组(cost 降序) */
   byModel: UsageGroupStat[];
+  /** 按 World 分组(events 降序,相同时 cost 降序) */
+  byWorld: WorldUsageStat[];
   /** Failed, aborted and discarded attempts are also included in totals. */
   failed: UsageAccum;
   /**
@@ -301,7 +317,7 @@ function utcMidnight(day: string | null): number {
  * 或 ts 读不出时刻。按时刻比较，两端按 UTC 偏移的极值放宽，多留的记录由 aggregateUsage 按墙钟再筛;
  * 范围一端不限时这一端不筛。opts 要和交给 aggregateUsage 的是同一份(含 now)。
  */
-export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRecord) => boolean {
+export function usageRecordFilter(opts: UsageAggregateOptions): (record: { ts: string }) => boolean {
   const { today, from, to } = requestedDays(opts);
   const end = to ?? today;
   const back = opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1 && end !== null ? daysBefore(end, opts.dailyTokenDays - 1) : null;
@@ -318,7 +334,11 @@ export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRe
  * 按包含端点的日期范围筛选，按时间、角色和模型聚合用量。
  * 费用从记录内的 charges 按币种和计价基础选择，再按 meter 归入四类成本。
  */
-export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
+export function aggregateUsage(
+  records: UsageRecord[],
+  opts: UsageAggregateOptions,
+  worldActivity: readonly WorldActivityRecord[] = [],
+): UsageAggregate {
   const { nowKeySource, today, from, to } = requestedDays(opts);
   const unit: UsageBucketUnit = opts.bucket === 'auto' ? resolveBucket(from, to) : opts.bucket;
   const series = new Map<string, { total: UsageAccum; roles: Map<string, UsageAccum>; models: Map<string, UsageAccum>; roleModels: Map<string, Map<string, UsageAccum>> }>();
@@ -398,6 +418,34 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const groupOut = (m: Map<string, UsageAccum>, labels?: Map<string, string>): UsageGroupStat[] =>
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
 
+  const worlds = new Map<string, { acc: UsageAccum; label?: string; events: number; rounds: number }>();
+  for (const [role, acc] of roles) {
+    if (!role.startsWith(WORLD_USAGE_ROLE_PREFIX)) continue;
+    const worldId = role.slice(WORLD_USAGE_ROLE_PREFIX.length);
+    if (!worldId) continue;
+    worlds.set(worldId, { acc, label: roleLabels.get(role), events: 0, rounds: 0 });
+  }
+  for (const act of worldActivity) {
+    if (!act || typeof act.ts !== 'string' || !act.world) continue;
+    const day = wall(act.ts).slice(0, 10);
+    if ((from && day < from) || (to && day > to)) continue;
+    if (act.events === 0 && act.rounds === 0) continue;
+    let entry = worlds.get(act.world);
+    if (!entry) {
+      entry = { acc: zero(), events: 0, rounds: 0 };
+      worlds.set(act.world, entry);
+    }
+    entry.events += act.events;
+    entry.rounds += act.rounds;
+  }
+  const byWorld: WorldUsageStat[] = [...worlds.entries()]
+    .map(([worldId, entry]) => ({
+      ...statOf(worldId, entry.acc, entry.label),
+      events: entry.events,
+      rounds: entry.rounds,
+    }))
+    .sort((a, b) => (b.events - a.events) || (b.cost - a.cost));
+
   const out: UsageAggregate = {
     currency, currencies, rates, basis, balances, successful, byInstance: groupOut(instances),
     bucket: unit,
@@ -408,6 +456,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     totals: statOf('total', totals),
     byRole: groupOut(roles, roleLabels),
     byModel: groupOut(models),
+    byWorld,
     failed,
   };
   if (opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1) {

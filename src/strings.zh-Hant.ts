@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'token用量流水(成本頁資料來源)',
-      note: '清除全部模型用量與成本記錄，成本頁從後續寫入的記錄重新累計。這些記錄不進入模型上下文',
+      note: '清除全部模型用量、成本與 World 活動統計（usage.jsonl 與 world-activity.jsonl），成本頁從後續寫入的記錄重新累計。這些記錄不進入模型上下文',
       stat: (n: number, size: string) => `${n}條 / ${size}`,
       cleared: (n: number) => `已清除${n}條用量記錄`,
     },

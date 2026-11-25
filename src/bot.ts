@@ -201,6 +201,22 @@ const fileSize = (dir: string, rel: string, noFile: string): string => {
   }
 };
 
+const filesSize = (dir: string, rels: readonly string[], noFile: string): string => {
+  let total = 0;
+  let found = false;
+  for (const rel of rels) {
+    const p = join(dir, rel);
+    if (!existsSync(p)) continue;
+    found = true;
+    try {
+      total += statSync(p).size;
+    } catch {
+      return '?';
+    }
+  }
+  return found ? `${(total / 1024).toFixed(1)}KB` : noFile;
+};
+
 function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, language: Language): StoragePart[] {
   const t = botText(language);
   const size = (dir: string, rel: string): string => fileSize(dir, rel, t.noFile);
@@ -248,14 +264,20 @@ function deriveStorage<C extends CoreConfig>(core: Core<C>, dataDir: string, lan
       key: 'usage',
       label: s.usage.label,
       kind: 'disk',
-      location: 'data/usage.jsonl',
+      location: 'data/usage.jsonl, data/world-activity.jsonl',
       note: s.usage.note,
       stat: () => {
         const count = core.usageLog.count();
-        const bytes = size(dataDir, 'usage.jsonl');
+        const bytes = filesSize(dataDir, ['usage.jsonl', 'world-activity.jsonl'], t.noFile);
         return count === null ? bytes : s.usage.stat(count, bytes);
       },
-      clear: async () => s.usage.cleared(await core.usageLog.clear()),
+      clear: async () => {
+        const [usageCleared] = await Promise.all([
+          core.usageLog.clear(),
+          core.worldActivityLog.clear(),
+        ]);
+        return s.usage.cleared(usageCleared);
+      },
     },
     {
       key: 'toolcalls',
@@ -1048,9 +1070,19 @@ export function createBot<C extends CoreConfig>(
         aggregate: async (opts) => {
           const { rates, sources } = await liveRates.resolve();
           const options = { ...opts, timezone: core.config.timezone, rates, now: new Date() };
-          return { ...aggregateUsage(await core.usageLog.readAll(usageRecordFilter(options)), options), rateSources: sources };
+          const filter = usageRecordFilter(options);
+          const [records, activity] = await Promise.all([
+            core.usageLog.readAll(filter),
+            core.worldActivityLog.readAll(filter),
+          ]);
+          return { ...aggregateUsage(records, options, activity), rateSources: sources };
         },
-        status: () => core.usageLog.status(),
+        status: () => {
+          const usage = core.usageLog.status();
+          const activity = core.worldActivityLog.status();
+          const errors = [usage.error, activity.error].filter((e): e is string => Boolean(e));
+          return { pending: usage.pending + activity.pending, error: errors.length ? errors.join('; ') : null };
+        },
       },
       config: {
         groups: (language) => allConfigGroups(language).map((group) => ({ group, values: group.owner.startsWith('provider:') ? providerSettings.values(group.id, language) : readGroupValues(cfg, group) })),

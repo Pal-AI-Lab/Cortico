@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, type UsageAggregateOptions } from '../../src/core/cost.ts';
+import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, WORLD_USAGE_ROLE_PREFIX, type UsageAggregateOptions } from '../../src/core/cost.ts';
 import type { UsageRecord } from '../../src/core/types.ts';
+import { WORLD_ACTIVITY_VERSION, type WorldActivityRecord } from '../../src/core/world-activity-log.ts';
 import { priceUsage, unknownMeters } from '../../src/core/generation.ts';
 import { snapshotPrice } from '../../src/providers/pricebook.ts';
 
@@ -251,5 +252,63 @@ describe('aggregateUsage:失败流单列', () => {
     const a = aggregateUsage([recs[0]], { bucket: 'day' });
     expect(a.failed.calls).toBe(0);
     expect(a.failed.cost).toBe(0);
+  });
+});
+
+describe('aggregateUsage · byWorld', () => {
+  const usageRec = (ts: string, role: string, model: string, miss: number, comp: number, label = role): UsageRecord => charged({
+    ts, sessionId: role, role: role as UsageRecord['role'], label, model,
+    promptTokens: miss, completionTokens: comp, cacheHitTokens: 0, cacheMissTokens: miss, reasoningTokens: 0,
+  });
+  const actRec = (ts: string, world: string, events: number, rounds: number, id: string): WorldActivityRecord => ({
+    version: WORLD_ACTIVITY_VERSION,
+    recordId: id,
+    ts,
+    run: 'run-1',
+    world,
+    events,
+    rounds,
+  });
+
+  it('按范围筛选并合并 worlds.<id> 的 token/费用与活动计数，按 events 降序、cost 降序排列', () => {
+    const records: UsageRecord[] = [
+      usageRec('2026-07-18T10:00:00+08:00', 'main', 'flash', 1_000_000, 0),
+      // beta 有历史模型调用但无活动记录，cost = 3
+      usageRec('2026-07-18T10:05:00+08:00', `${WORLD_USAGE_ROLE_PREFIX}beta`, 'pro', 1_000_000, 0, 'Beta'),
+      // gamma 与 delta 同为 events=5，gamma 费用更高（pro=3 > flash=1）
+      usageRec('2026-07-18T10:10:00+08:00', `${WORLD_USAGE_ROLE_PREFIX}gamma`, 'pro', 1_000_000, 0),
+      usageRec('2026-07-18T10:15:00+08:00', `${WORLD_USAGE_ROLE_PREFIX}delta`, 'flash', 1_000_000, 0),
+      // 范围外
+      usageRec('2026-07-17T23:59:00+08:00', `${WORLD_USAGE_ROLE_PREFIX}old`, 'pro', 1_000_000, 0),
+    ];
+    const activity: WorldActivityRecord[] = [
+      actRec('2026-07-18T10:00:00+08:00', 'alpha', 10, 3, 'a1'),
+      actRec('2026-07-18T10:01:00+08:00', 'alpha', 2, 1, 'a2'),
+      actRec('2026-07-18T10:10:00+08:00', 'gamma', 5, 2, 'g1'),
+      actRec('2026-07-18T10:15:00+08:00', 'delta', 5, 4, 'd1'),
+      // 范围外
+      actRec('2026-07-17T23:59:00+08:00', 'old', 99, 99, 'o1'),
+    ];
+
+    const opts: UsageAggregateOptions = { from: '2026-07-18', to: '2026-07-18', bucket: 'day', timezone: 'Asia/Shanghai' };
+    const a = aggregateUsage(records.filter(usageRecordFilter(opts)), opts, activity.filter(usageRecordFilter(opts)));
+
+    expect(a.byWorld.map((w) => w.key)).toEqual(['alpha', 'gamma', 'delta', 'beta']);
+    expect(a.byWorld[0]).toMatchObject({
+      key: 'alpha',
+      events: 12,
+      rounds: 4,
+      calls: 0,
+      promptTokens: 0,
+      completionTokens: 0,
+      cost: 0,
+      cacheHitRate: null,
+    });
+    expect(a.byWorld[1]).toMatchObject({ key: 'gamma', events: 5, rounds: 2, calls: 1, promptTokens: 1_000_000 });
+    expect(a.byWorld[1]!.cost).toBeCloseTo(3, 6);
+    expect(a.byWorld[2]).toMatchObject({ key: 'delta', events: 5, rounds: 4, calls: 1, promptTokens: 1_000_000 });
+    expect(a.byWorld[2]!.cost).toBeCloseTo(1, 6);
+    expect(a.byWorld[3]).toMatchObject({ key: 'beta', label: 'Beta', events: 0, rounds: 0, calls: 1 });
+    expect(a.byWorld[3]!.cost).toBeCloseTo(3, 6);
   });
 });

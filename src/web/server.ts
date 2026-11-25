@@ -2348,7 +2348,7 @@ export class WebApp {
 
     app.get('/api/usage', wrap(async (req, res) => {
       const src = this.deps.usage;
-      if (!src) { res.json({ currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [] }); return; }
+      if (!src) { res.json({ currency: 'USD', bucket: 'day', from: null, to: null, series: [], totals: null, byRole: [], byModel: [], byWorld: [] }); return; }
       const BUCKETS = ['auto', 'minute', 'hour', 'day', 'week', 'month'] as const;
       const raw = strParam(req.query.bucket);
       const bucket: UsageBucketOption = (BUCKETS as readonly string[]).includes(raw ?? '') ? (raw as UsageBucketOption) : 'auto';

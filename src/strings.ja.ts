@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: 'token 使用量の記録（コストページのデータ元）',
-      note: 'モデルの使用量とコストの記録をすべて消去します。コストページは以降に書き込まれる記録から集計し直します。これらの記録はモデルのコンテキストに入りません',
+      note: 'モデルの使用量・コストと World 活動の記録（usage.jsonl と world-activity.jsonl）をすべて消去します。コストページは以降に書き込まれる記録から集計し直します。これらの記録はモデルのコンテキストに入りません',
       stat: (n: number, size: string) => `${n} 件 / ${size}`,
       cleared: (n: number) => `使用量の記録を ${n} 件消去しました`,
     },

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebApp } from '../../src/web/server.ts';
 import { UsageLog } from '../../src/core/usage-log.ts';
+import { WORLD_USAGE_ROLE_PREFIX, WorldActivityLog } from '../../src/core/world-activity-log.ts';
 import { aggregateUsage } from '../../src/core/cost.ts';
 import { nullLogger } from '../../src/core/util.ts';
 import type { UsageRecord } from '../../src/core/types.ts';
@@ -42,19 +43,29 @@ beforeAll(async () => {
   memoryDir = mkdtempSync(join(tmpdir(), 'webpersona-'));
   dataDir = mkdtempSync(join(tmpdir(), 'webpersona-data-'));
   const usage = new UsageLog(join(dataDir, 'usage.jsonl'));
-  const rec = (ts: string, model: string, miss: number, comp: number): UsageRecord => ({
-    ts, sessionId: 'main', role: 'main', label: '主意识', model,
+  const activity = new WorldActivityLog(join(dataDir, 'world-activity.jsonl'), {
+    timezone: 'Asia/Shanghai',
+    run: 'run-1',
+    now: () => new Date('2026-07-19T01:00:00Z'), // 09:00+08:00
+  });
+  const rec = (ts: string, model: string, miss: number, comp: number, role = 'main'): UsageRecord => ({
+    ts, sessionId: role, role, label: role === 'main' ? '主意识' : role, model,
     promptTokens: miss, completionTokens: comp, cacheHitTokens: 0, cacheMissTokens: miss, reasoningTokens: 0,
   });
   usage.append(rec('2026-07-19T09:00:00+08:00', 'deepseek-v4-flash', 1_000_000, 1_000_000));
   usage.append(rec('2026-07-19T10:00:00+08:00', 'deepseek-v4-flash', 0, 500_000));
+  usage.append(rec('2026-07-19T10:30:00+08:00', 'deepseek-v4-flash', 200, 50, `${WORLD_USAGE_ROLE_PREFIX}qq`));
+  activity.recordEvent('qq', 4);
+  activity.recordRound('qq', 2);
+  activity.recordEvent('mc', 9);
+  activity.flush();
 
   app = new WebApp({
     store: new FakeStore(),
     memoryDir,
     dataDir,
     getStatus: () => ({}),
-    usage: { aggregate: async (opts) => aggregateUsage(await usage.readAll(), opts) },
+    usage: { aggregate: async (opts) => aggregateUsage(await usage.readAll(), opts, await activity.readAll()) },
     config: {
       groups: () => configGroups.map((group) => ({ group, values: readGroupValues(cfg, group) })),
       set: (groupId, values) => {
@@ -76,13 +87,17 @@ afterAll(async () => {
 });
 
 describe('/api/usage', () => {
-  it('聚合 IO 自报 token，未提交报价时显示未报价', async () => {
+  it('聚合 IO 自报 token，未提交报价时显示未报价，并返回 byWorld', async () => {
     const d = await getJ('/api/usage?bucket=hour&from=2026-07-19&to=2026-07-19');
-    expect(d.totals.calls).toBe(2);
+    expect(d.totals.calls).toBe(3);
     expect(d.series.filter((s: { calls: number }) => s.calls > 0).length).toBe(2); // 09 / 10 两个小时桶
     expect(d.totals.cost).toBe(0);
-    expect(d.totals.unpricedCalls).toBe(2);
+    expect(d.totals.unpricedCalls).toBe(3);
     expect(d.byModel[0].key).toBe('deepseek-v4-flash');
+    expect(d.byWorld).toEqual([
+      expect.objectContaining({ key: 'mc', events: 9, rounds: 0, calls: 0, promptTokens: 0, completionTokens: 0, cost: 0 }),
+      expect.objectContaining({ key: 'qq', events: 4, rounds: 2, calls: 1, promptTokens: 200, completionTokens: 50, cost: 0 }),
+    ]);
   });
 
   it('带 dailyTokenDays 时同一次回应附上逐日 token;不带时回应里没有 dailyTokens', async () => {
@@ -90,8 +105,35 @@ describe('/api/usage', () => {
     const plain = await getJ(range);
     const d = await getJ(`${range}&dailyTokenDays=2`);
     expect('dailyTokens' in plain).toBe(false);
-    expect(d.dailyTokens).toEqual([{ day: '2026-07-18', tokens: 0 }, { day: '2026-07-19', tokens: 2_500_000 }]);
+    expect(d.dailyTokens).toEqual([{ day: '2026-07-18', tokens: 0 }, { day: '2026-07-19', tokens: 2_500_250 }]);
     expect({ ...d, dailyTokens: undefined }).toEqual({ ...plain, dailyTokens: undefined });
+  });
+
+  it('usage 未挂载时返回空回应且包含 byWorld: []', async () => {
+    const bare = new WebApp({
+      store: new FakeStore(),
+      memoryDir,
+      dataDir,
+      getStatus: () => ({}),
+      log: nullLogger(),
+    });
+    const barePort = await bare.start(0);
+    try {
+      const d = await (await fetch(`http://127.0.0.1:${barePort}/api/usage`)).json() as Record<string, unknown>;
+      expect(d).toMatchObject({
+        currency: 'USD',
+        bucket: 'day',
+        from: null,
+        to: null,
+        series: [],
+        totals: null,
+        byRole: [],
+        byModel: [],
+        byWorld: [],
+      });
+    } finally {
+      await bare.stop();
+    }
   });
 });
 

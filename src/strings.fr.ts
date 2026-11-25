@@ -22,7 +22,7 @@ export const botText: Partial<typeof botEn> = {
     },
     usage: {
       label: "Registre d'utilisation des tokens (source de la page des coûts)",
-      note: "Efface tous les enregistrements d'utilisation et de coût des modèles ; les totaux repartent des enregistrements écrits ensuite. Ces enregistrements ne font pas partie du contexte du modèle",
+      note: "Efface tous les enregistrements d'utilisation, de coût et d'activité World (usage.jsonl et world-activity.jsonl) ; les totaux repartent des enregistrements écrits ensuite. Ces enregistrements ne font pas partie du contexte du modèle",
       stat: (n: number, size: string) => `${n} enregistrement${n > 1 ? 's' : ''} / ${size}`,
       cleared: (n: number) => `${n} enregistrement${n > 1 ? 's' : ''} d'utilisation effacé${n > 1 ? 's' : ''}`,
     },
