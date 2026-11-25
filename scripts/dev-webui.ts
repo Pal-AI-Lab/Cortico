@@ -111,8 +111,11 @@ function genUsage(): UsageRecord[] {
   const p2 = (n: number) => String(n).padStart(2, '0');
 
   const pickRole = () => roles[rnd() < 0.85 ? 0 : 1];
+  /** 主循环请求里各 World 新进上下文的估算 token;空的一档只有 Persona 自己的内容。 */
+  const sourceMix: Array<Record<string, number>> = [{ qq: 400 }, { qq: 300, bilibili: 900 }, { minecraft: 600 }, {}];
   const push = (day: string, hh: number, mm: number) => {
     const [role, label, model] = pickRole();
+    const worlds = role === 'main' ? sourceMix[Math.floor(rnd() * sourceMix.length)] : null;
     const prompt = 8000 + Math.floor(rnd() * 6000);
     const hit = Math.floor(prompt * (0.85 + rnd() * 0.1));
     const comp = 200 + Math.floor(rnd() * 800);
@@ -121,6 +124,7 @@ function genUsage(): UsageRecord[] {
       sessionId: role === 'main' ? 'main' : `${role}-${recs.length}`, role, label, model,
       promptTokens: prompt, completionTokens: comp, cacheHitTokens: hit, cacheMissTokens: prompt - hit,
       reasoningTokens: Math.floor(comp * 0.4),
+      ...(worlds ? { sources: { worlds, other: 120 } } : {}),
       charges: priceUsage({ ...unknownMeters(), input: prompt, output: comp, cachedInput: hit, uncachedInput: prompt - hit }, [snapshotPrice({
         models: [model], currency: 'USD', basis: 'marginal', source: 'dev fake price',
         rules: [{ meter: 'cachedInput', perMillion: 0.02 }, { meter: 'uncachedInput', perMillion: 0.27 }, { meter: 'output', perMillion: 1.1 }],

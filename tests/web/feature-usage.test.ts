@@ -452,6 +452,10 @@ function sample(): Any {
     byInstance: [
       { key: 'conn-a', ...accum({ calls: 6, cost: 4 }), cacheHitRate: 0.8 },
     ],
+    byWorld: [
+      { key: 'qq', ...accum({ calls: 4, cost: 2.5 }), cacheHitRate: 0.8 },
+    ],
+    unattributed: { key: 'unattributed', ...accum({ calls: 2, cost: 1.5 }), cacheHitRate: null },
     dailyTokens: [{ day: '2026-08-01', tokens: 1200 }, { day: '2026-08-02', tokens: 600 }],
   };
 }
@@ -928,7 +932,7 @@ describe('用量页挂载', () => {
     expect(root.textContent).not.toContain('桶');
   });
 
-  it('分组明细同一时刻一张表：切换用途 / 模型 / 模型连接时首列跟着换', async () => {
+  it('分组明细同一时刻一张表：切换用途 / 模型 / 模型连接 / World 时首列跟着换,World 表末行是未归属', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -942,6 +946,8 @@ describe('用量页挂载', () => {
     expect(firstCells()).toEqual(['m-big', 'm-small']);
     root.findButton('按模型连接')!.dispatchEvent({ type: 'click' });
     expect(firstCells()).toEqual(['conn-a']);
+    root.findButton('按 World')!.dispatchEvent({ type: 'click' });
+    expect(firstCells()).toEqual(['qq', '未归属']);
     expect(root.textContent).not.toContain('无数据');
   });
 
