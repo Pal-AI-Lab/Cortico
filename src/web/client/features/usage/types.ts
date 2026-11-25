@@ -81,6 +81,10 @@ export interface UsageAggregate {
   byModel?: UsageGroupStat[];
   /** 按发起调用的模型连接(Provider 实例)分组;同一模型走不同连接时分开。 */
   byInstance?: UsageGroupStat[];
+  /** 按 World 分组，key 是 World id;一次请求的 token 与费用按来源分给各 World,calls 是分到份额的请求数。 */
+  byWorld?: UsageGroupStat[];
+  /** 不归任何 World 的部分。 */
+  unattributed?: UsageGroupStat;
   /** 失败、丢弃和中断均计入 totals；此字段用于核对失败消耗。 */
   failed?: UsageAccum;
 }
