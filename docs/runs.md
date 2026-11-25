@@ -1,4 +1,4 @@
-<!-- Owner: src/core/run.ts, src/core/types.ts (LogRecord), scripts/logq.ts -->
+<!-- Owner: src/core/run.ts, src/core/types.ts (LogRecord), src/core/world-activity-log.ts, scripts/logq.ts -->
 
 # Run 与日志
 
@@ -18,8 +18,11 @@
 | `toolcalls.jsonl` | 工具调用与回执 |
 | `incidents/` | 事故包 |
 
-`data/` 根下与 run 无关的:`session-main.jsonl`、`usage.jsonl`、`core-state.json`(投递水位、
+`data/` 根下跨 run 保留的:`session-main.jsonl`、`usage.jsonl`、`world-activity.jsonl`、`core-state.json`(投递水位、
 模型停滞、Persona 的不透明状态、World 可见性)、`timers.json`、`instance.lock`、`web-auth.key`(WebUI 登录令牌的随机盐,设了访问密码才生成)。
+
+`world-activity.jsonl` 的每行记录同一 run 内一个 World 在一个部署时区分钟里的推送事件数和触发轮次数。
+`ts` 取该 World 在这一分钟首次计数的时刻。
 
 ## 日志格式
 

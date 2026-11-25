@@ -2,10 +2,15 @@
  * 验证恰好一个接收事件的常驻 session，以及 fork 的声明解析、并发统计和计量。
  * fork 模型来自活跃端点，工具和轮数来自声明；session id 仅作为查表键。
  */
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Core, type WorldFailure } from "./fixture-core.ts";
+import { LLMError } from './fixture-errors.ts';
+import { DEFAULT_RESUBMIT } from '../../src/core/loop.ts';
+import { HOST_LIFECYCLE_ENDED } from '../../src/core/markers.ts';
+import { nowIso } from '../../src/core/util.ts';
+import { WORLD_ACTIVITY_LOG_FILE, WorldActivityLog } from '../../src/core/world-activity-log.ts';
 import type { LoadedConfig } from '../../src/core/config.ts';
 import type { BotConfig } from '../../bots/corti-soulmate/assemble.ts';
 import type {
@@ -55,6 +60,141 @@ function forkDecl(patch: Partial<SessionDecl> = {}): SessionDecl {
     ...patch,
   };
 }
+
+describe('Core · World activity', () => {
+  let tmp: ReturnType<typeof makeTmpDir>;
+  let core: Core | undefined;
+
+  async function start(...ids: string[]) {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-07-19T12:00:30Z'));
+    tmp = makeTmpDir();
+    const loaded = loadedFor(tmp.dir);
+    const hosts = new Map<string, WorldHost>();
+    const worlds = ids.map(id => ({
+      ...makeFakeIO(id),
+      start: async (host: WorldHost) => { hosts.set(id, host); },
+    }));
+    const llm = new FakeLLM();
+    const instance = new Core(loaded, { worlds, persona: makeFakePersona([], { silent: true }), llm });
+    core = instance;
+    await instance.start();
+    const event = (source: string, text: string) => ({
+      source, text, type: `${source}.sample`, ts: nowIso(instance.config.timezone),
+    });
+    return { core: instance, llm, event, host: (id: string) => hosts.get(id)! };
+  }
+
+  afterEach(async () => {
+    await core?.stop();
+    core = undefined;
+    vi.useRealTimers();
+    tmp?.cleanup();
+  });
+
+  it('counts all host push paths, including hidden and archive-only events, until the lease ends', async () => {
+    const { core, host, event } = await start('sample');
+    const sample = host('sample');
+    const direct = event('sample', 'direct');
+    const archived = event('sample', 'archive only');
+    const hidden = event('sample', 'hidden');
+    const deferred = { type: 'sample.deferred', render: () => 'deferred' };
+    const sourceEvents = ['original A', 'original B'].map(text => event('sample', text));
+    const candidate = { sourceEvents, gateText: '', value: null, project: () => [] };
+    await sample.pushEvent(direct, { trigger: 'piggyback' });
+    await sample.pushEvent(archived, { deliver: false });
+    sample.pushDeferred(deferred, { trigger: 'piggyback' });
+    await sample.pushCandidate!(candidate, { trigger: 'piggyback' });
+    core.setWorldVisible('sample', false);
+    await sample.pushEvent(hidden);
+    sample.pushDeferred(deferred);
+    await core.unmountWorld('sample');
+    await expect(sample.pushEvent(direct)).rejects.toThrow(HOST_LIFECYCLE_ENDED);
+    await expect(sample.pushCandidate!(candidate)).rejects.toThrow(HOST_LIFECYCLE_ENDED);
+    sample.pushDeferred(deferred);
+
+    const accepted = [direct, archived, deferred, ...sourceEvents, hidden, deferred];
+    expect(await core.stop()).toEqual([]);
+    const persisted = new WorldActivityLog(join(core.loaded.dataDir, WORLD_ACTIVITY_LOG_FILE), {
+      run: core.run.id, timezone: () => core.config.timezone,
+    });
+    expect(await persisted.readAll()).toEqual([
+      expect.objectContaining({ world: 'sample', run: core.run.id, events: accepted.length, rounds: 0 }),
+    ]);
+  });
+
+  it('credits a single request to every World delivered across its batches', async () => {
+    const { core, llm, host, event } = await start('first', 'second', 'core', 'persona');
+    core.bus.setPaused(true);
+    const internal = core.store.append({ ...event('core', 'Core event'), origin: 'internal' });
+    core.bus.push({ event: internal }, { trigger: 'piggyback' });
+    core.loop.injectInternal('Persona event');
+    const firstEvents = ['first event', 'another first event'].map(text => event('first', text));
+    for (const item of firstEvents) await host('first').pushEvent(item, { trigger: 'piggyback' });
+    let added = false;
+    core.loop.onRunPhase(phase => {
+      if (phase.state !== 'delivering' || added) return;
+      added = true;
+      host('second').pushDeferred({ type: 'second.deferred', render: () => 'second event' }, { trigger: 'preempt' });
+    });
+    core.bus.setPaused(false);
+
+    await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+    const requestText = JSON.stringify(llm.calls[0].messages);
+    for (const text of [internal.text, 'Persona event', ...firstEvents.map(item => item.text), 'second event']) {
+      expect(requestText).toContain(text);
+    }
+    expect(await core.worldActivityLog.readAll()).toEqual([
+      expect.objectContaining({ world: 'first', events: firstEvents.length, rounds: llm.calls.length }),
+      expect.objectContaining({ world: 'second', events: 1, rounds: llm.calls.length }),
+    ]);
+  });
+
+  it('credits only newly delivered sources when a failed request is resubmitted', async () => {
+    const { core, llm, host, event } = await start('first', 'second');
+    llm.throwNext = new LLMError('temporarily unavailable', 503, '');
+    await host('first').pushEvent(event('first', 'initial event'), { trigger: 'flush' });
+    await vi.waitFor(() => expect(core.loop.getStatus().phase.state).toBe('backoff'));
+    await host('second').pushEvent(event('second', 'arrived during backoff'), { trigger: 'flush' });
+    await vi.waitFor(() => expect(llm.calls).toHaveLength(2), { timeout: DEFAULT_RESUBMIT.backoffMs[0] + 2_000 });
+
+    expect(JSON.stringify(llm.calls[1].messages)).toContain('arrived during backoff');
+    expect(await core.worldActivityLog.readAll()).toEqual([
+      expect.objectContaining({ world: 'first', events: 1, rounds: 1 }),
+      expect.objectContaining({ world: 'second', events: 1, rounds: 1 }),
+    ]);
+  });
+
+  it('credits the new sources when a model request is preempted', async () => {
+    const { core, llm, host, event } = await start('first', 'second');
+    llm.blockUntilAbort = true;
+    await host('first').pushEvent(event('first', 'initial event'), { trigger: 'flush' });
+    await vi.waitFor(() => expect(llm.calls).toHaveLength(1));
+    await host('second').pushEvent(event('second', 'preempting event'), { trigger: 'preempt' });
+    await vi.waitFor(() => expect(llm.calls).toHaveLength(2));
+    expect(await core.worldActivityLog.readAll()).toEqual([
+      expect.objectContaining({ world: 'first', rounds: 1 }),
+      expect.objectContaining({ world: 'second', rounds: 1 }),
+    ]);
+  });
+
+  it('reports the unwritten activity row count from Core.stop', async () => {
+    const { core, host, event } = await start('sample');
+    const blocked = join(core.loaded.dataDir, WORLD_ACTIVITY_LOG_FILE);
+    mkdirSync(blocked);
+    try {
+      await host('sample').pushEvent(event('sample', 'archive only'), { deliver: false });
+      const expected = (await core.worldActivityLog.readAll()).length;
+      expect(await core.stop()).toEqual([{
+        worldId: 'core.world-activity',
+        detail: expect.stringContaining(`${expected} World activity records remain unwritten`),
+      }]);
+      expect(core.worldActivityLog.status().pending).toBe(expected);
+    } finally {
+      rmdirSync(blocked);
+    }
+  });
+});
 
 describe('Core · session 声明与 fork 原语', () => {
   let tmp: ReturnType<typeof makeTmpDir> | null = null;

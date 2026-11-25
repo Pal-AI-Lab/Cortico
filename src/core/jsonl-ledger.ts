@@ -140,10 +140,14 @@ export class JsonlLedger<Row> {
     const count = (await this.readAll()).length;
     mkdirSync(dirname(this.file), { recursive: true });
     writeFileSync(this.file, '', 'utf8');
+    this.resetAfterClear();
+    return count;
+  }
+
+  protected resetAfterClear(): void {
     this.pending = [];
     this.error = null;
     this.cleared++;
     this.diskCount = 0;
-    return count;
   }
 }

@@ -126,6 +126,8 @@ export interface MainLoopDeps {
    * 返回前须把它移出 `worlds.all()`;这次构建不含它,其余 World 照常。
    */
   onWorldFailed(world: World, detail: string): void;
+  /** 自上次请求后送进上下文的事件来源，在发起模型请求时交付。 */
+  onRoundSources?(sources: ReadonlySet<string>): void;
   /** 环境提示词的两个覆盖层(包 / 部署);缺席 = 只用 World 自带的模板。 */
   dirs?: EnvPromptDirs;
   bus: WakeBus;
@@ -276,6 +278,7 @@ export class MainLoop {
   private roundsLastBatch = 0;
   /** 跨唤醒批次单调递增的轮序号;每建一份工具 ctx 加一,透传给 ToolCallContext.round */
   private roundSeq = 0;
+  private roundSources = new Set<string>();
   private lastUsage: LLMUsage | null = null;
   /** 主session的观察句柄(tracker未接线时null) */
   private mainTrack: SessionHandle | null = null;
@@ -737,6 +740,9 @@ export class MainLoop {
       session.append(msg);
     }
     if (events.length > 0 && !inUser) this.appendEventFrame(events);
+    if (this.d.onRoundSources) {
+      for (const event of delivered) this.roundSources.add(event.source);
+    }
     this.noteHandled(delivered, generation);
     this.notifySettled(delivered, 'delivered');
     const changed = lines.length > 0 || events.length > 0;
@@ -1260,7 +1266,13 @@ export class MainLoop {
         const llmStart = Date.now();
         let res: Awaited<ReturnType<typeof llm.respond>>;
         try {
-          res = await llm.respond(responseRequest(spec, outbound, schemas), {
+          const request = responseRequest(spec, outbound, schemas);
+          if (this.roundSources.size > 0) {
+            const sources = this.roundSources;
+            this.roundSources = new Set();
+            this.d.onRoundSources?.(sources);
+          }
+          res = await llm.respond(request, {
             context: outbound, nativeSpec: spec, onEvent,
             role: decl.id,
             sessionId: this.mainTrack?.id,
@@ -1805,6 +1817,7 @@ export class MainLoop {
     const sysMsg = await this.buildSystem();
     if (!this.active(generation)) return;
     session.reset([sysMsg]);
+    this.roundSources.clear();
     this.d.transcript?.boundary('clear', {});
     this.finishTurn();
     this.pushOpening('cleared');

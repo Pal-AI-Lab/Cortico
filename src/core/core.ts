@@ -37,6 +37,7 @@ import { LogBlobStore, blobScheme, mimeOfHandle, withBlobLines } from './blobs.t
 import { TimerStore } from './timers.ts';
 import { SessionTracker, type SessionHandle } from './sessions.ts';
 import { UsageLog } from './usage-log.ts';
+import { WORLD_ACTIVITY_LOG_FILE, WorldActivityLog } from './world-activity-log.ts';
 import { ToolCallLog } from './tool-log.ts';
 import { Transcript } from './transcript.ts';
 import { openRun, writeRunJson, type RunInfo } from './run.ts';
@@ -103,6 +104,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
   readonly sessions: SessionTracker;
   /** 每次LLM调用的持久化流水(跨重启;用量·成本页数据源) */
   readonly usageLog: UsageLog;
+  readonly worldActivityLog: WorldActivityLog;
   /** 主循环每次模型工具调用的持久化流水(工具名/原始参数/耗时/回执) */
   readonly toolLog: ToolCallLog;
   /** Persona注册的 session 声明;core 只按 id 查表,不对值分支 */
@@ -177,6 +179,11 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.timers = new TimerStore(dataDir, this.log.child('timer'));
 
     this.usageLog = new UsageLog(join(dataDir, 'usage.jsonl'), message => this.log.error(message));
+    this.worldActivityLog = new WorldActivityLog(join(dataDir, WORLD_ACTIVITY_LOG_FILE), {
+      timezone: () => cfg.timezone,
+      run: this.run.id,
+      report: message => this.log.error(message),
+    });
     this.toolLog = new ToolCallLog(join(this.run.dir, 'toolcalls.jsonl'), { timezone: cfg.timezone, run: this.run.id });
     this.sessions = new SessionTracker(cfg.timezone, (rec) => {
       const { round } = currentAnchors();
@@ -208,6 +215,12 @@ export class Core<C extends CoreConfig = CoreConfig> {
         visible: () => this.worlds.filter((m) => this.isWorldVisible(m.id)),
       },
       onWorldFailed: (mod, detail) => this.failWorld(mod, detail),
+      onRoundSources: (sources) => {
+        const atMs = Date.now();
+        for (const { id } of this.worlds) {
+          if (id !== 'core' && id !== 'persona' && sources.has(id)) this.worldActivityLog.record(id, 'rounds', atMs);
+        }
+      },
       dirs: { packageDir: loaded.packageDir ?? loaded.rootDir, deploymentDir: loaded.rootDir },
       bus: this.bus,
       session: this.session,
@@ -502,6 +515,11 @@ export class Core<C extends CoreConfig = CoreConfig> {
     return Number.isNaN(atMs) ? ts : nowIso(this.loaded.config.timezone, new Date(atMs));
   }
 
+  private noteWorldPush(worldId: string, type: string): void {
+    this.worldActivityLog.record(worldId, 'events');
+    this.onWorldPush(worldId, type);
+  }
+
   /** World 宿主接口;每个 World 使用以自身 id 命名的子 logger。 */
   private makeHost(mod: World): WorldHost {
     const previous = this.moduleHostLeases.get(mod);
@@ -517,7 +535,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
         opts?: PushOptions,
       ): Promise<EventEnvelope> => {
         if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
-        this.onWorldPush(mod.id, e.type);
+        this.noteWorldPush(mod.id, e.type);
         const deliver = opts?.deliver !== false && this.isWorldVisible(mod.id);
         const blobs = this.internBlobs(e.blobs);
         const envelope = this.store.append({
@@ -540,7 +558,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       },
       pushDeferred: (e, opts) => {
         if (!lease.active) return;
-        this.onWorldPush(mod.id, e.type);
+        this.noteWorldPush(mod.id, e.type);
         // 隐藏 World 的延迟渲染项没有正文，直接丢弃。
         if (!this.isWorldVisible(mod.id)) return;
         this.bus.push(
@@ -551,7 +569,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       pushCandidate: async (spec, opts) => {
         if (!lease.active) throw new Error(`World ${mod.id}: ${HOST_LIFECYCLE_ENDED}`);
         if (spec.sourceEvents.length === 0) throw new Error('候选票据至少需要一条原始事件');
-        for (const event of spec.sourceEvents) this.onWorldPush(mod.id, event.type);
+        for (const event of spec.sourceEvents) this.noteWorldPush(mod.id, event.type);
         const origin = spec.origin ?? 'external';
         const sourceEvents = spec.sourceEvents.map(({ blobs: inputs, ...event }) => {
           const blobs = this.internBlobs(inputs);
@@ -644,6 +662,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       );
     }
     const failed: WorldStartFailure[] = [];
+    this.worldActivityLog.start();
     for (const mod of [...this.worlds]) {
       try {
         await mod.start(this.makeHost(mod));
@@ -779,6 +798,12 @@ export class Core<C extends CoreConfig = CoreConfig> {
     this.usageLog.flush();
     const ledger = this.usageLog.status();
     if (ledger.pending) failures.push({ worldId: 'core.usage', detail: `${ledger.pending} usage records remain unwritten: ${ledger.error}` });
+    this.worldActivityLog.stop();
+    const activity = this.worldActivityLog.status();
+    if (activity.pending) failures.push({
+      worldId: 'core.world-activity',
+      detail: `${activity.pending} World activity records remain unwritten: ${activity.error}`,
+    });
     this.log.info('core已停止');
     return failures;
   }
