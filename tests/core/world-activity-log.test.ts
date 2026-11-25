@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { nowIso } from '../../src/core/util.ts';
+import { JsonlLedger } from '../../src/core/jsonl-ledger.ts';
 import {
   WORLD_ACTIVITY_LOG_FILE, WORLD_ACTIVITY_MINUTE_MS, WORLD_ACTIVITY_RECORD_VERSION, WorldActivityLog,
 } from '../../src/core/world-activity-log.ts';
@@ -96,5 +97,19 @@ describe('WorldActivityLog', () => {
     log.record('sample', 'rounds');
     log.stop();
     expect(await open().readAll()).toEqual([expect.objectContaining({ world: 'sample', events: 0, rounds: 1 })]);
+  });
+
+  it('keeps both ledgers intact if one cannot be opened for clearing', async () => {
+    const blocked = join(tmp.dir, 'blocked.jsonl');
+    const other = open(blocked, () => {});
+    log.record('sample', 'events');
+    vi.setSystemTime(next);
+    log.record('sample', 'rounds');
+    other.record('other', 'events');
+    const before = await log.readAll();
+    mkdirSync(blocked);
+    await expect(JsonlLedger.clearTogether([log, other])).rejects.toThrow();
+    expect(await log.readAll()).toEqual(before);
+    expect(await other.readAll()).toEqual([expect.objectContaining({ world: 'other' })]);
   });
 });

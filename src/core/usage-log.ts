@@ -1,6 +1,9 @@
 import { JsonlLedger } from './jsonl-ledger.ts';
 import type { UsageRecord } from './types.ts';
 
+export const USAGE_LOG_FILE = 'usage.jsonl';
+export const WORLD_USAGE_ROLE_PREFIX = 'worlds.';
+
 export class UsageLog extends JsonlLedger<UsageRecord> {
   constructor(file: string, report?: (message: string) => void) {
     super(file, {

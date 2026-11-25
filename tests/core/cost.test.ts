@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, type UsageAggregateOptions } from '../../src/core/cost.ts';
 import type { UsageRecord } from '../../src/core/types.ts';
 import { priceUsage, unknownMeters } from '../../src/core/generation.ts';
+import { WORLD_USAGE_ROLE_PREFIX } from '../../src/core/usage-log.ts';
+import { WORLD_ACTIVITY_RECORD_VERSION, type WorldActivityRecord } from '../../src/core/world-activity-log.ts';
 import { snapshotPrice } from '../../src/providers/pricebook.ts';
 
 function charged(row: UsageRecord): UsageRecord {
@@ -129,6 +131,72 @@ describe('分时段聚合 aggregateUsage', () => {
     expect(a.series).toEqual([]);
     expect(a.totals.calls).toBe(0);
     expect(a.totals.cost).toBe(0);
+  });
+});
+
+describe('aggregateUsage: byWorld', () => {
+  const timezone = 'Asia/Kathmandu';
+  const now = new Date('2026-07-19T08:00:00Z');
+  const day = '2026-07-19';
+  const inRange = '2026-07-18T23:30:00Z';
+  const previousDay = '2026-07-19T00:15:00+09:00';
+  const nextDay = '2026-07-19T19:00:00Z';
+  const roleOf = (id: string) => WORLD_USAGE_ROLE_PREFIX + id;
+  const modelUsage = (role: string, model: string, ts = inRange): UsageRecord => charged({
+    ts, role, sessionId: role, label: 'Model usage', model, promptTokens: 1_000_000,
+    completionTokens: 500_000, cacheHitTokens: 0, cacheMissTokens: 1_000_000, reasoningTokens: 10,
+  });
+  const activity = (world: string, events: number, rounds: number, ts = inRange): WorldActivityRecord => ({
+    version: WORLD_ACTIVITY_RECORD_VERSION, recordId: `${world}@${ts}`, run: 'fixture-run', ts, world, events, rounds,
+  });
+
+  it('uses the series date range in the deployment timezone for both ledgers', () => {
+    const included = activity('included', 2, 1);
+    const records = [
+      modelUsage(roleOf(included.world), 'flash'), modelUsage(roleOf('old'), 'flash', previousDay),
+      modelUsage(roleOf('future'), 'flash', nextDay), modelUsage('persona-fork', 'pro'),
+    ];
+    const rows = [included, activity('old', 4, 3, previousDay), activity('future', 4, 3, nextDay)];
+    const ranges = [{ from: day, to: day }, { days: 1 }];
+    for (const range of ranges) {
+      const report = aggregateUsage(records, { ...range, bucket: 'day', timezone, now, dailyTokenDays: 2 }, rows);
+      expect(report.series.map(point => point.bucket)).toEqual([day]);
+      expect(report.byWorld).toEqual([expect.objectContaining({
+        key: included.world, events: included.events, calls: included.events, rounds: included.rounds,
+        promptTokens: records[0].promptTokens, completionTokens: records[0].completionTokens,
+      })]);
+    }
+  });
+
+  it('ranks Worlds by events then cost and includes activity-only and historical usage-only Worlds', () => {
+    const busiest = activity('busiest', 4, 1);
+    const lowerCost = activity('lower', 2, 1);
+    const higherCost = activity('higher', lowerCost.events, 2);
+    const requeued = activity('requeued', 0, 1);
+    const anotherMinute = activity(busiest.world, 1, 1, '2026-07-18T23:31:00Z');
+    const records = [
+      modelUsage(roleOf(lowerCost.world), 'flash'),
+      modelUsage(roleOf(higherCost.world), 'pro'),
+      modelUsage(roleOf('historical'), 'pro'),
+    ];
+    const report = aggregateUsage(records, {
+      bucket: 'day', timezone, currency: 'CNY', rates: { CNY: 7 },
+    }, [lowerCost, higherCost, busiest, requeued, anotherMinute]);
+    const modelTotals = (id: string) => report.byRole.find(group => group.key === roleOf(id))!;
+    expect(report.byWorld.map(row => row.key)).toEqual([busiest.world, higherCost.world, lowerCost.world, 'historical', requeued.world]);
+    expect(report.byWorld[0]).toMatchObject({
+      calls: busiest.events + anotherMinute.events, events: busiest.events + anotherMinute.events,
+      rounds: busiest.rounds + anotherMinute.rounds, cost: 0, promptTokens: 0, completionTokens: 0,
+      cacheHitTokens: 0, cacheMissTokens: 0, reasoningTokens: 0, pricedCalls: 0, unpricedCalls: 0,
+    });
+    expect(report.byWorld[1]).toEqual({
+      ...modelTotals(higherCost.world), key: higherCost.world, calls: higherCost.events,
+      events: higherCost.events, rounds: higherCost.rounds,
+    });
+    expect(report.byWorld[3]).toEqual({
+      ...modelTotals('historical'), key: 'historical', events: 0, calls: 0, rounds: 0,
+    });
+    expect(report.byWorld[4]).toMatchObject({ calls: requeued.events, events: requeued.events, rounds: requeued.rounds });
   });
 });
 

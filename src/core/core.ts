@@ -36,7 +36,7 @@ import { providerModule, providerModules } from '../providers/registry.ts';
 import { LogBlobStore, blobScheme, mimeOfHandle, withBlobLines } from './blobs.ts';
 import { TimerStore } from './timers.ts';
 import { SessionTracker, type SessionHandle } from './sessions.ts';
-import { UsageLog } from './usage-log.ts';
+import { USAGE_LOG_FILE, UsageLog, WORLD_USAGE_ROLE_PREFIX } from './usage-log.ts';
 import { WORLD_ACTIVITY_LOG_FILE, WorldActivityLog } from './world-activity-log.ts';
 import { ToolCallLog } from './tool-log.ts';
 import { Transcript } from './transcript.ts';
@@ -178,7 +178,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     // TimerStore 仅提供通用持久定时器；Persona定义心跳与闹钟语义。
     this.timers = new TimerStore(dataDir, this.log.child('timer'));
 
-    this.usageLog = new UsageLog(join(dataDir, 'usage.jsonl'), message => this.log.error(message));
+    this.usageLog = new UsageLog(join(dataDir, USAGE_LOG_FILE), message => this.log.error(message));
     this.worldActivityLog = new WorldActivityLog(join(dataDir, WORLD_ACTIVITY_LOG_FILE), {
       timezone: () => cfg.timezone,
       run: this.run.id,
@@ -642,7 +642,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
     usage: LLMUsage,
     opts?: { model?: string; label?: string; charges?: import('./generation.ts').Charge[] },
   ): void {
-    const id = `worlds.${worldId}`;
+    const id = `${WORLD_USAGE_ROLE_PREFIX}${worldId}`;
     let track = this.moduleUsageTracks.get(id);
     if (!track) {
       track = this.sessions.open(id, opts?.label ?? worldId, { id });

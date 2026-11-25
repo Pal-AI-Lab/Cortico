@@ -2,7 +2,9 @@
 import type { UsageRecord } from './types.ts';
 import { billingBalances, recordCharges, type BillingBalance } from './billing.ts';
 import type { Charge } from './generation.ts';
+import { WORLD_USAGE_ROLE_PREFIX } from './usage-log.ts';
 import { getTimezoneOffsetMinutes, nowIso } from './util.ts';
+import type { WorldActivityRecord } from './world-activity-log.ts';
 
 /** 已解析的具体时间粒度(桶宽) */
 export type UsageBucketUnit = 'minute' | 'hour' | 'day' | 'week' | 'month';
@@ -52,6 +54,15 @@ export interface UsageGroupStat extends UsageAccum {
   cacheHitRate: number | null;
 }
 
+export interface WorldUsageStat extends UsageGroupStat {
+  /** World id. */
+  key: string;
+  /** Host pushes, also exposed as calls. */
+  events: number;
+  /** Main-loop requests that received newly delivered events from this World. */
+  rounds: number;
+}
+
 export interface UsageAggregate {
   currency: string;
   /** 这个计价基础下能显示的币种：有原价的，加上能从它们换算到的。 */
@@ -76,6 +87,8 @@ export interface UsageAggregate {
   byRole: UsageGroupStat[];
   /** 按模型分组(cost 降序) */
   byModel: UsageGroupStat[];
+  /** 按 World 分组，先按 events 降序，再按 cost 降序。 */
+  byWorld: WorldUsageStat[];
   /** Failed, aborted and discarded attempts are also included in totals. */
   failed: UsageAccum;
   /**
@@ -301,7 +314,7 @@ function utcMidnight(day: string | null): number {
  * 或 ts 读不出时刻。按时刻比较，两端按 UTC 偏移的极值放宽，多留的记录由 aggregateUsage 按墙钟再筛;
  * 范围一端不限时这一端不筛。opts 要和交给 aggregateUsage 的是同一份(含 now)。
  */
-export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRecord) => boolean {
+export function usageRecordFilter(opts: UsageAggregateOptions): (record: Pick<UsageRecord, 'ts'>) => boolean {
   const { today, from, to } = requestedDays(opts);
   const end = to ?? today;
   const back = opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1 && end !== null ? daysBefore(end, opts.dailyTokenDays - 1) : null;
@@ -318,7 +331,7 @@ export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRe
  * 按包含端点的日期范围筛选，按时间、角色和模型聚合用量。
  * 费用从记录内的 charges 按币种和计价基础选择，再按 meter 归入四类成本。
  */
-export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
+export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions, activity: readonly WorldActivityRecord[] = []): UsageAggregate {
   const { nowKeySource, today, from, to } = requestedDays(opts);
   const unit: UsageBucketUnit = opts.bucket === 'auto' ? resolveBucket(from, to) : opts.bucket;
   const series = new Map<string, { total: UsageAccum; roles: Map<string, UsageAccum>; models: Map<string, UsageAccum>; roleModels: Map<string, Map<string, UsageAccum>> }>();
@@ -331,10 +344,14 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const successful = zero();
   const instances = new Map<string, UsageAccum>();
   const wall = opts.timezone ? wallClockIn(opts.timezone) : (ts: string) => ts.slice(0, 16);
+  const inRange = (at: string): boolean => {
+    const day = at.slice(0, 10);
+    return (!from || day >= from) && (!to || day <= to);
+  };
   const walled = records
     .filter(r => r && typeof r.ts === 'string')
     .map(r => ({ r, at: wall(r.ts) }));
-  const keyed = walled.filter(({ at }) => (!from || at.slice(0, 10) >= from) && (!to || at.slice(0, 10) <= to));
+  const keyed = walled.filter(({ at }) => inRange(at));
   const selected = keyed.map(({ r }) => r);
   const balances = billingBalances(selected);
   const basis = opts.basis ?? 'marginal';
@@ -398,6 +415,27 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
   const groupOut = (m: Map<string, UsageAccum>, labels?: Map<string, string>): UsageGroupStat[] =>
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
 
+  const worlds = new Map<string, { events: number; rounds: number }>();
+  for (const row of activity) {
+    if (!inRange(wall(row.ts))) continue;
+    let counts = worlds.get(row.world);
+    if (!counts) {
+      counts = { events: 0, rounds: 0 };
+      worlds.set(row.world, counts);
+    }
+    counts.events += row.events;
+    counts.rounds += row.rounds;
+  }
+  for (const role of roles.keys()) {
+    if (!role.startsWith(WORLD_USAGE_ROLE_PREFIX)) continue;
+    const id = role.slice(WORLD_USAGE_ROLE_PREFIX.length);
+    if (id && !worlds.has(id)) worlds.set(id, { events: 0, rounds: 0 });
+  }
+  const byWorld = [...worlds].map(([id, counts]) => {
+    const role = WORLD_USAGE_ROLE_PREFIX + id;
+    return { ...statOf(id, roles.get(role) ?? zero(), roleLabels.get(role)), ...counts, calls: counts.events };
+  }).sort((a, b) => b.events - a.events || b.cost - a.cost);
+
   const out: UsageAggregate = {
     currency, currencies, rates, basis, balances, successful, byInstance: groupOut(instances),
     bucket: unit,
@@ -408,6 +446,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     totals: statOf('total', totals),
     byRole: groupOut(roles, roleLabels),
     byModel: groupOut(models),
+    byWorld,
     failed,
   };
   if (opts.dailyTokenDays !== undefined && opts.dailyTokenDays >= 1) {

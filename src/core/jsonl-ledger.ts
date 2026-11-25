@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readSync, writeFileSync } from 'node:fs';
+import { appendFileSync, closeSync, existsSync, fstatSync, ftruncateSync, mkdirSync, openSync, readSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 /** The ledger is read in chunks so its size is not bounded by V8's maximum string length. */
@@ -136,12 +136,29 @@ export class JsonlLedger<Row> {
     return null;
   }
 
-  async clear(): Promise<number> {
-    const count = (await this.readAll()).length;
-    mkdirSync(dirname(this.file), { recursive: true });
-    writeFileSync(this.file, '', 'utf8');
-    this.resetAfterClear();
-    return count;
+  clear(): Promise<number> {
+    return JsonlLedger.clearTogether([this]);
+  }
+
+  /** Opens every ledger for writing before clearing any of them. */
+  static async clearTogether(ledgers: readonly JsonlLedger<unknown>[]): Promise<number> {
+    const counts = await Promise.all(ledgers.map(async ledger => (await ledger.readAll()).length));
+    const files = new Map<number, JsonlLedger<unknown>>();
+    try {
+      for (const ledger of ledgers) {
+        mkdirSync(dirname(ledger.file), { recursive: true });
+        const fd = openSync(ledger.file, 'a');
+        files.set(fd, ledger);
+        if (!fstatSync(fd).isFile()) throw new Error(`Ledger ${ledger.file} is not a regular file`);
+      }
+      for (const [fd, ledger] of files) {
+        ftruncateSync(fd);
+        ledger.resetAfterClear();
+      }
+    } finally {
+      for (const fd of files.keys()) closeSync(fd);
+    }
+    return counts.reduce((sum, count) => sum + count, 0);
   }
 
   protected resetAfterClear(): void {

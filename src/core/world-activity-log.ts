@@ -88,6 +88,11 @@ export class WorldActivityLog extends JsonlLedger<WorldActivityRecord> {
     return [...records, ...active.filter(row => !ids.has(row.recordId))];
   }
 
+  override count(): number | null {
+    const count = super.count();
+    return count === null ? null : count + this.active.size;
+  }
+
   protected override resetAfterClear(): void {
     super.resetAfterClear();
     this.active.clear();
