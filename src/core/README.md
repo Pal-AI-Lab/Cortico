@@ -18,7 +18,7 @@ Core 管理 session、事件流与模型调用的生命周期，包括事件投�
 | `session.ts`、`sessions.ts` | 常驻 session 的追加式上下文；各 session 的状态与用量记录 |
 | `event-store.ts` | 按 run 分片的 JSONL 事件库,cursor 跨 run 全局单调 |
 | `state.ts`、`run.ts`、`timers.ts` | `core-state.json`;run 目录;通用持久定时器 |
-| `transcript.ts`、`tool-log.ts`、`usage-log.ts` | 主 session 副本、工具调用记录、用量记录 |
+| `transcript.ts`、`tool-log.ts`、`jsonl-log.ts`、`usage-log.ts`、`world-activity-log.ts` | 主 session 副本、工具调用记录、通用 JSONL 账本、用量记录、World 分钟级活动账本 |
 | `cost.ts`、`billing.ts`、`generation.ts` | 消耗汇总、计费余额、`ResponseClient` 与计量口径 |
 | `prefix.ts`、`template.ts` | system 前缀装配、环境提示词三层覆盖、模板渲染 |
 | `truncate.ts`、`markers.ts`、`blobs.ts` | 上下文压缩、结构记号、附件句柄(`log:` / `mem:`) |

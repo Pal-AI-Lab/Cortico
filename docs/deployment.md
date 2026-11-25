@@ -49,7 +49,7 @@ pnpm start mybot
 部署里手改的文本文件支持 UTF-8、带 BOM 的 UTF-8 和 UTF-16 LE,范围见 [windows.md](windows.md#文本文件编码)。
 
 `data/` 里:`runs/index.jsonl` 与 `runs/<run>/`(见 [runs.md](runs.md))、`session-main.jsonl`
-等 session 文件(见 [sessions.md](sessions.md))、`usage.jsonl`、`core-state.json`、
+等 session 文件(见 [sessions.md](sessions.md))、`usage.jsonl`、`world-activity.jsonl`、`core-state.json`、
 `timers.json`、单实例锁 `instance.lock`、重启标志 `.restart-request`。
 
 环境提示词三层:World 自带的 `src/worlds/<id>/ENV_PROMPT.md` → 代码包的
