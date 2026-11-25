@@ -382,4 +382,33 @@ describe('pathfinder 性能补丁', () => {
     m.updateCollisionIndex();
     expect(m.getNumEntitiesAt(new Vec3(3, 64, 3), 0, 0, 0)).toBeGreaterThan(0);
   });
+
+  it('搜索读过的墙在算挖掘代价前区块卸载:这一步按挖不动丢掉,搜索不抛异常', () => {
+    const world = makeWorld();
+    const bot = makeBot(world);
+    installPathfinderPerf();
+    const m = new Movements(bot as never) as unknown as {
+      getBlock(pos: unknown, dx: number, dy: number, dz: number): unknown;
+      getMoveForward(node: { x: number; y: number; z: number; remainingBlocks: number }, dir: { x: number; z: number }, neighbors: unknown[]): void;
+    };
+    const neighbors: unknown[] = [];
+    // 搜索按 tick 分片续算:前一片读进缓存的格子，到后一片时所在区块可能已经卸载
+    const goal = {
+      isValid: (): boolean => true,
+      hasChanged: (): boolean => false,
+      heuristic: (): number => 0,
+      isEnd: (): boolean => {
+        for (const y of [63, 64, 65]) m.getBlock(new Vec3(8, y, 0), 0, 0, 0);
+        world.unloadColumn(0, 0);
+        m.getMoveForward({ x: 7, y: 64, z: 0, remainingBlocks: 8 }, { x: 1, z: 0 }, neighbors);
+        return true;
+      },
+    };
+    const start = new (Move as never as new (...a: unknown[]) => unknown)(0, 64, 0, 8, 0);
+    const astar = new (AStar as never as new (...a: unknown[]) => { compute(): { status: string } })(
+      start, m, goal, 5_000, 60, -1,
+    );
+    expect(astar.compute().status).toBe('success');
+    expect(neighbors).toEqual([]);
+  });
 });

@@ -456,9 +456,12 @@ export function installPathfinderPerf(log?: Logger): void {
       const real = (typeof block.digTime === 'function'
         ? block
         : origGetBlock.call(this, block.position as { x: number; y: number; z: number }, 0, 0, 0)) as BlockLike;
+      // 搜索跨 tick 续算，缓存读到这一格之后区块可能已卸载，原始读块给的是缺块兜底(没有 digTime):
+      // 与原版对缺块一样按挖不动计价，不记忆化
+      if (typeof real.digTime !== 'function') return 100;
       const tool = this.bot.pathfinder.bestHarvestTool(real);
       const enchants = (tool && tool.nbt) ? nbt.simplify(tool.nbt).Enchantments : [];
-      const digTime = real.digTime!(tool ? tool.type : null, false, false, false, enchants, this.bot.entity.effects);
+      const digTime = real.digTime(tool ? tool.type : null, false, false, false, enchants, this.bot.entity.effects);
       labor = (1 + 3 * digTime / 1000) * this.digCost;
       cache?.labor.set(block.type, labor);
     }
