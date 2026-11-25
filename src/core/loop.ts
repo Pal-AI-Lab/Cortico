@@ -126,6 +126,8 @@ export interface MainLoopDeps {
    * 返回前须把它移出 `worlds.all()`;这次构建不含它,其余 World 照常。
    */
   onWorldFailed(world: World, detail: string): void;
+  /** 主循环发起一轮模型请求时调用，传入自上一轮以来经 deliverBatch 送进上下文的事件来源集合。 */
+  onRoundSources?(sources: ReadonlySet<string>): void;
   /** 环境提示词的两个覆盖层(包 / 部署);缺席 = 只用 World 自带的模板。 */
   dirs?: EnvPromptDirs;
   bus: WakeBus;
@@ -306,6 +308,8 @@ export class MainLoop {
    * 未处理的归档项阻止水位越过；该集合不持久化，重启时根据已生成事件的来源引用恢复。
    */
   private readonly settledArchives = new Set<number>();
+  /** 自上一轮模型请求以来经 deliverBatch 送进上下文的事件来源；下一轮发起请求时消费并清空。 */
+  private readonly pendingRoundSources = new Set<string>();
   /**
    * 窗口内的 LLM 失败时刻，单位为毫秒。保存在 state.data.llmStall，
    * 跨重启保留；恢复时通知 Persona，World 可按时间窗口查询。
@@ -739,6 +743,7 @@ export class MainLoop {
     if (events.length > 0 && !inUser) this.appendEventFrame(events);
     this.noteHandled(delivered, generation);
     this.notifySettled(delivered, 'delivered');
+    for (const e of delivered) this.pendingRoundSources.add(e.source);
     const changed = lines.length > 0 || events.length > 0;
     if (changed) this.batchesHandled++;
     return changed;
@@ -1184,6 +1189,11 @@ export class MainLoop {
 
       const queuedEvents: EventEnvelope[] = [];
       const roundNo = ++this.roundSeq;
+      if (this.pendingRoundSources.size > 0) {
+        const sources = new Set(this.pendingRoundSources);
+        this.pendingRoundSources.clear();
+        this.d.onRoundSources?.(sources);
+      }
       setAnchors({ round: roundNo, resp: undefined, call: undefined });
       const flight: Flight = {
         controller: new AbortController(), interrupt: new AbortController(), phase: 'model',
@@ -2122,6 +2132,7 @@ export class MainLoop {
     this.backoffWake?.();
     if (!this.shutdown.signal.aborted) this.shutdown.abort(new Error(ABORT_SHUTDOWN));
     this.handoffRequested = false;
+    this.pendingRoundSources.clear();
     this.releaseBoundary();
     this.stopFn?.();
     const round = this.currentRound;
