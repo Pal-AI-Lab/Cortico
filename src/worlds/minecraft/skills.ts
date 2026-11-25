@@ -79,6 +79,8 @@ export function parseQueueMode(raw: unknown): { mode: QueueMode } | { error: str
 interface PlaceOnFace { at: Anchor; face: BlockFace }
 
 export type AttackMode = 'auto' | 'melee' | 'ranged' | 'kite';
+const ARMOR_SLOTS = ['head', 'chest', 'legs', 'feet'] as const;
+export type ArmorSlot = (typeof ARMOR_SLOTS)[number];
 
 /** 一步技能:动作参数,外加边界声明(StepBounds)。 */
 export type SkillCall = StepBounds & (
@@ -118,7 +120,8 @@ export type SkillCall = StepBounds & (
   | { skill: 'enchant'; at: Anchor; item: string; index?: number }
   | { skill: 'eat'; item: string }
   | { skill: 'attack'; target: string; mode?: AttackMode }
-  | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off' }
+  | { skill: 'equip'; item?: string; pick?: string; hand?: 'main' | 'off'; slot?: never }
+  | { skill: 'equip'; slot: ArmorSlot; item?: never; pick?: never; hand?: never }
   | { skill: 'pickup'; item?: string }
   | { skill: 'toss'; item: string; count: number; at?: Anchor; pick?: string }
   | { skill: 'stow'; item: string; count: number; pick?: string }
@@ -705,6 +708,14 @@ const SIGN_LINE_CHARS = 45;
 const EMPTY_HAND_NAMES = ['air', 'minecraft:air'];
 
 function parseEquip(c: Record<string, unknown>, at: string): ParseResult {
+  if (c.slot !== undefined && c.slot !== null) {
+    const slot = ARMOR_SLOTS.find((name) => name === c.slot);
+    if (!slot) return { error: `${at} equip 的 slot 只认 ${ARMOR_SLOTS.join('/')}` };
+    if (c.item != null || c.pick != null || c.hand != null) {
+      return { error: `${at} equip 的 slot 不能和 item/pick/hand 一起给` };
+    }
+    return { step: { skill: 'equip', slot } };
+  }
   const item = str(c.item);
   const pick = str(c.pick);
   if (c.hand !== undefined && c.hand !== 'main' && c.hand !== 'off') {
@@ -1429,12 +1440,14 @@ const SKILLS: readonly SkillSpec[] = [
     name: 'equip',
     doc: `{"skill":"equip","item":"stone_sword"}           手持物品;盔甲、鞘翅、盾牌会自动穿进对应装备槽。
 {"skill":"equip","item":"filled_map","hand":"off"}  hand 指定哪只手:off = 副手,main = 主手;写了就不按物品自动分槽。
-                                                 不写 item = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)`,
+                                                 不写 item 和 slot = 把那只手腾空(默认主手;骑马、上鞍这类要空手的动作用它)。
+{"skill":"equip","slot":"head"}                   把该槽装备放回背包。slot 只认 head/chest/legs/feet,与 item/pick/hand 互斥。包满时保留装备`,
     parse: parseEquip,
     fields: [
-      { key: 'item', kind: 'string', hint: ITEM_ID_HINT, doc: '不写 = 把手腾空' },
+      { key: 'item', kind: 'string', hint: ITEM_ID_HINT, doc: '不写 item 和 slot = 把手腾空' },
       { key: 'pick', kind: 'string' },
       { key: 'hand', kind: 'enum', values: ['main', 'off'], error: 'equip 的 hand 只认 main/off', doc: '不写 = 按物品分槽' },
+      { key: 'slot', kind: 'enum', values: [...ARMOR_SLOTS], error: `equip 的 slot 只认 ${ARMOR_SLOTS.join('/')}`, doc: '脱下该装备槽的物品并放回背包' },
     ],
   },
   {

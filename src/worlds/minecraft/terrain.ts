@@ -584,7 +584,7 @@ export function enchantSuffix(enchants: readonly ItemEnchant[] | undefined): str
   return `（${enchants.map((e) => `${zhEnchant(e.name)}${roman(e.level)}`).join('·')}）`;
 }
 
-const GEAR_SLOT_ZH: Record<GearSlot, string> = {
+export const GEAR_SLOT_ZH: Readonly<Record<GearSlot, string>> = {
   head: '头', chest: '胸', legs: '腿', feet: '脚', offhand: '副手',
 };
 const WORN_ORDER: GearSlot[] = ['head', 'chest', 'legs', 'feet'];

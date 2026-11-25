@@ -259,6 +259,101 @@ describe('equip:盔甲穿身上,不是全塞主手', () => {
     expect(reports[0].text).toContain('手里拿起了石剑');
   });
 
+  function armorBot({ bagFull = false, binding = false, gameMode = 'survival' } = {}) {
+    const componentMap = binding ? new Map([
+      ['enchantments', { data: { enchantments: [{ id: 1, level: 1 }] } }],
+    ]) : undefined;
+    const armor = [
+      { name: 'diamond_helmet', type: 1, count: 1, componentMap },
+      { name: 'elytra', type: 2, count: 1 },
+      { name: 'iron_leggings', type: 3, count: 1 },
+      { name: 'diamond_boots', type: 4, count: 1 },
+    ];
+    const slots: Array<(typeof armor)[number] | null> = Array.from({ length: 46 }, () => null);
+    slots.splice(5, armor.length, ...armor);
+    if (bagFull) slots.fill({ name: 'cobblestone', type: 5, count: 64 }, 9, 45);
+    const equipmentSlots = { head: 5, torso: 6, legs: 7, feet: 8 };
+    return {
+      ...wardrobeBot(),
+      currentWindow: null,
+      game: { gameMode },
+      registry: { enchantments: { 1: { name: 'binding_curse' } } },
+      inventory: {
+        slots,
+        items: () => slots.slice(9, 45).filter((item) => item !== null),
+        firstEmptyInventorySlot: () => {
+          const index = slots.findIndex((item, i) => i >= 9 && i < 45 && item === null);
+          return index === -1 ? null : index;
+        },
+      },
+      getEquipmentDestSlot: (dest: keyof typeof equipmentSlots) => equipmentSlots[dest],
+      moveSlotItem: async (from: number, to: number) => {
+        [slots[from], slots[to]] = [slots[to], slots[from]];
+      },
+    };
+  }
+
+  it.each([
+    ['head', 5, '钻石头盔'], ['chest', 6, '鞘翅'], ['legs', 7, '铁护腿'], ['feet', 8, '钻石靴子'],
+  ] as const)('equip slot:%s 把指定装备移回背包', async (slot, index, itemName) => {
+    const bot = armorBot();
+    const worn = bot.inventory.slots.slice(5, 9);
+    const equipped = bot.inventory.slots[index];
+    const parsed = parseSteps([{ skill: 'equip', slot }]);
+    if ('error' in parsed) throw new Error(parsed.error);
+    const { exec, reports } = makeExecutorOn(bot);
+
+    exec.submit(parsed.steps);
+    await waitUntil(() => reports.length === 1);
+
+    worn[index - 5] = null;
+    expect(bot.inventory.slots.slice(5, 9)).toEqual(worn);
+    expect(bot.inventory.items()).toEqual([equipped]);
+    expect(reports[0].kind).toBe('done');
+    expect(reports[0].text).toContain(`把${itemName}放回了背包`);
+  });
+
+  it('equip slot 脱装备时背包已满会受阻,原装备留在身上', async () => {
+    const bot = armorBot({ bagFull: true });
+    const before = [...bot.inventory.slots];
+    const parsed = parseSteps([{ skill: 'equip', slot: 'head' }]);
+    if ('error' in parsed) throw new Error(parsed.error);
+    const { exec, reports } = makeExecutorOn(bot);
+
+    exec.submit(parsed.steps);
+    await waitUntil(() => reports.length === 1);
+
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('背包已满,钻石头盔还穿着');
+    expect(bot.inventory.slots).toEqual(before);
+  });
+
+  it('equip slot 在生存模式保留带绑定诅咒的装备', async () => {
+    const bot = armorBot({ binding: true });
+    const before = [...bot.inventory.slots];
+    const { exec, reports } = makeExecutorOn(bot);
+
+    exec.submit([{ skill: 'equip', slot: 'head' }]);
+    await waitUntil(() => reports.length === 1);
+
+    expect(reports[0].kind).toBe('blocked');
+    expect(reports[0].text).toContain('钻石头盔有绑定诅咒,脱不下来');
+    expect(bot.inventory.slots).toEqual(before);
+  });
+
+  it('equip slot 在创造模式可将带绑定诅咒的装备放回背包', async () => {
+    const bot = armorBot({ binding: true, gameMode: 'creative' });
+    const helmet = bot.inventory.slots[5];
+    const { exec, reports } = makeExecutorOn(bot);
+
+    exec.submit([{ skill: 'equip', slot: 'head' }]);
+    await waitUntil(() => reports.length === 1);
+
+    expect(reports[0].kind).toBe('done');
+    expect(bot.inventory.slots[5]).toBeNull();
+    expect(bot.inventory.items()).toEqual([helmet]);
+  });
+
   /** 副手槽在 mineflayer 的窗口里是 45;offHand 非空时就挂在那一格 */
   function offHandBot(opts: { bag: Array<{ name: string; type: number; count: number }>; offHand?: { name: string; type: number; count: number } }) {
     const equips: Array<[string, string]> = [];

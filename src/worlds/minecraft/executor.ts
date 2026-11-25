@@ -350,7 +350,6 @@ export function deriveExpect(bot: Bot, call: SkillCall): Expectation | null {
     // use 的判据是 (item, 目标方块) → 后置读数那张表,住在 use 自己那儿
     case 'use': return null;
     case 'equip': {
-      // 腾手(不写 item)不推:副手与装备槽不动的语义由技能自己说
       if (!call.item) return null;
       const found = invItemNamed(bot, call.item);
       // 落在装备槽的(盔甲/鞘翅/盾)不在手上,holding 判不了;包里没有的也不推,

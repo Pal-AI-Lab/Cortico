@@ -5,7 +5,7 @@
  */
 import type { Bot } from 'mineflayer';
 import { SkillBlocked, checkAbort, sleep, type SkillContext } from './skill-context.ts';
-import { type SkillCall } from './skills.ts';
+import { type ArmorSlot, type SkillCall } from './skills.ts';
 import { zhName } from './names.ts';
 import { gridText, zhErrorText } from './receipt.ts';
 import {
@@ -18,10 +18,11 @@ import {
   WINDOW_SETTLE_MS, openStationWindow, putIntoStation, stationItemFacts,
 } from './containers.ts';
 import { HANDHELD_SUFFIXES, equipDestOf, equippedAlready } from './tools.ts';
-import { DRINKABLES } from './item-facts.ts';
+import { DRINKABLES, readEnchants } from './item-facts.ts';
 import { noteAte } from './placed-ledger.ts';
 import { edibleInBag, notFoodText } from './precheck.ts';
 import { pickLabel, pickTargetOf } from './item-pick.ts';
+import { GEAR_SLOT_ZH } from './terrain.ts';
 
 /**
  * `bot.craft` 吃的配方数据面(见 mineflayer-fixes 的覆写版):
@@ -417,8 +418,9 @@ async function emptyOffHand(bot: Bot): Promise<string> {
   return `副手腾空了(原来挂的是${zhName(held.name)})`;
 }
 
-/** item 缺省时腾空 hand 指的那只手(默认主手)；air 别名由 parseEquip 归一化。 */
+/** Equips a named item or clears the requested slot. */
 export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'equip' }>): Promise<string> {
+  if (call.slot) return emptyArmorSlot(bot, call.slot);
   const want = call.item;
   if (!want) return call.hand === 'off' ? emptyOffHand(bot) : emptyHand(bot);
   // 精确名优先;退而求其次才用后缀(iron→iron_pickaxe),`includes` 会让
@@ -449,5 +451,25 @@ export async function skillEquip(bot: Bot, call: Extract<SkillCall, { skill: 'eq
   if (dest === 'hand') return `手里拿起了${what}`;
   if (dest === 'off-hand') return `${what}挂上了副手`;
   return `穿上了${what}`;
+}
+
+async function emptyArmorSlot(bot: Bot, slot: ArmorSlot): Promise<string> {
+  const equipmentSlot = bot.getEquipmentDestSlot(slot === 'chest' ? 'torso' : slot);
+  const equipped = bot.inventory.slots[equipmentSlot];
+  if (!equipped) return `${GEAR_SLOT_ZH[slot]}部没有装备`;
+  const name = zhName(equipped.name);
+  if (bot.game.gameMode !== 'creative' && readEnchants(equipped, bot.registry).some((e) => e.name === 'binding_curse')) {
+    throw new SkillBlocked(`${name}有绑定诅咒,脱不下来`);
+  }
+  const bagSlot = bot.inventory.firstEmptyInventorySlot();
+  if (bagSlot === null) throw new SkillBlocked(`背包已满,${name}还穿着`);
+  if (bot.currentWindow) throw new SkillBlocked('先关闭打开的容器');
+  if (bot.inventory.selectedItem) throw new SkillBlocked('先放下光标上的物品');
+
+  await bot.moveSlotItem(equipmentSlot, bagSlot);
+  if (bot.inventory.slots[equipmentSlot] || bot.inventory.slots[bagSlot]?.type !== equipped.type) {
+    throw new SkillBlocked(`没能把${name}放回背包`);
+  }
+  return `把${name}放回了背包`;
 }
 
