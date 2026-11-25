@@ -28,7 +28,7 @@ import { icon } from '../../ui/icons.ts';
 import { createStorageView } from '../storage/view.ts';
 
 const CORE_ROUTE = 'core';
-const DEBUG_WS_PATH = '/ws/debug';
+const DEBUG_WS_PATH = '/ws/debug?session=none';
 
 /** 一个子页签。`need` 是它依赖的 capability(null = 永远有)。 */
 interface SubDef {

@@ -100,6 +100,7 @@ export interface TimelineView {
   ): void;
   /** 追加一条(实时帧)。`live` 决定要不要动画与打字机。 */
   append(m: ContextRecord, index: number, live: boolean): void;
+  replaceSystem(entry: ContextRecord): void;
   /** 时间线下方的一行运行状态;null 时隐藏。重画不动它。 */
   setActivity(text: string | null): void;
   /** 说话人展示名。头像图片加载不到时,ASSISTANT 组左栏的占位圆里印它的首字;下一次画到组时生效。 */
@@ -116,6 +117,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   const el = ui.h('div', 'tlwrap');
   const scroll = ui.h('div', 'tlscroll');
   const inner = ui.h('div', 'tlinner');
+  let firstSystemCard: HTMLElement | null = null;
   scroll.appendChild(inner);
   const activity = ui.h('div', 'tlthink hidden');
   const activityText = ui.h('span');
@@ -553,6 +555,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
     else if (item.type === 'function_call_output') node = renderToolResult(entry, index, live);
     else node = renderOther(entry, index, live);
     if (node) inner.appendChild(node);
+    if (index === 0 && isPrefix(item)) firstSystemCard = node;
   };
 
   const renderHead = (entries: readonly ContextRecord[]): void => {
@@ -566,6 +569,7 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
   return {
     el,
     rebuild(messages, opts) {
+      firstSystemCard = null;
       const wasStuck = autoScroll;
       const keepTop = scroll.scrollTop;
       stopTyping();
@@ -596,6 +600,12 @@ export function createTimeline(deps: TimelineDeps): TimelineView {
       autoScroll = true;
       toggleClass(jump, 'hidden', true);
       stick(true);
+    },
+    replaceSystem(entry) {
+      if (!firstSystemCard) return;
+      const card = renderSystem(entry, false);
+      firstSystemCard.replaceWith(card);
+      firstSystemCard = card;
     },
     append(entry, index, live) {
       renderOne(entry, index, live);

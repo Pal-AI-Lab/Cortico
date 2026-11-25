@@ -472,7 +472,7 @@ export class MainLoop {
    * World 之间、与 Persona 声明的自有工具及保留帧重名时，装配层拒绝挂载。
    * Persona 未声明自有工具名时，此处保留先注册项并告警。
    */
-  private assembleTools(hiddenToolNames: Set<string>): void {
+  private assembleTools(hiddenToolNames: Set<string>): ToolDef[] {
     const { decl, log } = this.d;
     const defs: ToolDef[] = [];
     const seen = new Set<string>();
@@ -494,7 +494,7 @@ export class MainLoop {
       seen.add(def.name);
       defs.push(def);
     }
-    this.toolDefs = defs;
+    return defs;
   }
 
   /** 空 tags 只报告一次。 */
@@ -504,7 +504,7 @@ export class MainLoop {
    * 按当前可见性重建工具表并记录所用 World 集合；重启恢复前缀时也执行。
    * 先逐个读取 World 的 `tools()`,抛错的经 onWorldFailed 移出挂载表,Persona 组工具表时已看不到它。
    */
-  private bindWorlds(): { visible: World[]; failed: boolean } {
+  private bindWorlds(install: (apply: () => void) => void = apply => apply()): { visible: World[]; failed: boolean } {
     const { worlds } = this.d;
     const toolNames = new Map<World, string[]>();
     let failed = false;
@@ -524,10 +524,15 @@ export class MainLoop {
         .filter((m) => !visibleIds.has(m.id))
         .flatMap((m) => toolNames.get(m) ?? []),
     );
-    this.assembleTools(hiddenToolNames);
-    this.appliedVisibleWorlds = visibleIds;
-    this.appliedWorldTools = new Map(visible.map((m) => [m.id, (toolNames.get(m) ?? []).join(',')]));
-    this.worldToolOwners = new Map(visible.flatMap((m) => (toolNames.get(m) ?? []).map((name) => [name, m.id] as const)));
+    const defs = this.assembleTools(hiddenToolNames);
+    const signatures = new Map(visible.map((m) => [m.id, (toolNames.get(m) ?? []).join(',')]));
+    const owners = new Map(visible.flatMap((m) => (toolNames.get(m) ?? []).map((name) => [name, m.id] as const)));
+    install(() => {
+      this.toolDefs = defs;
+      this.appliedVisibleWorlds = visibleIds;
+      this.appliedWorldTools = signatures;
+      this.worldToolOwners = owners;
+    });
     return { visible, failed };
   }
 
@@ -535,15 +540,15 @@ export class MainLoop {
    * 组装 system 前缀,并在同一时刻换成匹配的工具表。两者同属请求缓存前缀,
    * 必须同步更新。环境段读取失败的 World 移出挂载表后重组工具表。
    */
-  private async buildSystem(): Promise<ContextRecord> {
+  private async buildSystem(install?: (apply: () => void) => void): Promise<ContextRecord> {
     const { persona, cfg, dirs, worlds } = this.d;
     const now = new Date();
-    let { visible } = this.bindWorlds();
+    let { visible } = this.bindWorlds(install);
     const { contexts, failed } = await collectWorldContexts(visible, dirs);
     // 等待期间已被卸载的 World 不再报失败
     const stillMounted = failed.filter(({ world }) => worlds.all().includes(world));
     for (const { world, detail } of stillMounted) this.d.onWorldFailed(world, detail);
-    if (stillMounted.length > 0) ({ visible } = this.bindWorlds());
+    if (stillMounted.length > 0) ({ visible } = this.bindWorlds(install));
     const bound = new Set(visible.map((m) => m.id));
     const segments = await persona.systemSegments({
       now,
@@ -1844,20 +1849,28 @@ export class MainLoop {
   private async flushBoundaryMaintenance(): Promise<boolean> {
     if (this.releaseAtBoundary.length === 0) return false;
     this.releaseBoundary();
-    await Promise.all([this.prefixReloadPromise, this.clearSessionPromise]);
+    // The caller observes the failed refresh. Retained data and tool bindings can serve the next batch.
+    await Promise.all([this.prefixReloadPromise?.catch(error => {
+      this.d.log.error('系统前缀重载失败，保留当前前缀继续处理事件', { err: error });
+    }), this.clearSessionPromise]);
     return true;
   }
 
   private async performSystemPrefixReload(generation: number): Promise<void> {
     const { session, log } = this.d;
-    const sysMsg = await this.buildSystem();
+    const started = performance.now();
+    let applyTools: (() => void) | undefined;
+    const sysMsg = await this.buildSystem(apply => { applyTools = apply; });
+    const built = performance.now();
     if (!this.active(generation)) return;
-    const snapshot = [...session.records];
-    let tailStart = 0;
-    while (tailStart < snapshot.length && hasRole(snapshot[tailStart], 'system')) tailStart++;
-    session.reset([sysMsg, ...snapshot.slice(tailStart)]);
-    this.d.transcript?.boundary('prefix-reload', { keptMessages: snapshot.length - tailStart });
-    log.emit('warn', '当前session系统前缀已重载', { event: 'prefix-reload', data: { keptMessages: snapshot.length - tailStart } });
+    const keptMessages = await session.replaceSystemPrefix(sysMsg, () => this.active(generation), applyTools);
+    if (keptMessages === null || !this.active(generation)) return;
+    this.d.transcript?.boundary('prefix-reload', { keptMessages });
+    const ended = performance.now();
+    log.emit('warn', '当前session系统前缀已重载', { event: 'prefix-reload', data: {
+      keptMessages, buildSystemMs: Math.round(built - started),
+      persistAndNotifyMs: Math.round(ended - built), totalMs: Math.round(ended - started),
+    } });
   }
 
   /** 每次已发出的 HTTP 尝试均记账；未报告的 token 维度保留为未知。 */
