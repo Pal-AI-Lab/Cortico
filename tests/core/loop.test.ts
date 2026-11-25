@@ -3423,6 +3423,29 @@ describe('MainLoop 失败流入账', () => {
     expect(rows[0].prefixHash).toMatch(/^[0-9a-f]{12}$/);
   });
 
+  it('流水按来源记上次模型输出之后的输入与这次输出里的 World 工具调用', async () => {
+    const { rows, tracker } = rigWithUsage();
+    rig = makeRig({
+      tracker,
+      silent: true,
+      // dig 执行期间到一条 qq 事件，接在回执后面进下一次请求。
+      worlds: [makeFakeIO('qq', []), makeFakeIO('mc', [makeTool('dig', () => { rig.pushEvent('还在吗'); return 'ok'; })])],
+      // 每条记录估 1 token,数值就是各来源写进 session 的记录条数(事件帧是调用加回执两条)。
+      context: { estimateTokens: (records) => records.length },
+    });
+    rig.llm.script(toolReply([{ name: 'dig' }]), textReply('好'), textReply('嗯'));
+    rig.start();
+    rig.pushEvent('在吗');
+    await until(() => rows.length >= 2);
+    rig.loop.injectInternal('提醒一下');
+    await until(() => rows.length >= 3);
+    expect(rows.map((row) => row.sources)).toEqual([
+      { worlds: { qq: 2 }, other: 0, output: { total: 1, worldTools: { mc: 1 } } },
+      { worlds: { mc: 1, qq: 2 }, other: 0, output: { total: 1, worldTools: {} } },
+      { worlds: {}, other: 1, output: { total: 1, worldTools: {} } },
+    ]);
+  });
+
   it('成功返回但本轮随关机丢弃:token 照样入账,标 discarded', async () => {
     const { rows, tracker } = rigWithUsage();
     rig = makeRig({ tracker });

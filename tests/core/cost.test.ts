@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, type UsageAggregateOptions } from '../../src/core/cost.ts';
-import type { UsageRecord } from '../../src/core/types.ts';
-import { priceUsage, unknownMeters } from '../../src/core/generation.ts';
+import { cacheHitRate, aggregateUsage, resolveBucket, usageRecordFilter, type UsageAggregateOptions, type UsageGroupStat } from '../../src/core/cost.ts';
+import type { UsageRecord, UsageSources } from '../../src/core/types.ts';
+import { priceUsage, unknownMeters, type Meter } from '../../src/core/generation.ts';
 import { snapshotPrice } from '../../src/providers/pricebook.ts';
 
 function charged(row: UsageRecord): UsageRecord {
@@ -80,6 +80,60 @@ describe('分时段聚合 aggregateUsage', () => {
     // main 成本 4 > dream 3 → main 在前
     expect(a.byRole[0].key).toBe('main');
     expect(a.byModel.find((g) => g.key === 'pro')?.cost).toBeCloseTo(3, 6);
+  });
+
+  describe('按 World 分组', () => {
+    const at = '2026-07-18T10:00:00+08:00';
+    const range = { from: '2026-07-18', to: '2026-07-18', bucket: 'day' as const };
+    type Rule = [Meter, number];
+    /** 主循环一次请求：输入 1M(缓存命中 hit),输出 out(其中推理 reasoning),按 rules 每百万计价。 */
+    const request = (o: { role?: string; hit: number; out: number; reasoning: number; rules: Rule[]; sources?: UsageSources }): UsageRecord => {
+      const row: UsageRecord = {
+        ts: at, sessionId: 'main', role: o.role ?? 'main', label: 'main', model: 'm',
+        promptTokens: 1_000_000, completionTokens: o.out, cacheHitTokens: o.hit, cacheMissTokens: 1_000_000 - o.hit, reasoningTokens: o.reasoning,
+        ...(o.sources ? { sources: o.sources } : {}),
+      };
+      const quote = snapshotPrice({ models: ['m'], currency: 'USD', basis: 'marginal', source: 'test contract', rules: o.rules.map(([meter, perMillion]) => ({ meter, perMillion })) }, { startedAt: at, requestedServiceTier: null });
+      return { ...row, version: 2, charges: priceUsage({ ...unknownMeters(), input: row.promptTokens, output: row.completionTokens, cachedInput: row.cacheHitTokens, uncachedInput: row.cacheMissTokens, reasoning: row.reasoningTokens }, [quote]) };
+    };
+    const split: Rule[] = [['cachedInput', 1], ['uncachedInput', 10], ['output', 100]];
+
+    it('输入、缓存与推理按新进上下文的估算 token 分;调用 World 工具的输出折成实际 token 记给那个 World,其余输出按输入比例分', () => {
+      // 输入份额 qq 0.6、mc 0.2、未归属 0.2。推理以外的输出 100k 对应估算 50,mc 的工具调用估 20 折成 40k;
+      // 余下 160k 按输入份额分，输出份额 qq 0.48、mc 0.2 + 0.16、未归属 0.16。
+      const a = aggregateUsage([request({
+        hit: 600_000, out: 200_000, reasoning: 100_000, rules: split,
+        sources: { worlds: { qq: 300, mc: 100 }, other: 100, output: { total: 50, worldTools: { mc: 20 } } },
+      })], range);
+      const row = (g: UsageGroupStat) => [g.key, g.calls, g.promptTokens, g.cacheHitTokens, g.completionTokens, g.reasoningTokens];
+      expect(a.byWorld.map(row)).toEqual([['qq', 1, 600_000, 360_000, 96_000, 60_000], ['mc', 1, 200_000, 120_000, 72_000, 20_000]]);
+      expect(row(a.unattributed)).toEqual(['unattributed', 1, 200_000, 120_000, 32_000, 20_000]);
+      // 缓存命中 0.6、未命中 4、输出 20。
+      expect([...a.byWorld, a.unattributed].map((g) => g.cost)).toEqual([expect.closeTo(0.6 * 4.6 + 0.48 * 20, 9), expect.closeTo(0.2 * 4.6 + 0.36 * 20, 9), expect.closeTo(0.2 * 4.6 + 0.16 * 20, 9)]);
+    });
+
+    it('每次请求分给各 World 与未归属的 token 和各项费用，加起来等于这次请求的实付', () => {
+      const rows = [
+        request({ hit: 700_000, out: 300_000, reasoning: 120_000, rules: [...split, ['reasoning', 50]], sources: { worlds: { qq: 37, mc: 11, bilibili: 5 }, other: 13, output: { total: 90, worldTools: { mc: 31, qq: 7 } } } }),
+        request({ hit: 0, out: 80_000, reasoning: 0, rules: split, sources: { worlds: {}, other: 0, output: { total: 40, worldTools: { mc: 40 } } } }),
+        request({ hit: 300_000, out: 0, reasoning: 0, rules: split, sources: { worlds: { qq: 9 }, other: 4 } }),
+        request({ hit: 500_000, out: 120_000, reasoning: 30_000, rules: [['total', 3]], sources: { worlds: { mc: 2 }, other: 1, output: { total: 12, worldTools: { mc: 5 } } } }),
+        request({ hit: 200_000, out: 50_000, reasoning: 0, rules: split }),
+        request({ role: 'worlds.qq', hit: 0, out: 10_000, reasoning: 0, rules: split }),
+      ];
+      for (const r of rows) {
+        const a = aggregateUsage([r], range);
+        const parts = [...a.byWorld, a.unattributed];
+        const sum = (field: keyof UsageGroupStat) => parts.reduce((total, g) => total + (g[field] as number), 0);
+        // token 各部分分别取整，误差不超过每部分半个 token。
+        for (const field of ['promptTokens', 'completionTokens', 'cacheHitTokens', 'cacheMissTokens', 'reasoningTokens'] as const) {
+          expect(Math.abs(sum(field) - a.totals[field])).toBeLessThanOrEqual(parts.length / 2);
+        }
+        for (const field of ['cost', 'costCacheHit', 'costCacheMiss', 'costOutput', 'costOther'] as const) {
+          expect(sum(field)).toBeCloseTo(a.totals[field], 9);
+        }
+      }
+    });
   });
 
   it('补齐范围内没有调用的桶,不越过部署时区的当前时刻;days 按部署时区取今天', () => {

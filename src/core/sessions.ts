@@ -6,7 +6,7 @@ import { usageCounters } from '../protocol/open-responses/context-helpers.ts';
  * role 使用 Persona 声明的 session id；open 返回的实例 id 也传给模型调用。
  * 消息通过保存的引用在读取时序列化；重启清空统计。
  */
-import type { LLMUsage, UsageRecord } from './types.ts';
+import type { LLMUsage, UsageRecord, UsageSources } from './types.ts';
 import { nowIso } from './util.ts';
 
 export interface SessionStats {
@@ -30,8 +30,15 @@ export interface SessionStats {
   messageCount: number;
 }
 
+/** 一次模型请求的各次尝试写进用量记录时附带的字段，含义见 UsageRecord 的同名字段。 */
+export interface AttemptRecordOptions {
+  prefixHash?: string;
+  outcome?: 'discarded';
+  sources?: UsageSources;
+}
+
 export interface SessionHandle {
-  recordAttempts(attempts: readonly ProviderAttempt[], messagesRef?: ContextRecord[], extra?: { prefixHash?: string; outcome?: 'discarded' }): void;
+  recordAttempts(attempts: readonly ProviderAttempt[], messagesRef?: ContextRecord[], extra?: AttemptRecordOptions): void;
   /** 本次 session 实例的 id；常驻 session 使用声明 id，临时 fork 使用运行期序号。 */
   id: string;
   /** 累计用量，可更新消息数组引用。model 用于持久化归因；extra 提供前缀指纹和费用记录。 */
@@ -127,6 +134,7 @@ export class SessionTracker {
             ...(attempt.status !== null ? { status: attempt.status } : {}),
             ...(failed ? { outcome: 'failed' } : attempt.outcome === 'discarded' ? { outcome: 'discarded' } : {}),
             ...(extra?.prefixHash ? { prefixHash: extra.prefixHash } : {}),
+            ...(extra?.sources ? { sources: structuredClone(extra.sources) } : {}),
           });
         }
         this.emit();

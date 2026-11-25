@@ -381,6 +381,22 @@ export interface LLMUsage {
   reasoningTokens?: number;
 }
 
+/** World 自报用量的 UsageRecord.role 前缀，后接 World id。 */
+export const WORLD_USAGE_ROLE_PREFIX = 'worlds.';
+
+/**
+ * 一次主循环请求的用量来源，数值都是主循环的估算 token(ContextFacts.estimateTokens)。
+ * 据此把这次请求的 token 与费用分给各 World 的规则在 cost.ts 的 usageShares。
+ */
+export interface UsageSources {
+  /** 上次模型输出写进 session 之后新进上下文的部分，按 World id 分：事件记给来源 World,工具回执记给工具所属的 World。 */
+  worlds: Record<string, number>;
+  /** 同期新进上下文、不属于任何 World 的部分:Persona 加的内容、来源不是 World 的事件、Persona 工具的回执。 */
+  other: number;
+  /** 这次输出里推理以外的部分(total),及其中调用各 World 工具的部分(工具名加参数，按 World id 分);拿到响应后才有。 */
+  output?: { total: number; worldTools: Record<string, number> };
+}
+
 /** 单次模型调用的持久记录，保存于 data/usage.jsonl。 */
 export interface UsageRecord {
   recordId?: string;
@@ -388,6 +404,8 @@ export interface UsageRecord {
   run?: string;
   /** 主循环轮次；fork 和 World 自报用量不提供。 */
   round?: number;
+  /** 主循环请求的用量来源;fork 和 World 自报用量不提供。 */
+  sources?: UsageSources;
   attempt?: ProviderAttempt;
   /** World 自报费用，不归属于当前 provider。 */
   charges?: import('./generation.ts').Charge[];
@@ -395,7 +413,7 @@ export interface UsageRecord {
   ts: string;
   /** 常驻 session 使用声明 id；fork 实例 id 由声明 id 和序号派生。 */
   sessionId: string;
-  /** Persona 定义的 session 声明 id，用于分类统计。 */
+  /** Persona 定义的 session 声明 id;World 自报用量为 `worlds.<id>`。用于分类统计。 */
   role: string;
   label: string;
   model: string;
