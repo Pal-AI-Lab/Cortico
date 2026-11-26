@@ -605,25 +605,26 @@ export class Cormini implements Persona {
   }
 
   onOpening(ctx: { reason: SessionOpeningReason }): void {
-    const text = ctx.reason === 'restarted' ? '[system] 进程重启,session 已续上。' : '[system] session 已开始。';
-    this.core?.injectInternal(text, 'opening');
+    this.core?.injectInternal(this.openingNotice(ctx.reason), 'opening');
+  }
+
+  protected openingNotice(reason: SessionOpeningReason): string {
+    return reason === 'restarted' ? '[system] 进程重启,session 已续上。' : '[system] session 已开始。';
   }
 
   /** World 装卸、可见性变化、启动失败与运行中出错只报一句;工具与环境提示词的增减随前缀重载自然体现。 */
   onWorldLifecycle(event: WorldLifecycleEvent): void {
-    if (event.kind === 'start-failed') {
-      this.core?.injectInternal(`[system] World 「${event.label}」启动失败,本次运行里没有它:${event.reason}`, 'notice');
-      return;
-    }
-    if (event.kind === 'failed') {
-      this.core?.injectInternal(`[system] World 「${event.label}」运行中出错,已卸载,本次运行里没有它:${event.reason}`, 'notice');
-      return;
-    }
+    this.core?.injectInternal(this.worldLifecycleNotice(event), 'notice');
+  }
+
+  protected worldLifecycleNotice(event: WorldLifecycleEvent): string {
+    if (event.kind === 'start-failed') return `[system] World 「${event.label}」启动失败,本次运行里没有它:${event.reason}`;
+    if (event.kind === 'failed') return `[system] World 「${event.label}」运行中出错,已卸载,本次运行里没有它:${event.reason}`;
     const what = event.kind === 'visibility'
       ? (event.visible ? '重新对你可见' : '已对你隐藏,它的事件不再送到你这里')
       : event.kind === 'mounted' ? '已激活'
         : event.kind === 'unmounted' ? '已停用' : '已重启';
-    this.core?.injectInternal(`[system] World 「${event.label}」${what}。`, 'notice');
+    return `[system] World 「${event.label}」${what}。`;
   }
 
   onDelivery(ctx: { events: EventEnvelope[] }): void {
