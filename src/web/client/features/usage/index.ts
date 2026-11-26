@@ -57,8 +57,12 @@ const METRICS: ReadonlyArray<{ value: UsageMetric; label: string }> = [
 const SPLITS: ReadonlyArray<{ dim: UsageDim; label: string }> = [
   { dim: 'type', label: S.dimType },
   { dim: 'role', label: S.dimRole },
+  { dim: 'world', label: S.dimWorld },
   { dim: 'model', label: S.dimModel },
 ];
+
+/** 桶里没有 World 与调用用途的交叉，选了一个就取消另一个。 */
+const EXCLUSIVE: Partial<Record<UsageDim, UsageDim>> = { world: 'role', role: 'world' };
 
 /** 已知金额。全部未计价为「未知」;部分未计价时金额是下限,后缀标出。 */
 function costText(amount: number, a: Partial<UsageAccum>, cur: string, decimals: 2 | 3 = 2): string {
@@ -210,8 +214,12 @@ export function mountUsage(ctx: FeatureContext): void {
     btn.setAttribute('aria-pressed', 'false');
     btn.addEventListener('click', () => {
       state.splitDims[dim] = !state.splitDims[dim];
-      btn.classList.toggle('active', !!state.splitDims[dim]);
-      btn.setAttribute('aria-pressed', String(!!state.splitDims[dim]));
+      const other = EXCLUSIVE[dim];
+      if (state.splitDims[dim] && other) state.splitDims[other] = false;
+      for (const b of splitBtns) {
+        b.btn.classList.toggle('active', !!state.splitDims[b.dim]);
+        b.btn.setAttribute('aria-pressed', String(!!state.splitDims[b.dim]));
+      }
       renderMain();
     }, { signal: ctx.signal });
     splitWrap.appendChild(btn);
@@ -275,14 +283,14 @@ export function mountUsage(ctx: FeatureContext): void {
 
   function renderMain(): void {
     const calls = state.metric === 'calls';
-    for (const { dim, btn } of splitBtns) if (dim === 'type') btn.disabled = calls;
+    for (const { dim, btn } of splitBtns) if (dim === 'type' || dim === 'world') btn.disabled = calls;
     if (!state.data) return;
     const unpriced = state.data.totals?.unpricedCalls || 0;
     mainNote.textContent = state.metric === 'cost' && unpriced > 0 ? S.compUnpriced(unpriced) : '';
     renderChart(
       { doc, ui, box: mainBox, legend: mainLegend, tip, color },
       state.data,
-      { metric: state.metric, dims: state.splitDims, allowType: !calls, sort: state.sortByShare },
+      { metric: state.metric, dims: state.splitDims, sort: state.sortByShare },
     );
   }
 

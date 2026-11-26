@@ -11,7 +11,7 @@ export interface UsageState {
   to: string;
   bucket: UsageBucketOption;
   metric: UsageMetric;
-  /** 拆分维度；指标为调用次数时不按"类型"拆。 */
+  /** 拆分维度；指标为调用次数时不按类型和 World 拆。 */
   splitDims: UsageDimFlags;
   sortByShare: boolean;
   /** 最近一次取回的数据。重绘（换指标、换拆分、主题换色、窗口改宽）不重取。 */
@@ -25,7 +25,7 @@ export function createUsageState(): UsageState {
     to: '',
     bucket: 'auto',
     metric: 'cost',
-    splitDims: { type: false, role: false, model: false },
+    splitDims: { type: false, role: false, world: false, model: false },
     sortByShare: false,
     data: null,
   };

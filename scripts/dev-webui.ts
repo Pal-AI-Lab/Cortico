@@ -111,8 +111,14 @@ function genUsage(): UsageRecord[] {
   const p2 = (n: number) => String(n).padStart(2, '0');
 
   const pickRole = () => roles[rnd() < 0.85 ? 0 : 1];
-  /** 主循环请求里各 World 新进上下文的估算 token;空的一档只有 Persona 自己的内容。 */
-  const sourceMix: Array<Record<string, number>> = [{ qq: 400 }, { qq: 300, bilibili: 900 }, { minecraft: 600 }, {}];
+  /**
+   * 主循环请求里各 World 新进上下文的估算 token;空的一档只有 Persona 自己的内容。World 数多于图表调色板的颜色数，
+   * 按 World 拆分时能看到合并成「其他」的一格。
+   */
+  const sourceMix: Array<Record<string, number>> = [
+    { qq: 400 }, { qq: 300, bilibili: 900 }, { minecraft: 600 }, {},
+    { discord: 200, telegram: 150, websearch: 80, music: 60, calendar: 40, notes: 30, weather: 20 },
+  ];
   const push = (day: string, hh: number, mm: number) => {
     const [role, label, model] = pickRole();
     const worlds = role === 'main' ? sourceMix[Math.floor(rnd() * sourceMix.length)] : null;

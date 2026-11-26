@@ -48,6 +48,7 @@ export const S: Partial<typeof en> = {
   byWorld: 'По World',
   dimWorld: 'World',
   unattributed: 'Без привязки',
+  foldLabel: (n: number) => `Прочие (${n})`,
   cardKnownCost: 'Подытог известной стоимости',
   unknown: 'неизвестно',
   cardCalls: 'Вызовы',

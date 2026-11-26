@@ -1,5 +1,5 @@
 /**
- * 用量页的堆叠柱图，包含 byRoleModel 寻址、成本档位和类型→角色→模型层级，归用量 feature 所有。
+ * 用量页的堆叠柱图，包含 byRoleModel 与 byWorld 寻址、成本档位、类型→角色/World→模型层级和「其他」合并，归用量 feature 所有。
  * 组合、取值、配色、格式化和桶标签均为独立导出的纯函数；renderChart 仅操作自身创建的 SVG。
  */
 
@@ -14,6 +14,7 @@ import type {
   UsageAccum,
   UsageAggregate,
   UsageBucketUnit,
+  UsageCompPart,
   UsageComposite,
   UsageDim,
   UsageDimFlags,
@@ -61,63 +62,128 @@ export function uTypeVal(
 // 维度 → 组合
 // ---------------------------------------------------------------------------
 
-/** 某个维度在这份数据里的分组表。`type` 不是分组，走 `U_TYPES`。 */
+/** World 维里未归属一格的键;World id 不会是空串。 */
+export const UNATTRIBUTED_KEY = '';
+
+function isUnattributed(part: UsageCompPart): boolean {
+  return part.dim === 'world' && part.key === UNATTRIBUTED_KEY;
+}
+/** 「其他」一格的键，取 U+241E,键里不会出现。 */
+export const FOLD_KEY = '␞';
+
+/** 某个维度在这份数据里的分组表,World 维末尾是未归属。`type` 不是分组，走 `U_TYPES`。 */
 function dimGroups(d: UsageAggregate, dim: UsageDim): readonly UsageGroupStat[] {
-  return (dim === 'role' ? d.byRole : d.byModel) || [];
+  if (dim === 'role') return d.byRole || [];
+  if (dim === 'model') return d.byModel || [];
+  if (dim !== 'world') return [];
+  const rest = d.unattributed ? [{ ...d.unattributed, key: UNATTRIBUTED_KEY, label: S.unattributed }] : [];
+  return [...(d.byWorld || []), ...rest];
 }
 
-function dimKeys(d: UsageAggregate, dim: UsageDim): string[] {
-  if (dim === 'type') return U_TYPES.filter(t => t.key !== 'other' || (d.totals?.costOther || 0) > 0 || (d.totals?.unclassifiedInputTokens || 0) > 0).map(t => t.key);
-  return dimGroups(d, dim).map((g) => g.key);
+/**
+ * 一个维度在图上分成的各格。类型按 `U_TYPES`;其余按范围内的读数降序，键数超过调色板的颜色数时，前面比颜色数少一个的
+ * 键各占一格，其余(至少两个)合成「其他」一格。未归属单独一格。「其他」与未归属用中性色，不占调色板。范围内读数为 0 的
+ * 键不出现。
+ */
+export function dimParts(d: UsageAggregate, dim: UsageDim, metric: UsageMetric): UsageCompPart[] {
+  if (dim === 'type') {
+    return U_TYPES
+      .filter(t => t.key !== 'other' || (d.totals?.costOther || 0) > 0 || (d.totals?.unclassifiedInputTokens || 0) > 0)
+      .map(t => ({ dim, key: t.key }));
+  }
+  const groups = dimGroups(d, dim).filter(g => uMetricVal(g, metric) > 0);
+  const residue = groups.filter(g => isUnattributed({ dim, key: g.key }));
+  const ranked = groups
+    .filter(g => !residue.includes(g))
+    .sort((a, b) => uMetricVal(b, metric) - uMetricVal(a, metric) || (a.key < b.key ? -1 : 1));
+  const seats = U_PALETTE.length;
+  const kept = ranked.length > seats ? ranked.slice(0, seats - 1) : ranked;
+  const parts: UsageCompPart[] = kept.map(g => ({ dim, key: g.key }));
+  if (ranked.length > seats) parts.push({ dim, key: FOLD_KEY, keys: ranked.slice(seats - 1).map(g => g.key) });
+  for (const g of residue) parts.push({ dim, key: g.key });
+  return parts;
 }
 
 /** 显示 UsageGroupStat.label；缺少 label 时显示原 id。 */
 export function dimKeyLabel(d: UsageAggregate, dim: UsageDim, key: string): string {
   if (dim === 'type') return U_TYPES.find((t) => t.key === key)?.label ?? key;
-  return groupLabel(dimGroups(d, dim), key);
+  return dimGroups(d, dim).find((g) => g.key === key)?.label || key;
 }
 
-/** 一条分组的人话名：声明方给了就用，没给就用 id。 */
-function groupLabel(groups: readonly UsageGroupStat[], key: string): string {
-  return groups.find((g) => g.key === key)?.label || key;
+function partLabel(d: UsageAggregate, part: UsageCompPart): string {
+  return part.keys ? S.foldLabel(part.keys.length) : dimKeyLabel(d, part.dim, part.key);
 }
 
-/** 按键的字典序分配颜色，使同一键集的颜色不随成本排序变化。 */
-export function paletteSeat(keys: readonly string[], key: string): string {
-  const sorted = [...keys].sort();
-  const i = sorted.indexOf(key);
-  return U_PALETTE[(i < 0 ? 0 : i) % U_PALETTE.length];
+/** FNV-1a,给键挑首选色位。 */
+function hashKey(key: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < key.length; i++) h = Math.imul(h ^ key.charCodeAt(i), 0x01000193);
+  return h >>> 0;
 }
 
-function dimBaseColor(
-  d: UsageAggregate,
-  dim: UsageDim,
-  key: string,
-  color: ColorResolver,
-): string {
-  if (dim === 'type') return color(U_TYPES.find((t) => t.key === key)?.color ?? U_PALETTE[0]);
-  return color(paletteSeat(dimKeys(d, dim), key));
+/**
+ * 给一组键分配调色板颜色：键按字典序依次取哈希选出的色位，色位已被占用就取下一个。键数不超过调色板时颜色各不相同；
+ * 增减一个键时，只有字典序在它之后、因色位被占而顺延的键会换色。
+ */
+export function paletteSeats(keys: readonly string[]): Map<string, string> {
+  const taken = new Set<number>();
+  const out = new Map<string, string>();
+  for (const key of [...new Set(keys)].sort()) {
+    let i = hashKey(key) % U_PALETTE.length;
+    for (let tries = 0; taken.has(i) && tries < U_PALETTE.length; tries++) i = (i + 1) % U_PALETTE.length;
+    taken.add(i);
+    out.set(key, U_PALETTE[i]!);
+  }
+  return out;
 }
 
-/** 勾选状态 → 有序维度列表。顺序即嵌套序：类型 > 角色 > 模型。 */
-export function activeDims(dims: UsageDimFlags, allowType: boolean): UsageDim[] {
+/** 这一格是否占调色板的颜色：类型有固定色，「其他」与未归属用中性色。 */
+function seated(part: UsageCompPart): boolean {
+  return part.dim !== 'type' && !part.keys && !isUnattributed(part);
+}
+
+/** 一格的基色:`seats` 是 `paletteSeats` 给占调色板的各格分好的颜色。 */
+function partBaseColor(part: UsageCompPart, seats: ReadonlyMap<string, string>, color: ColorResolver): string {
+  if (part.dim === 'type') return color(U_TYPES.find((t) => t.key === part.key)?.color ?? U_PALETTE[0]);
+  if (part.keys) return color('ink-dim');
+  if (isUnattributed(part)) return color('line-strong');
+  return color(seats.get(part.key) ?? U_PALETTE[0]);
+}
+
+/**
+ * 勾选状态 → 有序维度列表，顺序即嵌套序：类型 > 角色 > World > 模型。调用次数没有类型分量；一次请求的次数会记给
+ * 它分到份额的每个 World,叠起来超过合计，所以也不按 World 拆。
+ */
+export function activeDims(dims: UsageDimFlags, metric: UsageMetric): UsageDim[] {
+  const calls = metric === 'calls';
   const out: UsageDim[] = [];
-  if (allowType && dims.type) out.push('type');
+  if (!calls && dims.type) out.push('type');
   if (dims.role) out.push('role');
+  if (!calls && dims.world) out.push('world');
   if (dims.model) out.push('model');
   return out;
 }
 
-/** 各维度键集的笛卡尔积。无维度 → `[[]]`（一根合计柱），不是 `[]`。 */
-export function buildComposites(d: UsageAggregate, dimsList: readonly UsageDim[]): UsageComposite[] {
+/** 各维度各格的笛卡尔积。无维度 → `[[]]`（一根合计柱），不是 `[]`。 */
+export function buildComposites(d: UsageAggregate, dimsList: readonly UsageDim[], metric: UsageMetric): UsageComposite[] {
   let combos: UsageComposite[] = [[]];
   for (const dim of dimsList) {
-    const keys = dimKeys(d, dim);
+    const parts = dimParts(d, dim, metric);
     const nx: UsageComposite[] = [];
-    for (const c of combos) for (const k of keys) nx.push(c.concat([{ dim, key: k }]));
+    for (const c of combos) for (const part of parts) nx.push(c.concat([part]));
     combos = nx;
   }
   return combos;
+}
+
+/** 把含「其他」的组合展开成它合并的各键的组合。 */
+export function expandComposite(comp: UsageComposite): UsageComposite[] {
+  let out: UsageComposite[] = [[]];
+  for (const part of comp) {
+    const keys = part.keys ?? [part.key];
+    out = out.flatMap((c) => keys.map((key) => c.concat([{ dim: part.dim, key }])));
+  }
+  return out;
 }
 
 /** 组合的稳定 id。分隔符取 U+241F（单元分隔符的可见形），键里不会出现。 */
@@ -127,18 +193,22 @@ export function compId(comp: UsageComposite): string {
 
 /** 组合的显示名。要 `d` 是因为角色/模型的人话名只能从数据里取（见 `dimKeyLabel`）。 */
 export function compLabel(d: UsageAggregate, comp: UsageComposite): string {
-  return comp.length ? comp.map((c) => dimKeyLabel(d, c.dim, c.key)).join(' · ') : S.total;
+  return comp.length ? comp.map((c) => partLabel(d, c)).join(' · ') : S.total;
 }
 
 /**
  * 组合 → 桶里对应的那个累计单元。
  *
- * "类型"不参与寻址（它是同一个 accum 内部的分量），所以只看 role / model：
- * 两者都有走交叉表，只有一个走单维表，都没有就是整个桶。
+ * "类型"不参与寻址（它是同一个 accum 内部的分量），所以只看 World / role / model：World 或 role 与 model 同在时
+ * 走对应的交叉表，只有一维走单维表，都没有就是整个桶。未归属走 unattributed 与 unattributedByModel。组合里不能有「其他」,先用
+ * `expandComposite` 展开。
  */
 export function compScopeAccum(p: UsagePoint, comp: UsageComposite): UsageAccum | undefined {
+  const world = comp.find((c) => c.dim === 'world');
   const role = comp.find((c) => c.dim === 'role');
   const model = comp.find((c) => c.dim === 'model');
+  if (world && model) return isUnattributed(world) ? p.unattributedByModel?.[model.key] : p.byWorldModel?.[world.key]?.[model.key];
+  if (world) return isUnattributed(world) ? p.unattributed : (p.byWorld || {})[world.key];
   if (role && model) return (p.byRoleModel || {})[role.key]?.[model.key];
   if (role) return (p.byRole || {})[role.key];
   if (model) return (p.byModel || {})[model.key];
@@ -146,6 +216,7 @@ export function compScopeAccum(p: UsagePoint, comp: UsageComposite): UsageAccum 
 }
 
 export function compVal(p: UsagePoint, comp: UsageComposite, metric: UsageMetric): number {
+  if (comp.some((c) => c.keys)) return expandComposite(comp).reduce((sum, c) => sum + compVal(p, c, metric), 0);
   const acc = compScopeAccum(p, comp);
   if (!acc) return 0;
   const type = comp.find((c) => c.dim === 'type');
@@ -154,7 +225,6 @@ export function compVal(p: UsagePoint, comp: UsageComposite, metric: UsageMetric
 
 /** 最外层维度决定色系，同色系按位次调整明度；排序不改色。 */
 export function compositeColors(
-  d: UsageAggregate,
   composites: readonly UsageComposite[],
   dimsList: readonly UsageDim[],
   color: ColorResolver,
@@ -164,14 +234,15 @@ export function compositeColors(
     colorOf[compId([])] = 'var(--accent-2)';
     return colorOf;
   }
+  const seats = paletteSeats(composites.map((comp) => comp[0]!).filter(seated).map((part) => part.key));
   const fam = new Map<string, UsageComposite[]>();
   for (const comp of composites) {
     const fk = comp[0]!.key;
     if (!fam.has(fk)) fam.set(fk, []);
     fam.get(fk)!.push(comp);
   }
-  for (const [fk, members] of fam) {
-    const base = dimBaseColor(d, dimsList[0]!, fk, color);
+  for (const members of fam.values()) {
+    const base = partBaseColor(members[0]![0]!, seats, color);
     const hsl = hexToHsl(base);
     const n = members.length;
     members.forEach((comp, i) => {
@@ -268,7 +339,8 @@ export function uTipHtml(
   s += `<div class="tt-tot">${o.stacked ? S.totalPrefix : ''}${fmtMetric(total, o.metric, o.cur)}</div>`;
   if (o.stacked) {
     let shown = 0;
-    for (const comp of order) {
+    // 「其他」一行下面逐个列出它合并的键，与普通行共用行数上限。
+    rows: for (const comp of order) {
       const v = compVal(p, comp, o.metric);
       if (v <= 0) continue;
       if (shown++ >= TIP_ROWS_MAX) {
@@ -280,6 +352,19 @@ export function uTipHtml(
       s += `<div class="tt-row${cur}"><span class="tt-sw" style="background:${colorOf[cid]}"></span>`
         + `<span class="tt-l">${esc(compLabel(d, comp))}</span>`
         + `<span class="tt-v">${fmtMetric(v, o.metric, o.cur)} · ${pctOf(v)}%</span></div>`;
+      if (!comp.some((c) => c.keys)) continue;
+      const members = expandComposite(comp)
+        .map((m) => ({ m, v: compVal(p, m, o.metric) }))
+        .filter((x) => x.v > 0)
+        .sort((a, b) => b.v - a.v);
+      for (const { m, v: mv } of members) {
+        if (shown++ >= TIP_ROWS_MAX) {
+          s += `<div class="tt-extra">${S.restOmitted}</div>`;
+          break rows;
+        }
+        s += `<div class="tt-row tt-sub"><span></span><span class="tt-l">${esc(compLabel(d, m))}</span>`
+          + `<span class="tt-v">${fmtMetric(mv, o.metric, o.cur)} · ${pctOf(mv)}%</span></div>`;
+      }
     }
   }
   s += `<div class="tt-extra">${S.tipFoot(
@@ -324,9 +409,7 @@ export interface ChartDeps {
 export interface ChartOptions {
   metric: UsageMetric;
   dims: UsageDimFlags;
-  /** 调用次数没有三档分量，不按"类型"拆。 */
-  allowType?: boolean;
-  /** 按占比降序统一堆叠；关掉则按 类型>角色>模型 的嵌套序。 */
+  /** 按占比降序统一堆叠；关掉则按 `activeDims` 的嵌套序。 */
   sort?: boolean;
 }
 
@@ -354,8 +437,8 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     return;
   }
 
-  let dimsList = activeDims(opts.dims, opts.allowType !== false);
-  let composites = buildComposites(d, dimsList);
+  let dimsList = activeDims(opts.dims, metric);
+  let composites = buildComposites(d, dimsList, metric);
   const tot: Record<string, number> = {};
   for (const c of composites) tot[compId(c)] = 0;
   for (const p of series) for (const c of composites) tot[compId(c)] += compVal(p, c, metric);
@@ -369,7 +452,7 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
     }
   }
   const stacked = dimsList.length > 0;
-  const colorOf = compositeColors(d, composites, dimsList, color);
+  const colorOf = compositeColors(composites, dimsList, color);
   const order = (stacked && opts.sort)
     ? composites.slice().sort((a, b) => (tot[compId(b)] || 0) - (tot[compId(a)] || 0))
     : composites;
@@ -380,6 +463,7 @@ export function renderChart(deps: ChartDeps, d: UsageAggregate, opts: ChartOptio
       const sw = ui.h('span', 'legsw');
       sw.style.background = colorOf[compId(comp)] ?? '';
       it.append(sw, ui.h('span', 'leglbl', compLabel(d, comp)));
+      if (comp.some((c) => c.keys)) it.title = expandComposite(comp).map((c) => compLabel(d, c)).join('\n');
       legend.appendChild(it);
     }
   }

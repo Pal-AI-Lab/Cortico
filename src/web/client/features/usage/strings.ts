@@ -57,6 +57,8 @@ const zh = {
   byWorld: '按 World',
   dimWorld: 'World',
   unattributed: '未归属',
+  /** 柱图里合并在一起的 n 个键。 */
+  foldLabel: (n: number) => `其他 ${n} 项`,
   cardKnownCost: '已知费用小计',
   unknown: '未知',
   cardCalls: '调用次数',
@@ -160,6 +162,7 @@ export const en: typeof zh = {
   byWorld: 'By World',
   dimWorld: 'World',
   unattributed: 'Unattributed',
+  foldLabel: (n: number) => `${n} others`,
   cardKnownCost: 'Known cost subtotal',
   unknown: 'unknown',
   cardCalls: 'Calls',

@@ -48,6 +48,7 @@ export const S: Partial<typeof en> = {
   byWorld: '依 World',
   dimWorld: 'World',
   unattributed: '未歸屬',
+  foldLabel: (n: number) => `其他 ${n} 項`,
   cardKnownCost: '已知費用小計',
   unknown: '未知',
   cardCalls: '呼叫次數',
