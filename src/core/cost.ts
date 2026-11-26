@@ -42,6 +42,10 @@ export interface UsageSeriesPoint extends UsageAccum {
   byModel: Record<string, UsageAccum>;
   /** 按角色与模型交叉分组，键为 byRoleModel[role][model]。 */
   byRoleModel: Record<string, Record<string, UsageAccum>>;
+  /** 本桶内按 World 的份额，口径同 UsageAggregate.byWorld;token 在桶内取整。 */
+  byWorld: Record<string, UsageAccum>;
+  /** 本桶内不归任何 World 的部分，与 byWorld 相加等于本桶(token 有取整误差);没有这部分时省略。 */
+  unattributed?: UsageAccum;
 }
 
 /** 按 role / model 分组的合计 */
@@ -192,6 +196,29 @@ function usageShares(sources: UsageSources, outputTokens: number, reasoningToken
   return shares;
 }
 
+/**
+ * 一条记录分给各 World 的份额，键 null 是未归属。World 自己调模型的记录全额归它，没有来源记录的全额未归属。
+ */
+function worldShares(r: UsageRecord): Iterable<[string | null, UsageShare]> {
+  if (r.role?.startsWith(WORLD_USAGE_ROLE_PREFIX)) return [[r.role.slice(WORLD_USAGE_ROLE_PREFIX.length), WHOLE]];
+  if (!r.sources) return [[null, WHOLE]];
+  return usageShares(r.sources, r.completionTokens, r.reasoningTokens);
+}
+
+/** 一个时间桶的累计:合计与按角色、模型、World 的子拆分。 */
+interface BucketAccum {
+  total: UsageAccum;
+  roles: Map<string, UsageAccum>;
+  models: Map<string, UsageAccum>;
+  roleModels: Map<string, Map<string, UsageAccum>>;
+  worlds: Map<string, UsageAccum>;
+  unattributed: UsageAccum;
+}
+
+function bucketAccum(): BucketAccum {
+  return { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map(), worlds: new Map(), unattributed: zero() };
+}
+
 /** 按份额累计的 token 取整，费用保留小数。 */
 function wholeTokens(a: UsageAccum): UsageAccum {
   return {
@@ -205,9 +232,9 @@ function wholeTokens(a: UsageAccum): UsageAccum {
   };
 }
 
-function mapToObj(m: Map<string, UsageAccum>): Record<string, UsageAccum> {
+function mapToObj(m: Map<string, UsageAccum>, each: (a: UsageAccum) => UsageAccum = a => a): Record<string, UsageAccum> {
   const o: Record<string, UsageAccum> = {};
-  for (const [k, v] of m) o[k] = v;
+  for (const [k, v] of m) o[k] = each(v);
   return o;
 }
 
@@ -380,7 +407,7 @@ export function usageRecordFilter(opts: UsageAggregateOptions): (record: UsageRe
 export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptions): UsageAggregate {
   const { nowKeySource, today, from, to } = requestedDays(opts);
   const unit: UsageBucketUnit = opts.bucket === 'auto' ? resolveBucket(from, to) : opts.bucket;
-  const series = new Map<string, { total: UsageAccum; roles: Map<string, UsageAccum>; models: Map<string, UsageAccum>; roleModels: Map<string, Map<string, UsageAccum>> }>();
+  const series = new Map<string, BucketAccum>();
   const roles = new Map<string, UsageAccum>();
   /** 同一 role 的 label 使用最后一条记录提供的值。 */
   const roleLabels = new Map<string, string>();
@@ -426,7 +453,7 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     const model = r.model || 'unknown';
     const bk = bucketKeyOf(at, unit);
     let bucketAcc = series.get(bk);
-    if (!bucketAcc) { bucketAcc = { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map() }; series.set(bk, bucketAcc); }
+    if (!bucketAcc) { bucketAcc = bucketAccum(); series.set(bk, bucketAcc); }
     add(bucketAcc.total, r, cost);
     upsert(bucketAcc.roles, role, r, cost);
     upsert(bucketAcc.models, model, r, cost);
@@ -436,11 +463,9 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     upsert(roles, role, r, cost);
     if (r.label) roleLabels.set(role, r.label);
     upsert(models, model, r, cost);
-    if (role.startsWith(WORLD_USAGE_ROLE_PREFIX)) upsert(worlds, role.slice(WORLD_USAGE_ROLE_PREFIX.length), r, cost);
-    else if (!r.sources) add(unattributed, r, cost);
-    else for (const [key, share] of usageShares(r.sources, r.completionTokens, r.reasoningTokens)) {
-      if (key === null) add(unattributed, r, cost, share);
-      else upsert(worlds, key, r, cost, share);
+    for (const [world, share] of worldShares(r)) {
+      if (world === null) { add(unattributed, r, cost, share); add(bucketAcc.unattributed, r, cost, share); }
+      else { upsert(worlds, world, r, cost, share); upsert(bucketAcc.worlds, world, r, cost, share); }
     }
     add(totals, r, cost);
   }
@@ -457,12 +482,16 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     let key = from ? bucketKeyOf(`${from}T00:00`, unit) : keys[0]!;
     if (keys[0]! < key) key = keys[0]!;
     for (; key <= end; key = nextBucketKey(key, unit)) {
-      if (!series.has(key)) series.set(key, { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map() });
+      if (!series.has(key)) series.set(key, bucketAccum());
     }
   }
   const seriesOut: UsageSeriesPoint[] = [...series.entries()]
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([b, acc]) => ({ bucket: b, ...acc.total, byRole: mapToObj(acc.roles), byModel: mapToObj(acc.models), byRoleModel: nestedMapToObj(acc.roleModels) }));
+    .map(([b, acc]) => ({
+      bucket: b, ...acc.total, byRole: mapToObj(acc.roles), byModel: mapToObj(acc.models), byRoleModel: nestedMapToObj(acc.roleModels),
+      byWorld: mapToObj(acc.worlds, wholeTokens),
+      ...(acc.unattributed.calls ? { unattributed: wholeTokens(acc.unattributed) } : {}),
+    }));
   const groupOut = (m: Map<string, UsageAccum>, labels?: Map<string, string>): UsageGroupStat[] =>
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
 

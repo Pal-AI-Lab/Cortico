@@ -134,6 +134,29 @@ describe('分时段聚合 aggregateUsage', () => {
         }
       }
     });
+
+    it('每个时间桶的 World 份额加未归属等于这个桶，各桶同一 World 的份额加起来等于 byWorld', () => {
+      const minute = (ts: string, r: UsageRecord): UsageRecord => ({ ...r, ts });
+      const rows = [
+        minute('2026-07-18T10:00:10+08:00', request({ hit: 700_000, out: 300_000, reasoning: 120_000, rules: split, sources: { worlds: { qq: 37, mc: 11 }, other: 13, output: { total: 90, worldTools: { mc: 31 } } } })),
+        minute('2026-07-18T10:00:50+08:00', request({ role: 'worlds.qq', hit: 0, out: 10_000, reasoning: 0, rules: split })),
+        minute('2026-07-18T10:02:00+08:00', request({ hit: 200_000, out: 50_000, reasoning: 0, rules: split })),
+        minute('2026-07-18T10:03:00+08:00', request({ hit: 0, out: 80_000, reasoning: 0, rules: split, sources: { worlds: { mc: 3 }, other: 1 } })),
+      ];
+      const a = aggregateUsage(rows, { bucket: 'minute' });
+      expect(a.series.map((p) => p.bucket.slice(11))).toEqual(['10:00', '10:01', '10:02', '10:03']);
+      expect(a.series[1]!.byWorld).toEqual({});
+      expect(a.series[1]!.unattributed).toBeUndefined();
+      for (const p of a.series) {
+        const parts = [...Object.values(p.byWorld), ...(p.unattributed ? [p.unattributed] : [])];
+        expect(parts.reduce((sum, g) => sum + g.cost, 0)).toBeCloseTo(p.cost, 9);
+        expect(Math.abs(parts.reduce((sum, g) => sum + g.promptTokens, 0) - p.promptTokens)).toBeLessThanOrEqual(parts.length / 2);
+      }
+      for (const g of a.byWorld) {
+        expect(a.series.reduce((sum, p) => sum + (p.byWorld[g.key]?.cost ?? 0), 0)).toBeCloseTo(g.cost, 9);
+      }
+      expect(a.series.reduce((sum, p) => sum + (p.unattributed?.cost ?? 0), 0)).toBeCloseTo(a.unattributed.cost, 9);
+    });
   });
 
   it('补齐范围内没有调用的桶,不越过部署时区的当前时刻;days 按部署时区取今天', () => {
