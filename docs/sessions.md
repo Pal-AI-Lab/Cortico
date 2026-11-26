@@ -72,7 +72,8 @@ Core 记录并发数，WebUI「运行诊断 → 会话统计」显示各 session
 
 - 输入：上次模型输出写进 session 之后新写进去的记录。投递的事件记给来源 World,一次投递写进的记录按各事件正文
   的估算 token 比例分;工具回执记给工具所属的 World,一轮几条回执各算各的;Persona 加的内容(内部事件、轮数提示)、
-  来源不是 World 的事件和 Persona 工具的回执记作未归属。模型输出写进 session 时清零，失败后重试的请求仍带着它。
+  来源不是 World 的事件和 Persona 工具的回执记作未归属。模型输出写进 session、交接或清空 session 时清零，失败后重试的
+  请求仍带着它。
 - 输出：拿到响应后记下推理以外的输出的估算，和其中调用各 World 工具(工具名加参数)的部分。
 
 分摊在 `src/core/cost.ts` 的 `usageShares`:

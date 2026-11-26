@@ -3469,6 +3469,26 @@ describe('MainLoop 失败流入账', () => {
     expect(rows).toHaveLength(1);
   });
 
+  it('一批没等到模型输出就交接:新 session 第一次请求的来源只算交接后写进去的', async () => {
+    const { rows, tracker } = rigWithUsage();
+    rig = makeRig({
+      tracker,
+      silent: true,
+      onHandoff: async () => ({ tail: [] }),
+      // 每条记录估 1 token:一条事件投递是调用加回执两条
+      context: { estimateTokens: (records) => records.length },
+    });
+    rig.llm.throwNext = new LLMError('LLM API 400', 400, 'Model Not Exist');
+    rig.start();
+    rig.pushEvent('在吗');
+    await until(() => rows.length >= 1);
+    await rig.loop.handoffContext();
+    rig.llm.script(textReply('好'));
+    rig.pushEvent('还在吗');
+    await until(() => rows.length >= 2);
+    expect(rows[1].sources?.worlds).toEqual({ qq: 2 });
+  });
+
   it('成功返回但本轮随关机丢弃:token 照样入账,标 discarded', async () => {
     const { rows, tracker } = rigWithUsage();
     rig = makeRig({ tracker });
