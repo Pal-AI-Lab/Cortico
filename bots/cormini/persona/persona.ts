@@ -667,6 +667,8 @@ export class Cormini implements Persona {
       this.handoffUnreachableAt = null;
       return;
     }
+    // 这一批里登记的交接刚兑现:读到的是新 session,它压没压回计数由下一次投递时的 checkHandoffFloor 判断
+    if (this.handedOff) return;
     if (this.handoffUnreachableAt === soft) return;
     if (!this.pressureWarned) {
       this.pressureWarned = true;

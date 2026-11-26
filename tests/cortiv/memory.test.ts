@@ -532,6 +532,7 @@ describe('CortiV 软阈值提醒与交接', () => {
     p.onBatchEnd();
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), HANDOFF_CTX);
     attach(p, 100);
+    p.onDelivery({ events: [] });
     p.onBatchEnd();
     attach(p, 900);
     p.onBatchEnd();

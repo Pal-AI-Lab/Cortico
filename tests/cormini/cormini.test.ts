@@ -284,6 +284,18 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     expect(tidy()).toHaveLength(1);
   });
 
+  it('批内登记的交接兑现后,同一批的批末不提醒、不请求交接,由下一次投递判断下限', async () => {
+    attach(900);
+    // run() 的顺序:本批登记的交接先兑现,再跑批末钩子,下一批投递时才读新 session 的下限
+    await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    p.onBatchEnd();
+    expect(pressure()).toBe(0);
+    expect(handoffRequests).toBe(0);
+    p.onDelivery({ events: [] });
+    expect(handoffRequests).toBe(1);
+    expect(await workspace()).toContain('- notes/ (1 份');
+  });
+
   it('交接压回了计数、交接后那一批跑长又越过软阈值:照常先提醒再交接,不改清单', async () => {
     attach(900);
     p.onBatchEnd();
