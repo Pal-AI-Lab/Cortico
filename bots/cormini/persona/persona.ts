@@ -266,8 +266,10 @@ export class Cormini implements Persona {
   protected pressureSplitAt: number | null = null;
   /** 最近一份交接笔记的工作区路径;醒来那句话用它指路 */
   protected lastHandoffFile: string | null = null;
-  /** 交接之后还没投递过;下一次投递据此判断交接有没有把计数压回软阈值 */
+  /** 交接之后还没投递过 */
   private handedOff = false;
+  /** 交接后还没判断过它有没有把计数压回软阈值;等 openingTokens 有值的那个批末判断 */
+  private floorPending = false;
   /** 在这个软阈值下前缀清单只列顶层;计数回到软阈值内即恢复常规清单 */
   private compactListingAt: number | null = null;
   /** 在这个软阈值下交接已压不回计数:不再提醒、不再请求交接;计数回到软阈值内即恢复 */
@@ -573,7 +575,7 @@ export class Cormini implements Persona {
    * 其余目录直属文件超过 LIST_DIR_CAP 份的,同样折叠为一行计数(场次蒸馏一场几份,会越攒越多)。
    * Fallback:一棵子树逐行列出的路径总字符数超过 wholeReadFallbackChars() 时,整棵折成一行计数
    * (每层只有几份、总数上万的深树)。点名这个目录的 list_files 能看到全部,常驻前缀里的一棵子树
-   * 不比一次整份读取能交回的更大。交接后第一次投递判定交接没能把计数压回软阈值后,只列顶层各项与计数。
+   * 不比一次整份读取能交回的更大。交接没能把计数压回软阈值(见 handoffFellShort)后,只列顶层各项与计数。
    */
   protected prefixWorkspaceListing(): string {
     const files = this.memory.walkFiles();
@@ -632,7 +634,7 @@ export class Cormini implements Persona {
     this.batchOpenedAt ??= Date.now();
     if (this.handedOff) {
       this.handedOff = false;
-      this.checkHandoffFloor();
+      this.floorPending = true;
     }
     const externals = ctx.events.filter((e) => e.origin === 'external');
     if (externals.length === 0) return;
@@ -653,7 +655,7 @@ export class Cormini implements Persona {
    * 批末压力裁量:超软阈值先注入速记提醒(她拿到一轮落笔时间——提醒项挂 flush,
    * 下一批必含它),再超就请求交接。阶段预算是自己的裁量;越过模型物理上限的
    * 强制交接在 core。
-   * 交接压不回计数时的处理见 checkHandoffFloor。
+   * 交接后先看交接有没有把计数压回软阈值,见 handoffFellShort。
    */
   onBatchEnd(): void {
     const openedAt = this.batchOpenedAt;
@@ -662,15 +664,23 @@ export class Cormini implements Persona {
     if (!core) return;
     const info = core.sessionInfo(MAIN);
     if (info.estTokens === null) return;
+    const opening = this.floorPending ? info.openingTokens : null;
+    if (opening !== null) this.floorPending = false;
     const soft = this.softThreshold();
     if (info.estTokens <= soft) {
       this.compactListingAt = null;
       this.handoffUnreachableAt = null;
       return;
     }
-    // 这一批里登记的交接刚兑现:读到的是新 session,它压没压回计数由下一次投递时的 checkHandoffFloor 判断
+    // 这一批里登记的交接刚兑现:读到的是新 session,它压没压回计数由下一批的批末判断
     if (this.handedOff) return;
     if (this.handoffUnreachableAt === soft) return;
+    // 交接后还没有成功的请求:下限未知,先不提醒也不交接
+    if (this.floorPending) return;
+    if (opening !== null && opening > soft) {
+      this.handoffFellShort(core, soft, opening);
+      return;
+    }
     if (!this.pressureWarned) {
       this.pressureWarned = true;
       // 越过软阈值的这一批是"当前语境"的起点:交接笔记按它把上一窗切成更早的历史与最近的一段。
@@ -689,20 +699,18 @@ export class Cormini implements Persona {
   }
 
   /**
-   * 交接后第一次投递时的计数是新 session 的下限:重建的前缀与空尾,这一批还没进上下文。它仍超软阈值时,
-   * 先改列最简清单再交接一次,并请 bot 整理记忆(每个软阈值一次);已是最简清单就记下这个软阈值不可达,
+   * 交接后第一次请求的输入是新 session 的下限:重建的前缀、工具表、交接笔记与第一批投递,不含这一批之后的
+   * 工具调用与回执(批末计数含它们,批长时会越过软阈值,不能用来判断交接有没有用)。下限仍超软阈值时,
+   * 改列最简清单再交接一次,请 bot 整理记忆(每个软阈值一次);已是最简清单就记下这个软阈值不可达,
    * 不再提醒与交接,照常运行。交接笔记与提醒各自唤醒一批,下限超阈值时不停下就会接连交接。
+   * 两步的日志都写明操作者能做什么。
    */
-  private checkHandoffFloor(): void {
-    const core = this.core;
-    if (!core) return;
-    const estTokens = core.sessionInfo(MAIN).estTokens;
-    const soft = this.softThreshold();
-    if (estTokens === null || estTokens <= soft) return;
+  private handoffFellShort(core: CoreApi, soft: number, openingTokens: number): void {
     const { maxTokens, softRatio } = this.context();
+    const remedy = '调大上下文阶段预算可以抬高软阈值;精简常驻的提示词与记忆文件、停用不需要的 World 可以减小交接后的上下文';
     if (this.compactListingAt !== soft) {
       this.compactListingAt = soft;
-      core.log.warn('交接后计数仍越过软阈值,前缀工作区清单改为只列顶层,再交接一次', { estTokens, maxTokens, softRatio });
+      core.log.warn(`交接后第一次请求的输入仍越过软阈值,前缀工作区清单改为只列顶层,再交接一次。${remedy}`, { openingTokens, maxTokens, softRatio });
       if (this.tidyAskedAt !== soft) {
         this.tidyAskedAt = soft;
         core.injectInternal(this.tidyMemoryNote(), 'notice');
@@ -711,8 +719,8 @@ export class Cormini implements Persona {
       return;
     }
     this.handoffUnreachableAt = soft;
-    core.log.warn('只列顶层的前缀交接后计数仍越过软阈值,这个软阈值下不再提醒与请求交接;计数回到软阈值内或软阈值改变后恢复', {
-      estTokens, maxTokens, softRatio,
+    core.log.error(`只列顶层的前缀交接后第一次请求的输入仍越过软阈值,这个软阈值下不再提醒与请求交接;计数回到软阈值内或软阈值改变后恢复。${remedy}`, {
+      openingTokens, maxTokens, softRatio,
     });
   }
 

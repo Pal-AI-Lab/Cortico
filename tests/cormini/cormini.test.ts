@@ -9,6 +9,7 @@ import type { CoreConfig } from '../../src/core/types.ts';
 import { ConsoleWorld } from '../../src/worlds/console/world.ts';
 import { Cormini } from '../../bots/cormini/persona/persona.ts';
 import { makeCfg, FakeLLM, toolReply, sleep, makeFakeHarnessApi } from '../core/helpers.ts';
+import { nullLogger } from '../core/fixture-util.ts';
 
 let dir: string;
 let memoryDir: string;
@@ -209,11 +210,18 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
   let p: Cormini;
   let injected: string[];
   let handoffRequests: number;
+  let logged: Array<{ level: 'warn' | 'error'; msg: string }>;
 
-  const attach = (est: number): void => {
+  /** opening:交接后第一次请求的输入;null 是交接后还没有成功的请求。 */
+  const attach = (est: number, opening: number | null = null): void => {
     p.attach(makeFakeHarnessApi({
+      log: {
+        ...nullLogger(),
+        warn: (msg) => logged.push({ level: 'warn', msg }),
+        error: (msg) => logged.push({ level: 'error', msg }),
+      },
       injectInternal: (text) => injected.push(text),
-      sessionInfo: (id) => ({ id, running: 0, snapshot: null, estTokens: est, hardTokens: null, openingTokens: null }),
+      sessionInfo: (id) => ({ id, running: 0, snapshot: null, estTokens: est, hardTokens: null, openingTokens: opening }),
       requestContextHandoff: () => {
         handoffRequests++;
         return true;
@@ -225,6 +233,9 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
       .find((s) => s.title === 'WORKSPACE')!.text;
   const pressure = (): number => injected.filter((t) => t.includes('很早以前')).length;
   const tidy = (): string[] => injected.filter((t) => t.includes('整理一下记忆'));
+  /** 写给操作者的做法;两步的日志都带它。 */
+  const advised = (level: 'warn' | 'error'): number =>
+    logged.filter((l) => l.level === level && l.msg.includes('可以减小交接后的上下文')).length;
 
   beforeEach(() => {
     wsDir = mkdtempSync(join(tmpdir(), 'cormini-fallback-'));
@@ -232,6 +243,7 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     mkdirSync(join(wsDir, 'notes'), { recursive: true });
     writeFileSync(join(wsDir, 'notes', 'a.md'), 'x', 'utf8');
     injected = [];
+    logged = [];
     handoffRequests = 0;
   });
   afterEach(() => rmSync(wsDir, { recursive: true, force: true }));
@@ -248,7 +260,7 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     expect(ws).toContain('- notes/a.md');
   });
 
-  it('交接后仍超软阈值:只列顶层再交接一次,仍超就不再提醒和请求交接,整理记忆只请一次', async () => {
+  it('交接后第一次请求的输入仍超软阈值:只列顶层再交接一次并记 warn,仍超就不再提醒和请求交接并记 error;整理记忆只请一次', async () => {
     attach(900);
     p.onBatchEnd();
     p.onBatchEnd();
@@ -256,18 +268,25 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
 
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
     expect(await workspace()).toContain('- notes/a.md');
+    attach(900, 900);
     p.onDelivery({ events: [] });
+    expect(handoffRequests).toBe(1);
+    p.onBatchEnd();
     expect(handoffRequests).toBe(2);
     expect(await workspace()).toContain('- notes/ (1 份');
     expect(tidy()).toHaveLength(1);
     // the bot hears what to do, not how its context works
     expect(tidy()[0]).not.toMatch(/前缀|token|上下文|交接|CONSTITUTION/);
+    expect(advised('warn')).toBe(1);
+    expect(advised('error')).toBe(0);
 
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
     p.onDelivery({ events: [] });
     for (let i = 0; i < 5; i++) p.onBatchEnd();
     expect(handoffRequests).toBe(2);
     expect(pressure()).toBe(1);
+    expect(advised('warn')).toBe(1);
+    expect(advised('error')).toBe(1);
 
     // 计数回到软阈值内:常规清单与先提醒后交接都恢复;同一软阈值下不再请整理
     attach(100);
@@ -279,19 +298,39 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     expect(pressure()).toBe(2);
     expect(handoffRequests).toBe(3);
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    attach(900, 900);
     p.onDelivery({ events: [] });
+    p.onBatchEnd();
     expect(handoffRequests).toBe(4);
     expect(tidy()).toHaveLength(1);
   });
 
-  it('批内登记的交接兑现后,同一批的批末不提醒、不请求交接,由下一次投递判断下限', async () => {
+  it('交接后还没有成功的请求:不提醒也不请求交接,等 openingTokens 有值的批末再判断', async () => {
     attach(900);
-    // run() 的顺序:本批登记的交接先兑现,再跑批末钩子,下一批投递时才读新 session 的下限
+    p.onBatchEnd();
+    p.onBatchEnd();
+    expect(handoffRequests).toBe(1);
+    await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
+    attach(900, null);
+    p.onDelivery({ events: [] });
+    for (let i = 0; i < 3; i++) p.onBatchEnd();
+    expect(pressure()).toBe(1);
+    expect(handoffRequests).toBe(1);
+    attach(900, 900);
+    p.onBatchEnd();
+    expect(handoffRequests).toBe(2);
+    expect(await workspace()).toContain('- notes/ (1 份');
+  });
+
+  it('批内登记的交接兑现后,同一批的批末不提醒、不请求交接,由下一批的批末判断下限', async () => {
+    attach(900, 900);
+    // run() 的顺序:本批登记的交接先兑现,再跑批末钩子;新 session 的第一批跑完才有它的下限
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
     p.onBatchEnd();
     expect(pressure()).toBe(0);
     expect(handoffRequests).toBe(0);
     p.onDelivery({ events: [] });
+    p.onBatchEnd();
     expect(handoffRequests).toBe(1);
     expect(await workspace()).toContain('- notes/ (1 份');
   });
@@ -302,9 +341,8 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     p.onBatchEnd();
     expect(handoffRequests).toBe(1);
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), { hardTokens: null });
-    attach(150);
+    attach(900, 150);
     p.onDelivery({ events: [] });
-    attach(900);
     p.onBatchEnd();
     expect(pressure()).toBe(2);
     expect(handoffRequests).toBe(1);
@@ -312,5 +350,6 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
     expect(handoffRequests).toBe(2);
     expect(await workspace()).toContain('- notes/a.md');
     expect(tidy()).toHaveLength(0);
+    expect(logged).toHaveLength(0);
   });
 });
