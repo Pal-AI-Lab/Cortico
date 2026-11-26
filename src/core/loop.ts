@@ -342,6 +342,10 @@ export class MainLoop {
    * 新增条目使用本地估算，下次成功后更新计数；上下文整体重写后失效。
    */
   private anchor: { records: number; tokens: number; reasoningTokens: number } | null = null;
+  /** 见 SessionInfo.openingTokens。 */
+  private openingTokens: number | null = null;
+  /** 交接后还没有响应留在 session 里。 */
+  private openingPending = false;
   /** 当前 system 前缀和工具表采用的可见 World 集合。 */
   private appliedVisibleWorlds: Set<string> | null = null;
   /** 当前前缀中各可见 World 的工具签名，用于检测工具表漂移。 */
@@ -1289,6 +1293,7 @@ export class MainLoop {
         if (!this.active(generation) || flight.controller.signal.aborted) {
           if (this.active(generation) && flight.abortReason === 'interrupt') {
             // 打断与响应完成同时到达：完整响应作为已外化的输出保存，尚未执行的调用不执行。
+            this.noteOpening(outbound, res.attempts[res.attempts.length - 1].meters.input);
             this.mainTrack?.recordAttempts(res.attempts, undefined, usage);
             await this.recordAbortedStream(assistant, eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
@@ -1328,6 +1333,7 @@ export class MainLoop {
           const interrupted = flight.abortReason === 'interrupt';
           if (interrupted && e instanceof GenerationError && e.partial) {
             // 已外化的部分输出保存；提前执行的调用使用真实结果，其余调用不执行。
+            this.noteOpening(outbound, null);
             await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation, NOT_EXECUTED_INTERRUPTED);
             if (!this.active(generation)) return;
           }
@@ -1340,6 +1346,7 @@ export class MainLoop {
         this.recordFailedUsage(e, usage);
         if (tap && e instanceof GenerationError && e.partial) {
           // 已向外发送的部分输出必须保存；已执行的工具调用使用真实结果配对。
+          this.noteOpening(outbound, null);
           await this.recordAbortedStream(responseRecords(e.partial, e.origin), eager, generation);
           if (!this.active(generation)) {
             this.tapAbort(tap, ABORT_SHUTDOWN);
@@ -1403,6 +1410,7 @@ export class MainLoop {
       if (meters && meters.input !== null && meters.output !== null) {
         this.anchor = { records: session.records.length, tokens: meters.input + meters.output, reasoningTokens: meters.reasoning ?? 0 };
       }
+      this.noteOpening(outbound, meters?.input ?? null);
       if (tap) {
         try {
           tap.onRoundEnd?.();
@@ -1620,9 +1628,21 @@ export class MainLoop {
     return this.d.context.estimateTokens(view);
   }
 
+  /** 交接后第一次有响应留在 session 里时，记下那次请求的输入；input 为 null 时取本地估算。 */
+  private noteOpening(outbound: readonly ContextRecord[], input: number | null): void {
+    if (!this.openingPending) return;
+    this.openingPending = false;
+    this.openingTokens = input ?? this.estimateOutbound(outbound) + this.estimateTools();
+  }
+
+  /** 工具表随每次请求发出，不在 session 记录里。 */
+  private estimateTools(): number {
+    return estimateTokens(JSON.stringify(this.toolDefs.map(({ name, description, parameters }) => ({ name, description, parameters }))));
+  }
+
   /**
    * 使用上次成功请求的 token 计数，加上此后新增条目的本地估算。
-   * 禁用历史推理时扣除上次输出中的推理量；无上游计数时估算完整请求，含合成首轮对话。
+   * 禁用历史推理时扣除上次输出中的推理量；无上游计数时估算完整请求，含合成首轮对话与工具表。
    */
   estTokens(): number {
     const { anchor } = this;
@@ -1631,7 +1651,7 @@ export class MainLoop {
       const keep = this.d.cfg.context.keepPastThinking;
       return anchor.tokens - (keep ? 0 : anchor.reasoningTokens) + this.estimateOutbound(records.slice(anchor.records));
     }
-    return this.estimateOutbound(this.outboundMessages());
+    return this.estimateOutbound(this.outboundMessages()) + this.estimateTools();
   }
 
   /** 上游已计数的部分；全部由本地估算时为 0。 */
@@ -1642,8 +1662,8 @@ export class MainLoop {
   }
 
   /** 主 session 的计数与物理上限(sessionInfo 查询面的数据源)。 */
-  contextGauge(): { estTokens: number; hardTokens: number | null } {
-    return { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens() };
+  contextGauge(): { estTokens: number; hardTokens: number | null; openingTokens: number | null } {
+    return { estTokens: this.estTokens(), hardTokens: this.d.context.hardTokens(), openingTokens: this.openingTokens };
   }
 
   /** 一批结束后调用 Persona 钩子，再检查是否超过模型容量；超限时强制交接。 */
@@ -1765,6 +1785,8 @@ export class MainLoop {
     if (!this.active(generation)) return;
     const newTail = this.clampTail(result, snapshot, [sysMsg, ...this.sessionHead()]);
     session.reset([sysMsg, ...newTail]);
+    this.openingTokens = null;
+    this.openingPending = true;
     this.newInput.length = 0;
     for (const m of this.d.worlds.visible()) {
       try {
@@ -1781,14 +1803,14 @@ export class MainLoop {
   }
 
   /**
-   * 修复保留内容的工具配对，并将新前缀与保留内容限制在 hardTokens 内。
+   * 修复保留内容的工具配对，并将新前缀、工具表与保留内容限制在 hardTokens 内。
    * null 从快照末尾重建；上限未知时仅修复配对。trim 表示候选内容允许超限后裁剪。
    */
   private clampTail(result: ContextHandoffResult, snapshot: ContextRecord[], prefix: readonly ContextRecord[]): ContextRecord[] {
     const { log, context } = this.d;
     const { tail } = result;
     const hard = context.hardTokens();
-    const budget = hard === null ? null : Math.max(0, hard - context.estimateTokens(prefix));
+    const budget = hard === null ? null : Math.max(0, hard - context.estimateTokens(prefix) - this.estimateTools());
     const estimate = (records: readonly ContextRecord[]): number => context.estimateTokens(records);
     if (tail === null) {
       let start = 0;

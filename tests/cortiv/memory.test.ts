@@ -45,6 +45,7 @@ function sessionInfoOf(est: number | null) {
     snapshot: null,
     estTokens: est,
     hardTokens: null,
+    openingTokens: null,
   });
 }
 

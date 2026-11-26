@@ -300,6 +300,7 @@ export class Core<C extends CoreConfig = CoreConfig> {
       snapshot: isMainLoop ? this.loop.outboundMessages() : null,
       estTokens: gauge?.estTokens ?? null,
       hardTokens: gauge?.hardTokens ?? null,
+      openingTokens: gauge?.openingTokens ?? null,
     };
   }
 
