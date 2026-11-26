@@ -38,14 +38,15 @@ function ev(patch: Partial<EventEnvelope>): EventEnvelope {
   };
 }
 
-function sessionInfoOf(est: number | null) {
+/** opening:交接后第一次成功请求的输入;null 是交接后还没有成功的请求。 */
+function sessionInfoOf(est: number | null, opening: number | null = null) {
   return (id: string): SessionInfo => ({
     id,
     running: 0,
     snapshot: null,
     estTokens: est,
     hardTokens: null,
-    openingTokens: null,
+    openingTokens: opening,
   });
 }
 
@@ -497,11 +498,11 @@ describe('CortiV 软阈值提醒与交接', () => {
   });
   afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-  function attach(p2: CortiV, est: number | null): void {
+  function attach(p2: CortiV, est: number | null, opening: number | null = null): void {
     p2.attach(
       makeFakeHarnessApi({
         injectInternal: (text) => injected.push(text),
-        sessionInfo: sessionInfoOf(est),
+        sessionInfo: sessionInfoOf(est, opening),
         requestContextHandoff: () => {
           handoffRequests++;
           return true;
@@ -532,10 +533,10 @@ describe('CortiV 软阈值提醒与交接', () => {
     attach(p, 900);
     p.onBatchEnd();
     await p.onHandoff(records([{ role: 'user', content: 'x' }]), HANDOFF_CTX);
-    attach(p, 100);
+    attach(p, 100, 100);
     p.onDelivery({ events: [] });
     p.onBatchEnd();
-    attach(p, 900);
+    attach(p, 900, 100);
     p.onBatchEnd();
     expect(injected.filter((t) => t.includes('很早以前'))).toHaveLength(2);
     expect(handoffRequests).toBe(0);

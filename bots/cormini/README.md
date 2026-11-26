@@ -41,10 +41,15 @@ Open `http://127.0.0.1:7788/` and talk to it in the console view.
 - **Soft-boundary jot warning.** At batch end it checks `sessionInfo` token gauges
   against a fixed 0.85 ratio: one warning round to write things down, then it requests
   the handoff itself (the Core keeps only the over-budget hard clamp). As a fallback, when the
-  first batch after a handoff still ends above the soft threshold, the prefix file listing drops
-  to top-level entries with counts and one more handoff is requested, and the bot is asked once
-  per threshold to tidy its memory; if the count is still above, pressure warnings and handoff
-  requests stop at that threshold until the count falls back under it or the threshold changes.
+  input of the first request after a handoff (`sessionInfo().openingTokens`) is still above the
+  soft threshold, the prefix file listing drops to top-level entries with counts and one more
+  handoff is requested, and the bot is asked once per threshold to tidy its memory; if the first
+  request after that handoff is still above, pressure warnings and handoff requests stop at that
+  threshold until the count falls back under it or the threshold changes. The first
+  step is logged as a warning and the second as an error; both log lines name what the operator
+  can do: a larger context stage budget raises the soft threshold, and a shorter standing prompt,
+  fewer standing memory files and fewer Worlds make the context after a handoff smaller. The Core's forced handoff at the model's input limit
+  is not affected.
   In the prefix listing, a subtree whose paths total more than `(1 - softRatio) × maxTokens`
   characters is folded into one line with its file count.
 
