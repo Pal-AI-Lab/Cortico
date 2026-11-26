@@ -93,6 +93,8 @@
 .chart-legend:not(:empty) + .uchart { margin-top: 8px; }
 .legitem { display: inline-flex; align-items: center; gap: 6px; font: var(--text-detail)/1.4 var(--sans); color: var(--ink-soft); }
 .legsw { width: 11px; height: 11px; border-radius: 3px; }
+.u-tip .tt-sub { color: var(--ink-soft); }
+.u-tip .tt-sub .tt-l { padding-left: 8px; }
 .uchart svg { display: block; }
 /* 悬停柱子：这一列略微抬起并发光，其余列淡出；悬停堆叠中的一段时这一段最亮 */
 .uchart .barg { transition: opacity 220ms ease-out, transform 260ms cubic-bezier(.34, 1.56, .64, 1), filter 220ms ease-out; }

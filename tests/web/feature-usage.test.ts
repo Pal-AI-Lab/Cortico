@@ -418,6 +418,8 @@ function sample(): Any {
       alpha: { 'm-big': accum({ calls: 3, cost: 2, costCacheHit: 1, costOutput: 1 }) },
       beta: { 'm-small': accum({ calls: 1, cost: 1, costCacheMiss: 1 }) },
     },
+    byWorld: { qq: accum({ calls: 3, cost: 2, costOutput: 2 }) },
+    unattributed: accum({ calls: 2, cost: 1, costCacheHit: 1 }),
   };
   const p2 = {
     bucket: '2026-08-02',
@@ -425,6 +427,8 @@ function sample(): Any {
     byRole: { alpha: accum({ calls: 2, cost: 1, costCacheHit: 0.5, costOutput: 0.5 }) },
     byModel: { 'm-big': accum({ calls: 2, cost: 1 }) },
     byRoleModel: { alpha: { 'm-big': accum({ calls: 2, cost: 1 }) } },
+    byWorld: { qq: accum({ calls: 1, cost: 0.5 }) },
+    unattributed: accum({ calls: 1, cost: 0.5 }),
   };
   return {
     currency: 'USD',
@@ -502,7 +506,7 @@ describe('取值归一', () => {
 describe('buildComposites / compVal', () => {
   it('无维度 → 一根合计柱（[[]]，不是空数组）', async () => {
     const c = (await import(CHART)) as Any;
-    const combos = c.buildComposites(sample(), []);
+    const combos = c.buildComposites(sample(), [], 'cost');
     expect(combos).toEqual([[]]);
     expect(c.compId([])).toBe('');
     expect(c.compLabel(sample(), [])).toBe('合计');
@@ -511,15 +515,53 @@ describe('buildComposites / compVal', () => {
   it('三维全开 → 笛卡尔积，且顺序恒为 类型 > 角色 > 模型', async () => {
     const c = (await import(CHART)) as Any;
     const d = sample();
-    const dims = c.activeDims({ type: true, role: true, model: true }, true);
+    const dims = c.activeDims({ type: true, role: true, model: true }, 'cost');
     expect(dims).toEqual(['type', 'role', 'model']);
-    const combos = c.buildComposites(d, dims);
+    const combos = c.buildComposites(d, dims, 'cost');
     expect(combos.length).toBe(3 * 2 * 2);
     expect(combos[0].map((x: Any) => x.dim)).toEqual(['type', 'role', 'model']);
     // 勾选顺序不影响嵌套序
-    expect(c.activeDims({ model: true, role: true }, true)).toEqual(['role', 'model']);
-    // 调用图没有类型档：allowType=false 时 type 被忽略
-    expect(c.activeDims({ type: true, role: true }, false)).toEqual(['role']);
+    expect(c.activeDims({ model: true, role: true }, 'cost')).toEqual(['role', 'model']);
+    // 调用次数没有类型档，按 World 叠起来会超过合计：两者都被忽略
+    expect(c.activeDims({ type: true, role: true }, 'calls')).toEqual(['role']);
+    expect(c.activeDims({ type: true, world: true }, 'tokens')).toEqual(['type', 'world']);
+    expect(c.activeDims({ world: true }, 'calls')).toEqual([]);
+  });
+
+  it('World 维：各 World 在前，未归属末格，寻址走桶里的 byWorld 与 unattributed', async () => {
+    const c = (await import(CHART)) as Any;
+    const d = sample();
+    const p = d.series[0];
+    expect(c.buildComposites(d, ['world'], 'cost').map((comp: Any) => comp[0].key)).toEqual(['qq', c.UNATTRIBUTED_KEY]);
+    expect(c.compLabel(d, [{ dim: 'world', key: c.UNATTRIBUTED_KEY }])).toBe('未归属');
+    expect(c.compVal(p, [{ dim: 'world', key: 'qq' }], 'cost')).toBe(2);
+    expect(c.compVal(p, [{ dim: 'world', key: c.UNATTRIBUTED_KEY }], 'cost')).toBe(1);
+    expect(c.compVal(p, [{ dim: 'type', key: 'output' }, { dim: 'world', key: 'qq' }], 'cost')).toBe(2);
+    expect(c.compVal(p, [{ dim: 'world', key: 'ghost' }], 'cost')).toBe(0);
+  });
+
+  it('键多于调色板颜色数时，前面少一个的键各占一格，其余按当前指标合成「其他」，值是各键之和', async () => {
+    const c = (await import(CHART)) as Any;
+    const { U_PALETTE } = (await import(LABELS)) as Any;
+    const n = U_PALETTE.length;
+    const keys = Array.from({ length: n + 2 }, (_, i) => 'w' + i);
+    const d = {
+      ...sample(),
+      // 成本按 w0 最高依次递减;token 反过来
+      byWorld: keys.map((key, i) => ({ key, ...accum({ calls: 1, cost: n + 2 - i, promptTokens: i + 1 }), cacheHitRate: null })),
+      unattributed: { key: 'unattributed', ...accum({ calls: 1, cost: 0.5, promptTokens: 1 }), cacheHitRate: null },
+    };
+    const p = { bucket: '2026-08-01', ...accum({}), byWorld: Object.fromEntries(keys.map((key, i) => [key, accum({ cost: i })])), unattributed: accum({}) };
+    const parts = c.dimParts(d, 'world', 'cost');
+    expect(parts.map((x: Any) => x.key)).toEqual([...keys.slice(0, n - 1), c.FOLD_KEY, c.UNATTRIBUTED_KEY]);
+    const fold = parts[n - 1];
+    expect(fold.keys).toEqual(keys.slice(n - 1));
+    expect(c.compLabel(d, [fold])).toBe('其他 3 项');
+    expect(c.compVal(p, [fold], 'cost')).toBe((n - 1) + n + (n + 1));
+    // 换成 token 后排名反过来，合进「其他」的是成本最高的几个
+    expect(c.dimParts(d, 'world', 'tokens')[n - 1].keys).toEqual(['w2', 'w1', 'w0']);
+    // 正好占满调色板时不合并
+    expect(c.dimParts({ ...d, byWorld: d.byWorld.slice(0, n) }, 'world', 'cost').some((x: Any) => x.keys)).toBe(false);
   });
 
   it('compScopeAccum：角色+模型走交叉表，单维走单维表，无维度就是整个桶', async () => {
@@ -567,19 +609,16 @@ describe('标签与配色', () => {
     expect(c.dimKeyLabel(d, 'type', 'cacheHit')).toBe('命中缓存');
   });
 
-  it('调色板位次按键的字典序取：成本排名变了颜色也不跟着换位置', async () => {
+  it('paletteSeats：键数不超过调色板时颜色各不相同，与键的先后无关；去掉一个键不会让其余的键全部换色', async () => {
     const c = (await import(CHART)) as Any;
-    const keys = ['zeta', 'alpha', 'mid'];
-    const seats = keys.map((k) => c.paletteSeat(keys, k));
-    expect(c.paletteSeat(keys, 'alpha')).toBe('chart-1');
-    expect(c.paletteSeat(keys, 'mid')).toBe('chart-2');
-    expect(c.paletteSeat(keys, 'zeta')).toBe('chart-3');
-    // 换一个出现顺序，落座不变
-    expect(['mid', 'zeta', 'alpha'].map((k) => c.paletteSeat(['mid', 'zeta', 'alpha'], k)))
-      .toEqual(['chart-2', 'chart-3', 'chart-1']);
-    expect(new Set(seats).size).toBe(3);
-    // 不认识的键落回首色而不是 undefined
-    expect(c.paletteSeat(keys, 'ghost')).toBe('chart-1');
+    const { U_PALETTE } = (await import(LABELS)) as Any;
+    const keys = Array.from({ length: U_PALETTE.length }, (_, i) => 'world-' + i);
+    const seats = c.paletteSeats(keys);
+    expect(new Set(seats.values()).size).toBe(U_PALETTE.length);
+    expect([...c.paletteSeats([...keys].reverse())].sort()).toEqual([...seats].sort());
+    const fewer = c.paletteSeats(keys.slice(1));
+    const moved = keys.slice(1).filter((k) => fewer.get(k) !== seats.get(k));
+    expect(moved.length).toBeLessThan(keys.length - 1);
   });
 
   it('hexToHsl：三位简写展开，灰色的饱和度是 0', async () => {
@@ -598,12 +637,12 @@ describe('标签与配色', () => {
   it('compositeColors：无维度给一个 CSS 变量；同色系内按位次分明度，且钳在可读区间', async () => {
     const c = (await import(CHART)) as Any;
     const d = sample();
-    const flat = c.compositeColors(d, [[]], [], () => '#336699');
+    const flat = c.compositeColors([[]], [], () => '#336699');
     expect(flat['']).toBe('var(--accent-2)');
 
     const dims = ['role', 'model'];
-    const combos = c.buildComposites(d, dims);
-    const colors = c.compositeColors(d, combos, dims, () => '#336699');
+    const combos = c.buildComposites(d, dims, 'cost');
+    const colors = c.compositeColors(combos, dims, () => '#336699');
     const vals = Object.values(colors) as string[];
     expect(vals.length).toBe(4);
     // 每个色系两员 → 都走 hsl 分级，且没有 NaN
@@ -618,8 +657,19 @@ describe('标签与配色', () => {
       expect(l).toBeLessThanOrEqual(82);
     }
     // 单员色系原样用基色（不做无意义的分级）
-    const one = c.compositeColors(d, [[{ dim: 'role', key: 'alpha' }]], ['role'], () => '#336699');
+    const one = c.compositeColors([[{ dim: 'role', key: 'alpha' }]], ['role'], () => '#336699');
     expect(one['role:alpha']).toBe('#336699');
+  });
+
+  it('compositeColors：「其他」与未归属取两档中性色，不占调色板', async () => {
+    const c = (await import(CHART)) as Any;
+    const token = (t: string) => ({ 'ink-dim': '#111111', 'line-strong': '#222222' } as Record<string, string>)[t] ?? '#336699';
+    const colors = c.compositeColors([
+      [{ dim: 'world', key: 'qq' }],
+      [{ dim: 'world', key: c.FOLD_KEY, keys: ['a', 'b'] }],
+      [{ dim: 'world', key: c.UNATTRIBUTED_KEY }],
+    ], ['world'], token);
+    expect(Object.values(colors)).toEqual(['#336699', '#111111', '#222222']);
   });
 
   it('themeColor：读 --token；不是合法 hex 就退 --ink-dim；再不行给一个确定的兜底色', async () => {
@@ -699,6 +749,15 @@ describe('格式化', () => {
     });
     expect((big.match(/class="tt-row/g) ?? []).length).toBe(16);
     expect(big).toContain('其余从略');
+
+    // 「其他」一行下面按值降序列出它合并的键，读数为 0 的不列
+    const fold = [{ dim: 'role', key: c.FOLD_KEY, keys: ['r1', 'r2', 'r3'] }];
+    const foldPoint = { bucket: '2026-08-01', ...accum({ cost: 3 }), byRole: { r1: accum({ cost: 1 }), r2: accum({ cost: 2 }) } };
+    const folded = c.uTipHtml(d, foldPoint, [fold], {}, {
+      metric: 'cost', stacked: true, cur: 'USD', unit: 'day', curId: null,
+    });
+    expect(folded).toContain('其他 3 项');
+    expect([...folded.matchAll(/tt-sub"><span><\/span><span class="tt-l">([^<]+)/g)].map((m: Any) => m[1])).toEqual(['r2', 'r1']);
   });
 });
 
@@ -1111,17 +1170,35 @@ describe('用量页挂载', () => {
     expect(root.find('chart-legend')!.children.length).toBeGreaterThan(0);
   });
 
-  it('指标换成调用次数时「类型」不可拆，换回来恢复', async () => {
+  it('指标换成调用次数时「类型」和 World 不可拆，换回来恢复', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
     mountUsage(ctx);
     await flush();
     const type = root.findButton('类型')!;
+    const world = root.findButton('World')!;
     root.findButton('调用次数')!.dispatchEvent({ type: 'click' });
-    expect(type.disabled).toBe(true);
+    expect([type.disabled, world.disabled]).toEqual([true, true]);
     root.findButton('成本')!.dispatchEvent({ type: 'click' });
-    expect(type.disabled).toBe(false);
+    expect([type.disabled, world.disabled]).toEqual([false, false]);
+  });
+
+  it('按下 World 取消调用用途和模型，再按下其中一个取消 World;图例是各 World 加未归属', async () => {
+    stubFetch({ '/api/usage': sample() });
+    const { ctx, root } = await mkCtx({ usage: true });
+    const { mountUsage } = (await import(USAGE)) as Any;
+    mountUsage(ctx);
+    await flush();
+    const [role, world, model] = ['调用用途', 'World', '模型'].map((label) => root.findButton(label)!);
+    const pressed = () => [role, world, model].map((b) => b.getAttribute('aria-pressed'));
+    role.dispatchEvent({ type: 'click' });
+    model.dispatchEvent({ type: 'click' });
+    world.dispatchEvent({ type: 'click' });
+    expect(pressed()).toEqual(['false', 'true', 'false']);
+    expect(root.find('chart-legend')!.textContent).toBe('qq未归属');
+    model.dispatchEvent({ type: 'click' });
+    expect(pressed()).toEqual(['false', 'false', 'true']);
   });
 
   it('换粒度 / 点刷新 → 各重新取数一次，且 bucket 跟着走', async () => {

@@ -29,6 +29,10 @@ export interface UsagePoint extends UsageAccum {
   byModel?: Record<string, UsageAccum>;
   /** `byRoleModel[role][model]`：角色×模型的交叉格 */
   byRoleModel?: Record<string, Record<string, UsageAccum>>;
+  /** 本桶按 World 分到的份额，键是 World id。 */
+  byWorld?: Record<string, UsageAccum>;
+  /** 本桶不归任何 World 的部分；没有时省略。 */
+  unattributed?: UsageAccum;
 }
 
 /**
@@ -98,8 +102,8 @@ export interface UsageDailyTokens {
 /** 图上纵轴画的是什么。 */
 export type UsageMetric = 'cost' | 'tokens' | 'calls';
 
-/** 可拆分的三个维度。优先级（嵌套序）恒为 类型 > 角色 > 模型。 */
-export type UsageDim = 'type' | 'role' | 'model';
+/** 可拆分的维度。嵌套序恒为 类型 > 角色 > World > 模型；World 不与角色、模型同选。 */
+export type UsageDim = 'type' | 'role' | 'world' | 'model';
 
 /** 成本/token 的三档分量。与 `U_TYPES` 的 key 对应。 */
 export type UsageTypeKey = 'cacheHit' | 'cacheMiss' | 'output' | 'other';
@@ -108,6 +112,8 @@ export type UsageTypeKey = 'cacheHit' | 'cacheMiss' | 'output' | 'other';
 export interface UsageCompPart {
   dim: UsageDim;
   key: string;
+  /** 「其他」一格合并的各键；有它时 `key` 是 `FOLD_KEY`。 */
+  keys?: readonly string[];
 }
 
 /**
@@ -116,7 +122,7 @@ export interface UsageCompPart {
  */
 export type UsageComposite = UsageCompPart[];
 
-/** 拆分维度的勾选状态。调用次数没有 `type` 档，所以逐个可选。 */
+/** 拆分维度的勾选状态。 */
 export type UsageDimFlags = Partial<Record<UsageDim, boolean>>;
 
 /** 颜色解析器：把主题 token（`chart-1` / `chart-hit`）解析成一个具体颜色。 */

@@ -1,13 +1,13 @@
 /**
  * 用量页的配色与主题读取。角色 id 是人格定义的不透明字符串；标签由 UsageGroupStat.label 提供，缺席时显示 id。
- * 按键的字典序分配调色板位置，使颜色不随成本排序变化。命中、未命中与输出为框架 UsageAccum 字段，使用固定记账口径。
+ * 命中、未命中与输出为框架 UsageAccum 字段，使用固定记账口径和固定颜色。
  */
 
 import { readThemeColor } from '../../theme/palette.ts';
 import { S } from './strings.ts';
 import type { ColorResolver, UsageTypeKey } from './types.ts';
 
-/** 通用系列色，按位次取。 */
+/** 通用系列色，由 chart.ts 的 paletteSeats 分给各键。 */
 export const U_PALETTE = [
   'chart-1', 'chart-2', 'chart-3', 'chart-4',
   'chart-5', 'chart-6', 'chart-7', 'chart-8',
