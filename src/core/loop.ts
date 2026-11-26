@@ -309,7 +309,7 @@ export class MainLoop {
   private readonly settledArchives = new Set<number>();
   /**
    * 上次模型输出写进 session 之后新进上下文的记录，各带按来源分的比例：来源是 World id,null 是不属于任何 World 的部分。
-   * 每次模型请求的用量记录据此带上 UsageSources;模型输出写进 session 时清空;不持久化。
+   * 每次模型请求的用量记录据此带上 UsageSources;模型输出写进 session、交接或清空 session 时清空;不持久化。
    */
   private readonly newInput: Array<{ records: readonly ContextRecord[]; shares: ReadonlyArray<readonly [string | null, number]> }> = [];
   /**
@@ -1765,6 +1765,7 @@ export class MainLoop {
     if (!this.active(generation)) return;
     const newTail = this.clampTail(result, snapshot, [sysMsg, ...this.sessionHead()]);
     session.reset([sysMsg, ...newTail]);
+    this.newInput.length = 0;
     for (const m of this.d.worlds.visible()) {
       try {
         m.onHandoffEnded?.();
@@ -1826,6 +1827,7 @@ export class MainLoop {
     const sysMsg = await this.buildSystem();
     if (!this.active(generation)) return;
     session.reset([sysMsg]);
+    this.newInput.length = 0;
     this.d.transcript?.boundary('clear', {});
     this.finishTurn();
     this.pushOpening('cleared');
