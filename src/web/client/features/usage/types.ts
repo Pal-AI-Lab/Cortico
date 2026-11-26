@@ -33,6 +33,10 @@ export interface UsagePoint extends UsageAccum {
   byWorld?: Record<string, UsageAccum>;
   /** 本桶不归任何 World 的部分；没有时省略。 */
   unattributed?: UsageAccum;
+  /** `byWorldModel[world][model]`：World×模型的交叉格 */
+  byWorldModel?: Record<string, Record<string, UsageAccum>>;
+  /** 未归属部分按模型拆开；没有未归属时省略。 */
+  unattributedByModel?: Record<string, UsageAccum>;
 }
 
 /**
@@ -102,7 +106,7 @@ export interface UsageDailyTokens {
 /** 图上纵轴画的是什么。 */
 export type UsageMetric = 'cost' | 'tokens' | 'calls';
 
-/** 可拆分的维度。嵌套序恒为 类型 > 角色 > World > 模型；World 不与角色、模型同选。 */
+/** 可拆分的维度。嵌套序恒为 类型 > 角色 > World > 模型；World 不与角色同选。 */
 export type UsageDim = 'type' | 'role' | 'world' | 'model';
 
 /** 成本/token 的三档分量。与 `U_TYPES` 的 key 对应。 */

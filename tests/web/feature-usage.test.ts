@@ -420,6 +420,8 @@ function sample(): Any {
     },
     byWorld: { qq: accum({ calls: 3, cost: 2, costOutput: 2 }) },
     unattributed: accum({ calls: 2, cost: 1, costCacheHit: 1 }),
+    byWorldModel: { qq: { 'm-big': accum({ calls: 3, cost: 2, costOutput: 2 }) } },
+    unattributedByModel: { 'm-big': accum({ calls: 1, cost: 0.5 }), 'm-small': accum({ calls: 1, cost: 0.5, costCacheHit: 0.5 }) },
   };
   const p2 = {
     bucket: '2026-08-02',
@@ -429,6 +431,8 @@ function sample(): Any {
     byRoleModel: { alpha: { 'm-big': accum({ calls: 2, cost: 1 }) } },
     byWorld: { qq: accum({ calls: 1, cost: 0.5 }) },
     unattributed: accum({ calls: 1, cost: 0.5 }),
+    byWorldModel: { qq: { 'm-big': accum({ calls: 1, cost: 0.5 }) } },
+    unattributedByModel: { 'm-big': accum({ calls: 1, cost: 0.5 }) },
   };
   return {
     currency: 'USD',
@@ -538,6 +542,10 @@ describe('buildComposites / compVal', () => {
     expect(c.compVal(p, [{ dim: 'world', key: c.UNATTRIBUTED_KEY }], 'cost')).toBe(1);
     expect(c.compVal(p, [{ dim: 'type', key: 'output' }, { dim: 'world', key: 'qq' }], 'cost')).toBe(2);
     expect(c.compVal(p, [{ dim: 'world', key: 'ghost' }], 'cost')).toBe(0);
+    // 与模型同选时走 byWorldModel,未归属走 unattributedByModel
+    expect(c.compVal(p, [{ dim: 'world', key: 'qq' }, { dim: 'model', key: 'm-big' }], 'cost')).toBe(2);
+    expect(c.compVal(p, [{ dim: 'world', key: 'qq' }, { dim: 'model', key: 'm-small' }], 'cost')).toBe(0);
+    expect(c.compVal(p, [{ dim: 'world', key: c.UNATTRIBUTED_KEY }, { dim: 'model', key: 'm-small' }], 'cost')).toBe(0.5);
   });
 
   it('键多于调色板颜色数时，前面少一个的键各占一格，其余按当前指标合成「其他」，值是各键之和', async () => {
@@ -1184,7 +1192,7 @@ describe('用量页挂载', () => {
     expect([type.disabled, world.disabled]).toEqual([false, false]);
   });
 
-  it('按下 World 取消调用用途和模型，再按下其中一个取消 World;图例是各 World 加未归属', async () => {
+  it('World 与调用用途互斥、可与模型同选;图例是各 World 加未归属与模型的交叉', async () => {
     stubFetch({ '/api/usage': sample() });
     const { ctx, root } = await mkCtx({ usage: true });
     const { mountUsage } = (await import(USAGE)) as Any;
@@ -1195,10 +1203,10 @@ describe('用量页挂载', () => {
     role.dispatchEvent({ type: 'click' });
     model.dispatchEvent({ type: 'click' });
     world.dispatchEvent({ type: 'click' });
-    expect(pressed()).toEqual(['false', 'true', 'false']);
-    expect(root.find('chart-legend')!.textContent).toBe('qq未归属');
-    model.dispatchEvent({ type: 'click' });
-    expect(pressed()).toEqual(['false', 'false', 'true']);
+    expect(pressed()).toEqual(['false', 'true', 'true']);
+    expect(root.findAll('leglbl').map((el: Any) => el.textContent)).toEqual(['qq · m-big', '未归属 · m-big', '未归属 · m-small']);
+    role.dispatchEvent({ type: 'click' });
+    expect(pressed()).toEqual(['true', 'false', 'true']);
   });
 
   it('换粒度 / 点刷新 → 各重新取数一次，且 bucket 跟着走', async () => {

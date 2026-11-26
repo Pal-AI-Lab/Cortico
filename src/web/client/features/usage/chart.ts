@@ -199,15 +199,16 @@ export function compLabel(d: UsageAggregate, comp: UsageComposite): string {
 /**
  * 组合 → 桶里对应的那个累计单元。
  *
- * "类型"不参与寻址（它是同一个 accum 内部的分量），所以只看 World / role / model：World 走桶里的 byWorld 或
- * unattributed;role 与 model 都有走交叉表，只有一个走单维表，都没有就是整个桶。组合里不能有「其他」,先用
+ * "类型"不参与寻址（它是同一个 accum 内部的分量），所以只看 World / role / model：World 或 role 与 model 同在时
+ * 走对应的交叉表，只有一维走单维表，都没有就是整个桶。未归属走 unattributed 与 unattributedByModel。组合里不能有「其他」,先用
  * `expandComposite` 展开。
  */
 export function compScopeAccum(p: UsagePoint, comp: UsageComposite): UsageAccum | undefined {
   const world = comp.find((c) => c.dim === 'world');
-  if (world) return isUnattributed(world) ? p.unattributed : (p.byWorld || {})[world.key];
   const role = comp.find((c) => c.dim === 'role');
   const model = comp.find((c) => c.dim === 'model');
+  if (world && model) return isUnattributed(world) ? p.unattributedByModel?.[model.key] : p.byWorldModel?.[world.key]?.[model.key];
+  if (world) return isUnattributed(world) ? p.unattributed : (p.byWorld || {})[world.key];
   if (role && model) return (p.byRoleModel || {})[role.key]?.[model.key];
   if (role) return (p.byRole || {})[role.key];
   if (model) return (p.byModel || {})[model.key];

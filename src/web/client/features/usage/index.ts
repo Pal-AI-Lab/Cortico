@@ -61,12 +61,8 @@ const SPLITS: ReadonlyArray<{ dim: UsageDim; label: string }> = [
   { dim: 'model', label: S.dimModel },
 ];
 
-/** 桶里没有 World 与角色、模型的交叉，选 World 时另两个取消，反之亦然。 */
-const EXCLUSIVE: Partial<Record<UsageDim, readonly UsageDim[]>> = {
-  world: ['role', 'model'],
-  role: ['world'],
-  model: ['world'],
-};
+/** 桶里没有 World 与调用用途的交叉，选了一个就取消另一个。 */
+const EXCLUSIVE: Partial<Record<UsageDim, UsageDim>> = { world: 'role', role: 'world' };
 
 /** 已知金额。全部未计价为「未知」;部分未计价时金额是下限,后缀标出。 */
 function costText(amount: number, a: Partial<UsageAccum>, cur: string, decimals: 2 | 3 = 2): string {
@@ -218,7 +214,8 @@ export function mountUsage(ctx: FeatureContext): void {
     btn.setAttribute('aria-pressed', 'false');
     btn.addEventListener('click', () => {
       state.splitDims[dim] = !state.splitDims[dim];
-      if (state.splitDims[dim]) for (const other of EXCLUSIVE[dim] ?? []) state.splitDims[other] = false;
+      const other = EXCLUSIVE[dim];
+      if (state.splitDims[dim] && other) state.splitDims[other] = false;
       for (const b of splitBtns) {
         b.btn.classList.toggle('active', !!state.splitDims[b.dim]);
         b.btn.setAttribute('aria-pressed', String(!!state.splitDims[b.dim]));
