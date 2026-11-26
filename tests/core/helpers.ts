@@ -409,7 +409,7 @@ export function makeFakeHarnessApi(patch: Partial<FixtureHarnessApi> = {}): Core
     llm: adaptClient(patch.llm ?? new FakeLLM()),
     spawnFork: options => patch.spawnFork?.({ ...options, messages: messages(options.messages) }) ?? Promise.resolve(''),
     sessionInfo: id => {
-      const info = patch.sessionInfo?.(id) ?? { id, running: 0, snapshot: null, estTokens: null, hardTokens: null };
+      const info = patch.sessionInfo?.(id) ?? { id, running: 0, snapshot: null, estTokens: null, hardTokens: null, openingTokens: null };
       return { ...info, snapshot: info.snapshot ? records(info.snapshot) : null };
     },
   };

@@ -111,8 +111,10 @@ handler 抛错，或返回值既不是字符串也不是带字符串 text 的对
 计数检查回到上限内或上限改变时恢复。上游超限与手动交接不影响这条记录。
 
 `Persona.onHandoff(snapshot, { hardTokens })` 返回 `{ tail, trim? }`。Core 重建 system 前缀，
-按 `hardTokens − estimate(prefix)` 限制保留上下文，其中 prefix 包括 system 前缀和 Persona 的合成
-开头(`sessionHead()`)。Core 校验工具调用配对，并重置 session。
+按 `hardTokens − estimate(prefix) − estimate(tools)` 限制保留上下文，其中 prefix 包括 system 前缀和
+Persona 的合成开头(`sessionHead()`)，tools 是随请求发出的工具表。Core 校验工具调用配对，并重置 session。
+`sessionInfo().estTokens` 在上游还没报过计数时是请求内容加工具表的本地估算；`openingTokens` 是交接后
+第一次有响应留在上下文里的那次请求的输入，只有交接重新开始计。
 阶段预算与保留比例由 Persona 决定，模型配置来自当前 provider。
 
 ## 错误隔离

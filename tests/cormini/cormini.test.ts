@@ -213,7 +213,7 @@ describe('Cormini 交接压不回软阈值时的前缀清单', () => {
   const attach = (est: number): void => {
     p.attach(makeFakeHarnessApi({
       injectInternal: (text) => injected.push(text),
-      sessionInfo: (id) => ({ id, running: 0, snapshot: null, estTokens: est, hardTokens: null }),
+      sessionInfo: (id) => ({ id, running: 0, snapshot: null, estTokens: est, hardTokens: null, openingTokens: null }),
       requestContextHandoff: () => {
         handoffRequests++;
         return true;

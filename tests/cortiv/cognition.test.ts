@@ -63,6 +63,7 @@ function rig(opts: { enabled?: () => boolean; snapshot?: ChatMessage[] } = {}): 
         snapshot: id === 'main' ? (opts.snapshot ?? SNAPSHOT) : null,
         estTokens: null,
         hardTokens: null,
+        openingTokens: null,
       }),
     }),
   );

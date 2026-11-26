@@ -525,6 +525,12 @@ export interface SessionInfo {
    * 窗口未知或非接收事件的常驻 session 时为 null。
    */
   hardTokens: number | null;
+  /**
+   * 上下文交接后第一次有响应留在上下文里的那次请求的输入 token：上游报了计数取上游的，没报取那次请求的本地估算。
+   * 它是交接后的前缀、工具表与此前的投递，不含模型此后的输出、工具调用与回执。
+   * 交接后还没有这样的请求、或本进程里没有交接过时为 null；非接收事件的常驻 session 为 null。
+   */
+  openingTokens: number | null;
 }
 
 /** Persona 返回的上下文交接结果。 */

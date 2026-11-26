@@ -14,7 +14,7 @@ import { WakeBus } from '../../src/core/bus.ts';
 import { SessionLog } from "./fixture-session.ts";
 import { JsonlEventStore } from '../../src/core/event-store.ts';
 import { CoreState } from '../../src/core/state.ts';
-import { estimateMessagesTokens, nullLogger } from "./fixture-util.ts";
+import { estimateMessagesTokens, estimateTokens, nullLogger } from "./fixture-util.ts";
 import { ToolCallLog } from '../../src/core/tool-log.ts';
 import { Transcript } from '../../src/core/transcript.ts';
 import { LLMError, LLMStreamAborted } from './fixture-errors.ts';
@@ -1950,6 +1950,48 @@ describe('MainLoop user事件协议', () => {
       // 重写上下文后清除上游计数，恢复完整本地估算。
       await rig.loop.handoffContext();
       expect(rig.loop.getStatus().context.countedTokens).toBe(0);
+    } finally {
+      await rig.cleanup();
+    }
+  });
+
+  it('无上游计数时 estTokens 是请求内容加工具表的估算', async () => {
+    rig = makeRig();
+    try {
+      rig.start();
+      await until(() => rig.llm.calls.length >= 1);
+      await sleep(30);
+      const tools = rig.loop.getToolSchemas().map(({ name, description, parameters }) => ({ name, description, parameters }));
+      expect(tools.length).toBeGreaterThan(0);
+      expect(rig.loop.contextGauge().estTokens)
+        .toBe(estimateMessagesTokens(rig.loop.outboundMessages()) + estimateTokens(JSON.stringify(tools)));
+    } finally {
+      await rig.cleanup();
+    }
+  });
+
+  it('openingTokens:交接后第一次成功请求的输入,之后的请求和别的上下文重写都不改它;没交接过时为 null', async () => {
+    rig = makeRig();
+    try {
+      rig.llm.usage = { promptTokens: 5000, completionTokens: 200, cacheHitTokens: 0, cacheMissTokens: 5000 };
+      rig.start();
+      await until(() => rig.loop.getStatus().context.countedTokens === 5200);
+      expect(rig.loop.contextGauge().openingTokens).toBeNull();
+
+      rig.llm.usage = { promptTokens: 7000, completionTokens: 100, cacheHitTokens: 0, cacheMissTokens: 7000 };
+      await rig.loop.handoffContext();
+      rig.pushEvent('[10:05] 阿明: 在吗');
+      await until(() => rig.loop.contextGauge().openingTokens !== null);
+      expect(rig.loop.contextGauge().openingTokens).toBe(7000);
+
+      // 重载前缀也重写 session,但不是交接
+      await rig.loop.reloadSystemPrefix();
+      expect(rig.loop.contextGauge().openingTokens).toBe(7000);
+      const again = rig.llm.calls.length;
+      rig.llm.usage = { promptTokens: 9000, completionTokens: 100, cacheHitTokens: 0, cacheMissTokens: 9000 };
+      rig.pushEvent('[10:06] 阿明: 还在吗');
+      await until(() => rig.llm.calls.length > again && rig.loop.getStatus().context.countedTokens === 9100);
+      expect(rig.loop.contextGauge().openingTokens).toBe(7000);
     } finally {
       await rig.cleanup();
     }
