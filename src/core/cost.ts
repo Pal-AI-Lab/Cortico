@@ -46,6 +46,10 @@ export interface UsageSeriesPoint extends UsageAccum {
   byWorld: Record<string, UsageAccum>;
   /** 本桶内不归任何 World 的部分，与 byWorld 相加等于本桶(token 有取整误差);没有这部分时省略。 */
   unattributed?: UsageAccum;
+  /** World 与模型交叉，键为 byWorldModel[world][model];各模型相加等于 byWorld[world]。 */
+  byWorldModel: Record<string, Record<string, UsageAccum>>;
+  /** 未归属部分按模型拆开，相加等于 unattributed;没有未归属时省略。 */
+  unattributedByModel?: Record<string, UsageAccum>;
 }
 
 /** 按 role / model 分组的合计 */
@@ -213,10 +217,12 @@ interface BucketAccum {
   roleModels: Map<string, Map<string, UsageAccum>>;
   worlds: Map<string, UsageAccum>;
   unattributed: UsageAccum;
+  worldModels: Map<string, Map<string, UsageAccum>>;
+  unattributedModels: Map<string, UsageAccum>;
 }
 
 function bucketAccum(): BucketAccum {
-  return { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map(), worlds: new Map(), unattributed: zero() };
+  return { total: zero(), roles: new Map(), models: new Map(), roleModels: new Map(), worlds: new Map(), unattributed: zero(), worldModels: new Map(), unattributedModels: new Map() };
 }
 
 /** 按份额累计的 token 取整，费用保留小数。 */
@@ -238,10 +244,17 @@ function mapToObj(m: Map<string, UsageAccum>, each: (a: UsageAccum) => UsageAccu
   return o;
 }
 
-function nestedMapToObj(m: Map<string, Map<string, UsageAccum>>): Record<string, Record<string, UsageAccum>> {
+function nestedMapToObj(m: Map<string, Map<string, UsageAccum>>, each?: (a: UsageAccum) => UsageAccum): Record<string, Record<string, UsageAccum>> {
   const o: Record<string, Record<string, UsageAccum>> = {};
-  for (const [k, inner] of m) o[k] = mapToObj(inner);
+  for (const [k, inner] of m) o[k] = mapToObj(inner, each);
   return o;
+}
+
+/** 交叉表里 key 那一行，没有就建一行。 */
+function inner(m: Map<string, Map<string, UsageAccum>>, key: string): Map<string, UsageAccum> {
+  let row = m.get(key);
+  if (!row) { row = new Map(); m.set(key, row); }
+  return row;
 }
 
 function statOf(key: string, a: UsageAccum, label?: string): UsageGroupStat {
@@ -457,15 +470,20 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     add(bucketAcc.total, r, cost);
     upsert(bucketAcc.roles, role, r, cost);
     upsert(bucketAcc.models, model, r, cost);
-    let rm = bucketAcc.roleModels.get(role);
-    if (!rm) { rm = new Map(); bucketAcc.roleModels.set(role, rm); }
-    upsert(rm, model, r, cost);
+    upsert(inner(bucketAcc.roleModels, role), model, r, cost);
     upsert(roles, role, r, cost);
     if (r.label) roleLabels.set(role, r.label);
     upsert(models, model, r, cost);
     for (const [world, share] of worldShares(r)) {
-      if (world === null) { add(unattributed, r, cost, share); add(bucketAcc.unattributed, r, cost, share); }
-      else { upsert(worlds, world, r, cost, share); upsert(bucketAcc.worlds, world, r, cost, share); }
+      if (world === null) {
+        add(unattributed, r, cost, share);
+        add(bucketAcc.unattributed, r, cost, share);
+        upsert(bucketAcc.unattributedModels, model, r, cost, share);
+      } else {
+        upsert(worlds, world, r, cost, share);
+        upsert(bucketAcc.worlds, world, r, cost, share);
+        upsert(inner(bucketAcc.worldModels, world), model, r, cost, share);
+      }
     }
     add(totals, r, cost);
   }
@@ -489,8 +507,8 @@ export function aggregateUsage(records: UsageRecord[], opts: UsageAggregateOptio
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([b, acc]) => ({
       bucket: b, ...acc.total, byRole: mapToObj(acc.roles), byModel: mapToObj(acc.models), byRoleModel: nestedMapToObj(acc.roleModels),
-      byWorld: mapToObj(acc.worlds, wholeTokens),
-      ...(acc.unattributed.calls ? { unattributed: wholeTokens(acc.unattributed) } : {}),
+      byWorld: mapToObj(acc.worlds, wholeTokens), byWorldModel: nestedMapToObj(acc.worldModels, wholeTokens),
+      ...(acc.unattributed.calls ? { unattributed: wholeTokens(acc.unattributed), unattributedByModel: mapToObj(acc.unattributedModels, wholeTokens) } : {}),
     }));
   const groupOut = (m: Map<string, UsageAccum>, labels?: Map<string, string>): UsageGroupStat[] =>
     [...m.entries()].map(([k, a]) => statOf(k, a, labels?.get(k))).sort((x, y) => y.cost - x.cost);
