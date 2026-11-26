@@ -3446,6 +3446,29 @@ describe('MainLoop 失败流入账', () => {
     ]);
   });
 
+  it('Provider 的估算要用活跃模型、端点还没选模型时,投递不让主循环退出', async () => {
+    const { rows, tracker } = rigWithUsage();
+    const warns: string[] = [];
+    rig = makeRig({
+      tracker,
+      silent: true,
+      log: { ...nullLogger(), warn: (msg) => warns.push(msg), child: () => nullLogger() },
+      // 同 Core 的上下文事实:Provider 模块的 estimateTokens 先取活跃模型,没选模型就抛错;hardTokens 这时是 null
+      context: { hardTokens: () => null, estimateTokens: (records) => (activeSpec(rig.cfg), records.length) },
+    });
+    const entry = rig.cfg.providers[rig.cfg.activeProvider];
+    const spec = entry.spec;
+    delete entry.spec;
+    rig.llm.script(textReply('好'));
+    rig.start();
+    rig.pushEvent('在吗');
+    await until(() => warns.includes('模型配置不可用'));
+    entry.spec = spec;
+    rig.pushEvent('还在吗');
+    await until(() => rows.length >= 1);
+    expect(rows).toHaveLength(1);
+  });
+
   it('成功返回但本轮随关机丢弃:token 照样入账,标 discarded', async () => {
     const { rows, tracker } = rigWithUsage();
     rig = makeRig({ tracker });

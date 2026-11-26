@@ -308,10 +308,10 @@ export class MainLoop {
    */
   private readonly settledArchives = new Set<number>();
   /**
-   * 上次模型输出写进 session 之后新进上下文的估算 token,按来源分：键是 World id,null 是不属于任何 World 的部分。
-   * 每次模型请求的用量记录带上它(UsageSources),模型输出写进 session 时清空;不持久化。
+   * 上次模型输出写进 session 之后新进上下文的记录，各带按来源分的比例：来源是 World id,null 是不属于任何 World 的部分。
+   * 每次模型请求的用量记录据此带上 UsageSources;模型输出写进 session 时清空;不持久化。
    */
-  private readonly newInput = new Map<string | null, number>();
+  private readonly newInput: Array<{ records: readonly ContextRecord[]; shares: ReadonlyArray<readonly [string | null, number]> }> = [];
   /**
    * 窗口内的 LLM 失败时刻，单位为毫秒。保存在 state.data.llmStall，
    * 跨重启保留；恢复时通知 Persona，World 可按时间窗口查询。
@@ -1399,7 +1399,7 @@ export class MainLoop {
       const calls = assistant.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
       this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
       for (const entry of assistant) session.append(entry);
-      this.newInput.clear();
+      this.newInput.length = 0;
       if (meters && meters.input !== null && meters.output !== null) {
         this.anchor = { records: session.records.length, tokens: meters.input + meters.output, reasoningTokens: meters.reasoning ?? 0 };
       }
@@ -1563,7 +1563,7 @@ export class MainLoop {
     const calls = partial.flatMap(entry => entry.item.type === 'function_call' ? [entry.item] : []);
     this.pendingToolCalls = new Set(calls.map((call) => call.call_id));
     for (const entry of partial) session.append(entry);
-    if (partial.length > 0) this.newInput.clear();
+    if (partial.length > 0) this.newInput.length = 0;
     if (calls.some((call) => eager?.has(call.call_id))) this.enterPhase('tools', { round: this.phase.round });
     for (const call of calls) {
       const ran = eager?.take(call.call_id);
@@ -1887,24 +1887,29 @@ export class MainLoop {
   }
 
   /**
-   * records 刚写进 session:把它们的估算 token(口径同上下文计数)记给 parts 的来源。几段时按各段正文的估算 token
-   * 比例分，各段都为空时全记给第一段;来源 null 是不属于任何 World 的部分。
+   * records 刚写进 session:记下它们分给 parts 各来源的比例。几段时按各段正文的估算 token 比例分，各段都为空时
+   * 全记给第一段;来源 null 是不属于任何 World 的部分。
    */
   private noteInput(records: readonly ContextRecord[], parts: ReadonlyArray<{ source: string | null; text: string }>): void {
-    const tokens = this.d.context.estimateTokens(records);
     const sizes = parts.map((part) => estimateTokens(part.text));
     const sum = sizes.reduce((total, size) => total + size, 0);
-    parts.forEach((part, index) => {
-      const share = sum > 0 ? sizes[index] / sum : index === 0 ? 1 : 0;
-      if (share > 0) this.newInput.set(part.source, (this.newInput.get(part.source) ?? 0) + tokens * share);
-    });
+    const shares = parts.map((part, index) => [part.source, sum > 0 ? sizes[index] / sum : index === 0 ? 1 : 0] as const);
+    this.newInput.push({ records, shares: shares.filter(([, share]) => share > 0) });
   }
 
-  /** 这次请求新进上下文的来源，估算 token 取整。 */
+  /**
+   * 这次请求新进上下文的来源，估算 token(口径同上下文计数)取整。估算放在请求前、模型配置确认可用之后:
+   * Provider 模块的 estimateTokens 要用活跃端点的模型，投递时可能还没选模型。
+   */
   private inputSources(): UsageSources {
+    const tokens = new Map<string | null, number>();
+    for (const { records, shares } of this.newInput) {
+      const total = this.d.context.estimateTokens(records);
+      for (const [source, share] of shares) tokens.set(source, (tokens.get(source) ?? 0) + total * share);
+    }
     const worlds: Record<string, number> = {};
-    for (const [source, tokens] of this.newInput) if (source !== null) worlds[source] = Math.round(tokens);
-    return { worlds, other: Math.round(this.newInput.get(null) ?? 0) };
+    for (const [source, value] of tokens) if (source !== null) worlds[source] = Math.round(value);
+    return { worlds, other: Math.round(tokens.get(null) ?? 0) };
   }
 
   /** 响应里推理以外的输出的估算 token,及其中调用各 World 工具的部分。 */
