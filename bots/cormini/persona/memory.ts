@@ -152,13 +152,12 @@ function listDirLines(abs: string, prefix: string, full: boolean): string[] {
   return out;
 }
 
-function walkFilesAbs(dir: string, prefix: string): string[] {
-  const out: string[] = [];
+function walkFilesAbs(dir: string, prefix: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir).sort()) {
     if (name.startsWith('.')) continue;
     const abs = join(dir, name);
     const rel = prefix ? `${prefix}/${name}` : name;
-    if (statSync(abs).isDirectory()) out.push(...walkFilesAbs(abs, rel));
+    if (statSync(abs).isDirectory()) walkFilesAbs(abs, rel, out);
     else out.push(rel);
   }
   return out;
